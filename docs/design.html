@@ -375,6 +375,6 @@ Client byte rate is measured over multiple small windows (for e.g. 30 windows of
 <h4><a id="design_quotasoverrides" href="#design_quotasoverrides">Quota overrides</a></h4>
 <p>
     It is possible to override the default quota for client-ids that need a higher (or even lower) quota. The mechanism is similar to the per-topic log config overrides.
-    Client-id overrides are written to ZooKeeper under <i><b>/config/clients</b></i>. These overrides are read by all brokers and are effective immediately. This lets us change quotas without having to do a rolling restart of the entire cluster. See <a href="/ops.html#quotas">here</a> for details.
+    Client-id overrides are written to ZooKeeper under <i><b>/config/clients</b></i>. These overrides are read by all brokers and are effective immediately. This lets us change quotas without having to do a rolling restart of the entire cluster. See <a href="#quotas">here</a> for details.
 
 </p>

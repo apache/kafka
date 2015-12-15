@@ -355,7 +355,7 @@ import java.util.regex.Pattern;
  *
  *     public void run() {
  *         try {
- *             consumer.subscribe("topic");
+ *             consumer.subscribe(Arrays.asList("topic"));
  *             while (!closed.get()) {
  *                 ConsumerRecords records = consumer.poll(10000);
  *                 // Handle new records
@@ -1005,6 +1005,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void seek(TopicPartition partition, long offset) {
+        if (offset < 0) {
+            throw new IllegalArgumentException("seek offset must not be a negative number");
+        }
         acquire();
         try {
             log.debug("Seeking to offset {} for partition {}", offset, partition);
@@ -1068,10 +1071,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             if (!this.subscriptions.isAssigned(partition))
                 throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
-            Long offset = this.subscriptions.consumed(partition);
+            Long offset = this.subscriptions.position(partition);
             if (offset == null) {
                 updateFetchPositions(Collections.singleton(partition));
-                offset = this.subscriptions.consumed(partition);
+                offset = this.subscriptions.position(partition);
             }
             return offset;
         } finally {
