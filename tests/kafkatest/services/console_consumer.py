@@ -101,7 +101,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
 
     def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=False,
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=TRUNK,
-                 client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=[], log_values=False):
+                 client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=[], log_values=True):
         """
         Args:
             context:                    standard context
