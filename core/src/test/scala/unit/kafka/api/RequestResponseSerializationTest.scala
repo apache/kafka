@@ -43,6 +43,7 @@ object SerializationTestUtils {
   private val topic2 = "test2"
   private val leader1 = 0
   private val isr1 = List(0, 1, 2)
+  private val isrDirs1 = Map(("0","/data1/kafka_data2/"), ("2","/data10/kafka_data10/"))
   private val leader2 = 0
   private val isr2 = List(0, 2, 3)
   private val partitionDataFetchResponse0 = new FetchResponsePartitionData(messages = new ByteBufferMessageSet(new Message("first message".getBytes)))
@@ -123,7 +124,7 @@ object SerializationTestUtils {
   def createTestLeaderAndIsrRequest() : LeaderAndIsrRequest = {
     val leaderAndIsr1 = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader1, 1, isr1, 1), 1)
     val leaderAndIsr2 = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader2, 1, isr2, 2), 1)
-    val map = Map(((topic1, 0), PartitionStateInfo(leaderAndIsr1, isr1.toSet)),
+    val map = Map(((topic1, 0), PartitionStateInfo(leaderAndIsr1, isr1.toSet, isrDirs1)),
                   ((topic2, 0), PartitionStateInfo(leaderAndIsr2, isr2.toSet)))
     new LeaderAndIsrRequest(map.toMap, collection.immutable.Set[BrokerEndPoint](), 0, 1, 0, "")
   }

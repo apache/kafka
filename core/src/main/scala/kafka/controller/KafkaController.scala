@@ -571,7 +571,7 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
         updateAssignedReplicasForPartition(topicAndPartition, newAndOldReplicas.toSeq)
         //2. Send LeaderAndIsr request to every replica in OAR + RAR (with AR as OAR + RAR).
         updateLeaderEpochAndSendRequest(topicAndPartition, controllerContext.partitionReplicaAssignment(topicAndPartition),
-          newAndOldReplicas.toSeq)
+          newAndOldReplicas.toSeq, reassignedPartitionContext.newReplicaLogDirs)
         //3. replicas in RAR - OAR -> NewReplica
         startNewReplicasForReassignedPartition(topicAndPartition, reassignedPartitionContext, newReplicasNotInOldReplicaList)
         info("Waiting for new replicas %s for partition %s being ".format(reassignedReplicas.mkString(","), topicAndPartition) +
@@ -899,13 +899,16 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     }
   }
 
-  private def updateLeaderEpochAndSendRequest(topicAndPartition: TopicAndPartition, replicasToReceiveRequest: Seq[Int], newAssignedReplicas: Seq[Int]) {
+  private def updateLeaderEpochAndSendRequest(topicAndPartition: TopicAndPartition,
+                                              replicasToReceiveRequest: Seq[Int],
+                                              newAssignedReplicas: Seq[Int],
+                                              newReplicaDirs: Map[String, String] = Map.empty) {
     brokerRequestBatch.newBatch()
     updateLeaderEpoch(topicAndPartition.topic, topicAndPartition.partition) match {
       case Some(updatedLeaderIsrAndControllerEpoch) =>
         try {
           brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasToReceiveRequest, topicAndPartition.topic,
-            topicAndPartition.partition, updatedLeaderIsrAndControllerEpoch, newAssignedReplicas)
+            topicAndPartition.partition, updatedLeaderIsrAndControllerEpoch, newAssignedReplicas, newReplicaDirs)
           brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
         } catch {
           case e : IllegalStateException => {
@@ -1256,6 +1259,7 @@ class PartitionsReassignedListener(controller: KafkaController) extends IZkDataL
     debug("Partitions reassigned listener fired for path %s. Record partitions to be reassigned %s"
       .format(dataPath, data))
     val partitionsReassignmentData = zkUtils.parsePartitionReassignmentData(data.toString)
+    val partitionsReassignmentDir = zkUtils.parsePartitionReassignmentDirInfo(data.toString)
     val partitionsToBeReassigned = inLock(controllerContext.controllerLock) {
       partitionsReassignmentData.filterNot(p => controllerContext.partitionsBeingReassigned.contains(p._1))
     }
@@ -1266,7 +1270,10 @@ class PartitionsReassignedListener(controller: KafkaController) extends IZkDataL
             .format(partitionToBeReassigned._1, partitionToBeReassigned._1.topic))
           controller.removePartitionFromReassignedPartitions(partitionToBeReassigned._1)
         } else {
-          val context = new ReassignedPartitionsContext(partitionToBeReassigned._2)
+          var replicaDirs: Map[String, String] =  Map.empty
+          if (partitionsReassignmentDir.contains(partitionToBeReassigned._1))
+            replicaDirs = partitionsReassignmentDir(partitionToBeReassigned._1)
+          val context = new ReassignedPartitionsContext(partitionToBeReassigned._2, replicaDirs)
           controller.initiateReassignReplicasForTopicPartition(partitionToBeReassigned._1, context)
         }
       }
@@ -1447,6 +1454,7 @@ class PreferredReplicaElectionListener(controller: KafkaController) extends IZkD
 }
 
 case class ReassignedPartitionsContext(var newReplicas: Seq[Int] = Seq.empty,
+                                       var newReplicaLogDirs: Map[String,String] = Map.empty,
                                        var isrChangeListener: ReassignedPartitionsIsrChangeListener = null)
 
 case class PartitionAndReplica(topic: String, partition: Int, replica: Int) {

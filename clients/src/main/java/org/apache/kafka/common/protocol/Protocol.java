@@ -552,6 +552,10 @@ public class Protocol {
     public static final Schema[] LEAVE_GROUP_REQUEST = new Schema[] {LEAVE_GROUP_REQUEST_V0};
     public static final Schema[] LEAVE_GROUP_RESPONSE = new Schema[] {LEAVE_GROUP_RESPONSE_V0};
 
+    public static final Schema REPLICA_AND_LOGDIR_V0 =
+            new Schema(new Field("replica", STRING, "the replica id."),
+                       new Field("log_dir", STRING, "the log dir"));
+
     /* Leader and ISR api */
     public static final Schema LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0 =
             new Schema(new Field("topic", STRING, "Topic name."),
@@ -561,7 +565,8 @@ public class Protocol {
                        new Field("leader_epoch", INT32, "The leader epoch."),
                        new Field("isr", new ArrayOf(INT32), "The in sync replica ids."),
                        new Field("zk_version", INT32, "The ZK version."),
-                       new Field("replicas", new ArrayOf(INT32), "The replica ids."));
+                       new Field("replicas", new ArrayOf(INT32), "The replica ids."),
+                       new Field("replica_logdirs", new ArrayOf(REPLICA_AND_LOGDIR_V0), "the replica logdirs"));
 
     public static final Schema LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0 =
             new Schema(new Field("id", INT32, "The broker id."),

@@ -57,13 +57,16 @@ object PartitionStateInfo {
     val zkVersion = buffer.getInt
     val replicationFactor = buffer.getInt
     val replicas = for(i <- 0 until replicationFactor) yield buffer.getInt
+    val replicaDirsSize = buffer.getInt
+    val replicaDirs = for(i <- 0 until replicaDirsSize) yield readShortString(buffer) -> readShortString(buffer)
     PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, leaderEpoch, isr.toList, zkVersion), controllerEpoch),
-                       replicas.toSet)
+                       replicas.toSet, replicaDirs.toMap)
   }
 }
 
 case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
-                              allReplicas: Set[Int]) {
+                              allReplicas: Set[Int],
+                              replicaDirs: scala.collection.Map[String, String] = Map.empty) {
   def replicationFactor = allReplicas.size
 
   def writeTo(buffer: ByteBuffer) {
@@ -75,10 +78,15 @@ case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControlle
     buffer.putInt(leaderIsrAndControllerEpoch.leaderAndIsr.zkVersion)
     buffer.putInt(replicationFactor)
     allReplicas.foreach(buffer.putInt(_))
+    buffer.putInt(replicaDirs.size)
+    for ((key, value) <- replicaDirs) {
+      writeShortString(buffer, key)
+      writeShortString(buffer, value)
+    }
   }
 
   def sizeInBytes(): Int = {
-    val size =
+    var size =
       4 /* epoch of the controller that elected the leader */ +
       4 /* leader broker id */ +
       4 /* leader epoch */ +
@@ -86,7 +94,10 @@ case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControlle
       4 * leaderIsrAndControllerEpoch.leaderAndIsr.isr.size /* replicas in isr */ +
       4 /* zk version */ +
       4 /* replication factor */ +
-      allReplicas.size * 4
+      allReplicas.size * 4 +
+      4 /* number of replicaDirs */
+      for ((key, value) <- replicaDirs)
+        size += 2 + key.length + 2 + value.length
     size
   }
 
@@ -94,7 +105,9 @@ case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControlle
     val partitionStateInfo = new StringBuilder
     partitionStateInfo.append("(LeaderAndIsrInfo:" + leaderIsrAndControllerEpoch.toString)
     partitionStateInfo.append(",ReplicationFactor:" + replicationFactor + ")")
-    partitionStateInfo.append(",AllReplicas:" + allReplicas.mkString(",") + ")")
+    partitionStateInfo.append(",AllReplicas:" + allReplicas.mkString(","))
+    partitionStateInfo.append(",ReplicaDirs:{" + replicaDirs.map(p => p._1 + ":" + p._2).toSeq.mkString(",") + "}")
+    partitionStateInfo.append(")")
     partitionStateInfo.toString()
   }
 }

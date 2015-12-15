@@ -668,6 +668,28 @@ class ZkUtils(val zkClient: ZkClient,
     parsePartitionReassignmentDataWithoutDedup(jsonData).toMap
   }
 
+  def parsePartitionReassignmentDirInfo(jsonData: String): Map[TopicAndPartition, Map[String, String]] = {
+    Json.parseFull(jsonData) match {
+      case Some(m) =>
+        m.asInstanceOf[Map[String, Any]].get("partitions") match {
+          case Some(partitionsSeq) =>
+            partitionsSeq.asInstanceOf[Seq[Map[String, Any]]].map(p => {
+              val topic = p.get("topic").get.asInstanceOf[String]
+              val partition = p.get("partition").get.asInstanceOf[Int]
+              val replicaDirs = p.get("replicaDirs") match {
+                case Some(rds) => rds.asInstanceOf[Map[String, String]]
+                case None => Map[String, String]()
+              }
+              TopicAndPartition(topic, partition) -> replicaDirs
+            }).toMap
+          case None =>
+            Map.empty
+        }
+      case None =>
+        Map.empty
+    }
+  }
+
   def parseTopicsData(jsonData: String): Seq[String] = {
     var topics = List.empty[String]
     Json.parseFull(jsonData) match {

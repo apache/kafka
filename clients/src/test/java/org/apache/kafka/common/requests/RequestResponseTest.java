@@ -113,6 +113,7 @@ public class RequestResponseTest {
             Method deserializer = req.getClass().getDeclaredMethod("parse", ByteBuffer.class, Integer.TYPE);
             deserialized = (AbstractRequestResponse) deserializer.invoke(null, buffer, version);
         }
+
         assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should be the same.", req, deserialized);
         assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should have the same hashcode.",
                 req.hashCode(), deserialized.hashCode());
@@ -334,12 +335,14 @@ public class RequestResponseTest {
         Map<TopicPartition, LeaderAndIsrRequest.PartitionState> partitionStates = new HashMap<>();
         List<Integer> isr = Arrays.asList(1, 2);
         List<Integer> replicas = Arrays.asList(1, 2, 3, 4);
+        Map<String, String> replicaDirs = new HashMap<String, String>();
+        replicaDirs.put("1", "/data1/kafka_data");
         partitionStates.put(new TopicPartition("topic5", 105),
                 new LeaderAndIsrRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
         partitionStates.put(new TopicPartition("topic5", 1),
-                new LeaderAndIsrRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new LeaderAndIsrRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas), replicaDirs));
         partitionStates.put(new TopicPartition("topic20", 1),
-                new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas), replicaDirs));
 
         Set<LeaderAndIsrRequest.EndPoint> leaders = new HashSet<>(Arrays.asList(
                 new LeaderAndIsrRequest.EndPoint(0, "test0", 1223),
