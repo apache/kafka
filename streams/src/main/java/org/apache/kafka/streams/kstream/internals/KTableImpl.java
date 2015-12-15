@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 
+import java.util.Collection;
 import java.util.Set;
 
 /**
@@ -237,8 +238,26 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1, V1> KTable<K1, V1> aggregate(AggregateSupplier<K1, KeyValue<K, V>, V1> aggregateSupplier, KeyValueMapper<K, V, K1> selector) {
+    public <K1, V1, V2> KTable<K1, V2> aggregate(AggregateSupplier<K1, V1, V2> aggregateSupplier, KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name) {
         // TODO
         return null;
+    }
+
+    @Override
+    public <K1, V1> KTable<K1, V1>sum(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name) {
+
+        return this.aggregate(new SumSupplier<>(), selector, name);
+    }
+
+    @Override
+    public <K1> KTable<K1, Long> count(KeyValueMapper<K, V, KeyValue<K1, Long>> selector, String name) {
+
+        return this.aggregate(new CountSupplier<>(), selector, name);
+    }
+
+    @Override
+    public <K1, V1> KTable<K1, Collection<V1>> topK(int k, KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name) {
+
+        return this.aggregate(new TopKSupplier<>(k), selector, name);
     }
 }

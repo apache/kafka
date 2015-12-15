@@ -20,6 +20,8 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
+import java.util.Collection;
+
 /**
  * KTable is an abstraction of a change log stream.
  *
@@ -147,5 +149,20 @@ public interface KTable<K, V> {
      * @param <K1>   the key type of the aggregated table
      * @param <V1>   the value type of the aggregated table
      */
-    <K1, V1> KTable<K1, V1> aggregate(AggregateSupplier<K1, KeyValue<K, V>, V1> aggregateSupplier, KeyValueMapper<K, V, K1> selector, String name);
+    <K1, V1, V2> KTable<K1, V2> aggregate(AggregateSupplier<K1, V1, V2> aggregateSupplier, KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name);
+
+    /**
+     * Sum values of this table by the selected key on a window basis.
+     */
+    <K1, V1> KTable<K1, V1>sum(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name);
+
+    /**
+     * Count number of records of this table by the selected key on a window basis.
+     */
+    <K1> KTable<K1, Long> count(KeyValueMapper<K, V, KeyValue<K1, Long>> selector, String name);
+
+    /**
+     * Get the top-k records of this table by the selected key on a window basis.
+     */
+    <K1, V1> KTable<K1, Collection<V1>> topK(int k, KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name);
 }

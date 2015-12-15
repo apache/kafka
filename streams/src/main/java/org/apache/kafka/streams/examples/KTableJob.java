@@ -56,67 +56,17 @@ public class KTableJob {
         // stream aggregate
         KStream<String, Integer> stream1 = builder.stream("topic1");
 
-        KWindowedTable<String, Integer, HoppingWindow> wtable1 = stream1.aggregateByKey(new AggregateSupplier<String, Integer, Integer>() {
-            @Override
-            public Aggregator<String, Integer, Integer> get() {
-                return new Aggregator<String, Integer, Integer>() {
-                    @Override
-                    public Integer initialValue() {
-                        return 0;
-                    }
-
-                    @Override
-                    public Integer add(String aggKey, Integer value, Integer aggregate) {
-                        return aggregate + value;
-                    }
-
-                    @Override
-                    public Integer remove(String aggKey, Integer value, Integer aggregate) {
-                        return aggregate - value;
-                    }
-
-                    @Override
-                    public Integer merge(Integer aggr1, Integer aggr2) {
-                        return aggr1 + aggr2;
-                    }
-                };
-            }
-        }, HoppingWindows.of(1000).every(500).emit(1000).until(1000 * 60 * 60 * 24 /* one day */));
+        KWindowedTable<String, Integer, HoppingWindow> wtable1 = stream1.sumByKey(HoppingWindows.of(1000).every(500).emit(1000).until(1000 * 60 * 60 * 24 /* one day */));
 
         // table aggregation
         KTable<String, String> table1 = builder.table("topic2");
 
-        KTable<String, Integer> table2 = table1.aggregate(new AggregateSupplier<String, KeyValue<String, String>, Integer>() {
+        KTable<String, Integer> table2 = table1.sum(new KeyValueMapper<String, String, KeyValue<String, Integer>>() {
             @Override
-            public Aggregator<String, KeyValue<String, String>, Integer> get() {
-                return new Aggregator<String, KeyValue<String, String>, Integer>() {
-                    @Override
-                    public Integer initialValue() {
-                        return 0;
-                    }
-
-                    @Override
-                    public Integer add(String aggKey, KeyValue<String, String> value, Integer aggregate) {
-                        return aggregate + new Integer(value.value);
-                    }
-
-                    @Override
-                    public Integer remove(String aggKey, KeyValue<String, String> value, Integer aggregate) {
-                        return aggregate - new Integer(value.value);
-                    }
-
-                    @Override
-                    public Integer merge(Integer aggr1, Integer aggr2) {
-                        return aggr1 + aggr2;
-                    }
-                };
+            public KeyValue<String, Integer> apply(String key, String value) {
+                return new KeyValue<>(value, new Integer(key));
             }
-        }, new KeyValueMapper<String, String, String>() {
-            @Override
-            public String apply(String key, String value) {
-                return value;
-            }
-        });
+        }, "table2");
 
         // stream-table join
         KStream<String, Integer> stream2 = stream1.leftJoin(table2, new ValueJoiner<Integer, Integer, Integer>() {
