@@ -19,6 +19,7 @@ from ducktape.utils.util import wait_until
 from config import KafkaConfig
 from kafkatest.services.kafka import config_property
 from kafkatest.services.kafka.version import TRUNK
+from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.security_config import SecurityConfig
