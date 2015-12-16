@@ -15,31 +15,22 @@
 
 from ducktape.utils.util import wait_until
 
-from kafkatest.tests.kafka_test import KafkaTest
-from kafkatest.services.verifiable_consumer import VerifiableConsumer
+from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
 from kafkatest.services.kafka import TopicPartition
 
-class ConsumerRollingUpgradeTest(KafkaTest):
+class ConsumerRollingUpgradeTest(VerifiableConsumerTest):
     TOPIC = "test_topic"
     NUM_PARTITIONS = 4
-    GROUP_ID = "test_group_id"
     RANGE = "org.apache.kafka.clients.consumer.RangeAssignor"
     ROUND_ROBIN = "org.apache.kafka.clients.consumer.RoundRobinAssignor"
 
     def __init__(self, test_context):
-        super(ConsumerRollingUpgradeTest, self).__init__(test_context, num_zk=1, num_brokers=1, topics={
+        super(ConsumerRollingUpgradeTest, self).__init__(test_context, num_consumers=2, num_producers=0,
+                                                         num_zk=1, num_brokers=1, topics={
             self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 1 }
         })
         self.num_consumers = 2
         self.session_timeout = 10000
-
-    def min_cluster_size(self):
-        return super(ConsumerRollingUpgradeTest, self).min_cluster_size() + self.num_consumers
-
-    def _await_all_members(self, consumer):
-        # Wait until all members have joined the group
-        wait_until(lambda: len(consumer.joined_nodes()) == self.num_consumers, timeout_sec=self.session_timeout+5,
-                   err_msg="Consumers failed to join in a reasonable amount of time")
 
     def _verify_range_assignment(self, consumer):
         # range assignment should give us two partition sets: (0, 1) and (2, 3)
@@ -63,11 +54,10 @@ class ConsumerRollingUpgradeTest(KafkaTest):
         """
 
         # initialize the consumer using range assignment
-        consumer = VerifiableConsumer(self.test_context, self.num_consumers, self.kafka,
-                                      self.TOPIC, self.GROUP_ID, session_timeout=self.session_timeout,
-                                      assignment_strategy=self.RANGE)
+        consumer = self.setup_consumer(self.TOPIC, assignment_strategy=self.RANGE)
+
         consumer.start()
-        self._await_all_members(consumer)
+        self.await_all_members(consumer)
         self._verify_range_assignment(consumer)
 
         # change consumer configuration to prefer round-robin assignment, but still support range assignment
@@ -76,13 +66,13 @@ class ConsumerRollingUpgradeTest(KafkaTest):
         # restart one of the nodes and verify that we are still using range assignment
         consumer.stop_node(consumer.nodes[0])
         consumer.start_node(consumer.nodes[0])
-        self._await_all_members(consumer)
+        self.await_all_members(consumer)
         self._verify_range_assignment(consumer)
         
         # now restart the other node and verify that we have switched to round-robin
         consumer.stop_node(consumer.nodes[1])
         consumer.start_node(consumer.nodes[1])
-        self._await_all_members(consumer)
+        self.await_all_members(consumer)
         self._verify_roundrobin_assignment(consumer)
 
         # if we want, we can now drop support for range assignment
@@ -90,5 +80,5 @@ class ConsumerRollingUpgradeTest(KafkaTest):
         for node in consumer.nodes:
             consumer.stop_node(node)
             consumer.start_node(node)
-            self._await_all_members(consumer)
+            self.await_all_members(consumer)
             self._verify_roundrobin_assignment(consumer)
