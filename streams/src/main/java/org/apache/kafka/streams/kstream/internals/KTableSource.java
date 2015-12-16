@@ -20,13 +20,15 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class KTableSource<K, V> implements KTableProcessorSupplier<K, V, V> {
+public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     public final String topic;
 
     private boolean materialized = false;
+    private boolean sendOldValues = false;
 
     public KTableSource(String topic) {
         this.topic = topic;
@@ -45,15 +47,14 @@ public class KTableSource<K, V> implements KTableProcessorSupplier<K, V, V> {
         return materialized;
     }
 
-    @Override
-    public KTableValueGetterSupplier<K, V> view() {
-        throw new IllegalStateException("a view cannot be define on the ktable source");
+    public void enableSendingOldValues() {
+        sendOldValues = true;
     }
 
     private class KTableSourceProcessor extends AbstractProcessor<K, V> {
         @Override
         public void process(K key, V value) {
-            context().forward(key, value);
+            context().forward(key, new Change<>(value, null));
         }
     }
 
@@ -70,8 +71,10 @@ public class KTableSource<K, V> implements KTableProcessorSupplier<K, V, V> {
 
         @Override
         public void process(K key, V value) {
+            V oldValue = sendOldValues ? store.get(key) : null;
             store.put(key, value);
-            context().forward(key, value);
+
+            context().forward(key, new Change<>(value, oldValue));
         }
     }
 

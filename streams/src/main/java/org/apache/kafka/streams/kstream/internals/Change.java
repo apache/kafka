@@ -17,12 +17,18 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+public class Change<T> {
 
-public interface KTableProcessorSupplier<K, V, T> extends ProcessorSupplier<K, Change<V>> {
+    public final T newValue;
+    public final T oldValue;
 
-    KTableValueGetterSupplier<K, T> view();
+    public Change(T newValue, T oldValue) {
+        this.newValue = newValue;
+        this.oldValue = oldValue;
+    }
 
-    void enableSendingOldValues();
-
+    @Override
+    public String toString() {
+        return "(" + newValue + "<-" + oldValue + ")";
+    }
 }

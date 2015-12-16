@@ -28,6 +28,8 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final Predicate<K, V> predicate;
     private final boolean filterOut;
 
+    private boolean sendOldValues = false;
+
     public KTableFilter(KTableImpl<K, ?, V> parent, Predicate<K, V> predicate, boolean filterOut) {
         this.parent = parent;
         this.predicate = predicate;
@@ -35,7 +37,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
-    public Processor<K, V> get() {
+    public Processor<K, Change<V>> get() {
         return new KTableFilterProcessor();
     }
 
@@ -53,7 +55,13 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         };
     }
 
-    private V computeNewValue(K key, V value) {
+    @Override
+    public void enableSendingOldValues() {
+        parent.enableSendingOldValues();
+        sendOldValues = true;
+    }
+
+    private V computeValue(K key, V value) {
         V newValue = null;
 
         if (value != null && (filterOut ^ predicate.test(key, value)))
@@ -62,11 +70,14 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         return newValue;
     }
 
-    private class KTableFilterProcessor extends AbstractProcessor<K, V> {
+    private class KTableFilterProcessor extends AbstractProcessor<K, Change<V>> {
 
         @Override
-        public void process(K key, V value) {
-            context().forward(key, computeNewValue(key, value));
+        public void process(K key, Change<V> change) {
+            V newValue = computeValue(key, change.newValue);
+            V oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
+
+            context().forward(key, new Change<>(newValue, oldValue));
         }
 
     }
@@ -86,7 +97,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
         @Override
         public V get(K key) {
-            return computeNewValue(key, parentGetter.get(key));
+            return computeValue(key, parentGetter.get(key));
         }
 
     }

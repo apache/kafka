@@ -22,22 +22,14 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-class KTableKTableOuterJoin<K, V, V1, V2> implements KTableProcessorSupplier<K, V1, V> {
+class KTableKTableOuterJoin<K, V, V1, V2> extends KTableKTableAbstractJoin<K, V, V1, V2> {
 
-    private final KTableValueGetterSupplier<K, V1> valueGetterSupplier1;
-    private final KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
-    private final ValueJoiner<V1, V2, V> joiner;
-
-    KTableKTableOuterJoin(KTableImpl<K, ?, V1> table1,
-                          KTableImpl<K, ?, V2> table2,
-                          ValueJoiner<V1, V2, V> joiner) {
-        this.valueGetterSupplier1 = table1.valueGetterSupplier();
-        this.valueGetterSupplier2 = table2.valueGetterSupplier();
-        this.joiner = joiner;
+    KTableKTableOuterJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<V1, V2, V> joiner) {
+        super(table1, table2, joiner);
     }
 
     @Override
-    public Processor<K, V1> get() {
+    public Processor<K, Change<V1>> get() {
         return new KTableKTableOuterJoinProcessor(valueGetterSupplier2.get());
     }
 
@@ -52,7 +44,7 @@ class KTableKTableOuterJoin<K, V, V1, V2> implements KTableProcessorSupplier<K, 
         };
     }
 
-    private class KTableKTableOuterJoinProcessor extends AbstractProcessor<K, V1> {
+    private class KTableKTableOuterJoinProcessor extends AbstractProcessor<K, Change<V1>> {
 
         private final KTableValueGetter<K, V2> valueGetter;
 
@@ -68,14 +60,20 @@ class KTableKTableOuterJoin<K, V, V1, V2> implements KTableProcessorSupplier<K, 
         }
 
         @Override
-        public void process(K key, V1 value1) {
+        public void process(K key, Change<V1> change) {
             V newValue = null;
+            V oldValue = null;
             V2 value2 = valueGetter.get(key);
 
-            if (value1 != null || value2 != null)
-                newValue = joiner.apply(value1, value2);
+            if (change.newValue != null || value2 != null)
+                newValue = joiner.apply(change.newValue, value2);
 
-            context().forward(key, newValue);
+            if (sendOldValues) {
+                if (change.oldValue != null || value2 != null)
+                    oldValue = joiner.apply(change.oldValue, value2);
+            }
+
+            context().forward(key, new Change<>(newValue, oldValue));
         }
     }
 
