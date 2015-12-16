@@ -62,7 +62,7 @@ public class Schema extends Type {
     /**
      * Read a struct from the buffer
      */
-    public Object read(ByteBuffer buffer) {
+    public Struct read(ByteBuffer buffer) {
         Object[] objects = new Object[fields.length];
         for (int i = 0; i < fields.length; i++) {
             try {

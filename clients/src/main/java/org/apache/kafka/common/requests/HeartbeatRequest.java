@@ -76,6 +76,6 @@ public class HeartbeatRequest extends AbstractRequest {
     }
 
     public static HeartbeatRequest parse(ByteBuffer buffer) {
-        return new HeartbeatRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new HeartbeatRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

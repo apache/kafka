@@ -96,6 +96,6 @@ public class StopReplicaResponse extends AbstractRequestResponse {
     }
 
     public static StopReplicaResponse parse(ByteBuffer buffer) {
-        return new StopReplicaResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new StopReplicaResponse(CURRENT_SCHEMA.read(buffer));
     }
 }

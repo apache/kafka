@@ -57,15 +57,15 @@ public class ProtoUtils {
     }
 
     public static Struct parseRequest(int apiKey, int version, ByteBuffer buffer) {
-        return (Struct) requestSchema(apiKey, version).read(buffer);
+        return requestSchema(apiKey, version).read(buffer);
     }
 
     public static Struct parseResponse(int apiKey, ByteBuffer buffer) {
-        return (Struct) currentResponseSchema(apiKey).read(buffer);
+        return currentResponseSchema(apiKey).read(buffer);
     }
 
     public static Struct parseResponse(int apiKey, int version, ByteBuffer buffer) {
-        return (Struct) responseSchema(apiKey, version).read(buffer);
+        return responseSchema(apiKey, version).read(buffer);
     }
 
 }

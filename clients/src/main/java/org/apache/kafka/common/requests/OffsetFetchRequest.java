@@ -118,6 +118,6 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     public static OffsetFetchRequest parse(ByteBuffer buffer) {
-        return new OffsetFetchRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new OffsetFetchRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

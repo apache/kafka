@@ -69,7 +69,7 @@ public class SyncGroupResponse extends AbstractRequestResponse {
     }
 
     public static SyncGroupResponse parse(ByteBuffer buffer) {
-        return new SyncGroupResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new SyncGroupResponse(CURRENT_SCHEMA.read(buffer));
     }
 
 }

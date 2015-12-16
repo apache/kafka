@@ -49,7 +49,7 @@ public class UpdateMetadataResponse extends AbstractRequestResponse {
     }
 
     public static UpdateMetadataResponse parse(ByteBuffer buffer) {
-        return new UpdateMetadataResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new UpdateMetadataResponse(CURRENT_SCHEMA.read(buffer));
     }
 
     public static UpdateMetadataResponse parse(ByteBuffer buffer, int version) {
