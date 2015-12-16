@@ -29,6 +29,8 @@ import kafka.log.{LogAppendInfo, LogManager}
 import kafka.message.{ByteBufferMessageSet, MessageSet}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
+import org.apache.kafka.common.errors.{OffsetOutOfRangeException, RecordBatchTooLargeException, ReplicaNotAvailableException, RecordTooLargeException,
+InvalidTopicException, ControllerMovedException, NotLeaderForPartitionException, CorruptRecordException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -44,8 +46,8 @@ import scala.collection.JavaConverters._
  */
 case class LogAppendResult(info: LogAppendInfo, error: Option[Throwable] = None) {
   def errorCode = error match {
-    case None => ErrorMapping.NoError
-    case Some(e) => ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
+    case None => Errors.NONE.code
+    case Some(e) => Errors.forException(e).code
   }
 }
 
@@ -65,8 +67,8 @@ case class LogReadResult(info: FetchDataInfo,
                          error: Option[Throwable] = None) {
 
   def errorCode = error match {
-    case None => ErrorMapping.NoError
-    case Some(e) => ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
+    case None => Errors.NONE.code
+    case Some(e) => Errors.forException(e).code
   }
 
   override def toString = {
@@ -216,7 +218,7 @@ class ReplicaManager(val config: KafkaConfig,
   def stopReplica(topic: String, partitionId: Int, deletePartition: Boolean): Short  = {
     stateChangeLogger.trace("Broker %d handling stop replica (delete=%s) for partition [%s,%d]".format(localBrokerId,
       deletePartition.toString, topic, partitionId))
-    val errorCode = ErrorMapping.NoError
+    val errorCode = Errors.NONE.code
     getPartition(topic, partitionId) match {
       case Some(partition) =>
         if(deletePartition) {
@@ -248,7 +250,7 @@ class ReplicaManager(val config: KafkaConfig,
       if(stopReplicaRequest.controllerEpoch() < controllerEpoch) {
         stateChangeLogger.warn("Broker %d received stop replica request from an old controller epoch %d. Latest known controller epoch is %d"
           .format(localBrokerId, stopReplicaRequest.controllerEpoch, controllerEpoch))
-        (responseMap, ErrorMapping.StaleControllerEpochCode)
+        (responseMap, Errors.STALE_CONTROLLER_EPOCH.code)
       } else {
         val partitions = stopReplicaRequest.partitions.asScala
         controllerEpoch = stopReplicaRequest.controllerEpoch
@@ -258,7 +260,7 @@ class ReplicaManager(val config: KafkaConfig,
           val errorCode = stopReplica(topicPartition.topic, topicPartition.partition, stopReplicaRequest.deletePartitions)
           responseMap.put(topicPartition, errorCode)
         }
-        (responseMap, ErrorMapping.NoError)
+        (responseMap, Errors.NONE.code)
       }
     }
   }
@@ -393,7 +395,6 @@ class ReplicaManager(val config: KafkaConfig,
 
       // reject appending to internal topics if it is not allowed
       if (Topic.InternalTopics.contains(topicAndPartition.topic) && !internalTopicsAllowed) {
-
         (topicAndPartition, LogAppendResult(
           LogAppendInfo.UnknownLogAppendInfo,
           Some(new InvalidTopicException("Cannot append to internal topic %s".format(topicAndPartition.topic)))))
@@ -433,11 +434,11 @@ class ReplicaManager(val config: KafkaConfig,
             (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(utpe)))
           case nle: NotLeaderForPartitionException =>
             (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(nle)))
-          case mtle: MessageSizeTooLargeException =>
+          case mtle: RecordTooLargeException =>
             (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(mtle)))
-          case mstle: MessageSetSizeTooLargeException =>
+          case mstle: RecordBatchTooLargeException =>
             (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(mstle)))
-          case imse : InvalidMessageSizeException =>
+          case imse: CorruptRecordException =>
             (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(imse)))
           case t: Throwable =>
             BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).failedProduceRequestRate.mark()
@@ -473,7 +474,7 @@ class ReplicaManager(val config: KafkaConfig,
     // check if this fetch request can be satisfied right away
     val bytesReadable = logReadResults.values.map(_.info.messageSet.sizeInBytes).sum
     val errorReadingData = logReadResults.values.foldLeft(false) ((errorIncurred, readResult) =>
-      errorIncurred || (readResult.errorCode != ErrorMapping.NoError))
+      errorIncurred || (readResult.errorCode != Errors.NONE.code))
 
     // respond immediately if 1) fetch request does not want to wait
     //                        2) fetch request does not require any data
@@ -599,7 +600,7 @@ class ReplicaManager(val config: KafkaConfig,
           "its controller epoch %d is old. Latest known controller epoch is %d").format(localBrokerId, leaderAndISRRequest.controllerId,
           correlationId, leaderAndISRRequest.controllerEpoch, controllerEpoch))
         }
-        BecomeLeaderOrFollowerResult(responseMap, ErrorMapping.StaleControllerEpochCode)
+        BecomeLeaderOrFollowerResult(responseMap, Errors.STALE_CONTROLLER_EPOCH.code)
       } else {
         val controllerId = leaderAndISRRequest.controllerId
         controllerEpoch = leaderAndISRRequest.controllerEpoch
@@ -619,7 +620,7 @@ class ReplicaManager(val config: KafkaConfig,
                 "epoch %d for partition [%s,%d] as itself is not in assigned replica list %s")
                 .format(localBrokerId, controllerId, correlationId, leaderAndISRRequest.controllerEpoch,
                   topicPartition.topic, topicPartition.partition, stateInfo.replicas.asScala.mkString(",")))
-              responseMap.put(topicPartition, ErrorMapping.UnknownTopicOrPartitionCode)
+              responseMap.put(topicPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
             }
           } else {
             // Otherwise record the error code in response
@@ -627,7 +628,7 @@ class ReplicaManager(val config: KafkaConfig,
               "epoch %d for partition [%s,%d] since its associated leader epoch %d is old. Current leader epoch is %d")
               .format(localBrokerId, controllerId, correlationId, leaderAndISRRequest.controllerEpoch,
                 topicPartition.topic, topicPartition.partition, stateInfo.leaderEpoch, partitionLeaderEpoch))
-            responseMap.put(topicPartition, ErrorMapping.StaleLeaderEpochCode)
+            responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH.code)
           }
         }
 
@@ -654,7 +655,7 @@ class ReplicaManager(val config: KafkaConfig,
         replicaFetcherManager.shutdownIdleFetcherThreads()
 
         onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
-        BecomeLeaderOrFollowerResult(responseMap, ErrorMapping.NoError)
+        BecomeLeaderOrFollowerResult(responseMap, Errors.NONE.code)
       }
     }
   }
@@ -683,7 +684,7 @@ class ReplicaManager(val config: KafkaConfig,
         .format(localBrokerId, correlationId, controllerId, epoch, TopicAndPartition(state._1.topic, state._1.partitionId))))
 
     for (partition <- partitionState.keys)
-      responseMap.put(new TopicPartition(partition.topic, partition.partitionId), ErrorMapping.NoError)
+      responseMap.put(new TopicPartition(partition.topic, partition.partitionId), Errors.NONE.code)
 
     val partitionsToMakeLeaders: mutable.Set[Partition] = mutable.Set()
 
@@ -755,7 +756,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     for (partition <- partitionState.keys)
-      responseMap.put(new TopicPartition(partition.topic, partition.partitionId), ErrorMapping.NoError)
+      responseMap.put(new TopicPartition(partition.topic, partition.partitionId), Errors.NONE.code)
 
     val partitionsToMakeFollower: mutable.Set[Partition] = mutable.Set()
 

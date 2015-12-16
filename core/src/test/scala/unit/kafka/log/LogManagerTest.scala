@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -23,6 +23,7 @@ import java.util.Properties
 import kafka.common._
 import kafka.server.OffsetCheckpoint
 import kafka.utils._
+import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -56,7 +57,7 @@ class LogManagerTest {
     CoreUtils.rm(logDir)
     logManager.logDirs.foreach(CoreUtils.rm(_))
   }
-  
+
   /**
    * Test that getOrCreateLog on a non-existent log creates a new log and that we can append to the new log.
    */
@@ -92,9 +93,9 @@ class LogManagerTest {
       offset = info.lastOffset
     }
     assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
-    
+
     log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
-    
+
     time.sleep(maxLogAgeMs + 1)
     assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
@@ -177,15 +178,15 @@ class LogManagerTest {
     time.sleep(logManager.InitialTaskDelayMs)
     assertTrue("Time based flush should have been triggered triggered", lastFlush != log.lastFlushTime)
   }
-  
+
   /**
    * Test that new logs that are created are assigned to the least loaded log directory
    */
   @Test
   def testLeastLoadedAssignment() {
     // create a log manager with multiple data directories
-    val dirs = Array(TestUtils.tempDir(), 
-                     TestUtils.tempDir(), 
+    val dirs = Array(TestUtils.tempDir(),
+                     TestUtils.tempDir(),
                      TestUtils.tempDir())
     logManager.shutdown()
     logManager = createLogManager()
@@ -198,7 +199,7 @@ class LogManagerTest {
       assertTrue("Load should balance evenly", counts.max <= counts.min + 1)
     }
   }
-  
+
   /**
    * Test that it is not possible to open two log managers using the same data directory
    */
@@ -208,7 +209,7 @@ class LogManagerTest {
       createLogManager()
       fail("Should not be able to create a second log manager instance with the same data directory")
     } catch {
-      case e: KafkaException => // this is good 
+      case e: KafkaException => // this is good
     }
   }
 

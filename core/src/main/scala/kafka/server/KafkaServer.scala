@@ -46,11 +46,11 @@ import scala.collection.JavaConverters._
 import org.I0Itec.zkclient.ZkClient
 import kafka.controller.{ControllerStats, KafkaController}
 import kafka.cluster.{EndPoint, Broker}
-import kafka.common.{ErrorMapping, InconsistentBrokerIdException, GenerateBrokerIdException}
+import kafka.common.{InconsistentBrokerIdException, GenerateBrokerIdException}
 import kafka.network.{BlockingChannel, SocketServer}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
-import kafka.coordinator.{GroupConfig, GroupCoordinator}
+import kafka.coordinator.GroupCoordinator
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
@@ -269,13 +269,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     }
 
     val secureAclsEnabled = JaasUtils.isZkSecurityEnabled() && config.zkEnableSecureAcls
-    
+
     if(config.zkEnableSecureAcls && !secureAclsEnabled) {
-      throw new java.lang.SecurityException("zkEnableSecureAcls is true, but the verification of the JAAS login file failed.")    
+      throw new java.lang.SecurityException("zkEnableSecureAcls is true, but the verification of the JAAS login file failed.")
     }
     if (chroot.length > 1) {
       val zkConnForChrootCreation = config.zkConnect.substring(0, config.zkConnect.indexOf("/"))
-      val zkClientForChrootCreation = ZkUtils(zkConnForChrootCreation, 
+      val zkClientForChrootCreation = ZkUtils(zkConnForChrootCreation,
                                               config.zkSessionTimeoutMs,
                                               config.zkConnectionTimeoutMs,
                                               secureAclsEnabled)
@@ -465,7 +465,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
               response = channel.receive()
               val shutdownResponse = kafka.api.ControlledShutdownResponse.readFrom(response.payload())
-              if (shutdownResponse.errorCode == ErrorMapping.NoError && shutdownResponse.partitionsRemaining != null &&
+              if (shutdownResponse.errorCode == Errors.NONE.code && shutdownResponse.partitionsRemaining != null &&
                 shutdownResponse.partitionsRemaining.size == 0) {
                 shutdownSucceeded = true
                 info ("Controlled shutdown succeeded")

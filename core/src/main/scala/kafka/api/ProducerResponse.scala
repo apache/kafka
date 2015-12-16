@@ -18,8 +18,10 @@
 package kafka.api
 
 import java.nio.ByteBuffer
+import org.apache.kafka.common.protocol.Errors
+
 import scala.collection.Map
-import kafka.common.{TopicAndPartition, ErrorMapping}
+import kafka.common.TopicAndPartition
 import kafka.api.ApiUtils._
 
 object ProducerResponse {
@@ -56,7 +58,7 @@ case class ProducerResponse(correlationId: Int,
    */
   private lazy val statusGroupedByTopic = status.groupBy(_._1.topic)
 
-  def hasError = status.values.exists(_.error != ErrorMapping.NoError)
+  def hasError = status.values.exists(_.error != Errors.NONE.code)
 
   val sizeInBytes = {
     val throttleTimeSize = if (requestVersion > 0) 4 else 0

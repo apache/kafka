@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
+ * 
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,6 +19,7 @@ package kafka.server
 
 import java.io.File
 import kafka.utils._
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import java.util.{Random, Properties}
@@ -28,13 +29,13 @@ import kafka.zk.ZooKeeperTestHarness
 import kafka.admin.AdminUtils
 import kafka.api.{PartitionOffsetRequestInfo, FetchRequestBuilder, OffsetRequest}
 import kafka.utils.TestUtils._
-import kafka.common.{ErrorMapping, TopicAndPartition}
+import kafka.common.TopicAndPartition
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
 class LogOffsetTest extends ZooKeeperTestHarness {
-  val random = new Random()
+  val random = new Random() 
   var logDir: File = null
   var topicLogDir: File = null
   var server: KafkaServer = null
@@ -67,7 +68,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val request = OffsetRequest(
       Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 10)))
     val offsetResponse = simpleConsumer.getOffsetsBefore(request)
-    assertEquals(ErrorMapping.UnknownTopicOrPartitionCode,
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
                  offsetResponse.partitionErrorAndOffsets(topicAndPartition).error)
   }
 

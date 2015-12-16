@@ -18,12 +18,12 @@
 package kafka.server
 
 import kafka.cluster.{BrokerEndPoint,Broker}
-import kafka.common.{ErrorMapping, ReplicaNotAvailableException, LeaderNotAvailableException}
 import kafka.common.TopicAndPartition
 
 import kafka.api._
 import kafka.controller.KafkaController.StateChangeLogger
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.errors.{ReplicaNotAvailableException, LeaderNotAvailableException}
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import scala.collection.{Seq, Set, mutable}
 import kafka.utils.Logging
 import kafka.utils.CoreUtils._
@@ -75,12 +75,12 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
                 if (isrInfo.size < isr.size)
                   throw new ReplicaNotAvailableException("In Sync Replica information not available for following brokers: " +
                     isr.filterNot(isrInfo.map(_.id).contains(_)).mkString(","))
-                new PartitionMetadata(partitionId, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError)
+                new PartitionMetadata(partitionId, leaderInfo, replicaInfo, isrInfo, Errors.NONE.code)
               } catch {
                 case e: Throwable =>
                   debug("Error while fetching metadata for %s: %s".format(topicPartition, e.toString))
                   new PartitionMetadata(partitionId, leaderInfo, replicaInfo, isrInfo,
-                    ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+                    Errors.forException(e).code)
               }
           }
           topicResponses += new TopicMetadata(topic, partitionMetadata.toSeq)

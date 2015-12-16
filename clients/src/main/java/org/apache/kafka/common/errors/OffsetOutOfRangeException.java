@@ -15,28 +15,22 @@
  * limitations under the License.
  */
 
-package kafka.api
+package org.apache.kafka.common.errors;
 
-import java.nio.ByteBuffer
-import org.apache.kafka.common.protocol.Errors
+/**
+ * No reset policy has been defined, and the offsets for these partitions are either larger or smaller
+ * than the range of offsets the server has for the given partition.
+ */
+public class OffsetOutOfRangeException extends InvalidOffsetException {
 
-object UpdateMetadataResponse {
-  def readFrom(buffer: ByteBuffer): UpdateMetadataResponse = {
-    val correlationId = buffer.getInt
-    val errorCode = buffer.getShort
-    new UpdateMetadataResponse(correlationId, errorCode)
-  }
-}
+    private static final long serialVersionUID = 1L;
 
-case class UpdateMetadataResponse(correlationId: Int,
-                                  errorCode: Short = Errors.NONE.code)
-  extends RequestOrResponse() {
-  def sizeInBytes(): Int = 4 /* correlation id */ + 2 /* error code */
+    public OffsetOutOfRangeException(String message) {
+        super(message);
+    }
 
-  def writeTo(buffer: ByteBuffer) {
-    buffer.putInt(correlationId)
-    buffer.putShort(errorCode)
-  }
+    public OffsetOutOfRangeException(String message, Throwable cause) {
+        super(message, cause);
+    }
 
-  override def describe(details: Boolean):String = { toString }
 }

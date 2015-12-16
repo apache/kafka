@@ -29,6 +29,8 @@ import org.I0Itec.zkclient.exception.ZkNoNodeException
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.BrokerNotAvailableException
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.Utils
@@ -223,11 +225,11 @@ object ConsumerGroupCommand {
                 .format(group, topicAndPartition))
           }
         }
-        else if (offsetAndMetadata.error == ErrorMapping.NoError)
+        else if (offsetAndMetadata.error == Errors.NONE.code)
           offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
         else
           println("Could not fetch offset from kafka for group %s partition %s due to %s."
-            .format(group, topicAndPartition, ErrorMapping.exceptionFor(offsetAndMetadata.error)))
+            .format(group, topicAndPartition, Errors.forCode(offsetAndMetadata.error).exception))
       }
       channel.disconnect()
       offsetMap.toMap

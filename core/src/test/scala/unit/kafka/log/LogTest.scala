@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -20,21 +20,21 @@ package kafka.log
 import java.io._
 import java.util.Properties
 import java.util.concurrent.atomic._
+import org.apache.kafka.common.errors.{OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, CorruptRecordException}
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
 import kafka.message._
-import kafka.common.{MessageSizeTooLargeException, OffsetOutOfRangeException, MessageSetSizeTooLargeException}
 import kafka.utils._
 import kafka.server.KafkaConfig
 
 class LogTest extends JUnitSuite {
-  
+
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val time = new MockTime(0)
   var config: KafkaConfig = null
-  val logConfig = LogConfig()  
+  val logConfig = LogConfig()
 
   @Before
   def setUp() {
@@ -46,7 +46,7 @@ class LogTest extends JUnitSuite {
   def tearDown() {
     CoreUtils.rm(tmpDir)
   }
-  
+
   def createEmptyLogs(dir: File, offsets: Int*) {
     for(offset <- offsets) {
       Log.logFilename(dir, offset).createNewFile()
@@ -347,9 +347,9 @@ class LogTest extends JUnitSuite {
 
     try {
       log.append(messageSet)
-      fail("message set should throw MessageSetSizeTooLargeException.")
+      fail("message set should throw RecordBatchTooLargeException.")
     } catch {
-      case e: MessageSetSizeTooLargeException => // this is good
+      case e: RecordBatchTooLargeException => // this is good
     }
   }
 
@@ -376,19 +376,19 @@ class LogTest extends JUnitSuite {
       log.append(messageSetWithUnkeyedMessage)
       fail("Compacted topics cannot accept a message without a key.")
     } catch {
-      case e: InvalidMessageException => // this is good
+      case e: CorruptRecordException => // this is good
     }
     try {
       log.append(messageSetWithOneUnkeyedMessage)
       fail("Compacted topics cannot accept a message without a key.")
     } catch {
-      case e: InvalidMessageException => // this is good
+      case e: CorruptRecordException => // this is good
     }
     try {
       log.append(messageSetWithCompressedUnkeyedMessage)
       fail("Compacted topics cannot accept a message without a key.")
     } catch {
-      case e: InvalidMessageException => // this is good
+      case e: CorruptRecordException => // this is good
     }
 
     // the following should succeed without any InvalidMessageException
@@ -419,7 +419,7 @@ class LogTest extends JUnitSuite {
       log.append(second)
       fail("Second message set should throw MessageSizeTooLargeException.")
     } catch {
-      case e: MessageSizeTooLargeException => // this is good
+      case e: RecordTooLargeException => // this is good
     }
   }
   /**
