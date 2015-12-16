@@ -21,7 +21,6 @@ from kafkatest.services.console_consumer import ConsoleConsumer, is_int
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from ducktape.mark import matrix
 import time
-import random
 
 
 class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
@@ -75,24 +74,9 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
         # Roll cluster to disable PLAINTEXT port
         self.kafka.close_port('PLAINTEXT')
-        self.set_acls(upgrade_protocol)
+        self.kafka.authorizer_class_name = "kafka.security.auth.SimpleAclAuthorizer"
+        self.kafka.security_config.set_acls(upgrade_protocol, self.kafka, self.zk, self.topic, self.group)
         self.bounce()
-
-    def set_acls(self, upgrade_protocol):
-        if upgrade_protocol in ["SASL_PLAINTEXT", "SASL_SSL"]:
-            self.kafka.authorizer_class_name = "kafka.security.auth.SimpleAclAuthorizer"
-
-            self.add_cluster_props = self.kafka.security_config.addClusterAcl(self.zk.connect_setting())
-            self.kafka.security_config.acls_command(self.kafka.nodes[0], self.add_cluster_props)
-
-            self.broker_read_props = self.kafka.security_config.brokerReadAcl(self.zk.connect_setting(), self.topic)
-            self.kafka.security_config.acls_command(self.kafka.nodes[0], self.broker_read_props)
-
-            self.produce_props = self.kafka.security_config.produceAcl(self.zk.connect_setting(), self.topic)
-            self.kafka.security_config.acls_command(self.kafka.nodes[0], self.produce_props)
-
-            self.consume_props = self.kafka.security_config.consumeAcl(self.zk.connect_setting(), self.topic, self.group)
-            self.kafka.security_config.acls_command(self.kafka.nodes[0], self.consume_props)
 
     def open_secured_port(self, upgrade_protocol):
         self.kafka.security_protocol = upgrade_protocol
@@ -126,8 +110,8 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         """
         Start with a PLAINTEXT cluster with a second Secured port open (i.e. result of phase one).
         Start an Producer and Consumer via the SECURED port
-        Rolling upgrade to add inter-broker be the secure protocol
-        Rolling upgrade again to disable PLAINTEXT
+        Incrementally upgrade to add inter-broker be the secure protocol
+        Incrementally upgrade again to add ACLs as well as disabling the PLAINTEXT port
         Ensure the producer and consumer ran throughout
         """
         #Given we have a broker that has both secure and PLAINTEXT ports open
