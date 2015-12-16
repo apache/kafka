@@ -50,7 +50,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
         self.consumer = ConsoleConsumer(
             self.test_context, self.num_consumers, self.kafka, self.topic,
-            consumer_timeout_ms=60000, message_validator=is_int, new_consumer=True, log_values=True)
+            consumer_timeout_ms=60000, message_validator=is_int, new_consumer=True)
 
         self.consumer.group_id = "unique-test-group-" + str(random.random())
 

@@ -101,7 +101,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
 
     def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=False,
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=TRUNK,
-                 client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=[], log_values=True):
+                 client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=[]):
         """
         Args:
             context:                    standard context
@@ -135,7 +135,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         self.messages_consumed = {idx: [] for idx in range(1, num_nodes + 1)}
         self.client_id = client_id
         self.print_key = print_key
-        self.log_values = log_values
+        self.log_values = True if version == TRUNK else False
         self.log_level = "TRACE"
 
     def prop_file(self, node):
