@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 
-public class TopKSupplier<K, V> implements AggregatorSupplier<K, V, Collection<V>> {
+public class TopKSupplier<K, V extends Comparable<V>> implements AggregatorSupplier<K, V, Collection<V>> {
 
     private final int k;
 

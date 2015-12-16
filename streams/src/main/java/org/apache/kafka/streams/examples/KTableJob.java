@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KWindowedTable;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.KeyValueToLongMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.WindowMapper;
@@ -52,35 +53,35 @@ public class KTableJob {
         KStreamBuilder builder = new KStreamBuilder();
 
         // stream aggregate
-        KStream<String, Integer> stream1 = builder.stream("topic1");
+        KStream<String, Long> stream1 = builder.stream("topic1");
 
         @SuppressWarnings("unchecked")
-        KWindowedTable<String, Long, HoppingWindow> wtable1 = stream1.sumByKey(new ValueMapper<Integer, Long>() {
+        KWindowedTable<String, Long, HoppingWindow> wtable1 = stream1.sumByKey(new KeyValueToLongMapper<String, Long>() {
             @Override
-            public Long apply(Integer value) {
-                return (long) value;
+            public long apply(String key, Long value) {
+                return value;
             }
         }, HoppingWindows.of(1000).every(500).emit(1000).until(1000 * 60 * 60 * 24 /* one day */));
 
         // table aggregation
         KTable<String, String> table1 = builder.table("topic2");
 
-        KTable<String, Long> table2 = table1.sum(new KeyValueMapper<String, String, KeyValue<String, Integer>>() {
+        KTable<String, Long> table2 = table1.sum(new KeyValueMapper<String, String, String>() {
             @Override
-            public KeyValue<String, Integer> apply(String key, String value) {
-                return new KeyValue<>(value, new Integer(key));
+            public String apply(String key, String value) {
+                return value;
             }
-        }, new ValueMapper<Integer, Long>() {
+        }, new KeyValueToLongMapper<String, String>() {
             @Override
-            public Long apply(Integer value) {
-                return (long) value;
+            public long apply(String key, String value) {
+                return Long.parseLong(value);
             }
         }, "table2");
 
         // stream-table join
-        KStream<String, Long> stream2 = stream1.leftJoin(table2, new ValueJoiner<Integer, Long, Long>() {
+        KStream<String, Long> stream2 = stream1.leftJoin(table2, new ValueJoiner<Long, Long, Long>() {
             @Override
-            public Long apply(Integer value1, Long value2) {
+            public Long apply(Long value1, Long value2) {
                 if (value2 == null)
                     return 0L;
                 else

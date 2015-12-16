@@ -24,6 +24,9 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KWindowedTable;
 import org.apache.kafka.streams.kstream.KeyValue;
+import org.apache.kafka.streams.kstream.KeyValueToDoubleMapper;
+import org.apache.kafka.streams.kstream.KeyValueToIntMapper;
+import org.apache.kafka.streams.kstream.KeyValueToLongMapper;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
@@ -268,20 +271,30 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <W extends Window> KWindowedTable<K, Long, W> sumByKey(ValueMapper<V, Long> valueMapper, Windows<W> windows) {
+    public <W extends Window> KWindowedTable<K, Long, W> sumByKey(KeyValueToLongMapper<K, V> valueSelector, Windows<W> windows) {
+        // TODO
+        return null;
+    }
 
-        return this.aggregateByKey(new SumSupplier<>(valueMapper), windows);
+    public <W extends Window> KWindowedTable<K, Integer, W> sumByKey(KeyValueToIntMapper<K, V> valueSelector, Windows<W> windows) {
+        // TODO
+        return null;
+    }
+
+    public <W extends Window> KWindowedTable<K, Double, W> sumByKey(KeyValueToDoubleMapper<K, V> valueSelector, Windows<W> windows) {
+        // TODO
+        return null;
     }
 
     @Override
     public <W extends Window> KWindowedTable<K, Long, W> countByKey(Windows<W> windows) {
-
-        return this.aggregateByKey(new CountSupplier<>(), windows);
+        // TODO
+        return null;
     }
 
     @Override
-    public <W extends Window> KWindowedTable<K, Collection<V>, W> topKByKey(int k, Windows<W> windows) {
-
-        return this.aggregateByKey(new TopKSupplier<>(k), windows);
+    public <W extends Window, V1 extends Comparable<V1>> KWindowedTable<K, Collection<V1>, W> topKByKey(int k, KeyValueMapper<K, V, V1> valueSelector, Windows<W> windows) {
+        // TODO
+        return null;
     }
 }

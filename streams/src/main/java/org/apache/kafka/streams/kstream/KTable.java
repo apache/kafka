@@ -154,15 +154,19 @@ public interface KTable<K, V> {
     /**
      * Sum values of this table by the selected key on a window basis.
      */
-    <K1, V1> KTable<K1, Long>sum(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, ValueMapper<V1, Long> valueMapper, String name);
+    <K1> KTable<K1, Long> sum(KeyValueMapper<K, V, K1> keySelector, KeyValueToLongMapper<K, V> valueSelector, String name);
+
+    <K1> KTable<K1, Integer> sum(KeyValueMapper<K, V, K1> keySelector, KeyValueToIntMapper<K, V> valueSelector, String name);
+
+    <K1> KTable<K1, Double> sum(KeyValueMapper<K, V, K1> keySelector, KeyValueToDoubleMapper<K, V> valueSelector, String name);
 
     /**
      * Count number of records of this table by the selected key on a window basis.
      */
-    <K1> KTable<K1, Long> count(KeyValueMapper<K, V, KeyValue<K1, Long>> selector, String name);
+    <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> keySelector, String name);
 
     /**
      * Get the top-k records of this table by the selected key on a window basis.
      */
-    <K1, V1> KTable<K1, Collection<V1>> topK(int k, KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name);
+    <K1, V1 extends Comparable<V1>> KTable<K1, Collection<V1>> topK(int k, KeyValueMapper<K, V, K1> selector, String name);
 }

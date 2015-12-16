@@ -25,6 +25,9 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.KeyValueToDoubleMapper;
+import org.apache.kafka.streams.kstream.KeyValueToIntMapper;
+import org.apache.kafka.streams.kstream.KeyValueToLongMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -254,20 +257,32 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1, V1> KTable<K1, Long> sum(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, ValueMapper<V1, Long> valueMapper, String name) {
-
-        return this.aggregate(new SumSupplier<>(valueMapper), selector, name);
+    public <K1> KTable<K1, Long> sum(KeyValueMapper<K, V, K1> keySelector, KeyValueToLongMapper<K, V> valueSelector, String name) {
+        // TODO
+        return null;
     }
 
     @Override
-    public <K1> KTable<K1, Long> count(KeyValueMapper<K, V, KeyValue<K1, Long>> selector, String name) {
-
-        return this.aggregate(new CountSupplier<>(), selector, name);
+    public <K1> KTable<K1, Integer> sum(KeyValueMapper<K, V, K1> keySelector, KeyValueToIntMapper<K, V> valueSelector, String name) {
+        // TODO
+        return null;
     }
 
     @Override
-    public <K1, V1> KTable<K1, Collection<V1>> topK(int k, KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name) {
+    public <K1> KTable<K1, Double> sum(KeyValueMapper<K, V, K1> keySelector, KeyValueToDoubleMapper<K, V> valueSelector, String name) {
+        // TODO
+        return null;
+    }
 
-        return this.aggregate(new TopKSupplier<>(k), selector, name);
+    @Override
+    public <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> keySelector, String name) {
+        // TODO
+        return null;
+    }
+
+    @Override
+    public <K1, V1 extends Comparable<V1>> KTable<K1, Collection<V1>> topK(int k, KeyValueMapper<K, V, K1> selector, String name) {
+        // TODO
+        return null;
     }
 }

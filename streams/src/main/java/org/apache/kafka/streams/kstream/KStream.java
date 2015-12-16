@@ -199,7 +199,11 @@ public interface KStream<K, V> {
     /**
      * Sum values of this stream by key on a window basis.
      */
-    <W extends Window> KWindowedTable<K, Long, W> sumByKey(ValueMapper<V, Long> valueMapper, Windows<W> windows);
+    <W extends Window> KWindowedTable<K, Long, W> sumByKey(KeyValueToLongMapper<K, V> valueSelector, Windows<W> windows);
+
+    <W extends Window> KWindowedTable<K, Integer, W> sumByKey(KeyValueToIntMapper<K, V> valueSelector, Windows<W> windows);
+
+    <W extends Window> KWindowedTable<K, Double, W> sumByKey(KeyValueToDoubleMapper<K, V> valueSelector, Windows<W> windows);
 
     /**
      * Count number of records of this stream by key on a window basis.
@@ -209,5 +213,5 @@ public interface KStream<K, V> {
     /**
      * Get the top-k records of this stream by key on a window basis.
      */
-    <W extends Window> KWindowedTable<K, Collection<V>, W> topKByKey(int k, Windows<W> windows);
+    <W extends Window, V1 extends Comparable<V1>> KWindowedTable<K, Collection<V1>, W> topKByKey(int k, KeyValueMapper<K, V, V1> valueSelector, Windows<W> windows);
 }
