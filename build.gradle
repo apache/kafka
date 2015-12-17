@@ -27,8 +27,8 @@ buildscript {
   }
 }
 
-def slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.6'
-def slf4japi="org.slf4j:slf4j-api:1.7.6"
+def slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.13'
+def slf4japi="org.slf4j:slf4j-api:1.7.13"
 def junit='junit:junit:4.12'
 def easymock='org.easymock:easymock:3.4'
 def powermock='org.powermock:powermock-module-junit4:1.6.3'
