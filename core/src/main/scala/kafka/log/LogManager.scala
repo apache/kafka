@@ -389,7 +389,7 @@ class LogManager(val logDirs: Array[File],
    */
   private def deleteLogs(): Unit = {
     val logsBeingDeleted = mutable.ListBuffer.empty[Log]
-    logCreationOrDeletionLock synchronized {
+    logsToBeDeleted synchronized {
       logsBeingDeleted.appendAll(logsToBeDeleted)
       logsToBeDeleted.clear()
     }
@@ -409,27 +409,36 @@ class LogManager(val logDirs: Array[File],
     var removedLog: Log = null
     logCreationOrDeletionLock synchronized {
       removedLog = logs.remove(topicAndPartition)
-      if (removedLog != null) {
-        //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
-        if (cleaner != null) {
-          cleaner.abortCleaning(topicAndPartition)
-          cleaner.updateCheckpoints(removedLog.dir.getParentFile)
+    }
+    if (removedLog != null) {
+      //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
+      if (cleaner != null) {
+        cleaner.abortCleaning(topicAndPartition)
+        cleaner.updateCheckpoints(removedLog.dir.getParentFile)
+      }
+      // renaming the directory to topic-partition.unique-Id.delete
+      val dirName = StringBuilder.newBuilder
+      dirName.append(removedLog.name)
+      dirName.append(".")
+      val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-","")
+      dirName.append(uniqueId)
+      dirName.append(Log.DeleteDirSuffix)
+      removedLog.close()
+      val renamed = new File(removedLog.dir.getParent, dirName.toString())
+      val renameSuccessful = removedLog.dir.renameTo(renamed)
+      if (renameSuccessful) {
+        removedLog.dir = renamed
+        // change the file pointers for log and index file
+        for (logSegment <- removedLog.logSegments) {
+          logSegment.log.file = new File(renamed, logSegment.log.file.getName)
+          logSegment.index.file = new File(renamed, logSegment.index.file.getName)
         }
-        removedLog.close()
-        // renaming the directory to topic-partition.unique-Id.delete
-        val dirName = StringBuilder.newBuilder
-        dirName.append(removedLog.name)
-        dirName.append(".")
-        dirName.append(java.util.UUID.randomUUID.toString)
-        dirName.append(Log.DeleteDirSuffix)
-        val renamed = new File(removedLog.dir.getParent, dirName.toString())
-        val renameSuccessful = removedLog.dir.renameTo(renamed)
-        if (renameSuccessful) {
-          removedLog.dir = renamed
+
+        logsToBeDeleted synchronized {
           logsToBeDeleted += removedLog
-        } else {
-          throw new KafkaException("Failed to rename log directory from " + removedLog.dir.getAbsolutePath + " to " + renamed.getAbsolutePath)
         }
+      } else {
+        throw new KafkaException("Failed to rename log directory from " + removedLog.dir.getAbsolutePath + " to " + renamed.getAbsolutePath)
       }
     }
   }
