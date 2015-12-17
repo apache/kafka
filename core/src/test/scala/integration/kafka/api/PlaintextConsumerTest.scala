@@ -300,11 +300,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(totalRecords.toInt, tp)
     consumer.assign(List(tp).asJava)
 
-    consumer.seekToEnd(tp)
+    consumer.seekToEnd(List(tp).asJava)
     assertEquals(totalRecords, consumer.position(tp))
     assertFalse(consumer.poll(totalRecords).iterator().hasNext)
 
-    consumer.seekToBeginning(tp)
+    consumer.seekToBeginning(List(tp).asJava)
     assertEquals(0, consumer.position(tp), 0)
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0)
 
@@ -318,11 +318,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendCompressedMessages(totalRecords.toInt, tp2)
     consumer.assign(List(tp2).asJava)
 
-    consumer.seekToEnd(tp2)
+    consumer.seekToEnd(List(tp2).asJava)
     assertEquals(totalRecords, consumer.position(tp2))
     assertFalse(consumer.poll(totalRecords).iterator().hasNext)
 
-    consumer.seekToBeginning(tp2)
+    consumer.seekToBeginning(List(tp2).asJava)
     assertEquals(0, consumer.position(tp2), 0)
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0, tp = tp2)
 
@@ -375,13 +375,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @Test
   def testPartitionPauseAndResume() {
+    val partitions = List(tp).asJava
     sendRecords(5)
-    this.consumers(0).assign(List(tp).asJava)
+    this.consumers(0).assign(partitions)
     consumeAndVerifyRecords(consumer = this.consumers(0), numRecords = 5, startingOffset = 0)
-    this.consumers(0).pause(tp)
+    this.consumers(0).pause(partitions)
     sendRecords(5)
     assertTrue(this.consumers(0).poll(0).isEmpty)
-    this.consumers(0).resume(tp)
+    this.consumers(0).resume(partitions)
     consumeAndVerifyRecords(consumer = this.consumers(0), numRecords = 5, startingOffset = 5)
   }
 
@@ -632,7 +633,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val rebalanceListener = new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
         // keep partitions paused in this test so that we can verify the commits based on specific seeks
-        partitions.asScala.foreach(testConsumer.pause(_))
+        testConsumer.pause(partitions)
       }
 
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {}

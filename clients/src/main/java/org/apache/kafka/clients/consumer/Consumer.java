@@ -19,6 +19,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.io.Closeable;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -30,7 +31,7 @@ import java.util.regex.Pattern;
  */
 @InterfaceStability.Unstable
 public interface Consumer<K, V> extends Closeable {
-    
+
     /**
      * @see KafkaConsumer#assignment()
      */
@@ -42,19 +43,19 @@ public interface Consumer<K, V> extends Closeable {
     public Set<String> subscription();
 
     /**
-     * @see KafkaConsumer#subscribe(List)
+     * @see KafkaConsumer#subscribe(Collection)
      */
-    public void subscribe(List<String> topics);
+    public void subscribe(Collection<String> topics);
 
     /**
-     * @see KafkaConsumer#subscribe(List, ConsumerRebalanceListener)
+     * @see KafkaConsumer#subscribe(Collection, ConsumerRebalanceListener)
      */
-    public void subscribe(List<String> topics, ConsumerRebalanceListener callback);
+    public void subscribe(Collection<String> topics, ConsumerRebalanceListener callback);
 
     /**
-     * @see KafkaConsumer#assign(List)
+     * @see KafkaConsumer#assign(Collection)
      */
-    public void assign(List<TopicPartition> partitions);
+    public void assign(Collection<TopicPartition> partitions);
 
     /**
     * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
@@ -102,14 +103,14 @@ public interface Consumer<K, V> extends Closeable {
     public void seek(TopicPartition partition, long offset);
 
     /**
-     * @see KafkaConsumer#seekToBeginning(TopicPartition...)
+     * @see KafkaConsumer#seekToBeginning(Collection)
      */
-    public void seekToBeginning(TopicPartition... partitions);
+    public void seekToBeginning(Collection<TopicPartition> partitions);
 
     /**
-     * @see KafkaConsumer#seekToEnd(TopicPartition...)
+     * @see KafkaConsumer#seekToEnd(Collection)
      */
-    public void seekToEnd(TopicPartition... partitions);
+    public void seekToEnd(Collection<TopicPartition> partitions);
 
     /**
      * @see KafkaConsumer#position(TopicPartition)
@@ -137,19 +138,19 @@ public interface Consumer<K, V> extends Closeable {
     public Map<String, List<PartitionInfo>> listTopics();
 
     /**
-     * @see KafkaConsumer#pause(TopicPartition...)
-     */
-    public void pause(TopicPartition... partitions);
-
-    /**
      * @see KafkaConsumer#paused()
      */
     public Set<TopicPartition> paused();
 
     /**
-     * @see KafkaConsumer#resume(TopicPartition...)
+     * @see KafkaConsumer#pause(Collection)
      */
-    public void resume(TopicPartition... partitions);
+    public void pause(Collection<TopicPartition> partitions);
+
+    /**
+     * @see KafkaConsumer#resume(Collection)
+     */
+    public void resume(Collection<TopicPartition> partitions);
 
     /**
      * @see KafkaConsumer#close()
