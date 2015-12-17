@@ -33,6 +33,8 @@ fi
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
 shopt -s nullglob
 if [ $JARPATH ]; then
+  echo "JARPATH="
+  echo $JARPATH
   for jarPath in ${JARPATH[@]};
   do
     for dir in jarPath;
