@@ -23,23 +23,30 @@ import java.util.Collections;
 
 public class SlidingWindows extends Windows<SlidingWindow> {
 
-    private static final String NAME = "SLIDING-WINDOWS-";
+    private static final long DEFAULT_SIZE_MS = 1000L;
 
     private long size;
 
-    private SlidingWindows(long size) {
-        super();
+    private SlidingWindows(String name) {
+        super(name);
 
-        setName(newName(NAME));
+        this.size = DEFAULT_SIZE_MS;
+    }
 
-        this.size = size;
+    /**
+     * Returns a half-interval sliding window definition with the default window size
+     */
+    public static SlidingWindows of(String name) {
+        return new SlidingWindows(name);
     }
 
     /**
      * Returns a half-interval sliding window definition with the window size in milliseconds
      */
-    public static SlidingWindows of(long size) {
-        return new SlidingWindows(size);
+    public SlidingWindows with(long size) {
+        this.size = size;
+
+        return this;
     }
 
     @Override

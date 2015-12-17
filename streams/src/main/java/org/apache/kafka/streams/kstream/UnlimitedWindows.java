@@ -22,23 +22,27 @@ import java.util.Collections;
 
 public class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
-    private static final String NAME = "UNLIMITED-WINDOWS-";
+    private static final long DEFAULT_START_TIMESTAMP = 0L;
 
     private long start;
 
-    private UnlimitedWindows(long start) {
-        super();
+    private UnlimitedWindows(String name) {
+        super(name);
 
-        setName(newName(NAME));
-
-        this.start = start;
+        this.start = DEFAULT_START_TIMESTAMP;
     }
 
     /**
      * Returns an unlimited window definition
      */
-    public static UnlimitedWindows on(long start) {
-        return new UnlimitedWindows(start);
+    public static UnlimitedWindows of(String name) {
+        return new UnlimitedWindows(name);
+    }
+
+    public UnlimitedWindows startOn(long start) {
+        this.start = start;
+
+        return this;
     }
 
     @Override

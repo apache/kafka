@@ -61,7 +61,7 @@ public class KTableJob {
             public long apply(String key, Long value) {
                 return value;
             }
-        }, HoppingWindows.of(1000).every(500).emit(1000).until(1000 * 60 * 60 * 24 /* one day */));
+        }, HoppingWindows.of("window1").with(500L).every(500L).emit(1000L).until(1000L * 60 * 60 * 24 /* one day */));
 
         // table aggregation
         KTable<String, String> table1 = builder.table("topic2");

@@ -34,20 +34,13 @@ public abstract class Windows<W extends Window> {
 
     private String name;
 
-    protected Windows() {
+    protected Windows(String name) {
         this.emitDuration = DEFAULT_EMIT_DURATION;
         this.maintainDuration = DEFAULT_MAINTAIN_DURATION;
     }
 
     public String name() {
         return name;
-    }
-
-    /**
-     * Set the window name
-     */
-    protected void setName(String name) {
-        this.name = name;
     }
 
     /**

@@ -22,27 +22,35 @@ import java.util.Collections;
 
 public class HoppingWindows extends Windows<HoppingWindow> {
 
-    private static final String NAME = "HOPPING-WINDOWS-";
+    private static final long DEFAULT_SIZE_MS = 1000L;
 
     private long size;
 
     private long period;
 
-    private HoppingWindows(long size) {
-        super();
+    private HoppingWindows(String name) {
+        super(name);
 
-        setName(newName(NAME));
-
-        this.size = size;
-        this.period = size;
+        this.size = DEFAULT_SIZE_MS;
+        this.period = this.size;
     }
 
     /**
      * Returns a half-interval hopping window definition with the window size in milliseconds
-     * of the form &#91; N &#42; size, N &#42; size + size &#41;
+     * of the form &#91; N &#42; default_size, N &#42; default_size + default_size &#41;
      */
-    public static HoppingWindows of(long size) {
-        return new HoppingWindows(size);
+    public static HoppingWindows of(String name) {
+        return new HoppingWindows(name);
+    }
+
+    /**
+     * Returns a new hopping window definition with the original size but reassign the window
+     * period in milliseconds of the form &#91; N &#42; period, N &#42; period + size &#41;
+     */
+    public HoppingWindows with(long size) {
+        this.size = size;
+
+        return this;
     }
 
     /**

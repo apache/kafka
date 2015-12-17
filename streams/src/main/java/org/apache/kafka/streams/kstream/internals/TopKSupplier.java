@@ -28,6 +28,10 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 
+/**
+ * NOTE: This is just a demo aggregate supplier that can be implemented by users to add their own built-in aggregates.
+ * It is highly in-efficient and is not supposed to be merged in.
+ */
 public class TopKSupplier<K, V extends Comparable<V>> implements AggregatorSupplier<K, V, Collection<V>> {
 
     private final int k;

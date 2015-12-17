@@ -197,21 +197,42 @@ public interface KStream<K, V> {
     <T, W extends Window> KWindowedTable<K, T, W> aggregateByKey(AggregatorSupplier<K, V, T> aggregatorSupplier, Windows<W> windows);
 
     /**
-     * Sum values of this stream by key on a window basis.
+     * Sum extracted long integer values of this stream by key on a window basis.
+     *
+     * @param valueSelector the class of KeyValueToLongMapper to extract the long integer from value
+     * @param windows the window definition
      */
     <W extends Window> KWindowedTable<K, Long, W> sumByKey(KeyValueToLongMapper<K, V> valueSelector, Windows<W> windows);
 
+    /**
+     * Sum extracted integer values of this stream by key on a window basis.
+     *
+     * @param valueSelector the class of KeyValueToIntMapper to extract the long integer from value
+     * @param windows the window definition
+     */
     <W extends Window> KWindowedTable<K, Integer, W> sumByKey(KeyValueToIntMapper<K, V> valueSelector, Windows<W> windows);
 
+    /**
+     * Sum extracted double decimal values of this stream by key on a window basis.
+     *
+     * @param valueSelector the class of KeyValueToDoubleMapper to extract the long integer from value
+     * @param windows the window definition
+     */
     <W extends Window> KWindowedTable<K, Double, W> sumByKey(KeyValueToDoubleMapper<K, V> valueSelector, Windows<W> windows);
 
     /**
      * Count number of records of this stream by key on a window basis.
+     *
+     * @param windows the window definition
      */
     <W extends Window> KWindowedTable<K, Long, W> countByKey(Windows<W> windows);
 
     /**
-     * Get the top-k records of this stream by key on a window basis.
+     * Get the top-k values of this stream by key on a window basis.
+     *
+     * @param k parameter of the top-k computation
+     * @param valueSelector the class of KeyValueMapper to extract the comparable value
+     * @param windows the window definition
      */
     <W extends Window, V1 extends Comparable<V1>> KWindowedTable<K, Collection<V1>, W> topKByKey(int k, KeyValueMapper<K, V, V1> valueSelector, Windows<W> windows);
 }

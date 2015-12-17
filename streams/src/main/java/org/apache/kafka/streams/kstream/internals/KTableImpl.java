@@ -281,7 +281,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1, V1 extends Comparable<V1>> KTable<K1, Collection<V1>> topK(int k, KeyValueMapper<K, V, K1> selector, String name) {
+    public <K1, V1 extends Comparable<V1>> KTable<K1, Collection<V1>> topK(int k, KeyValueMapper<K, V, K1> keySelector, String name) {
         // TODO
         return null;
     }
