@@ -31,9 +31,9 @@ if [ -z "$SCALA_BINARY_VERSION" ]; then
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
+echo "JARPATH="
+echo $JARPATH
 shopt -s nullglob
-  echo "JARPATH="
-  echo $JARPATH
 if [ $JARPATH ]; then
   for jarPath in ${JARPATH[@]};
   do
