@@ -706,7 +706,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(List<String> topics, ConsumerRebalanceListener listener) {
-        subscribe(topics, listener);
+        Collection<String> tps = topics;
+        subscribe(tps, listener);
     }
 
 
@@ -819,7 +820,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void assign(List<TopicPartition> partitions) {
-        assign(partitions);
+        Collection<TopicPartition> parts = partitions;
+        assign(parts);
     }
 
 

@@ -112,7 +112,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void subscribe(List<String> topics, final ConsumerRebalanceListener listener) {
-        subscribe(topics, listener);
+        Collection<String> tps = topics;
+        subscribe(tps, listener);
     }
 
     @Override
@@ -123,7 +124,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void assign(List<TopicPartition> partitions) {
-        assign(partitions);
+        Collection<TopicPartition> parts = partitions;
+        assign(parts);
     }
 
     @Override
