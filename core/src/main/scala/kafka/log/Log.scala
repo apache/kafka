@@ -964,7 +964,7 @@ object Log {
     if (name == null || name.isEmpty || !name.contains('-')) {
       throwException(dir)
     }
-    val index = name.indexOf('-')
+    val index = name.lastIndexOf('-')
     val topic: String = name.substring(0, index)
     val partition = if(name.endsWith(DeleteDirSuffix)) {
       val partitionIndex = name.indexOf(".")
