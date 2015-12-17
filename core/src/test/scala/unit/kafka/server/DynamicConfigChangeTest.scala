@@ -109,12 +109,12 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
     val configManager = new DynamicConfigManager(zkUtils, Map(ConfigType.Topic -> handler))
     // Notifications created using the old TopicConfigManager are ignored.
-    configManager.ConfigChangedNotificaitonHandler.processNotification("not json")
+    configManager.ConfigChangedNotificationHandler.processNotification("not json")
 
     // Incorrect Map. No version
     try {
       val jsonMap = Map("v" -> 1, "x" -> 2)
-      configManager.ConfigChangedNotificaitonHandler.processNotification(Json.encode(jsonMap))
+      configManager.ConfigChangedNotificationHandler.processNotification(Json.encode(jsonMap))
       fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
     }
     catch {
@@ -123,7 +123,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     // Version is provided. EntityType is incorrect
     try {
       val jsonMap = Map("version" -> 1, "entity_type" -> "garbage", "entity_name" -> "x")
-      configManager.ConfigChangedNotificaitonHandler.processNotification(Json.encode(jsonMap))
+      configManager.ConfigChangedNotificationHandler.processNotification(Json.encode(jsonMap))
       fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
     }
     catch {
@@ -133,7 +133,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     // EntityName isn't provided
     try {
       val jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic)
-      configManager.ConfigChangedNotificaitonHandler.processNotification(Json.encode(jsonMap))
+      configManager.ConfigChangedNotificationHandler.processNotification(Json.encode(jsonMap))
       fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
     }
     catch {
@@ -142,7 +142,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
     // Everything is provided
     val jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic, "entity_name" -> "x")
-    configManager.ConfigChangedNotificaitonHandler.processNotification(Json.encode(jsonMap))
+    configManager.ConfigChangedNotificationHandler.processNotification(Json.encode(jsonMap))
 
     // Verify that processConfigChanges was only called once
     EasyMock.verify(handler)

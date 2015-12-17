@@ -73,14 +73,13 @@ object ConfigType {
  * on startup where a change might be missed between the initial config load and registering for change notifications.
  *
  */
-
 class DynamicConfigManager(private val zkUtils: ZkUtils,
                            private val configHandlers: Map[String, ConfigHandler],
                            private val changeExpirationMs: Long = 15*60*1000,
                            private val time: Time = SystemTime) extends Logging {
   private var lastExecutedChange = -1L
 
-  object ConfigChangedNotificaitonHandler extends NotificationHandler {
+  object ConfigChangedNotificationHandler extends NotificationHandler {
     override def processNotification(json: String) = {
       Json.parseFull(json) match {
         case None => // There are no config overrides.
@@ -114,7 +113,7 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
     }
   }
 
-  private val configChangeListener = new ZkNodeChangeNotificationListener(zkUtils, ZkUtils.EntityConfigChangesPath, AdminUtils.EntityConfigChangeZnodePrefix, ConfigChangedNotificaitonHandler) //TODO: null should be replaced with config handlers.
+  private val configChangeListener = new ZkNodeChangeNotificationListener(zkUtils, ZkUtils.EntityConfigChangesPath, AdminUtils.EntityConfigChangeZnodePrefix, ConfigChangedNotificationHandler)
 
   /**
    * Begin watching for config changes

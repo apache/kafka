@@ -138,7 +138,7 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
     }
 
     override def handleStateChanged(state: KeeperState) {
-      //no op
+      debug(s"new zookeeper state: ${state}")
     }
   }
 
