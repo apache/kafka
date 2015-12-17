@@ -1022,10 +1022,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
      */
     public void seekToBeginning(TopicPartition... partitions) {
+        seekToBeginning(Arrays.asList(partitions));
+    }
+
+    /**
+     * Seek to the first offset for each of the given partitions. This function evaluates lazily, seeking to the
+     * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
+     */
+    public void seekToBeginning(Collection<TopicPartition> partitions) {
         acquire();
         try {
-            Collection<TopicPartition> parts = partitions.length == 0 ? this.subscriptions.assignedPartitions()
-                    : Arrays.asList(partitions);
+            Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to beginning of partition {}", tp);
                 subscriptions.needOffsetReset(tp, OffsetResetStrategy.EARLIEST);
@@ -1040,10 +1047,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
      */
     public void seekToEnd(TopicPartition... partitions) {
+        seekToEnd(Arrays.asList(partitions));
+    }
+
+    /**
+     * Seek to the last offset for each of the given partitions. This function evaluates lazily, seeking to the
+     * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
+     */
+    public void seekToEnd(Collection<TopicPartition> partitions) {
         acquire();
         try {
-            Collection<TopicPartition> parts = partitions.length == 0 ? this.subscriptions.assignedPartitions()
-                    : Arrays.asList(partitions);
+            Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to end of partition {}", tp);
                 subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
@@ -1186,6 +1200,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void pause(TopicPartition... partitions) {
+        pause(Arrays.asList(partitions));
+    }
+
+    /**
+     * Suspend fetching from the requested partitions. Future calls to {@link #poll(long)} will not return
+     * any records from these partitions until they have been resumed using {@link #resume(TopicPartition...)}.
+     * Note that this method does not affect partition subscription. In particular, it does not cause a group
+     * rebalance when automatic assignment is used.
+     * @param partitions The partitions which should be paused
+     */
+    @Override
+    public void pause(Collection<TopicPartition> partitions) {
         acquire();
         try {
             for (TopicPartition partition: partitions) {
@@ -1205,6 +1231,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void resume(TopicPartition... partitions) {
+        resume(Arrays.asList(partitions));
+    }
+
+    /**
+     * Resume specified partitions which have been paused with {@link #pause(TopicPartition...)}. New calls to
+     * {@link #poll(long)} will return records from these partitions if there are any to be fetched.
+     * If the partitions were not previously paused, this method is a no-op.
+     * @param partitions The partitions which should be resumed
+     */
+    @Override
+    public void resume(Collection<TopicPartition> partitions) {
         acquire();
         try {
             for (TopicPartition partition: partitions) {
