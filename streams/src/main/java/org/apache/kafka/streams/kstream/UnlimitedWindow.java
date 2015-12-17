@@ -17,35 +17,19 @@
 
 package org.apache.kafka.streams.kstream;
 
-public abstract class Window {
+public class UnlimitedWindow extends Window {
 
-    private long start;
-    private long end;
-
-    public Window(long start, long end) {
-        this.start = start;
-        this.end = end;
+    public UnlimitedWindow(long start) {
+        super(start, Long.MAX_VALUE);
     }
 
-    /**
-     * Returns the start timestamp of this window, inclusive
-     */
-    public long start() {
-        return start;
-    }
-
-    /**
-     * Returns the end timestamp of this window, exclusive
-     */
-    public long end() {
-        return end;
-    }
-
+    @Override
     public boolean overlap(Window other) {
-        return this.start() < other.end() || other.start() < this.end();
+        return super.overlap(other) && other.getClass().equals(UnlimitedWindow.class);
     }
 
+    @Override
     public boolean equalsTo(Window other) {
-        return this.start() == other.start() && this.end() == other.end();
+        return super.equalsTo(other) && other.getClass().equals(UnlimitedWindow.class);
     }
 }

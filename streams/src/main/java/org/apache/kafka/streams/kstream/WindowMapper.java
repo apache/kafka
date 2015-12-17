@@ -17,22 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-/**
- * KStreamWindowed is an abstraction of a stream of key-value pairs with a window.
- */
-public interface KStreamWindowed<K, V> extends KStream<K, V> {
+public interface WindowMapper<K, V, W extends Window, K1, V1> {
 
-    /**
-     * Creates a new stream by joining this windowed stream with the other windowed stream.
-     * Each element arrived from either of the streams is joined with elements in a window of each other.
-     * The resulting values are computed by applying a joiner.
-     *
-     * @param other  the other windowed stream
-     * @param joiner ValueJoiner
-     * @param <V1>   the value type of the other stream
-     * @param <V2>   the value type of the new stream
-     * @return KStream
-     */
-    <V1, V2> KStream<K, V2> join(KStreamWindowed<K, V1> other, ValueJoiner<V, V1, V2> joiner);
-
+    KeyValue<K1, V1> apply(K key, V value, W window);
 }

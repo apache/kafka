@@ -17,35 +17,26 @@
 
 package org.apache.kafka.streams.kstream;
 
-public abstract class Window {
-
-    private long start;
-    private long end;
-
-    public Window(long start, long end) {
-        this.start = start;
-        this.end = end;
-    }
+public interface Aggregator<K, V, T> {
+    /**
+     * Set the initial aggregate value
+     */
+    T initialValue();
 
     /**
-     * Returns the start timestamp of this window, inclusive
+     * When a new record with the aggregate key is added,
+     * updating the aggregate value for this key
      */
-    public long start() {
-        return start;
-    }
+    T add(K aggKey, V value, T aggregate);
 
     /**
-     * Returns the end timestamp of this window, exclusive
+     * when an old record with the aggregate key is removed,
+     * updating the aggregate value for this key
      */
-    public long end() {
-        return end;
-    }
+    T remove(K aggKey, V value, T aggregate);
 
-    public boolean overlap(Window other) {
-        return this.start() < other.end() || other.start() < this.end();
-    }
-
-    public boolean equalsTo(Window other) {
-        return this.start() == other.start() && this.end() == other.end();
-    }
+    /**
+     * Merge two aggregate values
+     */
+    T merge(T aggr1, T aggr2);
 }
