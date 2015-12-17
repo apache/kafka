@@ -79,12 +79,12 @@ object Defaults {
   val LogCleanupPolicy = Delete
   val LogCleanerThreads = 1
   val LogCleanerIoMaxBytesPerSecond = Double.MaxValue
-  val LogCleanerDedupeBufferSize = 500 * 1024 * 1024L
+  val LogCleanerDedupeBufferSize = 128 * 1024 * 1024L
   val LogCleanerIoBufferSize = 512 * 1024
   val LogCleanerDedupeBufferLoadFactor = 0.9d
   val LogCleanerBackoffMs = 15 * 1000
   val LogCleanerMinCleanRatio = 0.5d
-  val LogCleanerEnable = false
+  val LogCleanerEnable = true
   val LogCleanerDeleteRetentionMs = 24 * 60 * 60 * 1000L
   val LogIndexSizeMaxBytes = 10 * 1024 * 1024
   val LogIndexIntervalBytes = 4096
@@ -401,7 +401,7 @@ object KafkaConfig {
   "will allow more log to be cleaned at once but will lead to more hash collisions"
   val LogCleanerBackoffMsDoc = "The amount of time to sleep when there are no logs to clean"
   val LogCleanerMinCleanRatioDoc = "The minimum ratio of dirty log to total log for a log to eligible for cleaning"
-  val LogCleanerEnableDoc = "Should we enable log cleaning?"
+  val LogCleanerEnableDoc = "Enable the log cleaner process to run on the server? Should be enabled if using any topics with a cleanup.policy=compact including the internal offsets topic. If disabled those topics will not be compacted and continually grow in size."
   val LogCleanerDeleteRetentionMsDoc = "How long are delete records retained?"
   val LogIndexSizeMaxBytesDoc = "The maximum size in bytes of the offset index"
   val LogIndexIntervalBytesDoc = "The interval with which we add an entry to the offset index"
