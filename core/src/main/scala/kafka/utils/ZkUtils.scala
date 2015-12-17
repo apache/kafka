@@ -403,7 +403,7 @@ class ZkUtils(val zkClient: ZkClient,
 
   /**
    * Update the value of a persistent node with the given path and data.
-   * create parrent directory if necessary. Never throw NodeExistException.
+   * create parent directory if necessary. Never throw NodeExistException.
    * Return the updated path zkVersion
    */
   def updatePersistentPath(path: String, data: String, acls: java.util.List[ACL] = DefaultAcls) = {
@@ -476,7 +476,7 @@ class ZkUtils(val zkClient: ZkClient,
 
   /**
    * Update the value of a persistent node with the given path and data.
-   * create parrent directory if necessary. Never throw NodeExistException.
+   * create parent directory if necessary. Never throw NodeExistException.
    */
   def updateEphemeralPath(path: String, data: String, acls: java.util.List[ACL] = DefaultAcls): Unit = {
     try {

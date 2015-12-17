@@ -61,7 +61,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   }
 
   def testWriteToWithMessageSet(set: MessageSet) {
-    // do the write twice to ensure the message set is restored to its orginal state
+    // do the write twice to ensure the message set is restored to its original state
     for(i <- List(0,1)) {
       val file = tempFile()
       val channel = new RandomAccessFile(file, "rw").getChannel()

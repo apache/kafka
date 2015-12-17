@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,13 +17,9 @@
 
 package kafka.api
 
-
-import java.nio.channels.GatheringByteChannel
-
-import kafka.cluster.{BrokerEndPoint, EndPoint, Broker}
+import kafka.cluster.{EndPoint, Broker}
 import kafka.common.{OffsetAndMetadata, ErrorMapping, OffsetMetadataAndError}
 import kafka.common._
-import kafka.consumer.FetchRequestAndResponseStatsRegistry
 import kafka.message.{Message, ByteBufferMessageSet}
 import kafka.utils.SystemTime
 
@@ -119,20 +115,6 @@ object SerializationTestUtils {
     TopicAndPartition(topic1,2) -> partitionStateInfo2,
     TopicAndPartition(topic1,3) -> partitionStateInfo3
   )
-
-  def createTestLeaderAndIsrRequest() : LeaderAndIsrRequest = {
-    val leaderAndIsr1 = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader1, 1, isr1, 1), 1)
-    val leaderAndIsr2 = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader2, 1, isr2, 2), 1)
-    val map = Map(((topic1, 0), PartitionStateInfo(leaderAndIsr1, isr1.toSet)),
-                  ((topic2, 0), PartitionStateInfo(leaderAndIsr2, isr2.toSet)))
-    new LeaderAndIsrRequest(map.toMap, collection.immutable.Set[BrokerEndPoint](), 0, 1, 0, "")
-  }
-
-  def createTestLeaderAndIsrResponse() : LeaderAndIsrResponse = {
-    val responseMap = Map(((topic1, 0), ErrorMapping.NoError),
-                          ((topic2, 0), ErrorMapping.NoError))
-    new LeaderAndIsrResponse(1, responseMap)
-  }
 
   def createTestStopReplicaRequest() : StopReplicaRequest = {
     new StopReplicaRequest(controllerId = 0, controllerEpoch = 1, correlationId = 0, deletePartitions = true,
@@ -257,8 +239,6 @@ object SerializationTestUtils {
 }
 
 class RequestResponseSerializationTest extends JUnitSuite {
-  private val leaderAndIsrRequest = SerializationTestUtils.createTestLeaderAndIsrRequest
-  private val leaderAndIsrResponse = SerializationTestUtils.createTestLeaderAndIsrResponse
   private val stopReplicaRequest = SerializationTestUtils.createTestStopReplicaRequest
   private val stopReplicaResponse = SerializationTestUtils.createTestStopReplicaResponse
   private val producerRequest = SerializationTestUtils.createTestProducerRequest
@@ -286,7 +266,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
   def testSerializationAndDeserialization() {
 
     val requestsAndResponses =
-      collection.immutable.Seq(leaderAndIsrRequest, leaderAndIsrResponse, stopReplicaRequest,
+      collection.immutable.Seq(stopReplicaRequest,
                                stopReplicaResponse, producerRequest, producerResponse,
                                fetchRequest, offsetRequest, offsetResponse, topicMetadataRequest,
                                topicMetadataResponse,

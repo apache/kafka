@@ -545,7 +545,7 @@ public class DistributedHerder implements Herder, Runnable {
         //      even attempting to. If we can't we should drop out of the group because we will block everyone from making
         //      progress. We can backoff and try rejoining later.
         //  1b. We are not the leader. We might need to catch up. If we're already caught up we can rejoin immediately,
-        //      otherwise, we just want to wait indefinitely to catch up and rejoin whenver we're finally ready.
+        //      otherwise, we just want to wait indefinitely to catch up and rejoin whenever we're finally ready.
         // 2. Assignment succeeded.
         //  2a. We are caught up on configs. Awesome! We can proceed to run our assigned work.
         //  2b. We need to try to catch up. We can do this potentially indefinitely because if it takes to long, we'll
