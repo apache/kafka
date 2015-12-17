@@ -31,12 +31,13 @@ if [ -z "$SCALA_BINARY_VERSION" ]; then
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
-echo "JARPATH="
+JARPATH=($JARPATH)
 echo $JARPATH
 shopt -s nullglob
 if [ $JARPATH ]; then
   for jarPath in ${JARPATH[@]};
   do
+    echo $jarPath
     for dir in jarPath;
       do
         for file in $dir/*.jar;
@@ -108,6 +109,7 @@ else
 fi
 shopt -u nullglob
 echo $CLASSPATH
+exit 0
 
 # JMX settings
 if [ -z "$KAFKA_JMX_OPTS" ]; then

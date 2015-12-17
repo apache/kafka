@@ -28,4 +28,4 @@ if [ -z "$SCALA_BINARY_VERSION" ]; then
         SCALA_BINARY_VERSION=2.10
 fi
 
-JARPATH=("$base_dir/core/build/dependant-libs-${SCALA_VERSION}*" "$base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar") exec $(dirname $0)/kafka-run-class.sh kafka.tools.ConsoleConsumer $@
+JARPATH="$base_dir/core/build/dependant-libs-${SCALA_VERSION}* $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar" exec $(dirname $0)/kafka-run-class.sh kafka.tools.ConsoleConsumer $@
