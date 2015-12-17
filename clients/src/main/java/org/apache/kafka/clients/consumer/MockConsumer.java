@@ -87,6 +87,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public void subscribe(Collection<String> topics) {
+        subscribe(topics, new NoOpConsumerRebalanceListener());
+    }
+
+    @Override
     public void subscribe(List<String> topics) {
         subscribe(topics, new NoOpConsumerRebalanceListener());
     }
@@ -107,12 +112,22 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void subscribe(List<String> topics, final ConsumerRebalanceListener listener) {
+        subscribe(topics, listener);
+    }
+
+    @Override
+    public void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
         this.subscriptions.subscribe(topics, listener);
     }
 
     @Override
     public void assign(List<TopicPartition> partitions) {
+        assign(partitions);
+    }
+
+    @Override
+    public void assign(Collection<TopicPartition> partitions) {
         ensureNotClosed();
         this.subscriptions.assignFromUser(partitions);
     }

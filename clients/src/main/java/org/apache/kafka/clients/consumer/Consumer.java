@@ -43,14 +43,29 @@ public interface Consumer<K, V> extends Closeable {
     public Set<String> subscription();
 
     /**
+     * @see KafkaConsumer#subscribe(Collection)
+     */
+    public void subscribe(Collection<String> topics);
+
+    /**
      * @see KafkaConsumer#subscribe(List)
      */
     public void subscribe(List<String> topics);
 
     /**
+     * @see KafkaConsumer#subscribe(Collection, ConsumerRebalanceListener)
+     */
+    public void subscribe(Collection<String> topics, ConsumerRebalanceListener callback);
+
+    /**
      * @see KafkaConsumer#subscribe(List, ConsumerRebalanceListener)
      */
     public void subscribe(List<String> topics, ConsumerRebalanceListener callback);
+
+    /**
+     * @see KafkaConsumer#assign(Collection)
+     */
+    public void assign(Collection<TopicPartition> partitions);
 
     /**
      * @see KafkaConsumer#assign(List)

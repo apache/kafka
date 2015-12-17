@@ -681,7 +681,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *                 subscribed topics
      */
     @Override
-    public void subscribe(List<String> topics, ConsumerRebalanceListener listener) {
+    public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
         acquire();
         try {
             if (topics.isEmpty()) {
@@ -698,20 +698,42 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Subscribe to the givent list of topics. See {@link #subscribe(Collection, ConsumerRebalanceListener)}
+     * for more details.
+     * @param topics The list of topics to subscribe to
+     * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
+     *                 subscribed topics
+     */
+    @Override
+    public void subscribe(List<String> topics, ConsumerRebalanceListener listener) {
+        subscribe(topics, listener);
+    }
+
+
+    /**
      * Subscribe to the given list of topics to get dynamically assigned partitions.
      * <b>Topic subscriptions are not incremental. This list will replace the current
      * assignment (if there is one).</b> It is not possible to combine topic subscription with group management
-     * with manual partition assignment through {@link #assign(List)}.
+     * with manual partition assignment through {@link #assign(Collection)}.
      *
      * If the given list of topics is empty, it is treated the same as {@link #unsubscribe()}.
      *
      * <p>
-     * This is a short-hand for {@link #subscribe(List, ConsumerRebalanceListener)}, which
+     * This is a short-hand for {@link #subscribe(Collection, ConsumerRebalanceListener)}, which
      * uses a noop listener. If you need the ability to either seek to particular offsets, you should prefer
-     * {@link #subscribe(List, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
+     * {@link #subscribe(Collection, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
      * to be reset. You should also prefer to provide your own listener if you are doing your own offset
      * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
      *
+     * @param topics The list of topics to subscribe to
+     */
+    @Override
+    public void subscribe(Collection<String> topics) {
+        subscribe(topics, new NoOpConsumerRebalanceListener());
+    }
+
+    /**
+     * Subscribe to the givent list of topics. See {@link #subscribe(Collection)} for more details.
      * @param topics The list of topics to subscribe to
      */
     @Override
@@ -775,7 +797,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions The list of partitions to assign this consumer
      */
     @Override
-    public void assign(List<TopicPartition> partitions) {
+    public void assign(Collection<TopicPartition> partitions) {
         acquire();
         try {
             log.debug("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
@@ -788,6 +810,19 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             release();
         }
     }
+
+    /**
+     * Manually assign a list of partition to this consumer.
+     * See {@link #assign(Collection)} for more details.
+     *
+     * @param partitions The list of partitions to assign this consumer
+     */
+    @Override
+    public void assign(List<TopicPartition> partitions) {
+        assign(partitions);
+    }
+
+
 
     /**
      * Fetch data for the topics or partitions specified using one of the subscribe/assign APIs. It is an error to not have

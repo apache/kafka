@@ -89,7 +89,7 @@ public class SubscriptionState {
         this.subscribedPattern = null;
     }
 
-    public void subscribe(List<String> topics, ConsumerRebalanceListener listener) {
+    public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
@@ -101,7 +101,7 @@ public class SubscriptionState {
         changeSubscription(topics);
     }
 
-    public void changeSubscription(List<String> topicsToSubscribe) {
+    public void changeSubscription(Collection<String> topicsToSubscribe) {
         if (!this.subscription.equals(new HashSet<>(topicsToSubscribe))) {
             this.subscription.clear();
             this.subscription.addAll(topicsToSubscribe);
