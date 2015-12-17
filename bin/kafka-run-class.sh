@@ -33,6 +33,16 @@ fi
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
 shopt -s nullglob
 if [ $JARPATH ]; then
+  for jarPath in ${JARPATH[@]};
+  do
+    for dir in jarPath;
+      do
+        for file in $dir/*.jar;
+          do
+            CLASSPATH=$CLASSPATH:$file
+          done
+      done
+  done
   CLASSPATH=$CLASSPATH:$JARPATH
 else
   for dir in $base_dir/core/build/dependant-libs-${SCALA_VERSION}*;
@@ -95,6 +105,7 @@ else
   done
 fi
 shopt -u nullglob
+echo $CLASSPATH
 
 # JMX settings
 if [ -z "$KAFKA_JMX_OPTS" ]; then
