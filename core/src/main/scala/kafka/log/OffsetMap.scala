@@ -42,7 +42,7 @@ trait OffsetMap {
 class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extends OffsetMap {
   private val bytes = ByteBuffer.allocate(memory)
   
-  /* the hash algorithm instance to use, defualt is MD5 */
+  /* the hash algorithm instance to use, default is MD5 */
   private val digest = MessageDigest.getInstance(hashAlgorithm)
   
   /* the number of bytes for this hash algorithm */
