@@ -734,7 +734,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Subscribe to the givent list of topics. See {@link #subscribe(Collection)} for more details.
+     * Subscribe to the givent list of topics.
+     * See {@link #subscribe(Collection)} for more details.
      * @param topics The list of topics to subscribe to
      */
     @Override
