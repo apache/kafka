@@ -31,65 +31,27 @@ if [ -z "$SCALA_BINARY_VERSION" ]; then
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
+
+if [ -z "$JARPATH" ]; then
+  JARPATH="$base_dir/core/build/dependant-libs-${SCALA_VERSION}/*.jar \
+            $base_dir/examples/build/libs//kafka-examples*.jar \
+            $base_dir/contrib/hadoop-consumer/build/libs//kafka-hadoop-consumer*.jar \
+            $base_dir/contrib/hadoop-producer/build/libs//kafka-hadoop-producer*.jar \
+            $base_dir/clients/build/libs/kafka-clients*.jar \
+            $base_dir/stream/build/libs/kafka-streams*.jar \
+            $base_dir/tools/build/libs/kafka-tools*.jar \
+            $base_dir/tools/build/dependant-libs-${SCALA_VERSION}* \
+            $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar \
+            $base_dir/connect/*/build/libs/connect-*.jar \
+            $base_dir/connect/*/build/dependant-libs/*.jar \
+            $base_dir/libs/*.jar"
+fi
+JARPATH=($JARPATH)
 shopt -s nullglob
-for dir in $base_dir/core/build/dependant-libs-${SCALA_VERSION}*;
-do
-  CLASSPATH=$CLASSPATH:$dir/*
-done
-
-for file in $base_dir/examples/build/libs//kafka-examples*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/contrib/hadoop-consumer/build/libs//kafka-hadoop-consumer*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/contrib/hadoop-producer/build/libs//kafka-hadoop-producer*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/clients/build/libs/kafka-clients*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/streams/build/libs/kafka-streams*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/tools/build/libs/kafka-tools*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for dir in $base_dir/tools/build/dependant-libs-${SCALA_VERSION}*;
-do
-  CLASSPATH=$CLASSPATH:$dir/*
-done
-
-for cc_pkg in "api" "runtime" "file" "json" "tools"
-do
-  for file in $base_dir/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
+for file in ${JARPATH[@]};
   do
     CLASSPATH=$CLASSPATH:$file
   done
-  if [ -d "$base_dir/connect/${cc_pkg}/build/dependant-libs" ] ; then
-    CLASSPATH=$CLASSPATH:$base_dir/connect/${cc_pkg}/build/dependant-libs/*
-  fi
-done
-
-# classpath addition for release
-CLASSPATH=$CLASSPATH:$base_dir/libs/*
-
-for file in $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
 shopt -u nullglob
 
 # JMX settings
