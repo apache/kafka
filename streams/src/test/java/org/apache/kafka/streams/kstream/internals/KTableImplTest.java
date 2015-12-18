@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -128,6 +129,9 @@ public class KTableImplTest {
 
             KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
 
+            // two state store should be created
+            assertEquals(2, driver.allStateStores().size());
+
             KTableValueGetter<String, String> getter1 = getterSupplier1.get();
             getter1.init(driver.context());
             KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
@@ -217,4 +221,87 @@ public class KTableImplTest {
         }
     }
 
+    @Test
+    public void testStateStore() throws IOException {
+        final Serializer<String> serializer = new StringSerializer();
+        final Deserializer<String> deserializer = new StringDeserializer();
+
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+
+        File stateDir = Files.createTempDirectory("test").toFile();
+        try {
+            KStreamBuilder builder = new KStreamBuilder();
+
+            KTableImpl<String, String, String> table1 =
+                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic1);
+            KTableImpl<String, String, String> table2 =
+                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic2);
+
+            KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
+                    new ValueMapper<String, Integer>() {
+                        @Override
+                        public Integer apply(String value) {
+                            return new Integer(value);
+                        }
+                    });
+            KTableImpl<String, Integer, Integer> table1MappedFiltered = (KTableImpl<String, Integer, Integer>) table1Mapped.filter(
+                    new Predicate<String, Integer>() {
+                        @Override
+                        public boolean test(String key, Integer value) {
+                            return (value % 2) == 0;
+                        }
+                    });
+
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            driver.setTime(0L);
+
+            // no state store should be created
+            assertEquals(0, driver.allStateStores().size());
+
+        } finally {
+            Utils.delete(stateDir);
+        }
+
+        try {
+            KStreamBuilder builder = new KStreamBuilder();
+
+            KTableImpl<String, String, String> table1 =
+                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic1);
+            KTableImpl<String, String, String> table2 =
+                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic2);
+
+            KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
+                    new ValueMapper<String, Integer>() {
+                        @Override
+                        public Integer apply(String value) {
+                            return new Integer(value);
+                        }
+                    });
+            KTableImpl<String, Integer, Integer> table1MappedFiltered = (KTableImpl<String, Integer, Integer>) table1Mapped.filter(
+                    new Predicate<String, Integer>() {
+                        @Override
+                        public boolean test(String key, Integer value) {
+                            return (value % 2) == 0;
+                        }
+                    });
+            table2.join(table1MappedFiltered,
+                    new ValueJoiner<String, Integer, String>() {
+                        @Override
+                        public String apply(String v1, Integer v2) {
+                            return v1 + v2;
+                        }
+                    });
+
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            driver.setTime(0L);
+
+            // two state store should be created
+            assertEquals(2, driver.allStateStores().size());
+
+        } finally {
+            Utils.delete(stateDir);
+        }
+
+    }
 }

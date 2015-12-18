@@ -401,12 +401,12 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Create a hexidecimal string for the given bytes
+   * Create a hexadecimal string for the given bytes
    */
   def hexString(bytes: Array[Byte]): String = hexString(ByteBuffer.wrap(bytes))
 
   /**
-   * Create a hexidecimal string for the given bytes
+   * Create a hexadecimal string for the given bytes
    */
   def hexString(buffer: ByteBuffer): String = {
     val builder = new StringBuilder("0x")
@@ -455,8 +455,7 @@ object TestUtils extends Logging {
    */
   def createNewProducer(brokerList: String,
                         acks: Int = -1,
-                        metadataFetchTimeout: Long = 3000L,
-                        blockOnBufferFull: Boolean = true,
+                        maxBlockMs: Long = 60 * 1000L,
                         bufferSize: Long = 1024L * 1024L,
                         retries: Int = 0,
                         lingerMs: Long = 0,
@@ -468,7 +467,7 @@ object TestUtils extends Logging {
     val producerProps = props.getOrElse(new Properties)
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.ACKS_CONFIG, acks.toString)
-    producerProps.put(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG, metadataFetchTimeout.toString)
+    producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
     producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
     producerProps.put(ProducerConfig.RETRIES_CONFIG, retries.toString)
         
@@ -712,7 +711,7 @@ object TestUtils extends Logging {
 
   /**
    * Execute the given block. If it throws an assert error, retry. Repeat
-   * until no error is thrown or the time limit ellapses
+   * until no error is thrown or the time limit elapses
    */
   def retry(maxWaitMs: Long)(block: => Unit) {
     var wait = 1L

@@ -205,28 +205,28 @@ public final class Metadata {
      * Set state to indicate if metadata for all topics in Kafka cluster is required or not.
      * @param needMetadaForAllTopics boolean indicating need for metadata of all topics in cluster.
      */
-    public void needMetadataForAllTopics(boolean needMetadaForAllTopics) {
+    public synchronized void needMetadataForAllTopics(boolean needMetadaForAllTopics) {
         this.needMetadataForAllTopics = needMetadaForAllTopics;
     }
 
     /**
      * Get whether metadata for all topics is needed or not
      */
-    public boolean needMetadataForAllTopics() {
+    public synchronized boolean needMetadataForAllTopics() {
         return this.needMetadataForAllTopics;
     }
 
     /**
      * Add a Metadata listener that gets notified of metadata updates
      */
-    public void addListener(Listener listener) {
+    public synchronized void addListener(Listener listener) {
         this.listeners.add(listener);
     }
 
     /**
      * Stop notifying the listener of metadata updates
      */
-    public void removeListener(Listener listener) {
+    public synchronized void removeListener(Listener listener) {
         this.listeners.remove(listener);
     }
 

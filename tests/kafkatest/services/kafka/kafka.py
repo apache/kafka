@@ -42,15 +42,19 @@ class KafkaService(JmxMixin, Service):
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "kafka-log4j.properties")
     # Logs such as controller.log, server.log, etc all go here
     OPERATIONAL_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-operational-logs")
+    OPERATIONAL_LOG_INFO_DIR = os.path.join(OPERATIONAL_LOG_DIR, "info")
+    OPERATIONAL_LOG_DEBUG_DIR = os.path.join(OPERATIONAL_LOG_DIR, "debug")
     # Kafka log segments etc go here
     DATA_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-data-logs")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka.properties")
 
-
     logs = {
-        "kafka_operational_logs": {
-            "path": OPERATIONAL_LOG_DIR,
+        "kafka_operational_logs_info": {
+            "path": OPERATIONAL_LOG_INFO_DIR,
             "collect_default": True},
+        "kafka_operational_logs_debug": {
+            "path": OPERATIONAL_LOG_DEBUG_DIR,
+            "collect_default": False},
         "kafka_data": {
             "path": DATA_LOG_DIR,
             "collect_default": False}
@@ -66,7 +70,6 @@ class KafkaService(JmxMixin, Service):
         """
         Service.__init__(self, context, num_nodes)
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
-        self.log_level = "DEBUG"
 
         self.zk = zk
         self.quota_config = quota_config
@@ -113,7 +116,7 @@ class KafkaService(JmxMixin, Service):
         self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=False)
 
     def start_minikdc(self, add_principals=""):
-        if self.security_config.has_sasl_kerberos:
+        if self.security_config.has_sasl:
             if self.minikdc is None:
                 self.minikdc = MiniKdc(self.context, self.nodes, extra_principals = add_principals)
                 self.minikdc.start()
@@ -167,7 +170,6 @@ class KafkaService(JmxMixin, Service):
     def start_cmd(self, node):
         cmd = "export JMX_PORT=%d; " % self.jmx_port
         cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG
-        cmd += "export LOG_DIR=%s; " % KafkaService.OPERATIONAL_LOG_DIR
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
         cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-server-start.sh %s 1>> %s 2>> %s &" % (KafkaService.CONFIG_FILE, KafkaService.STDOUT_CAPTURE, KafkaService.STDERR_CAPTURE)
         return cmd
@@ -265,6 +267,35 @@ class KafkaService(JmxMixin, Service):
             output += line
         return output
 
+    def parse_describe_topic(self, topic_description):
+        """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
+        PartitionCount:2\tReplicationFactor:2\tConfigs:
+            Topic: test_topic\ttPartition: 0\tLeader: 3\tReplicas: 3,1\tIsr: 3,1
+            Topic: test_topic\tPartition: 1\tLeader: 1\tReplicas: 1,2\tIsr: 1,2
+        into a dictionary structure appropriate for use with reassign-partitions tool:
+        {
+            "partitions": [
+                {"topic": "test_topic", "partition": 0, "replicas": [3, 1]},
+                {"topic": "test_topic", "partition": 1, "replicas": [1, 2]}
+            ]
+        }
+        """
+        lines = map(lambda x: x.strip(), topic_description.split("\n"))
+        partitions = []
+        for line in lines:
+            m = re.match(".*Leader:.*", line)
+            if m is None:
+                continue
+
+            fields = line.split("\t")
+            # ["Partition: 4", "Leader: 0"] -> ["4", "0"]
+            fields = map(lambda x: x.split(" ")[1], fields)
+            partitions.append(
+                {"topic": fields[0],
+                 "partition": int(fields[1]),
+                 "replicas": map(int, fields[3].split(','))})
+        return {"partitions": partitions}
+
     def verify_reassign_partitions(self, reassignment, node=None):
         """Run the reassign partitions admin tool in "verify" mode
         """
@@ -327,6 +358,37 @@ class KafkaService(JmxMixin, Service):
 
         self.logger.debug("Verify partition reassignment:")
         self.logger.debug(output)
+
+    def search_data_files(self, topic, messages):
+        """Check if a set of messages made it into the Kakfa data files. Note that
+        this method takes no account of replication. It simply looks for the
+        payload in all the partition files of the specified topic. 'messages' should be
+        an array of numbers. The list of missing messages is returned.
+        """
+        payload_match = "payload: " + "$|payload: ".join(str(x) for x in messages) + "$"
+        found = set([])
+
+        for node in self.nodes:
+            # Grab all .log files in directories prefixed with this topic
+            files = node.account.ssh_capture("find %s -regex  '.*/%s-.*/[^/]*.log'" % (KafkaService.DATA_LOG_DIR, topic))
+
+            # Check each data file to see if it contains the messages we want
+            for log in files:
+                cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.DumpLogSegments --print-data-log --files %s " \
+                      "| grep -E \"%s\"" % (kafka_dir(node), log.strip(), payload_match)
+
+                for line in node.account.ssh_capture(cmd, allow_fail=True):
+                    for val in messages:
+                        if line.strip().endswith("payload: "+str(val)):
+                            self.logger.debug("Found %s in data-file [%s] in line: [%s]" % (val, log.strip(), line.strip()))
+                            found.add(val)
+
+        missing = list(set(messages) - found)
+
+        if len(missing) > 0:
+            self.logger.warn("The following values were not found in the data files: " + str(missing))
+
+        return missing
 
     def restart_node(self, node, clean_shutdown=True):
         """Restart the given node."""

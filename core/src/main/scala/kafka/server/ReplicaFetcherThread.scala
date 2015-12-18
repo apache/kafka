@@ -108,18 +108,21 @@ class ReplicaFetcherThread(name: String,
 
       if (fetchOffset != replica.logEndOffset.messageOffset)
         throw new RuntimeException("Offset mismatch: fetched offset = %d, log end offset = %d.".format(fetchOffset, replica.logEndOffset.messageOffset))
-      trace("Follower %d has replica log end offset %d for partition %s. Received %d messages and leader hw %d"
-            .format(replica.brokerId, replica.logEndOffset.messageOffset, topicAndPartition, messageSet.sizeInBytes, partitionData.highWatermark))
+      if (logger.isTraceEnabled)
+        trace("Follower %d has replica log end offset %d for partition %s. Received %d messages and leader hw %d"
+          .format(replica.brokerId, replica.logEndOffset.messageOffset, topicAndPartition, messageSet.sizeInBytes, partitionData.highWatermark))
       replica.log.get.append(messageSet, assignOffsets = false)
-      trace("Follower %d has replica log end offset %d after appending %d bytes of messages for partition %s"
-            .format(replica.brokerId, replica.logEndOffset.messageOffset, messageSet.sizeInBytes, topicAndPartition))
+      if (logger.isTraceEnabled)
+        trace("Follower %d has replica log end offset %d after appending %d bytes of messages for partition %s"
+          .format(replica.brokerId, replica.logEndOffset.messageOffset, messageSet.sizeInBytes, topicAndPartition))
       val followerHighWatermark = replica.logEndOffset.messageOffset.min(partitionData.highWatermark)
       // for the follower replica, we do not need to keep
       // its segment base offset the physical position,
       // these values will be computed upon making the leader
       replica.highWatermark = new LogOffsetMetadata(followerHighWatermark)
-      trace("Follower %d set replica high watermark for partition [%s,%d] to %s"
-            .format(replica.brokerId, topic, partitionId, followerHighWatermark))
+      if (logger.isTraceEnabled)
+        trace("Follower %d set replica high watermark for partition [%s,%d] to %s"
+          .format(replica.brokerId, topic, partitionId, followerHighWatermark))
     } catch {
       case e: KafkaStorageException =>
         fatal("Disk error while replicating data.", e)

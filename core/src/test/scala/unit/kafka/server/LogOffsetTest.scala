@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,6 +19,7 @@ package kafka.server
 
 import java.io.File
 import kafka.utils._
+import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import java.util.{Random, Properties}
 import kafka.consumer.SimpleConsumer
@@ -33,7 +34,7 @@ import org.junit.Before
 import org.junit.Test
 
 class LogOffsetTest extends ZooKeeperTestHarness {
-  val random = new Random() 
+  val random = new Random()
   var logDir: File = null
   var topicLogDir: File = null
   var server: KafkaServer = null
@@ -89,7 +90,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
-    val offsets = server.apis.fetchOffsets(logManager, TopicAndPartition(topic, part), OffsetRequest.LatestTime, 10)
+    val offsets = server.apis.fetchOffsets(logManager, new TopicPartition(topic, part), OffsetRequest.LatestTime, 10)
     assertEquals(Seq(20L, 18L, 15L, 12L, 9L, 6L, 3L, 0), offsets)
 
     waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), "Leader should be elected")
@@ -152,7 +153,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
 
     val now = time.milliseconds + 30000 // pretend it is the future to avoid race conditions with the fs
 
-    val offsets = server.apis.fetchOffsets(logManager, TopicAndPartition(topic, part), now, 10)
+    val offsets = server.apis.fetchOffsets(logManager, new TopicPartition(topic, part), now, 10)
     assertEquals(Seq(20L, 18L, 15L, 12L, 9L, 6L, 3L, 0L), offsets)
 
     waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), "Leader should be elected")
@@ -179,7 +180,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
-    val offsets = server.apis.fetchOffsets(logManager, TopicAndPartition(topic, part), OffsetRequest.EarliestTime, 10)
+    val offsets = server.apis.fetchOffsets(logManager, new TopicPartition(topic, part), OffsetRequest.EarliestTime, 10)
 
     assertEquals(Seq(0L), offsets)
 
