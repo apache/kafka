@@ -133,7 +133,7 @@ public final class RecordBatch {
         if ((this.records.isFull() && requestTimeout < (now - this.lastAppendTime)) || requestTimeout < (now - (this.lastAttemptMs + lingerMs))) {
             expire = true;
             this.records.close();
-            this.done(-1L, new TimeoutException("Batch Expired"));
+            this.done(-1L, new TimeoutException("Batch Expired due to timeout for " + topicPartition.topic() + "-" + topicPartition.partition()));
         }
 
         return expire;
