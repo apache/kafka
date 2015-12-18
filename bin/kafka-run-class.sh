@@ -108,6 +108,7 @@ else
   done
 fi
 shopt -u nullglob
+echo "CLASSPATH"
 echo $CLASSPATH
 
 # JMX settings
