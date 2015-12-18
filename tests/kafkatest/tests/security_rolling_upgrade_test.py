@@ -21,7 +21,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer, is_int
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from ducktape.mark import matrix
-from kafkatest.services.security.acls import ACLs
+from kafkatest.services.security.kafka_acls import ACLs
 import time
 
 
