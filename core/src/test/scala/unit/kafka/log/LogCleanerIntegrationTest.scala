@@ -74,7 +74,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     cleaner.awaitCleaned("log", 0, firstDirty2)
 
     val lastCleaned2 = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition("log", 0)).get
-    assertTrue("log cleaner should have processed, firstDirty=%d, lastCleaned=%d, firstDirty2=%d, lastCleaned2=%d.".format(firstDirty, lastCleaned, firstDirty2, lastCleaned2), lastCleaned2 > lastCleaned)
+    assertTrue("log cleaner should have processed up to offset " + firstDirty2, lastCleaned2 >= firstDirty2);
 
     val read2 = readFromLog(log)
     assertEquals("Contents of the map shouldn't change.", appends2.toMap, read2.toMap)
@@ -139,7 +139,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
       logProps.put(LogConfig.SegmentIndexBytesProp, 100*1024: java.lang.Integer)
       logProps.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
       logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-      logProps.put(LogConfig.MinCleanableDirtyRatioProp, 0: java.lang.Float)
+      logProps.put(LogConfig.MinCleanableDirtyRatioProp, 0F: java.lang.Float)
 
       val log = new Log(dir = dir,
                         LogConfig(logProps),
