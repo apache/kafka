@@ -36,7 +36,7 @@ class Keytool(object):
             os.remove(ks_path)
         if os.path.exists(ts_path):
             os.remove(ts_path)
-        
+
         Keytool.runcmd("keytool -genkeypair -alias test -keyalg RSA -keysize 2048 -keystore %s -storetype JKS -keypass %s -storepass %s -dname CN=systemtest" % (ks_path, key_password, ks_password))
         Keytool.runcmd("keytool -export -alias test -keystore %s -storepass %s -storetype JKS -rfc -file test.crt" % (ks_path, ks_password))
         Keytool.runcmd("keytool -import -alias test -file test.crt -keystore %s -storepass %s -storetype JKS -noprompt" % (ts_path, ts_password))
@@ -173,53 +173,51 @@ class SecurityConfig(TemplateRenderer):
         else:
             return ""
 
-    #
-    # ACLs
-    #
+    def set_acls(self, protocol, kafka, zk, topic, group):
+        node = kafka.nodes[0]
+        setting = zk.connect_setting()
+
+        # Set server ACLs
+        kafka_principal = "User:CN=systemtest" if protocol == "SSL" else "User:kafka"
+        self.acls_command(node, self.add_cluster_acl(setting, kafka_principal))
+        self.acls_command(node, self.broker_read_acl(setting, "*", kafka_principal))
+
+        # Set client ACLs
+        client_principal = "User:CN=systemtest" if protocol == "SSL" else "User:client"
+        self.acls_command(node, self.produce_acl(setting, topic, client_principal))
+        self.acls_command(node, self.consume_acl(setting, topic, group, client_principal))
+
     def acls_command(self, node, properties):
         cmd = "/opt/%s/bin/kafka-acls.sh %s" % (kafka_dir(node), properties)
         node.account.ssh(cmd)
 
-    #
-    # Cluster action
-    #
-    def addClusterAcl(self, zk_connect, principal="User:kafka"):
+    def add_cluster_acl(self, zk_connect, principal="User:kafka"):
         return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --cluster --operation=ClusterAction --allow-principal=%(principal)s " % {
-                    'zk_connect': zk_connect,
-                    'principal': principal
-                }
+            'zk_connect': zk_connect,
+            'principal': principal
+        }
 
-
-    #
-    # Broker read, necessary for replication
-    #
-    def brokerReadAcl(self, zk_connect, topic, principal="User:kafka"):
+    def broker_read_acl(self, zk_connect, topic, principal="User:kafka"):
         return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s --operation=Read --allow-principal=%(principal)s " % {
-                        'zk_connect': zk_connect,
-                        'topic': topic,
-                        'principal': principal
-                }
+            'zk_connect': zk_connect,
+            'topic': topic,
+            'principal': principal
+        }
 
-    #
-    # Produce
-    #
-    def produceAcl(self, zk_connect, topic, principal="User:client"):
+    def produce_acl(self, zk_connect, topic, principal="User:client"):
         return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s --producer --allow-principal=%(principal)s " % {
-                        'zk_connect': zk_connect,
-                        'topic': topic,
-                        'principal': principal
-                }
+            'zk_connect': zk_connect,
+            'topic': topic,
+            'principal': principal
+        }
 
-    #
-    # Consume
-    #
-    def consumeAcl(self, zk_connect, topic, group, principal="User:client"):
+    def consume_acl(self, zk_connect, topic, group, principal="User:client"):
         return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s --group=%(group)s --consumer --allow-principal=%(principal)s " % {
-                    'zk_connect': zk_connect,
-                    'topic': topic,
-                    'group': group,
-                    'principal': principal
-                }
+            'zk_connect': zk_connect,
+            'topic': topic,
+            'group': group,
+            'principal': principal
+        }
 
     def __str__(self):
         """
@@ -234,4 +232,3 @@ class SecurityConfig(TemplateRenderer):
                 prop_str += ("\n" + key + "=" + value)
             prop_str += "\n"
         return prop_str
-
