@@ -16,10 +16,12 @@
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
+from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer, is_int
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from ducktape.mark import matrix
+from kafkatest.services.security.acls import ACLs
 import time
 
 
@@ -31,6 +33,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         super(TestSecurityRollingUpgrade, self).__init__(test_context=test_context)
 
     def setUp(self):
+        self.acls = ACLs()
         self.topic = "test_topic"
         self.group = "group"
         self.producer_throughput = 100
@@ -72,24 +75,9 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         # Roll cluster to disable PLAINTEXT port
         self.kafka.close_port('PLAINTEXT')
         self.kafka.authorizer_class_name = "kafka.security.auth.SimpleAclAuthorizer"
-        self.kafka.security_config.set_acls(upgrade_protocol, self.kafka, self.zk, self.topic, self.group)
+        self.acls.set_acls(client_protocol, self.kafka, self.zk, self.topic, self.group)
+        self.acls.set_acls(broker_protocol, self.kafka, self.zk, self.topic, self.group)
         self.bounce()
-
-    def set_acls(self, upgrade_protocol):
-        if upgrade_protocol in ["SASL_PLAINTEXT", "SASL_SSL"]:
-            self.kafka.authorizer_class_name = "kafka.security.auth.SimpleAclAuthorizer"
-
-            self.add_cluster_props = self.kafka.security_config.addClusterAcl(self.zk.connect_setting())
-            self.kafka.security_config.acls_command(self.kafka.nodes[0], self.add_cluster_props)
-
-            self.broker_read_props = self.kafka.security_config.brokerReadAcl(self.zk.connect_setting(), self.topic)
-            self.kafka.security_config.acls_command(self.kafka.nodes[0], self.broker_read_props)
-
-            self.produce_props = self.kafka.security_config.produceAcl(self.zk.connect_setting(), self.topic)
-            self.kafka.security_config.acls_command(self.kafka.nodes[0], self.produce_props)
-
-            self.consume_props = self.kafka.security_config.consumeAcl(self.zk.connect_setting(), self.topic, self.group)
-            self.kafka.security_config.acls_command(self.kafka.nodes[0], self.consume_props)
 
     def open_secured_port(self, client_protocol):
         self.kafka.security_protocol = client_protocol

@@ -21,9 +21,8 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer, is_int
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
-
+from kafkatest.services.security.acls import ACLs
 import time
-
 
 class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
     """Tests a rolling upgrade for zookeeper.
@@ -38,6 +37,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         self.producer_throughput = 100
         self.num_producers = 1
         self.num_consumers = 1
+        self.acls = ACLs()
 
         self.zk = ZookeeperService(self.test_context, num_nodes=3)
 
@@ -102,7 +102,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         # set acls
         if self.is_secure:
             self.kafka.authorizer_class_name = "kafka.security.auth.SimpleAclAuthorizer"
-            self.kafka.security_config.set_acls(security_protocol, self.kafka, self.zk, self.topic, self.group)
+            self.acls.set_acls(security_protocol, self.kafka, self.zk, self.topic, self.group)
 
         if(self.no_sasl):
             self.kafka.start()
