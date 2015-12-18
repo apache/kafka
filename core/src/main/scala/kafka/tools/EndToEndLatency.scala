@@ -22,6 +22,7 @@ import java.util.{Arrays, Properties}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.TopicPartition
 
 import scala.collection.JavaConversions._
 
@@ -85,7 +86,7 @@ object EndToEndLatency {
 
     //Ensure we are at latest offset. seekToEnd evaluates lazily, that is to say actually performs the seek only when
     //a poll() or position() request is issued. Hence we need to poll after we seek to ensure we see our first write.
-    consumer.seekToEnd()
+    consumer.seekToEnd(List[TopicPartition]())
     consumer.poll(0)
 
     var totalTime = 0.0

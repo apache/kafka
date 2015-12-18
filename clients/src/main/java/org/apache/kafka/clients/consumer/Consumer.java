@@ -48,29 +48,14 @@ public interface Consumer<K, V> extends Closeable {
     public void subscribe(Collection<String> topics);
 
     /**
-     * @see KafkaConsumer#subscribe(List)
-     */
-    public void subscribe(List<String> topics);
-
-    /**
      * @see KafkaConsumer#subscribe(Collection, ConsumerRebalanceListener)
      */
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener callback);
 
     /**
-     * @see KafkaConsumer#subscribe(List, ConsumerRebalanceListener)
-     */
-    public void subscribe(List<String> topics, ConsumerRebalanceListener callback);
-
-    /**
      * @see KafkaConsumer#assign(Collection)
      */
     public void assign(Collection<TopicPartition> partitions);
-
-    /**
-     * @see KafkaConsumer#assign(List)
-     */
-    public void assign(List<TopicPartition> partitions);
 
     /**
     * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
@@ -118,22 +103,12 @@ public interface Consumer<K, V> extends Closeable {
     public void seek(TopicPartition partition, long offset);
 
     /**
-     * @see KafkaConsumer#seekToBeginning(TopicPartition...)
-     */
-    public void seekToBeginning(TopicPartition... partitions);
-
-    /**
-     * @see KafkaConsumer#seekToBeginning(Collection<TopicPartition>)
+     * @see KafkaConsumer#seekToBeginning(Collection)
      */
     public void seekToBeginning(Collection<TopicPartition> partitions);
 
     /**
-     * @see KafkaConsumer#seekToEnd(TopicPartition...)
-     */
-    public void seekToEnd(TopicPartition... partitions);
-
-    /**
-     * @see KafkaConsumer#seekToEnd(Collection<TopicPartition>)
+     * @see KafkaConsumer#seekToEnd(Collection)
      */
     public void seekToEnd(Collection<TopicPartition> partitions);
 
@@ -163,22 +138,12 @@ public interface Consumer<K, V> extends Closeable {
     public Map<String, List<PartitionInfo>> listTopics();
 
     /**
-     * @see KafkaConsumer#pause(TopicPartition...)
-     */
-    public void pause(TopicPartition... partitions);
-
-    /**
-     * @see KafkaConsumer#pause(Collection<TopicPartition>)
+     * @see KafkaConsumer#pause(Collection)
      */
     public void pause(Collection<TopicPartition> partitions);
 
     /**
-     * @see KafkaConsumer#resume(TopicPartition...)
-     */
-    public void resume(TopicPartition... partitions);
-
-    /**
-     * @see KafkaConsumer#resume(Collection<TopicPartition>)
+     * @see KafkaConsumer#resume(Collection)
      */
     public void resume(Collection<TopicPartition> partitions);
 

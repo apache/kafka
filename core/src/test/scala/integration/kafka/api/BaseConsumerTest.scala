@@ -101,7 +101,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     val rebalanceListener = new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
         // keep partitions paused in this test so that we can verify the commits based on specific seeks
-        partitions.asScala.foreach(consumer0.pause(_))
+        consumer0.pause(partitions)
       }
 
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {}
@@ -246,7 +246,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     sendRecords(5)
     consumer0.subscribe(List(topic).asJava)
     consumeAndVerifyRecords(consumer0, 5, 0)
-    consumer0.pause(tp)
+    consumer0.pause(List(tp).asJava)
 
     // subscribe to a new topic to trigger a rebalance
     consumer0.subscribe(List("topic2").asJava)

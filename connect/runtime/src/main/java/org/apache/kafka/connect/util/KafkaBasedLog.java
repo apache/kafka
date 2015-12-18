@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -251,7 +252,7 @@ public class KafkaBasedLog<K, V> {
         for (TopicPartition tp : assignment) {
             long offset = consumer.position(tp);
             offsets.put(tp, offset);
-            consumer.seekToEnd(tp);
+            consumer.seekToEnd(Arrays.asList(tp));
         }
 
         Map<TopicPartition, Long> endOffsets = new HashMap<>();

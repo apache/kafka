@@ -21,7 +21,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 
-import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -92,11 +91,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void subscribe(List<String> topics) {
-        subscribe(topics, new NoOpConsumerRebalanceListener());
-    }
-
-    @Override
     public void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
         this.subscriptions.subscribe(pattern, listener);
@@ -111,21 +105,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void subscribe(List<String> topics, final ConsumerRebalanceListener listener) {
-        Collection<String> tps = topics;
-        subscribe(tps, listener);
-    }
-
-    @Override
     public void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
         this.subscriptions.subscribe(topics, listener);
-    }
-
-    @Override
-    public void assign(List<TopicPartition> partitions) {
-        Collection<TopicPartition> parts = partitions;
-        assign(parts);
     }
 
     @Override
@@ -256,11 +238,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void seekToBeginning(TopicPartition... partitions) {
-        seekToBeginning(Arrays.asList(partitions));
-    }
-
-    @Override
     public void seekToBeginning(Collection<TopicPartition> partitions) {
         ensureNotClosed();
         for (TopicPartition tp : partitions)
@@ -269,11 +246,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     public void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {
         beginningOffsets.putAll(newOffsets);
-    }
-
-    @Override
-    public void seekToEnd(TopicPartition... partitions) {
-        seekToEnd(Arrays.asList(partitions));
     }
 
     @Override
@@ -315,21 +287,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void pause(TopicPartition... partitions) {
-        pause(Arrays.asList(partitions));
-    }
-
-    @Override
     public void pause(Collection<TopicPartition> partitions) {
         for (TopicPartition partition : partitions) {
             subscriptions.pause(partition);
             paused.add(partition);
         }
-    }
-
-    @Override
-    public void resume(TopicPartition... partitions) {
-        resume(Arrays.asList(partitions));
     }
 
     @Override

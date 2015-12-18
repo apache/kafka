@@ -340,7 +340,7 @@ public class StreamThread extends Thread {
                             if (remaining != null) {
                                 standbyRecords.put(partition, remaining);
                             } else {
-                                restoreConsumer.resume(partition);
+                                restoreConsumer.resume(Arrays.asList(partition));
                             }
                         }
                     }
@@ -355,7 +355,7 @@ public class StreamThread extends Thread {
                     StandbyTask task = standbyTasksByPartition.get(partition);
                     List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
                     if (remaining != null) {
-                        restoreConsumer.pause(partition);
+                        restoreConsumer.pause(Arrays.asList(partition));
                         standbyRecords.put(partition, remaining);
                     }
                 }
@@ -631,7 +631,7 @@ public class StreamThread extends Thread {
             if (offset >= 0) {
                 restoreConsumer.seek(partition, offset);
             } else {
-                restoreConsumer.seekToBeginning(partition);
+                restoreConsumer.seekToBeginning(Arrays.asList(partition));
             }
         }
     }

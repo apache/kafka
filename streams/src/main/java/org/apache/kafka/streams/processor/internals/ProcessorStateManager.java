@@ -34,6 +34,7 @@ import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -185,7 +186,7 @@ public class ProcessorStateManager {
         try {
             // calculate the end offset of the partition
             // TODO: this is a bit hacky to first seek then position to get the end offset
-            restoreConsumer.seekToEnd(storePartition);
+            restoreConsumer.seekToEnd(Arrays.asList(storePartition));
             long endOffset = restoreConsumer.position(storePartition);
 
             // restore from the checkpointed offset of the change log if it is persistent and the offset exists;
@@ -193,7 +194,7 @@ public class ProcessorStateManager {
             if (checkpointedOffsets.containsKey(storePartition)) {
                 restoreConsumer.seek(storePartition, checkpointedOffsets.get(storePartition));
             } else {
-                restoreConsumer.seekToBeginning(storePartition);
+                restoreConsumer.seekToBeginning(Arrays.asList(storePartition));
             }
 
             // restore its state from changelog records; while restoring the log end offset
