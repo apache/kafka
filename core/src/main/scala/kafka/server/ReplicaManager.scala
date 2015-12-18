@@ -147,8 +147,6 @@ class ReplicaManager(val config: KafkaConfig,
   val isrExpandRate = newMeter("IsrExpandsPerSec",  "expands", TimeUnit.SECONDS)
   val isrShrinkRate = newMeter("IsrShrinksPerSec",  "shrinks", TimeUnit.SECONDS)
 
-  Class.forName("kafka.server.DelayedFetchMetrics$")
-
   def underReplicatedPartitionCount(): Int = {
       getLeaderPartitions().count(_.isUnderReplicated)
   }
