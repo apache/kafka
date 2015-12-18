@@ -139,6 +139,8 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
       logProps.put(LogConfig.SegmentIndexBytesProp, 100*1024: java.lang.Integer)
       logProps.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
       logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+      logProps.put(LogConfig.MinCleanableDirtyRatioProp, 0: java.lang.Float)
+
       val log = new Log(dir = dir,
                         LogConfig(logProps),
                         recoveryPoint = 0L,
