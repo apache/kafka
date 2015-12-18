@@ -109,7 +109,6 @@ else
 fi
 shopt -u nullglob
 echo $CLASSPATH
-exit 0
 
 # JMX settings
 if [ -z "$KAFKA_JMX_OPTS" ]; then
