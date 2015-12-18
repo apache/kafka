@@ -800,6 +800,30 @@ object TestUtils extends Logging {
     leader
   }
 
+  def waitUntilLeadersAreMade(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long = 5000L): Unit = {
+    TestUtils.waitUntilTrue(() => {
+      var res = false
+      servers.foreach(server => {
+        server.replicaManager.getPartition(topic, partition) match {
+          case Some(partition) => {
+            partition.leaderReplicaIfLocal() match {
+              case Some(replica) => res = true
+              case None =>
+            }
+          }
+          case None =>
+        }
+      })
+      if (res == false) {
+        println("***waitUntilLeadersAreMade failed")
+      }
+      res
+    },
+      "Partition [%s,%d] leaders not made yet after %d ms".format(topic, partition, timeout),
+      waitTime = timeout
+    )
+  }
+
   def writeNonsenseToFile(fileName: File, position: Long, size: Int) {
     val file = new RandomAccessFile(fileName, "rw")
     file.seek(position)

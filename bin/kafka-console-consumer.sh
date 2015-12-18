@@ -18,4 +18,14 @@ if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
     export KAFKA_HEAP_OPTS="-Xmx512M"
 fi
 
-exec $(dirname $0)/kafka-run-class.sh kafka.tools.ConsoleConsumer $@
+base_dir=$(dirname $0)/..
+
+if [ -z "$SCALA_VERSION" ]; then
+        SCALA_VERSION=2.10.6
+fi
+
+if [ -z "$SCALA_BINARY_VERSION" ]; then
+        SCALA_BINARY_VERSION=2.10
+fi
+
+JARPATH="$base_dir/core/build/dependant-libs-${SCALA_VERSION}* $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar" exec $(dirname $0)/kafka-run-class.sh kafka.tools.ConsoleConsumer $@
