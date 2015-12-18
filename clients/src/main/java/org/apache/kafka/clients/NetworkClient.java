@@ -77,9 +77,6 @@ public class NetworkClient implements KafkaClient {
     /* the client id used to identify this client in requests to the server */
     private final String clientId;
 
-    /* a random offset to use when choosing nodes to avoid having all nodes choose the same node */
-    private final int nodeIndexOffset;
-
     /* the current correlation id to use when sending requests to servers */
     private int correlation;
 
@@ -144,7 +141,6 @@ public class NetworkClient implements KafkaClient {
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
         this.randOffset = new Random();
-        this.nodeIndexOffset = this.randOffset.nextInt(Integer.MAX_VALUE);
         this.requestTimeoutMs = requestTimeoutMs;
         this.nodesEverSeen = new ArrayList<>();
         this.nodesEverSeenById = new HashMap<>();
@@ -363,8 +359,10 @@ public class NetworkClient implements KafkaClient {
         List<Node> nodes = this.metadataUpdater.fetchNodes();
         int inflight = Integer.MAX_VALUE;
         Node found = null;
+
+        int offset = this.randOffset.nextInt(nodes.size());
         for (int i = 0; i < nodes.size(); i++) {
-            int idx = Utils.abs((this.nodeIndexOffset + i) % nodes.size());
+            int idx = (offset + i) % nodes.size();
             Node node = nodes.get(idx);
             int currInflight = this.inFlightRequests.inFlightRequestCount(node.idString());
             if (currInflight == 0 && this.connectionStates.isConnected(node.idString())) {
@@ -379,9 +377,9 @@ public class NetworkClient implements KafkaClient {
 
         // if we found no node in the current list, try one from the nodes seen before
         if (found == null && nodesEverSeen.size() > 0) {
-            int offset = randOffset.nextInt(nodesEverSeen.size());
+            offset = randOffset.nextInt(nodesEverSeen.size());
             for (int i = 0; i < nodesEverSeen.size(); i++) {
-                int idx = Utils.abs((offset + i) % nodesEverSeen.size());
+                int idx = (offset + i) % nodesEverSeen.size();
                 Node node = nodesEverSeenById.get(nodesEverSeen.get(idx));
                 log.debug("No node found. Trying previously-seen node with ID {}", node.id());
                 if (!this.connectionStates.isBlackedOut(node.idString(), now)) {
