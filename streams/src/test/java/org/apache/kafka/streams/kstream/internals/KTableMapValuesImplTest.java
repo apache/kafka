@@ -35,7 +35,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class KTableMapValuesImplTest {
 
@@ -189,6 +191,114 @@ public class KTableMapValuesImplTest {
             assertNull(getter4.get("A"));
             assertEquals("02", getter4.get("B"));
             assertEquals("01", getter4.get("C"));
+
+        } finally {
+            Utils.delete(stateDir);
+        }
+    }
+
+    @Test
+    public void testNotSendingOldValue() throws IOException {
+        File stateDir = Files.createTempDirectory("test").toFile();
+        try {
+            final Serializer<String> serializer = new StringSerializer();
+            final Deserializer<String> deserializer = new StringDeserializer();
+            final KStreamBuilder builder = new KStreamBuilder();
+
+            String topic1 = "topic1";
+
+            KTableImpl<String, String, String> table1 =
+                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic1);
+            KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
+                    new ValueMapper<String, Integer>() {
+                        @Override
+                        public Integer apply(String value) {
+                            return new Integer(value);
+                        }
+                    });
+
+            MockProcessorSupplier<String, Integer> proc = new MockProcessorSupplier<>();
+
+            builder.addProcessor("proc", proc, table2.name);
+
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+
+            assertFalse(table1.sendingOldValueEnabled());
+            assertFalse(table2.sendingOldValueEnabled());
+
+            driver.process(topic1, "A", "01");
+            driver.process(topic1, "B", "01");
+            driver.process(topic1, "C", "01");
+
+            proc.checkAndClearResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+
+            driver.process(topic1, "A", "02");
+            driver.process(topic1, "B", "02");
+
+            proc.checkAndClearResult("A:(2<-null)", "B:(2<-null)");
+
+            driver.process(topic1, "A", "03");
+
+            proc.checkAndClearResult("A:(3<-null)");
+
+            driver.process(topic1, "A", null);
+
+            proc.checkAndClearResult("A:(null<-null)");
+
+        } finally {
+            Utils.delete(stateDir);
+        }
+    }
+
+    @Test
+    public void testSendingOldValue() throws IOException {
+        File stateDir = Files.createTempDirectory("test").toFile();
+        try {
+            final Serializer<String> serializer = new StringSerializer();
+            final Deserializer<String> deserializer = new StringDeserializer();
+            final KStreamBuilder builder = new KStreamBuilder();
+
+            String topic1 = "topic1";
+
+            KTableImpl<String, String, String> table1 =
+                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic1);
+            KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
+                    new ValueMapper<String, Integer>() {
+                        @Override
+                        public Integer apply(String value) {
+                            return new Integer(value);
+                        }
+                    });
+
+            table2.enableSendingOldValues();
+
+            MockProcessorSupplier<String, Integer> proc = new MockProcessorSupplier<>();
+
+            builder.addProcessor("proc", proc, table2.name);
+
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+
+            assertTrue(table1.sendingOldValueEnabled());
+            assertTrue(table2.sendingOldValueEnabled());
+
+            driver.process(topic1, "A", "01");
+            driver.process(topic1, "B", "01");
+            driver.process(topic1, "C", "01");
+
+            proc.checkAndClearResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+
+            driver.process(topic1, "A", "02");
+            driver.process(topic1, "B", "02");
+
+            proc.checkAndClearResult("A:(2<-1)", "B:(2<-1)");
+
+            driver.process(topic1, "A", "03");
+
+            proc.checkAndClearResult("A:(3<-2)");
+
+            driver.process(topic1, "A", null);
+
+            proc.checkAndClearResult("A:(null<-3)");
 
         } finally {
             Utils.delete(stateDir);

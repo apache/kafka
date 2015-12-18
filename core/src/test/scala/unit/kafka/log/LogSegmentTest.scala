@@ -260,7 +260,7 @@ class LogSegmentTest {
     val oldFileSize = seg.log.file.length
     assertEquals(512*1024*1024, oldFileSize)
     seg.close()
-    //After close, file should be trimed
+    //After close, file should be trimmed
     assertEquals(oldSize, seg.log.file.length)
 
     val segReopen = new LogSegment(tempDir, 40, 10, 1000, 0, SystemTime, true,  512*1024*1024, true)
