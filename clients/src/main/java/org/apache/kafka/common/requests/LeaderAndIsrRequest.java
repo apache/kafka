@@ -206,7 +206,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     }
 
     public static LeaderAndIsrRequest parse(ByteBuffer buffer) {
-        return new LeaderAndIsrRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new LeaderAndIsrRequest(CURRENT_SCHEMA.read(buffer));
     }
 
 }

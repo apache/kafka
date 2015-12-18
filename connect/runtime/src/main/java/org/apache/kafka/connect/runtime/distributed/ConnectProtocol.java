@@ -83,10 +83,10 @@ public class ConnectProtocol {
     }
 
     public static WorkerState deserializeMetadata(ByteBuffer buffer) {
-        Struct header = (Struct) CONNECT_PROTOCOL_HEADER_SCHEMA.read(buffer);
+        Struct header = CONNECT_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
         checkVersionCompatibility(version);
-        Struct struct = (Struct) CONFIG_STATE_V0.read(buffer);
+        Struct struct = CONFIG_STATE_V0.read(buffer);
         long configOffset = struct.getLong(CONFIG_OFFSET_KEY_NAME);
         String url = struct.getString(URL_KEY_NAME);
         return new WorkerState(url, configOffset);
@@ -116,10 +116,10 @@ public class ConnectProtocol {
     }
 
     public static Assignment deserializeAssignment(ByteBuffer buffer) {
-        Struct header = (Struct) CONNECT_PROTOCOL_HEADER_SCHEMA.read(buffer);
+        Struct header = CONNECT_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
         checkVersionCompatibility(version);
-        Struct struct = (Struct) ASSIGNMENT_V0.read(buffer);
+        Struct struct = ASSIGNMENT_V0.read(buffer);
         short error = struct.getShort(ERROR_KEY_NAME);
         String leader = struct.getString(LEADER_KEY_NAME);
         String leaderUrl = struct.getString(LEADER_URL_KEY_NAME);

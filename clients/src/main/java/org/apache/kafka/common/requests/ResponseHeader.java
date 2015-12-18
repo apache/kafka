@@ -50,7 +50,7 @@ public class ResponseHeader extends AbstractRequestResponse {
     }
 
     public static ResponseHeader parse(ByteBuffer buffer) {
-        return new ResponseHeader((Struct) Protocol.RESPONSE_HEADER.read(buffer));
+        return new ResponseHeader(Protocol.RESPONSE_HEADER.read(buffer));
     }
 
 }

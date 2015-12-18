@@ -201,6 +201,6 @@ public class MetadataResponse extends AbstractRequestResponse {
     }
 
     public static MetadataResponse parse(ByteBuffer buffer) {
-        return new MetadataResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new MetadataResponse(CURRENT_SCHEMA.read(buffer));
     }
 }

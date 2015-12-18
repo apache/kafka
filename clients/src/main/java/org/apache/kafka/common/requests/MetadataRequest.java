@@ -77,6 +77,6 @@ public class MetadataRequest extends AbstractRequest {
     }
 
     public static MetadataRequest parse(ByteBuffer buffer) {
-        return new MetadataRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new MetadataRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

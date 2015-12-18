@@ -60,6 +60,6 @@ public class GroupCoordinatorRequest extends AbstractRequest {
     }
 
     public static GroupCoordinatorRequest parse(ByteBuffer buffer) {
-        return new GroupCoordinatorRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new GroupCoordinatorRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

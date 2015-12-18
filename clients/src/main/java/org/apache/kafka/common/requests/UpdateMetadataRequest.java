@@ -286,6 +286,6 @@ public class UpdateMetadataRequest extends AbstractRequest {
     }
 
     public static UpdateMetadataRequest parse(ByteBuffer buffer) {
-        return new UpdateMetadataRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new UpdateMetadataRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

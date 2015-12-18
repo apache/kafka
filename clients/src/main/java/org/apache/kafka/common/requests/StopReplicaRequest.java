@@ -115,6 +115,6 @@ public class StopReplicaRequest extends AbstractRequest {
     }
 
     public static StopReplicaRequest parse(ByteBuffer buffer) {
-        return new StopReplicaRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new StopReplicaRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

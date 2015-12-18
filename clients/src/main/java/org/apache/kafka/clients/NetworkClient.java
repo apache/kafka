@@ -461,7 +461,7 @@ public class NetworkClient implements KafkaClient {
             // Always expect the response version id to be the same as the request version id
             short apiKey = req.request().header().apiKey();
             short apiVer = req.request().header().apiVersion();
-            Struct body = (Struct) ProtoUtils.responseSchema(apiKey, apiVer).read(receive.payload());
+            Struct body = ProtoUtils.responseSchema(apiKey, apiVer).read(receive.payload());
             correlate(req.request().header(), header);
             if (!metadataUpdater.maybeHandleCompletedReceive(req, now, body))
                 responses.add(new ClientResponse(req, now, false, body));

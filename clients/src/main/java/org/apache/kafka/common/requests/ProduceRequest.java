@@ -127,6 +127,6 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public static ProduceRequest parse(ByteBuffer buffer) {
-        return new ProduceRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new ProduceRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

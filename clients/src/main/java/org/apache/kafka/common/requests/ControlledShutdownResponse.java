@@ -82,7 +82,7 @@ public class ControlledShutdownResponse extends AbstractRequestResponse {
     }
 
     public static ControlledShutdownResponse parse(ByteBuffer buffer) {
-        return new ControlledShutdownResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new ControlledShutdownResponse(CURRENT_SCHEMA.read(buffer));
     }
 
     public static ControlledShutdownResponse parse(ByteBuffer buffer, int version) {
