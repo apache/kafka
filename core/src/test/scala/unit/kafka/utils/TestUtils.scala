@@ -800,24 +800,19 @@ object TestUtils extends Logging {
     leader
   }
 
-  def waitUntilLeadersAreMade(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long = 5000L): Unit = {
+  def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long = 5000L): Unit = {
     TestUtils.waitUntilTrue(() => {
-      var res = false
-      servers.foreach(server => {
+      servers.exists(server => {
         server.replicaManager.getPartition(topic, partition) match {
           case Some(partition) => {
             partition.leaderReplicaIfLocal() match {
-              case Some(replica) => res = true
-              case None =>
+              case Some(replica) => true
+              case None => false
             }
           }
-          case None =>
+          case None => false
         }
       })
-      if (res == false) {
-        println("***waitUntilLeadersAreMade failed")
-      }
-      res
     },
       "Partition [%s,%d] leaders not made yet after %d ms".format(topic, partition, timeout),
       waitTime = timeout
