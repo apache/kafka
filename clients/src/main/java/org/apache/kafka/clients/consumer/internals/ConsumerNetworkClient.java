@@ -213,7 +213,7 @@ public class ConsumerNetworkClient implements Closeable {
         clientPoll(timeout, now);
         now = time.milliseconds();
 
-        // handle any disconnects by failing the active requests. note that disconects must
+        // handle any disconnects by failing the active requests. note that disconnects must
         // be checked immediately following poll since any subsequent call to client.ready()
         // will reset the disconnect status
         checkDisconnects(now);

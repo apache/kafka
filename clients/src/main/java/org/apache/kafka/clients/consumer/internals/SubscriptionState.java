@@ -214,14 +214,6 @@ public class SubscriptionState {
         return this.groupSubscription;
     }
 
-    public Long fetched(TopicPartition tp) {
-        return assignedState(tp).fetched;
-    }
-
-    public void fetched(TopicPartition tp, long offset) {
-        assignedState(tp).fetched(offset);
-    }
-
     private TopicPartitionState assignedState(TopicPartition tp) {
         TopicPartitionState state = this.assignment.get(tp);
         if (state == null)
@@ -270,12 +262,12 @@ public class SubscriptionState {
         return !this.subscription.isEmpty();
     }
 
-    public void consumed(TopicPartition tp, long offset) {
-        assignedState(tp).consumed(offset);
+    public void position(TopicPartition tp, long offset) {
+        assignedState(tp).position(offset);
     }
 
-    public Long consumed(TopicPartition tp) {
-        return assignedState(tp).consumed;
+    public Long position(TopicPartition tp) {
+        return assignedState(tp).position;
     }
 
     public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
@@ -283,7 +275,7 @@ public class SubscriptionState {
         for (Map.Entry<TopicPartition, TopicPartitionState> entry : assignment.entrySet()) {
             TopicPartitionState state = entry.getValue();
             if (state.hasValidPosition)
-                allConsumed.put(entry.getKey(), new OffsetAndMetadata(state.consumed));
+                allConsumed.put(entry.getKey(), new OffsetAndMetadata(state.position));
         }
         return allConsumed;
     }
@@ -356,8 +348,7 @@ public class SubscriptionState {
     }
 
     private static class TopicPartitionState {
-        private Long consumed;   // offset exposed to the user
-        private Long fetched;    // current fetch position
+        private Long position;
         private OffsetAndMetadata committed;  // last committed position
 
         private boolean hasValidPosition; // whether we have valid consumed and fetched positions
@@ -367,8 +358,7 @@ public class SubscriptionState {
 
         public TopicPartitionState() {
             this.paused = false;
-            this.consumed = null;
-            this.fetched = null;
+            this.position = null;
             this.committed = null;
             this.awaitingReset = false;
             this.hasValidPosition = false;
@@ -378,29 +368,21 @@ public class SubscriptionState {
         private void awaitReset(OffsetResetStrategy strategy) {
             this.awaitingReset = true;
             this.resetStrategy = strategy;
-            this.consumed = null;
-            this.fetched = null;
+            this.position = null;
             this.hasValidPosition = false;
         }
 
         private void seek(long offset) {
-            this.consumed = offset;
-            this.fetched = offset;
+            this.position = offset;
             this.awaitingReset = false;
             this.resetStrategy = null;
             this.hasValidPosition = true;
         }
 
-        private void fetched(long offset) {
+        private void position(long offset) {
             if (!hasValidPosition)
                 throw new IllegalStateException("Cannot update fetch position without valid consumed/fetched positions");
-            this.fetched = offset;
-        }
-
-        private void consumed(long offset) {
-            if (!hasValidPosition)
-                throw new IllegalStateException("Cannot update consumed position without valid consumed/fetched positions");
-            this.consumed = offset;
+            this.position = offset;
         }
 
         private void committed(OffsetAndMetadata offset) {

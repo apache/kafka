@@ -172,7 +172,7 @@ public class SslTransportLayerTest {
     }
     
     /**
-     * Tests that server does not accept connections from clients which dont
+     * Tests that server does not accept connections from clients which don't
      * provide a certificate when client authentication is required.
      */
     @Test

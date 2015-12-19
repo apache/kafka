@@ -41,19 +41,25 @@ class ProduceConsumeValidateTest(Test):
         wait_until(lambda: len(self.consumer.messages_consumed[1]) > 0, timeout_sec=30,
              err_msg="Consumer failed to start in a reasonable amount of time.")
 
-    def stop_producer_and_consumer(self):
+    def check_alive(self):
+        msg = ""
         for node in self.consumer.nodes:
             if not self.consumer.alive(node):
-                self.logger.warn("Consumer on %s is not alive and probably should be." % str(node.account))
+                msg = "The consumer has terminated, or timed out, on node %s." % str(node.account)
         for node in self.producer.nodes:
             if not self.producer.alive(node):
-                self.logger.warn("Producer on %s is not alive and probably should be." % str(node.account))
+                msg += "The producer has terminated, or timed out, on node %s." % str(node.account)
+        if len(msg) > 0:
+            raise Exception(msg)
 
-        # Check that producer is still successfully producing
+    def check_producing(self):
         currently_acked = self.producer.num_acked
         wait_until(lambda: self.producer.num_acked > currently_acked + 5, timeout_sec=30,
-             err_msg="Expected producer to still be producing.")
+                   err_msg="Expected producer to still be producing.")
 
+    def stop_producer_and_consumer(self):
+        self.check_alive()
+        self.check_producing()
         self.producer.stop()
         self.consumer.wait()
 
@@ -72,40 +78,58 @@ class ProduceConsumeValidateTest(Test):
                 self.mark_for_collect(s)
             raise e
 
+    @staticmethod
+    def annotate_missing_msgs(missing, acked, consumed, msg):
+        msg += "%s acked message did not make it to the Consumer. They are: " % len(missing)
+        if len(missing) < 20:
+            msg += str(missing) + ". "
+        else:
+            for i in range(20):
+                msg += str(missing.pop()) + ", "
+            msg += "...plus %s more. Total Acked: %s, Total Consumed: %s. " \
+                   % (len(missing) - 20, len(set(acked)), len(set(consumed)))
+        return msg
+
+    @staticmethod
+    def annotate_data_lost(data_lost, msg, number_validated):
+        print_limit = 10
+        if len(data_lost) > 0:
+            msg += "The first %s missing messages were validated to ensure they are in Kafka's data files. " \
+                   "%s were missing. This suggests data loss. Here are some of the messages not found in the data files: %s\n" \
+                   % (number_validated, len(data_lost), str(data_lost[0:print_limit]) if len(data_lost) > print_limit else str(data_lost))
+        else:
+            msg += "We validated that the first %s of these missing messages correctly made it into Kafka's data files. " \
+                   "This suggests they were lost on their way to the consumer." % number_validated
+        return msg
+
     def validate(self):
         """Check that each acked message was consumed."""
-
-        self.acked = self.producer.acked
-        self.not_acked = self.producer.not_acked
-
-        # Check produced vs consumed
-        self.consumed = self.consumer.messages_consumed[1]
-        self.logger.info("num consumed:  %d" % len(self.consumed))
-
         success = True
         msg = ""
+        acked = self.producer.acked
+        consumed = self.consumer.messages_consumed[1]
+        missing = set(acked) - set(consumed)
 
-        if len(set(self.consumed)) != len(self.consumed):
-            # There are duplicates. This is ok, so report it but don't fail the test
-            msg += "There are duplicate messages in the log\n"
+        self.logger.info("num consumed:  %d" % len(consumed))
 
-        if not set(self.consumed).issuperset(set(self.acked)):
-            # Every acked message must appear in the logs. I.e. consumed messages must be superset of acked messages.
-            acked_minus_consumed = set(self.producer.acked) - set(self.consumed)
+        # Were all acked messages consumed?
+        if len(missing) > 0:
+            msg = self.annotate_missing_msgs(missing, acked, consumed, msg)
             success = False
 
-            msg += "At least one acked message did not appear in the consumed messages. acked_minus_consumed: "
-            if len(acked_minus_consumed) < 20:
-                msg += str(acked_minus_consumed)
-            else:
-                for i in range(20):
-                    msg += str(acked_minus_consumed.pop()) + ", "
-                msg += "...plus " + str(len(acked_minus_consumed) - 20) + " more"
+            #Did we miss anything due to data loss?
+            to_validate = list(missing)[0:1000 if len(missing) > 1000 else len(missing)]
+            data_lost = self.kafka.search_data_files(self.topic, to_validate)
+            msg = self.annotate_data_lost(data_lost, msg, len(to_validate))
 
-        # collect all logs if validation fails
+
+        # Are there duplicates?
+        if len(set(consumed)) != len(consumed):
+            msg += "(There are also %s duplicate messages in the log - but that is an acceptable outcome)\n" % abs(len(set(consumed)) - len(consumed))
+
+        # Collect all logs if validation fails
         if not success:
             for s in self.test_context.services:
                 self.mark_for_collect(s)
 
         assert success, msg
-

@@ -333,9 +333,9 @@ public class Fetcher<K, V> {
                 log.debug("Ignoring fetched records for {} since it is no longer fetchable", entry.getKey());
                 continue;
             }
-            Long consumed = subscriptions.consumed(entry.getKey());
-            // ignore partition if its consumed offset != offset in fetchResponse, e.g. after seek()
-            if (consumed != null && entry.getValue().equals(consumed))
+            Long position = subscriptions.position(entry.getKey());
+            // ignore partition if the current position != the offset in fetchResponse, e.g. after seek()
+            if (position != null && entry.getValue().equals(position))
                 currentOutOfRangePartitions.put(entry.getKey(), entry.getValue());
         }
         this.offsetOutOfRangePartitions.clear();
@@ -401,18 +401,15 @@ public class Fetcher<K, V> {
 
                 // note that the consumed position should always be available
                 // as long as the partition is still assigned
-                long consumed = subscriptions.consumed(part.partition);
+                long position = subscriptions.position(part.partition);
                 if (!subscriptions.isFetchable(part.partition)) {
-                    // this can happen when a partition consumption paused before fetched records are returned to the consumer's poll call
+                    // this can happen when a partition is paused before fetched records are returned to the consumer's poll call
                     log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", part.partition);
-
-                    // we also need to reset the fetch positions to pretend we did not fetch
-                    // this partition in the previous request at all
-                    subscriptions.fetched(part.partition, consumed);
-                } else if (part.fetchOffset == consumed) {
+                } else if (part.fetchOffset == position) {
                     long nextOffset = part.records.get(part.records.size() - 1).offset() + 1;
 
-                    log.trace("Returning fetched records for assigned partition {} and update consumed position to {}", part.partition, nextOffset);
+                    log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
+                            "position to {}", position, part.partition, nextOffset);
 
                     List<ConsumerRecord<K, V>> records = drained.get(part.partition);
                     if (records == null) {
@@ -421,11 +418,13 @@ public class Fetcher<K, V> {
                     } else {
                         records.addAll(part.records);
                     }
-                    subscriptions.consumed(part.partition, nextOffset);
+
+                    subscriptions.position(part.partition, nextOffset);
                 } else {
                     // these records aren't next in line based on the last consumed position, ignore them
                     // they must be from an obsolete request
-                    log.debug("Ignoring fetched records for {} at offset {}", part.partition, part.fetchOffset);
+                    log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
+                            part.partition, part.fetchOffset, position);
                 }
             }
             this.records.clear();
@@ -513,11 +512,9 @@ public class Fetcher<K, V> {
                     fetchable.put(node, fetch);
                 }
 
-                long fetched = this.subscriptions.fetched(partition);
-                long consumed = this.subscriptions.consumed(partition);
-                // Only fetch data for partitions whose previously fetched data has been consumed
-                if (consumed == fetched)
-                    fetch.put(partition, new FetchRequest.PartitionData(fetched, this.fetchSize));
+                long position = this.subscriptions.position(partition);
+                fetch.put(partition, new FetchRequest.PartitionData(position, this.fetchSize));
+                log.trace("Added fetch request for partition {} at offset {}", partition, position);
             }
         }
 
@@ -550,29 +547,25 @@ public class Fetcher<K, V> {
 
                 // we are interested in this fetch only if the beginning offset matches the
                 // current consumed position
-                Long consumed = subscriptions.consumed(tp);
-                if (consumed == null) {
-                    continue;
-                } else if (consumed != fetchOffset) {
-                    // the fetched position has gotten out of sync with the consumed position
-                    // (which might happen when a rebalance occurs with a fetch in-flight),
-                    // so we need to reset the fetch position so the next fetch is right
-                    subscriptions.fetched(tp, consumed);
+                Long position = subscriptions.position(tp);
+                if (position == null || position != fetchOffset) {
+                    log.debug("Discarding fetch response for partition {} since its offset {} does not match " +
+                            "the expected offset {}", tp, fetchOffset, position);
                     continue;
                 }
 
                 int bytes = 0;
                 ByteBuffer buffer = partition.recordSet;
                 MemoryRecords records = MemoryRecords.readableRecords(buffer);
-                List<ConsumerRecord<K, V>> parsed = new ArrayList<ConsumerRecord<K, V>>();
+                List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
                 for (LogEntry logEntry : records) {
                     parsed.add(parseRecord(tp, logEntry));
                     bytes += logEntry.size();
                 }
 
                 if (!parsed.isEmpty()) {
+                    log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
                     ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
-                    this.subscriptions.fetched(tp, record.offset() + 1);
                     this.records.add(new PartitionRecords<>(fetchOffset, tp, parsed));
                     this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
                 } else if (buffer.limit() > 0) {
@@ -594,7 +587,7 @@ public class Fetcher<K, V> {
                     subscriptions.needOffsetReset(tp);
                 else
                     this.offsetOutOfRangePartitions.put(tp, fetchOffset);
-                log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
+                log.info("Fetch offset {} is out of range, resetting offset", fetchOffset);
             } else if (partition.errorCode == Errors.TOPIC_AUTHORIZATION_FAILED.code()) {
                 log.warn("Not authorized to read from topic {}.", tp.topic());
                 unauthorizedTopics.add(tp.topic());

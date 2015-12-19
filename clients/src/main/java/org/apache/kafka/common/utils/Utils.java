@@ -129,7 +129,7 @@ public class Utils {
 
     /**
      * Get the little-endian value of an integer as a byte array.
-     * @param val The value to convert to a litte-endian array
+     * @param val The value to convert to a little-endian array
      * @return The little-endian encoded array of bytes for the value
      */
     public static byte[] toArrayLE(int val) {

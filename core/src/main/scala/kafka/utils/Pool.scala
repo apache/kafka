@@ -22,12 +22,10 @@ import java.util.concurrent._
 import collection.mutable
 import collection.JavaConversions
 import kafka.common.KafkaException
-import java.lang.Object
-
 
 class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] {
 
-  private val pool = new ConcurrentHashMap[K, V]
+  private val pool: ConcurrentMap[K, V] = new ConcurrentHashMap[K, V]
   private val createLock = new Object
 
   def this(m: collection.Map[K, V]) {

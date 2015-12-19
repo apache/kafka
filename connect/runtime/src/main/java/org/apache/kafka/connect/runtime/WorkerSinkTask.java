@@ -129,7 +129,7 @@ class WorkerSinkTask implements WorkerTask {
     }
 
     /**
-     * Preforms initial join process for consumer group, ensures we have an assignment, and initializes + starts the
+     * Performs initial join process for consumer group, ensures we have an assignment, and initializes + starts the
      * SinkTask.
      *
      * @returns true if successful, false if joining the consumer group was interrupted

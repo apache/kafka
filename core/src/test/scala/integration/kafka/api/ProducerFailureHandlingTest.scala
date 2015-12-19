@@ -63,17 +63,17 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   override def setUp() {
     super.setUp()
 
-    producer1 = TestUtils.createNewProducer(brokerList, acks = 0, blockOnBufferFull = false, bufferSize = producerBufferSize)
-    producer2 = TestUtils.createNewProducer(brokerList, acks = 1, blockOnBufferFull = false, bufferSize = producerBufferSize)
-    producer3 = TestUtils.createNewProducer(brokerList, acks = -1, blockOnBufferFull = false, bufferSize = producerBufferSize)
+    producer1 = TestUtils.createNewProducer(brokerList, acks = 0, maxBlockMs = 10000L, bufferSize = producerBufferSize)
+    producer2 = TestUtils.createNewProducer(brokerList, acks = 1, maxBlockMs = 10000L, bufferSize = producerBufferSize)
+    producer3 = TestUtils.createNewProducer(brokerList, acks = -1, maxBlockMs = 10000L, bufferSize = producerBufferSize)
   }
 
   @After
   override def tearDown() {
-    if (producer1 != null) producer1.close
-    if (producer2 != null) producer2.close
-    if (producer3 != null) producer3.close
-    if (producer4 != null) producer4.close
+    if (producer1 != null) producer1.close()
+    if (producer2 != null) producer2.close()
+    if (producer3 != null) producer3.close()
+    if (producer4 != null) producer4.close()
 
     super.tearDown()
   }
@@ -134,7 +134,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     TestUtils.createTopic(zkUtils, topic1, 1, numServers, servers)
 
     // producer with incorrect broker list
-    producer4 = TestUtils.createNewProducer("localhost:8686,localhost:4242", acks = 1, blockOnBufferFull = false, bufferSize = producerBufferSize)
+    producer4 = TestUtils.createNewProducer("localhost:8686,localhost:4242", acks = 1, maxBlockMs = 10000L, bufferSize = producerBufferSize)
 
     // send a record with incorrect broker list
     val record = new ProducerRecord[Array[Byte],Array[Byte]](topic1, null, "key".getBytes, "value".getBytes)
@@ -180,15 +180,15 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     producer3.send(record).get
 
     intercept[IllegalStateException] {
-      producer1.close
+      producer1.close()
       producer1.send(record)
     }
     intercept[IllegalStateException] {
-      producer2.close
+      producer2.close()
       producer2.send(record)
     }
     intercept[IllegalStateException] {
-      producer3.close
+      producer3.close()
       producer3.send(record)
     }
 
@@ -280,7 +280,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
     override def shutdown(){
       super.shutdown()
-      producer.close
+      producer.close()
     }
   }
 }

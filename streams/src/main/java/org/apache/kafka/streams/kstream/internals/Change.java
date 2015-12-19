@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,25 +15,20 @@
  * limitations under the License.
  */
 
-package kafka.tools
+package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.zookeeper.ZooKeeperMain
+public class Change<T> {
 
-class ZooKeeperMainWrapper(args: Array[String]) extends ZooKeeperMain(args) {
-  def runCmd(): Unit = {
-    processCmd(this.cl)
-    System.exit(0)
-  }
-}
+    public final T newValue;
+    public final T oldValue;
 
-/**
- * ZooKeeper 3.4.6 broke being able to pass commands on command line.
- * See ZOOKEEPER-1897.  This class is a hack to restore this facility.
- */
-object ZooKeeperMainWrapper {
+    public Change(T newValue, T oldValue) {
+        this.newValue = newValue;
+        this.oldValue = oldValue;
+    }
 
-  def main(args: Array[String]): Unit = {
-    val main: ZooKeeperMainWrapper = new ZooKeeperMainWrapper(args)
-    main.runCmd()
-  }
+    @Override
+    public String toString() {
+        return "(" + newValue + "<-" + oldValue + ")";
+    }
 }

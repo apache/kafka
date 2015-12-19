@@ -154,7 +154,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             if (!subscriptions.isPaused(entry.getKey())) {
                 List<ConsumerRecord<K, V>> recs = entry.getValue();
                 if (!recs.isEmpty())
-                    this.subscriptions.consumed(entry.getKey(), recs.get(recs.size() - 1).offset() + 1);
+                    this.subscriptions.position(entry.getKey(), recs.get(recs.size() - 1).offset() + 1);
             }
         }
 
@@ -229,10 +229,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         ensureNotClosed();
         if (!this.subscriptions.isAssigned(partition))
             throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
-        Long offset = this.subscriptions.consumed(partition);
+        Long offset = this.subscriptions.position(partition);
         if (offset == null) {
             updateFetchPosition(partition);
-            offset = this.subscriptions.consumed(partition);
+            offset = this.subscriptions.position(partition);
         }
         return offset;
     }
