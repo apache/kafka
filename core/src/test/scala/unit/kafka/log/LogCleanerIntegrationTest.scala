@@ -57,7 +57,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     cleaner.startup()
 
     val firstDirty = log.activeSegment.baseOffset
-    // wait until we clean up to base_offset of active segment - minDirtyMessages
+    // wait until cleaning up to base_offset, note that cleaning happens only when "log dirty ratio" is higher than LogConfig.MinCleanableDirtyRatioProp
     cleaner.awaitCleaned("log", 0, firstDirty)
     val compactedSize = log.logSegments.map(_.size).sum
     val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition("log", 0)).get
@@ -124,7 +124,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
   
   /* create a cleaner instance and logs with the given parameters */
   def makeCleaner(parts: Int, 
-                  minDirtyMessages: Int = 0, 
+                  minCleanableDirtyRatio: Float = 0.0F,
                   numThreads: Int = 1,
                   defaultPolicy: String = "compact",
                   policyOverrides: Map[String, String] = Map()): LogCleaner = {
@@ -139,7 +139,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
       logProps.put(LogConfig.SegmentIndexBytesProp, 100*1024: java.lang.Integer)
       logProps.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
       logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-      logProps.put(LogConfig.MinCleanableDirtyRatioProp, 0F: java.lang.Float)
+      logProps.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
 
       val log = new Log(dir = dir,
                         LogConfig(logProps),
