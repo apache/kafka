@@ -152,7 +152,7 @@ public class ProcessorStateManagerTest {
         }
 
         @Override
-        public synchronized void seekToBeginning(TopicPartition... partitions) {
+        public synchronized void seekToBeginning(Collection<TopicPartition> partitions) {
             if (partitions.length != 1)
                 throw new IllegalStateException("RestoreConsumer: other than one partition specified");
 
@@ -166,7 +166,7 @@ public class ProcessorStateManagerTest {
         }
 
         @Override
-        public synchronized void seekToEnd(TopicPartition... partitions) {
+        public synchronized void seekToEnd(Collection<TopicPartition> partitions) {
             if (partitions.length != 1)
                 throw new IllegalStateException("RestoreConsumer: other than one partition specified");
 

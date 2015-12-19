@@ -311,12 +311,12 @@ public class ProcessorTopologyTestDriver {
     protected MockConsumer<byte[], byte[]> createRestoreConsumer(TaskId id, String... storeNames) {
         MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.LATEST) {
             @Override
-            public synchronized void seekToEnd(TopicPartition... partitions) {
+            public synchronized void seekToEnd(Collection<TopicPartition> partitions) {
                 // do nothing ...
             }
 
             @Override
-            public synchronized void seekToBeginning(TopicPartition... partitions) {
+            public synchronized void seekToBeginning(Collection<TopicPartition> partitions) {
                 // do nothing ...
             }
 
