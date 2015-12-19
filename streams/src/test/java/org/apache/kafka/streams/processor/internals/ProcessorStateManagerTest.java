@@ -93,7 +93,7 @@ public class ProcessorStateManagerTest {
         }
 
         @Override
-        public synchronized void assign(List<TopicPartition> partitions) {
+        public synchronized void assign(Collection<TopicPartition> partitions) {
             int numPartitions = partitions.size();
             if (numPartitions > 1)
                 throw new IllegalArgumentException("RestoreConsumer: more than one partition specified");
