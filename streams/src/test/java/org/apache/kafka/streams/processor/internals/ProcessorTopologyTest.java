@@ -45,6 +45,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.util.Collection;
 import java.util.Properties;
 
 public class ProcessorTopologyTest {
