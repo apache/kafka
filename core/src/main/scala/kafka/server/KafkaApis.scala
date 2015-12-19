@@ -315,19 +315,23 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) {
-      var errorInResponse = false
+
       val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ => ProducerResponseStatus(ErrorMapping.TopicAuthorizationCode, -1))
 
+      var errorInResponse = false
+
       mergedResponseStatus.foreach { case (topicAndPartition, status) =>
-        // we only print warnings for known errors here; if it is unknown, it will cause
-        // an error message in the replica manager
-        if (status.error != ErrorMapping.NoError && status.error != ErrorMapping.UnknownCode) {
-          debug("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
-            produceRequest.correlationId,
-            produceRequest.clientId,
-            topicAndPartition,
-            ErrorMapping.exceptionNameFor(status.error)))
+        if (status.error != ErrorMapping.NoError) {
           errorInResponse = true
+          // we only print warnings for known errors here; if it is unknown, it will cause
+          // an error message in the replica manager
+          if (status.error != ErrorMapping.UnknownCode) {
+            debug("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
+              produceRequest.correlationId,
+              produceRequest.clientId,
+              topicAndPartition,
+              ErrorMapping.exceptionNameFor(status.error)))
+          }
         }
       }
 
@@ -338,10 +342,14 @@ class KafkaApis(val requestChannel: RequestChannel,
           // the request, since no response is expected by the producer, the server will close socket server so that
           // the producer client will know that some error has happened and will refresh its metadata
           if (errorInResponse) {
+            val exceptionsSummary = mergedResponseStatus.map { case (topicAndPartition, status) =>
+              topicAndPartition -> ErrorMapping.exceptionNameFor(status.error)
+            }.mkString(", ")
             info(
-              "Close connection due to error handling produce request with correlation id %d from client id %s with ack=0".format(
-                produceRequest.correlationId,
-                produceRequest.clientId))
+              s"Closing connection due to error during produce request with correlation id ${produceRequest.correlationId} " +
+                s"from client id ${produceRequest.clientId} with ack=0\n" +
+                s"Topic and partition to exceptions: $exceptionsSummary"
+            )
             requestChannel.closeConnection(request.processor, request)
           } else {
             requestChannel.noOperation(request.processor, request)
