@@ -38,7 +38,7 @@ class ProduceConsumeValidateTest(Test):
         wait_until(lambda: self.producer.num_acked > 5, timeout_sec=10,
              err_msg="Producer failed to start in a reasonable amount of time.")
         self.consumer.start()
-        wait_until(lambda: len(self.consumer.messages_consumed[1]) > 0, timeout_sec=30,
+        wait_until(lambda: len(self.consumer.messages_consumed[1]) > 0, timeout_sec=60,
              err_msg="Consumer failed to start in a reasonable amount of time.")
 
     def check_alive(self):
