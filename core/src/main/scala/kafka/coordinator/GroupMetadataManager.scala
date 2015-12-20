@@ -564,7 +564,7 @@ class GroupMetadataManager(val brokerId: Int,
           trace("Marked %d offsets in %s for deletion.".format(messages.size, appendPartition))
 
           try {
-            // do not need to require acks since even if the tombsone is lost,
+            // do not need to require acks since even if the tombstone is lost,
             // it will be appended again in the next purge cycle
             partition.appendMessagesToLeader(new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, messages: _*))
             tombstones.size
