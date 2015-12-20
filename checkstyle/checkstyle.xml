@@ -64,6 +64,9 @@
     <module name="ParameterName"/>
     <module name="StaticVariableName"/>
     <module name="TypeName"/>
+    <module name="AvoidStarImport">
+      <property name="allowClassImports" value="false"/>
+    </module>
 
     <!-- dependencies -->
     <module name="ImportControl">
