@@ -130,9 +130,9 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall().andThrow(new RetriableException("retry"));
         // Pause
         EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2)));
-        consumer.pause(TOPIC_PARTITION);
+        consumer.pause(Arrays.asList(TOPIC_PARTITION));
         PowerMock.expectLastCall();
-        consumer.pause(TOPIC_PARTITION2);
+        consumer.pause(Arrays.asList(TOPIC_PARTITION2));
         PowerMock.expectLastCall();
 
         // Retry delivery should succeed
@@ -141,9 +141,9 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall();
         // And unpause
         EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2)));
-        consumer.resume(TOPIC_PARTITION);
+        consumer.resume(Arrays.asList(TOPIC_PARTITION));
         PowerMock.expectLastCall();
-        consumer.resume(TOPIC_PARTITION2);
+        consumer.resume(Arrays.asList(TOPIC_PARTITION2));
         PowerMock.expectLastCall();
 
         PowerMock.replayAll();

@@ -314,7 +314,7 @@ import java.util.regex.Pattern;
  * <p>
  * Kafka allows specifying the position using {@link #seek(TopicPartition, long)} to specify the new position. Special
  * methods for seeking to the earliest and latest offset the server maintains are also available (
- * {@link #seekToBeginning(TopicPartition...)} and {@link #seekToEnd(TopicPartition...)} respectively).
+ * {@link #seekToBeginning(Collection)} and {@link #seekToEnd(Collection)} respectively).
  *
  * <h4>Consumption Flow Control</h4>
  *
@@ -331,7 +331,7 @@ import java.util.regex.Pattern;
  * fetching other topics.
  *
  * <p>
- * Kafka supports dynamic controlling of consumption flows by using {@link #pause(TopicPartition...)} and {@link #resume(TopicPartition...)}
+ * Kafka supports dynamic controlling of consumption flows by using {@link #pause(Collection)} and {@link #resume(Collection)}
  * to pause the consumption on the specified assigned partitions and resume the consumption
  * on the specified paused partitions respectively in the future {@link #poll(long)} calls.
  *

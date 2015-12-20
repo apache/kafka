@@ -101,7 +101,7 @@ public class ProcessorStateManagerTest {
             if (numPartitions == 1) {
                 if (assignedPartition != null)
                     throw new IllegalStateException("RestoreConsumer: partition already assigned");
-                assignedPartition = partitions.get(0);
+                assignedPartition = partitions.toArray().get(0);
 
                 // set the beginning offset to 0
                 // NOTE: this is users responsible to set the initial lEO.
@@ -154,7 +154,7 @@ public class ProcessorStateManagerTest {
 
         @Override
         public synchronized void seekToBeginning(Collection<TopicPartition> partitions) {
-            if (partitions.length != 1)
+            if (partitions.size() != 1)
                 throw new IllegalStateException("RestoreConsumer: other than one partition specified");
 
             for (TopicPartition partition : partitions) {
@@ -168,7 +168,7 @@ public class ProcessorStateManagerTest {
 
         @Override
         public synchronized void seekToEnd(Collection<TopicPartition> partitions) {
-            if (partitions.length != 1)
+            if (partitions.size() != 1)
                 throw new IllegalStateException("RestoreConsumer: other than one partition specified");
 
             for (TopicPartition partition : partitions) {
