@@ -801,19 +801,10 @@ object TestUtils extends Logging {
   }
 
   def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long = 5000L): Unit = {
-    TestUtils.waitUntilTrue(() => {
-      servers.exists(server => {
-        server.replicaManager.getPartition(topic, partition) match {
-          case Some(partition) => {
-            partition.leaderReplicaIfLocal() match {
-              case Some(replica) => true
-              case None => false
-            }
-          }
-          case None => false
-        }
-      })
-    },
+    TestUtils.waitUntilTrue(() => 
+      servers.exists { server =>
+        server.replicaManager.getPartition(topic, partition).exists(_.leaderReplicaIfLocal().isDefined)
+      },
       "Partition [%s,%d] leaders not made yet after %d ms".format(topic, partition, timeout),
       waitTime = timeout
     )
