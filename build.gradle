@@ -75,8 +75,7 @@ if (new File('.git').exists()) {
         'CONTRIBUTING.md',
         'gradlew',
         'gradlew.bat',
-        '**/README.md',
-        '.reviewboardrc'
+        '**/README.md'
     ])
   }
 }
