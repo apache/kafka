@@ -101,7 +101,7 @@ public class ProcessorStateManagerTest {
             if (numPartitions == 1) {
                 if (assignedPartition != null)
                     throw new IllegalStateException("RestoreConsumer: partition already assigned");
-                assignedPartition = partitions.toArray().get(0);
+                assignedPartition = partitions.iterator().next();
 
                 // set the beginning offset to 0
                 // NOTE: this is users responsible to set the initial lEO.
