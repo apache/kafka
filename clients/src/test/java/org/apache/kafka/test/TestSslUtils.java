@@ -27,8 +27,17 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.EOFException;
 import java.math.BigInteger;
+
 import javax.net.ssl.TrustManagerFactory;
-import java.security.*;
+
+import java.security.GeneralSecurityException;
+import java.security.Key;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.Security;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
