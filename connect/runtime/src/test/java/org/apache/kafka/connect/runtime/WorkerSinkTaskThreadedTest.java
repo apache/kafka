@@ -332,12 +332,12 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
             @Override
             public Object answer() throws Throwable {
                 try {
-                    sinkTaskContext.getValue().pause(Arrays.asList(UNASSIGNED_TOPIC_PARTITION));
+                    sinkTaskContext.getValue().pause(UNASSIGNED_TOPIC_PARTITION);
                     fail("Trying to pause unassigned partition should have thrown an Connect exception");
                 } catch (ConnectException e) {
                     // expected
                 }
-                sinkTaskContext.getValue().pause(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
+                sinkTaskContext.getValue().pause(TOPIC_PARTITION, TOPIC_PARTITION2);
                 return null;
             }
         });
