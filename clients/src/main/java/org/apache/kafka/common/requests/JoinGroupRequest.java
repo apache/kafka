@@ -145,6 +145,6 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     public static JoinGroupRequest parse(ByteBuffer buffer) {
-        return new JoinGroupRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new JoinGroupRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

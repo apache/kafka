@@ -97,7 +97,7 @@ public class ListGroupsResponse extends AbstractRequestResponse {
     }
 
     public static ListGroupsResponse parse(ByteBuffer buffer) {
-        return new ListGroupsResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new ListGroupsResponse(CURRENT_SCHEMA.read(buffer));
     }
 
     public static ListGroupsResponse fromError(Errors error) {

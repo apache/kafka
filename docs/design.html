@@ -114,7 +114,7 @@ The client controls which partition it publishes messages to. This can be done a
 <p>
 Batching is one of the big drivers of efficiency, and to enable batching the Kafka producer will attempt to accumulate data in memory and to send out larger batches in a single request. The batching can be configured to accumulate no more than a fixed number of messages and to wait no longer than some fixed latency bound (say 64k or 10 ms). This allows the accumulation of more bytes to send, and few larger I/O operations on the servers. This buffering is configurable and gives a mechanism to trade off a small amount of additional latency for better throughput.
 <p>
-Details on <a href="#newproducerconfigs">configuration</a> and <a href="http://kafka.apache.org/082/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html">api</a> for the producer can be found elsewhere in the documentation.
+Details on <a href="#producerconfigs">configuration</a> and <a href="http://kafka.apache.org/082/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html">api</a> for the producer can be found elsewhere in the documentation.
 
 <h3><a id="theconsumer" href="#theconsumer">4.5 The Consumer</a></h3>
 

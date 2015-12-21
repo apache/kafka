@@ -123,6 +123,6 @@ public class OffsetFetchResponse extends AbstractRequestResponse {
     }
 
     public static OffsetFetchResponse parse(ByteBuffer buffer) {
-        return new OffsetFetchResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new OffsetFetchResponse(CURRENT_SCHEMA.read(buffer));
     }
 }

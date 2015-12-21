@@ -160,6 +160,6 @@ public class FetchRequest extends AbstractRequest {
     }
 
     public static FetchRequest parse(ByteBuffer buffer) {
-        return new FetchRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new FetchRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

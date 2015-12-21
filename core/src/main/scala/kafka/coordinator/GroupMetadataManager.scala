@@ -850,7 +850,7 @@ object GroupMetadataManager {
   def readMessageKey(buffer: ByteBuffer): BaseKey = {
     val version = buffer.getShort
     val keySchema = schemaForKey(version)
-    val key = keySchema.read(buffer).asInstanceOf[Struct]
+    val key = keySchema.read(buffer)
 
     if (version <= CURRENT_OFFSET_KEY_SCHEMA_VERSION) {
       // version 0 and 1 refer to offset
@@ -882,7 +882,7 @@ object GroupMetadataManager {
     } else {
       val version = buffer.getShort
       val valueSchema = schemaForOffset(version)
-      val value = valueSchema.read(buffer).asInstanceOf[Struct]
+      val value = valueSchema.read(buffer)
 
       if (version == 0) {
         val offset = value.get(OFFSET_VALUE_OFFSET_FIELD_V0).asInstanceOf[Long]
@@ -915,7 +915,7 @@ object GroupMetadataManager {
     } else {
       val version = buffer.getShort
       val valueSchema = schemaForGroup(version)
-      val value = valueSchema.read(buffer).asInstanceOf[Struct]
+      val value = valueSchema.read(buffer)
 
       if (version == 0) {
         val protocolType = value.get(GROUP_METADATA_PROTOCOL_TYPE_V0).asInstanceOf[String]

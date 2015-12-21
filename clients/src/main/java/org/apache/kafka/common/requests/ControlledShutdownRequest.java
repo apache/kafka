@@ -64,6 +64,6 @@ public class ControlledShutdownRequest extends AbstractRequest {
     }
 
     public static ControlledShutdownRequest parse(ByteBuffer buffer) {
-        return new ControlledShutdownRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new ControlledShutdownRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

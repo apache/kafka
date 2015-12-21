@@ -149,6 +149,6 @@ public class ProduceResponse extends AbstractRequestResponse {
     }
 
     public static ProduceResponse parse(ByteBuffer buffer) {
-        return new ProduceResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new ProduceResponse(CURRENT_SCHEMA.read(buffer));
     }
 }
