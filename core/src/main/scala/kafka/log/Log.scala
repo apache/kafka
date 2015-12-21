@@ -222,7 +222,6 @@ class Log(@volatile var dir: File,
           error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
           segment.recover(config.maxMessageSize)
         }
-
         segments.put(start, segment)
       }
     }
@@ -263,12 +262,13 @@ class Log(@volatile var dir: File,
                                      initFileSize = this.initFileSize(),
                                      preallocate = config.preallocate))
     } else {
-      recoverLog()
-      // reset the index size of the currently active log segment to allow more entries
-      activeSegment.index.resize(config.maxIndexSize)
-      activeSegment.timeIndex.resize(config.maxIndexSize)
+      if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
+        recoverLog()
+        // reset the index size of the currently active log segment to allow more entries
+        activeSegment.index.resize(config.maxIndexSize)
+        activeSegment.timeIndex.resize(config.maxIndexSize)
+      }
     }
-
   }
 
   private def updateLogEndOffset(messageOffset: Long) {
