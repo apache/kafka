@@ -154,12 +154,15 @@ class LogManager(val logDirs: Array[File],
           val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
 
           val current = new Log(logDir, config, logRecoveryPoint, scheduler, time)
-          val previous = this.logs.put(topicPartition, current)
-
-          if (previous != null) {
-            throw new IllegalArgumentException(
-              "Duplicate log directories found: %s, %s!".format(
-              current.dir.getAbsolutePath, previous.dir.getAbsolutePath))
+          if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
+            this.logsToBeDeleted += current
+          } else {
+            val previous = this.logs.put(topicPartition, current)
+            if (previous != null) {
+              throw new IllegalArgumentException(
+                "Duplicate log directories found: %s, %s!".format(
+                  current.dir.getAbsolutePath, previous.dir.getAbsolutePath))
+            }
           }
         }
       }

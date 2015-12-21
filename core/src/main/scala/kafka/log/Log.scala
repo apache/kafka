@@ -200,8 +200,10 @@ class Log(@volatile var dir: File,
           }
         }
         else {
-          error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
-          segment.recover(config.maxMessageSize)
+          if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
+            recoverLog()
+            activeSegment.index.resize(config.maxIndexSize)
+          }
         }
         segments.put(start, segment)
       }
