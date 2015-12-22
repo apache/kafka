@@ -19,7 +19,6 @@ package kafka.log
 
 import java.io._
 import java.nio.file.{StandardCopyOption, Files, Paths, Path}
-;
 import java.util.concurrent.TimeUnit
 
 import kafka.utils._
