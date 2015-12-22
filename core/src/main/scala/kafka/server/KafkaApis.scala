@@ -93,7 +93,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       case e: Throwable =>
         if (request.requestObj != null) {
           request.requestObj.handleError(e, requestChannel, request)
-          error("error when handling request %s".format(request.requestObj), e)
+          error("Error when handling request %s".format(request.requestObj), e)
         } else {
           val response = request.body.getErrorResponse(request.header.apiVersion, e)
           val respHeader = new ResponseHeader(request.header.correlationId)
@@ -105,7 +105,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           else
             requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, respHeader, response)))
 
-          error("error when handling request %s".format(request.body), e)
+          error("Error when handling request %s".format(request.body), e)
         }
 
     } finally
@@ -164,8 +164,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
         new StopReplicaResponse(error, result.asInstanceOf[Map[TopicPartition, JShort]].asJava)
       } else {
-        val result = stopReplicaRequest.partitions.asScala.map((_, Errors.CLUSTER_AUTHORIZATION_FAILED.code)).toMap
-        new StopReplicaResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.code, result.mapValues(new JShort(_)).asJava)
+        val result = stopReplicaRequest.partitions.asScala.map((_, new JShort(Errors.CLUSTER_AUTHORIZATION_FAILED.code))).toMap
+        new StopReplicaResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.code, result.asJava)
       }
 
     requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, response)))
