@@ -45,7 +45,7 @@ public class ConnectorConfig extends AbstractConfig {
     private static final String CONNECTOR_CLASS_DOC =
                     "Name or alias of the class for this connector. Must be a subclass of org.apache.kafka.connect.connector.Connector. " +
                     "If the connector is org.apache.kafka.connect.file.FileStreamSinkConnector, you can either specify this full name, " +
-                    " or use \"FileStreamSink\" or \"FileStreamSinkConnect\" to make the configuration a bit shorter";
+                    " or use \"FileStreamSink\" or \"FileStreamSinkConnector\" to make the configuration a bit shorter";
 
     public static final String TASKS_MAX_CONFIG = "tasks.max";
     private static final String TASKS_MAX_DOC = "Maximum number of tasks to use for this connector.";

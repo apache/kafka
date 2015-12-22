@@ -157,8 +157,6 @@
     <allow pkg="org.apache.kafka.connect.errors" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
-    <allow pkg="org.reflections"/>
-    <allow pkg="org.reflections.util"/>
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />
@@ -173,6 +171,8 @@
 
     <subpackage name="runtime">
       <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="org.reflections"/>
+      <allow pkg="org.reflections.util"/>
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
