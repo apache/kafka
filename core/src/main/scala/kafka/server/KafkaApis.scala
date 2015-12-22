@@ -159,6 +159,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val (response, error) = replicaManager.stopReplicas(stopReplicaRequest)
     val stopReplicaResponse = new StopReplicaResponse(stopReplicaRequest.correlationId, response.toMap, error)
     requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, stopReplicaResponse)))
+    stopReplicaRequest.partitions.foreach(topicPartition => coordinator.groupManager.removeOffsetsByTopicPartition(topicPartition))
     replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads()
   }
 
