@@ -270,6 +270,10 @@ project(':core') {
     compile 'com.101tec:zkclient:0.7'
     compile 'com.yammer.metrics:metrics-core:2.2.0'
     compile 'net.sf.jopt-simple:jopt-simple:4.9'
+    if (baseScalaVersion == '2.11') {
+      compile 'org.scala-lang.modules:scala-parser-combinators_2.11:1.0.4'
+    }
+
     testCompile "$junit"
     testCompile "$easymock"
     testCompile 'org.bouncycastle:bcpkix-jdk15on:1.53'
