@@ -376,8 +376,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (authorizedRequestInfo.isEmpty)
       sendResponseCallback(Map.empty)
     else {
-      // only allow appending to internal topic partitions
-      // if the client is not from admin
       val internalTopicsAllowed = produceRequest.clientId == AdminUtils.AdminClientId
 
       // call the replica manager to append messages to the replicas
