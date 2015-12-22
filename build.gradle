@@ -45,7 +45,7 @@ allprojects {
 }
 
 ext {
-    gradleVersion = "2.9"
+    gradleVersion = "2.10"
     buildVersionFileName = "kafka-version.properties"
 
     userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
