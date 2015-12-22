@@ -282,6 +282,7 @@ project(':core') {
     testCompile project(':clients')
     testCompile project(':clients').sourceSets.test.output
     testCompile 'org.apache.hadoop:hadoop-minikdc:2.7.1'
+    testCompile 'commons-collections:commons-collections:3.2.2' // transitive dependency bumped for security reasons
     testRuntime "$slf4jlog4j"
     zinc 'com.typesafe.zinc:zinc:0.3.7'
   }
