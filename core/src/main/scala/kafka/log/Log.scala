@@ -218,7 +218,12 @@ class Log(@volatile var dir: File,
               timeIndexFile.delete()
               segment.recover(config.maxMessageSize)
           }
+<<<<<<< HEAD
         } else {
+=======
+        }
+        else {
+>>>>>>> Removed a bug from earlier commit
           error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
           segment.recover(config.maxMessageSize)
         }
