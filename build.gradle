@@ -259,6 +259,7 @@ project(':core') {
   println "Building project 'core' with Scala version $resolvedScalaVersion"
 
   apply plugin: 'scala'
+  apply plugin: 'checkstyle'
   archivesBaseName = "kafka_${baseScalaVersion}"
 
   dependencies {
@@ -334,8 +335,6 @@ project(':core') {
     into 'site-docs'
   }
 
-
-
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
     into "kafka_${baseScalaVersion}-${version}"
     compression = Compression.GZIP
@@ -390,15 +389,27 @@ project(':core') {
     }
     into "$buildDir/dependant-testlibs"
   }
+
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':examples') {
+  apply plugin: 'checkstyle'
   archivesBaseName = "kafka-examples"
 
   dependencies {
     compile project(':core')
   }
 
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':clients') {
