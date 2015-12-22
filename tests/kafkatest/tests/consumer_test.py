@@ -66,14 +66,6 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 self.await_all_members(consumer)
                 self.await_consumed_messages(consumer)
 
-    def bounce_all_brokers(self, consumer, num_bounces=5, clean_shutdown=True):
-        for _ in range(num_bounces):
-            for node in self.kafka.nodes:
-                self.kafka.stop_node(node)
-
-            for node in self.kafka.nodes:
-                self.kafka.start_node(node)
-            
     def test_broker_rolling_bounce(self):
         """
         Verify correct consumer behavior when the brokers are consecutively restarted.
@@ -250,17 +242,13 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         producer.start()
 
-        num_started = 0
-        for node in consumer.nodes:
+        for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
-            num_started += 1
             self.await_members(consumer, num_started)
             self.await_consumed_messages(consumer)
 
-        num_stopped = 0
-        for node in consumer.nodes:
+        for num_stopped, node in enumerate(consumer.nodes, 1):
             consumer.stop_node(node)
-            num_stopped += 1
 
             if num_stopped < self.num_consumers:
                 self.await_members(consumer, self.num_consumers - num_stopped)
@@ -280,7 +268,7 @@ class AssignmentValidationTest(VerifiableConsumerTest):
     def __init__(self, test_context):
         super(AssignmentValidationTest, self).__init__(test_context, num_consumers=3, num_producers=0,
                                                 num_zk=1, num_brokers=2, topics={
-            self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 2 },
+            self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 1 },
         })
 
     @matrix(assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
@@ -296,10 +284,8 @@ class AssignmentValidationTest(VerifiableConsumerTest):
         - Validate assignment after every expected rebalance
         """
         consumer = self.setup_consumer(self.TOPIC, assignment_strategy=assignment_strategy)
-        num_started = 0
-        for node in consumer.nodes:
+        for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
-            num_started += 1
             self.await_members(consumer, num_started)
             assert self.valid_assignment(self.TOPIC, self.NUM_PARTITIONS, consumer.current_assignment())
             

@@ -123,7 +123,7 @@ class VerifiableConsumer(BackgroundThreadService):
     logs = {
         "verifiable_consumer_stdout": {
             "path": STDOUT_CAPTURE,
-            "collect_default": True},
+            "collect_default": False},
         "verifiable_consumer_stderr": {
             "path": STDERR_CAPTURE,
             "collect_default": False},

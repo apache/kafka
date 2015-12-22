@@ -29,8 +29,6 @@ class ConsumerRollingUpgradeTest(VerifiableConsumerTest):
                                                          num_zk=1, num_brokers=1, topics={
             self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 1 }
         })
-        self.num_consumers = 2
-        self.session_timeout = 10000
 
     def _verify_range_assignment(self, consumer):
         # range assignment should give us two partition sets: (0, 1) and (2, 3)
