@@ -309,7 +309,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testOffsetDeleteAfterTopicDeletion() {
+  def testOffsetsDeleteAfterTopicDeletion() {
     // set up topic partition
     val topic = "topic"
     val topicPartition = TopicAndPartition(topic, 0)
