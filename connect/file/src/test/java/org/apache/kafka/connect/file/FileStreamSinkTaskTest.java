@@ -47,6 +47,7 @@ public class FileStreamSinkTaskTest {
     @Test
     public void testPutFlush() {
         HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        final String newLine = System.getProperty("line.separator"); 
 
         // We do not call task.start() since it would override the output stream
 
@@ -55,7 +56,7 @@ public class FileStreamSinkTaskTest {
         ));
         offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(1L));
         task.flush(offsets);
-        assertEquals("line1\n", os.toString());
+        assertEquals("line1" + newLine, os.toString());
 
         task.put(Arrays.asList(
                 new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line2", 2),
@@ -64,6 +65,6 @@ public class FileStreamSinkTaskTest {
         offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(2L));
         offsets.put(new TopicPartition("topic2", 0), new OffsetAndMetadata(1L));
         task.flush(offsets);
-        assertEquals("line1\nline2\nline3\n", os.toString());
+        assertEquals("line1" + newLine + "line2" + newLine + "line3" + newLine, os.toString());
     }
 }
