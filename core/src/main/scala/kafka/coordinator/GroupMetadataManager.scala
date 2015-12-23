@@ -170,7 +170,7 @@ class GroupMetadataManager(val brokerId: Int,
     val startMs = SystemTime.milliseconds
     val numberOfDeletedExpiredOffsets = inWriteLock(offsetExpireLock) {
       val expireOffsets = offsetsCache.filter(_._1.topicPartition == topicPartition)
-      deleteExpiredOffsets(expireOffsets)
+      deleteOffsets(expireOffsets)
     }
     info(s"Removed ${numberOfDeletedExpiredOffsets} expired offsets in ${SystemTime.milliseconds - startMs} milliseconds for topicPartition ${topicPartition}")
   }
@@ -551,10 +551,10 @@ class GroupMetadataManager(val brokerId: Int,
         offsetAndMetadata.expireTimestamp < startMs
       }
 
-      deleteExpiredOffsets(expiredOffsets)
+      deleteOffsets(expiredOffsets)
     }
 
-    info("Removed %d expired offsets in %d milliseconds.".format(numExpiredOffsetsRemoved, SystemTime.milliseconds - startMs))
+    info(s"Removed ${numExpiredOffsetsRemoved} expired offsets in ${SystemTime.milliseconds - startMs} milliseconds.")
   }
 
   /**
@@ -562,7 +562,7 @@ class GroupMetadataManager(val brokerId: Int,
    * @param expiredOffsets collection of expired offsets.
    * @return number of expired offsets deleted.
    */
-  def deleteExpiredOffsets(expiredOffsets: scala.Iterable[(GroupTopicPartition, OffsetAndMetadata)]): Int = {
+  def deleteOffsets(expiredOffsets: scala.Iterable[(GroupTopicPartition, OffsetAndMetadata)]): Int = {
     debug("Found %d expired offsets.".format(expiredOffsets.size))
 
     // delete the expired offsets from the table and generate tombstone messages to remove them from the log
