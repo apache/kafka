@@ -74,6 +74,6 @@ public class GroupCoordinatorResponse extends AbstractRequestResponse {
     }
 
     public static GroupCoordinatorResponse parse(ByteBuffer buffer) {
-        return new GroupCoordinatorResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new GroupCoordinatorResponse(CURRENT_SCHEMA.read(buffer));
     }
 }

@@ -50,7 +50,7 @@ public class ListGroupsRequest extends AbstractRequest {
     }
 
     public static ListGroupsRequest parse(ByteBuffer buffer) {
-        return new ListGroupsRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new ListGroupsRequest(CURRENT_SCHEMA.read(buffer));
     }
 
 

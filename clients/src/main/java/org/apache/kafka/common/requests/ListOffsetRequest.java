@@ -143,6 +143,6 @@ public class ListOffsetRequest extends AbstractRequest {
     }
 
     public static ListOffsetRequest parse(ByteBuffer buffer) {
-        return new ListOffsetRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new ListOffsetRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

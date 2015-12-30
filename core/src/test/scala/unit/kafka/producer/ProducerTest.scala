@@ -252,6 +252,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     server1.startup()
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
+    TestUtils.waitUntilLeaderIsKnown(servers, topic, 0)
 
     try {
       // cross check if broker 1 got the messages

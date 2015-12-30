@@ -99,7 +99,7 @@ public class LeaderAndIsrResponse extends AbstractRequestResponse {
     }
 
     public static LeaderAndIsrResponse parse(ByteBuffer buffer) {
-        return new LeaderAndIsrResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new LeaderAndIsrResponse(CURRENT_SCHEMA.read(buffer));
     }
 
 }
