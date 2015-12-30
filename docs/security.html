@@ -231,7 +231,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
 
         We must also configure the service name in server.properties, which should match the principal name of the kafka brokers. In the above example, principal is "kafka/kafka1.hostname.com@EXAMPLE.com", so:
         <pre>
-    sasl.kerberos.service.name="kafka"</pre>
+    sasl.kerberos.service.name=kafka</pre>
 
         <u>Important notes:</u>
         <ol>
@@ -270,7 +270,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
             <li>Configure the following properties in producer.properties or consumer.properties:
                 <pre>
     security.protocol=SASL_PLAINTEXT (or SASL_SSL)
-    sasl.kerberos.service.name="kafka"</pre>
+    sasl.kerberos.service.name=kafka</pre>
             </li>
         </ol></li>
 </ol>
