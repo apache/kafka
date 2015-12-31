@@ -89,7 +89,7 @@ public class SerializationTest {
 
         assertEquals("Should get the original ByteBuffer after serialization and deserialization",
               buf, deserializer.deserialize(mytopic, serializer.serialize(mytopic, buf)));
-        System.out.println(buf);
+
         assertEquals("Should support null in serialization and deserialization",
                 null, deserializer.deserialize(mytopic, serializer.serialize(mytopic, null)));
 
