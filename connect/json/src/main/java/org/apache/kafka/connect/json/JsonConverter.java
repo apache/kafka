@@ -404,7 +404,7 @@ public class JsonConverter implements Converter {
                 jsonSchema = JsonNodeFactory.instance.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.STRUCT_TYPE_NAME);
                 ArrayNode fields = JsonNodeFactory.instance.arrayNode();
                 for (Field field : schema.fields()) {
-                    ObjectNode fieldJsonSchema = asJsonSchema(field.schema());
+                    ObjectNode fieldJsonSchema = asJsonSchema(field.schema()).deepCopy(); //KAFKA-3055
                     fieldJsonSchema.put(JsonSchema.STRUCT_FIELD_NAME_FIELD_NAME, field.name());
                     fields.add(fieldJsonSchema);
                 }
