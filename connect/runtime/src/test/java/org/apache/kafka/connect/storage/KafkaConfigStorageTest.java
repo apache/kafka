@@ -224,17 +224,17 @@ public class KafkaConfigStorageTest {
         expectConvertWriteRead(
                 TASK_CONFIG_KEYS.get(0), KafkaConfigStorage.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
                 "properties", SAMPLE_CONFIGS.get(0));
-        expectReadToEnd(new LinkedHashMap<String,byte[]>(Collections.singletonMap(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0))));
+        expectReadToEnd(new LinkedHashMap<String, byte[]>(Collections.singletonMap(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0))));
 
         expectConvertWriteRead(
                 TASK_CONFIG_KEYS.get(1), KafkaConfigStorage.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(1),
                 "properties", SAMPLE_CONFIGS.get(1));
-        expectReadToEnd(new LinkedHashMap<String,byte[]>(Collections.singletonMap(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1))));
+        expectReadToEnd(new LinkedHashMap<String, byte[]>(Collections.singletonMap(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1))));
 
         expectConvertWriteRead(
                 COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigStorage.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
                 "tasks", 2); // Starts with 0 tasks, after update has 2
-        expectReadToEnd(new LinkedHashMap<String,byte[]>(Collections.singletonMap(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2))));
+        expectReadToEnd(new LinkedHashMap<String, byte[]>(Collections.singletonMap(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2))));
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
         tasksReconfiguredCallback.onCompletion(null, Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)));
         EasyMock.expectLastCall();
