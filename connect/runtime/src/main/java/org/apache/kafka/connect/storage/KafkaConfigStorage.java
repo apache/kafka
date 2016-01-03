@@ -330,23 +330,13 @@ public class KafkaConfigStorage {
 
         // Finally, send the commit to update the number of tasks and apply the new configs, then wait until we read to
         // the end of the log
-        try {
-            // Read to end to ensure all the task configs have been written
-            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        // Write all the commit messages
 
-            // Write all the commit messages
-            for (Map.Entry<String, Integer> taskCountEntry : newTaskCounts.entrySet()) {
-                Struct connectConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
-                connectConfig.put("tasks", taskCountEntry.getValue());
-                byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
-                sendToConfigLog(COMMIT_TASKS_KEY(taskCountEntry.getKey()), serializedConfig, "Failed to send task config commit to Kafka");
-            }
-
-            // Read to end to ensure all the commit messages have been written
-            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            log.error("Failed to write root configuration to Kafka: ", e);
-            throw new ConnectException("Error writing root configuration to Kafka", e);
+        for (Map.Entry<String, Integer> taskCountEntry : newTaskCounts.entrySet()) {
+            Struct connectConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
+            connectConfig.put("tasks", taskCountEntry.getValue());
+            byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
+            sendToConfigLog(COMMIT_TASKS_KEY(taskCountEntry.getKey()), serializedConfig, "Failed to send task config commit to Kafka");
         }
     }
 
