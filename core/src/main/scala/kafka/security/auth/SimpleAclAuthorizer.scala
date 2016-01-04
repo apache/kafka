@@ -80,18 +80,21 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   override def configure(javaConfigs: util.Map[String, _]) {
     val configs = javaConfigs.asScala
     val props = new java.util.Properties()
-    configs foreach { case (key, value) => props.put(key, value.toString) }
-    val kafkaConfig = KafkaConfig.fromProps(props)
+    configs.foreach { case (key, value) => props.put(key, value.toString) }
 
     superUsers = configs.get(SimpleAclAuthorizer.SuperUsersProp).collect {
       case str: String if str.nonEmpty => str.split(";").map(s => KafkaPrincipal.fromString(s.trim)).toSet
     }.getOrElse(Set.empty[KafkaPrincipal])
 
-    shouldAllowEveryoneIfNoAclIsFound = configs.get(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp).map(_.toString.toBoolean).getOrElse(false)
+    shouldAllowEveryoneIfNoAclIsFound = configs.get(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp).exists(_.toString.toBoolean)
 
-    val zkUrl = configs.getOrElse(SimpleAclAuthorizer.ZkUrlProp, kafkaConfig.zkConnect).toString
-    val zkConnectionTimeoutMs = configs.getOrElse(SimpleAclAuthorizer.ZkConnectionTimeOutProp, kafkaConfig.zkConnectionTimeoutMs).toString.toInt
-    val zkSessionTimeOutMs = configs.getOrElse(SimpleAclAuthorizer.ZkSessionTimeOutProp, kafkaConfig.zkSessionTimeoutMs).toString.toInt
+    // Use `KafkaConfig` in order to get the default ZK config values if not present in `javaConfigs`. Note that this
+    // means that `KafkaConfig.zkConnect` must always be set by the user (even if `SimpleAclAuthorizer.ZkUrlProp` is also
+    // set).
+    val kafkaConfig = KafkaConfig.fromProps(props, doLog = false)
+    val zkUrl = configs.get(SimpleAclAuthorizer.ZkUrlProp).map(_.toString).getOrElse(kafkaConfig.zkConnect)
+    val zkConnectionTimeoutMs = configs.get(SimpleAclAuthorizer.ZkConnectionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkConnectionTimeoutMs)
+    val zkSessionTimeOutMs = configs.get(SimpleAclAuthorizer.ZkSessionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkSessionTimeoutMs)
 
     zkUtils = ZkUtils(zkUrl,
                       zkConnectionTimeoutMs,

@@ -131,7 +131,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   def withAuthorizer(props: Properties)(f: Authorizer => Unit) {
-    val kafkaConfig = KafkaConfig.fromProps(props)
+    val kafkaConfig = KafkaConfig.fromProps(props, doLog = false)
     val authZ = new SimpleAclAuthorizer
     try {
       authZ.configure(kafkaConfig.originals)
