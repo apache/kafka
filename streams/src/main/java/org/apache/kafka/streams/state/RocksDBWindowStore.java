@@ -110,7 +110,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         this.windowBefore = windowBefore;
         this.windowAfter = windowAfter;
 
-        // The retention period must be at least four times as long as the windowSize
+        // The retention period must be at least two times as long as the total window size
         if ((this.windowBefore + this.windowAfter + 1) * 2 > retentionPeriod)
             retentionPeriod = (this.windowBefore + this.windowAfter + 1) * 2;
 
