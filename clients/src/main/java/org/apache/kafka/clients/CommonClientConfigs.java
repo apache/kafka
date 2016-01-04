@@ -13,10 +13,26 @@
 
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.utils.Utils;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
+
 /**
  * Some configurations shared by both producer and consumer
  */
 public class CommonClientConfigs {
+
+    private static final Set<SecurityProtocol> VALID_SECURITY_PROTOCOLS;
+    static {
+        Set<SecurityProtocol> protocols = EnumSet.allOf(SecurityProtocol.class);
+        protocols.remove(SecurityProtocol.TRACE);
+        VALID_SECURITY_PROTOCOLS = Collections.unmodifiableSet(protocols);
+    }
 
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
@@ -56,7 +72,7 @@ public class CommonClientConfigs {
     public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>MetricReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
 
     public static final String SECURITY_PROTOCOL_CONFIG = "security.protocol";
-    public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers. Currently only PLAINTEXT and SSL are supported.";
+    public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers. Valid values are: " + Utils.mkString(validSecurityProtocolNames(), ", ") + ".";
     public static final String DEFAULT_SECURITY_PROTOCOL = "PLAINTEXT";
 
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = "connections.max.idle.ms";
@@ -67,4 +83,18 @@ public class CommonClientConfigs {
                                                          + "for the response of a request. If the response is not received before the timeout "
                                                          + "elapses the client will resend the request if necessary or fail the request if "
                                                          + "retries are exhausted.";
+
+    private static List<String> validSecurityProtocolNames() {
+        List<String> names = new ArrayList<>();
+        for (SecurityProtocol protocol : validSecurityProtocols())
+            names.add(protocol.name);
+        return names;
+    }
+
+    /**
+     * Returns the security protocols supported by clients.
+     */
+    public static final Set<SecurityProtocol> validSecurityProtocols() {
+        return VALID_SECURITY_PROTOCOLS;
+    }
 }
