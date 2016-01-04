@@ -67,8 +67,10 @@ object AclCommand {
 
     val authorizerClass = opts.options.valueOf(opts.authorizerOpt)
     val authZ = CoreUtils.createObject[Authorizer](authorizerClass)
-    authZ.configure(authorizerProperties.asJava)
-    try f(authZ)
+    try {
+      authZ.configure(authorizerProperties.asJava)
+      f(authZ)
+    }
     finally CoreUtils.swallow(authZ.close())
   }
 

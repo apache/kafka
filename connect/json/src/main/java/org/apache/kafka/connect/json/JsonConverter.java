@@ -25,7 +25,16 @@ import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.connect.data.*;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Field;
+import org.apache.kafka.connect.data.ConnectSchema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.data.Time;
+import org.apache.kafka.connect.data.Decimal;
+import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.storage.Converter;
 
@@ -395,7 +404,7 @@ public class JsonConverter implements Converter {
                 jsonSchema = JsonNodeFactory.instance.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.STRUCT_TYPE_NAME);
                 ArrayNode fields = JsonNodeFactory.instance.arrayNode();
                 for (Field field : schema.fields()) {
-                    ObjectNode fieldJsonSchema = asJsonSchema(field.schema());
+                    ObjectNode fieldJsonSchema = asJsonSchema(field.schema()).deepCopy();
                     fieldJsonSchema.put(JsonSchema.STRUCT_FIELD_NAME_FIELD_NAME, field.name());
                     fields.add(fieldJsonSchema);
                 }
