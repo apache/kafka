@@ -139,19 +139,7 @@ public class RocksDBWindowStoreTest {
                 // Flush the store and verify all current entries were properly flushed ...
                 store.flush();
 
-                Map<Integer, Set<String>> entriesByKey = new HashMap<>();
-                for (Entry<byte[], byte[]> entry : changeLog) {
-                    long timestamp = WindowStoreUtil.timestampFromBinaryKey(entry.key());
-                    Integer key = WindowStoreUtil.keyFromBinaryKey(entry.key(), serdes);
-                    String value = entry.value() == null ? null : serdes.valueFrom(entry.value());
-
-                    Set<String> entries = entriesByKey.get(key);
-                    if (entries == null) {
-                        entries = new HashSet<>();
-                        entriesByKey.put(key, entries);
-                    }
-                    entries.add(value + "@" + (timestamp - startTime));
-                }
+                Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, startTime);
 
                 assertEquals(Utils.mkSet("zero@0"), entriesByKey.get(0));
                 assertEquals(Utils.mkSet("one@1"), entriesByKey.get(1));
@@ -247,19 +235,7 @@ public class RocksDBWindowStoreTest {
                 // Flush the store and verify all current entries were properly flushed ...
                 store.flush();
 
-                Map<Integer, Set<String>> entriesByKey = new HashMap<>();
-                for (Entry<byte[], byte[]> entry : changeLog) {
-                    long timestamp = WindowStoreUtil.timestampFromBinaryKey(entry.key());
-                    Integer key = WindowStoreUtil.keyFromBinaryKey(entry.key(), serdes);
-                    String value = entry.value() == null ? null : serdes.valueFrom(entry.value());
-
-                    Set<String> entries = entriesByKey.get(key);
-                    if (entries == null) {
-                        entries = new HashSet<>();
-                        entriesByKey.put(key, entries);
-                    }
-                    entries.add(value + "@" + (timestamp - startTime));
-                }
+                Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, startTime);
 
                 assertEquals(Utils.mkSet("zero@0"), entriesByKey.get(0));
                 assertEquals(Utils.mkSet("one@1"), entriesByKey.get(1));
@@ -355,19 +331,7 @@ public class RocksDBWindowStoreTest {
                 // Flush the store and verify all current entries were properly flushed ...
                 store.flush();
 
-                Map<Integer, Set<String>> entriesByKey = new HashMap<>();
-                for (Entry<byte[], byte[]> entry : changeLog) {
-                    long timestamp = WindowStoreUtil.timestampFromBinaryKey(entry.key());
-                    Integer key = WindowStoreUtil.keyFromBinaryKey(entry.key(), serdes);
-                    String value = entry.value() == null ? null : serdes.valueFrom(entry.value());
-
-                    Set<String> entries = entriesByKey.get(key);
-                    if (entries == null) {
-                        entries = new HashSet<>();
-                        entriesByKey.put(key, entries);
-                    }
-                    entries.add(value + "@" + (timestamp - startTime));
-                }
+                Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, startTime);
 
                 assertEquals(Utils.mkSet("zero@0"), entriesByKey.get(0));
                 assertEquals(Utils.mkSet("one@1"), entriesByKey.get(1));
@@ -432,19 +396,7 @@ public class RocksDBWindowStoreTest {
                 // Flush the store and verify all current entries were properly flushed ...
                 store.flush();
 
-                Map<Integer, Set<String>> entriesByKey = new HashMap<>();
-                for (Entry<byte[], byte[]> entry : changeLog) {
-                    long timestamp = WindowStoreUtil.timestampFromBinaryKey(entry.key());
-                    Integer key = WindowStoreUtil.keyFromBinaryKey(entry.key(), serdes);
-                    String value = entry.value() == null ? null : serdes.valueFrom(entry.value());
-
-                    Set<String> entries = entriesByKey.get(key);
-                    if (entries == null) {
-                        entries = new HashSet<>();
-                        entriesByKey.put(key, entries);
-                    }
-                    entries.add(value + "@" + (timestamp - startTime));
-                }
+                Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, startTime);
 
                 assertEquals(Utils.mkSet("zero@0", "zero@0", "zero+@0", "zero++@0"), entriesByKey.get(0));
 
@@ -697,5 +649,24 @@ public class RocksDBWindowStoreTest {
             set.add(subdir.substring(7));
         }
         return set;
+    }
+
+    private Map<Integer, Set<String>> entriesByKey(List<Entry<byte[], byte[]>> changeLog, long startTime) {
+        HashMap<Integer, Set<String>> entriesByKey = new HashMap<>();
+
+        for (Entry<byte[], byte[]> entry : changeLog) {
+            long timestamp = WindowStoreUtil.timestampFromBinaryKey(entry.key());
+            Integer key = WindowStoreUtil.keyFromBinaryKey(entry.key(), serdes);
+            String value = entry.value() == null ? null : serdes.valueFrom(entry.value());
+
+            Set<String> entries = entriesByKey.get(key);
+            if (entries == null) {
+                entries = new HashSet<>();
+                entriesByKey.put(key, entries);
+            }
+            entries.add(value + "@" + (timestamp - startTime));
+        }
+
+        return entriesByKey;
     }
 }

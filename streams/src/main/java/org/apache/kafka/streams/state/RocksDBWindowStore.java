@@ -260,6 +260,15 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
     }
 
+    public long segmentId(long timestamp) {
+        return timestamp / segmentInterval;
+    }
+
+    public String directorySuffix(long segmentId) {
+        return formatter.format(new Date(segmentId * segmentInterval));
+    }
+
+    // this method is used by a test
     public Set<Long> segmentIds() {
         HashSet<Long> segmentIds = new HashSet<>();
 
@@ -271,11 +280,4 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         return segmentIds;
     }
 
-    public long segmentId(long timestamp) {
-        return timestamp / segmentInterval;
-    }
-
-    public String directorySuffix(long segmentId) {
-        return formatter.format(new Date(segmentId * segmentInterval));
-    }
 }
