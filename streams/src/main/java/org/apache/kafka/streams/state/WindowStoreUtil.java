@@ -19,6 +19,8 @@
 
 package org.apache.kafka.streams.state;
 
+import java.nio.ByteBuffer;
+
 public class WindowStoreUtil<K, V> {
 
     public static final int TIMESTAMP_SIZE = 8;
@@ -29,22 +31,13 @@ public class WindowStoreUtil<K, V> {
 
     public static <K> byte[] toBinaryKey(K key, final long timestamp, final int seqnum, Serdes<K, ?> serdes) {
         byte[] serializedKey = serdes.rawKey(key);
-        byte[] binaryKey = new byte[serializedKey.length + TIMESTAMP_SIZE + SEQNUM_SIZE];
-        System.arraycopy(serializedKey, 0, binaryKey, 0, serializedKey.length);
 
-        // Put the timestamp
-        int index = serializedKey.length + TIMESTAMP_SIZE;
-        for (int i = 0; i < TIMESTAMP_SIZE; i++) {
-            binaryKey[--index] = (byte) (timestamp >>> (8 * i));
-        }
+        ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + TIMESTAMP_SIZE + SEQNUM_SIZE);
+        buf.put(serializedKey);
+        buf.putLong(timestamp);
+        buf.putInt(seqnum);
 
-        // Put the sequential number. This differentiate the records of the same key and timestamp
-        index = binaryKey.length;
-        for (int i = 0; i < SEQNUM_SIZE; i++) {
-            binaryKey[--index] = (byte) (seqnum >>> (8 * i));
-        }
-
-        return binaryKey;
+        return buf.array();
     }
 
     public static <K> K keyFromBinaryKey(byte[] binaryKey, Serdes<K, ?> serdes) {
@@ -56,13 +49,7 @@ public class WindowStoreUtil<K, V> {
     }
 
     public static long timestampFromBinaryKey(byte[] binaryKey) {
-        int index = binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE;
-
-        long timestamp = 0L;
-        for (int i = 0; i < TIMESTAMP_SIZE; i++) {
-            timestamp = (timestamp << 8) | (binaryKey[index++] & 0xFFL);
-        }
-        return timestamp;
+        return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE);
     }
 
 }
