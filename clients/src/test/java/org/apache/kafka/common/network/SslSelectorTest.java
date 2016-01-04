@@ -158,7 +158,7 @@ public class SslSelectorTest extends SelectorTest {
     }
 
     /**
-     * Connects and waits for handshake to complete. This is required since SSLTransportLayer
+     * Connects and waits for handshake to complete. This is required since SslTransportLayer
      * implementation requires the channel to be ready before send is invoked (unlike plaintext
      * where send can be invoked straight after connect)
      */
