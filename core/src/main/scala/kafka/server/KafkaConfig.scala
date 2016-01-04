@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.util
 import java.util.Properties
 
 import kafka.api.ApiVersion
@@ -32,7 +31,6 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, SslConfigs}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.security.auth.PrincipalBuilder
 
 import scala.collection.{Map, immutable, JavaConverters}
 import JavaConverters._
@@ -688,19 +686,27 @@ object KafkaConfig {
       require(names.contains(name), "Unknown configuration \"%s\".".format(name))
   }
 
-  def fromProps(props: Properties): KafkaConfig = {
-    KafkaConfig(props)
-  }
+  def fromProps(props: Properties): KafkaConfig =
+    fromProps(props, true)
 
-  def fromProps(defaults: Properties, overrides: Properties): KafkaConfig = {
+  def fromProps(props: Properties, doLog: Boolean): KafkaConfig =
+    new KafkaConfig(props, doLog)
+
+  def fromProps(defaults: Properties, overrides: Properties): KafkaConfig =
+    fromProps(defaults, overrides, true)
+
+  def fromProps(defaults: Properties, overrides: Properties, doLog: Boolean): KafkaConfig = {
     val props = new Properties()
     props.putAll(defaults)
     props.putAll(overrides)
-    fromProps(props)
+    fromProps(props, doLog)
   }
+
+  def apply(props: java.util.Map[_, _]): KafkaConfig = new KafkaConfig(props, true)
+
 }
 
-case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(KafkaConfig.configDef, props) {
+class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends AbstractConfig(KafkaConfig.configDef, props, doLog) {
 
   /** ********* Zookeeper Configuration ***********/
   val zkConnect: String = getString(KafkaConfig.ZkConnectProp)
@@ -915,29 +921,6 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
     } else {
       getListeners()
     }
-  }
-
-  private def getMetricClasses(metricClasses: java.util.List[String]): java.util.List[MetricsReporter] = {
-
-    val reporterList = new util.ArrayList[MetricsReporter]()
-    val iterator = metricClasses.iterator()
-
-    while (iterator.hasNext) {
-      val reporterName = iterator.next()
-      if (!reporterName.isEmpty) {
-        val reporter: MetricsReporter = CoreUtils.createObject[MetricsReporter](reporterName)
-        reporter.configure(originals)
-        reporterList.add(reporter)
-      }
-    }
-
-    reporterList
-
-  }
-
-
-  private def getPrincipalBuilderClass(principalBuilderClass: String): PrincipalBuilder = {
-    CoreUtils.createObject[PrincipalBuilder](principalBuilderClass)
   }
 
   validateValues()
