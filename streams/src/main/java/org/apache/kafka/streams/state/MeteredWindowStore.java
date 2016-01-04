@@ -17,51 +17,43 @@
 
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.Time;
 
-import java.util.List;
+public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
 
-public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
-
-    protected final KeyValueStore<K, V> inner;
-    protected final StoreChangeLogger.ValueGetter getter;
-    protected final Serdes<K, V> serialization;
+    protected final WindowStore<K, V> inner;
+    protected final StoreChangeLogger.ValueGetter<byte[], byte[]> getter;
     protected final String metricScope;
     protected final Time time;
 
     private Sensor putTime;
     private Sensor getTime;
-    private Sensor deleteTime;
-    private Sensor putAllTime;
-    private Sensor allTime;
     private Sensor rangeTime;
     private Sensor flushTime;
     private Sensor restoreTime;
     private StreamingMetrics metrics;
 
     private boolean loggingEnabled = true;
-    private StoreChangeLogger<K, V> changeLogger = null;
+    private StoreChangeLogger<byte[], byte[]> changeLogger = null;
 
     // always wrap the store with the metered store
-    public MeteredKeyValueStore(final KeyValueStore<K, V> inner, Serdes<K, V> serialization, String metricScope, Time time) {
+    public MeteredWindowStore(final WindowStore<K, V> inner, String metricScope, Time time) {
         this.inner = inner;
-        this.getter = new StoreChangeLogger.ValueGetter<K, V>() {
-            public V get(K key) {
-                return inner.get(key);
+        this.getter = new StoreChangeLogger.ValueGetter<byte[], byte[]>() {
+            public byte[] get(byte[] key) {
+                return inner.getInternal(key);
             }
         };
-        this.serialization = serialization;
         this.metricScope = metricScope;
         this.time = time != null ? time : new SystemTime();
     }
 
-    public MeteredKeyValueStore<K, V> disableLogging() {
+    public MeteredWindowStore<K, V> disableLogging() {
         loggingEnabled = false;
         return this;
     }
@@ -77,28 +69,21 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.metrics = context.metrics();
         this.putTime = this.metrics.addLatencySensor(metricScope, name, "put");
         this.getTime = this.metrics.addLatencySensor(metricScope, name, "get");
-        this.deleteTime = this.metrics.addLatencySensor(metricScope, name, "delete");
-        this.putAllTime = this.metrics.addLatencySensor(metricScope, name, "put-all");
-        this.allTime = this.metrics.addLatencySensor(metricScope, name, "all");
         this.rangeTime = this.metrics.addLatencySensor(metricScope, name, "range");
         this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush");
         this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore");
 
-        serialization.init(context);
-        this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(name, context, serialization) : null;
+        this.changeLogger = this.loggingEnabled ?
+                new StoreChangeLogger<>(name, context, Serdes.withBuiltinTypes("", byte[].class, byte[].class)) : null;
 
         // register and possibly restore the state from the logs
         long startNs = time.nanoseconds();
         inner.init(context);
         try {
-            final Deserializer<K> keyDeserializer = serialization.keyDeserializer();
-            final Deserializer<V> valDeserializer = serialization.valueDeserializer();
-
             context.register(this, loggingEnabled, new StateRestoreCallback() {
                 @Override
                 public void restore(byte[] key, byte[] value) {
-                    inner.put(keyDeserializer.deserialize(name, key),
-                            valDeserializer.deserialize(name, value));
+                    inner.putInternal(key, value);
                 }
             });
         } finally {
@@ -112,83 +97,45 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public V get(K key) {
-        long startNs = time.nanoseconds();
-        try {
-            return this.inner.get(key);
-        } finally {
-            this.metrics.recordLatency(this.getTime, startNs, time.nanoseconds());
-        }
+    public WindowStoreIterator<V> fetch(K key, long timestamp) {
+        return new MeteredWindowStoreIterator<>(this.inner.fetch(key, timestamp), this.rangeTime);
     }
 
     @Override
     public void put(K key, V value) {
+        putAndReturnInternalKey(key, value);
+    }
+
+    @Override
+    public byte[] putAndReturnInternalKey(K key, V value) {
         long startNs = time.nanoseconds();
         try {
-            this.inner.put(key, value);
+            byte[] binKey = this.inner.putAndReturnInternalKey(key, value);
 
             if (loggingEnabled) {
-                changeLogger.add(key);
+                changeLogger.add(binKey);
                 changeLogger.maybeLogChange(this.getter);
             }
+
+            return binKey;
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
     }
 
     @Override
-    public void putAll(List<Entry<K, V>> entries) {
+    public void putInternal(byte[] binaryKey, byte[] binaryValue) {
+        inner.putInternal(binaryKey, binaryValue);
+    }
+
+    @Override
+    public byte[] getInternal(byte[] binaryKey) {
         long startNs = time.nanoseconds();
         try {
-            this.inner.putAll(entries);
-
-            if (loggingEnabled) {
-                for (Entry<K, V> entry : entries) {
-                    K key = entry.key();
-                    changeLogger.add(key);
-                }
-                changeLogger.maybeLogChange(this.getter);
-            }
+            return this.inner.getInternal(binaryKey);
         } finally {
-            this.metrics.recordLatency(this.putAllTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.getTime, startNs, time.nanoseconds());
         }
-    }
-
-    @Override
-    public V delete(K key) {
-        long startNs = time.nanoseconds();
-        try {
-            V value = this.inner.delete(key);
-
-            removed(key);
-
-            return value;
-        } finally {
-            this.metrics.recordLatency(this.deleteTime, startNs, time.nanoseconds());
-        }
-    }
-
-    /**
-     * Called when the underlying {@link #inner} {@link KeyValueStore} removes an entry in response to a call from this
-     * store.
-     *
-     * @param key the key for the entry that the inner store removed
-     */
-    protected void removed(K key) {
-        if (loggingEnabled) {
-            changeLogger.delete(key);
-            changeLogger.maybeLogChange(this.getter);
-        }
-    }
-
-    @Override
-    public KeyValueIterator<K, V> range(K from, K to) {
-        return new MeteredKeyValueIterator<K, V>(this.inner.range(from, to), this.rangeTime);
-    }
-
-    @Override
-    public KeyValueIterator<K, V> all() {
-        return new MeteredKeyValueIterator<K, V>(this.inner.all(), this.allTime);
     }
 
     @Override
@@ -209,13 +156,13 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         }
     }
 
-    private class MeteredKeyValueIterator<K1, V1> implements KeyValueIterator<K1, V1> {
+    private class MeteredWindowStoreIterator<E> implements WindowStoreIterator<E> {
 
-        private final KeyValueIterator<K1, V1> iter;
+        private final WindowStoreIterator<E> iter;
         private final Sensor sensor;
         private final long startNs;
 
-        public MeteredKeyValueIterator(KeyValueIterator<K1, V1> iter, Sensor sensor) {
+        public MeteredWindowStoreIterator(WindowStoreIterator<E> iter, Sensor sensor) {
             this.iter = iter;
             this.sensor = sensor;
             this.startNs = time.nanoseconds();
@@ -227,7 +174,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         }
 
         @Override
-        public Entry<K1, V1> next() {
+        public E next() {
             return iter.next();
         }
 
@@ -247,4 +194,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     }
 
+    WindowStore<K, V> inner() {
+        return inner;
+    }
 }
