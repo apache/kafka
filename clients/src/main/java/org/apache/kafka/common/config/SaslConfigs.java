@@ -26,8 +26,7 @@ public class SaslConfigs {
         + "This can be defined either in Kafka's JAAS config or in Kafka's config.";
 
     public static final String SASL_KERBEROS_KINIT_CMD = "sasl.kerberos.kinit.cmd";
-    public static final String SASL_KERBEROS_KINIT_CMD_DOC = "Kerberos kinit command path. "
-        + "Default is /usr/bin/kinit";
+    public static final String SASL_KERBEROS_KINIT_CMD_DOC = "Kerberos kinit command path.";
     public static final String DEFAULT_KERBEROS_KINIT_CMD = "/usr/bin/kinit";
 
     public static final String SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR = "sasl.kerberos.ticket.renew.window.factor";
