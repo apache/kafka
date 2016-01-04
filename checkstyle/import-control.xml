@@ -171,6 +171,8 @@
 
     <subpackage name="runtime">
       <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="org.reflections"/>
+      <allow pkg="org.reflections.util"/>
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />

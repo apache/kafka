@@ -36,6 +36,7 @@ def powermock_easymock='org.powermock:powermock-api-easymock:1.6.3'
 def jackson_version = '2.6.3'
 def jetty_version = '9.2.14.v20151106'
 def jersey_version = '2.22.1'
+def reflections_version = '0.9.10'
 
 allprojects {
   apply plugin: 'idea'
@@ -790,6 +791,7 @@ project(':connect:runtime') {
     compile "org.eclipse.jetty:jetty-servlet:$jetty_version"
     compile "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$jackson_version"
     compile "org.glassfish.jersey.containers:jersey-container-servlet:$jersey_version"
+    compile "org.reflections:reflections:$reflections_version"
 
     testCompile "$junit"
     testCompile "$easymock"

@@ -136,6 +136,7 @@ public class DistributedHerderTest {
     @Before
     public void setUp() throws Exception {
         worker = PowerMock.createMock(Worker.class);
+        EasyMock.expect(worker.isSinkConnector(CONN1)).andStubReturn(Boolean.FALSE);
         time = new MockTime();
 
         herder = PowerMock.createPartialMock(DistributedHerder.class, new String[]{"backoff"},
@@ -487,6 +488,7 @@ public class DistributedHerderTest {
         worker.addConnector(EasyMock.capture(capturedUpdatedConfig), EasyMock.<ConnectorContext>anyObject());
         PowerMock.expectLastCall();
         EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
