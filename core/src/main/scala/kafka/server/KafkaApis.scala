@@ -218,10 +218,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val mergedCommitStatus = commitStatus ++ unauthorizedRequestInfo.mapValues(_ => ErrorMapping.TopicAuthorizationCode)
 
       mergedCommitStatus.foreach { case (topicAndPartition, errorCode) =>
-        // we only print warnings for known errors here; only replica manager could see an unknown
-        // exception while trying to write the offset message to the local log, and it will log
-        // an error message and write the error code in this case; hence it can be ignored here
-        if (errorCode != ErrorMapping.NoError && errorCode != ErrorMapping.UnknownCode) {
+        if (errorCode != ErrorMapping.NoError) {
           debug("Offset commit request with correlation id %d from client %s on partition %s failed due to %s"
             .format(offsetCommitRequest.correlationId, offsetCommitRequest.clientId,
               topicAndPartition, ErrorMapping.exceptionNameFor(errorCode)))
@@ -323,15 +320,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       mergedResponseStatus.foreach { case (topicAndPartition, status) =>
         if (status.error != ErrorMapping.NoError) {
           errorInResponse = true
-          // we only print warnings for known errors here; if it is unknown, it will cause
-          // an error message in the replica manager
-          if (status.error != ErrorMapping.UnknownCode) {
-            debug("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
-              produceRequest.correlationId,
-              produceRequest.clientId,
-              topicAndPartition,
-              ErrorMapping.exceptionNameFor(status.error)))
-          }
+          debug("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
+            produceRequest.correlationId,
+            produceRequest.clientId,
+            topicAndPartition,
+            ErrorMapping.exceptionNameFor(status.error)))
         }
       }
 
@@ -410,9 +403,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val mergedResponseStatus = responsePartitionData ++ unauthorizedResponseStatus
 
       mergedResponseStatus.foreach { case (topicAndPartition, data) =>
-        // we only print warnings for known errors here; if it is unknown, it will cause
-        // an error message in the replica manager already and hence can be ignored here
-        if (data.error != ErrorMapping.NoError && data.error != ErrorMapping.UnknownCode) {
+        if (data.error != ErrorMapping.NoError) {
           debug("Fetch request with correlation id %d from client %s on partition %s failed due to %s"
             .format(fetchRequest.correlationId, fetchRequest.clientId,
             topicAndPartition, ErrorMapping.exceptionNameFor(data.error)))
