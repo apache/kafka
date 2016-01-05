@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.test.TestUtils;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
@@ -39,17 +37,21 @@ public class StateUtils {
      * @return the new directory that will exist; never null
      */
     public static File tempDir() {
-        final File dir = new File(TestUtils.IO_TMP_DIR, "kafka-" + INSTANCE_COUNTER.incrementAndGet());
-        dir.mkdirs();
-        dir.deleteOnExit();
+        try {
+            final File dir = Files.createTempDirectory("test").toFile();
+            dir.mkdirs();
+            dir.deleteOnExit();
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                deleteDirectory(dir);
-            }
-        });
-        return dir;
+            Runtime.getRuntime().addShutdownHook(new Thread() {
+                @Override
+                public void run() {
+                    deleteDirectory(dir);
+                }
+            });
+            return dir;
+        } catch (IOException ex) {
+            throw new RuntimeException("failed to create a temp dir", ex);
+        }
     }
 
     private static void deleteDirectory(File dir) {

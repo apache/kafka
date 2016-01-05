@@ -91,10 +91,10 @@ public class ConsumerProtocol {
     }
 
     public static PartitionAssignor.Subscription deserializeSubscription(ByteBuffer buffer) {
-        Struct header = (Struct) CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
+        Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
         checkVersionCompatibility(version);
-        Struct struct = (Struct) SUBSCRIPTION_V0.read(buffer);
+        Struct struct = SUBSCRIPTION_V0.read(buffer);
         ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
         List<String> topics = new ArrayList<>();
         for (Object topicObj : struct.getArray(TOPICS_KEY_NAME))
@@ -103,10 +103,10 @@ public class ConsumerProtocol {
     }
 
     public static PartitionAssignor.Assignment deserializeAssignment(ByteBuffer buffer) {
-        Struct header = (Struct) CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
+        Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
         checkVersionCompatibility(version);
-        Struct struct = (Struct) ASSIGNMENT_V0.read(buffer);
+        Struct struct = ASSIGNMENT_V0.read(buffer);
         ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
         List<TopicPartition> partitions = new ArrayList<>();
         for (Object structObj : struct.getArray(TOPIC_PARTITIONS_KEY_NAME)) {

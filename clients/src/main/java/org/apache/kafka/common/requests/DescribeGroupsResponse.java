@@ -210,7 +210,7 @@ public class DescribeGroupsResponse extends AbstractRequestResponse {
     }
 
     public static DescribeGroupsResponse parse(ByteBuffer buffer) {
-        return new DescribeGroupsResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new DescribeGroupsResponse(CURRENT_SCHEMA.read(buffer));
     }
 
     public static DescribeGroupsResponse fromError(Errors error, List<String> groupIds) {

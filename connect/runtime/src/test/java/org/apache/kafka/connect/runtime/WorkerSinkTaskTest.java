@@ -135,7 +135,7 @@ public class WorkerSinkTaskTest {
         consumer.pause(TOPIC_PARTITION2);
         PowerMock.expectLastCall();
 
-        // Retry delivery should suceed
+        // Retry delivery should succeed
         expectConsumerPoll(0);
         sinkTask.put(EasyMock.capture(records));
         EasyMock.expectLastCall();

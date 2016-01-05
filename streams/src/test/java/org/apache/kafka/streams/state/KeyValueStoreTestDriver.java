@@ -221,7 +221,6 @@ public class KeyValueStoreTestDriver<K, V> {
     private final Map<K, V> flushedEntries = new HashMap<>();
     private final Set<K> flushedRemovals = new HashSet<>();
     private final List<Entry<K, V>> restorableEntries = new LinkedList<>();
-    private final StreamingConfig config;
     private final MockProcessorContext context;
     private final Map<String, StateStore> storeMap = new HashMap<>();
     private final StreamingMetrics metrics = new StreamingMetrics() {
@@ -235,7 +234,7 @@ public class KeyValueStoreTestDriver<K, V> {
         }
     };
     private final RecordCollector recordCollector;
-    private File stateDir = new File("build/data").getAbsoluteFile();
+    private File stateDir = null;
 
     protected KeyValueStoreTestDriver(Serdes<K, V> serdes) {
         this.serdes = serdes;
@@ -247,6 +246,9 @@ public class KeyValueStoreTestDriver<K, V> {
                 recordFlushed(record.key(), record.value());
             }
         };
+        this.stateDir = StateUtils.tempDir();
+        this.stateDir.mkdirs();
+
         Properties props = new Properties();
         props.put(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
@@ -254,9 +256,8 @@ public class KeyValueStoreTestDriver<K, V> {
         props.put(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, serdes.keyDeserializer().getClass());
         props.put(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, serdes.valueSerializer().getClass());
         props.put(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, serdes.valueDeserializer().getClass());
-        this.config = new StreamingConfig(props);
 
-        this.context = new MockProcessorContext(null, serdes.keySerializer(), serdes.keyDeserializer(), serdes.valueSerializer(),
+        this.context = new MockProcessorContext(null, this.stateDir, serdes.keySerializer(), serdes.keyDeserializer(), serdes.valueSerializer(),
                 serdes.valueDeserializer(), recordCollector) {
             @Override
             public TaskId id() {
@@ -286,22 +287,9 @@ public class KeyValueStoreTestDriver<K, V> {
 
             @Override
             public File stateDir() {
-                if (stateDir == null) {
-                    stateDir = StateUtils.tempDir();
-                }
-                stateDir.mkdirs();
                 return stateDir;
             }
         };
-    }
-
-    /**
-     * Set the directory that should be used by the store for local disk storage.
-     *
-     * @param dir the directory; may be null if no local storage is allowed
-     */
-    public void useStateDir(File dir) {
-        this.stateDir = dir;
     }
 
     @SuppressWarnings("unchecked")

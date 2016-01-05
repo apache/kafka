@@ -25,7 +25,11 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 import java.util.HashSet;
 import java.util.Set;
 
-public class KeyValueStoreChangeLogger<K, V> {
+public class StoreChangeLogger<K, V> {
+
+    public interface ValueGetter<K, V> {
+        V get(K key);
+    }
 
     protected final Serdes<K, V> serialization;
 
@@ -39,7 +43,7 @@ public class KeyValueStoreChangeLogger<K, V> {
     private ProcessorContext context;
 
     // always wrap the logged store with the metered store
-    public KeyValueStoreChangeLogger(String topic, ProcessorContext context, Serdes<K, V> serialization) {
+    public StoreChangeLogger(String topic, ProcessorContext context, Serdes<K, V> serialization) {
         this.topic = topic;
         this.serialization = serialization;
         this.context = context;
@@ -61,12 +65,12 @@ public class KeyValueStoreChangeLogger<K, V> {
         this.removed.add(key);
     }
 
-    public void maybeLogChange(KeyValueStore<K, V> kv) {
+    public void maybeLogChange(ValueGetter<K, V> getter) {
         if (this.dirty.size() > this.maxDirty || this.removed.size() > this.maxRemoved)
-            logChange(kv);
+            logChange(getter);
     }
 
-    public void logChange(KeyValueStore<K, V> kv) {
+    public void logChange(ValueGetter<K, V> getter) {
         RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
         if (collector != null) {
             Serializer<K> keySerializer = serialization.keySerializer();
@@ -76,7 +80,7 @@ public class KeyValueStoreChangeLogger<K, V> {
                 collector.send(new ProducerRecord<>(this.topic, this.partition, k, (V) null), keySerializer, valueSerializer);
             }
             for (K k : this.dirty) {
-                V v = kv.get(k);
+                V v = getter.get(k);
                 collector.send(new ProducerRecord<>(this.topic, this.partition, k, v), keySerializer, valueSerializer);
             }
             this.removed.clear();

@@ -66,6 +66,6 @@ public class LeaveGroupRequest extends AbstractRequest {
     }
 
     public static LeaveGroupRequest parse(ByteBuffer buffer) {
-        return new LeaveGroupRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new LeaveGroupRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

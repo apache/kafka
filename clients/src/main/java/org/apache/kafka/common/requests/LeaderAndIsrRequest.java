@@ -25,7 +25,12 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class LeaderAndIsrRequest extends AbstractRequest {
 
@@ -206,7 +211,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     }
 
     public static LeaderAndIsrRequest parse(ByteBuffer buffer) {
-        return new LeaderAndIsrRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new LeaderAndIsrRequest(CURRENT_SCHEMA.read(buffer));
     }
 
 }

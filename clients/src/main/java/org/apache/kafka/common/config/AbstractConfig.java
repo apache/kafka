@@ -12,7 +12,13 @@
  */
 package org.apache.kafka.common.config;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;

@@ -48,7 +48,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private static final int MAX_WRITE_BUFFERS = 3;
     private static final String DB_FILE_DIR = "rocksdb";
 
-    private final String topic;
+    private final String name;
 
     private final Options options;
     private final WriteOptions wOptions;
@@ -56,11 +56,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private Serdes<K, V> serdes;
     private ProcessorContext context;
-    private String dirName;
+    protected File dbDir;
     private RocksDB db;
 
     public RocksDBStore(String name, Serdes<K, V> serdes) {
-        this.topic = name;
+        this.name = name;
         this.serdes = serdes;
 
         // initialize the rocksdb options
@@ -88,8 +88,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         serdes.init(context);
 
         this.context = context;
-        this.dirName = this.context.stateDir() + File.separator + DB_FILE_DIR;
-        this.db = openDB(new File(this.dirName, this.topic), this.options, TTL_SECONDS);
+        this.dbDir = new File(new File(this.context.stateDir(), DB_FILE_DIR), this.name);
+        this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
     }
 
     private RocksDB openDB(File dir, Options options, int ttl) {
@@ -98,19 +98,19 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 dir.getParentFile().mkdirs();
                 return RocksDB.open(options, dir.toString());
             } else {
-                throw new KafkaException("Change log is not supported for store " + this.topic + " since it is TTL based.");
+                throw new KafkaException("Change log is not supported for store " + this.name + " since it is TTL based.");
                 // TODO: support TTL with change log?
                 // return TtlDB.open(options, dir.toString(), ttl, false);
             }
         } catch (RocksDBException e) {
             // TODO: this needs to be handled more accurately
-            throw new KafkaException("Error opening store " + this.topic + " at location " + dir.toString(), e);
+            throw new KafkaException("Error opening store " + this.name + " at location " + dir.toString(), e);
         }
     }
 
     @Override
     public String name() {
-        return this.topic;
+        return this.name;
     }
 
     @Override
@@ -124,7 +124,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return serdes.valueFrom(this.db.get(serdes.rawKey(key)));
         } catch (RocksDBException e) {
             // TODO: this needs to be handled more accurately
-            throw new KafkaException("Error while executing get " + key.toString() + " from store " + this.topic, e);
+            throw new KafkaException("Error while executing get " + key.toString() + " from store " + this.name, e);
         }
     }
 
@@ -138,7 +138,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             }
         } catch (RocksDBException e) {
             // TODO: this needs to be handled more accurately
-            throw new KafkaException("Error while executing put " + key.toString() + " from store " + this.topic, e);
+            throw new KafkaException("Error while executing put " + key.toString() + " from store " + this.name, e);
         }
     }
 
@@ -173,7 +173,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             db.flush(fOptions);
         } catch (RocksDBException e) {
             // TODO: this needs to be handled more accurately
-            throw new KafkaException("Error while executing flush from store " + this.topic, e);
+            throw new KafkaException("Error while executing flush from store " + this.name, e);
         }
     }
 

@@ -110,7 +110,7 @@ The source and destination clusters are completely independent entities: they ca
 <p>
 Here is an example showing how to mirror a single topic (named <i>my-topic</i>) from two input clusters:
 <pre>
- &gt; bin/kafka-run-class.sh kafka.tools.MirrorMaker
+ &gt; bin/kafka-mirror-maker.sh
        --consumer.config consumer-1.properties --consumer.config consumer-2.properties
        --producer.config producer.properties --whitelist my-topic
 </pre>

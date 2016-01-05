@@ -36,6 +36,7 @@ def powermock_easymock='org.powermock:powermock-api-easymock:1.6.3'
 def jackson_version = '2.6.3'
 def jetty_version = '9.2.14.v20151106'
 def jersey_version = '2.22.1'
+def reflections_version = '0.9.10'
 
 allprojects {
   apply plugin: 'idea'
@@ -45,7 +46,7 @@ allprojects {
 }
 
 ext {
-    gradleVersion = "2.9"
+    gradleVersion = "2.10"
     buildVersionFileName = "kafka-version.properties"
 
     userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
@@ -75,8 +76,7 @@ if (new File('.git').exists()) {
         'CONTRIBUTING.md',
         'gradlew',
         'gradlew.bat',
-        '**/README.md',
-        '.reviewboardrc'
+        '**/README.md'
     ])
   }
 }
@@ -259,6 +259,7 @@ project(':core') {
   println "Building project 'core' with Scala version $resolvedScalaVersion"
 
   apply plugin: 'scala'
+  apply plugin: 'checkstyle'
   archivesBaseName = "kafka_${baseScalaVersion}"
 
   dependencies {
@@ -270,7 +271,6 @@ project(':core') {
     compile 'com.yammer.metrics:metrics-core:2.2.0'
     compile 'net.sf.jopt-simple:jopt-simple:4.9'
     if (baseScalaVersion == '2.11') {
-      compile 'org.scala-lang.modules:scala-xml_2.11:1.0.4'
       compile 'org.scala-lang.modules:scala-parser-combinators_2.11:1.0.4'
     }
 
@@ -282,7 +282,6 @@ project(':core') {
     testCompile project(':clients').sourceSets.test.output
     testCompile 'org.apache.hadoop:hadoop-minikdc:2.7.1'
     testRuntime "$slf4jlog4j"
-    zinc 'com.typesafe.zinc:zinc:0.3.7'
   }
 
   configurations {
@@ -333,8 +332,6 @@ project(':core') {
     from project.file("../docs")
     into 'site-docs'
   }
-
-
 
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
     into "kafka_${baseScalaVersion}-${version}"
@@ -390,15 +387,27 @@ project(':core') {
     }
     into "$buildDir/dependant-testlibs"
   }
+
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':examples') {
+  apply plugin: 'checkstyle'
   archivesBaseName = "kafka-examples"
 
   dependencies {
     compile project(':core')
   }
 
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':clients') {
@@ -782,6 +791,7 @@ project(':connect:runtime') {
     compile "org.eclipse.jetty:jetty-servlet:$jetty_version"
     compile "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$jackson_version"
     compile "org.glassfish.jersey.containers:jersey-container-servlet:$jersey_version"
+    compile "org.reflections:reflections:$reflections_version"
 
     testCompile "$junit"
     testCompile "$easymock"

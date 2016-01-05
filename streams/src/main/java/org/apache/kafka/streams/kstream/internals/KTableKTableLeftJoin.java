@@ -22,22 +22,14 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-class KTableKTableLeftJoin<K, V, V1, V2> implements KTableProcessorSupplier<K, V1, V> {
+class KTableKTableLeftJoin<K, V, V1, V2> extends KTableKTableAbstractJoin<K, V, V1, V2> {
 
-    private final KTableValueGetterSupplier<K, V1> valueGetterSupplier1;
-    private final KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
-    private final ValueJoiner<V1, V2, V> joiner;
-
-    KTableKTableLeftJoin(KTableImpl<K, ?, V1> table1,
-                         KTableImpl<K, ?, V2> table2,
-                         ValueJoiner<V1, V2, V> joiner) {
-        this.valueGetterSupplier1 = table1.valueGetterSupplier();
-        this.valueGetterSupplier2 = table2.valueGetterSupplier();
-        this.joiner = joiner;
+    KTableKTableLeftJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<V1, V2, V> joiner) {
+        super(table1, table2, joiner);
     }
 
     @Override
-    public Processor<K, V1> get() {
+    public Processor<K, Change<V1>> get() {
         return new KTableKTableLeftJoinProcessor(valueGetterSupplier2.get());
     }
 
@@ -52,7 +44,7 @@ class KTableKTableLeftJoin<K, V, V1, V2> implements KTableProcessorSupplier<K, V
         };
     }
 
-    private class KTableKTableLeftJoinProcessor extends AbstractProcessor<K, V1> {
+    private class KTableKTableLeftJoinProcessor extends AbstractProcessor<K, Change<V1>> {
 
         private final KTableValueGetter<K, V2> valueGetter;
 
@@ -68,13 +60,21 @@ class KTableKTableLeftJoin<K, V, V1, V2> implements KTableProcessorSupplier<K, V
         }
 
         @Override
-        public void process(K key, V1 value1) {
+        public void process(K key, Change<V1> change) {
             V newValue = null;
+            V oldValue = null;
+            V2 value2 = null;
 
-            if (value1 != null)
-                newValue = joiner.apply(value1, valueGetter.get(key));
+            if (change.newValue != null || change.oldValue != null)
+                value2 = valueGetter.get(key);
 
-            context().forward(key, newValue);
+            if (change.newValue != null)
+                newValue = joiner.apply(change.newValue, value2);
+
+            if (sendOldValues && change.oldValue != null)
+                oldValue = joiner.apply(change.oldValue, value2);
+
+            context().forward(key, new Change<>(newValue, oldValue));
         }
 
     }

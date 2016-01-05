@@ -60,10 +60,10 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
     }
 
     public void checkAndClearResult(String... expected) {
-        assertEquals(expected.length, processed.size());
+        assertEquals("the number of outputs:", expected.length, processed.size());
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processed.get(i));
+            assertEquals("output[" + i + "]:", expected[i], processed.get(i));
         }
 
         processed.clear();
