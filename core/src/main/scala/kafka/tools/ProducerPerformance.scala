@@ -34,10 +34,8 @@ import org.apache.log4j.Logger
 
 /**
  * Load test for the producer
- *
- * @note This class will be replaced by org.apache.kafka.tools.ProducerPerformance after the old producer client is removed
  */
-@deprecated
+@deprecated("This class will be replaced by org.apache.kafka.tools.ProducerPerformance after the old producer client is removed", "0.9.0.0")
 object ProducerPerformance extends Logging {
 
   def main(args: Array[String]) {
