@@ -17,7 +17,6 @@
 package kafka.security.auth
 
 import java.util
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import org.apache.zookeeper.Watcher.Event.KeeperState
@@ -27,7 +26,7 @@ import kafka.network.RequestChannel.Session
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
+import org.I0Itec.zkclient.IZkStateListener
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import scala.collection.JavaConverters._
@@ -74,7 +73,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private val aclCache = new scala.collection.mutable.HashMap[Resource, Set[Acl]]
   private val lock = new ReentrantReadWriteLock()
-  private val isClosed = new AtomicBoolean(false);
 
   /**
    * Guaranteed to be called before any authorize call is made.
@@ -107,7 +105,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     loadCache()
 
     zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclChangedZkPath)
-    aclChangeListener = new ZkNodeChangeNotificationListener(zkUtils, SimpleAclAuthorizer.AclChangedZkPath, SimpleAclAuthorizer.AclChangedPrefix, AclChangedNotificaitonHandler)
+    aclChangeListener = new ZkNodeChangeNotificationListener(zkUtils, SimpleAclAuthorizer.AclChangedZkPath, SimpleAclAuthorizer.AclChangedPrefix, AclChangedNotificationHandler)
     aclChangeListener.init()
 
     zkUtils.zkClient.subscribeStateChanges(ZkStateChangeListener)
@@ -232,8 +230,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   def close() {
+    if (aclChangeListener != null) aclChangeListener.close()
     if (zkUtils != null) zkUtils.close()
-    isClosed.set(true)
   }
 
   private def loadCache()  {
@@ -272,23 +270,12 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     zkUtils.createSequentialPersistentPath(SimpleAclAuthorizer.AclChangedZkPath + "/" + SimpleAclAuthorizer.AclChangedPrefix, resource.toString)
   }
 
-  object AclChangedNotificaitonHandler extends NotificationHandler {
+  object AclChangedNotificationHandler extends NotificationHandler {
 
     override def processNotification(notificationMessage: String) {
       val resource: Resource = Resource.fromString(notificationMessage)
-      try {
-        val acls = getAclsFromZk(resource)
-        updateCache(resource, acls)
-      } catch {
-        case e: InterruptedException =>
-          // It is OK to have InterruptedException after authorizer is closed.
-          if (!isClosed.get)
-            throw e
-          authorizerLogger.debug(s"NotificationHandler is interrupted after authorizer is closed")
-          Set.empty
-        case e: Exception =>
-          throw e
-      }
+      val acls = getAclsFromZk(resource)
+      updateCache(resource, acls)
     }
   }
 
