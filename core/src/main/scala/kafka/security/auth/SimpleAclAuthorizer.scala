@@ -26,7 +26,7 @@ import kafka.network.RequestChannel.Session
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
+import org.I0Itec.zkclient.IZkStateListener
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import scala.collection.JavaConverters._
@@ -105,7 +105,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     loadCache()
 
     zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclChangedZkPath)
-    aclChangeListener = new ZkNodeChangeNotificationListener(zkUtils, SimpleAclAuthorizer.AclChangedZkPath, SimpleAclAuthorizer.AclChangedPrefix, AclChangedNotificaitonHandler)
+    aclChangeListener = new ZkNodeChangeNotificationListener(zkUtils, SimpleAclAuthorizer.AclChangedZkPath, SimpleAclAuthorizer.AclChangedPrefix, AclChangedNotificationHandler)
     aclChangeListener.init()
 
     zkUtils.zkClient.subscribeStateChanges(ZkStateChangeListener)
@@ -230,6 +230,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   def close() {
+    if (aclChangeListener != null) aclChangeListener.close()
     if (zkUtils != null) zkUtils.close()
   }
 
@@ -269,7 +270,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     zkUtils.createSequentialPersistentPath(SimpleAclAuthorizer.AclChangedZkPath + "/" + SimpleAclAuthorizer.AclChangedPrefix, resource.toString)
   }
 
-  object AclChangedNotificaitonHandler extends NotificationHandler {
+  object AclChangedNotificationHandler extends NotificationHandler {
 
     override def processNotification(notificationMessage: String) {
       val resource: Resource = Resource.fromString(notificationMessage)
