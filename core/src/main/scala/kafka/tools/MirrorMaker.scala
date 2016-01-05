@@ -54,7 +54,7 @@ import scala.util.control.ControlThrowable
  *       1. use new producer with following settings
  *            acks=all
  *            retries=max integer
- *            block.on.buffer.full=true
+ *            max.block.ms.config=max long
  *            max.in.flight.requests.per.connection=1
  *       2. Consumer Settings
  *            auto.commit.enable=false
