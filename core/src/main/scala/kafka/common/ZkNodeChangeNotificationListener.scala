@@ -37,7 +37,7 @@ trait NotificationHandler {
  * The caller/user of this class should ensure that they use zkClient.subscribeStateChanges and call processAllNotifications
  * method of this class from ZkStateChangeListener's handleNewSession() method. This is necessary to ensure that if zk session
  * is terminated and reestablished any missed notification will be processed immediately.
- * @param zkClient
+ * @param zkUtils
  * @param seqNodeRoot
  * @param seqNodePrefix
  * @param notificationHandler

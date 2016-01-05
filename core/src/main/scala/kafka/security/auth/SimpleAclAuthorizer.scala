@@ -17,6 +17,7 @@
 package kafka.security.auth
 
 import java.util
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import org.apache.zookeeper.Watcher.Event.KeeperState
@@ -73,6 +74,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private val aclCache = new scala.collection.mutable.HashMap[Resource, Set[Acl]]
   private val lock = new ReentrantReadWriteLock()
+  private val isClosed = new AtomicBoolean(false);
 
   /**
    * Guaranteed to be called before any authorize call is made.
@@ -231,6 +233,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   def close() {
     if (zkUtils != null) zkUtils.close()
+    isClosed.set(true)
   }
 
   private def loadCache()  {
@@ -273,8 +276,19 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     override def processNotification(notificationMessage: String) {
       val resource: Resource = Resource.fromString(notificationMessage)
-      val acls = getAclsFromZk(resource)
-      updateCache(resource, acls)
+      try {
+        val acls = getAclsFromZk(resource)
+        updateCache(resource, acls)
+      } catch {
+        case e: InterruptedException =>
+          // It is OK to have InterruptedException after authorizer is closed.
+          if (!isClosed.get)
+            throw e
+          authorizerLogger.debug(s"NotificationHandler is interrupted after authorizer is closed")
+          Set.empty
+        case e: Exception =>
+          throw e
+      }
     }
   }
 
