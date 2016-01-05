@@ -26,18 +26,13 @@ import java.nio.channels.SelectionKey;
 
 import java.security.Principal;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-
 public class KafkaChannel {
-    private static final Logger log = LoggerFactory.getLogger(KafkaChannel.class);
     private final String id;
-    private TransportLayer transportLayer;
-    private Authenticator authenticator;
+    private final TransportLayer transportLayer;
+    private final Authenticator authenticator;
+    private final int maxReceiveSize;
     private NetworkReceive receive;
     private Send send;
-    private int maxReceiveSize;
 
     public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize) throws IOException {
         this.id = id;
@@ -52,9 +47,7 @@ public class KafkaChannel {
     }
 
     /**
-     * returns user principal for the session
-     * In case of PLAINTEXT and No Authentication returns ANONYMOUS as the userPrincipal
-     * If SSL used without any SASL Authentication returns SSLSession.peerPrincipal
+     * Returns the principal returned by `authenticator.principal()`.
      */
     public Principal principal() throws IOException {
         return authenticator.principal();
@@ -157,8 +150,7 @@ public class KafkaChannel {
     }
 
     private long receive(NetworkReceive receive) throws IOException {
-        long result = receive.readFrom(transportLayer);
-        return result;
+        return receive.readFrom(transportLayer);
     }
 
     private boolean send(Send send) throws IOException {
