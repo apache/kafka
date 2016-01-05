@@ -13,6 +13,7 @@
 package org.apache.kafka.clients.producer.internals;
 
 import static java.util.Arrays.asList;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -27,10 +28,20 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.producer.internals.RecordAccumulator.ReadyCheckResult;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -42,6 +53,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.junit.After;
 import org.junit.Test;
 
@@ -439,5 +451,90 @@ public class RecordAccumulatorTest {
         accum.unmutePartition(tp1);
         drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertTrue("The batch should have been drained.", drained.get(node1.id()).size() > 0);
+    }
+
+    @Test
+    public void testUnusedPartitions() throws InterruptedException {
+        Time time = new MockTime();
+        long now = time.milliseconds();
+        int batchSize = 1024;
+        RecordAccumulator accum = new RecordAccumulator(batchSize, 10 * 1024, CompressionType.NONE, 10, 100L, metrics, time);
+
+        accum.append(tp1, 0L, key, new byte[batchSize], null, maxBlockTimeMs);
+        assertTrue("Topic partition not found", accum.getTopicPartitions().contains(tp1));
+        time.sleep(2000);
+        ReadyCheckResult result = accum.ready(cluster, now);
+        assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
+        now = time.milliseconds();
+        accum.drain(cluster, Collections.singleton(node1), Integer.MAX_VALUE, 0).get(node1.id());
+        accum.abortExpiredBatches(60, now);
+        assertTrue("Unused topic partition not removed", accum.getTopicPartitions().isEmpty());
+
+        accum.append(tp1, 0L, key, new byte[batchSize], null, maxBlockTimeMs);
+        assertTrue("Topic partition not found", accum.getTopicPartitions().contains(tp1));
+        time.sleep(2000);
+        result = accum.ready(cluster, now);
+        assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
+        now = time.milliseconds();
+        List<RecordBatch> expiredBatches = accum.abortExpiredBatches(60, now);
+        assertEquals(1, expiredBatches.size());
+        assertEquals(tp1, expiredBatches.get(0).topicPartition);
+        assertTrue("Unused topic partition not removed after batch expiry", accum.getTopicPartitions().isEmpty());
+    }
+
+    @Test
+    public void testConcurrentAppendAndExpiry() throws InterruptedException, ExecutionException, TimeoutException {
+        final Time time = new MockTime();
+        final int batchSize = 1024;
+        final long retryBackoffMs = 100L;
+        final RecordAccumulator accum = new RecordAccumulator(batchSize, 1000 * 1024, CompressionType.NONE, 10, retryBackoffMs, metrics, time);
+        final AtomicBoolean done = new AtomicBoolean(false);
+        final AtomicLong now = new AtomicLong(time.milliseconds());
+        ExecutorService executor = Executors.newFixedThreadPool(3);
+        Callable<Boolean> appender = new Callable<Boolean>() {
+            @Override
+            public Boolean call() throws Exception {
+                for (int i = 0; i < 1000; i++) {
+                    accum.append(tp1, 0L, key, new byte[batchSize], null, maxBlockTimeMs);
+                    ReadyCheckResult result = accum.ready(cluster, now.get());
+                    assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
+                    assertTrue("Topic partition not found", accum.getTopicPartitions().contains(tp1));
+                    List<RecordBatch> batches = accum.drain(cluster, Collections.singleton(node1), Integer.MAX_VALUE, now.get()).get(node1.id());
+                    assertFalse("Batch not found", batches.isEmpty());
+                    time.sleep(2000);
+                    now.set(time.milliseconds());
+                    accum.reenqueue(batches.get(0), now.get());
+                    time.sleep(retryBackoffMs);
+                    now.set(time.milliseconds());
+                    result = accum.ready(cluster, now.get());
+                    assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
+                    assertTrue("Topic partition not found", accum.getTopicPartitions().contains(tp1));
+                    time.sleep(2000);
+                    now.set(time.milliseconds());
+                }
+                return true;
+            }
+        };
+        Callable<Boolean> expirer = new Callable<Boolean>() {
+            @Override
+            public Boolean call() throws Exception {
+                while (!done.get()) {
+                    accum.abortExpiredBatches(1000, now.get());
+                }
+                time.sleep(60000);
+                accum.abortExpiredBatches(1000, time.milliseconds());
+                assertFalse("Unused topic partition not removed", accum.getTopicPartitions().contains(tp1));
+                return true;
+            }
+        };
+        try {
+            Future<Boolean> appenderFuture = executor.submit(appender);
+            Future<Boolean> expirerFuture = executor.submit(expirer);
+            assertTrue(appenderFuture.get(10, TimeUnit.SECONDS));
+            done.set(true);
+            assertTrue(expirerFuture.get(10, TimeUnit.SECONDS));
+        } finally {
+            executor.shutdownNow();
+        }
     }
 }
