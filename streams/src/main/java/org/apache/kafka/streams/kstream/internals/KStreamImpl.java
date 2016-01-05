@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.AggregatorSupplier;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KWindowedTable;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueToDoubleMapper;
 import org.apache.kafka.streams.kstream.KeyValueToIntMapper;
@@ -35,6 +34,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -265,35 +265,35 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <T, W extends Window> KWindowedTable<K, T, W> aggregateByKey(AggregatorSupplier<K, V, T> aggregatorSupplier, Windows<W> windows) {
+    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(AggregatorSupplier<K, V, T> aggregatorSupplier, Windows<W> windows) {
         // TODO
         return null;
     }
 
     @Override
-    public <W extends Window> KWindowedTable<K, Long, W> sumByKey(KeyValueToLongMapper<K, V> valueSelector, Windows<W> windows) {
+    public <W extends Window> KTable<Windowed<K>, Long> sumByKey(KeyValueToLongMapper<K, V> valueSelector, Windows<W> windows) {
         // TODO
         return null;
     }
 
-    public <W extends Window> KWindowedTable<K, Integer, W> sumByKey(KeyValueToIntMapper<K, V> valueSelector, Windows<W> windows) {
+    public <W extends Window> KTable<Windowed<K>, Integer> sumByKey(KeyValueToIntMapper<K, V> valueSelector, Windows<W> windows) {
         // TODO
         return null;
     }
 
-    public <W extends Window> KWindowedTable<K, Double, W> sumByKey(KeyValueToDoubleMapper<K, V> valueSelector, Windows<W> windows) {
-        // TODO
-        return null;
-    }
-
-    @Override
-    public <W extends Window> KWindowedTable<K, Long, W> countByKey(Windows<W> windows) {
+    public <W extends Window> KTable<Windowed<K>, Double> sumByKey(KeyValueToDoubleMapper<K, V> valueSelector, Windows<W> windows) {
         // TODO
         return null;
     }
 
     @Override
-    public <W extends Window, V1 extends Comparable<V1>> KWindowedTable<K, Collection<V1>, W> topKByKey(int k, KeyValueMapper<K, V, V1> valueSelector, Windows<W> windows) {
+    public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows) {
+        // TODO
+        return null;
+    }
+
+    @Override
+    public <W extends Window, V1 extends Comparable<V1>> KTable<Windowed<K>, Collection<V1>> topKByKey(int k, KeyValueMapper<K, V, V1> valueSelector, Windows<W> windows) {
         // TODO
         return null;
     }

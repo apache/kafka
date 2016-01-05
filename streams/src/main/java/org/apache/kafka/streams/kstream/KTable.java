@@ -108,6 +108,13 @@ public interface KTable<K, V> {
     KStream<K, V> toStream();
 
     /**
+     * Creates a new instance of KStream from this KTable
+     *
+     * @return the instance of KStream
+     */
+    <K1> KStream<K1, V> toStream(ValueMapper<K, K1> mapper);
+
+    /**
      * Combines values of this KTable with another KTable using Inner Join.
      *
      * @param other the instance of KTable joined with this stream

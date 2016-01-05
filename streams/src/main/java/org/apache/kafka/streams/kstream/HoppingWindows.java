@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.streams.kstream.internals.HoppingWindow;
+
 import java.util.Collection;
 import java.util.Collections;
 
@@ -64,9 +66,9 @@ public class HoppingWindows extends Windows<HoppingWindow> {
     }
 
     @Override
-    public Collection<Window> windowsFor(long timestamp) {
+    public Collection<HoppingWindow> windowsFor(long timestamp) {
         // TODO
-        return Collections.<Window>emptyList();
+        return Collections.<HoppingWindow>emptyList();
     }
 
     @Override

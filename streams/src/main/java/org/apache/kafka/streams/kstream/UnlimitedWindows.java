@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
+
 import java.util.Collection;
 import java.util.Collections;
 
@@ -46,9 +48,9 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
     }
 
     @Override
-    public Collection<Window> windowsFor(long timestamp) {
+    public Collection<UnlimitedWindow> windowsFor(long timestamp) {
         // TODO
-        return Collections.<Window>emptyList();
+        return Collections.<UnlimitedWindow>emptyList();
     }
 
     @Override

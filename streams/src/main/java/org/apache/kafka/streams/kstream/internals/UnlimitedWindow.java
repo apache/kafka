@@ -15,22 +15,23 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.Window;
 
-public class SlidingWindow extends Window {
+public class UnlimitedWindow extends Window {
 
-    public SlidingWindow(long start, long end) {
-        super(start, end);
+    public UnlimitedWindow(long start) {
+        super(start, Long.MAX_VALUE);
     }
 
     @Override
     public boolean overlap(Window other) {
-        return super.overlap(other) && other.getClass().equals(SlidingWindow.class);
+        return super.overlap(other) && other.getClass().equals(UnlimitedWindow.class);
     }
 
     @Override
     public boolean equalsTo(Window other) {
-        return super.equalsTo(other) && other.getClass().equals(SlidingWindow.class);
+        return super.equalsTo(other) && other.getClass().equals(UnlimitedWindow.class);
     }
 }

@@ -75,5 +75,5 @@ public abstract class Windows<W extends Window> {
 
     abstract boolean equalTo(Windows other);
 
-    abstract Collection<Window> windowsFor(long timestamp);
+    abstract Collection<W> windowsFor(long timestamp);
 }
