@@ -352,16 +352,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                         null);
 
         KStreamJoinWindow<K, V1> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name());
-        KStreamKStreamLeftJoin<K, R, V, V1> joinThis = new KStreamKStreamLeftJoin<>(otherWindow.name(), joiner);
+        KStreamKStreamJoin<K, R, V, V1> joinThis = new KStreamKStreamJoin<>(otherWindow.name(), joiner, true);
 
         String otherWindowStreamName = topology.newName(WINDOWED_NAME);
-        String name = topology.newName(LEFTJOIN_NAME);
+        String joinThisName = topology.newName(LEFTJOIN_NAME);
 
         topology.addProcessor(otherWindowStreamName, otherWindowedStream, ((KStreamImpl) other).name);
-        topology.addProcessor(name, joinThis, this.name);
-        topology.addStateStore(otherWindow, name, otherWindowStreamName);
+        topology.addProcessor(joinThisName, joinThis, this.name);
+        topology.addStateStore(otherWindow, joinThisName, otherWindowStreamName);
 
-        return new KStreamImpl<>(topology, name, allSourceNodes);
+        return new KStreamImpl<>(topology, joinThisName, allSourceNodes);
     }
 
     @SuppressWarnings("unchecked")
