@@ -74,7 +74,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
         # Roll cluster to disable PLAINTEXT port
         self.kafka.close_port('PLAINTEXT')
-        self.kafka.authorizer_class_name = "kafka.security.auth.SimpleAclAuthorizer"
+        self.kafka.authorizer_class_name = KafkaService.SIMPLE_AUTHORIZER
         self.acls.set_acls(client_protocol, self.kafka, self.zk, self.topic, self.group)
         self.acls.set_acls(broker_protocol, self.kafka, self.zk, self.topic, self.group)
         self.bounce()
