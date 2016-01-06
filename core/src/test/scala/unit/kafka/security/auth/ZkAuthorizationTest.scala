@@ -118,7 +118,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
   def testZkMigration() {
     val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false) 
     try {
-      testMigration(unsecureZkUtils, zkUtils)
+      testMigration(zkConnect, unsecureZkUtils, zkUtils)
     } finally {
       unsecureZkUtils.close()
     }
@@ -132,7 +132,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
   def testZkAntiMigration() {
     val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
     try {
-      testMigration(zkUtils, unsecureZkUtils)
+      testMigration(zkConnect, zkUtils, unsecureZkUtils)
     } finally {
       unsecureZkUtils.close()
     }
@@ -169,11 +169,12 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
    */
   @Test
   def testChroot {
+    val zkUrl = zkConnect + "/kafka"
     zkUtils.createPersistentPath("/kafka")
-    val unsecureZkUtils = ZkUtils(zkConnect + "/kafka", 6000, 6000, false)
-    val secureZkUtils = ZkUtils(zkConnect + "/kafka", 6000, 6000, true)
+    val unsecureZkUtils = ZkUtils(zkUrl, 6000, 6000, false)
+    val secureZkUtils = ZkUtils(zkUrl, 6000, 6000, true)
     try {
-      testMigration(unsecureZkUtils, secureZkUtils)
+      testMigration(zkUrl, unsecureZkUtils, secureZkUtils)
     } finally {
       unsecureZkUtils.close()
       secureZkUtils.close()
@@ -184,8 +185,8 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
    * Exercises the migration tool. It is used by two test cases:
    * testZkMigration and testZkAntiMigration.
    */
-  private def testMigration(firstZk: ZkUtils, secondZk: ZkUtils) {
-    info(s"zkConnect string: $zkConnect")
+  private def testMigration(zkUrl: String, firstZk: ZkUtils, secondZk: ZkUtils) {
+    info(s"zkConnect string: $zkUrl")
     for (path <- firstZk.securePersistentZkPaths) {
       info(s"Creating $path")
       firstZk.makeSurePersistentPathExists(path)
@@ -197,7 +198,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
       case true => "secure"
       case false => "unsecure"
     }
-    ZkSecurityMigrator.run(Array(s"--zookeeper.acl=$secureOpt", s"--zookeeper.connect=$zkConnect"))
+    ZkSecurityMigrator.run(Array(s"--zookeeper.acl=$secureOpt", s"--zookeeper.connect=$zkUrl"))
     info("Done with migration")
     for (path <- secondZk.securePersistentZkPaths) {
       val listParent = (secondZk.zkConnection.getAcl(path)).getKey
