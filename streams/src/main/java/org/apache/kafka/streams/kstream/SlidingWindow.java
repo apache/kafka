@@ -17,9 +17,20 @@
 
 package org.apache.kafka.streams.kstream;
 
-public interface WindowSupplier<K, V> {
 
-    String name();
+public class SlidingWindow extends Window {
 
-    Window<K, V> get();
+    public SlidingWindow(long start, long end) {
+        super(start, end);
+    }
+
+    @Override
+    public boolean overlap(Window other) {
+        return super.overlap(other) && other.getClass().equals(SlidingWindow.class);
+    }
+
+    @Override
+    public boolean equalsTo(Window other) {
+        return super.equalsTo(other) && other.getClass().equals(SlidingWindow.class);
+    }
 }

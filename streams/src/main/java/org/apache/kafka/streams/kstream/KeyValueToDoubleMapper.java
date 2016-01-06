@@ -17,35 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-public abstract class Window {
+public interface KeyValueToDoubleMapper<K, V> {
 
-    private long start;
-    private long end;
-
-    public Window(long start, long end) {
-        this.start = start;
-        this.end = end;
-    }
-
-    /**
-     * Returns the start timestamp of this window, inclusive
-     */
-    public long start() {
-        return start;
-    }
-
-    /**
-     * Returns the end timestamp of this window, exclusive
-     */
-    public long end() {
-        return end;
-    }
-
-    public boolean overlap(Window other) {
-        return this.start() < other.end() || other.start() < this.end();
-    }
-
-    public boolean equalsTo(Window other) {
-        return this.start() == other.start() && this.end() == other.end();
-    }
+    double apply(K key, V value);
 }

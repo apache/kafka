@@ -17,35 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-public abstract class Window {
+public interface AggregatorSupplier<K, V, T> {
 
-    private long start;
-    private long end;
-
-    public Window(long start, long end) {
-        this.start = start;
-        this.end = end;
-    }
-
-    /**
-     * Returns the start timestamp of this window, inclusive
-     */
-    public long start() {
-        return start;
-    }
-
-    /**
-     * Returns the end timestamp of this window, exclusive
-     */
-    public long end() {
-        return end;
-    }
-
-    public boolean overlap(Window other) {
-        return this.start() < other.end() || other.start() < this.end();
-    }
-
-    public boolean equalsTo(Window other) {
-        return this.start() == other.start() && this.end() == other.end();
-    }
+    Aggregator<K, V, T> get();
 }

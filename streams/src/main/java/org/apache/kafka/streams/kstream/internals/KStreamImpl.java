@@ -19,21 +19,28 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.AggregatorSupplier;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.KWindowedTable;
 import org.apache.kafka.streams.kstream.KeyValue;
+import org.apache.kafka.streams.kstream.KeyValueToDoubleMapper;
+import org.apache.kafka.streams.kstream.KeyValueToIntMapper;
+import org.apache.kafka.streams.kstream.KeyValueToLongMapper;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamWindowed;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.WindowSupplier;
+import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.lang.reflect.Array;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -59,7 +66,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     private static final String BRANCHCHILD_NAME = "KSTREAM-BRANCHCHILD-";
 
-    private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
+    private static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
 
     public static final String SINK_NAME = "KSTREAM-SINK-";
 
@@ -132,15 +139,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public KStreamWindowed<K, V> with(WindowSupplier<K, V> windowSupplier) {
-        String name = topology.newName(WINDOWED_NAME);
-
-        topology.addProcessor(name, new KStreamWindow<>(windowSupplier), this.name);
-
-        return new KStreamWindowedImpl<>(topology, name, sourceNodes, windowSupplier);
-    }
-
-    @Override
     @SuppressWarnings("unchecked")
     public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
         String branchName = topology.newName(BRANCH_NAME);
@@ -191,7 +189,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                  Deserializer<V> valDeserializer) {
         to(topic, keySerializer, valSerializer);
 
-        return topology.from(keyDeserializer, valDeserializer, topic);
+        return topology.stream(keyDeserializer, valDeserializer, topic);
     }
 
     @Override
@@ -251,4 +249,52 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return new KStreamImpl<>(topology, name, allSourceNodes);
     }
 
+    @Override
+    public <V1, V2, W extends Window> KStream<K, V2> join(KStream<K, V1> kstream, ValueJoiner<V, V1, V2> joiner, Windows<W> windows) {
+        // TODO
+        String name = topology.newName(JOINTHIS_NAME);
+
+        topology.addProcessor(name, new ProcessorSupplier() {
+            @Override
+            public Processor get() {
+                return null;
+            }
+        }, this.name);
+
+        return new KStreamImpl<>(topology, name, sourceNodes);
+    }
+
+    @Override
+    public <T, W extends Window> KWindowedTable<K, T, W> aggregateByKey(AggregatorSupplier<K, V, T> aggregatorSupplier, Windows<W> windows) {
+        // TODO
+        return null;
+    }
+
+    @Override
+    public <W extends Window> KWindowedTable<K, Long, W> sumByKey(KeyValueToLongMapper<K, V> valueSelector, Windows<W> windows) {
+        // TODO
+        return null;
+    }
+
+    public <W extends Window> KWindowedTable<K, Integer, W> sumByKey(KeyValueToIntMapper<K, V> valueSelector, Windows<W> windows) {
+        // TODO
+        return null;
+    }
+
+    public <W extends Window> KWindowedTable<K, Double, W> sumByKey(KeyValueToDoubleMapper<K, V> valueSelector, Windows<W> windows) {
+        // TODO
+        return null;
+    }
+
+    @Override
+    public <W extends Window> KWindowedTable<K, Long, W> countByKey(Windows<W> windows) {
+        // TODO
+        return null;
+    }
+
+    @Override
+    public <W extends Window, V1 extends Comparable<V1>> KWindowedTable<K, Collection<V1>, W> topKByKey(int k, KeyValueMapper<K, V, V1> valueSelector, Windows<W> windows) {
+        // TODO
+        return null;
+    }
 }

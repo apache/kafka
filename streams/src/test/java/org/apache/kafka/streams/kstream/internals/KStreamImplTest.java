@@ -25,7 +25,7 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.UnlimitedWindowDef;
+import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -40,9 +40,9 @@ public class KStreamImplTest {
         final Deserializer<String> deserializer = new StringDeserializer();
         final KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> source1 = builder.from(deserializer, deserializer, "topic-1", "topic-2");
+        KStream<String, String> source1 = builder.stream(deserializer, deserializer, "topic-1", "topic-2");
 
-        KStream<String, String> source2 = builder.from(deserializer, deserializer, "topic-3", "topic-4");
+        KStream<String, String> source2 = builder.stream(deserializer, deserializer, "topic-3", "topic-4");
 
         KStream<String, String> stream1 =
             source1.filter(new Predicate<String, String>() {
@@ -101,21 +101,19 @@ public class KStreamImplTest {
             }
         );
 
-        KStream<String, Integer> stream4 = streams2[0].with(new UnlimitedWindowDef<String, Integer>("window"))
-            .join(streams3[0].with(new UnlimitedWindowDef<String, Integer>("window")), new ValueJoiner<Integer, Integer, Integer>() {
-                @Override
-                public Integer apply(Integer value1, Integer value2) {
-                    return value1 + value2;
-                }
-            });
+        KStream<String, Integer> stream4 = streams2[0].join(streams3[0], new ValueJoiner<Integer, Integer, Integer>() {
+            @Override
+            public Integer apply(Integer value1, Integer value2) {
+                return value1 + value2;
+            }
+        }, UnlimitedWindows.on(0));
 
-        KStream<String, Integer> stream5 = streams2[1].with(new UnlimitedWindowDef<String, Integer>("window"))
-            .join(streams3[1].with(new UnlimitedWindowDef<String, Integer>("window")), new ValueJoiner<Integer, Integer, Integer>() {
-                @Override
-                public Integer apply(Integer value1, Integer value2) {
-                    return value1 + value2;
-                }
-            });
+        KStream<String, Integer> stream5 = streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
+            @Override
+            public Integer apply(Integer value1, Integer value2) {
+                return value1 + value2;
+            }
+        }, UnlimitedWindows.on(0));
 
         stream4.to("topic-5");
 
