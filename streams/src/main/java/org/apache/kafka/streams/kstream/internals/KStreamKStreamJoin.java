@@ -18,66 +18,55 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Iterator;
 
-class KStreamJoin<K, V, V1, V2> implements ProcessorSupplier<K, V1> {
+class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
-    private static abstract class Finder<K, T> {
-        abstract Iterator<T> find(K key, long timestamp);
-    }
+    private final String otherWindowName;
+    private final ValueJoiner<V1, V2, R> joiner;
+    private final boolean outer;
 
-    private final String windowName;
-    private final ValueJoiner<V1, V2, V> joiner;
-
-    KStreamJoin(String windowName, ValueJoiner<V1, V2, V> joiner) {
-        this.windowName = windowName;
+    KStreamKStreamJoin(String otherWindowName, ValueJoiner<V1, V2, R> joiner, boolean outer) {
+        this.otherWindowName = otherWindowName;
         this.joiner = joiner;
+        this.outer = outer;
     }
 
     @Override
     public Processor<K, V1> get() {
-        return new KStreamJoinProcessor(windowName);
+        return new KStreamKStreamJoinProcessor();
     }
 
-    private class KStreamJoinProcessor extends AbstractProcessor<K, V1> {
+    private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {
 
-        private final String windowName;
-        protected Finder<K, V2> finder;
-
-        public KStreamJoinProcessor(String windowName) {
-            this.windowName = windowName;
-        }
+        private WindowStore<K, V2> otherWindow;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
 
-            final Window<K, V2> window = (Window<K, V2>) context.getStateStore(windowName);
-
-            this.finder = new Finder<K, V2>() {
-                @Override
-                Iterator<V2> find(K key, long timestamp) {
-                    return window.find(key, timestamp);
-                }
-            };
+            otherWindow = (WindowStore<K, V2>) context.getStateStore(otherWindowName);
         }
 
         @Override
         public void process(K key, V1 value) {
-            long timestamp = context().timestamp();
-            Iterator<V2> iter = finder.find(key, timestamp);
-            if (iter != null) {
-                while (iter.hasNext()) {
-                    context().forward(key, joiner.apply(value, iter.next()));
-                }
+            boolean needOuterJoin = KStreamKStreamJoin.this.outer;
+
+            Iterator<V2> iter = otherWindow.fetch(key, context().timestamp());
+            while (iter.hasNext()) {
+                needOuterJoin = false;
+                context().forward(key, joiner.apply(value, iter.next()));
             }
+
+            if (needOuterJoin)
+                context().forward(key, joiner.apply(value, null));
         }
     }
 
