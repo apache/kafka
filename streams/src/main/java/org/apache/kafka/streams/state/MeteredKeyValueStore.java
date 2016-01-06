@@ -30,6 +30,7 @@ import java.util.List;
 public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     protected final KeyValueStore<K, V> inner;
+    protected final StoreChangeLogger.ValueGetter getter;
     protected final Serdes<K, V> serialization;
     protected final String metricScope;
     protected final Time time;
@@ -45,11 +46,16 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private StreamingMetrics metrics;
 
     private boolean loggingEnabled = true;
-    private KeyValueStoreChangeLogger<K, V> changeLogger = null;
+    private StoreChangeLogger<K, V> changeLogger = null;
 
     // always wrap the store with the metered store
     public MeteredKeyValueStore(final KeyValueStore<K, V> inner, Serdes<K, V> serialization, String metricScope, Time time) {
         this.inner = inner;
+        this.getter = new StoreChangeLogger.ValueGetter<K, V>() {
+            public V get(K key) {
+                return inner.get(key);
+            }
+        };
         this.serialization = serialization;
         this.metricScope = metricScope;
         this.time = time != null ? time : new SystemTime();
@@ -79,7 +85,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore");
 
         serialization.init(context);
-        this.changeLogger = this.loggingEnabled ? new KeyValueStoreChangeLogger<>(name, context, serialization) : null;
+        this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(name, context, serialization) : null;
 
         // register and possibly restore the state from the logs
         long startNs = time.nanoseconds();
@@ -123,7 +129,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
             if (loggingEnabled) {
                 changeLogger.add(key);
-                changeLogger.maybeLogChange(this.inner);
+                changeLogger.maybeLogChange(this.getter);
             }
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
@@ -141,7 +147,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
                     K key = entry.key();
                     changeLogger.add(key);
                 }
-                changeLogger.maybeLogChange(this.inner);
+                changeLogger.maybeLogChange(this.getter);
             }
         } finally {
             this.metrics.recordLatency(this.putAllTime, startNs, time.nanoseconds());
@@ -171,7 +177,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     protected void removed(K key) {
         if (loggingEnabled) {
             changeLogger.delete(key);
-            changeLogger.maybeLogChange(this.inner);
+            changeLogger.maybeLogChange(this.getter);
         }
     }
 
@@ -197,7 +203,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             this.inner.flush();
 
             if (loggingEnabled)
-                changeLogger.logChange(this.inner);
+                changeLogger.logChange(this.getter);
         } finally {
             this.metrics.recordLatency(this.flushTime, startNs, time.nanoseconds());
         }

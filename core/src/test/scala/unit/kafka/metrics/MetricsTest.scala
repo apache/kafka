@@ -58,6 +58,9 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     // force creation not client's specific metrics.
     createAndShutdownStep("group0", "consumer0", "producer0")
 
+    //this assertion is only used for creating the metrics for DelayedFetchMetrics, it should never fail, but should not be removed
+    assertNotNull(DelayedFetchMetrics)
+
     val countOfStaticMetrics = Metrics.defaultRegistry().allMetrics().keySet().size
 
     for (i <- 0 to 5) {

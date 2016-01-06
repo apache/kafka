@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.util
 import java.util.Properties
 
 import kafka.api.ApiVersion
@@ -32,9 +31,9 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, SslConfigs}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.security.auth.PrincipalBuilder
 
-import scala.collection.{Map, immutable}
+import scala.collection.{Map, immutable, JavaConverters}
+import JavaConverters._
 
 object Defaults {
   /** ********* Zookeeper Configuration ***********/
@@ -414,7 +413,7 @@ object KafkaConfig {
   val LogPreAllocateEnableDoc = "Should pre allocate file when create new segment? If you are using Kafka on Windows, you probably need to set it to true."
   val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server"
-  val MinInSyncReplicasDoc = "define the minimum number of replicas in ISR needed to satisfy a produce request with required.acks=-1 (or all)"
+  val MinInSyncReplicasDoc = "define the minimum number of replicas in ISR needed to satisfy a produce request with acks=all (or -1)"
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsDoc = "The socket timeout for controller-to-broker channels"
   val ControllerMessageQueueSizeDoc = "The buffer size for controller-to-broker-channels"
@@ -437,7 +436,8 @@ object KafkaConfig {
   val LeaderImbalancePerBrokerPercentageDoc = "The ratio of leader imbalance allowed per broker. The controller would trigger a leader balance if it goes above this value per broker. The value is specified in percentage."
   val LeaderImbalanceCheckIntervalSecondsDoc = "The frequency with which the partition rebalance check is triggered by the controller"
   val UncleanLeaderElectionEnableDoc = "Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss"
-  val InterBrokerSecurityProtocolDoc = "Security protocol used to communicate between brokers. Defaults to plain text."
+  val InterBrokerSecurityProtocolDoc = "Security protocol used to communicate between brokers. Valid values are: " +
+    s"${SecurityProtocol.nonTestingValues.asScala.toSeq.map(_.name).mkString(", ")}."
   val InterBrokerProtocolVersionDoc = "Specify which version of the inter-broker protocol will be used.\n" +
   " This is typically bumped after all brokers were upgraded to a new version.\n" +
   " Example of some valid values are: 0.8.0, 0.8.1, 0.8.1.1, 0.8.2, 0.8.2.0, 0.8.2.1, 0.9.0.0, 0.9.0.1 Check ApiVersion for the full list."
@@ -687,19 +687,27 @@ object KafkaConfig {
       require(names.contains(name), "Unknown configuration \"%s\".".format(name))
   }
 
-  def fromProps(props: Properties): KafkaConfig = {
-    KafkaConfig(props)
-  }
+  def fromProps(props: Properties): KafkaConfig =
+    fromProps(props, true)
 
-  def fromProps(defaults: Properties, overrides: Properties): KafkaConfig = {
+  def fromProps(props: Properties, doLog: Boolean): KafkaConfig =
+    new KafkaConfig(props, doLog)
+
+  def fromProps(defaults: Properties, overrides: Properties): KafkaConfig =
+    fromProps(defaults, overrides, true)
+
+  def fromProps(defaults: Properties, overrides: Properties, doLog: Boolean): KafkaConfig = {
     val props = new Properties()
     props.putAll(defaults)
     props.putAll(overrides)
-    fromProps(props)
+    fromProps(props, doLog)
   }
+
+  def apply(props: java.util.Map[_, _]): KafkaConfig = new KafkaConfig(props, true)
+
 }
 
-case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(KafkaConfig.configDef, props) {
+class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends AbstractConfig(KafkaConfig.configDef, props, doLog) {
 
   /** ********* Zookeeper Configuration ***********/
   val zkConnect: String = getString(KafkaConfig.ZkConnectProp)
@@ -914,29 +922,6 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
     } else {
       getListeners()
     }
-  }
-
-  private def getMetricClasses(metricClasses: java.util.List[String]): java.util.List[MetricsReporter] = {
-
-    val reporterList = new util.ArrayList[MetricsReporter]()
-    val iterator = metricClasses.iterator()
-
-    while (iterator.hasNext) {
-      val reporterName = iterator.next()
-      if (!reporterName.isEmpty) {
-        val reporter: MetricsReporter = CoreUtils.createObject[MetricsReporter](reporterName)
-        reporter.configure(originals)
-        reporterList.add(reporter)
-      }
-    }
-
-    reporterList
-
-  }
-
-
-  private def getPrincipalBuilderClass(principalBuilderClass: String): PrincipalBuilder = {
-    CoreUtils.createObject[PrincipalBuilder](principalBuilderClass)
   }
 
   validateValues()

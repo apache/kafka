@@ -18,7 +18,7 @@
 package org.apache.kafka.common.cache;
 
 /**
- * Interface for caches, semi-peristent maps which store key-value mappings until either an eviction criteria is met
+ * Interface for caches, semi-persistent maps which store key-value mappings until either an eviction criteria is met
  * or the entries are manually invalidated. Caches are not required to be thread-safe, but some implementations may be.
  */
 public interface Cache<K, V> {

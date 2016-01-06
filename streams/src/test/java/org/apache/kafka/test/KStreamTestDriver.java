@@ -53,8 +53,8 @@ public class KStreamTestDriver {
                              Serializer<?> keySerializer, Deserializer<?> keyDeserializer,
                              Serializer<?> valSerializer, Deserializer<?> valDeserializer) {
         this.topology = builder.build(null);
-        this.context = new MockProcessorContext(this, keySerializer, keyDeserializer, valSerializer, valDeserializer, new MockRecordCollector());
         this.stateDir = stateDir;
+        this.context = new MockProcessorContext(this, stateDir, keySerializer, keyDeserializer, valSerializer, valDeserializer, new MockRecordCollector());
 
         for (StateStoreSupplier stateStoreSupplier : topology.stateStoreSuppliers()) {
             StateStore store = stateStoreSupplier.get();

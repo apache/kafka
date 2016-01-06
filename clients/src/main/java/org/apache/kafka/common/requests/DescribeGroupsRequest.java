@@ -62,7 +62,7 @@ public class DescribeGroupsRequest extends AbstractRequest {
     }
 
     public static DescribeGroupsRequest parse(ByteBuffer buffer) {
-        return new DescribeGroupsRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new DescribeGroupsRequest(CURRENT_SCHEMA.read(buffer));
     }
 
 }

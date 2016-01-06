@@ -12,15 +12,15 @@
  */
 package org.apache.kafka.common.security.ssl;
 
-import javax.net.ssl.*;
-
 import java.io.File;
 import java.util.Map;
 
+import javax.net.ssl.SSLEngine;
+
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.common.network.Mode;
-
 import org.junit.Test;
+
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertArrayEquals;

@@ -16,80 +16,34 @@
 from ducktape.mark import matrix
 from ducktape.utils.util import wait_until
 
-from kafkatest.tests.kafka_test import KafkaTest
-from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
-from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.verifiable_consumer import VerifiableConsumer
+from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
 from kafkatest.services.kafka import TopicPartition
 
 import signal
 
-def partitions_for(topic, num_partitions):
-    partitions = set()
-    for i in range(num_partitions):
-        partitions.add(TopicPartition(topic=topic, partition=i))
-    return partitions
-
-class VerifiableConsumerTest(KafkaTest):
-    STOPIC = "simple_topic"
+class OffsetValidationTest(VerifiableConsumerTest):
     TOPIC = "test_topic"
-    NUM_PARTITIONS = 3
-    PARTITIONS = partitions_for(TOPIC, NUM_PARTITIONS)
-    GROUP_ID = "test_group_id"
+    NUM_PARTITIONS = 1
 
     def __init__(self, test_context):
-        super(VerifiableConsumerTest, self).__init__(test_context, num_zk=1, num_brokers=2, topics={
-            self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 1 },
-            self.STOPIC : { 'partitions': 1, 'replication-factor': 2 }
+        super(OffsetValidationTest, self).__init__(test_context, num_consumers=3, num_producers=1,
+                                                     num_zk=1, num_brokers=2, topics={
+            self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 2 }
         })
-        self.num_producers = 1
-        self.num_consumers = 2
-        self.session_timeout = 10000
-
-    def min_cluster_size(self):
-        """Override this since we're adding services outside of the constructor"""
-        return super(VerifiableConsumerTest, self).min_cluster_size() + self.num_consumers + self.num_producers
-
-    def _partitions(self, assignment):
-        partitions = []
-        for parts in assignment.itervalues():
-            partitions += parts
-        return partitions
-
-    def _valid_assignment(self, assignment):
-        partitions = self._partitions(assignment)
-        return len(partitions) == self.NUM_PARTITIONS and set(partitions) == self.PARTITIONS
-
-    def _setup_consumer(self, topic, enable_autocommit=False):
-        return VerifiableConsumer(self.test_context, self.num_consumers, self.kafka,
-                                  topic, self.GROUP_ID, session_timeout=self.session_timeout,
-                                  enable_autocommit=enable_autocommit)
-
-    def _setup_producer(self, topic, max_messages=-1):
-        return VerifiableProducer(self.test_context, self.num_producers, self.kafka, topic,
-                                  max_messages=max_messages, throughput=500)
-
-    def _await_all_members(self, consumer):
-        # Wait until all members have joined the group
-        wait_until(lambda: len(consumer.joined_nodes()) == self.num_consumers, timeout_sec=self.session_timeout+5,
-                   err_msg="Consumers failed to join in a reasonable amount of time")
 
     def rolling_bounce_consumers(self, consumer, num_bounces=5, clean_shutdown=True):
         for _ in range(num_bounces):
             for node in consumer.nodes:
                 consumer.stop_node(node, clean_shutdown)
 
-                wait_until(lambda: len(consumer.dead_nodes()) == (self.num_consumers - 1), timeout_sec=self.session_timeout,
-                           err_msg="Timed out waiting for the consumers to shutdown")
+                wait_until(lambda: len(consumer.dead_nodes()) == 1,
+                           timeout_sec=self.session_timeout_sec+5,
+                           err_msg="Timed out waiting for the consumer to shutdown")
 
-                total_consumed = consumer.total_consumed()
-            
                 consumer.start_node(node)
 
-                wait_until(lambda: len(consumer.joined_nodes()) == self.num_consumers and consumer.total_consumed() > total_consumed,
-                           timeout_sec=self.session_timeout,
-                           err_msg="Timed out waiting for the consumers to shutdown")
+                self.await_all_members(consumer)
+                self.await_consumed_messages(consumer)
 
     def bounce_all_consumers(self, consumer, num_bounces=5, clean_shutdown=True):
         for _ in range(num_bounces):
@@ -98,35 +52,19 @@ class VerifiableConsumerTest(KafkaTest):
 
             wait_until(lambda: len(consumer.dead_nodes()) == self.num_consumers, timeout_sec=10,
                        err_msg="Timed out waiting for the consumers to shutdown")
-
-            total_consumed = consumer.total_consumed()
             
             for node in consumer.nodes:
                 consumer.start_node(node)
 
-            wait_until(lambda: len(consumer.joined_nodes()) == self.num_consumers and consumer.total_consumed() > total_consumed,
-                       timeout_sec=self.session_timeout*2,
-                       err_msg="Timed out waiting for the consumers to shutdown")
+            self.await_all_members(consumer)
+            self.await_consumed_messages(consumer)
 
     def rolling_bounce_brokers(self, consumer, num_bounces=5, clean_shutdown=True):
         for _ in range(num_bounces):
             for node in self.kafka.nodes:
-                total_consumed = consumer.total_consumed()
-
                 self.kafka.restart_node(node, clean_shutdown=True)
-
-                wait_until(lambda: len(consumer.joined_nodes()) == self.num_consumers and consumer.total_consumed() > total_consumed,
-                           timeout_sec=30,
-                           err_msg="Timed out waiting for the broker to shutdown")
-
-    def bounce_all_brokers(self, consumer, num_bounces=5, clean_shutdown=True):
-        for _ in range(num_bounces):
-            for node in self.kafka.nodes:
-                self.kafka.stop_node(node)
-
-            for node in self.kafka.nodes:
-                self.kafka.start_node(node)
-            
+                self.await_all_members(consumer)
+                self.await_consumed_messages(consumer)
 
     def test_broker_rolling_bounce(self):
         """
@@ -142,17 +80,16 @@ class VerifiableConsumerTest(KafkaTest):
         - Verify delivery semantics according to the failure type and that the broker bounces
           did not cause unexpected group rebalances.
         """
-        partition = TopicPartition(self.STOPIC, 0)
+        partition = TopicPartition(self.TOPIC, 0)
         
-        producer = self._setup_producer(self.STOPIC)
-        consumer = self._setup_consumer(self.STOPIC)
+        producer = self.setup_producer(self.TOPIC)
+        consumer = self.setup_consumer(self.TOPIC)
 
         producer.start()
-        wait_until(lambda: producer.num_acked > 1000, timeout_sec=10,
-                   err_msg="Producer failed waiting for messages to be written")
+        self.await_produced_messages(producer)
 
         consumer.start()
-        self._await_all_members(consumer)
+        self.await_all_members(consumer)
 
         num_rebalances = consumer.num_rebalances()
         # TODO: make this test work with hard shutdowns, which probably requires
@@ -182,17 +119,16 @@ class VerifiableConsumerTest(KafkaTest):
           restarting the rest.
         - Verify delivery semantics according to the failure type.
         """
-        partition = TopicPartition(self.STOPIC, 0)
+        partition = TopicPartition(self.TOPIC, 0)
         
-        producer = self._setup_producer(self.STOPIC)
-        consumer = self._setup_consumer(self.STOPIC)
+        producer = self.setup_producer(self.TOPIC)
+        consumer = self.setup_consumer(self.TOPIC)
 
         producer.start()
-        wait_until(lambda: producer.num_acked > 1000, timeout_sec=10,
-                   err_msg="Producer failed waiting for messages to be written")
+        self.await_produced_messages(producer)
 
         consumer.start()
-        self._await_all_members(consumer)
+        self.await_all_members(consumer)
 
         if bounce_mode == "all":
             self.bounce_all_consumers(consumer, clean_shutdown=clean_shutdown)
@@ -212,31 +148,28 @@ class VerifiableConsumerTest(KafkaTest):
 
     @matrix(clean_shutdown=[True, False], enable_autocommit=[True, False])
     def test_consumer_failure(self, clean_shutdown, enable_autocommit):
-        partition = TopicPartition(self.STOPIC, 0)
+        partition = TopicPartition(self.TOPIC, 0)
         
-        consumer = self._setup_consumer(self.STOPIC, enable_autocommit=enable_autocommit)
-        producer = self._setup_producer(self.STOPIC)
+        consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit)
+        producer = self.setup_producer(self.TOPIC)
 
         consumer.start()
-        self._await_all_members(consumer)
+        self.await_all_members(consumer)
 
         partition_owner = consumer.owner(partition)
         assert partition_owner is not None
 
         # startup the producer and ensure that some records have been written
         producer.start()
-        wait_until(lambda: producer.num_acked > 1000, timeout_sec=10,
-                   err_msg="Producer failed waiting for messages to be written")
+        self.await_produced_messages(producer)
 
         # stop the partition owner and await its shutdown
         consumer.kill_node(partition_owner, clean_shutdown=clean_shutdown)
         wait_until(lambda: len(consumer.joined_nodes()) == (self.num_consumers - 1) and consumer.owner(partition) != None,
-                   timeout_sec=self.session_timeout+5, err_msg="Timed out waiting for consumer to close")
+                   timeout_sec=self.session_timeout_sec+5, err_msg="Timed out waiting for consumer to close")
 
         # ensure that the remaining consumer does some work after rebalancing
-        current_total_consumed = consumer.total_consumed()
-        wait_until(lambda: consumer.total_consumed() > current_total_consumed + 1000, timeout_sec=10,
-                   err_msg="Timed out waiting for additional records to be consumed after first consumer failed")
+        self.await_consumed_messages(consumer, min_messages=1000)
 
         consumer.stop_all()
 
@@ -258,14 +191,14 @@ class VerifiableConsumerTest(KafkaTest):
 
     @matrix(clean_shutdown=[True, False], enable_autocommit=[True, False])
     def test_broker_failure(self, clean_shutdown, enable_autocommit):
-        partition = TopicPartition(self.STOPIC, 0)
+        partition = TopicPartition(self.TOPIC, 0)
         
-        consumer = self._setup_consumer(self.STOPIC, enable_autocommit=enable_autocommit)
-        producer = self._setup_producer(self.STOPIC)
+        consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit)
+        producer = self.setup_producer(self.TOPIC)
 
         producer.start()
         consumer.start()
-        self._await_all_members(consumer)
+        self.await_all_members(consumer)
 
         num_rebalances = consumer.num_rebalances()
 
@@ -274,9 +207,7 @@ class VerifiableConsumerTest(KafkaTest):
         self.kafka.signal_node(self.kafka.nodes[0], signal.SIGTERM if clean_shutdown else signal.SIGKILL)
 
         # ensure that the consumers do some work after the broker failure
-        current_total_consumed = consumer.total_consumed()
-        wait_until(lambda: consumer.total_consumed() > current_total_consumed + 1000, timeout_sec=20,
-                   err_msg="Timed out waiting for additional records to be consumed after first consumer failed")
+        self.await_consumed_messages(consumer, min_messages=1000)
 
         # verify that there were no rebalances on failover
         assert num_rebalances == consumer.num_rebalances(), "Broker failure should not cause a rebalance"
@@ -292,28 +223,69 @@ class VerifiableConsumerTest(KafkaTest):
             assert consumer.last_commit(partition) == consumer.current_position(partition), \
                 "Last committed offset did not match last consumed position"
 
-    def test_simple_consume(self):
-        total_records = 1000
+    def test_group_consumption(self):
+        """
+        Verifies correct group rebalance behavior as consumers are started and stopped. 
+        In particular, this test verifies that the partition is readable after every
+        expected rebalance.
 
-        consumer = self._setup_consumer(self.STOPIC)
-        producer = self._setup_producer(self.STOPIC, max_messages=total_records)
+        Setup: single Kafka cluster with a group of consumers reading from one topic
+        with one partition while the verifiable producer writes to it.
 
-        partition = TopicPartition(self.STOPIC, 0)
+        - Start the consumers one by one, verifying consumption after each rebalance
+        - Shutdown the consumers one by one, verifying consumption after each rebalance
+        """
+        consumer = self.setup_consumer(self.TOPIC)
+        producer = self.setup_producer(self.TOPIC)
 
-        consumer.start()
-        self._await_all_members(consumer)
+        partition = TopicPartition(self.TOPIC, 0)
 
         producer.start()
-        wait_until(lambda: producer.num_acked == total_records, timeout_sec=20,
-                   err_msg="Producer failed waiting for messages to be written")
 
-        wait_until(lambda: consumer.last_commit(partition) == total_records, timeout_sec=10,
-                   err_msg="Consumer failed to read all expected messages")
+        for num_started, node in enumerate(consumer.nodes, 1):
+            consumer.start_node(node)
+            self.await_members(consumer, num_started)
+            self.await_consumed_messages(consumer)
 
-        assert consumer.current_position(partition) == total_records
+        for num_stopped, node in enumerate(consumer.nodes, 1):
+            consumer.stop_node(node)
 
-    def test_valid_assignment(self):
-        consumer = self._setup_consumer(self.TOPIC)
-        consumer.start()
-        self._await_all_members(consumer)
-        assert self._valid_assignment(consumer.current_assignment())
+            if num_stopped < self.num_consumers:
+                self.await_members(consumer, self.num_consumers - num_stopped)
+                self.await_consumed_messages(consumer)
+
+        assert consumer.current_position(partition) == consumer.total_consumed(), \
+            "Total consumed records did not match consumed position"
+
+        assert consumer.last_commit(partition) == consumer.current_position(partition), \
+            "Last committed offset did not match last consumed position"
+
+
+class AssignmentValidationTest(VerifiableConsumerTest):
+    TOPIC = "test_topic"
+    NUM_PARTITIONS = 6
+
+    def __init__(self, test_context):
+        super(AssignmentValidationTest, self).__init__(test_context, num_consumers=3, num_producers=0,
+                                                num_zk=1, num_brokers=2, topics={
+            self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 1 },
+        })
+
+    @matrix(assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
+                                 "org.apache.kafka.clients.consumer.RoundRobinAssignor"])
+    def test_valid_assignment(self, assignment_strategy):
+        """
+        Verify assignment strategy correctness: each partition is assigned to exactly
+        one consumer instance.
+
+        Setup: single Kafka cluster with a set of consumers in the same group.
+
+        - Start the consumers one by one
+        - Validate assignment after every expected rebalance
+        """
+        consumer = self.setup_consumer(self.TOPIC, assignment_strategy=assignment_strategy)
+        for num_started, node in enumerate(consumer.nodes, 1):
+            consumer.start_node(node)
+            self.await_members(consumer, num_started)
+            assert self.valid_assignment(self.TOPIC, self.NUM_PARTITIONS, consumer.current_assignment())
+            

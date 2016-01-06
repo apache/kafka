@@ -20,7 +20,7 @@ import kafka.common._
 import kafka.utils._
 import kafka.utils.CoreUtils.{inReadLock,inWriteLock}
 import kafka.admin.AdminUtils
-import kafka.api.{PartitionStateInfo, LeaderAndIsr}
+import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
 import kafka.server._
 import kafka.metrics.KafkaMetricsGroup
@@ -29,7 +29,9 @@ import kafka.message.ByteBufferMessageSet
 
 import java.io.IOException
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import scala.collection.immutable.Set
+import org.apache.kafka.common.requests.LeaderAndIsrRequest
+
+import scala.collection.JavaConverters._
 
 import com.yammer.metrics.core.Gauge
 
@@ -161,22 +163,20 @@ class Partition(val topic: String,
    * from the time when this broker was the leader last time) and setting the new leader and ISR.
    * If the leader replica id does not change, return false to indicate the replica manager.
    */
-  def makeLeader(controllerId: Int, partitionStateInfo: PartitionStateInfo, correlationId: Int): Boolean = {
+  def makeLeader(controllerId: Int, partitionStateInfo: LeaderAndIsrRequest.PartitionState, correlationId: Int): Boolean = {
     val (leaderHWIncremented, isNewLeader) = inWriteLock(leaderIsrUpdateLock) {
-      val allReplicas = partitionStateInfo.allReplicas
-      val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
-      val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
+      val allReplicas = partitionStateInfo.replicas.asScala.map(_.toInt)
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
-      controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
+      controllerEpoch = partitionStateInfo.controllerEpoch
       // add replicas that are new
       allReplicas.foreach(replica => getOrCreateReplica(replica))
-      val newInSyncReplicas = leaderAndIsr.isr.map(r => getOrCreateReplica(r)).toSet
+      val newInSyncReplicas = partitionStateInfo.isr.asScala.map(r => getOrCreateReplica(r)).toSet
       // remove assigned replicas that have been removed by the controller
       (assignedReplicas().map(_.brokerId) -- allReplicas).foreach(removeReplica(_))
       inSyncReplicas = newInSyncReplicas
-      leaderEpoch = leaderAndIsr.leaderEpoch
-      zkVersion = leaderAndIsr.zkVersion
+      leaderEpoch = partitionStateInfo.leaderEpoch
+      zkVersion = partitionStateInfo.zkVersion
       val isNewLeader =
         if (leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == localBrokerId) {
           false
@@ -204,22 +204,20 @@ class Partition(val topic: String,
    *  Make the local replica the follower by setting the new leader and ISR to empty
    *  If the leader replica id does not change, return false to indicate the replica manager
    */
-  def makeFollower(controllerId: Int, partitionStateInfo: PartitionStateInfo, correlationId: Int): Boolean = {
+  def makeFollower(controllerId: Int, partitionStateInfo: LeaderAndIsrRequest.PartitionState, correlationId: Int): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
-      val allReplicas = partitionStateInfo.allReplicas
-      val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
-      val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-      val newLeaderBrokerId: Int = leaderAndIsr.leader
+      val allReplicas = partitionStateInfo.replicas.asScala.map(_.toInt)
+      val newLeaderBrokerId: Int = partitionStateInfo.leader
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
-      controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
+      controllerEpoch = partitionStateInfo.controllerEpoch
       // add replicas that are new
       allReplicas.foreach(r => getOrCreateReplica(r))
       // remove assigned replicas that have been removed by the controller
       (assignedReplicas().map(_.brokerId) -- allReplicas).foreach(removeReplica(_))
       inSyncReplicas = Set.empty[Replica]
-      leaderEpoch = leaderAndIsr.leaderEpoch
-      zkVersion = leaderAndIsr.zkVersion
+      leaderEpoch = partitionStateInfo.leaderEpoch
+      zkVersion = partitionStateInfo.zkVersion
 
       if (leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == newLeaderBrokerId) {
         false

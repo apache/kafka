@@ -16,9 +16,12 @@
  */
 package kafka.common
 
+import java.util.concurrent.atomic.AtomicBoolean
+
 import kafka.utils.{Time, SystemTime, ZkUtils, Logging}
-import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
+import org.I0Itec.zkclient.exception.ZkInterruptedException
+import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener}
 import scala.collection.JavaConverters._
 
 /**
@@ -52,6 +55,7 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
                                        private val changeExpirationMs: Long = 15 * 60 * 1000,
                                        private val time: Time = SystemTime) extends Logging {
   private var lastExecutedChange = -1L
+  private val isClosed = new AtomicBoolean(false)
 
   /**
    * create seqNodeRoot and begin watching for any new children nodes.
@@ -61,6 +65,10 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
     zkUtils.zkClient.subscribeChildChanges(seqNodeRoot, NodeChangeListener)
     zkUtils.zkClient.subscribeStateChanges(ZkStateChangeListener)
     processAllNotifications()
+  }
+
+  def close() = {
+    isClosed.set(true)
   }
 
   /**
@@ -77,17 +85,23 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
   private def processNotifications(notifications: Seq[String]) {
     if (notifications.nonEmpty) {
       info(s"Processing notification(s) to $seqNodeRoot")
-      val now = time.milliseconds
-      for (notification <- notifications) {
-        val changeId = changeNumber(notification)
-        if (changeId > lastExecutedChange) {
-          val changeZnode = seqNodeRoot + "/" + notification
-          val (data, stat) = zkUtils.readDataMaybeNull(changeZnode)
-          data map (notificationHandler.processNotification(_)) getOrElse(logger.warn(s"read null data from $changeZnode when processing notification $notification"))
+      try {
+        val now = time.milliseconds
+        for (notification <- notifications) {
+          val changeId = changeNumber(notification)
+          if (changeId > lastExecutedChange) {
+            val changeZnode = seqNodeRoot + "/" + notification
+            val (data, stat) = zkUtils.readDataMaybeNull(changeZnode)
+            data map (notificationHandler.processNotification(_)) getOrElse (logger.warn(s"read null data from $changeZnode when processing notification $notification"))
+          }
+          lastExecutedChange = changeId
         }
-        lastExecutedChange = changeId
+        purgeObsoleteNotifications(now, notifications)
+      } catch {
+        case e: ZkInterruptedException =>
+          if (!isClosed.get)
+            throw e
       }
-      purgeObsoleteNotifications(now, notifications)
     }
   }
 

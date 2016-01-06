@@ -50,6 +50,6 @@ public class LeaveGroupResponse extends AbstractRequestResponse {
     }
 
     public static LeaveGroupResponse parse(ByteBuffer buffer) {
-        return new LeaveGroupResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new LeaveGroupResponse(CURRENT_SCHEMA.read(buffer));
     }
 }

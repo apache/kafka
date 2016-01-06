@@ -27,13 +27,15 @@ class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2>
     private final KTableImpl<K1, ?, V1> parent;
     private final ValueMapper<V1, V2> mapper;
 
+    private boolean sendOldValues = false;
+
     public KTableMapValues(KTableImpl<K1, ?, V1> parent, ValueMapper<V1, V2> mapper) {
         this.parent = parent;
         this.mapper = mapper;
     }
 
     @Override
-    public Processor<K1, V1> get() {
+    public Processor<K1, Change<V1>> get() {
         return new KTableMapProcessor();
     }
 
@@ -50,7 +52,13 @@ class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2>
         };
     }
 
-    private V2 computeNewValue(V1 value) {
+    @Override
+    public void enableSendingOldValues() {
+        parent.enableSendingOldValues();
+        sendOldValues = true;
+    }
+
+    private V2 computeValue(V1 value) {
         V2 newValue = null;
 
         if (value != null)
@@ -59,11 +67,14 @@ class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2>
         return newValue;
     }
 
-    private class KTableMapProcessor extends AbstractProcessor<K1, V1> {
+    private class KTableMapProcessor extends AbstractProcessor<K1, Change<V1>> {
 
         @Override
-        public void process(K1 key, V1 value) {
-            context().forward(key, computeNewValue(value));
+        public void process(K1 key, Change<V1> change) {
+            V2 newValue = computeValue(change.newValue);
+            V2 oldValue = sendOldValues ? computeValue(change.oldValue) : null;
+
+            context().forward(key, new Change(newValue, oldValue));
         }
 
     }
@@ -83,7 +94,7 @@ class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2>
 
         @Override
         public V2 get(K1 key) {
-            return computeNewValue(parentGetter.get(key));
+            return computeValue(parentGetter.get(key));
         }
 
     }

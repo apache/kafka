@@ -63,7 +63,7 @@ object CoreUtils extends Logging {
   /**
    * Create a daemon thread
    * @param name The name of the thread
-   * @param fun The runction to execute in the thread
+   * @param fun The function to execute in the thread
    * @return The unstarted thread
    */
   def daemonThread(name: String, fun: => Unit): Thread =
@@ -162,7 +162,7 @@ object CoreUtils extends Logging {
   def crc32(bytes: Array[Byte]): Long = crc32(bytes, 0, bytes.length)
 
   /**
-   * Compute the CRC32 of the segment of the byte array given by the specificed size and offset
+   * Compute the CRC32 of the segment of the byte array given by the specified size and offset
    * @param bytes The bytes to checksum
    * @param offset the offset at which to begin checksumming
    * @param size the number of bytes to checksum

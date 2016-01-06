@@ -20,8 +20,7 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.connect.connector.ConnectorContext;
 
 /**
- * ConnectorContext for use with the StandaloneHerder, which maintains all connectors and tasks
- * in a single process.
+ * ConnectorContext for use with a Herder
  */
 public class HerderConnectorContext implements ConnectorContext {
 
@@ -35,8 +34,8 @@ public class HerderConnectorContext implements ConnectorContext {
 
     @Override
     public void requestTaskReconfiguration() {
-        // This is trivial to forward since there is only one herder and it's in memory in this
-        // process
+        // Local herder runs in memory in this process
+        // Distributed herder will forward the request to the leader if needed
         herder.requestTaskReconfiguration(connectorName);
     }
 }
