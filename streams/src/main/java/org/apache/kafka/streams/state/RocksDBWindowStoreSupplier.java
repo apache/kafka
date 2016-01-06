@@ -39,7 +39,7 @@ public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
     private final Serdes serdes;
     private final Time time;
 
-    protected RocksDBWindowStoreSupplier(String name, long windowBefore, long windowAfter, long retentionPeriod, int numSegments, Serdes<K, V> serdes, Time time) {
+    public RocksDBWindowStoreSupplier(String name, long windowBefore, long windowAfter, long retentionPeriod, int numSegments, Serdes<K, V> serdes, Time time) {
         this.name = name;
         this.windowBefore = windowBefore;
         this.windowAfter = windowAfter;

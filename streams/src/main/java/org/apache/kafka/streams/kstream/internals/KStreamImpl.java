@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.JoinWindowSpec;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValue;
@@ -26,12 +27,12 @@ import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamWindowed;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.WindowSupplier;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.state.RocksDBWindowStoreSupplier;
+import org.apache.kafka.streams.state.Serdes;
 
 import java.lang.reflect.Array;
 import java.util.HashSet;
@@ -66,6 +67,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public static final String JOINTHIS_NAME = "KSTREAM-JOINTHIS-";
 
     public static final String JOINOTHER_NAME = "KSTREAM-JOINOTHER-";
+
+    public static final String OUTERTHIS_NAME = "KSTREAM-OUTERTHIS-";
+
+    public static final String OUTEROTHER_NAME = "KSTREAM-OUTEROTHER-";
 
     public static final String LEFTJOIN_NAME = "KSTREAM-LEFTJOIN-";
 
@@ -129,15 +134,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         topology.addProcessor(name, new KStreamFlatMapValues<>(mapper), this.name);
 
         return new KStreamImpl<>(topology, name, sourceNodes);
-    }
-
-    @Override
-    public KStreamWindowed<K, V> with(WindowSupplier<K, V> windowSupplier) {
-        String name = topology.newName(WINDOWED_NAME);
-
-        topology.addProcessor(name, new KStreamWindow<>(windowSupplier), this.name);
-
-        return new KStreamWindowedImpl<>(topology, name, sourceNodes, windowSupplier);
     }
 
     @Override
@@ -237,6 +233,135 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, processorSupplier, this.name);
         topology.connectProcessorAndStateStores(name, stateStoreNames);
+    }
+
+    @Override
+    public <V1, R> KStream<K, R> join(
+            KStream<K, V1> other,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindowSpec joinWindowSpec,
+            Serializer<K> keySerialzier,
+            Serializer<V> thisValueSerialzier,
+            Serializer<V1> otherValueSerialzier,
+            Deserializer<K> keyDeserialier,
+            Deserializer<V> thisValueDeserialzier,
+            Deserializer<V1> otherValueDeserialzier) {
+
+        return join(other, joiner, joinWindowSpec,
+                keySerialzier, thisValueSerialzier, otherValueSerialzier,
+                keyDeserialier, thisValueDeserialzier, otherValueDeserialzier, false);
+    }
+
+    @Override
+    public <V1, R> KStream<K, R> outerJoin(
+            KStream<K, V1> other,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindowSpec joinWindowSpec,
+            Serializer<K> keySerialzier,
+            Serializer<V> thisValueSerialzier,
+            Serializer<V1> otherValueSerialzier,
+            Deserializer<K> keyDeserialier,
+            Deserializer<V> thisValueDeserialzier,
+            Deserializer<V1> otherValueDeserialzier) {
+
+        return join(other, joiner, joinWindowSpec,
+                keySerialzier, thisValueSerialzier, otherValueSerialzier,
+                keyDeserialier, thisValueDeserialzier, otherValueDeserialzier, true);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <V1, R> KStream<K, R> join(
+            KStream<K, V1> other,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindowSpec joinWindowSpec,
+            Serializer<K> keySerialzier,
+            Serializer<V> thisValueSerialzier,
+            Serializer<V1> otherValueSerialzier,
+            Deserializer<K> keyDeserialier,
+            Deserializer<V> thisValueDeserialzier,
+            Deserializer<V1> otherValueDeserialzier,
+            boolean outer) {
+
+        Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
+
+        RocksDBWindowStoreSupplier<K, V> thisWindow =
+                new RocksDBWindowStoreSupplier<>(
+                        joinWindowSpec.name + "-1",
+                        joinWindowSpec.before,
+                        joinWindowSpec.after,
+                        joinWindowSpec.retention,
+                        joinWindowSpec.segments,
+                        new Serdes<>("", keySerialzier, keyDeserialier, thisValueSerialzier, thisValueDeserialzier),
+                        null);
+
+        RocksDBWindowStoreSupplier<K, V1> otherWindow =
+                new RocksDBWindowStoreSupplier<>(
+                        joinWindowSpec.name + "-2",
+                        joinWindowSpec.after,
+                        joinWindowSpec.before,
+                        joinWindowSpec.retention,
+                        joinWindowSpec.segments,
+                        new Serdes<>("", keySerialzier, keyDeserialier, otherValueSerialzier, otherValueDeserialzier),
+                        null);
+
+        KStreamJoinWindow<K, V> thisWindowedStream = new KStreamJoinWindow<>(thisWindow.name());
+        KStreamJoinWindow<K, V1> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name());
+
+        KStreamKStreamJoin<K, R, V, V1> joinThis = new KStreamKStreamJoin<>(otherWindow.name(), joiner, outer);
+        KStreamKStreamJoin<K, R, V1, V> joinOther = new KStreamKStreamJoin<>(thisWindow.name(), reverseJoiner(joiner), outer);
+        KStreamPassThrough<K, R> joinMerge = new KStreamPassThrough<>();
+
+        String thisWindowStreamName = topology.newName(WINDOWED_NAME);
+        String otherWindowStreamName = topology.newName(WINDOWED_NAME);
+        String joinThisName = outer ? topology.newName(OUTERTHIS_NAME) : topology.newName(JOINTHIS_NAME);
+        String joinOtherName = outer ? topology.newName(OUTEROTHER_NAME) : topology.newName(JOINOTHER_NAME);
+        String joinMergeName = topology.newName(MERGE_NAME);
+
+        topology.addProcessor(thisWindowStreamName, thisWindowedStream, this.name);
+        topology.addProcessor(otherWindowStreamName, otherWindowedStream, ((KStreamImpl) other).name);
+        topology.addProcessor(joinThisName, joinThis, thisWindowStreamName);
+        topology.addProcessor(joinOtherName, joinOther, otherWindowStreamName);
+        topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
+        topology.addStateStore(thisWindow, thisWindowStreamName, otherWindowStreamName);
+        topology.addStateStore(otherWindow, thisWindowStreamName, otherWindowStreamName);
+
+        return new KStreamImpl<>(topology, joinMergeName, allSourceNodes);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <V1, R> KStream<K, R> leftJoin(
+            KStream<K, V1> other,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindowSpec joinWindowSpec,
+            Serializer<K> keySerialzier,
+            Serializer<V1> otherValueSerialzier,
+            Deserializer<K> keyDeserialier,
+            Deserializer<V1> otherValueDeserialzier) {
+
+        Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
+
+        RocksDBWindowStoreSupplier<K, V1> otherWindow =
+                new RocksDBWindowStoreSupplier<>(
+                        joinWindowSpec.name,
+                        joinWindowSpec.after,
+                        joinWindowSpec.before,
+                        joinWindowSpec.retention,
+                        joinWindowSpec.segments,
+                        new Serdes<>("", keySerialzier, keyDeserialier, otherValueSerialzier, otherValueDeserialzier),
+                        null);
+
+        KStreamJoinWindow<K, V1> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name());
+        KStreamKStreamJoin<K, R, V, V1> joinThis = new KStreamKStreamJoin<>(otherWindow.name(), joiner, true);
+
+        String otherWindowStreamName = topology.newName(WINDOWED_NAME);
+        String joinThisName = topology.newName(LEFTJOIN_NAME);
+
+        topology.addProcessor(otherWindowStreamName, otherWindowedStream, ((KStreamImpl) other).name);
+        topology.addProcessor(joinThisName, joinThis, this.name);
+        topology.addStateStore(otherWindow, joinThisName, otherWindowStreamName);
+
+        return new KStreamImpl<>(topology, joinThisName, allSourceNodes);
     }
 
     @SuppressWarnings("unchecked")

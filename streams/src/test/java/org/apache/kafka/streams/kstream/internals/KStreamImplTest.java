@@ -22,10 +22,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.UnlimitedWindowDef;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -72,54 +70,38 @@ public class KStreamImplTest {
         });
 
         KStream<String, Integer>[] streams2 = stream2.branch(
-            new Predicate<String, Integer>() {
-                @Override
-                public boolean test(String key, Integer value) {
-                    return (value % 2) == 0;
+                new Predicate<String, Integer>() {
+                    @Override
+                    public boolean test(String key, Integer value) {
+                        return (value % 2) == 0;
+                    }
+                },
+                new Predicate<String, Integer>() {
+                    @Override
+                    public boolean test(String key, Integer value) {
+                        return true;
+                    }
                 }
-            },
-            new Predicate<String, Integer>() {
-                @Override
-                public boolean test(String key, Integer value) {
-                    return true;
-                }
-            }
         );
 
         KStream<String, Integer>[] streams3 = stream3.branch(
-            new Predicate<String, Integer>() {
-                @Override
-                public boolean test(String key, Integer value) {
-                    return (value % 2) == 0;
+                new Predicate<String, Integer>() {
+                    @Override
+                    public boolean test(String key, Integer value) {
+                        return (value % 2) == 0;
+                    }
+                },
+                new Predicate<String, Integer>() {
+                    @Override
+                    public boolean test(String key, Integer value) {
+                        return true;
+                    }
                 }
-            },
-            new Predicate<String, Integer>() {
-                @Override
-                public boolean test(String key, Integer value) {
-                    return true;
-                }
-            }
         );
 
-        KStream<String, Integer> stream4 = streams2[0].with(new UnlimitedWindowDef<String, Integer>("window"))
-            .join(streams3[0].with(new UnlimitedWindowDef<String, Integer>("window")), new ValueJoiner<Integer, Integer, Integer>() {
-                @Override
-                public Integer apply(Integer value1, Integer value2) {
-                    return value1 + value2;
-                }
-            });
+        streams2[0].to("topic-5");
 
-        KStream<String, Integer> stream5 = streams2[1].with(new UnlimitedWindowDef<String, Integer>("window"))
-            .join(streams3[1].with(new UnlimitedWindowDef<String, Integer>("window")), new ValueJoiner<Integer, Integer, Integer>() {
-                @Override
-                public Integer apply(Integer value1, Integer value2) {
-                    return value1 + value2;
-                }
-            });
-
-        stream4.to("topic-5");
-
-        stream5.through("topic-6").process(new MockProcessorSupplier<String, Integer>());
+        streams2[1].through("topic-6").process(new MockProcessorSupplier<String, Integer>());
 
         assertEquals(2 + // sources
             2 + // stream1
@@ -127,8 +109,6 @@ public class KStreamImplTest {
             1 + // stream3
             1 + 2 + // streams2
             1 + 2 + // streams3
-            2 + 3 + // stream4
-            2 + 3 + // stream5
             1 + // to
             2 + // through
             1, // process
