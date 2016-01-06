@@ -150,20 +150,6 @@ subprojects {
     from sourceSets.main.allSource
   }
 
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from '../LICENSE'
-    from '../NOTICE'
-    from sourceSets.test.output
-  }
-
-  task testSrcJar(type: Jar, dependsOn: testJar) {
-    classifier = 'test-sources'
-    from '../LICENSE'
-    from '../NOTICE'
-    from sourceSets.test.allSource
-  }
-
   task javadocJar(type: Jar, dependsOn: javadoc) {
     classifier 'javadoc'
     from '../LICENSE'
@@ -177,9 +163,28 @@ subprojects {
 
   artifacts {
     archives srcJar
-    archives testJar
-    archives testSrcJar
     archives javadocJar
+  }
+
+  if(!sourceSets.test.allSource.isEmpty()) {
+    task testJar(type: Jar) {
+      classifier = 'test'
+      from '../LICENSE'
+      from '../NOTICE'
+      from sourceSets.test.output
+    }
+
+    task testSrcJar(type: Jar, dependsOn: testJar) {
+      classifier = 'test-sources'
+      from '../LICENSE'
+      from '../NOTICE'
+      from sourceSets.test.allSource
+    }
+
+    artifacts {
+      archives testJar
+      archives testSrcJar
+    }
   }
 
   plugins.withType(ScalaPlugin) {
@@ -407,10 +412,6 @@ project(':examples') {
 
   dependencies {
     compile project(':core')
-  }
-
-  testJar {
-    enabled = false
   }
 
   checkstyle {
