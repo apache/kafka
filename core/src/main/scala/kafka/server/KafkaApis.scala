@@ -36,7 +36,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse,
 DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse,
-LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse}
+LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse,
+StopReplicaRequest, StopReplicaResponse}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Node}
 
@@ -90,9 +91,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     } catch {
       case e: Throwable =>
-        if ( request.requestObj != null)
+        if (request.requestObj != null) {
           request.requestObj.handleError(e, requestChannel, request)
-        else {
+          error("Error when handling request %s".format(request.requestObj), e)
+        } else {
           val response = request.body.getErrorResponse(request.header.apiVersion, e)
           val respHeader = new ResponseHeader(request.header.correlationId)
 
@@ -102,8 +104,10 @@ class KafkaApis(val requestChannel: RequestChannel,
             requestChannel.closeConnection(request.processor, request)
           else
             requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, respHeader, response)))
+
+          error("Error when handling request %s".format(request.body), e)
         }
-        error("error when handling request %s".format(request.requestObj), e)
+
     } finally
       request.apiLocalCompleteTimeMs = SystemTime.milliseconds
   }
@@ -152,13 +156,19 @@ class KafkaApis(val requestChannel: RequestChannel,
     // ensureTopicExists is only for client facing requests
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
-    val stopReplicaRequest = request.requestObj.asInstanceOf[StopReplicaRequest]
+    val stopReplicaRequest = request.body.asInstanceOf[StopReplicaRequest]
 
-    authorizeClusterAction(request)
+    val responseHeader = new ResponseHeader(request.header.correlationId)
+    val response =
+      if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+        val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
+        new StopReplicaResponse(error, result.asInstanceOf[Map[TopicPartition, JShort]].asJava)
+      } else {
+        val result = stopReplicaRequest.partitions.asScala.map((_, new JShort(Errors.CLUSTER_AUTHORIZATION_FAILED.code))).toMap
+        new StopReplicaResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.code, result.asJava)
+      }
 
-    val (response, error) = replicaManager.stopReplicas(stopReplicaRequest)
-    val stopReplicaResponse = new StopReplicaResponse(stopReplicaRequest.correlationId, response.toMap, error)
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, stopReplicaResponse)))
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, response)))
     replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads()
   }
 
@@ -218,10 +228,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val mergedCommitStatus = commitStatus ++ unauthorizedRequestInfo.mapValues(_ => ErrorMapping.TopicAuthorizationCode)
 
       mergedCommitStatus.foreach { case (topicAndPartition, errorCode) =>
-        // we only print warnings for known errors here; only replica manager could see an unknown
-        // exception while trying to write the offset message to the local log, and it will log
-        // an error message and write the error code in this case; hence it can be ignored here
-        if (errorCode != ErrorMapping.NoError && errorCode != ErrorMapping.UnknownCode) {
+        if (errorCode != ErrorMapping.NoError) {
           debug("Offset commit request with correlation id %d from client %s on partition %s failed due to %s"
             .format(offsetCommitRequest.correlationId, offsetCommitRequest.clientId,
               topicAndPartition, ErrorMapping.exceptionNameFor(errorCode)))
@@ -315,19 +322,19 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) {
-      var errorInResponse = false
+
       val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ => ProducerResponseStatus(ErrorMapping.TopicAuthorizationCode, -1))
 
+      var errorInResponse = false
+
       mergedResponseStatus.foreach { case (topicAndPartition, status) =>
-        // we only print warnings for known errors here; if it is unknown, it will cause
-        // an error message in the replica manager
-        if (status.error != ErrorMapping.NoError && status.error != ErrorMapping.UnknownCode) {
+        if (status.error != ErrorMapping.NoError) {
+          errorInResponse = true
           debug("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
             produceRequest.correlationId,
             produceRequest.clientId,
             topicAndPartition,
             ErrorMapping.exceptionNameFor(status.error)))
-          errorInResponse = true
         }
       }
 
@@ -338,10 +345,14 @@ class KafkaApis(val requestChannel: RequestChannel,
           // the request, since no response is expected by the producer, the server will close socket server so that
           // the producer client will know that some error has happened and will refresh its metadata
           if (errorInResponse) {
+            val exceptionsSummary = mergedResponseStatus.map { case (topicAndPartition, status) =>
+              topicAndPartition -> ErrorMapping.exceptionNameFor(status.error)
+            }.mkString(", ")
             info(
-              "Close connection due to error handling produce request with correlation id %d from client id %s with ack=0".format(
-                produceRequest.correlationId,
-                produceRequest.clientId))
+              s"Closing connection due to error during produce request with correlation id ${produceRequest.correlationId} " +
+                s"from client id ${produceRequest.clientId} with ack=0\n" +
+                s"Topic and partition to exceptions: $exceptionsSummary"
+            )
             requestChannel.closeConnection(request.processor, request)
           } else {
             requestChannel.noOperation(request.processor, request)
@@ -368,8 +379,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (authorizedRequestInfo.isEmpty)
       sendResponseCallback(Map.empty)
     else {
-      // only allow appending to internal topic partitions
-      // if the client is not from admin
       val internalTopicsAllowed = produceRequest.clientId == AdminUtils.AdminClientId
 
       // call the replica manager to append messages to the replicas
@@ -404,9 +413,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val mergedResponseStatus = responsePartitionData ++ unauthorizedResponseStatus
 
       mergedResponseStatus.foreach { case (topicAndPartition, data) =>
-        // we only print warnings for known errors here; if it is unknown, it will cause
-        // an error message in the replica manager already and hence can be ignored here
-        if (data.error != ErrorMapping.NoError && data.error != ErrorMapping.UnknownCode) {
+        if (data.error != ErrorMapping.NoError) {
           debug("Fetch request with correlation id %d from client %s on partition %s failed due to %s"
             .format(fetchRequest.correlationId, fetchRequest.clientId,
             topicAndPartition, ErrorMapping.exceptionNameFor(data.error)))
@@ -929,5 +936,4 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (!authorize(request.session, ClusterAction, Resource.ClusterResource))
       throw new ClusterAuthorizationException(s"Request $request is not authorized.")
   }
-
 }
