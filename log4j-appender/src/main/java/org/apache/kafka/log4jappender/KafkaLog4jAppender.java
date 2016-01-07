@@ -24,6 +24,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.log4j.AppenderSkeleton;
 import org.apache.log4j.helpers.LogLog;
@@ -51,6 +52,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private static final String SSL_KEYSTORE_TYPE = SslConfigs.SSL_KEYSTORE_TYPE_CONFIG;
     private static final String SSL_KEYSTORE_LOCATION = SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
     private static final String SSL_KEYSTORE_PASSWORD = SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG;
+    private static final String SASL_KERBEROS_SERVICE_NAME = SaslConfigs.SASL_KERBEROS_SERVICE_NAME;
 
     private String brokerList = null;
     private String topic = null;
@@ -61,6 +63,8 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private String sslKeystoreType = null;
     private String sslKeystoreLocation = null;
     private String sslKeystorePassword = null;
+    private String saslKerberosServiceName = null;
+    private String clientJaasConfPath = null;
 
     private int retries = 0;
     private int requiredNumAcks = Integer.MAX_VALUE;
@@ -155,6 +159,14 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         this.sslKeystoreLocation = sslKeystoreLocation;
     }
 
+    public void setSaslKerberosServiceName(String saslKerberosServiceName) {
+        this.saslKerberosServiceName = saslKerberosServiceName;
+    }
+
+    public void setClientJaasConfPath(String clientJaasConfPath) {
+        this.clientJaasConfPath = clientJaasConfPath;
+    }
+
     public String getSslKeystoreLocation() {
         return sslKeystoreLocation;
     }
@@ -165,6 +177,14 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
 
     public String getSslKeystorePassword() {
         return sslKeystorePassword;
+    }
+
+    public String getSaslKerberosServiceName() {
+        return saslKerberosServiceName;
+    }
+
+    public String getClientJaasConfPath() {
+        return clientJaasConfPath;
     }
 
     @Override
@@ -195,6 +215,13 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
                 props.put(SSL_KEYSTORE_LOCATION, sslKeystoreLocation);
                 props.put(SSL_KEYSTORE_PASSWORD, sslKeystorePassword);
             }
+        }
+        if (securityProtocol != null && saslKerberosServiceName != null && clientJaasConfPath != null) {
+            if (securityProtocol == null) {
+                props.put(SECURITY_PROTOCOL, securityProtocol);
+            }
+            props.put(SASL_KERBEROS_SERVICE_NAME, saslKerberosServiceName);
+            System.setProperty("java.security.auth.login.config", clientJaasConfPath);
         }
 
         props.put(KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
