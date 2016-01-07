@@ -17,7 +17,9 @@
 
 package org.apache.kafka.streams.examples;
 
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.kstream.HoppingWindows;
@@ -47,6 +49,9 @@ public class KTableJob {
         props.put(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class);
         StreamingConfig config = new StreamingConfig(props);
 
+        Serializer<String> stringSerializer = new StringSerializer();
+        Deserializer<String> stringDeserializer = new StringDeserializer();
+
         KStreamBuilder builder = new KStreamBuilder();
 
         // stream aggregate
@@ -58,7 +63,7 @@ public class KTableJob {
             public long apply(String key, Long value) {
                 return value;
             }
-        }, HoppingWindows.of("window1").with(500L).every(500L).emit(1000L).until(1000L * 60 * 60 * 24 /* one day */));
+        }, HoppingWindows.of("window1").with(500L).every(500L).emit(1000L).until(1000L * 60 * 60 * 24 /* one day */), stringSerializer, stringDeserializer);
 
         // table aggregation
         KTable<String, String> table1 = builder.table("topic2");
@@ -73,7 +78,7 @@ public class KTableJob {
             public long apply(String key, String value) {
                 return Long.parseLong(value);
             }
-        }, "table2");
+        }, stringSerializer, stringDeserializer, "table2");
 
         // stream-table join
         KStream<String, Long> stream2 = stream1.leftJoin(table2, new ValueJoiner<Long, Long, Long>() {

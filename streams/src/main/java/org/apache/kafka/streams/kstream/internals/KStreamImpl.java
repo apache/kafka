@@ -387,35 +387,57 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(AggregatorSupplier<K, V, T> aggregatorSupplier, Windows<W> windows) {
+    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(AggregatorSupplier<K, V, T> aggregatorSupplier,
+                                                                       Windows<W> windows,
+                                                                       Serializer<K> keySerializer,
+                                                                       Serializer<T> aggValueSerializer,
+                                                                       Deserializer<K> keyDeserializer,
+                                                                       Deserializer<T> aggValueDeserializer) {
         // TODO
         return null;
     }
 
     @Override
-    public <W extends Window> KTable<Windowed<K>, Long> sumByKey(KeyValueToLongMapper<K, V> valueSelector, Windows<W> windows) {
+    public <W extends Window> KTable<Windowed<K>, Long> sumByKey(KeyValueToLongMapper<K, V> valueSelector,
+                                                                 Windows<W> windows,
+                                                                 Serializer<K> keySerializer,
+                                                                 Deserializer<K> keyDeserializer) {
         // TODO
         return null;
     }
 
-    public <W extends Window> KTable<Windowed<K>, Integer> sumByKey(KeyValueToIntMapper<K, V> valueSelector, Windows<W> windows) {
+    public <W extends Window> KTable<Windowed<K>, Integer> sumByKey(KeyValueToIntMapper<K, V> valueSelector,
+                                                                    Windows<W> windows,
+                                                                    Serializer<K> keySerializer,
+                                                                    Deserializer<K> keyDeserializer) {
         // TODO
         return null;
     }
 
-    public <W extends Window> KTable<Windowed<K>, Double> sumByKey(KeyValueToDoubleMapper<K, V> valueSelector, Windows<W> windows) {
+    public <W extends Window> KTable<Windowed<K>, Double> sumByKey(KeyValueToDoubleMapper<K, V> valueSelector,
+                                                                   Windows<W> windows,
+                                                                   Serializer<K> keySerializer,
+                                                                   Deserializer<K> keyDeserializer) {
         // TODO
         return null;
     }
 
     @Override
-    public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows) {
+    public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
+                                                                   Serializer<K> keySerializer,
+                                                                   Deserializer<K> keyDeserializer) {
         // TODO
         return null;
     }
 
     @Override
-    public <W extends Window, V1 extends Comparable<V1>> KTable<Windowed<K>, Collection<V1>> topKByKey(int k, KeyValueMapper<K, V, V1> valueSelector, Windows<W> windows) {
+    public <W extends Window, V1 extends Comparable<V1>> KTable<Windowed<K>, Collection<V1>> topKByKey(int k,
+                                                                                                       KeyValueMapper<K, V, V1> valueSelector,
+                                                                                                       Windows<W> windows,
+                                                                                                       Serializer<K> keySerializer,
+                                                                                                       Serializer<V1> aggValueSerializer,
+                                                                                                       Deserializer<K> keyDeserializer,
+                                                                                                       Deserializer<V1> aggValueDeserializer) {
         // TODO
         return null;
     }
