@@ -36,7 +36,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse,
 DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse,
-LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse}
+LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse,
+StopReplicaRequest, StopReplicaResponse}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Node}
 
@@ -90,9 +91,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     } catch {
       case e: Throwable =>
-        if ( request.requestObj != null)
+        if (request.requestObj != null) {
           request.requestObj.handleError(e, requestChannel, request)
-        else {
+          error("Error when handling request %s".format(request.requestObj), e)
+        } else {
           val response = request.body.getErrorResponse(request.header.apiVersion, e)
           val respHeader = new ResponseHeader(request.header.correlationId)
 
@@ -102,8 +104,10 @@ class KafkaApis(val requestChannel: RequestChannel,
             requestChannel.closeConnection(request.processor, request)
           else
             requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, respHeader, response)))
+
+          error("Error when handling request %s".format(request.body), e)
         }
-        error("error when handling request %s".format(request.requestObj), e)
+
     } finally
       request.apiLocalCompleteTimeMs = SystemTime.milliseconds
   }
@@ -152,13 +156,19 @@ class KafkaApis(val requestChannel: RequestChannel,
     // ensureTopicExists is only for client facing requests
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
-    val stopReplicaRequest = request.requestObj.asInstanceOf[StopReplicaRequest]
+    val stopReplicaRequest = request.body.asInstanceOf[StopReplicaRequest]
 
-    authorizeClusterAction(request)
+    val responseHeader = new ResponseHeader(request.header.correlationId)
+    val response =
+      if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+        val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
+        new StopReplicaResponse(error, result.asInstanceOf[Map[TopicPartition, JShort]].asJava)
+      } else {
+        val result = stopReplicaRequest.partitions.asScala.map((_, new JShort(Errors.CLUSTER_AUTHORIZATION_FAILED.code))).toMap
+        new StopReplicaResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.code, result.asJava)
+      }
 
-    val (response, error) = replicaManager.stopReplicas(stopReplicaRequest)
-    val stopReplicaResponse = new StopReplicaResponse(stopReplicaRequest.correlationId, response.toMap, error)
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, stopReplicaResponse)))
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, response)))
     replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads()
   }
 
@@ -926,5 +936,4 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (!authorize(request.session, ClusterAction, Resource.ClusterResource))
       throw new ClusterAuthorizationException(s"Request $request is not authorized.")
   }
-
 }

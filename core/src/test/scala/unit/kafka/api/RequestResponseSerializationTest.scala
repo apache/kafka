@@ -116,17 +116,6 @@ object SerializationTestUtils {
     TopicAndPartition(topic1,3) -> partitionStateInfo3
   )
 
-  def createTestStopReplicaRequest() : StopReplicaRequest = {
-    new StopReplicaRequest(controllerId = 0, controllerEpoch = 1, correlationId = 0, deletePartitions = true,
-                           partitions = collection.immutable.Set(TopicAndPartition(topic1, 0),TopicAndPartition(topic2, 0)))
-  }
-
-  def createTestStopReplicaResponse() : StopReplicaResponse = {
-    val responseMap = Map((TopicAndPartition(topic1, 0), ErrorMapping.NoError),
-                          (TopicAndPartition(topic2, 0), ErrorMapping.NoError))
-    new StopReplicaResponse(0, responseMap.toMap)
-  }
-
   def createTestProducerRequest: ProducerRequest = {
     new ProducerRequest(1, "client 1", 0, 1000, topicDataProducerRequest)
   }
@@ -239,8 +228,6 @@ object SerializationTestUtils {
 }
 
 class RequestResponseSerializationTest extends JUnitSuite {
-  private val stopReplicaRequest = SerializationTestUtils.createTestStopReplicaRequest
-  private val stopReplicaResponse = SerializationTestUtils.createTestStopReplicaResponse
   private val producerRequest = SerializationTestUtils.createTestProducerRequest
   private val producerResponse = SerializationTestUtils.createTestProducerResponse
   private val fetchRequest = SerializationTestUtils.createTestFetchRequest
@@ -266,8 +253,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
   def testSerializationAndDeserialization() {
 
     val requestsAndResponses =
-      collection.immutable.Seq(stopReplicaRequest,
-                               stopReplicaResponse, producerRequest, producerResponse,
+      collection.immutable.Seq(producerRequest, producerResponse,
                                fetchRequest, offsetRequest, offsetResponse, topicMetadataRequest,
                                topicMetadataResponse,
                                offsetCommitRequestV0, offsetCommitRequestV1, offsetCommitRequestV2,
