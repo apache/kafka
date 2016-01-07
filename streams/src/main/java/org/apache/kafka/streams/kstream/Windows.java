@@ -32,9 +32,10 @@ public abstract class Windows<W extends Window> {
 
     private long maintainDuration;
 
-    private String name;
+    protected String name;
 
     protected Windows(String name) {
+        this.name = name;
         this.emitDuration = DEFAULT_EMIT_DURATION;
         this.maintainDuration = DEFAULT_MAINTAIN_DURATION;
     }

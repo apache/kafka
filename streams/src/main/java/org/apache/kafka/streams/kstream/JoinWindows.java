@@ -17,27 +17,32 @@
 
 package org.apache.kafka.streams.kstream;
 
+
+import org.apache.kafka.streams.kstream.internals.SlidingWindow;
+
+import java.util.Collection;
+
 /**
  * This class is used to specify the behaviour of windowed joins.
  */
-public class JoinWindowSpec {
+public class JoinWindows extends Windows<SlidingWindow> {
 
-    public final String name;
+    private static final int DEFAULT_NUM_SEGMENTS = 3;
+
     public final long before;
     public final long after;
-    public final long retention;
     public final int segments;
 
-    private JoinWindowSpec(String name, long before, long after, long retention, int segments) {
-        this.name = name;
+    private JoinWindows(String name, long before, long after, int segments) {
+        super(name);
+
         this.after = after;
         this.before = before;
-        this.retention = retention;
         this.segments = segments;
     }
 
-    public static JoinWindowSpec of(String name) {
-        return new JoinWindowSpec(name, 0L, 0L, 0L, 3);
+    public static JoinWindows of(String name) {
+        return new JoinWindows(name, 0L, 0L, DEFAULT_NUM_SEGMENTS);
     }
 
     /**
@@ -47,8 +52,8 @@ public class JoinWindowSpec {
      * @param timeDifference
      * @return
      */
-    public JoinWindowSpec within(long timeDifference) {
-        return new JoinWindowSpec(name, timeDifference, timeDifference, retention, segments);
+    public JoinWindows within(long timeDifference) {
+        return new JoinWindows(this.name, timeDifference, timeDifference, this.segments);
     }
 
     /**
@@ -59,8 +64,8 @@ public class JoinWindowSpec {
      * @param timeDifference
      * @return
      */
-    public JoinWindowSpec before(long timeDifference) {
-        return new JoinWindowSpec(name, timeDifference, 0L, retention, segments);
+    public JoinWindows before(long timeDifference) {
+        return new JoinWindows(this.name, timeDifference, this.after, this.segments);
     }
 
     /**
@@ -71,21 +76,35 @@ public class JoinWindowSpec {
      * @param timeDifference
      * @return
      */
-    public JoinWindowSpec after(long timeDifference) {
-        return new JoinWindowSpec(name, 0L, timeDifference, retention, segments);
+    public JoinWindows after(long timeDifference) {
+        return new JoinWindows(this.name, this.before, timeDifference, this.segments);
     }
 
     /**
-     * Specifies the retention period of windows
-     * @param retentionPeriod
+     * Specifies the number of segments to be used for rolling the window store,
+     * this function is not exposed to users but can be called by developers that extend this JoinWindows specs
+     *
+     * @param segments
      * @return
      */
-    public JoinWindowSpec retentionPeriod(long retentionPeriod) {
-        return new JoinWindowSpec(name, before, after, retentionPeriod, segments);
+    protected JoinWindows segments(int segments) {
+        return new JoinWindows(name, before, after, segments);
     }
 
-    public JoinWindowSpec segments(int segments) {
-        return new JoinWindowSpec(name, before, after, retention, segments);
+    @Override
+    public Collection<SlidingWindow> windowsFor(long timestamp) {
+        // this function should never be called
+        throw new UnsupportedOperationException("windowsFor() is not supported in JoinWindows");
+    }
+
+    @Override
+    public boolean equalTo(Windows other) {
+        if (!other.getClass().equals(JoinWindows.class))
+            return false;
+
+        JoinWindows otherWindows = (JoinWindows) other;
+
+        return this.before == otherWindows.before && this.after == otherWindows.after;
     }
 
 }

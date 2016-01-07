@@ -27,28 +27,26 @@ public class SlidingWindows extends Windows<SlidingWindow> {
 
     private static final long DEFAULT_SIZE_MS = 1000L;
 
-    private long size;
+    public final long size;
 
-    private SlidingWindows(String name) {
+    private SlidingWindows(String name, long size) {
         super(name);
 
-        this.size = DEFAULT_SIZE_MS;
+        this.size = size;
     }
 
     /**
      * Returns a half-interval sliding window definition with the default window size
      */
     public static SlidingWindows of(String name) {
-        return new SlidingWindows(name);
+        return new SlidingWindows(name, DEFAULT_SIZE_MS);
     }
 
     /**
      * Returns a half-interval sliding window definition with the window size in milliseconds
      */
     public SlidingWindows with(long size) {
-        this.size = size;
-
-        return this;
+        return new SlidingWindows(this.name, size);
     }
 
     @Override

@@ -26,15 +26,15 @@ public class HoppingWindows extends Windows<HoppingWindow> {
 
     private static final long DEFAULT_SIZE_MS = 1000L;
 
-    private long size;
+    public final long size;
 
-    private long period;
+    public final long period;
 
-    private HoppingWindows(String name) {
+    private HoppingWindows(String name, long size, long period) {
         super(name);
 
-        this.size = DEFAULT_SIZE_MS;
-        this.period = this.size;
+        this.size = size;
+        this.period = period;
     }
 
     /**
@@ -42,7 +42,7 @@ public class HoppingWindows extends Windows<HoppingWindow> {
      * of the form &#91; N &#42; default_size, N &#42; default_size + default_size &#41;
      */
     public static HoppingWindows of(String name) {
-        return new HoppingWindows(name);
+        return new HoppingWindows(name, DEFAULT_SIZE_MS, DEFAULT_SIZE_MS);
     }
 
     /**
@@ -50,9 +50,7 @@ public class HoppingWindows extends Windows<HoppingWindow> {
      * period in milliseconds of the form &#91; N &#42; period, N &#42; period + size &#41;
      */
     public HoppingWindows with(long size) {
-        this.size = size;
-
-        return this;
+        return new HoppingWindows(this.name, size, this.period);
     }
 
     /**
@@ -60,9 +58,7 @@ public class HoppingWindows extends Windows<HoppingWindow> {
      * period in milliseconds of the form &#91; N &#42; period, N &#42; period + size &#41;
      */
     public HoppingWindows every(long period) {
-        this.period = period;
-
-        return this;
+        return new HoppingWindows(this.name, this.size, period);
     }
 
     @Override

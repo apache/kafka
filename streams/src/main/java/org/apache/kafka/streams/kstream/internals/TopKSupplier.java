@@ -45,7 +45,7 @@ public class TopKSupplier<K, V extends Comparable<V>> implements AggregatorSuppl
         private final Map<K, PriorityQueue<V>> sorted = new HashMap<>();
 
         @Override
-        public Collection<V> initialValue(){
+        public Collection<V> initialValue() {
             return Collections.<V>emptySet();
         }
 

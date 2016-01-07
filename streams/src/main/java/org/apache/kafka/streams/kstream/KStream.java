@@ -171,7 +171,7 @@ public interface KStream<K, V> {
      *
      * @param otherStream the instance of KStream joined with this stream
      * @param joiner ValueJoiner
-     * @param joinWindowSpec the specification of the join window
+     * @param windows the specification of the join window
      * @param keySerializer key serializer,
      *                      if not specified the default serializer defined in the configs will be used
      * @param thisValueSerializer value serializer for this stream,
@@ -190,7 +190,7 @@ public interface KStream<K, V> {
     <V1, V2> KStream<K, V2> join(
             KStream<K, V1> otherStream,
             ValueJoiner<V, V1, V2> joiner,
-            JoinWindowSpec joinWindowSpec,
+            JoinWindows windows,
             Serializer<K> keySerializer,
             Serializer<V> thisValueSerializer,
             Serializer<V1> otherValueSerializer,
@@ -203,7 +203,7 @@ public interface KStream<K, V> {
      *
      * @param otherStream the instance of KStream joined with this stream
      * @param joiner ValueJoiner
-     * @param joinWindowSpec the specification of the join window
+     * @param windows the specification of the join window
      * @param keySerializer key serializer,
      *                      if not specified the default serializer defined in the configs will be used
      * @param thisValueSerializer value serializer for this stream,
@@ -222,7 +222,7 @@ public interface KStream<K, V> {
     <V1, V2> KStream<K, V2> outerJoin(
             KStream<K, V1> otherStream,
             ValueJoiner<V, V1, V2> joiner,
-            JoinWindowSpec joinWindowSpec,
+            JoinWindows windows,
             Serializer<K> keySerializer,
             Serializer<V> thisValueSerializer,
             Serializer<V1> otherValueSerializer,
@@ -235,6 +235,7 @@ public interface KStream<K, V> {
      *
      * @param otherStream the instance of KStream joined with this stream
      * @param joiner ValueJoiner
+     * @param windows the specification of the join window
      * @param keySerializer key serializer,
      *                      if not specified the default serializer defined in the configs will be used
      * @param otherValueSerializer value serializer for other stream,
@@ -249,7 +250,7 @@ public interface KStream<K, V> {
     <V1, V2> KStream<K, V2> leftJoin(
             KStream<K, V1> otherStream,
             ValueJoiner<V, V1, V2> joiner,
-            JoinWindowSpec joinWindowSpec,
+            JoinWindows windows,
             Serializer<K> keySerializer,
             Serializer<V1> otherValueSerializer,
             Deserializer<K> keyDeserializer,
@@ -266,21 +267,10 @@ public interface KStream<K, V> {
     <V1, V2> KStream<K, V2> leftJoin(KTable<K, V1> ktable, ValueJoiner<V, V1, V2> joiner);
 
     /**
-     * Combines values of this stream with another KStream on a window basis using Join.
-     *
-     * @param kstream the instance of KStream joined with this stream
-     * @param joiner ValueJoiner
-     * @param windows the window definition
-     * @param <V1>   the value type of the other stream
-     * @param <V2>   the value type of the new stream
-     */
-    <V1, V2, W extends Window> KStream<K, V2> join(KStream<K, V1> kstream, ValueJoiner<V, V1, V2> joiner, Windows<W> windows);
-
-    /**
      * Aggregate values of this stream by key on a window basis.
      *
      * @param aggregatorSupplier the class of aggregatorSupplier
-     * @param windows the window definition
+     * @param windows the specification of the aggregation window
      * @param <T>   the value type of the aggregated table
      */
     <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(AggregatorSupplier<K, V, T> aggregatorSupplier, Windows<W> windows);
@@ -289,7 +279,7 @@ public interface KStream<K, V> {
      * Sum extracted long integer values of this stream by key on a window basis.
      *
      * @param valueSelector the class of KeyValueToLongMapper to extract the long integer from value
-     * @param windows the window definition
+     * @param windows the specification of the aggregation window
      */
     <W extends Window> KTable<Windowed<K>, Long> sumByKey(KeyValueToLongMapper<K, V> valueSelector, Windows<W> windows);
 
@@ -297,7 +287,7 @@ public interface KStream<K, V> {
      * Sum extracted integer values of this stream by key on a window basis.
      *
      * @param valueSelector the class of KeyValueToIntMapper to extract the long integer from value
-     * @param windows the window definition
+     * @param windows the specification of the aggregation window
      */
     <W extends Window> KTable<Windowed<K>, Integer> sumByKey(KeyValueToIntMapper<K, V> valueSelector, Windows<W> windows);
 
@@ -305,14 +295,14 @@ public interface KStream<K, V> {
      * Sum extracted double decimal values of this stream by key on a window basis.
      *
      * @param valueSelector the class of KeyValueToDoubleMapper to extract the long integer from value
-     * @param windows the window definition
+     * @param windows the specification of the aggregation window
      */
     <W extends Window> KTable<Windowed<K>, Double> sumByKey(KeyValueToDoubleMapper<K, V> valueSelector, Windows<W> windows);
 
     /**
      * Count number of records of this stream by key on a window basis.
      *
-     * @param windows the window definition
+     * @param windows the specification of the aggregation window
      */
     <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows);
 
@@ -321,7 +311,7 @@ public interface KStream<K, V> {
      *
      * @param k parameter of the top-k computation
      * @param valueSelector the class of KeyValueMapper to extract the comparable value
-     * @param windows the window definition
+     * @param windows the specification of the aggregation window
      */
     <W extends Window, V1 extends Comparable<V1>> KTable<Windowed<K>, Collection<V1>> topKByKey(int k, KeyValueMapper<K, V, V1> valueSelector, Windows<W> windows);
 }

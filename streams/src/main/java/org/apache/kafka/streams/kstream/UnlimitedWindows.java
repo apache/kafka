@@ -26,25 +26,23 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
     private static final long DEFAULT_START_TIMESTAMP = 0L;
 
-    private long start;
+    public final long start;
 
-    private UnlimitedWindows(String name) {
+    private UnlimitedWindows(String name, long start) {
         super(name);
 
-        this.start = DEFAULT_START_TIMESTAMP;
+        this.start = start;
     }
 
     /**
      * Returns an unlimited window definition
      */
     public static UnlimitedWindows of(String name) {
-        return new UnlimitedWindows(name);
+        return new UnlimitedWindows(name, DEFAULT_START_TIMESTAMP);
     }
 
     public UnlimitedWindows startOn(long start) {
-        this.start = start;
-
-        return this;
+        return new UnlimitedWindows(this.name, start);
     }
 
     @Override
