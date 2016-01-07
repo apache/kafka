@@ -47,17 +47,18 @@ allprojects {
 }
 
 ext {
-    gradleVersion = "2.10"
-    buildVersionFileName = "kafka-version.properties"
+  gradleVersion = "2.10"
+  buildVersionFileName = "kafka-version.properties"
 
-    userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
+  userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
 
-    skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
-    shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
+  skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
+  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
 
-    mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
-    mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
-    mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+  mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
+  mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
+  mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+
 }
 
 apply from: file('wrapper.gradle')
