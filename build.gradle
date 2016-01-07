@@ -40,6 +40,7 @@ def reflections_version = '0.9.10'
 
 allprojects {
   apply plugin: 'idea'
+  apply plugin: 'eclipse'
   repositories {
     mavenCentral()
   }
@@ -83,9 +84,9 @@ if (new File('.git').exists()) {
 
 subprojects {
   apply plugin: 'java'
-  apply plugin: 'eclipse'
   apply plugin: 'maven'
   apply plugin: 'signing'
+  apply plugin: 'checkstyle'
 
   sourceCompatibility = 1.7
 
@@ -129,8 +130,12 @@ subprojects {
     }
   }
 
-  tasks.withType(Test) {
+  test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    testLogging {
+      events "passed", "skipped", "failed"
+      exceptionFormat = 'full'
+    }
   }
 
   jar {
@@ -138,11 +143,11 @@ subprojects {
     from '../NOTICE'
   }
 
-  task srcJar(type:Jar) {
+  task srcJar(type: Jar) {
     classifier = 'sources'
     from '../LICENSE'
     from '../NOTICE'
-    from sourceSets.main.java
+    from sourceSets.main.allSource
   }
 
   task javadocJar(type: Jar, dependsOn: javadoc) {
@@ -161,15 +166,33 @@ subprojects {
     archives javadocJar
   }
 
-  plugins.withType(ScalaPlugin) {
-    //source jar should also contain scala source:
-    srcJar.from sourceSets.main.scala
+  if(!sourceSets.test.allSource.isEmpty()) {
+    task testJar(type: Jar) {
+      classifier = 'test'
+      from '../LICENSE'
+      from '../NOTICE'
+      from sourceSets.test.output
+    }
 
+    task testSrcJar(type: Jar, dependsOn: testJar) {
+      classifier = 'test-sources'
+      from '../LICENSE'
+      from '../NOTICE'
+      from sourceSets.test.allSource
+    }
+
+    artifacts {
+      archives testJar
+      archives testSrcJar
+    }
+  }
+
+  plugins.withType(ScalaPlugin) {
     task scaladocJar(type:Jar) {
       classifier = 'scaladoc'
       from '../LICENSE'
       from '../NOTICE'
-      from scaladoc
+      from scaladoc.destinationDir
     }
 
     //documentation task should also trigger building scala doc jar
@@ -188,6 +211,12 @@ subprojects {
       jvmArgs = ['-XX:MaxPermSize=512m', '-Xss2m']
     }
   }
+
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 for ( sv in ['2_10', '2_11'] ) {
@@ -259,7 +288,6 @@ project(':core') {
   println "Building project 'core' with Scala version $resolvedScalaVersion"
 
   apply plugin: 'scala'
-  apply plugin: 'checkstyle'
   archivesBaseName = "kafka_${baseScalaVersion}"
 
   dependencies {
@@ -365,22 +393,6 @@ project(':core') {
     )
   }
 
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-        events "passed", "skipped", "failed"
-        exceptionFormat = 'full'
-    }
-  }
-
-  artifacts {
-    archives testJar
-  }
-
   tasks.create(name: "copyDependantTestLibs", type: Copy) {
     from (configurations.testRuntime) {
       include('*.jar')
@@ -389,14 +401,11 @@ project(':core') {
   }
 
   checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
   }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':examples') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "kafka-examples"
 
   dependencies {
@@ -404,14 +413,11 @@ project(':examples') {
   }
 
   checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
   }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':clients') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "kafka-clients"
 
   dependencies {
@@ -468,18 +474,6 @@ project(':clients') {
     delete "$buildDir/kafka/"
   }
 
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-        events "passed", "skipped", "failed"
-        exceptionFormat = 'full'
-    }
-  }
-
   javadoc {
     include "**/org/apache/kafka/clients/consumer/*"
     include "**/org/apache/kafka/clients/producer/*"
@@ -487,24 +481,9 @@ project(':clients') {
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/serialization/*"
   }
-
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom (testCompile)
-  }
-
-  checkstyle {
-     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':tools') {
-    apply plugin: 'checkstyle'
     archivesBaseName = "kafka-tools"
 
     dependencies {
@@ -516,18 +495,6 @@ project(':tools') {
 
         testCompile "$junit"
         testCompile project(path: ':clients', configuration: 'archives')
-    }
-
-    task testJar(type: Jar) {
-        classifier = 'test'
-        from sourceSets.test.output
-    }
-
-    test {
-        testLogging {
-            events "passed", "skipped", "failed"
-            exceptionFormat = 'full'
-        }
     }
 
     javadoc {
@@ -547,24 +514,9 @@ project(':tools') {
     jar {
         dependsOn 'copyDependantLibs'
     }
-
-    artifacts {
-        archives testJar
-    }
-
-    configurations {
-        archives.extendsFrom (testCompile)
-    }
-
-    checkstyle {
-        configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-        configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-    }
-    test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':streams') {
-    apply plugin: 'checkstyle'
     archivesBaseName = "kafka-streams"
 
     dependencies {
@@ -576,18 +528,6 @@ project(':streams') {
 
         testCompile "$junit"
         testCompile project(path: ':clients', configuration: 'archives')
-    }
-
-    task testJar(type: Jar) {
-        classifier = 'test'
-        from sourceSets.test.output
-    }
-
-    test {
-        testLogging {
-            events "passed", "skipped", "failed"
-            exceptionFormat = 'full'
-        }
     }
 
     javadoc {
@@ -607,24 +547,9 @@ project(':streams') {
     jar {
         dependsOn 'copyDependantLibs'
     }
-
-    artifacts {
-      archives testJar
-    }
-
-    configurations {
-      archives.extendsFrom (testCompile)
-    }
-
-    checkstyle {
-        configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-        configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-    }
-    test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':log4j-appender') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "kafka-log4j-appender"
 
   dependencies {
@@ -635,31 +560,12 @@ project(':log4j-appender') {
     testCompile project(path: ':clients', configuration: 'archives')
   }
 
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-        events "passed", "skipped", "failed"
-        exceptionFormat = 'full'
-    }
-  }
-
   javadoc {
     include "**/org/apache/kafka/log4jappender/*"
   }
-
-  checkstyle {
-     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':connect:api') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "connect-api"
 
   dependencies {
@@ -668,18 +574,6 @@ project(':connect:api') {
 
     testCompile "$junit"
     testRuntime "$slf4jlog4j"
-  }
-
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-      events "passed", "skipped", "failed"
-      exceptionFormat = 'full'
-    }
   }
 
   javadoc {
@@ -700,24 +594,9 @@ project(':connect:api') {
   jar {
     dependsOn copyDependantLibs
   }
-
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom (testCompile)
-  }
-
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':connect:json') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "connect-json"
 
   dependencies {
@@ -730,18 +609,6 @@ project(':connect:json') {
     testCompile "$powermock"
     testCompile "$powermock_easymock"
     testRuntime "$slf4jlog4j"
-  }
-
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-      events "passed", "skipped", "failed"
-      exceptionFormat = 'full'
-    }
   }
 
   javadoc {
@@ -762,24 +629,9 @@ project(':connect:json') {
   jar {
     dependsOn copyDependantLibs
   }
-
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom(testCompile)
-  }
-
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':connect:runtime') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "connect-runtime"
 
   dependencies {
@@ -803,18 +655,6 @@ project(':connect:runtime') {
     testRuntime project(":connect:json")
   }
 
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-      events "passed", "skipped", "failed"
-      exceptionFormat = 'full'
-    }
-  }
-
   javadoc {
     enabled = false
   }
@@ -834,20 +674,6 @@ project(':connect:runtime') {
     dependsOn copyDependantLibs
   }
 
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom(testCompile)
-  }
-
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
-
   tasks.create(name: "genConnectConfigDocs", dependsOn:jar, type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
@@ -856,7 +682,6 @@ project(':connect:runtime') {
 }
 
 project(':connect:file') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "connect-file"
 
   dependencies {
@@ -870,18 +695,6 @@ project(':connect:file') {
     testRuntime "$slf4jlog4j"
   }
 
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-      events "passed", "skipped", "failed"
-      exceptionFormat = 'full'
-    }
-  }
-
   javadoc {
     enabled = false
   }
@@ -900,18 +713,4 @@ project(':connect:file') {
   jar {
     dependsOn copyDependantLibs
   }
-
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom(testCompile)
-  }
-
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
