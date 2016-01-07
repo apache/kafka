@@ -423,7 +423,7 @@ class KafkaService(JmxMixin, Service):
 
         if new_consumer:
             cmd = "/opt/%s/bin/kafka-consumer-groups.sh --new-consumer --bootstrap-server %s %s --list" % \
-                  (kafka_dir(node), self.bootstrap_servers(), command_config)
+                  (kafka_dir(node), self.bootstrap_servers(self.security_protocol), command_config)
         else:
             cmd = "/opt/%s/bin/kafka-consumer-groups.sh --zookeeper %s %s --list" % \
                   (kafka_dir(node), self.zk.connect_setting(), command_config)
@@ -448,7 +448,7 @@ class KafkaService(JmxMixin, Service):
 
         if new_consumer:
             cmd = "/opt/%s/bin/kafka-consumer-groups.sh --new-consumer --bootstrap-server %s %s --group %s --describe" % \
-                  (kafka_dir(node), self.bootstrap_servers(), command_config, group)
+                  (kafka_dir(node), self.bootstrap_servers(self.security_protocol), command_config, group)
         else:
             cmd = "/opt/%s/bin/kafka-consumer-groups.sh --zookeeper %s %s --group %s --describe" % \
                   (kafka_dir(node), self.zk.connect_setting(), command_config, group)
