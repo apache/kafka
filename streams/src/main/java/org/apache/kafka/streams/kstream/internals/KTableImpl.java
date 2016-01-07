@@ -168,20 +168,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return new KStreamImpl<>(topology, name, sourceNodes);
     }
 
-    @Override
-    public <K1> KStream<K1, V> toStream(final ValueMapper<K, K1> mapper) {
-        String name = topology.newName(TOSTREAM_NAME);
-
-        topology.addProcessor(name, new KStreamMap<K, Change<V>, K1, V>(new KeyValueMapper<K, Change<V>, KeyValue<K1, V>>() {
-            @Override
-            public KeyValue<K1, V> apply(K key, Change<V> change) {
-                return new KeyValue<K1, V>(mapper.apply(key), change.newValue);
-            }
-        }), this.name);
-
-        return new KStreamImpl<>(topology, name, sourceNodes);
-    }
-
     @SuppressWarnings("unchecked")
     KTableValueGetterSupplier<K, V> valueGetterSupplier() {
         if (processorSupplier instanceof KTableSource) {

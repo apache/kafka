@@ -31,7 +31,6 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.KeyValueToLongMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
 
 import java.util.Properties;
@@ -104,14 +103,7 @@ public class KTableJob {
             }
         });
 
-        KStream<String, Long> stream3 = wtable1.toStream(new ValueMapper<Windowed<String>, String>() {
-            @Override
-            public String apply(Windowed<String> windowedKey) {
-                return windowedKey.value() + windowedKey.window().start();
-            }
-        });
-
-        stream3.to("topic3");
+        wtable1.to("topic3");
 
         KafkaStreaming kstream = new KafkaStreaming(builder, config);
         kstream.start();
