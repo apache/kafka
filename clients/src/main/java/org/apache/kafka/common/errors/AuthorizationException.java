@@ -18,4 +18,8 @@ public class AuthorizationException extends ApiException {
         super(message);
     }
 
+    public AuthorizationException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
 }

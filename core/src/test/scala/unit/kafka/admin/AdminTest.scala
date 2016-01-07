@@ -17,6 +17,7 @@
 package kafka.admin
 
 import junit.framework.Assert._
+import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Test
@@ -25,7 +26,7 @@ import kafka.utils._
 import kafka.log._
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{Logging, ZkUtils, TestUtils}
-import kafka.common.{InvalidTopicException, TopicExistsException, TopicAndPartition}
+import kafka.common.{TopicExistsException, TopicAndPartition}
 import kafka.server.{ConfigType, KafkaServer, KafkaConfig}
 import java.io.File
 import TestUtils._

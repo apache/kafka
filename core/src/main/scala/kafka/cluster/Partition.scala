@@ -29,7 +29,10 @@ import kafka.message.ByteBufferMessageSet
 
 import java.io.IOException
 import java.util.concurrent.locks.ReentrantReadWriteLock
+import org.apache.kafka.common.errors.{NotEnoughReplicasException, NotLeaderForPartitionException}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.LeaderAndIsrRequest
+
 
 import scala.collection.JavaConverters._
 
@@ -325,14 +328,14 @@ class Partition(val topic: String,
           * in this scenario the request was already appended locally and then added to the purgatory before the ISR was shrunk
           */
           if (minIsr <= curInSyncReplicas.size) {
-            (true, ErrorMapping.NoError)
+            (true, Errors.NONE.code)
           } else {
-            (true, ErrorMapping.NotEnoughReplicasAfterAppendCode)
+            (true, Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND.code)
           }
         } else
-          (false, ErrorMapping.NoError)
+          (false, Errors.NONE.code)
       case None =>
-        (false, ErrorMapping.NotLeaderForPartitionCode)
+        (false, Errors.NOT_LEADER_FOR_PARTITION.code)
     }
   }
 

@@ -28,7 +28,8 @@ import kafka.api.{TopicMetadata, PartitionMetadata}
 
 import java.util.Random
 import java.util.Properties
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.errors.{ReplicaNotAvailableException, InvalidTopicException, LeaderNotAvailableException}
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 
 import scala.Predef._
 import scala.collection._
@@ -37,7 +38,6 @@ import scala.collection.mutable
 import collection.Map
 import collection.Set
 
-import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 
 object AdminUtils extends Logging {
@@ -159,7 +159,7 @@ object AdminUtils extends Logging {
     }
     ret.toMap
   }
-  
+
   def deleteTopic(zkUtils: ZkUtils, topic: String) {
     try {
       zkUtils.createPersistentPath(getDeleteTopicPath(topic))
@@ -169,7 +169,7 @@ object AdminUtils extends Logging {
       case e2: Throwable => throw new AdminOperationException(e2.toString)
     }
   }
-  
+
   def isConsumerGroupActive(zkUtils: ZkUtils, group: String) = {
     zkUtils.getConsumersInGroup(group).nonEmpty
   }
@@ -224,13 +224,13 @@ object AdminUtils extends Logging {
     groups.foreach(group => deleteConsumerGroupInfoForTopicInZK(zkUtils, group, topic))
   }
 
-  def topicExists(zkUtils: ZkUtils, topic: String): Boolean = 
+  def topicExists(zkUtils: ZkUtils, topic: String): Boolean =
     zkUtils.zkClient.exists(getTopicPath(topic))
 
   def createTopic(zkUtils: ZkUtils,
                   topic: String,
-                  partitions: Int, 
-                  replicationFactor: Int, 
+                  partitions: Int,
+                  replicationFactor: Int,
                   topicConfig: Properties = new Properties) {
     val brokerList = zkUtils.getSortedBrokerList()
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, partitions, replicationFactor)
@@ -345,7 +345,7 @@ object AdminUtils extends Logging {
     val map = Map("version" -> 1, "config" -> configMap)
     zkUtils.updatePersistentPath(getEntityConfigPath(entityType, entityName), Json.encode(map))
   }
-  
+
   /**
    * Read the entity (topic or client) config (if any) from zk
    */
@@ -426,18 +426,18 @@ object AdminUtils extends Logging {
           if(isrInfo.size < inSyncReplicas.size)
             throw new ReplicaNotAvailableException("In Sync Replica information not available for following brokers: " +
               inSyncReplicas.filterNot(isrInfo.map(_.id).contains(_)).mkString(","))
-          new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError)
+          new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo, Errors.NONE.code)
         } catch {
           case e: Throwable =>
             debug("Error while fetching metadata for partition [%s,%d]".format(topic, partition), e)
             new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo,
-              ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+              Errors.forException(e).code)
         }
       }
       new TopicMetadata(topic, partitionMetadata)
     } else {
       // topic doesn't exist, send appropriate error code
-      new TopicMetadata(topic, Seq.empty[PartitionMetadata], ErrorMapping.UnknownTopicOrPartitionCode)
+      new TopicMetadata(topic, Seq.empty[PartitionMetadata], Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
     }
   }
 

@@ -190,23 +190,23 @@ class GroupMetadataManager(val brokerId: Int,
       val status = responseStatus(groupMetadataPartition)
 
       var responseCode = Errors.NONE.code
-      if (status.error != ErrorMapping.NoError) {
+      if (status.error != Errors.NONE.code) {
         debug("Metadata from group %s with generation %d failed when appending to log due to %s"
-          .format(group.groupId, generationId, ErrorMapping.exceptionNameFor(status.error)))
+          .format(group.groupId, generationId, Errors.forCode(status.error).exception.getClass.getName))
 
         // transform the log append error code to the corresponding the commit status error code
-        responseCode = if (status.error == ErrorMapping.UnknownTopicOrPartitionCode) {
+        responseCode = if (status.error == Errors.UNKNOWN_TOPIC_OR_PARTITION.code) {
           Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code
-        } else if (status.error == ErrorMapping.NotLeaderForPartitionCode) {
+        } else if (status.error == Errors.NOT_LEADER_FOR_PARTITION.code) {
           Errors.NOT_COORDINATOR_FOR_GROUP.code
-        } else if (status.error == ErrorMapping.RequestTimedOutCode) {
+        } else if (status.error == Errors.REQUEST_TIMED_OUT.code) {
           Errors.REBALANCE_IN_PROGRESS.code
-        } else if (status.error == ErrorMapping.MessageSizeTooLargeCode
-          || status.error == ErrorMapping.MessageSetSizeTooLargeCode
-          || status.error == ErrorMapping.InvalidFetchSizeCode) {
+        } else if (status.error == Errors.MESSAGE_TOO_LARGE.code
+          || status.error == Errors.RECORD_LIST_TOO_LARGE.code
+          || status.error == Errors.INVALID_FETCH_SIZE.code) {
 
           error("Appending metadata message for group %s generation %d failed due to %s, returning UNKNOWN error code to the client"
-            .format(group.groupId, generationId, ErrorMapping.exceptionNameFor(status.error)))
+            .format(group.groupId, generationId, Errors.forCode(status.error).exception.getClass.getName))
 
           Errors.UNKNOWN.code
         } else {
@@ -271,23 +271,23 @@ class GroupMetadataManager(val brokerId: Int,
       val status = responseStatus(offsetTopicPartition)
 
       val responseCode =
-        if (status.error == ErrorMapping.NoError) {
+        if (status.error == Errors.NONE.code) {
           filteredOffsetMetadata.foreach { case (topicAndPartition, offsetAndMetadata) =>
             putOffset(GroupTopicPartition(groupId, topicAndPartition), offsetAndMetadata)
           }
-          ErrorMapping.NoError
+          Errors.NONE.code
         } else {
           debug("Offset commit %s from group %s consumer %s with generation %d failed when appending to log due to %s"
-            .format(filteredOffsetMetadata, groupId, consumerId, generationId, ErrorMapping.exceptionNameFor(status.error)))
+            .format(filteredOffsetMetadata, groupId, consumerId, generationId, Errors.forCode(status.error).exception.getClass.getName))
 
           // transform the log append error code to the corresponding the commit status error code
-          if (status.error == ErrorMapping.UnknownTopicOrPartitionCode)
-            ErrorMapping.ConsumerCoordinatorNotAvailableCode
-          else if (status.error == ErrorMapping.NotLeaderForPartitionCode)
-            ErrorMapping.NotCoordinatorForConsumerCode
-          else if (status.error == ErrorMapping.MessageSizeTooLargeCode
-            || status.error == ErrorMapping.MessageSetSizeTooLargeCode
-            || status.error == ErrorMapping.InvalidFetchSizeCode)
+          if (status.error == Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+            Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code
+          else if (status.error == Errors.NOT_LEADER_FOR_PARTITION.code)
+            Errors.NOT_COORDINATOR_FOR_GROUP.code
+          else if (status.error == Errors.MESSAGE_TOO_LARGE.code
+            || status.error == Errors.RECORD_LIST_TOO_LARGE.code
+            || status.error == Errors.INVALID_FETCH_SIZE.code)
             Errors.INVALID_COMMIT_OFFSET_SIZE.code
           else
             status.error
@@ -299,7 +299,7 @@ class GroupMetadataManager(val brokerId: Int,
         if (validateOffsetMetadataLength(offsetAndMetadata.metadata))
           (topicAndPartition, responseCode)
         else
-          (topicAndPartition, ErrorMapping.OffsetMetadataTooLargeCode)
+          (topicAndPartition, Errors.OFFSET_METADATA_TOO_LARGE.code)
       }
 
       // finally trigger the callback logic passed from the API layer
@@ -320,7 +320,7 @@ class GroupMetadataManager(val brokerId: Int,
       if (topicPartitions.isEmpty) {
         // Return offsets for all partitions owned by this consumer group. (this only applies to consumers that commit offsets to Kafka.)
         offsetsCache.filter(_._1.group == group).map { case(groupTopicPartition, offsetAndMetadata) =>
-          (groupTopicPartition.topicPartition, OffsetMetadataAndError(offsetAndMetadata.offset, offsetAndMetadata.metadata, ErrorMapping.NoError))
+          (groupTopicPartition.topicPartition, OffsetMetadataAndError(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE.code))
         }.toMap
       } else {
         topicPartitions.map { topicAndPartition =>
@@ -516,7 +516,7 @@ class GroupMetadataManager(val brokerId: Int,
     if (offsetAndMetadata == null)
       OffsetMetadataAndError.NoOffset
     else
-      OffsetMetadataAndError(offsetAndMetadata.offset, offsetAndMetadata.metadata, ErrorMapping.NoError)
+      OffsetMetadataAndError(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE.code)
   }
 
   /**

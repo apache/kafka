@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
+ * 
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -20,10 +20,10 @@ import java.nio.ByteBuffer
 
 import kafka.api.ApiUtils._
 import kafka.cluster.{Broker, BrokerEndPoint}
-import kafka.common.{ErrorMapping, KafkaException, TopicAndPartition}
+import kafka.common.{KafkaException, TopicAndPartition}
 import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 
 import scala.collection.Set
 
@@ -127,7 +127,7 @@ case class UpdateMetadataRequest (versionId: Short,
   }
 
   override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val errorResponse = new UpdateMetadataResponse(correlationId, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+    val errorResponse = new UpdateMetadataResponse(correlationId, Errors.forException(e).code)
     requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 

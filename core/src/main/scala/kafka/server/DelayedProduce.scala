@@ -22,10 +22,10 @@ import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.core.Meter
 import kafka.api.ProducerResponseStatus
-import kafka.common.ErrorMapping
 import kafka.common.TopicAndPartition
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Pool
+import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
 
@@ -58,10 +58,10 @@ class DelayedProduce(delayMs: Long,
 
   // first update the acks pending variable according to the error code
   produceMetadata.produceStatus.foreach { case (topicAndPartition, status) =>
-    if (status.responseStatus.error == ErrorMapping.NoError) {
+    if (status.responseStatus.error == Errors.NONE.code) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
-      status.responseStatus.error = ErrorMapping.RequestTimedOutCode
+      status.responseStatus.error = Errors.REQUEST_TIMED_OUT.code
     } else {
       status.acksPending = false
     }
@@ -92,16 +92,16 @@ class DelayedProduce(delayMs: Long,
             partition.checkEnoughReplicasReachOffset(status.requiredOffset)
           case None =>
             // Case A
-            (false, ErrorMapping.UnknownTopicOrPartitionCode)
+            (false, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
         }
-        if (errorCode != ErrorMapping.NoError) {
+        if (errorCode != Errors.NONE.code) {
           // Case B.1
           status.acksPending = false
           status.responseStatus.error = errorCode
         } else if (hasEnough) {
           // Case B.2
           status.acksPending = false
-          status.responseStatus.error = ErrorMapping.NoError
+          status.responseStatus.error = Errors.NONE.code
         }
       }
     }

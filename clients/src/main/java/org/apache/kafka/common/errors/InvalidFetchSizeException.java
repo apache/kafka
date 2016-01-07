@@ -12,27 +12,15 @@
  */
 package org.apache.kafka.common.errors;
 
-/**
- * This exception indicates a record has failed its internal CRC check, this generally indicates network or disk
- * corruption.
- */
-public class CorruptRecordException extends RetriableException {
+public class InvalidFetchSizeException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public CorruptRecordException() {
-        super("This message has failed its CRC checksum, exceeds the valid size, or is otherwise corrupt.");
-    }
-
-    public CorruptRecordException(String message) {
+    public InvalidFetchSizeException(String message) {
         super(message);
     }
 
-    public CorruptRecordException(Throwable cause) {
-        super(cause);
-    }
-
-    public CorruptRecordException(String message, Throwable cause) {
+    public InvalidFetchSizeException(String message, Throwable cause) {
         super(message, cause);
     }
 
