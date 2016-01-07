@@ -132,19 +132,21 @@ public class TopologyBuilder {
         public final String topic;
         private Serializer keySerializer;
         private Serializer valSerializer;
+        private final StreamPartitioner partitioner;
 
-        private SinkNodeFactory(String name, String[] parents, String topic, Serializer keySerializer, Serializer valSerializer) {
+        private SinkNodeFactory(String name, String[] parents, String topic, Serializer keySerializer, Serializer valSerializer, StreamPartitioner partitioner) {
             super(name);
             this.parents = parents.clone();
             this.topic = topic;
             this.keySerializer = keySerializer;
             this.valSerializer = valSerializer;
+            this.partitioner = partitioner;
         }
 
         @SuppressWarnings("unchecked")
         @Override
         public ProcessorNode build() {
-            return new SinkNode(name, topic, keySerializer, valSerializer);
+            return new SinkNode(name, topic, keySerializer, valSerializer, partitioner);
         }
     }
 
@@ -235,15 +237,53 @@ public class TopologyBuilder {
      *
      * @param name the unique name of the sink
      * @param topic the name of the Kafka topic to which this sink should write its messages
+     * @param parentNames the name of one or more source or processor nodes whose output message this sink should consume
+     * and write to its topic
      * @return this builder instance so methods can be chained together; never null
+     * @see #addSink(String, String, StreamPartitioner, String...)
+     * @see #addSink(String, String, Serializer, Serializer, String...)
+     * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
      */
     public final TopologyBuilder addSink(String name, String topic, String... parentNames) {
         return addSink(name, topic, (Serializer) null, (Serializer) null, parentNames);
     }
 
     /**
+     * Add a new sink that forwards messages from upstream parent processor and/or source nodes to the named Kafka topic, using
+     * the supplied partitioner.
+     * The sink will use the {@link StreamingConfig#KEY_SERIALIZER_CLASS_CONFIG default key serializer} and
+     * {@link StreamingConfig#VALUE_SERIALIZER_CLASS_CONFIG default value serializer} specified in the
+     * {@link StreamingConfig streaming configuration}.
+     * <p>
+     * The sink will also use the specified {@link StreamPartitioner} to determine how messages are distributed among
+     * the named Kafka topic's partitions. Such control is often useful with topologies that use
+     * {@link #addStateStore(StateStoreSupplier, String...) state stores}
+     * in its processors. In most other cases, however, a partitioner need not be specified and Kafka will automatically distribute
+     * messages among partitions using Kafka's default partitioning logic.
+     *
+     * @param name the unique name of the sink
+     * @param topic the name of the Kafka topic to which this sink should write its messages
+     * @param partitioner the function that should be used to determine the partition for each message processed by the sink
+     * @param parentNames the name of one or more source or processor nodes whose output message this sink should consume
+     * and write to its topic
+     * @return this builder instance so methods can be chained together; never null
+     * @see #addSink(String, String, String...)
+     * @see #addSink(String, String, Serializer, Serializer, String...)
+     * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
+     */
+    public final TopologyBuilder addSink(String name, String topic, StreamPartitioner partitioner, String... parentNames) {
+        return addSink(name, topic, (Serializer) null, (Serializer) null, partitioner, parentNames);
+    }
+
+    /**
      * Add a new sink that forwards messages from upstream parent processor and/or source nodes to the named Kafka topic.
      * The sink will use the specified key and value serializers.
+     * <p>
+     * The sink will also use the specified {@link StreamPartitioner} to determine how messages are distributed among
+     * the named Kafka topic's partitions. Such control is often useful with topologies that use
+     * {@link #addStateStore(StateStoreSupplier, String...) state stores}
+     * in its processors. In most other cases, however, a partitioner need not be specified and Kafka will automatically distribute
+     * messages among partitions using Kafka's default partitioning logic.
      *
      * @param name the unique name of the sink
      * @param topic the name of the Kafka topic to which this sink should write its messages
@@ -256,8 +296,35 @@ public class TopologyBuilder {
      * @param parentNames the name of one or more source or processor nodes whose output message this sink should consume
      * and write to its topic
      * @return this builder instance so methods can be chained together; never null
+     * @see #addSink(String, String, String...)
+     * @see #addSink(String, String, StreamPartitioner, String...)
+     * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
      */
     public final TopologyBuilder addSink(String name, String topic, Serializer keySerializer, Serializer valSerializer, String... parentNames) {
+        return addSink(name, topic, keySerializer, valSerializer, (StreamPartitioner) null, parentNames);
+    }
+
+    /**
+     * Add a new sink that forwards messages from upstream parent processor and/or source nodes to the named Kafka topic.
+     * The sink will use the specified key and value serializers, and the supplied partitioner.
+     *
+     * @param name the unique name of the sink
+     * @param topic the name of the Kafka topic to which this sink should write its messages
+     * @param keySerializer the {@link Serializer key serializer} used when consuming messages; may be null if the sink
+     * should use the {@link StreamingConfig#KEY_SERIALIZER_CLASS_CONFIG default key serializer} specified in the
+     * {@link StreamingConfig streaming configuration}
+     * @param valSerializer the {@link Serializer value serializer} used when consuming messages; may be null if the sink
+     * should use the {@link StreamingConfig#VALUE_SERIALIZER_CLASS_CONFIG default value serializer} specified in the
+     * {@link StreamingConfig streaming configuration}
+     * @param partitioner the function that should be used to determine the partition for each message processed by the sink
+     * @param parentNames the name of one or more source or processor nodes whose output message this sink should consume
+     * and write to its topic
+     * @return this builder instance so methods can be chained together; never null
+     * @see #addSink(String, String, String...)
+     * @see #addSink(String, String, StreamPartitioner, String...)
+     * @see #addSink(String, String, Serializer, Serializer, String...)
+     */
+    public final <K, V> TopologyBuilder addSink(String name, String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, StreamPartitioner<K, V> partitioner, String... parentNames) {
         if (nodeFactories.containsKey(name))
             throw new TopologyException("Processor " + name + " is already added.");
 
@@ -272,7 +339,7 @@ public class TopologyBuilder {
             }
         }
 
-        nodeFactories.put(name, new SinkNodeFactory(name, parentNames, topic, keySerializer, valSerializer));
+        nodeFactories.put(name, new SinkNodeFactory(name, parentNames, topic, keySerializer, valSerializer, partitioner));
         nodeGrouper.add(name);
         nodeGrouper.unite(name, parentNames);
         return this;
