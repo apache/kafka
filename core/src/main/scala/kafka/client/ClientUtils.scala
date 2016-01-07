@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -16,19 +16,18 @@
  */
 package kafka.client
 
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 
 import scala.collection._
 import kafka.cluster._
 import kafka.api._
 import kafka.producer._
-import kafka.common.{ErrorMapping, KafkaException}
+import kafka.common.KafkaException
 import kafka.utils.{CoreUtils, Logging}
 import java.util.Properties
 import util.Random
 import kafka.network.BlockingChannel
 import kafka.utils.ZkUtils
-import org.I0Itec.zkclient.ZkClient
 import java.io.IOException
 
  /**
@@ -95,7 +94,7 @@ object ClientUtils extends Logging{
   }
 
   /**
-   * Parse a list of broker urls in the form host1:port1, host2:port2, ... 
+   * Parse a list of broker urls in the form host1:port1, host2:port2, ...
    */
   def parseBrokerList(brokerListStr: String): Seq[BrokerEndPoint] = {
     val brokersStr = CoreUtils.parseCsvList(brokerListStr)
@@ -155,7 +154,7 @@ object ClientUtils extends Logging{
            val response = queryChannel.receive()
            val consumerMetadataResponse =  GroupCoordinatorResponse.readFrom(response.payload())
            debug("Consumer metadata response: " + consumerMetadataResponse.toString)
-           if (consumerMetadataResponse.errorCode == ErrorMapping.NoError)
+           if (consumerMetadataResponse.errorCode == Errors.NONE.code)
              coordinatorOpt = consumerMetadataResponse.coordinatorOpt
            else {
              debug("Query to %s:%d to locate offset manager for %s failed - will retry in %d milliseconds."

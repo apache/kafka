@@ -19,7 +19,7 @@ import java.util.concurrent.ExecutionException
 import java.util.{ArrayList, Collections, Properties}
 
 import kafka.cluster.EndPoint
-import kafka.common.{ErrorMapping, TopicAndPartition}
+import kafka.common.TopicAndPartition
 import kafka.coordinator.GroupCoordinator
 import kafka.integration.KafkaServerTestHarness
 import kafka.security.auth._

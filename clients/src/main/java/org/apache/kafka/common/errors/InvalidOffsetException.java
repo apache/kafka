@@ -15,28 +15,23 @@
  * limitations under the License.
  */
 
-package kafka.api
+package org.apache.kafka.common.errors;
 
-import java.nio.ByteBuffer
-import org.apache.kafka.common.protocol.Errors
+/**
+ * Thrown when the offset for a set of partitions is invalid (either undefined or out of range),
+ * and no reset policy has been configured.
+ * @see OffsetOutOfRangeException
+ */
+public class InvalidOffsetException extends ApiException {
 
-object UpdateMetadataResponse {
-  def readFrom(buffer: ByteBuffer): UpdateMetadataResponse = {
-    val correlationId = buffer.getInt
-    val errorCode = buffer.getShort
-    new UpdateMetadataResponse(correlationId, errorCode)
-  }
-}
+    private static final long serialVersionUID = 1L;
 
-case class UpdateMetadataResponse(correlationId: Int,
-                                  errorCode: Short = Errors.NONE.code)
-  extends RequestOrResponse() {
-  def sizeInBytes(): Int = 4 /* correlation id */ + 2 /* error code */
+    public InvalidOffsetException(String message) {
+        super(message);
+    }
 
-  def writeTo(buffer: ByteBuffer) {
-    buffer.putInt(correlationId)
-    buffer.putShort(errorCode)
-  }
+    public InvalidOffsetException(String message, Throwable cause) {
+        super(message, cause);
+    }
 
-  override def describe(details: Boolean):String = { toString }
 }
