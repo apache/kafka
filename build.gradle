@@ -59,6 +59,8 @@ ext {
   mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
   mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
 
+  userShowStandardStreams = project.hasProperty("showStandardStreams") ? showStandardStreams : null
+
 }
 
 apply from: file('wrapper.gradle')
@@ -135,6 +137,7 @@ subprojects {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
     testLogging {
       events "passed", "skipped", "failed"
+      showStandardStreams = userShowStandardStreams ?: false
       exceptionFormat = 'full'
     }
   }
