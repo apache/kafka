@@ -181,8 +181,8 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       response2.messageSet("new-topic", 0).iterator.toBuffer
     }
     assertEquals("Should have fetched 2 messages", 2, messageSet.size)
-    assertEquals(new Message(bytes = "test1".getBytes, key = "test".getBytes), messageSet(0).message)
-    assertEquals(new Message(bytes = "test2".getBytes, key = "test".getBytes), messageSet(1).message)
+    assertEquals(new Message(bytes = "test1".getBytes, key = "test".getBytes, timestamp = Message.NoTimestamp, magicValue = Message.MagicValue_V0), messageSet(0).message)
+    assertEquals(new Message(bytes = "test2".getBytes, key = "test".getBytes, timestamp = Message.NoTimestamp, magicValue = Message.MagicValue_V0), messageSet(1).message)
     producer1.close()
 
     val props2 = new util.Properties()
@@ -260,7 +260,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
       val messageSet1 = response1.messageSet(topic, 0).iterator
       assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      assertEquals(new Message(bytes = "test1".getBytes, key = "test".getBytes), messageSet1.next.message)
+      assertEquals(new Message(bytes = "test1".getBytes, key = "test".getBytes, timestamp = Message.NoTimestamp, magicValue = Message.MagicValue_V0), messageSet1.next.message)
       assertFalse("Message set should have another message", messageSet1.hasNext)
     } catch {
       case e: Exception => fail("Not expected", e)

@@ -42,7 +42,9 @@ class MessageCompressionTest extends JUnitSuite {
     val bytes1k: Array[Byte] = (0 until 1000).map(_.toByte).toArray
     val bytes2k: Array[Byte] = (1000 until 2000).map(_.toByte).toArray
     val bytes3k: Array[Byte] = (3000 until 4000).map(_.toByte).toArray
-    val messages: List[Message] = List(new Message(bytes1k), new Message(bytes2k), new Message(bytes3k))
+    val messages: List[Message] = List(new Message(bytes1k, Message.NoTimestamp, Message.MagicValue_V0),
+                                       new Message(bytes2k, Message.NoTimestamp, Message.MagicValue_V0),
+                                       new Message(bytes3k, Message.NoTimestamp, Message.MagicValue_V0))
 
     testCompressSize(GZIPCompressionCodec, messages, 388)
 

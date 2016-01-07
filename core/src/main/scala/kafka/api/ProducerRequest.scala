@@ -27,7 +27,7 @@ import kafka.network.RequestChannel.Response
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 
 object ProducerRequest {
-  val CurrentVersion = 1.shortValue
+  val CurrentVersion = 2.shortValue
 
   def readFrom(buffer: ByteBuffer): ProducerRequest = {
     val versionId: Short = buffer.getShort

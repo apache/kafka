@@ -20,6 +20,7 @@ package kafka.log
 import java.io._
 import java.util.Properties
 
+import kafka.api.ApiVersion
 import kafka.common._
 import kafka.server.OffsetCheckpoint
 import kafka.utils._
@@ -36,6 +37,8 @@ class LogManagerTest {
   logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.SegmentIndexBytesProp, 4096: java.lang.Integer)
   logProps.put(LogConfig.RetentionMsProp, maxLogAgeMs: java.lang.Integer)
+  // We need to use magic value 1 here because some tests requires no message format conversion.
+  logProps.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString())
   val logConfig = LogConfig(logProps)
   var logDir: File = null
   var logManager: LogManager = null

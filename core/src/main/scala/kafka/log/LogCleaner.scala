@@ -425,7 +425,9 @@ private[log] class Cleaner(val id: Int,
           }
           messagesRead += 1
         } else {
-          val messages = ByteBufferMessageSet.deepIterator(entry.message)
+          // We use absolute offset to compare decide whether retain the message or not. This is handled by
+          // deep iterator.
+          val messages = ByteBufferMessageSet.deepIterator(entry)
           val retainedMessages = messages.filter(messageAndOffset => {
             messagesRead += 1
             shouldRetainMessage(source, map, retainDeletes, messageAndOffset)
@@ -461,15 +463,24 @@ private[log] class Cleaner(val id: Int,
         ByteBufferMessageSet.writeMessage(buffer, messageOffset.message, messageOffset.offset)
       MessageSet.messageSetSize(messagesIterable)
     } else {
+      val messageSetTimestamp = MessageSet.validateMagicValuesAndGetTimestamp(messages.map(_.message))
+      val firstAbsoluteOffset = messages.head.offset
       var offset = -1L
+      val magicValue = messages.head.message.magic
       val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messagesIterable) / 2, 1024), 1 << 16))
-      messageWriter.write(codec = compressionCodec) { outputStream =>
+      messageWriter.write(codec = compressionCodec, timestamp = messageSetTimestamp, magicValue = magicValue) { outputStream =>
         val output = new DataOutputStream(CompressionFactory(compressionCodec, outputStream))
         try {
           for (messageOffset <- messages) {
             val message = messageOffset.message
             offset = messageOffset.offset
-            output.writeLong(offset)
+            // Use relative offset when magic value is greater than 0
+            if (magicValue > Message.MagicValue_V0) {
+              // The offset of the messages are absolute offset, compute the relative offset.
+              val relativeOffset = messageOffset.offset - firstAbsoluteOffset
+              output.writeLong(relativeOffset)
+            } else
+              output.writeLong(offset)
             output.writeInt(message.size)
             output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
           }

@@ -20,7 +20,7 @@ package kafka.server
 import java.util.Properties
 
 import junit.framework.Assert._
-import kafka.api.{ApiVersion, KAFKA_082}
+import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.ConfigException
@@ -283,12 +283,12 @@ class KafkaConfigTest {
 
     props.put(KafkaConfig.InterBrokerProtocolVersionProp,"0.8.2.0")
     val conf2 = KafkaConfig.fromProps(props)
-    assertEquals(KAFKA_082, conf2.interBrokerProtocolVersion)
+    assertEquals(KAFKA_0_8_2, conf2.interBrokerProtocolVersion)
 
     // check that 0.8.2.0 is the same as 0.8.2.1
     props.put(KafkaConfig.InterBrokerProtocolVersionProp,"0.8.2.1")
     val conf3 = KafkaConfig.fromProps(props)
-    assertEquals(KAFKA_082, conf3.interBrokerProtocolVersion)
+    assertEquals(KAFKA_0_8_2, conf3.interBrokerProtocolVersion)
 
     //check that latest is newer than 0.8.2
     assert(ApiVersion.latestVersion.onOrAfter(conf3.interBrokerProtocolVersion))

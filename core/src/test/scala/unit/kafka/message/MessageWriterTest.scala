@@ -34,7 +34,7 @@ class MessageWriterTest extends JUnitSuite {
 
   private def mkMessageWithWriter(key: Array[Byte] = null, bytes: Array[Byte], codec: CompressionCodec): Message = {
     val writer = new MessageWriter(100)
-    writer.write(key = key, codec = codec) { output =>
+    writer.write(key = key, codec = codec, timestamp = Message.NoTimestamp, magicValue = Message.MagicValue_V0) { output =>
       val out = if (codec == NoCompressionCodec) output else CompressionFactory(codec, output)
       try {
         val p = rnd.nextInt(bytes.length)
@@ -101,7 +101,7 @@ class MessageWriterTest extends JUnitSuite {
   def testWithNoCompressionAttribute(): Unit = {
     val bytes = mkRandomArray(4096)
     val actual = mkMessageWithWriter(bytes = bytes, codec = NoCompressionCodec)
-    val expected = new Message(bytes, NoCompressionCodec)
+    val expected = new Message(bytes, Message.NoTimestamp, NoCompressionCodec, Message.MagicValue_V0)
     assertEquals(expected.buffer, actual.buffer)
   }
 
@@ -109,7 +109,7 @@ class MessageWriterTest extends JUnitSuite {
   def testWithCompressionAttribute(): Unit = {
     val bytes = mkRandomArray(4096)
     val actual = mkMessageWithWriter(bytes = bytes, codec = SnappyCompressionCodec)
-    val expected = new Message(compress(bytes, SnappyCompressionCodec), SnappyCompressionCodec)
+    val expected = new Message(compress(bytes, SnappyCompressionCodec), Message.NoTimestamp, SnappyCompressionCodec, Message.MagicValue_V0)
 
     assertEquals(
       decompress(toArray(expected.payload), SnappyCompressionCodec).toSeq,
@@ -122,7 +122,7 @@ class MessageWriterTest extends JUnitSuite {
     val key = mkRandomArray(123)
     val bytes = mkRandomArray(4096)
     val actual = mkMessageWithWriter(bytes = bytes, key = key, codec = NoCompressionCodec)
-    val expected = new Message(bytes = bytes, key = key, codec = NoCompressionCodec)
+    val expected = new Message(bytes = bytes, key = key, timestamp = Message.NoTimestamp, codec = NoCompressionCodec, magicValue = Message.MagicValue_V0)
 
     assertEquals(expected.buffer, actual.buffer)
   }

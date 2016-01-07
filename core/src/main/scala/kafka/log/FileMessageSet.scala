@@ -139,7 +139,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
       if(offset >= targetOffset)
         return OffsetPosition(offset, position)
       val messageSize = buffer.getInt()
-      if(messageSize < Message.MessageOverhead)
+      if(messageSize < Message.MinMessageOverhead)
         throw new IllegalStateException("Invalid message size: " + messageSize)
       position += MessageSet.LogOverhead + messageSize
     }
@@ -169,6 +169,35 @@ class FileMessageSet private[kafka](@volatile var file: File,
     trace("FileMessageSet " + file.getAbsolutePath + " : bytes transferred : " + bytesTransferred
       + " bytes requested for transfer : " + math.min(size, sizeInBytes))
     bytesTransferred
+  }
+
+  /**
+    * This method is called before we write messages to socket use zero-copy transfer. We need to
+    * make sure all the messages in the message set has expected magic value
+    * @param expectedMagicValue the magic value expected
+    * @return true if all messages has expected magic value, false otherwise
+    */
+  override def hasMagicValue(expectedMagicValue: Byte): Boolean = {
+    var location = start
+    val offsetAndSizeBuffer = ByteBuffer.allocate(MessageSet.LogOverhead)
+    val crcAndMagicByteBuffer = ByteBuffer.allocate(Message.CrcLength + Message.MagicLength)
+    while(location < end) {
+      offsetAndSizeBuffer.rewind()
+      channel.read(offsetAndSizeBuffer, location)
+      if (offsetAndSizeBuffer.hasRemaining)
+        return true
+      offsetAndSizeBuffer.rewind()
+      offsetAndSizeBuffer.getLong // skip offset field
+      val messageSize = offsetAndSizeBuffer.getInt
+      if(messageSize < Message.MinMessageOverhead)
+        throw new IllegalStateException("Invalid message size: " + messageSize)
+      crcAndMagicByteBuffer.rewind()
+      channel.read(crcAndMagicByteBuffer, location + MessageSet.LogOverhead)
+      if (crcAndMagicByteBuffer.get(Message.MagicOffset) != expectedMagicValue)
+        return false
+      location += (MessageSet.LogOverhead + messageSize)
+    }
+    true
   }
 
   /**

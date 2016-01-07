@@ -20,14 +20,15 @@ package kafka.api
 import java.nio.ByteBuffer
 import java.nio.channels.GatheringByteChannel
 
-import kafka.common.TopicAndPartition
-import kafka.message.{MessageSet, ByteBufferMessageSet}
+import kafka.common.{TopicAndPartition, ErrorMapping}
+import kafka.message.{NoCompressionCodec, Message, MessageSet, ByteBufferMessageSet}
 import kafka.api.ApiUtils._
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.{Send, MultiSend}
 import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
+import scala.collection.mutable.ArrayBuffer
 
 object FetchResponsePartitionData {
   def readFrom(buffer: ByteBuffer): FetchResponsePartitionData = {
@@ -48,6 +49,36 @@ object FetchResponsePartitionData {
 
 case class FetchResponsePartitionData(error: Short = Errors.NONE.code, hw: Long = -1L, messages: MessageSet) {
   val sizeInBytes = FetchResponsePartitionData.headerSize + messages.sizeInBytes
+
+  def toMessageFormat(toMagicValue: Byte): FetchResponsePartitionData = {
+    if (messages.hasMagicValue(toMagicValue))
+      this
+    else {
+      val offsets = new ArrayBuffer[Long]
+      val newMessages = new ArrayBuffer[Message]
+      messages.iterator.foreach(messageAndOffset => {
+        val message = messageAndOffset.message
+        // File message set only has shallow iterator. We need to do deep iteration here if needed.
+        if (message.compressionCodec == NoCompressionCodec) {
+          newMessages += messageAndOffset.message.toFormatVersion(toMagicValue)
+          offsets += messageAndOffset.offset
+        } else {
+          val deepIter = ByteBufferMessageSet.deepIterator(messageAndOffset)
+          for (innerMessageAndOffset <- deepIter) {
+            newMessages += innerMessageAndOffset.message.toFormatVersion(toMagicValue)
+            offsets += innerMessageAndOffset.offset
+          }
+        }
+      })
+
+      // We use the offset seq to assign offsets so the offset of the messages does not change.
+      val newMessageSet = new ByteBufferMessageSet(
+        compressionCodec = messages.headOption.map(_.message.compressionCodec).getOrElse(NoCompressionCodec),
+        offsetSeq = offsets.toSeq,
+        newMessages: _*)
+      new FetchResponsePartitionData(error, hw, newMessageSet)
+    }
+  }
 }
 
 // SENDS
@@ -200,13 +231,20 @@ object FetchResponse {
 case class FetchResponse(correlationId: Int,
                          data: Map[TopicAndPartition, FetchResponsePartitionData],
                          requestVersion: Int = 0,
-                         throttleTimeMs: Int = 0)
+                         throttleTimeMs: Int = 0,
+                         magicValueToUse: Byte = Message.CurrentMagicValue)
   extends RequestOrResponse() {
 
+
+  /**
+   * Convert the message format if necessary.
+   */
+  lazy val dataAfterVersionConversion = data.map{case (topicAndPartition, partitionData) =>
+    topicAndPartition -> partitionData.toMessageFormat(magicValueToUse)}
   /**
    * Partitions the data into a map of maps (one for each topic).
    */
-  lazy val dataGroupedByTopic = data.groupBy{ case (topicAndPartition, fetchData) => topicAndPartition.topic }
+  lazy val dataGroupedByTopic = dataAfterVersionConversion.groupBy{ case (topicAndPartition, fetchData) => topicAndPartition.topic }
   val headerSizeInBytes = FetchResponse.headerSize(requestVersion)
   lazy val sizeInBytes = FetchResponse.responseSize(dataGroupedByTopic, requestVersion)
 

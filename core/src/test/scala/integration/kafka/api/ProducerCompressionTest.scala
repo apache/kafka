@@ -101,7 +101,7 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
 
       var index = 0
       for (message <- messages) {
-        assertEquals(new Message(bytes = message), messageSet(index).message)
+        assertEquals(new Message(bytes = message, Message.NoTimestamp, Message.MagicValue_V0), messageSet(index).message)
         assertEquals(index.toLong, messageSet(index).offset)
         index += 1
       }

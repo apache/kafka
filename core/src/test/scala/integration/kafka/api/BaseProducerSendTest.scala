@@ -17,7 +17,6 @@
 
 package kafka.api
 
-import java.io.File
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
@@ -238,7 +237,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
       // TODO: also check topic and partition after they are added in the return messageSet
       for (i <- 0 to numRecords - 1) {
-        assertEquals(new Message(bytes = ("value" + (i + 1)).getBytes), messageSet1(i).message)
+        assertEquals(new Message(bytes = ("value" + (i + 1)).getBytes, Message.NoTimestamp, Message.MagicValue_V0), messageSet1(i).message)
         assertEquals(i.toLong, messageSet1(i).offset)
       }
     } finally {

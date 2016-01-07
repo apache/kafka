@@ -26,13 +26,15 @@ class MessageWriter(segmentSize: Int) extends BufferingOutputStream(segmentSize)
 
   import Message._
 
-  def write(key: Array[Byte] = null, codec: CompressionCodec)(writePayload: OutputStream => Unit): Unit = {
+  def write(key: Array[Byte] = null, codec: CompressionCodec, timestamp: Long, magicValue: Byte)(writePayload: OutputStream => Unit): Unit = {
     withCrc32Prefix {
-      write(CurrentMagicValue)
+      write(magicValue)
       var attributes: Byte = 0
       if (codec.codec > 0)
         attributes = (attributes | (CompressionCodeMask & codec.codec)).toByte
       write(attributes)
+      if (magicValue > MagicValue_V0)
+        writeLong(timestamp)
       // write the key
       if (key == null) {
         writeInt(-1)
@@ -59,6 +61,17 @@ class MessageWriter(segmentSize: Int) extends BufferingOutputStream(segmentSize)
     out.write(value >>> 16)
     out.write(value >>> 8)
     out.write(value)
+  }
+
+  private def writeLong(value: Long): Unit = {
+    write((value >>> 56).toInt)
+    write((value >>> 48).toInt)
+    write((value >>> 40).toInt)
+    write((value >>> 32).toInt)
+    write((value >>> 24).toInt)
+    write((value >>> 16).toInt)
+    write((value >>> 8).toInt)
+    write(value.toInt)
   }
 
   private def withCrc32Prefix(writeData: => Unit): Unit = {

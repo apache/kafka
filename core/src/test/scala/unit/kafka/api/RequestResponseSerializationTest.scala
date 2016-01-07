@@ -20,11 +20,13 @@ package kafka.api
 import kafka.cluster.{EndPoint, Broker}
 import kafka.common.{OffsetAndMetadata, OffsetMetadataAndError}
 import kafka.common._
-import kafka.message.{Message, ByteBufferMessageSet}
+import kafka.log.FileMessageSet
+import kafka.message._
 import kafka.utils.SystemTime
 
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
+import kafka.utils.TestUtils._
 
 import java.nio.ByteBuffer
 
@@ -287,4 +289,97 @@ class RequestResponseSerializationTest extends JUnitSuite {
     // new response should have 4 bytes more than the old response since delayTime is an INT32
     assertEquals(oldClientResponse.sizeInBytes + 4, newClientResponse.sizeInBytes)
   }
+
+  @Test
+  def testFetchResponseFormatConversion() {
+    // Up conversion
+    val offsets = Seq(0L, 2L)
+    val messagesV0 = Seq(new Message("hello".getBytes, "k1".getBytes, Message.NoTimestamp, Message.MagicValue_V0),
+                       new Message("goodbye".getBytes, "k2".getBytes, Message.NoTimestamp, Message.MagicValue_V0))
+    val messageSetV0 = new ByteBufferMessageSet(
+      compressionCodec = NoCompressionCodec,
+      offsetSeq = offsets,
+      messages = messagesV0:_*)
+    val compressedMessageSetV0 = new ByteBufferMessageSet(
+      compressionCodec = DefaultCompressionCodec,
+      offsetSeq = offsets,
+      messages = messagesV0:_*)
+
+    // up conversion for non-compressed messages
+    var fileMessageSet = new FileMessageSet(tempFile())
+    fileMessageSet.append(messageSetV0)
+    fileMessageSet.flush()
+    var convertedPartitionData = new FetchResponsePartitionData(messages = fileMessageSet).toMessageFormat(Message.MagicValue_V1)
+    var i = 0
+    for (messageAndOffset <- convertedPartitionData.messages) {
+      val message = messageAndOffset.message
+      val offset = messageAndOffset.offset
+      assertEquals("magic byte should be 1", Message.MagicValue_V1, message.magic)
+      assertEquals("offset should not change", offsets(i), offset)
+      assertEquals("key should not change", messagesV0(i).key, message.key)
+      assertEquals("payload should not change", messagesV0(i).payload, message.payload)
+      i += 1
+    }
+
+    fileMessageSet = new FileMessageSet(tempFile())
+    fileMessageSet.append(compressedMessageSetV0)
+    fileMessageSet.flush()
+    // up conversion for compressed messages
+    convertedPartitionData = new FetchResponsePartitionData(messages = fileMessageSet).toMessageFormat(Message.MagicValue_V1)
+    i = 0
+    for (messageAndOffset <- convertedPartitionData.messages) {
+      val message = messageAndOffset.message
+      val offset = messageAndOffset.offset
+      assertEquals("magic byte should be 1", Message.MagicValue_V1, message.magic)
+      assertEquals("offset should not change", offsets(i), offset)
+      assertEquals("key should not change", messagesV0(i).key, message.key)
+      assertEquals("payload should not change", messagesV0(i).payload, message.payload)
+      i += 1
+    }
+
+    // Down conversion
+    val messagesV1 = Seq(new Message("hello".getBytes, "k1".getBytes, 1L, Message.MagicValue_V1),
+                                  new Message("goodbye".getBytes, "k2".getBytes, 2L, Message.MagicValue_V1))
+    val messageSetV1 = new ByteBufferMessageSet(
+      compressionCodec = NoCompressionCodec,
+      offsetSeq = offsets,
+      messages = messagesV1:_*)
+    val compressedMessageSetV1 = new ByteBufferMessageSet(
+      compressionCodec = DefaultCompressionCodec,
+      offsetSeq = offsets,
+      messages = messagesV1:_*)
+
+    // down conversion for non-compressed messages
+    fileMessageSet = new FileMessageSet(tempFile())
+    fileMessageSet.append(messageSetV1)
+    fileMessageSet.flush()
+    convertedPartitionData = new FetchResponsePartitionData(messages = fileMessageSet).toMessageFormat(Message.MagicValue_V0)
+    i = 0
+    for (messageAndOffset <- convertedPartitionData.messages) {
+      val message = messageAndOffset.message
+      val offset = messageAndOffset.offset
+      assertEquals("magic byte should be 0", Message.MagicValue_V0, message.magic)
+      assertEquals("offset should not change", offsets(i), offset)
+      assertEquals("key should not change", messagesV0(i).key, message.key)
+      assertEquals("payload should not change", messagesV0(i).payload, message.payload)
+      i += 1
+    }
+
+    fileMessageSet = new FileMessageSet(tempFile())
+    fileMessageSet.append(compressedMessageSetV1)
+    fileMessageSet.flush()
+    // down conversion for compressed messages
+    convertedPartitionData = new FetchResponsePartitionData(messages = fileMessageSet).toMessageFormat(Message.MagicValue_V0)
+    i = 0
+    for (messageAndOffset <- convertedPartitionData.messages) {
+      val message = messageAndOffset.message
+      val offset = messageAndOffset.offset
+      assertEquals("magic byte should be 0", Message.MagicValue_V0, message.magic)
+      assertEquals("offset should not change", offsets(i), offset)
+      assertEquals("key should not change", messagesV0(i).key, message.key)
+      assertEquals("payload should not change", messagesV0(i).payload, message.payload)
+      i += 1
+    }
+  }
+
 }

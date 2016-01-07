@@ -36,6 +36,12 @@ import JavaConverters._
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
 
+  // TODO: Remove this after o.a.k.clients has Record version 1 (relative offset + timestamp)
+  // We need this config because testRecordTooLarge does not work when message format conversion occurs on server
+  // side. In that case we lose the residue part of the file message set from zero-copy transfer, which is exactly
+  // what we are depending on to determine if message size is too large.
+  this.serverConfig.setProperty(KafkaConfig.MessageFormatVersionProp, "0.9.0")
+
   @Test
   def testAutoCommitOnClose() {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")

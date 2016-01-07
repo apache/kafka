@@ -141,7 +141,9 @@ class GroupMetadataManager(val brokerId: Int,
       // if we crash or leaders move) since the new leaders will still expire the consumers with heartbeat and
       // retry removing this group.
       val groupPartition = partitionFor(group.groupId)
-      val tombstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(group.groupId))
+      // Tombstone does not care about message magic value, simply use magic value 0.
+      val tombstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(group.groupId),
+        timestamp = Message.NoTimestamp, magicValue = Message.MagicValue_V0)
 
       val partitionOpt = replicaManager.getPartition(GroupCoordinator.GroupMetadataTopicName, groupPartition)
       partitionOpt.foreach { partition =>
@@ -166,10 +168,12 @@ class GroupMetadataManager(val brokerId: Int,
   def prepareStoreGroup(group: GroupMetadata,
                         groupAssignment: Map[String, Array[Byte]],
                         responseCallback: Short => Unit): DelayedStore = {
-    // construct the message to append
+    // construct the message to append. GroupMetadata does not use message timestamp so we use magic value 0
     val message = new Message(
       key = GroupMetadataManager.groupMetadataKey(group.groupId),
-      bytes = GroupMetadataManager.groupMetadataValue(group, groupAssignment)
+      bytes = GroupMetadataManager.groupMetadataValue(group, groupAssignment),
+      timestamp = Message.NoTimestamp,
+      magicValue = Message.MagicValue_V0
     )
 
     val groupMetadataPartition = new TopicPartition(GroupCoordinator.GroupMetadataTopicName, partitionFor(group.groupId))
@@ -251,7 +255,9 @@ class GroupMetadataManager(val brokerId: Int,
     val messages = filteredOffsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
       new Message(
         key = GroupMetadataManager.offsetCommitKey(groupId, topicAndPartition.topic, topicAndPartition.partition),
-        bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata)
+        bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata),
+        timestamp = Message.NoTimestamp,
+        magicValue = Message.MagicValue_V0
       )
     }.toSeq
 
@@ -551,7 +557,7 @@ class GroupMetadataManager(val brokerId: Int,
         val commitKey = GroupMetadataManager.offsetCommitKey(groupTopicAndPartition.group,
           groupTopicAndPartition.topicPartition.topic, groupTopicAndPartition.topicPartition.partition)
 
-        (offsetsPartition, new Message(bytes = null, key = commitKey))
+        (offsetsPartition, new Message(bytes = null, key = commitKey, timestamp = Message.NoTimestamp, magicValue = Message.MagicValue_V0))
       }.groupBy { case (partition, tombstone) => partition }
 
       // Append the tombstone messages to the offset partitions. It is okay if the replicas don't receive these (say,

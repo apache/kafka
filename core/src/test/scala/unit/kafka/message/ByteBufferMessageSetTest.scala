@@ -19,6 +19,8 @@ package kafka.message
 
 import java.nio._
 import java.util.concurrent.atomic.AtomicLong
+import kafka.api.ApiVersion
+import kafka.message.Message.TimestampType
 import org.junit.Assert._
 import org.junit.Test
 import kafka.utils.TestUtils
@@ -135,27 +137,233 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       verifyShallowIterator(mixedMessageSet)
     }
   }
+
+  @Test
+  def testMessageWithProvidedOffsetSeq() {
+    val offsets = Seq(0L, 2L)
+    val messages = new ByteBufferMessageSet(
+      compressionCodec = NoCompressionCodec,
+      offsetSeq = offsets,
+      new Message("hello".getBytes),
+      new Message("goodbye".getBytes))
+    val iter = messages.iterator
+    assertEquals("first offset should be 0", 0L, iter.next().offset)
+    assertEquals("second offset should be 2", 2L, iter.next().offset)
+  }
+
+  @Test
+  def testLogAppendTime() {
+    val startTime = System.currentTimeMillis()
+    // The timestamps should be overwritten
+    val messages = getMessages(magicValue = Message.MagicValue_V1, timestamp = 0L, codec = NoCompressionCodec)
+    val compressedMessages = getMessages(magicValue = Message.MagicValue_V1, timestamp = 5L, codec = DefaultCompressionCodec)
+    val compressedMessagesWithoutRecompression =
+      getMessages(magicValue = Message.MagicValue_V1, timestamp = -1L, codec = DefaultCompressionCodec)
+
+    val validatedMessages = messages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+                                                                      sourceCodec = NoCompressionCodec,
+                                                                      targetCodec = NoCompressionCodec,
+                                                                      messageFormatVersion = ApiVersion.latestVersion,
+                                                                      messageTimestampType = TimestampType.LogAppendTime,
+                                                                      messageTimestampDiffMaxMs = 1000L)
+
+    val validatedCompressedMessages =
+      compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+                                                          sourceCodec = DefaultCompressionCodec,
+                                                          targetCodec = DefaultCompressionCodec,
+                                                          messageFormatVersion = ApiVersion.latestVersion,
+                                                          messageTimestampType = TimestampType.LogAppendTime,
+                                                          messageTimestampDiffMaxMs = 1000L)
+
+    val validatedCompressedMessagesWithoutRecompression =
+      compressedMessagesWithoutRecompression.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+                                                                              sourceCodec = DefaultCompressionCodec,
+                                                                              targetCodec = DefaultCompressionCodec,
+                                                                              messageFormatVersion = ApiVersion.latestVersion,
+                                                                              messageTimestampType = TimestampType.LogAppendTime,
+                                                                              messageTimestampDiffMaxMs = 1000L)
+
+    val now = System.currentTimeMillis()
+    assertEquals("message set size should not change", messages.size, validatedMessages.size)
+    for (messageAndOffset <- validatedMessages)
+      assertTrue(messageAndOffset.message.timestamp >= startTime && messageAndOffset.message.timestamp <= now)
+
+    assertEquals("message set size should not change", compressedMessages.size, validatedCompressedMessages.size)
+    for (messageAndOffset <- validatedCompressedMessages) {
+      assertTrue(s"Timestamp of message ${messageAndOffset.message}} should be between $startTime and $now",
+        messageAndOffset.message.timestamp >= startTime && messageAndOffset.message.timestamp <= now)
+    }
+    assertTrue("MessageSet should still valid", validatedCompressedMessages.shallowIterator.next().message.isValid)
+
+    assertEquals("message set size should not change", compressedMessagesWithoutRecompression.size,
+      validatedCompressedMessagesWithoutRecompression.size)
+    for (messageAndOffset <- validatedCompressedMessagesWithoutRecompression) {
+      assertTrue(s"Timestamp of message ${messageAndOffset.message}} should be between $startTime and $now",
+        messageAndOffset.message.timestamp >= startTime && messageAndOffset.message.timestamp <= now)
+    }
+    assertTrue("MessageSet should still valid", validatedCompressedMessagesWithoutRecompression.shallowIterator.next().message.isValid)
+  }
+
+  @Test
+  def testCreateTime() {
+    val now = System.currentTimeMillis()
+    val messages = getMessages(magicValue = Message.MagicValue_V1, timestamp = now, codec = NoCompressionCodec)
+    val compressedMessages = getMessages(magicValue = Message.MagicValue_V1, timestamp = now, codec = DefaultCompressionCodec)
+
+    val validatedMessages = messages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+                                                                      sourceCodec = NoCompressionCodec,
+                                                                      targetCodec = NoCompressionCodec,
+                                                                      messageFormatVersion = ApiVersion.latestVersion,
+                                                                      messageTimestampType = TimestampType.CreateTime,
+                                                                      messageTimestampDiffMaxMs = 1000L)
+
+    val validatedCompressedMessages =
+      compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+                                                          sourceCodec = DefaultCompressionCodec,
+                                                          targetCodec = DefaultCompressionCodec,
+                                                          messageFormatVersion = ApiVersion.latestVersion,
+                                                          messageTimestampType = TimestampType.CreateTime,
+                                                          messageTimestampDiffMaxMs = 1000L)
+
+    for (messageAndOffset <- validatedMessages)
+      assertEquals(messageAndOffset.message.timestamp, now)
+    for (messageAndOffset <- validatedCompressedMessages)
+      assertEquals(messageAndOffset.message.timestamp, now)
+  }
+
+  @Test
+  def testInvalidCreateTime() {
+    val now = System.currentTimeMillis()
+    val messages = getMessages(magicValue = Message.MagicValue_V1, timestamp = now - 1001L, codec = NoCompressionCodec)
+    val compressedMessages = getMessages(magicValue = Message.MagicValue_V1, timestamp = now - 1001L, codec = DefaultCompressionCodec)
+
+    try {
+      messages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+                                                sourceCodec = NoCompressionCodec,
+                                                targetCodec = NoCompressionCodec,
+                                                messageFormatVersion = ApiVersion.latestVersion,
+                                                messageTimestampType = TimestampType.CreateTime,
+                                                messageTimestampDiffMaxMs = 1000L)
+      fail("Should throw InvalidMessageException.")
+    } catch {
+      case e: InvalidMessageException =>
+    }
+
+    try {
+      compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+                                                          sourceCodec = DefaultCompressionCodec,
+                                                          targetCodec = DefaultCompressionCodec,
+                                                          messageFormatVersion = ApiVersion.latestVersion,
+                                                          messageTimestampType = TimestampType.CreateTime,
+                                                          messageTimestampDiffMaxMs = 1000L)
+      fail("Should throw InvalidMessageException.")
+    } catch {
+      case e: InvalidMessageException =>
+    }
+  }
   
   @Test
-  def testOffsetAssignment() {
-    val messages = new ByteBufferMessageSet(NoCompressionCodec,
-                                            new Message("hello".getBytes), 
-                                            new Message("there".getBytes), 
-                                            new Message("beautiful".getBytes))
-    val compressedMessages = new ByteBufferMessageSet(compressionCodec = DefaultCompressionCodec,
-                                                      messages = messages.map(_.message).toBuffer:_*)
-    // check uncompressed offsets 
+  def testAbsoluteOffsetAssignment() {
+    val messages = getMessages(magicValue = Message.MagicValue_V0, codec = NoCompressionCodec)
+    val compressedMessages = getMessages(magicValue = Message.MagicValue_V0, codec = DefaultCompressionCodec)
+    // check uncompressed offsets
     checkOffsets(messages, 0)
-    var offset = 1234567
-    checkOffsets(messages.validateMessagesAndAssignOffsets(new AtomicLong(offset), NoCompressionCodec, NoCompressionCodec), offset)
+    val offset = 1234567
+    checkOffsets(messages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+                                                           sourceCodec = NoCompressionCodec,
+                                                           targetCodec = NoCompressionCodec,
+                                                           messageFormatVersion = ApiVersion("0.9.0"),
+                                                           messageTimestampType = TimestampType.CreateTime,
+                                                           messageTimestampDiffMaxMs = 1000L), offset)
 
     // check compressed messages
     checkOffsets(compressedMessages, 0)
-    checkOffsets(compressedMessages.validateMessagesAndAssignOffsets(new AtomicLong(offset), DefaultCompressionCodec, DefaultCompressionCodec), offset)
+    checkOffsets(compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+                                                                     sourceCodec = DefaultCompressionCodec,
+                                                                     targetCodec = DefaultCompressionCodec,
+                                                                     messageFormatVersion = ApiVersion("0.9.0"),
+                                                                     messageTimestampType = TimestampType.CreateTime,
+                                                                     messageTimestampDiffMaxMs = 1000L), offset)
+
+  }
+
+  @Test
+  def testRelativeOffsetAssignment() {
+    val now = System.currentTimeMillis()
+    val messages = getMessages(magicValue = Message.MagicValue_V1, timestamp = now, codec = NoCompressionCodec)
+    val compressedMessages = getMessages(magicValue = Message.MagicValue_V1, timestamp = now, codec = DefaultCompressionCodec)
+
+    // check uncompressed offsets
+    checkOffsets(messages, 0)
+    val offset = 1234567
+    val messageWithOffset = messages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+                                                                      sourceCodec = NoCompressionCodec,
+                                                                      targetCodec = NoCompressionCodec,
+                                                                      messageTimestampType = TimestampType.CreateTime,
+                                                                      messageTimestampDiffMaxMs = 5000L)
+    checkOffsets(messageWithOffset, offset)
+
+    // check compressed messages
+    checkOffsets(compressedMessages, 0)
+    val compressedMessagesWithOffset = compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+                                                                                           sourceCodec = DefaultCompressionCodec,
+                                                                                           targetCodec = DefaultCompressionCodec,
+                                                                                           messageTimestampType = TimestampType.CreateTime,
+                                                                                           messageTimestampDiffMaxMs = 5000L)
+    checkOffsets(compressedMessagesWithOffset, offset)
+  }
+
+  @Test
+  def testOffsetAssignmentAfterMessageFormatConversion() {
+    // Check up conversion
+    val messagesV0 = getMessages(magicValue = Message.MagicValue_V0, codec = NoCompressionCodec)
+    val compressedMessagesV0 = getMessages(magicValue = Message.MagicValue_V0, codec = DefaultCompressionCodec)
+    // check uncompressed offsets
+    checkOffsets(messagesV0, 0)
+    val offset = 1234567
+    checkOffsets(messagesV0.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+                                                             sourceCodec = NoCompressionCodec,
+                                                             targetCodec = NoCompressionCodec,
+                                                             messageFormatVersion = ApiVersion.latestVersion,
+                                                             messageTimestampType = TimestampType.LogAppendTime,
+                                                             messageTimestampDiffMaxMs = 1000L), offset)
+
+    // check compressed messages
+    checkOffsets(compressedMessagesV0, 0)
+    checkOffsets(compressedMessagesV0.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+                                                                       sourceCodec = DefaultCompressionCodec,
+                                                                       targetCodec = DefaultCompressionCodec,
+                                                                       messageFormatVersion = ApiVersion.latestVersion,
+                                                                       messageTimestampType = TimestampType.LogAppendTime,
+                                                                       messageTimestampDiffMaxMs = 1000L), offset)
+
+    // Check down conversion
+    val now = System.currentTimeMillis()
+    val messagesV1 = getMessages(Message.MagicValue_V1, now, NoCompressionCodec)
+    val compressedMessagesV1 = getMessages(Message.MagicValue_V1, now, DefaultCompressionCodec)
+
+    // check uncompressed offsets
+    checkOffsets(messagesV1, 0)
+    checkOffsets(messagesV1.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+                                                             sourceCodec = NoCompressionCodec,
+                                                             targetCodec = NoCompressionCodec,
+                                                             messageFormatVersion = ApiVersion("0.9.0"),
+                                                             messageTimestampType = TimestampType.CreateTime,
+                                                             messageTimestampDiffMaxMs = 5000L), offset)
+
+    // check compressed messages
+    checkOffsets(compressedMessagesV1, 0)
+    checkOffsets(compressedMessagesV1.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+                                                                       sourceCodec = DefaultCompressionCodec,
+                                                                       targetCodec = DefaultCompressionCodec,
+                                                                       messageFormatVersion = ApiVersion("0.9.0"),
+                                                                       messageTimestampType = TimestampType.CreateTime,
+                                                                       messageTimestampDiffMaxMs = 5000L), offset)
   }
   
   /* check that offsets are assigned based on byte offset from the given base offset */
   def checkOffsets(messages: ByteBufferMessageSet, baseOffset: Long) {
+    assertTrue("Message set should not be empty", messages.size > 0)
     var offset = baseOffset
     for(entry <- messages) {
       assertEquals("Unexpected offset in message set iterator", offset, entry.offset)
@@ -168,5 +376,23 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     val shallowOffsets = messageSet.shallowIterator.map(msgAndOff => msgAndOff.offset).toSet
     val deepOffsets = messageSet.iterator.map(msgAndOff => msgAndOff.offset).toSet
     assertTrue(shallowOffsets.subsetOf(deepOffsets))
+  }
+
+  private def getMessages(magicValue: Byte = Message.CurrentMagicValue,
+                          timestamp: Long = Message.NoTimestamp,
+                          codec: CompressionCodec = NoCompressionCodec): ByteBufferMessageSet = {
+    if (magicValue == Message.MagicValue_V0) {
+      new ByteBufferMessageSet(
+        codec,
+        new Message("hello".getBytes),
+        new Message("there".getBytes),
+        new Message("beautiful".getBytes))
+    } else {
+      new ByteBufferMessageSet(
+        codec,
+        new Message("hello".getBytes, timestamp = timestamp, magicValue = Message.MagicValue_V1),
+        new Message("there".getBytes, timestamp = timestamp, magicValue = Message.MagicValue_V1),
+        new Message("beautiful".getBytes, timestamp = timestamp, magicValue = Message.MagicValue_V1))
+    }
   }
 }

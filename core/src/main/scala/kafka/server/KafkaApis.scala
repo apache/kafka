@@ -27,7 +27,7 @@ import kafka.common._
 import kafka.controller.KafkaController
 import kafka.coordinator.{GroupCoordinator, JoinGroupResult}
 import kafka.log._
-import kafka.message.{ByteBufferMessageSet, MessageSet}
+import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
 import kafka.network._
 import kafka.network.RequestChannel.{Session, Response}
 import kafka.security.auth.{Authorizer, ClusterAction, Group, Create, Describe, Operation, Read, Resource, Topic, Write}
@@ -426,6 +426,18 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for sending a fetch response
     def sendResponseCallback(responsePartitionData: Map[TopicAndPartition, FetchResponsePartitionData]) {
+
+      // determine the magic value to use
+      // Only send messages with magic value 1 when client supports it and server has this format on disk.
+      val magicValueToUse =
+        if (fetchRequest.versionId > 1 && config.messageFormatVersion.onOrAfter(KAFKA_0_10_0_DV0))
+          // TODO: Change magic value to 1 after o.a.k.client side change is done.
+          // We cannot send message format 1 back yet, because replica fetcher thread uses o.a.k.clients schema
+          // that does not have magic value 1 yet.
+          Message.MagicValue_V0
+        else
+          Message.MagicValue_V0
+
       val mergedResponseStatus = responsePartitionData ++ unauthorizedResponseStatus
 
       mergedResponseStatus.foreach { case (topicAndPartition, data) =>
@@ -440,7 +452,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       def fetchResponseCallback(delayTimeMs: Int) {
-        val response = FetchResponse(fetchRequest.correlationId, mergedResponseStatus, fetchRequest.versionId, delayTimeMs)
+          info(s"Sending fetch response to ${fetchRequest.clientId} with ${responsePartitionData.values.map(_.messages.size).sum}" +
+            s" messages using magic value $magicValueToUse")
+        val response = FetchResponse(fetchRequest.correlationId, mergedResponseStatus, fetchRequest.versionId, delayTimeMs, magicValueToUse)
         requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
       }
 

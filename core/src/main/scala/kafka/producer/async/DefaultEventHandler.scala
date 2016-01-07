@@ -129,9 +129,22 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     events.foreach{e =>
       try {
         if(e.hasKey)
-          serializedMessages += new KeyedMessage[K,Message](topic = e.topic, key = e.key, partKey = e.partKey, message = new Message(key = keyEncoder.toBytes(e.key), bytes = encoder.toBytes(e.message)))
+          serializedMessages += new KeyedMessage[K,Message](
+            topic = e.topic,
+            key = e.key,
+            partKey = e.partKey,
+            message = new Message(key = keyEncoder.toBytes(e.key),
+                                  bytes = encoder.toBytes(e.message),
+                                  timestamp = Message.NoTimestamp,
+                                  magicValue = Message.MagicValue_V0))
         else
-          serializedMessages += new KeyedMessage[K,Message](topic = e.topic, key = e.key, partKey = e.partKey, message = new Message(bytes = encoder.toBytes(e.message)))
+          serializedMessages += new KeyedMessage[K,Message](
+            topic = e.topic,
+            key = e.key,
+            partKey = e.partKey,
+            message = new Message(bytes = encoder.toBytes(e.message),
+                                  timestamp = Message.NoTimestamp,
+                                  magicValue = Message.MagicValue_V0))
       } catch {
         case t: Throwable =>
           producerStats.serializationErrorRate.mark()

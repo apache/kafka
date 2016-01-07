@@ -24,16 +24,24 @@ package kafka.api
  *
  * Note that the ID we initialize for each version is important.
  * We consider a version newer than another, if it has a higher ID (to avoid depending on lexicographic order)
+ * 
+ * If there is a draft protocol version between protocols of two official releases. The suffix "-DV#" will be added to
+ * help users who are running on trunk upgrade. For example:
+ * 1. Kafka 0.9.0 is released
+ * 2. After that some protocol change are made and will be released in 0.10.0. The version will be named 0.10.0-DV0
+ *    (DV stands for draft version)
+ * 3. When Kafka 0.10.0 is released. The official version 0.10.0 will be the same as the last draft version.
  */
 object ApiVersion {
   // This implicit is necessary due to: https://issues.scala-lang.org/browse/SI-8541
   implicit def orderingByVersion[A <: ApiVersion]: Ordering[A] = Ordering.by(_.id)
 
   private val versionNameMap = Map(
-    "0.8.0" -> KAFKA_080,
-    "0.8.1" -> KAFKA_081,
-    "0.8.2" -> KAFKA_082,
-    "0.9.0" -> KAFKA_090
+    "0.8.0" -> KAFKA_0_8_0,
+    "0.8.1" -> KAFKA_0_8_1,
+    "0.8.2" -> KAFKA_0_8_2,
+    "0.9.0" -> KAFKA_0_9_0,
+    "0.10.0-DV0" -> KAFKA_0_10_0_DV0
   )
 
   def apply(version: String): ApiVersion  = versionNameMap(version.split("\\.").slice(0,3).mkString("."))
@@ -57,22 +65,28 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
 }
 
 // Keep the IDs in order of versions
-case object KAFKA_080 extends ApiVersion {
+case object KAFKA_0_8_0 extends ApiVersion {
   val version: String = "0.8.0.X"
   val id: Int = 0
 }
 
-case object KAFKA_081 extends ApiVersion {
+case object KAFKA_0_8_1 extends ApiVersion {
   val version: String = "0.8.1.X"
   val id: Int = 1
 }
 
-case object KAFKA_082 extends ApiVersion {
+case object KAFKA_0_8_2 extends ApiVersion {
   val version: String = "0.8.2.X"
   val id: Int = 2
 }
 
-case object KAFKA_090 extends ApiVersion {
+case object KAFKA_0_9_0 extends ApiVersion {
   val version: String = "0.9.0.X"
   val id: Int = 3
+}
+
+// This is a between-release protocol version
+case object KAFKA_0_10_0_DV0 extends ApiVersion {
+  val version: String = "0.10.0-DV0"
+  val id: Int = 4
 }

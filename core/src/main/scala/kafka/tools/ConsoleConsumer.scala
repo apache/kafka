@@ -395,7 +395,7 @@ class ChecksumMessageFormatter extends MessageFormatter {
   }
 
   def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
-    val chksum = new Message(value, key).checksum
+    val chksum = new Message(value, key, Message.NoTimestamp, Message.MagicValue_V0).checksum
     output.println(topicStr + "checksum:" + chksum)
   }
 }
