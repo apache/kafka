@@ -19,5 +19,11 @@ repositories {
     maven {
       url 'http://dl.bintray.com/content/netflixoss/external-gradle-plugins/'
     }
+    mavenCentral()
+    jcenter()
+  }
+
+  dependencies {
+  	  classpath "org.github.ngbinh.scalastyle:gradle-scalastyle-plugin_2.10:0.7.2"
   }
 }
