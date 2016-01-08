@@ -22,6 +22,8 @@ import java.net.URI
 import java.security.URIParameter
 import javax.security.auth.login.Configuration
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Callable
+import java.util.ArrayList
 
 import kafka.cluster._
 import kafka.consumer.{ConsumerThreadId, TopicCount}
@@ -33,9 +35,11 @@ import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
 
-import org.apache.zookeeper.ZooDefs
+import org.apache.zookeeper._
 import scala.collection.JavaConverters._
+import scala.collection.JavaConversions._
 import scala.collection._
+import scala.collection.mutable.ArrayBuffer
 import kafka.api.LeaderAndIsr
 import org.apache.zookeeper.data.{ACL, Stat}
 import kafka.admin._
@@ -46,12 +50,9 @@ import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
 import kafka.utils.ZkUtils._
 
-import org.apache.zookeeper.AsyncCallback.{DataCallback,StringCallback}
-import org.apache.zookeeper.CreateMode
-import org.apache.zookeeper.KeeperException
+import org.apache.zookeeper.AsyncCallback.{StatCallback, DataCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.ZooDefs.Ids
-import org.apache.zookeeper.ZooKeeper
 
 object ZkUtils {
   val ConsumersPath = "/consumers"
@@ -455,6 +456,50 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
+  private class conditionalUpdatePersistentPathCallback extends StatCallback {
+    def processResult(rc: Int, path: String, internalCtx: scala.Any, stat: Stat): Unit = {
+      val (zkUtils, zkHandle, path2, data, expectVersion, optionalCheckerAsync, topCallback, topCtx) =
+        internalCtx.asInstanceOf[(ZkUtils, ZooKeeper, String, String, Int,
+          Option[(ZkUtils, String, String, (Boolean,Int,scala.Any) => Unit, scala.Any) => Unit],
+        (Boolean,Int,scala.Any) => Unit, scala.Any)]
+
+      Code.get(rc) match {
+        case Code.OK =>
+          return topCallback(true, stat.getVersion, topCtx)
+        case Code.BADVERSION =>
+          optionalCheckerAsync match {
+            case Some(checker) =>
+              return checker(zkUtils, path, data, topCallback, topCtx)
+            case _ => debug("Checker method is not passed skipping zkData match")
+          }
+          warn("Conditional update of path %s with data %s and expected version %d failed due to bad version".format(path, data,
+            expectVersion))
+          return topCallback(false, -1, topCtx)
+        case Code.CONNECTIONLOSS | Code.SESSIONEXPIRED =>
+          zkHandle.setData(path, ZKStringSerializer.serialize(data), expectVersion, new conditionalUpdatePersistentPathCallback, internalCtx)
+        case _ =>
+          warn("ZooKeeper event while setting data: %s %s".format(path, Code.get(rc)))
+          topCallback(false, -1, topCtx)
+      }
+    }
+  }
+  /**
+    * Conditional update (async version) the persistent path data, return (true, newVersion) if it succeeds, otherwise (the path doesn't
+    * exist, the current version is not the expected version, etc.) return (false, -1)
+    *
+    * When there is a ConnectionLossException during the conditional update, zkClient will retry the update and may fail
+    * since the previous update may have succeeded (but the stored zkVersion no longer matches the expected one).
+    * In this case, we will run the optionalChecker to further check if the previous write did indeed succeeded.
+    */
+  def conditionalUpdatePersistentPathAsync(path: String, data: String, expectVersion: Int,
+                                           optionalCheckerAsync: Option[(ZkUtils, String, String, (Boolean,Int,scala.Any) => Unit, scala.Any) => Unit] = None,
+                                           topCallback: (Boolean,Int,scala.Any) => Unit, topCtx: scala.Any) : Unit = {
+    val internalCtx = (this, this.zkConnection.getZookeeper, path, data, expectVersion, optionalCheckerAsync, topCallback, topCtx)
+
+    this.zkConnection.getZookeeper.setData(path, ZKStringSerializer.serialize(data), expectVersion, new conditionalUpdatePersistentPathCallback, internalCtx)
+  }
+
+
   /**
    * Conditional update the persistent path data, return (true, newVersion) if it succeeds, otherwise (the current
    * version is not the expected version, etc.) return (false, -1). If path doesn't exist, throws ZkNoNodeException
@@ -529,6 +574,32 @@ class ZkUtils(val zkClient: ZkClient,
                         case e2: Throwable => throw e2
                       }
     dataAndStat
+  }
+
+  private class readDataMaybeNullCallback extends DataCallback {
+    def processResult(rc: Int,
+                      path: String,
+                      ctx: Object,
+                      readData: Array[Byte],
+                      stat: Stat) {
+      val (path, topCallback, topCtx) = ctx.asInstanceOf[(String, (Option[String], Stat, scala.Any) => Unit, scala.Any)]
+      Code.get(rc) match {
+        case Code.OK =>
+          val dataStr : Option[String] = Some(ZKStringSerializer.deserialize(readData).asInstanceOf[String])
+          topCallback(dataStr, stat, topCtx)
+        case Code.NONODE | Code.CONNECTIONLOSS | Code.SESSIONEXPIRED=>
+          info("The node at %s has gone away while reading it, ".format(path))
+          readDataMaybeNullAsync(path, topCallback, topCtx)
+        case _ =>
+          warn("ZooKeeper event while getting znode data: %s %s".format(path, Code.get(rc)))
+          topCallback(None, stat, topCtx)
+      }
+    }
+  }
+
+  def readDataMaybeNullAsync(path: String, topCallback: (Option[String], Stat, scala.Any) => Unit, topCtx: scala.Any): Unit = {
+    val internalCtx = (path, topCallback, topCtx)
+    this.zkConnection.getZookeeper.getData(path, false, new readDataMaybeNullCallback, internalCtx)
   }
 
   def getChildren(path: String): Seq[String] = {
@@ -1027,7 +1098,7 @@ class ZKCheckedEphemeral(path: String,
                                           name : String) {
                           Code.get(rc) match {
                             case Code.OK | Code.NODEEXISTS =>
-                              // Nothing to do
+                            // Nothing to do
                             case Code.CONNECTIONLOSS =>
                               // try again
                               val suffix = ctx.asInstanceOf[String]

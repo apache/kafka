@@ -25,7 +25,7 @@ import kafka.common.TopicAndPartition
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.easymock.EasyMock
-
+import scala.collection.mutable.ArrayBuffer
 
 class ReplicationUtilsTest extends ZooKeeperTestHarness {
   val topic = "my-topic-test"
@@ -43,6 +43,7 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     "versions" -> 2, "leader_epoch" -> 2,"isr" -> List(1,2)))
 
   val topicDataLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(1,leaderEpoch,List(1,2),0), controllerEpoch)
+
 
   @Before
   override def setUp() {
@@ -95,6 +96,70 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     assertFalse(updateSucceeded3)
     assertEquals(newZkVersion3,-1)
   }
+
+  @Test
+  def testUpdateLeaderAndIsrAsync() {
+    val configs = TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
+    val log = EasyMock.createMock(classOf[kafka.log.Log])
+    EasyMock.expect(log.logEndOffset).andReturn(20).anyTimes()
+    EasyMock.expect(log)
+    EasyMock.replay(log)
+
+    val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
+    EasyMock.expect(logManager.getLog(TopicAndPartition(topic, partitionId))).andReturn(Some(log)).anyTimes()
+    EasyMock.replay(logManager)
+
+    val replicaManager = EasyMock.createMock(classOf[kafka.server.ReplicaManager])
+    EasyMock.expect(replicaManager.config).andReturn(configs.head)
+    EasyMock.expect(replicaManager.logManager).andReturn(logManager)
+    EasyMock.expect(replicaManager.replicaFetcherManager).andReturn(EasyMock.createMock(classOf[ReplicaFetcherManager]))
+    EasyMock.expect(replicaManager.zkUtils).andReturn(zkUtils)
+    EasyMock.replay(replicaManager)
+
+    zkUtils.makeSurePersistentPathExists(ZkUtils.IsrChangeNotificationPath)
+
+    val replicas = List(0,1)
+    var returnProcessed = false
+    def processReturn(success: Boolean, newVersion:Int, ctx: scala.Any) = {
+      val expected = ctx.asInstanceOf[Boolean]
+
+      if (expected) {
+        assertTrue(success)
+        assertEquals(newVersion, 1)
+      } else {
+        assertFalse(success)
+        assertEquals(newVersion, -1)
+      }
+      returnProcessed = true
+    }
+
+    // regular update
+    val newLeaderAndIsr1 = new LeaderAndIsr(brokerId, leaderEpoch, replicas, 0)
+    ReplicationUtils.updateLeaderAndIsrAsync(zkUtils,"my-topic-test", partitionId, newLeaderAndIsr1, controllerEpoch, 0,
+      processReturn, true)
+    // Waits until the znode is created
+    TestUtils.waitUntilTrue(() => (returnProcessed == true),
+      s"Leader was not updated asynchronously")
+
+    // mismatched zkVersion with the same data
+    returnProcessed = false
+    val newLeaderAndIsr2 = new LeaderAndIsr(brokerId, leaderEpoch, replicas, zkVersion + 1)
+    ReplicationUtils.updateLeaderAndIsrAsync(zkUtils,
+      "my-topic-test", partitionId, newLeaderAndIsr2, controllerEpoch, zkVersion + 1, processReturn, true)
+    // Waits until the znode is created
+    TestUtils.waitUntilTrue(() => (returnProcessed == true),
+      s"Leader was not updated asynchronously")
+
+    // mismatched zkVersion and leaderEpoch
+    returnProcessed = false
+    val newLeaderAndIsr3 = new LeaderAndIsr(brokerId, leaderEpoch + 1, replicas, zkVersion + 1)
+    ReplicationUtils.updateLeaderAndIsrAsync(zkUtils,
+      "my-topic-test", partitionId, newLeaderAndIsr3, controllerEpoch, zkVersion + 1, processReturn, false)
+    // Waits until the znode is created
+    TestUtils.waitUntilTrue(() => (returnProcessed == true),
+      s"Leader was not updated asynchronously")
+  }
+
 
   @Test
   def testGetLeaderIsrAndEpochForPartition() {

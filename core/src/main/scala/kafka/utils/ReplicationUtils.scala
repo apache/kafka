@@ -25,7 +25,7 @@ import org.I0Itec.zkclient.ZkClient
 import org.apache.zookeeper.data.Stat
 
 import scala.collection._
-
+import scala.collection.mutable.ArrayBuffer
 object ReplicationUtils extends Logging {
 
   private val IsrChangeNotificationPrefix = "isr_change_"
@@ -39,6 +39,24 @@ object ReplicationUtils extends Logging {
     val updatePersistentPath: (Boolean, Int) = zkUtils.conditionalUpdatePersistentPath(path, newLeaderData, zkVersion, Some(checkLeaderAndIsrZkData))
     updatePersistentPath
   }
+
+  /**
+    * Async version of updateLeaderAndIsr
+    */
+  def updateLeaderAndIsrAsync(zkUtils: ZkUtils, topic: String, partitionId: Int, newLeaderAndIsr: LeaderAndIsr, controllerEpoch: Int,
+                              zkVersion: Int, topCallback: (Boolean,Int,scala.Any) => Unit, topCtx: scala.Any) = {
+    debug("Updated async ISR for partition [%s,%d] to %s".format(topic, partitionId, newLeaderAndIsr.isr.mkString(",")))
+    val internalCtx = (topCallback, topCtx)
+    def updateCallback(success: Boolean, newVersion: Int, internalCtx: scala.Any): Unit = {
+      val (topCallback, topCtx) = internalCtx.asInstanceOf[((Boolean,Int,scala.Any) => Unit, scala.Any)]
+      topCallback(success, newVersion, topCtx)
+    }
+    val path = getTopicPartitionLeaderAndIsrPath(topic, partitionId)
+    val newLeaderData = zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
+    // use the epoch of the controller that made the leadership decision, instead of the current controller epoch
+    zkUtils.conditionalUpdatePersistentPathAsync(path, newLeaderData, zkVersion, Some(checkLeaderAndIsrZkDataAsync), updateCallback, internalCtx)
+  }
+
 
   def propagateIsrChanges(zkUtils: ZkUtils, isrChangeSet: Set[TopicAndPartition]): Unit = {
     val isrChangeNotificationPath: String = zkUtils.createSequentialPersistentPath(
@@ -68,6 +86,28 @@ object ReplicationUtils extends Logging {
       case e1: Exception =>
     }
     (false,-1)
+  }
+
+  def checkLeaderAndIsrZkDataAsync(zkUtils: ZkUtils, path: String, expectedLeaderAndIsrInfo: String,
+      topCallback: (Boolean,Int,scala.Any) => Unit, topCtx: scala.Any) = {
+    val internalCtx = (topCallback, topCtx)
+    def internalCallback(writtenLeaderOpt: Option[String], stat: Stat, internalCtx: scala.Any): Unit = {
+      val (topCallback, topCtx) = internalCtx.asInstanceOf[((Boolean, Int, scala.Any) => Unit, scala.Any)]
+      val expectedLeader = parseLeaderAndIsr(expectedLeaderAndIsrInfo, path, stat)
+      writtenLeaderOpt match {
+        case Some(writtenData) =>
+          val writtenLeader = parseLeaderAndIsr(writtenData, path, stat)
+          (expectedLeader, writtenLeader) match {
+            case (Some(expectedLeader), Some(writtenLeader)) =>
+              if (expectedLeader == writtenLeader)
+                return topCallback(true, stat.getVersion(), topCtx)
+            case _ =>
+          }
+        case None =>
+      }
+      return topCallback(false, -1, topCtx)
+    }
+    zkUtils.readDataMaybeNullAsync(path, internalCallback, internalCtx)
   }
 
   def getLeaderIsrAndEpochForPartition(zkUtils: ZkUtils, topic: String, partition: Int):Option[LeaderIsrAndControllerEpoch] = {
