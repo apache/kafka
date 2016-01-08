@@ -103,7 +103,7 @@ Please note for this to work you should create/update `~/.gradle/gradle.properti
     signing.password=
     signing.secretKeyRingFile=
 
-### Install the jars to the local Maven repository ###
+### Installing the jars to the local Maven repository ###
     ./gradlew install
 
 ### Building the test jar ###
