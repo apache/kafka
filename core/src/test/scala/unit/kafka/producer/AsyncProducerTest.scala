@@ -30,14 +30,13 @@ import kafka.message._
 import kafka.producer.async._
 import kafka.serializer._
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils._
 import scala.collection.Map
 import scala.collection.mutable.ArrayBuffer
 import kafka.utils._
 
 class AsyncProducerTest {
   // One of the few cases we can just set a fixed port because the producer is mocked out here since this uses mocks
-  val props = Seq(createBrokerConfig(1, "127.0.0.1:1", port=65534))
+  val props = Seq(TestUtils.createBrokerConfig(1, "127.0.0.1:1", port = 65534))
   val configs = props.map(KafkaConfig.fromProps)
   val brokerList = configs.map(c => org.apache.kafka.common.utils.Utils.formatAddress(c.hostName, c.port)).mkString(",")
 
@@ -79,7 +78,7 @@ class AsyncProducerTest {
   @Test
   def testProduceAfterClosed() {
     val produceData = getProduceData(10)
-    val producer = createProducer[String, String](
+    val producer = TestUtils.createProducer[String, String](
       brokerList,
       encoder = classOf[StringEncoder].getName)
 
@@ -301,7 +300,7 @@ class AsyncProducerTest {
     val props = new Properties()
     // no need to retry since the send will always fail
     props.put("message.send.max.retries", "0")
-    val producer= createProducer[String, String](
+    val producer = TestUtils.createProducer[String, String](
       brokerList = brokerList,
       encoder = classOf[DefaultEncoder].getName,
       keyEncoder = classOf[DefaultEncoder].getName,

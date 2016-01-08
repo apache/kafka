@@ -170,9 +170,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
   def verifyUncleanLeaderElectionEnabled {
     // wait until leader is elected
-    val leaderIdOpt = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
-    assertTrue("Leader should get elected", leaderIdOpt.isDefined)
-    val leaderId = leaderIdOpt.get
+    val leaderId = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
     debug("Leader for " + topic  + " is elected to be: %s".format(leaderId))
     assertTrue("Leader id is set to expected value for topic: " + topic, leaderId == brokerId1 || leaderId == brokerId2)
 
@@ -205,9 +203,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
   def verifyUncleanLeaderElectionDisabled {
     // wait until leader is elected
-    val leaderIdOpt = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
-    assertTrue("Leader should get elected", leaderIdOpt.isDefined)
-    val leaderId = leaderIdOpt.get
+    val leaderId = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
     debug("Leader for " + topic  + " is elected to be: %s".format(leaderId))
     assertTrue("Leader id is set to expected value for topic: " + topic, leaderId == brokerId1 || leaderId == brokerId2)
 
