@@ -56,13 +56,14 @@ public class SerializeCompatibilityOffsetAndMetadata {
         assertTrue(deserializedObject instanceof OffsetAndMetadata);
 
         if (deserializedObject instanceof OffsetAndMetadata) {
+            OffsetAndMetadata deSerOAM = (OffsetAndMetadata) deserializedObject;
             //assert metadata is of type String
-            assertTrue(((OffsetAndMetadata) deserializedObject).metadata() instanceof String);
+            assertTrue(deSerOAM.metadata() instanceof String);
 
             //assert de-serialized values are same as original
             //not using assertEquals for offset to ensure the type casting will catch any change in datatype
-            assertTrue("Offset should be " + offset + " and of type long. Got " + ((OffsetAndMetadata) deserializedObject).offset(), offset == (long) ((OffsetAndMetadata) deserializedObject).offset());
-            assertEquals("metadata should be " + metadata + " but got " + ((OffsetAndMetadata) deserializedObject).metadata(), metadata, ((OffsetAndMetadata) deserializedObject).metadata());
+            assertTrue("Offset should be " + offset + " and of type long. Got " + deSerOAM.offset(), offset == (long) deSerOAM.offset());
+            assertEquals("metadata should be " + metadata + " but got " + deSerOAM.metadata(), metadata, deSerOAM.metadata());
         }
     }
 }

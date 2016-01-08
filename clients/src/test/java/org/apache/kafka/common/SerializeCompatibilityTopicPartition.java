@@ -58,13 +58,14 @@ public class SerializeCompatibilityTopicPartition {
         assertTrue(deserializedObject instanceof TopicPartition);
 
         if (deserializedObject instanceof TopicPartition) {
+            TopicPartition deSerTP = (TopicPartition) deserializedObject;
             //assert topic is of type String
-            assertTrue("topic should be of type String", ((TopicPartition) deserializedObject).topic() instanceof String);
+            assertTrue("topic should be of type String", deSerTP.topic() instanceof String);
 
             //assert de-serialized values are same as original
             //not using assertEquals for partition number to ensure the type casting will catch any change in datatype
-            assertTrue("partition number should be " + partNum + " and of type int. Got " + ((TopicPartition) deserializedObject).partition(), partNum == (int) ((TopicPartition) deserializedObject).partition());
-            assertEquals("topic should be " + topicName + " but got " + ((TopicPartition) deserializedObject).topic(), topicName, ((TopicPartition) deserializedObject).topic());
+            assertTrue("partition number should be " + partNum + " and of type int. Got " + deSerTP.partition(), partNum == (int) deSerTP.partition());
+            assertEquals("topic should be " + topicName + " but got " + deSerTP.topic(), topicName, deSerTP.topic());
         }
     }
 }
