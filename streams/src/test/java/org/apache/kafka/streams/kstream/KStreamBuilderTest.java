@@ -32,7 +32,7 @@ public class KStreamBuilderTest {
     public void testFrom() {
         final KStreamBuilder builder = new KStreamBuilder();
 
-        builder.from("topic-1", "topic-2");
+        builder.stream("topic-1", "topic-2");
 
         builder.addSource(KStreamImpl.SOURCE_NAME + "0000000000", "topic-3");
     }
@@ -59,8 +59,8 @@ public class KStreamBuilderTest {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> source1 = builder.from(topic1);
-        KStream<String, String> source2 = builder.from(topic2);
+        KStream<String, String> source1 = builder.stream(topic1);
+        KStream<String, String> source2 = builder.stream(topic2);
         KStream<String, String> merged = builder.merge(source1, source2);
 
         MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();

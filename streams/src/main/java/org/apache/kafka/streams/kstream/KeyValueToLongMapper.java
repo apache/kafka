@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-public interface TransformerSupplier<K, V, R> {
+public interface KeyValueToLongMapper<K, V> {
 
-    Transformer<K, V, R> get();
+    long apply(K key, V value);
 }

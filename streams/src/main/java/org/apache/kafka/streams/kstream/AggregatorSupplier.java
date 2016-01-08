@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-public interface TransformerSupplier<K, V, R> {
+public interface AggregatorSupplier<K, V, T> {
 
-    Transformer<K, V, R> get();
+    Aggregator<K, V, T> get();
 }

@@ -45,7 +45,7 @@ public class KStreamJob {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> stream1 = builder.from("topic1");
+        KStream<String, String> stream1 = builder.stream("topic1");
 
         KStream<String, Integer> stream2 =
             stream1.map(new KeyValueMapper<String, String, KeyValue<String, Integer>>() {

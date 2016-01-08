@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-public interface TransformerSupplier<K, V, R> {
+public interface KeyValueToIntMapper<K, V> {
 
-    Transformer<K, V, R> get();
+    int apply(K key, V value);
 }

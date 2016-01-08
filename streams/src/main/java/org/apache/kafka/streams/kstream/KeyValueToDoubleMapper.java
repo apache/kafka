@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-public interface TransformerSupplier<K, V, R> {
+public interface KeyValueToDoubleMapper<K, V> {
 
-    Transformer<K, V, R> get();
+    double apply(K key, V value);
 }

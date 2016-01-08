@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.JoinWindowSpec;
+import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -71,9 +71,9 @@ public class KStreamKStreamLeftJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.from(keyDeserializer, valDeserializer, topic1);
-            stream2 = builder.from(keyDeserializer, valDeserializer, topic2);
-            joined = stream1.leftJoin(stream2, joiner, JoinWindowSpec.of("test").within(100),
+            stream1 = builder.stream(keyDeserializer, valDeserializer, topic1);
+            stream2 = builder.stream(keyDeserializer, valDeserializer, topic2);
+            joined = stream1.leftJoin(stream2, joiner, JoinWindows.of("test").within(100),
                     keySerializer, valSerializer, keyDeserializer, valDeserializer);
             joined.process(processor);
 
@@ -157,9 +157,9 @@ public class KStreamKStreamLeftJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.from(keyDeserializer, valDeserializer, topic1);
-            stream2 = builder.from(keyDeserializer, valDeserializer, topic2);
-            joined = stream1.leftJoin(stream2, joiner, JoinWindowSpec.of("test").within(100),
+            stream1 = builder.stream(keyDeserializer, valDeserializer, topic1);
+            stream2 = builder.stream(keyDeserializer, valDeserializer, topic2);
+            joined = stream1.leftJoin(stream2, joiner, JoinWindows.of("test").within(100),
                     keySerializer, valSerializer, keyDeserializer, valDeserializer);
             joined.process(processor);
 

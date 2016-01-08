@@ -15,9 +15,23 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.streams.kstream.internals;
 
-public interface TransformerSupplier<K, V, R> {
+import org.apache.kafka.streams.kstream.Window;
 
-    Transformer<K, V, R> get();
+public class HoppingWindow extends Window {
+
+    public HoppingWindow(long start, long end) {
+        super(start, end);
+    }
+
+    @Override
+    public boolean overlap(Window other) {
+        return super.overlap(other) && other.getClass().equals(HoppingWindow.class);
+    }
+
+    @Override
+    public boolean equalsTo(Window other) {
+        return super.equalsTo(other) && other.getClass().equals(HoppingWindow.class);
+    }
 }
