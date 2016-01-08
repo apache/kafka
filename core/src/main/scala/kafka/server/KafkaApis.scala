@@ -316,7 +316,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleProducerRequest(request: RequestChannel.Request) {
     val produceRequest = request.body.asInstanceOf[ProduceRequest]
-    val numBytesAppended = request.header.sizeOf() + produceRequest.sizeOf()
+    val numBytesAppended = request.header.sizeOf + produceRequest.sizeOf
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) = produceRequest.partitionRecords.asScala.partition {
       case (topicPartition, _) => authorize(request.session, Write, new Resource(Topic, topicPartition.topic))
@@ -341,13 +341,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       def produceResponseCallback(delayTimeMs: Int) {
-        if (produceRequest.acks() == 0) {
+        if (produceRequest.acks == 0) {
           // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
           // the request, since no response is expected by the producer, the server will close socket server so that
           // the producer client will know that some error has happened and will refresh its metadata
           if (errorInResponse) {
-            val exceptionsSummary = mergedResponseStatus.map { case (topicAndPartition, status) =>
-              topicAndPartition -> Errors.forCode(status.errorCode).exceptionName
+            val exceptionsSummary = mergedResponseStatus.map { case (topicPartition, status) =>
+              topicPartition -> Errors.forCode(status.errorCode).exceptionName
             }.mkString(", ")
             info(
               s"Closing connection due to error during produce request with correlation id ${request.header.correlationId} " +
@@ -359,8 +359,8 @@ class KafkaApis(val requestChannel: RequestChannel,
             requestChannel.noOperation(request.processor, request)
           }
         } else {
-          val respHeader = new ResponseHeader(request.header.correlationId())
-          val respBody = if (request.header.apiVersion() > 0)
+          val respHeader = new ResponseHeader(request.header.correlationId)
+          val respBody = if (request.header.apiVersion > 0)
             new ProduceResponse(mergedResponseStatus.asJava, delayTimeMs)
           else
             new ProduceResponse(mergedResponseStatus.asJava)
@@ -383,7 +383,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
 
       // Convert ByteBuffer to ByteBufferMessageSet
-      val authorizedMessagesPerPartition = authorizedRequestInfo.mapValues(new ByteBufferMessageSet(_))
+      val authorizedMessagesPerPartition = authorizedRequestInfo.map {
+        case (topicPartition, buffer) => (topicPartition, new ByteBufferMessageSet(buffer))
+      }
 
       // call the replica manager to append messages to the replicas
       replicaManager.appendMessages(
@@ -396,7 +398,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // if the request is put into the purgatory, it will have a held reference
       // and hence cannot be garbage collected; hence we clear its data here in
       // order to let GC re-claim its memory since it is already appended to log
-      produceRequest.emptyData()
+      produceRequest.clearPartitionRecords()
     }
   }
 

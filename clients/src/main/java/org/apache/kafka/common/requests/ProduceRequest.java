@@ -122,7 +122,7 @@ public class ProduceRequest extends AbstractRequest {
         return partitionRecords;
     }
 
-    public void emptyData() {
+    public void clearPartitionRecords() {
         partitionRecords.clear();
     }
 

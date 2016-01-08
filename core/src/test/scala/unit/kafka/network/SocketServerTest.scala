@@ -58,17 +58,15 @@ class SocketServerTest extends JUnitSuite {
   val server = new SocketServer(config, metrics, new SystemTime)
   server.startup()
 
-  def sendRequest(socket: Socket, id: Short, request: Array[Byte]) {
+  def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None) {
     val outgoing = new DataOutputStream(socket.getOutputStream)
-    outgoing.writeInt(request.length + 2)
-    outgoing.writeShort(id)
-    outgoing.write(request)
-    outgoing.flush()
-  }
-
-  def sendRequest(socket: Socket, request: Array[Byte]) {
-    val outgoing = new DataOutputStream(socket.getOutputStream)
-    outgoing.writeInt(request.length)
+    id match {
+      case Some(id) =>
+        outgoing.writeInt(request.length + 2)
+        outgoing.writeShort(id)
+      case None =>
+        outgoing.writeInt(request.length)
+    }
     outgoing.write(request)
     outgoing.flush()
   }
@@ -84,7 +82,7 @@ class SocketServerTest extends JUnitSuite {
   /* A simple request handler that just echos back the response */
   def processRequest(channel: RequestChannel) {
     val request = channel.receiveRequest
-    val byteBuffer = ByteBuffer.allocate(request.header.sizeOf() + request.body.sizeOf())
+    val byteBuffer = ByteBuffer.allocate(request.header.sizeOf + request.body.sizeOf)
     request.header.writeTo(byteBuffer)
     request.body.writeTo(byteBuffer)
     byteBuffer.rewind()
@@ -112,7 +110,7 @@ class SocketServerTest extends JUnitSuite {
     val emptyHeader = new RequestHeader(apiKey, clientId, correlationId)
     val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new util.HashMap[TopicPartition, ByteBuffer]())
 
-    val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf() + emptyRequest.sizeOf())
+    val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf + emptyRequest.sizeOf)
     emptyHeader.writeTo(byteBuffer)
     emptyRequest.writeTo(byteBuffer)
     byteBuffer.rewind()
@@ -143,7 +141,7 @@ class SocketServerTest extends JUnitSuite {
     val tooManyBytes = new Array[Byte](server.config.socketRequestMaxBytes + 1)
     new Random().nextBytes(tooManyBytes)
     val socket = connect()
-    sendRequest(socket, 0, tooManyBytes)
+    sendRequest(socket, tooManyBytes, Some(0))
     try {
       receiveResponse(socket)
     } catch {
@@ -158,8 +156,8 @@ class SocketServerTest extends JUnitSuite {
     val traceSocket = connect(protocol = SecurityProtocol.TRACE)
     val bytes = new Array[Byte](40)
     // send a request first to make sure the connection has been picked up by the socket server
-    sendRequest(plainSocket, 0, bytes)
-    sendRequest(traceSocket, 0, bytes)
+    sendRequest(plainSocket, bytes, Some(0))
+    sendRequest(traceSocket, bytes, Some(0))
     processRequest(server.requestChannel)
 
     // make sure the sockets are open
@@ -171,14 +169,14 @@ class SocketServerTest extends JUnitSuite {
     // doing a subsequent send should throw an exception as the connection should be closed.
     // send a large chunk of bytes to trigger a socket flush
     try {
-      sendRequest(plainSocket, 0, largeChunkOfBytes)
+      sendRequest(plainSocket, largeChunkOfBytes, Some(0))
       fail("expected exception when writing to closed plain socket")
     } catch {
       case e: IOException => // expected
     }
 
     try {
-      sendRequest(traceSocket, 0, largeChunkOfBytes)
+      sendRequest(traceSocket, largeChunkOfBytes, Some(0))
       fail("expected exception when writing to closed trace socket")
     } catch {
       case e: IOException => // expected
@@ -278,7 +276,7 @@ class SocketServerTest extends JUnitSuite {
   def testSessionPrincipal(): Unit = {
     val socket = connect()
     val bytes = new Array[Byte](40)
-    sendRequest(socket, 0, bytes)
+    sendRequest(socket, bytes, Some(0))
     assertEquals(KafkaPrincipal.ANONYMOUS, server.requestChannel.receiveRequest().session.principal)
     socket.close()
   }
