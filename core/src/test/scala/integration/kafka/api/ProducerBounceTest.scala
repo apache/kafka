@@ -67,9 +67,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
     val numPartitions = 3
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    val leaders = TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers, topicConfig)
-
-    assertTrue("Leader of all partitions of the topic should exist", leaders.values.forall(leader => leader.isDefined))
+    TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers, topicConfig)
 
     val scheduler = new ProducerScheduler()
     scheduler.start
