@@ -47,6 +47,8 @@ class KafkaService(JmxMixin, Service):
     # Kafka log segments etc go here
     DATA_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-data-logs")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka.properties")
+    # Kafka Authorizer
+    SIMPLE_AUTHORIZER = "kafka.security.auth.SimpleAclAuthorizer"
 
     logs = {
         "kafka_operational_logs_info": {
@@ -61,7 +63,7 @@ class KafkaService(JmxMixin, Service):
     }
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
-                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None,
+                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, authorizer_class_name=None, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None,
                  jmx_attributes=[], zk_connect_timeout=5000):
         """
         :type context
@@ -79,6 +81,7 @@ class KafkaService(JmxMixin, Service):
         self.sasl_mechanism = sasl_mechanism
         self.topics = topics
         self.minikdc = None
+        self.authorizer_class_name = authorizer_class_name
         #
         # In a heavily loaded and not very fast machine, it is
         # sometimes necessary to give more time for the zk client
