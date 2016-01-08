@@ -23,12 +23,12 @@ import java.util.Properties
 import org.junit.Assert
 import kafka.admin.AdminUtils
 import kafka.api.ProducerResponseStatus
-import kafka.common.{ErrorMapping, TopicAndPartition}
+import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
 import kafka.message._
 import kafka.server.KafkaConfig
 import kafka.utils._
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.junit.Test
 
 class SyncProducerTest extends KafkaServerTestHarness {
@@ -103,8 +103,8 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val messageSet1 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message1)
     val response1 = producer.send(TestUtils.produceRequest("test", 0, messageSet1, acks = 1))
 
-    Assert.assertEquals(1, response1.status.count(_._2.error != ErrorMapping.NoError))
-    Assert.assertEquals(ErrorMapping.MessageSizeTooLargeCode, response1.status(TopicAndPartition("test", 0)).error)
+    Assert.assertEquals(1, response1.status.count(_._2.error != Errors.NONE.code))
+    Assert.assertEquals(Errors.MESSAGE_TOO_LARGE.code, response1.status(TopicAndPartition("test", 0)).error)
     Assert.assertEquals(-1L, response1.status(TopicAndPartition("test", 0)).offset)
 
     val safeSize = configs(0).messageMaxBytes - Message.MessageOverhead - MessageSet.LogOverhead - 1
@@ -112,8 +112,8 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val messageSet2 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message2)
     val response2 = producer.send(TestUtils.produceRequest("test", 0, messageSet2, acks = 1))
 
-    Assert.assertEquals(1, response1.status.count(_._2.error != ErrorMapping.NoError))
-    Assert.assertEquals(ErrorMapping.NoError, response2.status(TopicAndPartition("test", 0)).error)
+    Assert.assertEquals(1, response1.status.count(_._2.error != Errors.NONE.code))
+    Assert.assertEquals(Errors.NONE.code, response2.status(TopicAndPartition("test", 0)).error)
     Assert.assertEquals(0, response2.status(TopicAndPartition("test", 0)).offset)
   }
 
@@ -162,7 +162,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     Assert.assertEquals(3, response.status.size)
     response.status.values.foreach {
       case ProducerResponseStatus(error, nextOffset) =>
-        Assert.assertEquals(ErrorMapping.UnknownTopicOrPartitionCode.toShort, error)
+        Assert.assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, error)
         Assert.assertEquals(-1L, nextOffset)
     }
 
@@ -178,13 +178,13 @@ class SyncProducerTest extends KafkaServerTestHarness {
     Assert.assertEquals(3, response2.status.size)
 
     // the first and last message should have been accepted by broker
-    Assert.assertEquals(ErrorMapping.NoError, response2.status(TopicAndPartition("topic1", 0)).error)
-    Assert.assertEquals(ErrorMapping.NoError, response2.status(TopicAndPartition("topic3", 0)).error)
+    Assert.assertEquals(Errors.NONE.code, response2.status(TopicAndPartition("topic1", 0)).error)
+    Assert.assertEquals(Errors.NONE.code, response2.status(TopicAndPartition("topic3", 0)).error)
     Assert.assertEquals(0, response2.status(TopicAndPartition("topic1", 0)).offset)
     Assert.assertEquals(0, response2.status(TopicAndPartition("topic3", 0)).offset)
 
     // the middle message should have been rejected because broker doesn't lead partition
-    Assert.assertEquals(ErrorMapping.UnknownTopicOrPartitionCode.toShort,
+    Assert.assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
                         response2.status(TopicAndPartition("topic2", 0)).error)
     Assert.assertEquals(-1, response2.status(TopicAndPartition("topic2", 0)).offset)
   }
@@ -250,6 +250,6 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val response = producer.send(TestUtils.produceRequest(topicName, 0,
       new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)),-1))
 
-    Assert.assertEquals(ErrorMapping.NotEnoughReplicasCode, response.status(TopicAndPartition(topicName, 0)).error)
+    Assert.assertEquals(Errors.NOT_ENOUGH_REPLICAS.code, response.status(TopicAndPartition(topicName, 0)).error)
   }
 }

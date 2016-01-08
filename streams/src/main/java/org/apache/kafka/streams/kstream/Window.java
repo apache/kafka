@@ -17,20 +17,35 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStore;
+public abstract class Window {
 
-import java.util.Iterator;
+    private long start;
+    private long end;
 
-public interface Window<K, V> extends StateStore {
+    public Window(long start, long end) {
+        this.start = start;
+        this.end = end;
+    }
 
-    void init(ProcessorContext context);
+    /**
+     * Returns the start timestamp of this window, inclusive
+     */
+    public long start() {
+        return start;
+    }
 
-    Iterator<V> find(K key, long timestamp);
+    /**
+     * Returns the end timestamp of this window, exclusive
+     */
+    public long end() {
+        return end;
+    }
 
-    Iterator<V> findAfter(K key, long timestamp);
+    public boolean overlap(Window other) {
+        return this.start() < other.end() || other.start() < this.end();
+    }
 
-    Iterator<V> findBefore(K key, long timestamp);
-
-    void put(K key, V value, long timestamp);
+    public boolean equalsTo(Window other) {
+        return this.start() == other.start() && this.end() == other.end();
+    }
 }

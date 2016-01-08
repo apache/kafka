@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
+ * 
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -20,11 +20,11 @@ package kafka.api
 import java.nio.ByteBuffer
 
 import kafka.api.ApiUtils._
-import kafka.common.{ErrorMapping, OffsetAndMetadata, TopicAndPartition}
+import kafka.common.{OffsetAndMetadata, TopicAndPartition}
 import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 
 import scala.collection._
 
@@ -41,7 +41,7 @@ object OffsetCommitRequest extends Logging {
     val correlationId = buffer.getInt
     val clientId = readShortString(buffer)
 
-    // Read the OffsetRequest
+    // Read the OffsetRequest 
     val groupId = readShortString(buffer)
 
     // version 1 and 2 specific fields
@@ -161,7 +161,7 @@ case class OffsetCommitRequest(groupId: String,
     })
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val errorCode = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
+    val errorCode = Errors.forException(e).code
     val commitStatus = requestInfo.mapValues(_ => errorCode)
     val commitResponse = OffsetCommitResponse(commitStatus, correlationId)
 

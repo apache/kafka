@@ -42,7 +42,7 @@ class TopicTest {
         fail("Should throw InvalidTopicException.")
       }
       catch {
-        case e: InvalidTopicException => "This is good."
+        case e: org.apache.kafka.common.errors.InvalidTopicException => // This is good.
       }
     }
 

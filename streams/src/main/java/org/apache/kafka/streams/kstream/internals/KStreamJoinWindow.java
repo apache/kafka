@@ -17,52 +17,42 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.WindowSupplier;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.state.WindowStore;
 
-public class KStreamWindow<K, V> implements ProcessorSupplier<K, V> {
+class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
 
-    private final WindowSupplier<K, V> windowSupplier;
+    private final String windowName;
 
-    KStreamWindow(WindowSupplier<K, V> windowSupplier) {
-        this.windowSupplier = windowSupplier;
-    }
-
-    public WindowSupplier<K, V> window() {
-        return windowSupplier;
+    KStreamJoinWindow(String windowName) {
+        this.windowName = windowName;
     }
 
     @Override
     public Processor<K, V> get() {
-        return new KStreamWindowProcessor();
+        return new KStreamJoinWindowProcessor();
     }
 
-    private class KStreamWindowProcessor extends AbstractProcessor<K, V> {
+    private class KStreamJoinWindowProcessor extends AbstractProcessor<K, V> {
 
-        private Window<K, V> window;
+        private WindowStore<K, V> window;
 
+        @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-            this.window = windowSupplier.get();
-            this.window.init(context);
+
+            window = (WindowStore<K, V>) context.getStateStore(windowName);
         }
 
         @Override
         public void process(K key, V value) {
-            synchronized (this) {
-                window.put(key, value, context().timestamp());
-                context().forward(key, value);
-            }
-        }
-
-        @Override
-        public void close() {
-            window.close();
+            context().forward(key, value);
+            window.put(key, value);
         }
     }
+
 }
