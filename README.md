@@ -103,8 +103,8 @@ Please note for this to work you should create/update `~/.gradle/gradle.properti
     signing.password=
     signing.secretKeyRingFile=
 
-### Publishing the jars without signing to a local repository ###
-    ./gradlew -Dorg.gradle.project.skipSigning=true -Dorg.gradle.project.mavenUrl=file://path/to/repo uploadArchivesAll
+### Installing the jars to the local Maven repository ###
+    ./gradlew installAll
 
 ### Building the test jar ###
     ./gradlew testJar
@@ -115,11 +115,17 @@ Please note for this to work you should create/update `~/.gradle/gradle.properti
 ### Running checkstyle on the java code ###
     ./gradlew checkstyleMain checkstyleTest
 
-### Limit the number of processes for each task ###
-    ./gradlew -Dorg.gradle.project.maxParallelForks=1 test
-
 This will most commonly be useful for automated builds where the full resources of the host running the build and tests
 may not be dedicated to Kafka's build.
+
+### Common build options ###
+
+The following options should be set with a `-D` switch, for example `./gradlew -Dorg.gradle.project.maxParallelForms=1 test`.
+
+* `org.gradle.project.mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
+* `org.gradle.project.maxParallelForks`: limits the maximum number of processes for each task.
+* `org.gradle.project.showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
+* `org.gradle.project.skipSigning`: skips signing of artifacts.
 
 ### Running in Vagrant ###
 
