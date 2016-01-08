@@ -46,7 +46,7 @@
     <li> The kafka-topics.sh script (kafka.admin.TopicCommand) now exits with non-zero exit code on failure. </li>
     <li> The kafka-topics.sh script (kafka.admin.TopicCommand) will now print a warning when topic names risk metric collisions due to the use of a '.' or '_' in the topic name, and error in the case of an actual collision. </li>
     <li> The kafka-console-producer.sh script (kafka.tools.ConsoleProducer) will use the new producer instead of the old producer be default, and users have to specify 'old-producer' to use the old producer. </li>
-    <li> By default all command line tools will print all logging messages to stderr instead of stout. </li>
+    <li> By default all command line tools will print all logging messages to stderr instead of stdout. </li>
 </ul>
 
 <h5>Deprecations in 0.9.0.0</h5>
