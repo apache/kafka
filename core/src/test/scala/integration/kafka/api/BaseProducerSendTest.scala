@@ -203,7 +203,6 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
       // make sure leaders exist
       val leader1 = leaders(partition)
-      assertTrue("Leader for topic \"topic\" partition 1 should exist", leader1.isDefined)
 
       val responses =
         for (i <- 1 to numRecords)
@@ -221,7 +220,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       }
 
       // make sure the fetched messages also respect the partitioning and ordering
-      val fetchResponse1 = if(leader1.get == configs(0).brokerId) {
+      val fetchResponse1 = if (leader1 == configs(0).brokerId) {
         consumer1.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
       } else {
         consumer2.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
@@ -309,7 +308,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
             assertEquals("java.lang.IllegalStateException: Producer is closed forcefully.", e.getMessage)
         }
       }
-      val fetchResponse = if (leader0.get == configs(0).brokerId) {
+      val fetchResponse = if (leader0 == configs(0).brokerId) {
         consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
       } else {
         consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
@@ -351,7 +350,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       producer.flush()
       assertTrue("All request are complete.", responses.forall(_.isDone()))
       // Check the messages received by broker.
-      val fetchResponse = if (leader.get == configs(0).brokerId) {
+      val fetchResponse = if (leader == configs(0).brokerId) {
         consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
       } else {
         consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())

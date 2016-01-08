@@ -236,7 +236,7 @@ object TestUtils extends Logging {
                   numPartitions: Int = 1,
                   replicationFactor: Int = 1,
                   servers: Seq[KafkaServer],
-                  topicConfig: Properties = new Properties) : scala.collection.immutable.Map[Int, Option[Int]] = {
+                  topicConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] = {
     // create topic
     AdminUtils.createTopic(zkUtils, topic, numPartitions, replicationFactor, topicConfig)
     // wait until the update metadata request for new topic reaches all servers
@@ -252,7 +252,7 @@ object TestUtils extends Logging {
    * Return the leader for each partition.
    */
   def createTopic(zkUtils: ZkUtils, topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
-                  servers: Seq[KafkaServer]) : scala.collection.immutable.Map[Int, Option[Int]] = {
+                  servers: Seq[KafkaServer]): scala.collection.immutable.Map[Int, Int] = {
     // create topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, partitionReplicaAssignment)
     // wait until the update metadata request for new topic reaches all servers
@@ -666,49 +666,62 @@ object TestUtils extends Logging {
   }
 
   /**
-   *  If neither oldLeaderOpt nor newLeaderOpt is defined, wait until the leader of a partition is elected.
-   *  If oldLeaderOpt is defined, it waits until the new leader is different from the old leader.
-   *  If newLeaderOpt is defined, it waits until the new leader becomes the expected new leader.
-   * @return The new leader or assertion failure if timeout is reached.
-   */
+    * If neither oldLeaderOpt nor newLeaderOpt is defined, wait until the leader of a partition is elected.
+    * If oldLeaderOpt is defined, it waits until the new leader is different from the old leader.
+    * If newLeaderOpt is defined, it waits until the new leader becomes the expected new leader.
+    *
+    * @return The new leader (note that negative values are used to indicate conditions like NoLeader and
+    *         LeaderDuringDelete) or assertion failure if timeout is reached.
+    */
   def waitUntilLeaderIsElectedOrChanged(zkUtils: ZkUtils, topic: String, partition: Int, timeoutMs: Long = 5000L,
-                                        oldLeaderOpt: Option[Int] = None, newLeaderOpt: Option[Int] = None): Option[Int] = {
+                                        oldLeaderOpt: Option[Int] = None, newLeaderOpt: Option[Int] = None): Int = {
     require(!(oldLeaderOpt.isDefined && newLeaderOpt.isDefined), "Can't define both the old and the new leader")
     val startTime = System.currentTimeMillis()
-    var isLeaderElectedOrChanged = false
 
     trace("Waiting for leader to be elected or changed for partition [%s,%d], older leader is %s, new leader is %s"
           .format(topic, partition, oldLeaderOpt, newLeaderOpt))
 
     var leader: Option[Int] = None
-    while (!isLeaderElectedOrChanged && System.currentTimeMillis() < startTime + timeoutMs) {
+    var electedOrChangedLeader: Option[Int] = None
+    while (electedOrChangedLeader.isEmpty && System.currentTimeMillis() < startTime + timeoutMs) {
       // check if leader is elected
       leader = zkUtils.getLeaderForPartition(topic, partition)
       leader match {
-        case Some(l) =>
-          if (newLeaderOpt.isDefined && newLeaderOpt.get == l) {
+        case Some(l) => (newLeaderOpt, oldLeaderOpt) match {
+          case (Some(newLeader), _) if newLeader == l =>
             trace("Expected new leader %d is elected for partition [%s,%d]".format(l, topic, partition))
-            isLeaderElectedOrChanged = true
-          } else if (oldLeaderOpt.isDefined && oldLeaderOpt.get != l) {
+            electedOrChangedLeader = leader
+          case (_, Some(oldLeader)) if oldLeader != l =>
             trace("Leader for partition [%s,%d] is changed from %d to %d".format(topic, partition, oldLeaderOpt.get, l))
-            isLeaderElectedOrChanged = true
-          } else if (!oldLeaderOpt.isDefined) {
+            electedOrChangedLeader = leader
+          case (None, None) =>
             trace("Leader %d is elected for partition [%s,%d]".format(l, topic, partition))
-            isLeaderElectedOrChanged = true
-          } else {
+            electedOrChangedLeader = leader
+          case _ =>
             trace("Current leader for partition [%s,%d] is %d".format(topic, partition, l))
-          }
+        }
         case None =>
           trace("Leader for partition [%s,%d] is not elected yet".format(topic, partition))
       }
       Thread.sleep(timeoutMs.min(100L))
     }
-    if (!isLeaderElectedOrChanged)
-      fail("Timing out after %d ms since leader is not elected or changed for partition [%s,%d]"
-           .format(timeoutMs, topic, partition))
-
-    leader
+    electedOrChangedLeader.getOrElse {
+      val errorMessage = (newLeaderOpt, oldLeaderOpt) match {
+        case (Some(newLeader), _) =>
+          s"Timing out after $timeoutMs ms since expected new leader $newLeader was not elected for partition [$topic,$partition], leader is ${leader.get}"
+        case (_, Some(oldLeader)) =>
+          s"Timing out after $timeoutMs ms since leader did not change from $oldLeader for partition [$topic,$partition]"
+        case _ =>
+          s"Timing out after $timeoutMs ms since leader was not elected for partition [$topic,$partition]"
+      }
+      fail(errorMessage)
+    }
   }
+
+  /**
+   * Like `Assert.fail`, but returns `Nothing` so that the compiler knows that this method always throws an exception.
+   */
+  def fail(message: String): Nothing = throw new AssertionError(message)
 
   /**
    * Execute the given block. If it throws an assert error, retry. Repeat
