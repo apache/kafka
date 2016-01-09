@@ -469,30 +469,26 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
         !deleteTopicManager.isTopicQueuedUpForDeletion(partitionAndLeader._1.topic)).keySet
     partitionStateMachine.handleStateChanges(partitionsWithoutLeader, OfflinePartition)
     // trigger OnlinePartition state changes for offline or new partitions
-
-
-    def triggerOnlinePartitionStateChangeAsyncCallback(ctx: scala.Any) = {
-      // filter out the replicas that belong to topics that are being deleted
-      var allReplicasOnDeadBrokers = controllerContext.replicasOnBrokers(deadBrokersSet)
-      val activeReplicasOnDeadBrokers = allReplicasOnDeadBrokers.filterNot(p => deleteTopicManager.isTopicQueuedUpForDeletion(p.topic))
-      // handle dead replicas
-      replicaStateMachine.handleStateChanges(activeReplicasOnDeadBrokers, OfflineReplica)
-      // check if topic deletion state for the dead replicas needs to be updated
-      val replicasForTopicsToBeDeleted = allReplicasOnDeadBrokers.filter(p => deleteTopicManager.isTopicQueuedUpForDeletion(p.topic))
-      if(replicasForTopicsToBeDeleted.size > 0) {
-        // it is required to mark the respective replicas in TopicDeletionFailed state since the replica cannot be
-        // deleted when the broker is down. This will prevent the replica from being in TopicDeletionStarted state indefinitely
-        // since topic deletion cannot be retried until at least one replica is in TopicDeletionStarted state
-        deleteTopicManager.failReplicaDeletion(replicasForTopicsToBeDeleted)
-      }
-
-      // If broker failure did not require leader re-election, inform brokers of failed broker
-      // Note that during leader re-election, brokers update their metadata
-      if (partitionsWithoutLeader.isEmpty) {
-        sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq)
-      }
+    partitionStateMachine.triggerOnlinePartitionStateChange()
+    // filter out the replicas that belong to topics that are being deleted
+    var allReplicasOnDeadBrokers = controllerContext.replicasOnBrokers(deadBrokersSet)
+    val activeReplicasOnDeadBrokers = allReplicasOnDeadBrokers.filterNot(p => deleteTopicManager.isTopicQueuedUpForDeletion(p.topic))
+    // handle dead replicas
+    replicaStateMachine.handleStateChanges(activeReplicasOnDeadBrokers, OfflineReplica)
+    // check if topic deletion state for the dead replicas needs to be updated
+    val replicasForTopicsToBeDeleted = allReplicasOnDeadBrokers.filter(p => deleteTopicManager.isTopicQueuedUpForDeletion(p.topic))
+    if(replicasForTopicsToBeDeleted.size > 0) {
+      // it is required to mark the respective replicas in TopicDeletionFailed state since the replica cannot be
+      // deleted when the broker is down. This will prevent the replica from being in TopicDeletionStarted state indefinitely
+      // since topic deletion cannot be retried until at least one replica is in TopicDeletionStarted state
+      deleteTopicManager.failReplicaDeletion(replicasForTopicsToBeDeleted)
     }
-    partitionStateMachine.triggerOnlinePartitionStateChangeAsync(triggerOnlinePartitionStateChangeAsyncCallback, None)
+
+    // If broker failure did not require leader re-election, inform brokers of failed broker
+    // Note that during leader re-election, brokers update their metadata
+    if (partitionsWithoutLeader.isEmpty) {
+      sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq)
+    }
   }
 
   /**

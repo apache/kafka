@@ -16,6 +16,8 @@
 */
 package kafka.controller
 
+import java.util.concurrent.CountDownLatch
+
 import collection._
 import collection.JavaConversions
 import collection.mutable.Buffer
@@ -131,33 +133,28 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   /**
     * Async version of triggerOnlinePartitionStateChange
     */
-  def triggerOnlinePartitionStateChangeAsync(topCallback:(scala.Any)=>Unit, topCtx:scala.Any) {
+  def triggerOnlinePartitionStateChangeAsync() {
     try {
-      val internalCtx = (topCallback, topCtx)
+      val internalCtx = None
       brokerRequestBatch.newBatch()
-      var totalCallbacks = partitionState.size
+      val latch: CountDownLatch = new CountDownLatch(partitionState.size)
 
-      def handleStateChangeAsyncCallback(ctx: scala.Any): Unit = {
-        val (topCallback, topCtx) = ctx.asInstanceOf[((scala.Any)=>Unit, scala.Any)]
-        brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
-        totalCallbacks = totalCallbacks - 1
-        if (totalCallbacks == 0) {
-          brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
-          topCallback(topCtx)
-        }
+      def handleStateChangeCallback(ctx: scala.Any): Unit = {
+        latch.countDown()
       }
-
       // try to move all partitions in NewPartition or OfflinePartition state to OnlinePartition state except partitions
       // that belong to topics to be deleted
       for ((topicAndPartition, partitionState) <- partitionState
            if (!controller.deleteTopicManager.isTopicQueuedUpForDeletion(topicAndPartition.topic))) {
         if (partitionState.equals(OfflinePartition) || partitionState.equals(NewPartition)) {
           handleStateChangeAsync(topicAndPartition.topic, topicAndPartition.partition, OnlinePartition, controller.offlinePartitionSelector,
-            handleStateChangeAsyncCallback, internalCtx)
+            handleStateChangeCallback, internalCtx)
         } else {
-          handleStateChangeAsyncCallback(internalCtx)
+          handleStateChangeCallback(internalCtx)
         }
       }
+      latch.await
+      brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
     }
     catch {
       case e: Throwable => error("Error while moving some partitions to the online state", e)
@@ -275,7 +272,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
 
   /**
-    * Like handleStateChange but asynchronous. Currently only works for targetState == OnlinePartition
+    * Asynchronous version of handleStateChange only for the case when targetState == OnlinePartition.
+    * For any other transitions the syncronous version should be used
     */
   private def handleStateChangeAsync(topic: String, partition: Int, targetState: PartitionState,
                                      leaderSelector: PartitionLeaderSelector,
@@ -289,7 +287,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         .format(controllerId, controller.epoch, topicAndPartition, targetState))
     val currState = partitionState.getOrElseUpdate(topicAndPartition, NonExistentPartition)
 
-    def electLeaderForPartitionAsyncCallback(ctx: scala.Any): Unit = {
+    def electLeaderForPartitionCallback(ctx: scala.Any): Unit = {
       val (topCallback, topCtx, topicAndPartition) = ctx.asInstanceOf[((scala.Any) => Unit, scala.Any, TopicAndPartition)]
       partitionState.put(topicAndPartition, OnlinePartition)
       val leader = controllerContext.partitionLeadershipInfo(topicAndPartition).leaderAndIsr.leader
@@ -308,9 +306,9 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
               initializeLeaderAndIsrForPartition(topicAndPartition)
               topCallback(topCtx)
             case OfflinePartition =>
-              electLeaderForPartitionAsync(topic, partition, leaderSelector, electLeaderForPartitionAsyncCallback, internalCtx)
+              electLeaderForPartitionAsync(topic, partition, leaderSelector, electLeaderForPartitionCallback, internalCtx)
             case OnlinePartition => // invoked when the leader needs to be re-elected
-              electLeaderForPartitionAsync(topic, partition, leaderSelector, electLeaderForPartitionAsyncCallback, internalCtx)
+              electLeaderForPartitionAsync(topic, partition, leaderSelector, electLeaderForPartitionCallback, internalCtx)
             case _ => // should never come here since illegal previous states are checked above
           }
         case _ => stateChangeLogger.error("Controller %d epoch %d initiated unknown async state change for partition %s from %s to %s"
@@ -462,16 +460,16 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     * Async version of electLeaderForPartition
     */
   def electLeaderForPartitionAsync(topic: String, partition: Int, leaderSelector: PartitionLeaderSelector,
-                                  topCallback: (scala.Any)=>Unit, topCtx: scala.Any) {
+                                   topCallback: (scala.Any) => Unit, topCtx: scala.Any) {
     val topicAndPartition = TopicAndPartition(topic, partition)
     // handle leader election for the partitions whose leader is no longer alive
     stateChangeLogger.trace("Controller %d epoch %d started leader election for partition %s"
       .format(controllerId, controller.epoch, topicAndPartition))
 
 
-    def updateLeaderAndIsrAsyncCallback(updateSucceeded: Boolean, newVersion: Int, internalCtx: scala.Any): Unit = {
+    def updateLeaderAndIsrCallback(updateSucceeded: Boolean, newVersion: Int, internalCtx: scala.Any): Unit = {
       val (topic, partition, leaderSelector, newLeaderAndIsr, topCallback, topCtx, replicasForThisPartition) =
-        internalCtx.asInstanceOf[(String, Int, PartitionLeaderSelector, LeaderAndIsr, (scala.Any)=>Unit, scala.Any, Seq[Int])]
+        internalCtx.asInstanceOf[(String, Int, PartitionLeaderSelector, LeaderAndIsr, (scala.Any) => Unit, scala.Any, Seq[Int])]
 
       newLeaderAndIsr.zkVersion = newVersion
       if (!updateSucceeded) {
@@ -514,7 +512,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
       val internalCtx = (topic, partition, leaderSelector, newLeaderAndIsr, topCallback, topCtx, replicas)
       ReplicationUtils.updateLeaderAndIsrAsync(zkUtils, topic, partition, leaderAndIsr, controller.epoch, currentLeaderAndIsr.zkVersion,
-        updateLeaderAndIsrAsyncCallback, internalCtx)
+        updateLeaderAndIsrCallback, internalCtx)
 
     } catch {
       case lenne: LeaderElectionNotNeededException => // swallow

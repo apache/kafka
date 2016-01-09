@@ -44,11 +44,11 @@ object ReplicationUtils extends Logging {
     * Async version of updateLeaderAndIsr
     */
   def updateLeaderAndIsrAsync(zkUtils: ZkUtils, topic: String, partitionId: Int, newLeaderAndIsr: LeaderAndIsr, controllerEpoch: Int,
-                              zkVersion: Int, topCallback: (Boolean,Int,scala.Any) => Unit, topCtx: scala.Any) = {
-    debug("Updated async ISR for partition [%s,%d] to %s".format(topic, partitionId, newLeaderAndIsr.isr.mkString(",")))
+                              zkVersion: Int, topCallback: (Boolean, Int, scala.Any) => Unit, topCtx: scala.Any) = {
+    debug("Updated (async) ISR for partition [%s,%d] to %s".format(topic, partitionId, newLeaderAndIsr.isr.mkString(",")))
     val internalCtx = (topCallback, topCtx)
     def updateCallback(success: Boolean, newVersion: Int, internalCtx: scala.Any): Unit = {
-      val (topCallback, topCtx) = internalCtx.asInstanceOf[((Boolean,Int,scala.Any) => Unit, scala.Any)]
+      val (topCallback, topCtx) = internalCtx.asInstanceOf[((Boolean, Int, scala.Any) => Unit, scala.Any)]
       topCallback(success, newVersion, topCtx)
     }
     val path = getTopicPartitionLeaderAndIsrPath(topic, partitionId)
@@ -88,9 +88,13 @@ object ReplicationUtils extends Logging {
     (false,-1)
   }
 
+  /**
+    * Asynchronous version of checkLeaderAndIsrZkData
+    */
   def checkLeaderAndIsrZkDataAsync(zkUtils: ZkUtils, path: String, expectedLeaderAndIsrInfo: String,
       topCallback: (Boolean,Int,scala.Any) => Unit, topCtx: scala.Any) = {
     val internalCtx = (topCallback, topCtx)
+
     def internalCallback(writtenLeaderOpt: Option[String], stat: Stat, internalCtx: scala.Any): Unit = {
       val (topCallback, topCtx) = internalCtx.asInstanceOf[((Boolean, Int, scala.Any) => Unit, scala.Any)]
       val expectedLeader = parseLeaderAndIsr(expectedLeaderAndIsrInfo, path, stat)
@@ -107,6 +111,7 @@ object ReplicationUtils extends Logging {
       }
       return topCallback(false, -1, topCtx)
     }
+
     zkUtils.readDataMaybeNullAsync(path, internalCallback, internalCtx)
   }
 

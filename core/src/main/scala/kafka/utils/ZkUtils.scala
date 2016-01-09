@@ -456,46 +456,54 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
+  /**
+    * Callback that processes result of asynchronous version of conditionalUpdatePersistentPathAsync
+    */
   private class conditionalUpdatePersistentPathCallback extends StatCallback {
+
     def processResult(rc: Int, path: String, internalCtx: scala.Any, stat: Stat): Unit = {
-      val (zkUtils, zkHandle, path2, data, expectVersion, optionalCheckerAsync, topCallback, topCtx) =
+      val (zkUtils, zkHandle, path2, data, expectVersion, optionalCheckerAsync, callback, ctx) =
         internalCtx.asInstanceOf[(ZkUtils, ZooKeeper, String, String, Int,
-          Option[(ZkUtils, String, String, (Boolean,Int,scala.Any) => Unit, scala.Any) => Unit],
-        (Boolean,Int,scala.Any) => Unit, scala.Any)]
+          Option[(ZkUtils, String, String, (Boolean, Int, scala.Any) => Unit, scala.Any) => Unit],
+          (Boolean, Int, scala.Any) => Unit, scala.Any)]
 
       Code.get(rc) match {
         case Code.OK =>
-          return topCallback(true, stat.getVersion, topCtx)
+          debug("Conditional (async) update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
+            .format(path, data, expectVersion, stat.getVersion))
+          return callback(true, stat.getVersion, ctx)
         case Code.BADVERSION =>
           optionalCheckerAsync match {
             case Some(checker) =>
-              return checker(zkUtils, path, data, topCallback, topCtx)
+              return checker(zkUtils, path, data, callback, ctx)
             case _ => debug("Checker method is not passed skipping zkData match")
           }
-          warn("Conditional update of path %s with data %s and expected version %d failed due to bad version".format(path, data,
+          warn("Conditional update (async) of path %s with data %s and expected version %d failed due to bad version".format(path, data,
             expectVersion))
-          return topCallback(false, -1, topCtx)
+          return callback(false, -1, ctx)
         case Code.CONNECTIONLOSS | Code.SESSIONEXPIRED =>
+          // retry
+          warn("Conditional update (async) of path %s with data %s and expected version %d failed due to connection/session loss %d. Retrying.".format(path, data,
+            expectVersion, Code.get(rc).intValue()))
           zkHandle.setData(path, ZKStringSerializer.serialize(data), expectVersion, new conditionalUpdatePersistentPathCallback, internalCtx)
         case _ =>
           warn("ZooKeeper event while setting data: %s %s".format(path, Code.get(rc)))
-          topCallback(false, -1, topCtx)
+          callback(false, -1, ctx)
       }
     }
   }
+
   /**
-    * Conditional update (async version) the persistent path data, return (true, newVersion) if it succeeds, otherwise (the path doesn't
-    * exist, the current version is not the expected version, etc.) return (false, -1)
-    *
-    * When there is a ConnectionLossException during the conditional update, zkClient will retry the update and may fail
-    * since the previous update may have succeeded (but the stored zkVersion no longer matches the expected one).
-    * In this case, we will run the optionalChecker to further check if the previous write did indeed succeeded.
+    * Async version of conditionalUpdatePersistentPath
     */
   def conditionalUpdatePersistentPathAsync(path: String, data: String, expectVersion: Int,
-                                           optionalCheckerAsync: Option[(ZkUtils, String, String, (Boolean,Int,scala.Any) => Unit, scala.Any) => Unit] = None,
-                                           topCallback: (Boolean,Int,scala.Any) => Unit, topCtx: scala.Any) : Unit = {
-    val internalCtx = (this, this.zkConnection.getZookeeper, path, data, expectVersion, optionalCheckerAsync, topCallback, topCtx)
+                                           optionalChecker: Option[(ZkUtils, String, String, (Boolean, Int, scala.Any) => Unit, scala.Any) => Unit] = None,
+                                           callback: (Boolean, Int, scala.Any) => Unit, ctx: scala.Any): Unit = {
 
+    // internal context passed to callback
+    val internalCtx = (this, this.zkConnection.getZookeeper, path, data, expectVersion, optionalChecker, callback, ctx)
+
+    // call ZK asynchronously
     this.zkConnection.getZookeeper.setData(path, ZKStringSerializer.serialize(data), expectVersion, new conditionalUpdatePersistentPathCallback, internalCtx)
   }
 
@@ -576,6 +584,9 @@ class ZkUtils(val zkClient: ZkClient,
     dataAndStat
   }
 
+  /**
+    * Callback for asynchronous version of readDataMaybeNull
+    */
   private class readDataMaybeNullCallback extends DataCallback {
     def processResult(rc: Int,
                       path: String,
@@ -597,8 +608,11 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
-  def readDataMaybeNullAsync(path: String, topCallback: (Option[String], Stat, scala.Any) => Unit, topCtx: scala.Any): Unit = {
-    val internalCtx = (path, topCallback, topCtx)
+  /**
+    * Asynchronous version of readDataMaybeNull
+    */
+  def readDataMaybeNullAsync(path: String, callback: (Option[String], Stat, scala.Any) => Unit, ctx: scala.Any): Unit = {
+    val internalCtx = (path, callback, ctx)
     this.zkConnection.getZookeeper.getData(path, false, new readDataMaybeNullCallback, internalCtx)
   }
 
