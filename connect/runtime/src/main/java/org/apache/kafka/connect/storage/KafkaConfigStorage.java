@@ -282,7 +282,13 @@ public class KafkaConfigStorage {
             serializedConfig = converter.fromConnectData(topic, CONNECTOR_CONFIGURATION_V0, connectConfig);
         }
 
-        sendToConfigLog(CONNECTOR_KEY(connector), serializedConfig, "Failed to write connector configuration to Kafka");
+        try {
+            configLog.send(CONNECTOR_KEY(connector), serializedConfig);
+            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            log.error("Failed to write connector configuration to Kafka: ", e);
+            throw new ConnectException("Error writing connector configuration to Kafka", e);
+        }
     }
 
     /**
@@ -325,7 +331,7 @@ public class KafkaConfigStorage {
             Struct connectConfig = new Struct(TASK_CONFIGURATION_V0);
             connectConfig.put("properties", taskConfigEntry.getValue());
             byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
-            sendToConfigLog(TASK_KEY(taskConfigEntry.getKey()), serializedConfig, "Failed to write task configuration to Kafka");
+            configLog.send(TASK_KEY(taskConfigEntry.getKey()), serializedConfig);
         }
 
         // Finally, send the commit to update the number of tasks and apply the new configs, then wait until we read to
@@ -339,7 +345,7 @@ public class KafkaConfigStorage {
                 Struct connectConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
                 connectConfig.put("tasks", taskCountEntry.getValue());
                 byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
-                sendToConfigLog(COMMIT_TASKS_KEY(taskCountEntry.getKey()), serializedConfig, "Failed to send task config commit to Kafka");
+                configLog.send(COMMIT_TASKS_KEY(taskCountEntry.getKey()), serializedConfig);
             }
 
             // Read to end to ensure all the commit messages have been written
@@ -361,17 +367,6 @@ public class KafkaConfigStorage {
     private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
                                                               Map<String, Object> consumerProps, Callback<ConsumerRecord<String, byte[]>> consumedCallback) {
         return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, new SystemTime());
-    }
-
-    private void sendToConfigLog(String key, byte[] value, String errorMsg) {
-        try {
-            configLog.send(key, value);
-            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            log.error(errorMsg, e);
-            throw new ConnectException(errorMsg, e);
-        }
-
     }
 
     private final Callback<ConsumerRecord<String, byte[]>> consumedCallback = new Callback<ConsumerRecord<String, byte[]>>() {
