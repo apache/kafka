@@ -415,7 +415,7 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
    *    every broker that it is still valid.  Brokers check the leader epoch to determine validity of the request.
    */
   def onBrokerStartup(newBrokers: Seq[Int]) {
-    info("New broker startup callback for %s".format(newBrokers.mkString(",")))
+    info("New broker startup callback for %s".format(newBrokers.sorted.mkString(",")))
     val newBrokersSet = newBrokers.toSet
     // send update metadata request to all live and shutting down brokers. Old brokers will get to know of the new
     // broker via this update.
@@ -440,7 +440,7 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     if(replicasForTopicsToBeDeleted.size > 0) {
       info(("Some replicas %s for topics scheduled for deletion %s are on the newly restarted brokers %s. " +
         "Signaling restart of topic deletion for these topics").format(replicasForTopicsToBeDeleted.mkString(","),
-        deleteTopicManager.topicsToBeDeleted.mkString(","), newBrokers.mkString(",")))
+        deleteTopicManager.topicsToBeDeleted.mkString(","), newBrokers.sorted.mkString(",")))
       deleteTopicManager.resumeDeletionForTopics(replicasForTopicsToBeDeleted.map(_.topic))
     }
   }
@@ -458,10 +458,10 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
    * partitions coming online.
    */
   def onBrokerFailure(deadBrokers: Seq[Int]) {
-    info("Broker failure callback for %s".format(deadBrokers.mkString(",")))
+    info("Broker failure callback for %s".format(deadBrokers.sorted.mkString(",")))
     val deadBrokersThatWereShuttingDown =
       deadBrokers.filter(id => controllerContext.shuttingDownBrokerIds.remove(id))
-    info("Removed %s from list of shutting down brokers.".format(deadBrokersThatWereShuttingDown))
+    info("Removed %s from list of shutting down brokers.".format(deadBrokersThatWereShuttingDown.sorted.mkString(", ")))
     val deadBrokersSet = deadBrokers.toSet
     // trigger OfflinePartition state for all partitions whose current leader is one amongst the dead brokers
     val partitionsWithoutLeader = controllerContext.partitionLeadershipInfo.filter(partitionAndLeader =>
