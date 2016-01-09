@@ -65,6 +65,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private String sslKeystorePassword = null;
     private String saslKerberosServiceName = null;
     private String clientJaasConfPath = null;
+    private String kerb5ConfPath = null;
 
     private int retries = 0;
     private int requiredNumAcks = Integer.MAX_VALUE;
@@ -167,6 +168,10 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         this.clientJaasConfPath = clientJaasConfPath;
     }
 
+    public void setKerb5ConfPath(String kerb5ConfPath) {
+        this.kerb5ConfPath = kerb5ConfPath;
+    }
+
     public String getSslKeystoreLocation() {
         return sslKeystoreLocation;
     }
@@ -187,6 +192,10 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         return clientJaasConfPath;
     }
 
+    public String getKerb5ConfPath() {
+        return kerb5ConfPath;
+    }
+
     @Override
     public void activateOptions() {
         // check for config parameter validity
@@ -203,9 +212,11 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
             props.put(ACKS_CONFIG, Integer.toString(requiredNumAcks));
         if (retries > 0)
             props.put(RETRIES_CONFIG, retries);
-        if (securityProtocol != null && sslTruststoreLocation != null &&
-            sslTruststorePassword != null) {
+        if (securityProtocol != null) {
             props.put(SECURITY_PROTOCOL, securityProtocol);
+        }
+        if (securityProtocol != null && securityProtocol.contains("SSL") && sslTruststoreLocation != null &&
+            sslTruststorePassword != null) {
             props.put(SSL_TRUSTSTORE_LOCATION, sslTruststoreLocation);
             props.put(SSL_TRUSTSTORE_PASSWORD, sslTruststorePassword);
 
@@ -216,12 +227,12 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
                 props.put(SSL_KEYSTORE_PASSWORD, sslKeystorePassword);
             }
         }
-        if (securityProtocol != null && saslKerberosServiceName != null && clientJaasConfPath != null) {
-            if (securityProtocol == null) {
-                props.put(SECURITY_PROTOCOL, securityProtocol);
-            }
+        if (securityProtocol != null && securityProtocol.contains("SASL") && saslKerberosServiceName != null && clientJaasConfPath != null) {
             props.put(SASL_KERBEROS_SERVICE_NAME, saslKerberosServiceName);
             System.setProperty("java.security.auth.login.config", clientJaasConfPath);
+            if (kerb5ConfPath != null) {
+                System.setProperty("java.security.krb5.conf", kerb5ConfPath);
+            }
         }
 
         props.put(KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
