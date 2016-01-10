@@ -31,6 +31,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Time;
 import org.easymock.Capture;
@@ -313,6 +314,13 @@ public class KafkaBasedLogTest {
                 // Already have FutureCallback that should be invoked/awaited, so no need for follow up finishedLatch
             }
         });
+
+        //this consumer.poll is to invoke the task scheduled by "consumer.schedulePollTask"
+        try {
+            consumer.poll(0);
+        } catch (WakeupException e) {
+            //WakeupException can be caused bystore.readToEnd, do nothing here
+        }
         readEndFutureCallback.get(10000, TimeUnit.MILLISECONDS);
         assertTrue(getInvoked.get());
         assertEquals(2, consumedRecords.size());

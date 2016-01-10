@@ -255,20 +255,15 @@ public class KafkaBasedLog<K, V> {
         }
 
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        try {
-            poll(0);
-        } finally {
-            // If there is an exception, even a possibly expected one like WakeupException, we need to make sure
-            // the consumers position is reset or it'll get into an inconsistent state.
-            for (TopicPartition tp : assignment) {
-                long startOffset = offsets.get(tp);
-                long endOffset = consumer.position(tp);
-                if (endOffset > startOffset) {
-                    endOffsets.put(tp, endOffset);
-                    consumer.seek(tp, startOffset);
-                }
-                log.trace("Reading to end of log for {}: starting offset {} to ending offset {}", tp, startOffset, endOffset);
+
+        for (TopicPartition tp : assignment) {
+            long startOffset = offsets.get(tp);
+            long endOffset = consumer.position(tp);
+            if (endOffset > startOffset) {
+                endOffsets.put(tp, endOffset);
+                consumer.seek(tp, startOffset);
             }
+            log.trace("Reading to end of log for {}: starting offset {} to ending offset {}", tp, startOffset, endOffset);
         }
 
         while (!endOffsets.isEmpty()) {
