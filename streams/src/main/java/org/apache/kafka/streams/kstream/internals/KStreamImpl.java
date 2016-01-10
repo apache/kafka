@@ -19,21 +19,30 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.AggregatorSupplier;
+import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValue;
+import org.apache.kafka.streams.kstream.KeyValueToDoubleMapper;
+import org.apache.kafka.streams.kstream.KeyValueToIntMapper;
+import org.apache.kafka.streams.kstream.KeyValueToLongMapper;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamWindowed;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.WindowSupplier;
+import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.state.RocksDBWindowStoreSupplier;
+import org.apache.kafka.streams.state.Serdes;
 
 import java.lang.reflect.Array;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -61,11 +70,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
 
+    private static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
+
     public static final String SINK_NAME = "KSTREAM-SINK-";
 
     public static final String JOINTHIS_NAME = "KSTREAM-JOINTHIS-";
 
     public static final String JOINOTHER_NAME = "KSTREAM-JOINOTHER-";
+
+    public static final String OUTERTHIS_NAME = "KSTREAM-OUTERTHIS-";
+
+    public static final String OUTEROTHER_NAME = "KSTREAM-OUTEROTHER-";
 
     public static final String LEFTJOIN_NAME = "KSTREAM-LEFTJOIN-";
 
@@ -132,15 +147,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public KStreamWindowed<K, V> with(WindowSupplier<K, V> windowSupplier) {
-        String name = topology.newName(WINDOWED_NAME);
-
-        topology.addProcessor(name, new KStreamWindow<>(windowSupplier), this.name);
-
-        return new KStreamWindowedImpl<>(topology, name, sourceNodes, windowSupplier);
-    }
-
-    @Override
     @SuppressWarnings("unchecked")
     public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
         String branchName = topology.newName(BRANCH_NAME);
@@ -191,7 +197,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                  Deserializer<V> valDeserializer) {
         to(topic, keySerializer, valSerializer);
 
-        return topology.from(keyDeserializer, valDeserializer, topic);
+        return topology.stream(keyDeserializer, valDeserializer, topic);
     }
 
     @Override
@@ -239,6 +245,135 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         topology.connectProcessorAndStateStores(name, stateStoreNames);
     }
 
+    @Override
+    public <V1, R> KStream<K, R> join(
+            KStream<K, V1> other,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindows windows,
+            Serializer<K> keySerialzier,
+            Serializer<V> thisValueSerialzier,
+            Serializer<V1> otherValueSerialzier,
+            Deserializer<K> keyDeserialier,
+            Deserializer<V> thisValueDeserialzier,
+            Deserializer<V1> otherValueDeserialzier) {
+
+        return join(other, joiner, windows,
+                keySerialzier, thisValueSerialzier, otherValueSerialzier,
+                keyDeserialier, thisValueDeserialzier, otherValueDeserialzier, false);
+    }
+
+    @Override
+    public <V1, R> KStream<K, R> outerJoin(
+            KStream<K, V1> other,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindows windows,
+            Serializer<K> keySerialzier,
+            Serializer<V> thisValueSerialzier,
+            Serializer<V1> otherValueSerialzier,
+            Deserializer<K> keyDeserialier,
+            Deserializer<V> thisValueDeserialzier,
+            Deserializer<V1> otherValueDeserialzier) {
+
+        return join(other, joiner, windows,
+                keySerialzier, thisValueSerialzier, otherValueSerialzier,
+                keyDeserialier, thisValueDeserialzier, otherValueDeserialzier, true);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <V1, R> KStream<K, R> join(
+            KStream<K, V1> other,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindows windows,
+            Serializer<K> keySerialzier,
+            Serializer<V> thisValueSerialzier,
+            Serializer<V1> otherValueSerialzier,
+            Deserializer<K> keyDeserialier,
+            Deserializer<V> thisValueDeserialzier,
+            Deserializer<V1> otherValueDeserialzier,
+            boolean outer) {
+
+        Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
+
+        RocksDBWindowStoreSupplier<K, V> thisWindow =
+                new RocksDBWindowStoreSupplier<>(
+                        windows.name() + "-this",
+                        windows.before,
+                        windows.after,
+                        windows.maintainMs(),
+                        windows.segments,
+                        new Serdes<>("", keySerialzier, keyDeserialier, thisValueSerialzier, thisValueDeserialzier),
+                        null);
+
+        RocksDBWindowStoreSupplier<K, V1> otherWindow =
+                new RocksDBWindowStoreSupplier<>(
+                        windows.name() + "-other",
+                        windows.before,
+                        windows.after,
+                        windows.maintainMs(),
+                        windows.segments,
+                        new Serdes<>("", keySerialzier, keyDeserialier, otherValueSerialzier, otherValueDeserialzier),
+                        null);
+
+        KStreamJoinWindow<K, V> thisWindowedStream = new KStreamJoinWindow<>(thisWindow.name());
+        KStreamJoinWindow<K, V1> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name());
+
+        KStreamKStreamJoin<K, R, V, V1> joinThis = new KStreamKStreamJoin<>(otherWindow.name(), joiner, outer);
+        KStreamKStreamJoin<K, R, V1, V> joinOther = new KStreamKStreamJoin<>(thisWindow.name(), reverseJoiner(joiner), outer);
+        KStreamPassThrough<K, R> joinMerge = new KStreamPassThrough<>();
+
+        String thisWindowStreamName = topology.newName(WINDOWED_NAME);
+        String otherWindowStreamName = topology.newName(WINDOWED_NAME);
+        String joinThisName = outer ? topology.newName(OUTERTHIS_NAME) : topology.newName(JOINTHIS_NAME);
+        String joinOtherName = outer ? topology.newName(OUTEROTHER_NAME) : topology.newName(JOINOTHER_NAME);
+        String joinMergeName = topology.newName(MERGE_NAME);
+
+        topology.addProcessor(thisWindowStreamName, thisWindowedStream, this.name);
+        topology.addProcessor(otherWindowStreamName, otherWindowedStream, ((KStreamImpl) other).name);
+        topology.addProcessor(joinThisName, joinThis, thisWindowStreamName);
+        topology.addProcessor(joinOtherName, joinOther, otherWindowStreamName);
+        topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
+        topology.addStateStore(thisWindow, thisWindowStreamName, otherWindowStreamName);
+        topology.addStateStore(otherWindow, thisWindowStreamName, otherWindowStreamName);
+
+        return new KStreamImpl<>(topology, joinMergeName, allSourceNodes);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <V1, R> KStream<K, R> leftJoin(
+            KStream<K, V1> other,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindows windows,
+            Serializer<K> keySerialzier,
+            Serializer<V1> otherValueSerialzier,
+            Deserializer<K> keyDeserialier,
+            Deserializer<V1> otherValueDeserialzier) {
+
+        Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
+
+        RocksDBWindowStoreSupplier<K, V1> otherWindow =
+                new RocksDBWindowStoreSupplier<>(
+                        windows.name() + "-this",
+                        windows.before,
+                        windows.after,
+                        windows.maintainMs(),
+                        windows.segments,
+                        new Serdes<>("", keySerialzier, keyDeserialier, otherValueSerialzier, otherValueDeserialzier),
+                        null);
+
+        KStreamJoinWindow<K, V1> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name());
+        KStreamKStreamJoin<K, R, V, V1> joinThis = new KStreamKStreamJoin<>(otherWindow.name(), joiner, true);
+
+        String otherWindowStreamName = topology.newName(WINDOWED_NAME);
+        String joinThisName = topology.newName(LEFTJOIN_NAME);
+
+        topology.addProcessor(otherWindowStreamName, otherWindowedStream, ((KStreamImpl) other).name);
+        topology.addProcessor(joinThisName, joinThis, this.name);
+        topology.addStateStore(otherWindow, joinThisName, otherWindowStreamName);
+
+        return new KStreamImpl<>(topology, joinThisName, allSourceNodes);
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KStream<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
@@ -251,4 +386,59 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return new KStreamImpl<>(topology, name, allSourceNodes);
     }
 
+    @Override
+    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(AggregatorSupplier<K, V, T> aggregatorSupplier,
+                                                                       Windows<W> windows,
+                                                                       Serializer<K> keySerializer,
+                                                                       Serializer<T> aggValueSerializer,
+                                                                       Deserializer<K> keyDeserializer,
+                                                                       Deserializer<T> aggValueDeserializer) {
+        // TODO
+        return null;
+    }
+
+    @Override
+    public <W extends Window> KTable<Windowed<K>, Long> sumByKey(KeyValueToLongMapper<K, V> valueSelector,
+                                                                 Windows<W> windows,
+                                                                 Serializer<K> keySerializer,
+                                                                 Deserializer<K> keyDeserializer) {
+        // TODO
+        return null;
+    }
+
+    public <W extends Window> KTable<Windowed<K>, Integer> sumByKey(KeyValueToIntMapper<K, V> valueSelector,
+                                                                    Windows<W> windows,
+                                                                    Serializer<K> keySerializer,
+                                                                    Deserializer<K> keyDeserializer) {
+        // TODO
+        return null;
+    }
+
+    public <W extends Window> KTable<Windowed<K>, Double> sumByKey(KeyValueToDoubleMapper<K, V> valueSelector,
+                                                                   Windows<W> windows,
+                                                                   Serializer<K> keySerializer,
+                                                                   Deserializer<K> keyDeserializer) {
+        // TODO
+        return null;
+    }
+
+    @Override
+    public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
+                                                                   Serializer<K> keySerializer,
+                                                                   Deserializer<K> keyDeserializer) {
+        // TODO
+        return null;
+    }
+
+    @Override
+    public <W extends Window, V1 extends Comparable<V1>> KTable<Windowed<K>, Collection<V1>> topKByKey(int k,
+                                                                                                       KeyValueMapper<K, V, V1> valueSelector,
+                                                                                                       Windows<W> windows,
+                                                                                                       Serializer<K> keySerializer,
+                                                                                                       Serializer<V1> aggValueSerializer,
+                                                                                                       Deserializer<K> keyDeserializer,
+                                                                                                       Deserializer<V1> aggValueDeserializer) {
+        // TODO
+        return null;
+    }
 }

@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.util
 import java.util.Properties
 
 import kafka.api.ApiVersion
@@ -32,9 +31,9 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, SslConfigs}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.security.auth.PrincipalBuilder
 
-import scala.collection.{Map, immutable}
+import scala.collection.{Map, immutable, JavaConverters}
+import JavaConverters._
 
 object Defaults {
   /** ********* Zookeeper Configuration ***********/
@@ -80,12 +79,12 @@ object Defaults {
   val LogCleanupPolicy = Delete
   val LogCleanerThreads = 1
   val LogCleanerIoMaxBytesPerSecond = Double.MaxValue
-  val LogCleanerDedupeBufferSize = 500 * 1024 * 1024L
+  val LogCleanerDedupeBufferSize = 128 * 1024 * 1024L
   val LogCleanerIoBufferSize = 512 * 1024
   val LogCleanerDedupeBufferLoadFactor = 0.9d
   val LogCleanerBackoffMs = 15 * 1000
   val LogCleanerMinCleanRatio = 0.5d
-  val LogCleanerEnable = false
+  val LogCleanerEnable = true
   val LogCleanerDeleteRetentionMs = 24 * 60 * 60 * 1000L
   val LogIndexSizeMaxBytes = 10 * 1024 * 1024
   val LogIndexIntervalBytes = 4096
@@ -402,7 +401,7 @@ object KafkaConfig {
   "will allow more log to be cleaned at once but will lead to more hash collisions"
   val LogCleanerBackoffMsDoc = "The amount of time to sleep when there are no logs to clean"
   val LogCleanerMinCleanRatioDoc = "The minimum ratio of dirty log to total log for a log to eligible for cleaning"
-  val LogCleanerEnableDoc = "Should we enable log cleaning?"
+  val LogCleanerEnableDoc = "Enable the log cleaner process to run on the server? Should be enabled if using any topics with a cleanup.policy=compact including the internal offsets topic. If disabled those topics will not be compacted and continually grow in size."
   val LogCleanerDeleteRetentionMsDoc = "How long are delete records retained?"
   val LogIndexSizeMaxBytesDoc = "The maximum size in bytes of the offset index"
   val LogIndexIntervalBytesDoc = "The interval with which we add an entry to the offset index"
@@ -437,7 +436,8 @@ object KafkaConfig {
   val LeaderImbalancePerBrokerPercentageDoc = "The ratio of leader imbalance allowed per broker. The controller would trigger a leader balance if it goes above this value per broker. The value is specified in percentage."
   val LeaderImbalanceCheckIntervalSecondsDoc = "The frequency with which the partition rebalance check is triggered by the controller"
   val UncleanLeaderElectionEnableDoc = "Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss"
-  val InterBrokerSecurityProtocolDoc = "Security protocol used to communicate between brokers. Defaults to plain text."
+  val InterBrokerSecurityProtocolDoc = "Security protocol used to communicate between brokers. Valid values are: " +
+    s"${SecurityProtocol.nonTestingValues.asScala.toSeq.map(_.name).mkString(", ")}."
   val InterBrokerProtocolVersionDoc = "Specify which version of the inter-broker protocol will be used.\n" +
   " This is typically bumped after all brokers were upgraded to a new version.\n" +
   " Example of some valid values are: 0.8.0, 0.8.1, 0.8.1.1, 0.8.2, 0.8.2.0, 0.8.2.1, 0.9.0.0, 0.9.0.1 Check ApiVersion for the full list."
@@ -472,7 +472,7 @@ object KafkaConfig {
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +
-  "('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to no compression; and " +
+  "('gzip', 'snappy', 'lz4'). It additionally accepts 'uncompressed' which is equivalent to no compression; and " +
   "'producer' which means retain the original compression codec set by the producer."
 
   /** ********* Kafka Metrics Configuration ***********/
@@ -687,19 +687,27 @@ object KafkaConfig {
       require(names.contains(name), "Unknown configuration \"%s\".".format(name))
   }
 
-  def fromProps(props: Properties): KafkaConfig = {
-    KafkaConfig(props)
-  }
+  def fromProps(props: Properties): KafkaConfig =
+    fromProps(props, true)
 
-  def fromProps(defaults: Properties, overrides: Properties): KafkaConfig = {
+  def fromProps(props: Properties, doLog: Boolean): KafkaConfig =
+    new KafkaConfig(props, doLog)
+
+  def fromProps(defaults: Properties, overrides: Properties): KafkaConfig =
+    fromProps(defaults, overrides, true)
+
+  def fromProps(defaults: Properties, overrides: Properties, doLog: Boolean): KafkaConfig = {
     val props = new Properties()
     props.putAll(defaults)
     props.putAll(overrides)
-    fromProps(props)
+    fromProps(props, doLog)
   }
+
+  def apply(props: java.util.Map[_, _]): KafkaConfig = new KafkaConfig(props, true)
+
 }
 
-case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(KafkaConfig.configDef, props) {
+class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends AbstractConfig(KafkaConfig.configDef, props, doLog) {
 
   /** ********* Zookeeper Configuration ***********/
   val zkConnect: String = getString(KafkaConfig.ZkConnectProp)
@@ -914,29 +922,6 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
     } else {
       getListeners()
     }
-  }
-
-  private def getMetricClasses(metricClasses: java.util.List[String]): java.util.List[MetricsReporter] = {
-
-    val reporterList = new util.ArrayList[MetricsReporter]()
-    val iterator = metricClasses.iterator()
-
-    while (iterator.hasNext) {
-      val reporterName = iterator.next()
-      if (!reporterName.isEmpty) {
-        val reporter: MetricsReporter = CoreUtils.createObject[MetricsReporter](reporterName)
-        reporter.configure(originals)
-        reporterList.add(reporter)
-      }
-    }
-
-    reporterList
-
-  }
-
-
-  private def getPrincipalBuilderClass(principalBuilderClass: String): PrincipalBuilder = {
-    CoreUtils.createObject[PrincipalBuilder](principalBuilderClass)
   }
 
   validateValues()

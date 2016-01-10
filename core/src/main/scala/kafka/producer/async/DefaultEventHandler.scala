@@ -22,6 +22,8 @@ import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
 import kafka.producer._
 import kafka.serializer.Encoder
 import kafka.utils.{CoreUtils, Logging, SystemTime}
+import org.apache.kafka.common.errors.{LeaderNotAvailableException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.protocol.Errors
 import scala.util.Random
 import scala.collection.{Seq, Map}
 import scala.collection.mutable.{ArrayBuffer, HashMap, Set}
@@ -261,11 +263,11 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           if (response.status.size != producerRequest.data.size)
             throw new KafkaException("Incomplete response (%s) for producer request (%s)".format(response, producerRequest))
           if (logger.isTraceEnabled) {
-            val successfullySentData = response.status.filter(_._2.error == ErrorMapping.NoError)
+            val successfullySentData = response.status.filter(_._2.error == Errors.NONE.code)
             successfullySentData.foreach(m => messagesPerTopic(m._1).foreach(message =>
               trace("Successfully sent message: %s".format(if(message.message.isNull) null else message.message.toString()))))
           }
-          val failedPartitionsAndStatus = response.status.filter(_._2.error != ErrorMapping.NoError).toSeq
+          val failedPartitionsAndStatus = response.status.filter(_._2.error != Errors.NONE.code).toSeq
           failedTopicPartitions = failedPartitionsAndStatus.map(partitionStatus => partitionStatus._1)
           if(failedTopicPartitions.size > 0) {
             val errorString = failedPartitionsAndStatus
@@ -273,7 +275,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
                                     (p1._1.topic.compareTo(p2._1.topic) == 0 && p1._1.partition < p2._1.partition))
               .map{
                 case(topicAndPartition, status) =>
-                  topicAndPartition.toString + ": " + ErrorMapping.exceptionFor(status.error).getClass.getName
+                  topicAndPartition.toString + ": " + Errors.forCode(status.error).exception.getClass.getName
               }.mkString(",")
             warn("Produce request with correlation id %d failed due to %s".format(currentCorrelationId, errorString))
           }

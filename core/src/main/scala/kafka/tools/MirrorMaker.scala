@@ -54,7 +54,7 @@ import scala.util.control.ControlThrowable
  *       1. use new producer with following settings
  *            acks=all
  *            retries=max integer
- *            block.on.buffer.full=true
+ *            max.block.ms=max long
  *            max.in.flight.requests.per.connection=1
  *       2. Consumer Settings
  *            auto.commit.enable=false
@@ -192,7 +192,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       val producerProps = Utils.loadProps(options.valueOf(producerConfigOpt))
       // Defaults to no data loss settings.
       maybeSetDefaultProperty(producerProps, ProducerConfig.RETRIES_CONFIG, Int.MaxValue.toString)
-      maybeSetDefaultProperty(producerProps, ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
+      maybeSetDefaultProperty(producerProps, ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
       maybeSetDefaultProperty(producerProps, ProducerConfig.ACKS_CONFIG, "all")
       maybeSetDefaultProperty(producerProps, ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
       // Always set producer key and value serializer to ByteArraySerializer.

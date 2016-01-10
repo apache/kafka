@@ -24,12 +24,11 @@ import kafka.admin.AdminUtils
 import kafka.api.{TopicMetadataRequest, TopicMetadataResponse}
 import kafka.client.ClientUtils
 import kafka.cluster.{Broker, BrokerEndPoint}
-import kafka.common.ErrorMapping
 import kafka.server.{KafkaConfig, KafkaServer, NotRunning}
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.junit.Assert._
 import org.junit.{Test, After, Before}
 
@@ -89,8 +88,8 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
 
     val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), brokerEndPoints, "TopicMetadataTest-testBasicTopicMetadata",
       2000,0).topicsMetadata
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.errorCode)
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.partitionsMetadata.head.errorCode)
+    assertEquals(Errors.NONE.code, topicsMetadata.head.errorCode)
+    assertEquals(Errors.NONE.code, topicsMetadata.head.partitionsMetadata.head.errorCode)
     assertEquals("Expecting metadata only for 1 topic", 1, topicsMetadata.size)
     assertEquals("Expecting metadata for the test topic", "test", topicsMetadata.head.topic)
     val partitionMetadata = topicsMetadata.head.partitionsMetadata
@@ -110,10 +109,10 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
     // issue metadata request with empty list of topics
     val topicsMetadata = ClientUtils.fetchTopicMetadata(Set.empty, brokerEndPoints, "TopicMetadataTest-testGetAllTopicMetadata",
       2000, 0).topicsMetadata
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.errorCode)
+    assertEquals(Errors.NONE.code, topicsMetadata.head.errorCode)
     assertEquals(2, topicsMetadata.size)
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.partitionsMetadata.head.errorCode)
-    assertEquals(ErrorMapping.NoError, topicsMetadata.last.partitionsMetadata.head.errorCode)
+    assertEquals(Errors.NONE.code, topicsMetadata.head.partitionsMetadata.head.errorCode)
+    assertEquals(Errors.NONE.code, topicsMetadata.last.partitionsMetadata.head.errorCode)
     val partitionMetadataTopic1 = topicsMetadata.head.partitionsMetadata
     val partitionMetadataTopic2 = topicsMetadata.last.partitionsMetadata
     assertEquals("Expecting metadata for 1 partition", 1, partitionMetadataTopic1.size)
@@ -130,7 +129,7 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
     val topic = "testAutoCreateTopic"
     var topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), brokerEndPoints, "TopicMetadataTest-testAutoCreateTopic",
       2000,0).topicsMetadata
-    assertEquals(ErrorMapping.LeaderNotAvailableCode, topicsMetadata.head.errorCode)
+    assertEquals(Errors.LEADER_NOT_AVAILABLE.code, topicsMetadata.head.errorCode)
     assertEquals("Expecting metadata only for 1 topic", 1, topicsMetadata.size)
     assertEquals("Expecting metadata for the test topic", topic, topicsMetadata.head.topic)
     assertEquals(0, topicsMetadata.head.partitionsMetadata.size)
@@ -142,8 +141,8 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
     // retry the metadata for the auto created topic
     topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), brokerEndPoints, "TopicMetadataTest-testBasicTopicMetadata",
       2000,0).topicsMetadata
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.errorCode)
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.partitionsMetadata.head.errorCode)
+    assertEquals(Errors.NONE.code, topicsMetadata.head.errorCode)
+    assertEquals(Errors.NONE.code, topicsMetadata.head.partitionsMetadata.head.errorCode)
     val partitionMetadata = topicsMetadata.head.partitionsMetadata
     assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
     assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
@@ -160,9 +159,9 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
       2000,0).topicsMetadata
     assertEquals("Expecting metadata for 2 topics", 2, topicsMetadata.size)
     assertEquals("Expecting metadata for topic1", topic1, topicsMetadata.head.topic)
-    assertEquals(ErrorMapping.LeaderNotAvailableCode, topicsMetadata.head.errorCode)
+    assertEquals(Errors.LEADER_NOT_AVAILABLE.code, topicsMetadata.head.errorCode)
     assertEquals("Expecting metadata for topic2", topic2, topicsMetadata(1).topic)
-    assertEquals("Expecting InvalidTopicCode for topic2 metadata", ErrorMapping.InvalidTopicCode, topicsMetadata(1).errorCode)
+    assertEquals("Expecting InvalidTopicCode for topic2 metadata", Errors.INVALID_TOPIC_EXCEPTION.code, topicsMetadata(1).errorCode)
 
     // wait for leader to be elected
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, 0)
@@ -171,8 +170,8 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
     // retry the metadata for the first auto created topic
     topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic1), brokerEndPoints, "TopicMetadataTest-testBasicTopicMetadata",
       2000,0).topicsMetadata
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.errorCode)
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.partitionsMetadata.head.errorCode)
+    assertEquals(Errors.NONE.code, topicsMetadata.head.errorCode)
+    assertEquals(Errors.NONE.code, topicsMetadata.head.partitionsMetadata.head.errorCode)
     var partitionMetadata = topicsMetadata.head.partitionsMetadata
     assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
     assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)

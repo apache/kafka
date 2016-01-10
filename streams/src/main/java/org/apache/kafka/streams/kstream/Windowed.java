@@ -17,9 +17,22 @@
 
 package org.apache.kafka.streams.kstream;
 
-public interface WindowSupplier<K, V> {
+public class Windowed<T> {
 
-    String name();
+    private T value;
 
-    Window<K, V> get();
+    private Window window;
+
+    public Windowed(T value, Window window) {
+        this.value = value;
+        this.window = window;
+    }
+
+    public T value() {
+        return value;
+    }
+
+    public Window window() {
+        return window;
+    }
 }

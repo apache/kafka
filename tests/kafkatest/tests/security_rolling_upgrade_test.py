@@ -16,12 +16,13 @@
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
+from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer, is_int
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from ducktape.mark import matrix
+from kafkatest.services.security.kafka_acls import ACLs
 import time
-import random
 
 
 class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
@@ -32,7 +33,9 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         super(TestSecurityRollingUpgrade, self).__init__(test_context=test_context)
 
     def setUp(self):
+        self.acls = ACLs()
         self.topic = "test_topic"
+        self.group = "group"
         self.producer_throughput = 100
         self.num_producers = 1
         self.num_consumers = 1
@@ -52,7 +55,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
             self.test_context, self.num_consumers, self.kafka, self.topic,
             consumer_timeout_ms=60000, message_validator=is_int, new_consumer=True)
 
-        self.consumer.group_id = "unique-test-group-" + str(random.random())
+        self.consumer.group_id = "group"
 
     def bounce(self):
         self.kafka.start_minikdc()
@@ -71,6 +74,9 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
         # Roll cluster to disable PLAINTEXT port
         self.kafka.close_port('PLAINTEXT')
+        self.kafka.authorizer_class_name = KafkaService.SIMPLE_AUTHORIZER
+        self.acls.set_acls(client_protocol, self.kafka, self.zk, self.topic, self.group)
+        self.acls.set_acls(broker_protocol, self.kafka, self.zk, self.topic, self.group)
         self.bounce()
 
     def open_secured_port(self, client_protocol):
@@ -105,8 +111,8 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         """
         Start with a PLAINTEXT cluster with a second Secured port open (i.e. result of phase one).
         Start an Producer and Consumer via the SECURED port
-        Rolling upgrade to add inter-broker be the secure protocol
-        Rolling upgrade again to disable PLAINTEXT
+        Incrementally upgrade to add inter-broker be the secure protocol
+        Incrementally upgrade again to add ACLs as well as disabling the PLAINTEXT port
         Ensure the producer and consumer ran throughout
         """
         #Given we have a broker that has both secure and PLAINTEXT ports open

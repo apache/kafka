@@ -21,11 +21,12 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.cluster.BrokerEndPoint
 import kafka.consumer.PartitionTopicInfo
-import kafka.message.{InvalidMessageException, MessageAndOffset, ByteBufferMessageSet}
+import kafka.message.{MessageAndOffset, ByteBufferMessageSet}
 import kafka.utils.{Pool, ShutdownableThread, DelayedItem}
 import kafka.common.{KafkaException, ClientIdAndBroker, TopicAndPartition}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
+import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.protocol.Errors
 import AbstractFetcherThread._
 import scala.collection.{mutable, Set, Map}
@@ -137,7 +138,7 @@ abstract class AbstractFetcherThread(name: String,
                     // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
                     processPartitionData(topicAndPartition, currentPartitionFetchState.offset, partitionData)
                   } catch {
-                    case ime: InvalidMessageException =>
+                    case ime: CorruptRecordException =>
                       // we log the error and continue. This ensures two things
                       // 1. If there is a corrupt message in a topic partition, it does not bring the fetcher thread down and cause other topic partition to also lag
                       // 2. If the message is corrupt due to a transient state in the log (truncation, partial writes can cause this), we simply continue and

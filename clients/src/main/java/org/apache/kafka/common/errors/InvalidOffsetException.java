@@ -15,24 +15,23 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.common.errors;
 
 /**
- * KStreamWindowed is an abstraction of a stream of key-value pairs with a window.
+ * Thrown when the offset for a set of partitions is invalid (either undefined or out of range),
+ * and no reset policy has been configured.
+ * @see OffsetOutOfRangeException
  */
-public interface KStreamWindowed<K, V> extends KStream<K, V> {
+public class InvalidOffsetException extends ApiException {
 
-    /**
-     * Creates a new stream by joining this windowed stream with the other windowed stream.
-     * Each element arrived from either of the streams is joined with elements in a window of each other.
-     * The resulting values are computed by applying a joiner.
-     *
-     * @param other  the other windowed stream
-     * @param joiner ValueJoiner
-     * @param <V1>   the value type of the other stream
-     * @param <V2>   the value type of the new stream
-     * @return KStream
-     */
-    <V1, V2> KStream<K, V2> join(KStreamWindowed<K, V1> other, ValueJoiner<V, V1, V2> joiner);
+    private static final long serialVersionUID = 1L;
+
+    public InvalidOffsetException(String message) {
+        super(message);
+    }
+
+    public InvalidOffsetException(String message, Throwable cause) {
+        super(message, cause);
+    }
 
 }

@@ -19,15 +19,22 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.AggregatorSupplier;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.KeyValue;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.KeyValueToDoubleMapper;
+import org.apache.kafka.streams.kstream.KeyValueToIntMapper;
+import org.apache.kafka.streams.kstream.KeyValueToLongMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 
+import java.util.Collection;
 import java.util.Set;
 
 /**
@@ -271,4 +278,66 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes);
     }
 
+    @Override
+    public <K1, V1, V2> KTable<K1, V2> aggregate(AggregatorSupplier<K1, V1, V2> aggregatorSupplier,
+                                                 KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
+                                                 Serializer<K> keySerializer,
+                                                 Serializer<V2> aggValueSerializer,
+                                                 Deserializer<K> keyDeserializer,
+                                                 Deserializer<V2> aggValueDeserializer,
+                                                 String name) {
+        // TODO
+        return null;
+    }
+
+    @Override
+    public <K1> KTable<K1, Long> sum(KeyValueMapper<K, V, K1> keySelector,
+                                     KeyValueToLongMapper<K, V> valueSelector,
+                                     Serializer<K> keySerializer,
+                                     Deserializer<K> keyDeserializer,
+                                     String name) {
+        // TODO
+        return null;
+    }
+
+    @Override
+    public <K1> KTable<K1, Integer> sum(KeyValueMapper<K, V, K1> keySelector,
+                                        KeyValueToIntMapper<K, V> valueSelector,
+                                        Serializer<K> keySerializer,
+                                        Deserializer<K> keyDeserializer,
+                                        String name) {
+        // TODO
+        return null;
+    }
+
+    @Override
+    public <K1> KTable<K1, Double> sum(KeyValueMapper<K, V, K1> keySelector,
+                                       KeyValueToDoubleMapper<K, V> valueSelector,
+                                       Serializer<K> keySerializer,
+                                       Deserializer<K> keyDeserializer,
+                                       String name) {
+        // TODO
+        return null;
+    }
+
+    @Override
+    public <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> keySelector,
+                                       Serializer<K> keySerializer,
+                                       Deserializer<K> keyDeserializer,
+                                       String name) {
+        // TODO
+        return null;
+    }
+
+    @Override
+    public <K1, V1 extends Comparable<V1>> KTable<K1, Collection<V1>> topK(int k,
+                                                                           KeyValueMapper<K, V, K1> keySelector,
+                                                                           Serializer<K> keySerializer,
+                                                                           Serializer<V1> aggValueSerializer,
+                                                                           Deserializer<K> keyDeserializer,
+                                                                           Deserializer<V1> aggValueDeserializer,
+                                                                           String name) {
+        // TODO
+        return null;
+    }
 }

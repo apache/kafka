@@ -149,7 +149,12 @@ public class ProcessorTopologyTestDriver {
 
         // Set up the consumer and producer ...
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        producer = new MockProducer<>(true, bytesSerializer, bytesSerializer);
+        producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
+            @Override
+            public List<PartitionInfo> partitionsFor(String topic) {
+                return Collections.emptyList();
+            }
+        };
         restoreStateConsumer = createRestoreConsumer(id, storeNames);
 
         // Set up all of the topic+partition information and subscribe the consumer to each ...

@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -114,22 +115,23 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingSimpleTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology());
+        int partition = 10;
+        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition));
         driver.process(INPUT_TOPIC, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition);
         assertNoOutputRecord(OUTPUT_TOPIC_2);
 
         driver.process(INPUT_TOPIC, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition);
         assertNoOutputRecord(OUTPUT_TOPIC_2);
 
         driver.process(INPUT_TOPIC, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC, "key4", "value4", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC, "key5", "value5", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNoOutputRecord(OUTPUT_TOPIC_2);
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3");
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key4", "value4");
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key5", "value5");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", partition);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key4", "value4", partition);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key5", "value5", partition);
     }
 
     @Test
@@ -172,25 +174,38 @@ public class ProcessorTopologyTest {
     }
 
     protected void assertNextOutputRecord(String topic, String key, String value) {
-        assertProducerRecord(driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER), topic, key, value);
+        ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
+        assertEquals(topic, record.topic());
+        assertEquals(key, record.key());
+        assertEquals(value, record.value());
+        assertNull(record.partition());
+    }
+
+    protected void assertNextOutputRecord(String topic, String key, String value, Integer partition) {
+        ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
+        assertEquals(topic, record.topic());
+        assertEquals(key, record.key());
+        assertEquals(value, record.value());
+        assertEquals(partition, record.partition());
     }
 
     protected void assertNoOutputRecord(String topic) {
         assertNull(driver.readOutput(topic));
     }
 
-    private void assertProducerRecord(ProducerRecord<String, String> record, String topic, String key, String value) {
-        assertEquals(topic, record.topic());
-        assertEquals(key, record.key());
-        assertEquals(value, record.value());
-        // Kafka Streaming doesn't set the partition, so it's always null
-        assertNull(record.partition());
+    protected <K, V> StreamPartitioner<K, V> constantPartitioner(final Integer partition) {
+        return new StreamPartitioner<K, V>() {
+            @Override
+            public Integer partition(K key, V value, int numPartitions) {
+                return partition;
+            }
+        };
     }
 
-    protected TopologyBuilder createSimpleTopology() {
+    protected TopologyBuilder createSimpleTopology(int partition) {
         return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC)
                                     .addProcessor("processor", define(new ForwardingProcessor()), "source")
-                                    .addSink("sink", OUTPUT_TOPIC_1, "processor");
+                                    .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
     protected TopologyBuilder createMultiplexingTopology() {

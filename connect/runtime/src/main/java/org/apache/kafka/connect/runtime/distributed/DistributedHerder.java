@@ -34,7 +34,6 @@ import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
-import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.storage.KafkaConfigStorage;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -709,9 +708,8 @@ public class DistributedHerder implements Herder, Runnable {
         try {
             Map<String, String> configs = configState.connectorConfig(connName);
             ConnectorConfig connConfig = new ConnectorConfig(configs);
-
             List<String> sinkTopics = null;
-            if (SinkConnector.class.isAssignableFrom(connConfig.getClass(ConnectorConfig.CONNECTOR_CLASS_CONFIG)))
+            if (worker.isSinkConnector(connName))
                 sinkTopics = connConfig.getList(ConnectorConfig.TOPICS_CONFIG);
 
             final List<Map<String, String>> taskProps
