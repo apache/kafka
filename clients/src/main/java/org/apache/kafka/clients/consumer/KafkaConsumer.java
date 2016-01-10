@@ -798,8 +798,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * offset for the subscribed list of partitions
      *
      *
-     * @param timeout The time, in milliseconds, spent waiting in poll if data is not available. If 0, returns
-     *            immediately with any records that are available now. Must not be negative.
+     * @param timeout The time, in milliseconds, spent waiting in poll if data is not available in buffer.
+     *            If 0, returns immediately with any records that are available currently in buffer else returns empty.
+     *            Must not be negative.
      * @return map of topic to records since the last fetch for the subscribed list of topics and partitions
      *
      * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if the offset for a partition or set of
