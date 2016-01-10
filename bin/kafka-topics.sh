@@ -16,4 +16,4 @@
 
 base_dir=$(dirname $0)/..
 
-PROJECT_NAMES="core clients" exec $(dirname $0)/kafka-run-class.sh kafka.admin.TopicCommand $@
+PROJECT_NAMES="clients core" exec $(dirname $0)/kafka-run-class.sh kafka.admin.TopicCommand $@

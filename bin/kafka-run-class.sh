@@ -31,7 +31,7 @@ if [ -z "$SCALA_BINARY_VERSION" ]; then
 fi
 
 if [ -z "$PROJECT_NAMES" ]; then
-  PROJECT_NAMES="core tools clients connect stream"
+  PROJECT_NAMES="core tools clients connect stream log4j-appender"
 fi
 PROJECT_NAMES=($PROJECT_NAMES)
 JARPATH=""
@@ -39,40 +39,29 @@ for project in ${PROJECT_NAMES[@]};
   do
     case $project in
       "core")
-      JARPATH=$JARPATH"$base_dir/core/build/dependant-libs-${SCALA_VERSION}/*.jar "
+      JARPATH=$JARPATH"$base_dir/core/build/dependant-libs-${SCALA_VERSION}/*.jar $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar "
       ;;
       "tools")
-      JARPATH=$JARPATH"$base_dir/tools/build/libs/kafka-tools*.jar $base_dir/tools/build/dependant-libs-${SCALA_VERSION}*.jar "
+      JARPATH=$JARPATH"$base_dir/tools/build/libs/kafka-tools*.jar $base_dir/tools/build/dependant-libs-${SCALA_VERSION}/*.jar "
       ;;
       "clients")
       JARPATH=$JARPATH"$base_dir/clients/build/libs/kafka-clients*.jar "
       ;;
       "connect")
-      JARPATH=$JARPATH"$base_dir/connect/*/build/libs/connect-*.jar $base_dir/connect/*/build/dependant-libs/*.jar "
+      JARPATH=$JARPATH"$base_dir/connect/*/build/libs/connect-*.jar $base_dir/connect/*/build/dependant-libs/*.jar $base_dir/connect/build/dependant-libs/*.jar "
       ;;
       "stream")
       JARPATH=$JARPATH"$base_dir/stream/build/libs/kafka-streams*.jar "
       ;;
+      "log4j-appender")
+      JARPATH=$JARPATH"$base_dir/log4j-appender/build/libs/kafka-*.jar "
+      ;;
     esac
   done
+JARPATH=($JARPATH)
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
 
-#if [ -z "$JARPATH" ]; then
-#  JARPATH="$base_dir/core/build/dependant-libs-${SCALA_VERSION}/*.jar \
-#            $base_dir/examples/build/libs//kafka-examples*.jar \
-#            $base_dir/contrib/hadoop-consumer/build/libs//kafka-hadoop-consumer*.jar \
-#            $base_dir/contrib/hadoop-producer/build/libs//kafka-hadoop-producer*.jar \
-#            $base_dir/clients/build/libs/kafka-clients*.jar \
-#            $base_dir/stream/build/libs/kafka-streams*.jar \
-#            $base_dir/tools/build/libs/kafka-tools*.jar \
-#            $base_dir/tools/build/dependant-libs-${SCALA_VERSION}* \
-#            $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar \
-#            $base_dir/connect/*/build/libs/connect-*.jar \
-#            $base_dir/connect/*/build/dependant-libs/*.jar \
-#            $base_dir/libs/*.jar"
-#fi
-JARPATH=($JARPATH)
 
 shopt -s nullglob
 for file in ${JARPATH[@]};

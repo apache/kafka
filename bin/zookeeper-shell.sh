@@ -20,4 +20,4 @@ then
 	exit 1
 fi
 
-exec $(dirname $0)/kafka-run-class.sh org.apache.zookeeper.ZooKeeperMain -server "$@"
+PROJECT_NAMES="core" exec $(dirname $0)/kafka-run-class.sh org.apache.zookeeper.ZooKeeperMain -server "$@"

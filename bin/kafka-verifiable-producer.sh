@@ -17,4 +17,4 @@
 if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
     export KAFKA_HEAP_OPTS="-Xmx512M"
 fi
-exec $(dirname $0)/kafka-run-class.sh org.apache.kafka.tools.VerifiableProducer $@
+PROJECT_NAMES="clients log4j-appender tools" exec $(dirname $0)/kafka-run-class.sh org.apache.kafka.tools.VerifiableProducer $@
