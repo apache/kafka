@@ -108,7 +108,7 @@ object TopicCommand extends Logging {
       }
       println("Created topic \"%s\".".format(topic))
     } catch  {
-      case e: TopicExistsException => if(!ifNotExists) throw e
+      case e: TopicExistsException => if (!ifNotExists) throw e
     }
   }
 
