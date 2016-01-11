@@ -414,9 +414,8 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
    * 2. Even if we do refresh the cache, there is no guarantee that by the time the leader and ISR request reaches
    *    every broker that it is still valid.  Brokers check the leader epoch to determine validity of the request.
    */
-  def onBrokerStartup(newBrokers: Seq[Int]) {
-    info("New broker startup callback for %s".format(newBrokers.sorted.mkString(",")))
-    val newBrokersSet = newBrokers.toSet
+  def onBrokerStartup(newBrokerIds: Set[Int]) {
+    info("New broker startup callback for %s".format(brokerSetToString(newBrokerIds)))
     // send update metadata request to all live and shutting down brokers. Old brokers will get to know of the new
     // broker via this update.
     // In cases of controlled shutdown leaders will not be elected when a new broker comes up. So at least in the
@@ -424,23 +423,23 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq)
     // the very first thing to do when a new broker comes up is send it the entire list of partitions that it is
     // supposed to host. Based on that the broker starts the high watermark threads for the input list of partitions
-    val allReplicasOnNewBrokers = controllerContext.replicasOnBrokers(newBrokersSet)
+    val allReplicasOnNewBrokers = controllerContext.replicasOnBrokers(newBrokerIds)
     replicaStateMachine.handleStateChanges(allReplicasOnNewBrokers, OnlineReplica)
     // when a new broker comes up, the controller needs to trigger leader election for all new and offline partitions
     // to see if these brokers can become leaders for some/all of those
     partitionStateMachine.triggerOnlinePartitionStateChange()
     // check if reassignment of some partitions need to be restarted
     val partitionsWithReplicasOnNewBrokers = controllerContext.partitionsBeingReassigned.filter {
-      case (topicAndPartition, reassignmentContext) => reassignmentContext.newReplicas.exists(newBrokersSet.contains(_))
+      case (topicAndPartition, reassignmentContext) => reassignmentContext.newReplicas.exists(newBrokerIds.contains(_))
     }
     partitionsWithReplicasOnNewBrokers.foreach(p => onPartitionReassignment(p._1, p._2))
     // check if topic deletion needs to be resumed. If at least one replica that belongs to the topic being deleted exists
     // on the newly restarted brokers, there is a chance that topic deletion can resume
     val replicasForTopicsToBeDeleted = allReplicasOnNewBrokers.filter(p => deleteTopicManager.isTopicQueuedUpForDeletion(p.topic))
-    if(replicasForTopicsToBeDeleted.size > 0) {
+    if(replicasForTopicsToBeDeleted.nonEmpty) {
       info(("Some replicas %s for topics scheduled for deletion %s are on the newly restarted brokers %s. " +
-        "Signaling restart of topic deletion for these topics").format(replicasForTopicsToBeDeleted.mkString(","),
-        deleteTopicManager.topicsToBeDeleted.mkString(","), newBrokers.sorted.mkString(",")))
+        "Signaling restart of topic deletion for these topics").format(replicasForTopicsToBeDeleted.mkString(", "),
+        brokerSetToString(deleteTopicManager.topicsToBeDeleted), brokerSetToString(newBrokerIds)))
       deleteTopicManager.resumeDeletionForTopics(replicasForTopicsToBeDeleted.map(_.topic))
     }
   }
@@ -457,27 +456,26 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
    * the partition state machine will refresh our cache for us when performing leader election for all new/offline
    * partitions coming online.
    */
-  def onBrokerFailure(deadBrokers: Seq[Int]) {
-    info("Broker failure callback for %s".format(deadBrokers.sorted.mkString(",")))
+  def onBrokerFailure(deadBrokerIds: Set[Int]) {
+    info("Broker failure callback for %s".format(brokerSetToString(deadBrokerIds)))
     val deadBrokersThatWereShuttingDown =
-      deadBrokers.filter(id => controllerContext.shuttingDownBrokerIds.remove(id))
-    info("Removed %s from list of shutting down brokers.".format(deadBrokersThatWereShuttingDown.sorted.mkString(", ")))
-    val deadBrokersSet = deadBrokers.toSet
+      deadBrokerIds.filter(id => controllerContext.shuttingDownBrokerIds.remove(id))
+    info("Removed %s from list of shutting down brokers.".format(brokerSetToString(deadBrokersThatWereShuttingDown)))
     // trigger OfflinePartition state for all partitions whose current leader is one amongst the dead brokers
     val partitionsWithoutLeader = controllerContext.partitionLeadershipInfo.filter(partitionAndLeader =>
-      deadBrokersSet.contains(partitionAndLeader._2.leaderAndIsr.leader) &&
+      deadBrokerIds.contains(partitionAndLeader._2.leaderAndIsr.leader) &&
         !deleteTopicManager.isTopicQueuedUpForDeletion(partitionAndLeader._1.topic)).keySet
     partitionStateMachine.handleStateChanges(partitionsWithoutLeader, OfflinePartition)
     // trigger OnlinePartition state changes for offline or new partitions
     partitionStateMachine.triggerOnlinePartitionStateChange()
     // filter out the replicas that belong to topics that are being deleted
-    var allReplicasOnDeadBrokers = controllerContext.replicasOnBrokers(deadBrokersSet)
+    val allReplicasOnDeadBrokers = controllerContext.replicasOnBrokers(deadBrokerIds)
     val activeReplicasOnDeadBrokers = allReplicasOnDeadBrokers.filterNot(p => deleteTopicManager.isTopicQueuedUpForDeletion(p.topic))
     // handle dead replicas
     replicaStateMachine.handleStateChanges(activeReplicasOnDeadBrokers, OfflineReplica)
     // check if topic deletion state for the dead replicas needs to be updated
     val replicasForTopicsToBeDeleted = allReplicasOnDeadBrokers.filter(p => deleteTopicManager.isTopicQueuedUpForDeletion(p.topic))
-    if(replicasForTopicsToBeDeleted.size > 0) {
+    if(replicasForTopicsToBeDeleted.nonEmpty) {
       // it is required to mark the respective replicas in TopicDeletionFailed state since the replica cannot be
       // deleted when the broker is down. This will prevent the replica from being in TopicDeletionStarted state indefinitely
       // since topic deletion cannot be retried until at least one replica is in TopicDeletionStarted state
@@ -490,6 +488,8 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
       sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq)
     }
   }
+
+  private def brokerSetToString[A](set: Set[A])(implicit ord: Ordering[A]) = set.toSeq.sorted(ord).mkString(", ")
 
   /**
    * This callback is invoked by the partition state machine's topic change listener with the list of new topics

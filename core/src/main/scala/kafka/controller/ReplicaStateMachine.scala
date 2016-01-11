@@ -354,7 +354,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     def handleChildChange(parentPath : String, currentBrokerList : java.util.List[String]) {
       val curBrokerIds = currentBrokerList.map(_.toInt).toSet
       info("Broker change listener fired for path %s with children %s"
-        .format(parentPath, curBrokerIds.toSeq.sorted.mkString(",")))
+        .format(parentPath, brokerSetToString(curBrokerIds)))
       inLock(controllerContext.controllerLock) {
         if (hasStarted.get) {
           ControllerStats.leaderElectionTimer.time {
@@ -365,14 +365,14 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               val deadBrokerIds = controllerContext.liveOrShuttingDownBrokerIds -- curBrokerIds
               controllerContext.liveBrokers = curBrokerIds.map(zkUtils.getBrokerInfo(_)).filter(_.isDefined).map(_.get)
               info("Newly added brokers: %s, deleted brokers: %s, all live brokers: %s"
-                .format(newBrokerIds.toSeq.sorted.mkString(","), deadBrokerIds.toSeq.sorted.mkString(","),
-                  controllerContext.liveBrokerIds.toSeq.sorted.mkString(",")))
+                .format(brokerSetToString(newBrokerIds), brokerSetToString(deadBrokerIds),
+                  brokerSetToString(controllerContext.liveBrokerIds)))
               newBrokers.foreach(controllerContext.controllerChannelManager.addBroker(_))
               deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker(_))
-              if(newBrokerIds.nonEmpty)
-                controller.onBrokerStartup(newBrokerIds.toSeq)
-              if(deadBrokerIds.nonEmpty)
-                controller.onBrokerFailure(deadBrokerIds.toSeq)
+              if (newBrokerIds.nonEmpty)
+                controller.onBrokerStartup(newBrokerIds)
+              if (deadBrokerIds.nonEmpty)
+                controller.onBrokerFailure(deadBrokerIds)
             } catch {
               case e: Throwable => error("Error while handling broker changes", e)
             }
@@ -380,6 +380,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
         }
       }
     }
+
+    private def brokerSetToString[A](set: Set[A])(implicit ord: Ordering[A]) = set.toSeq.sorted(ord).mkString(", ")
   }
 }
 
