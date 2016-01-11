@@ -167,7 +167,7 @@ class VerifiableProducer(BackgroundThreadService):
             return len(self.not_acked_values)
 
     def stop_node(self, node):
-        self.kill_node(node, clean_shutdown=False, allow_fail=False)
+        self.kill_node(node, allow_fail=False)
         if self.worker_threads is None:
             return
 

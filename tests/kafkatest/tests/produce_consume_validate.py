@@ -58,8 +58,9 @@ class ProduceConsumeValidateTest(Test):
                    err_msg="Expected producer to still be producing.")
 
     def stop_producer_and_consumer(self):
-        self.check_alive()
-        self.check_producing()
+        if self.producer.max_messages == -1:
+            self.check_alive()
+            self.check_producing()
         self.producer.stop()
         self.consumer.wait()
 
@@ -110,7 +111,8 @@ class ProduceConsumeValidateTest(Test):
         consumed = self.consumer.messages_consumed[1]
         missing = set(acked) - set(consumed)
 
-        self.logger.info("num consumed:  %d" % len(consumed))
+        self.logger.info("Producer produced %d messages where %d messages are unique" % (len(acked), len(acked)))
+        self.logger.info("Consumer consumed %d messages where %d messages are unique" % (len(consumed), len(consumed)))
 
         # Were all acked messages consumed?
         if len(missing) > 0:
