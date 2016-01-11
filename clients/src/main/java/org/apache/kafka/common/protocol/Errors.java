@@ -152,6 +152,13 @@ public enum Errors {
     }
 
     /**
+     * Returns the class name of the exception
+     */
+    public String exceptionName() {
+        return exception.getClass().getName();
+    }
+
+    /**
      * The error code for the exception
      */
     public short code() {
