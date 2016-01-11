@@ -192,7 +192,7 @@ class GroupMetadataManager(val brokerId: Int,
       var responseCode = Errors.NONE.code
       if (status.error != Errors.NONE.code) {
         debug("Metadata from group %s with generation %d failed when appending to log due to %s"
-          .format(group.groupId, generationId, Errors.forCode(status.error).exception.getClass.getName))
+          .format(group.groupId, generationId, Errors.forCode(status.error).exceptionName))
 
         // transform the log append error code to the corresponding the commit status error code
         responseCode = if (status.error == Errors.UNKNOWN_TOPIC_OR_PARTITION.code) {
@@ -206,7 +206,7 @@ class GroupMetadataManager(val brokerId: Int,
           || status.error == Errors.INVALID_FETCH_SIZE.code) {
 
           error("Appending metadata message for group %s generation %d failed due to %s, returning UNKNOWN error code to the client"
-            .format(group.groupId, generationId, Errors.forCode(status.error).exception.getClass.getName))
+            .format(group.groupId, generationId, Errors.forCode(status.error).exceptionName))
 
           Errors.UNKNOWN.code
         } else {
@@ -278,7 +278,7 @@ class GroupMetadataManager(val brokerId: Int,
           Errors.NONE.code
         } else {
           debug("Offset commit %s from group %s consumer %s with generation %d failed when appending to log due to %s"
-            .format(filteredOffsetMetadata, groupId, consumerId, generationId, Errors.forCode(status.error).exception.getClass.getName))
+            .format(filteredOffsetMetadata, groupId, consumerId, generationId, Errors.forCode(status.error).exceptionName))
 
           // transform the log append error code to the corresponding the commit status error code
           if (status.error == Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
