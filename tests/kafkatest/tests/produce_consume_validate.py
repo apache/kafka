@@ -111,8 +111,8 @@ class ProduceConsumeValidateTest(Test):
         consumed = self.consumer.messages_consumed[1]
         missing = set(acked) - set(consumed)
 
-        self.logger.info("Producer produced %d messages where %d messages are unique" % (len(acked), len(acked)))
-        self.logger.info("Consumer consumed %d messages where %d messages are unique" % (len(consumed), len(consumed)))
+        self.logger.info("Producer produced %d messages." % len(acked))
+        self.logger.info("Consumer consumed %d messages where %d messages are unique" % (len(consumed), len(set(consumed))))
 
         # Were all acked messages consumed?
         if len(missing) > 0:

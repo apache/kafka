@@ -275,7 +275,7 @@ class VerifiableConsumer(BackgroundThreadService):
         # block until the corresponding thread exits
         if len(self.worker_threads) >= self.idx(node):
             # Need to guard this because stop is preemptively called before the worker threads are added and started
-            self.worker_threads[self.idx(node) - 1].join()
+            self.worker_threads[self.idx(node) - 1].join(60)
 
     def clean_node(self, node):
         self.kill_node(node, clean_shutdown=False)
