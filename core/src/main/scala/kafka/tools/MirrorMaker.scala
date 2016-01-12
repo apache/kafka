@@ -631,15 +631,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
    * If message.handler.args is specified. A constructor that takes in a String as argument must exist.
    */
   trait MirrorMakerMessageHandler {
-    def handle(record: MessageAndMetadata[Array[Byte], Array[Byte]]): util.List[ProducerRecord[Array[Byte], Array[Byte]]]
     def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]]
   }
 
   private object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
-    override def handle(record: MessageAndMetadata[Array[Byte], Array[Byte]]): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
-      Collections.singletonList(new ProducerRecord[Array[Byte], Array[Byte]](record.topic, record.key(), record.message()))
-    }
-
     override def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
       Collections.singletonList(new ProducerRecord[Array[Byte], Array[Byte]](record.topic, record.key, record.value))
     }
