@@ -26,7 +26,6 @@ import java.io._
  */
 class OffsetCheckpoint(val file: File) extends Logging {
   private val lock = new Object()
-  new File(file + ".tmp").delete() // try to delete any existing temp files for cleanliness
   file.createNewFile() // in case the file doesn't exist
 
   def write(offsets: Map[TopicAndPartition, Long]) {
