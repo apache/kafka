@@ -55,9 +55,9 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   val message = "hello"
 
   var producer: Producer[Int, String] = null
-  def hwFile1: OffsetCheckpoint = new OffsetCheckpoint(new File(configProps1.logDirs(0), ReplicaManager.HighWatermarkFilename))
-  def hwFile2: OffsetCheckpoint = new OffsetCheckpoint(new File(configProps2.logDirs(0), ReplicaManager.HighWatermarkFilename))
-  var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
+  def hwFile1 = new OffsetCheckpoint(new File(configProps1.logDirs(0), ReplicaManager.HighWatermarkFilename))
+  def hwFile2 = new OffsetCheckpoint(new File(configProps2.logDirs(0), ReplicaManager.HighWatermarkFilename))
+  var servers = Seq.empty[KafkaServer]
 
   // Some tests restart the brokers then produce more data. But since test brokers use random ports, we need
   // to use a new producer that knows the new ports
@@ -81,7 +81,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     servers = List(server1, server2)
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
+    createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(0,1)), servers = servers)
 
     // create the producer
     updateProducer()
@@ -90,7 +90,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     producer.close()
-    for(server <- servers) {
+    for (server <- servers) {
       server.shutdown()
       CoreUtils.rm(server.config.logDirs(0))
     }
@@ -107,7 +107,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
       server2.replicaManager.getReplica(topic, 0).get.highWatermark.messageOffset == numMessages,
       "Failed to update high watermark for follower after timeout")
 
-    servers.foreach(server => server.replicaManager.checkpointHighWatermarks())
+    servers.foreach(_.replicaManager.checkpointHighWatermarks())
     val leaderHW = hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L)
     assertEquals(numMessages, leaderHW)
     val followerHW = hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L)
@@ -160,7 +160,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
       server2.replicaManager.getReplica(topic, 0).get.highWatermark.messageOffset == hw,
       "Failed to update high watermark for follower after timeout")
     // shutdown the servers to allow the hw to be checkpointed
-    servers.foreach(server => server.shutdown())
+    servers.foreach(_.shutdown())
     assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
     assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
   }
@@ -174,7 +174,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
       server2.replicaManager.getReplica(topic, 0).get.highWatermark.messageOffset == hw,
       "Failed to update high watermark for follower after timeout")
     // shutdown the servers to allow the hw to be checkpointed
-    servers.foreach(server => server.shutdown())
+    servers.foreach(_.shutdown())
     val leaderHW = hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L)
     assertEquals(hw, leaderHW)
     val followerHW = hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L)
@@ -224,7 +224,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
       server1.replicaManager.getReplica(topic, 0).get.highWatermark.messageOffset == hw,
       "Failed to update high watermark for follower after timeout")
     // shutdown the servers to allow the hw to be checkpointed
-    servers.foreach(server => server.shutdown())
+    servers.foreach(_.shutdown())
     assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
     assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
   }
