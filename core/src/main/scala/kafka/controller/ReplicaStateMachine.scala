@@ -352,7 +352,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   class BrokerChangeListener() extends IZkChildListener with Logging {
     this.logIdent = "[BrokerChangeListener on Controller " + controller.config.brokerId + "]: "
     def handleChildChange(parentPath : String, currentBrokerList : java.util.List[String]) {
-      info("Broker change listener fired for path %s with children %s".format(parentPath, currentBrokerList.mkString(",")))
+      info("Broker change listener fired for path %s with children %s".format(parentPath, currentBrokerList.sorted.mkString(",")))
       inLock(controllerContext.controllerLock) {
         if (hasStarted.get) {
           ControllerStats.leaderElectionTimer.time {
@@ -365,14 +365,17 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               val brokerById = curBrokers.map(broker => broker.id -> broker).toMap
               val newBrokers = newBrokerIds.flatMap(brokerById.get)
               controllerContext.liveBrokers = curBrokers
+              val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
+              val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
+              val liveBrokerIdsSorted = controllerContext.liveBrokerIds.toSeq.sorted
               info("Newly added brokers: %s, deleted brokers: %s, all live brokers: %s"
-                .format(newBrokerIds.mkString(","), deadBrokerIds.mkString(","), controllerContext.liveBrokerIds.mkString(",")))
+                .format(newBrokerIdsSorted.mkString(","), deadBrokerIdsSorted.mkString(","), liveBrokerIdsSorted.mkString(",")))
               newBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
               deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
               if(newBrokerIds.size > 0)
-                controller.onBrokerStartup(newBrokerIds.toSeq)
+                controller.onBrokerStartup(newBrokerIdsSorted)
               if(deadBrokerIds.size > 0)
-                controller.onBrokerFailure(deadBrokerIds.toSeq)
+                controller.onBrokerFailure(deadBrokerIdsSorted)
             } catch {
               case e: Throwable => error("Error while handling broker changes", e)
             }
