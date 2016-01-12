@@ -275,7 +275,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
                                     (p1._1.topic.compareTo(p2._1.topic) == 0 && p1._1.partition < p2._1.partition))
               .map{
                 case(topicAndPartition, status) =>
-                  topicAndPartition.toString + ": " + Errors.forCode(status.error).exception.getClass.getName
+                  topicAndPartition.toString + ": " + Errors.forCode(status.error).exceptionName
               }.mkString(",")
             warn("Produce request with correlation id %d failed due to %s".format(currentCorrelationId, errorString))
           }

@@ -35,6 +35,7 @@ class Log4jAppenderTest(Test):
         super(Log4jAppenderTest, self).__init__(test_context)
         self.num_zk = 1
         self.num_brokers = 1
+        self.messages_received_count = 0
         self.topics = {
             TOPIC: {'partitions': 1, 'replication-factor': 1}
         }
@@ -56,13 +57,20 @@ class Log4jAppenderTest(Test):
                                            security_protocol=security_protocol)
         self.appender.start()
 
+    def custom_message_validator(self, msg):
+        if msg and "INFO : org.apache.kafka.tools.VerifiableLog4jAppender" in msg:
+            self.logger.debug("Received message: %s" % msg)
+            self.messages_received_count += 1
+
+
     def start_consumer(self, security_protocol):
-        enable_new_consumer = security_protocol == SecurityConfig.SSL
+        enable_new_consumer = security_protocol != SecurityConfig.PLAINTEXT
         self.consumer = ConsoleConsumer(self.test_context, num_nodes=self.num_brokers, kafka=self.kafka, topic=TOPIC,
-                                        consumer_timeout_ms=1000, new_consumer=enable_new_consumer)
+                                        consumer_timeout_ms=1000, new_consumer=enable_new_consumer,
+                                        message_validator=self.custom_message_validator)
         self.consumer.start()
 
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
+    @matrix(security_protocol=['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'])
     def test_log4j_appender(self, security_protocol='PLAINTEXT'):
         """
         Tests if KafkaLog4jAppender is producing to Kafka topic
@@ -79,8 +87,7 @@ class Log4jAppenderTest(Test):
             timeout_sec=10, backoff_sec=.2, err_msg="Consumer was too slow to start")
 
         # Verify consumed messages count
-        expected_lines_count = MAX_MESSAGES * 2  # two times to account for new lines introduced by log4j
-        wait_until(lambda: len(self.consumer.messages_consumed[1]) == expected_lines_count, timeout_sec=10,
+        wait_until(lambda: self.messages_received_count == MAX_MESSAGES, timeout_sec=10,
                    err_msg="Timed out waiting to consume expected number of messages.")
 
         self.consumer.stop()

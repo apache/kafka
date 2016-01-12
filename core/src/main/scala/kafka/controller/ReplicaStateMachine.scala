@@ -352,30 +352,27 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   class BrokerChangeListener() extends IZkChildListener with Logging {
     this.logIdent = "[BrokerChangeListener on Controller " + controller.config.brokerId + "]: "
     def handleChildChange(parentPath : String, currentBrokerList : java.util.List[String]) {
-      val curBrokerIds = currentBrokerList.map(_.toInt).toSet
-      val curBrokerIdsSorted = curBrokerIds.toSeq.sorted
-      info("Broker change listener fired for path %s with children %s"
-        .format(parentPath, curBrokerIdsSorted.mkString(", ")))
+      info("Broker change listener fired for path %s with children %s".format(parentPath, currentBrokerList.mkString(",")))
       inLock(controllerContext.controllerLock) {
         if (hasStarted.get) {
           ControllerStats.leaderElectionTimer.time {
             try {
-              val newBrokerIds = curBrokerIds -- controllerContext.liveOrShuttingDownBrokerIds
-              val newBrokerInfo = newBrokerIds.map(zkUtils.getBrokerInfo(_))
-              val newBrokers = newBrokerInfo.filter(_.isDefined).map(_.get)
-              val deadBrokerIds = controllerContext.liveOrShuttingDownBrokerIds -- curBrokerIds
-              controllerContext.liveBrokers = curBrokerIds.map(zkUtils.getBrokerInfo(_)).filter(_.isDefined).map(_.get)
-              val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
-              val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
-              val liveBrokerIdsSorted = controllerContext.liveBrokerIds.toSeq.sorted
+              val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
+              val curBrokerIds = currentBrokerList.map(_.toInt).toSet
+              val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
+              val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
+              val curBrokers = curBrokerIds.flatMap(zkUtils.getBrokerInfo)
+              val brokerById = curBrokers.map(broker => broker.id -> broker).toMap
+              val newBrokers = newBrokerIds.flatMap(brokerById.get)
+              controllerContext.liveBrokers = curBrokers
               info("Newly added brokers: %s, deleted brokers: %s, all live brokers: %s"
-                .format(newBrokerIdsSorted, deadBrokerIdsSorted, liveBrokerIdsSorted))
-              newBrokers.foreach(controllerContext.controllerChannelManager.addBroker(_))
-              deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker(_))
-              if (newBrokerIds.nonEmpty)
-                controller.onBrokerStartup(newBrokerIdsSorted)
-              if (deadBrokerIds.nonEmpty)
-                controller.onBrokerFailure(deadBrokerIdsSorted)
+                .format(newBrokerIds.mkString(","), deadBrokerIds.mkString(","), controllerContext.liveBrokerIds.mkString(",")))
+              newBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
+              deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
+              if(newBrokerIds.size > 0)
+                controller.onBrokerStartup(newBrokerIds.toSeq)
+              if(deadBrokerIds.size > 0)
+                controller.onBrokerFailure(deadBrokerIds.toSeq)
             } catch {
               case e: Throwable => error("Error while handling broker changes", e)
             }
