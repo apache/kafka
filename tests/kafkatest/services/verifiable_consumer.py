@@ -276,7 +276,7 @@ class VerifiableConsumer(BackgroundThreadService):
         if len(self.worker_threads) >= self.idx(node):
             # Need to guard this because stop is preemptively called before the worker threads are added and started
             self.worker_threads[self.idx(node) - 1].join(60)
-            assert not self.worker_threads[self.idx(node)-1].isAlive()
+            assert not self.worker_threads[self.idx(node)-1].isAlive(), "Consumer thread did not terminate within 60 seconds"
 
     def clean_node(self, node):
         self.kill_node(node, clean_shutdown=False)
