@@ -19,7 +19,7 @@ package kafka.controller
 import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
-import kafka.utils.Logging
+import kafka.utils.{ZkUtils, ReplicationUtils, Logging}
 import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
 import kafka.server.{ConfigType, KafkaConfig}
 
@@ -63,9 +63,15 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
             // for unclean leader election.
             if (!LogConfig.fromProps(config.originals, AdminUtils.fetchEntityConfig(controllerContext.zkUtils,
               ConfigType.Topic, topicAndPartition.topic)).uncleanLeaderElectionEnable) {
-              throw new NoReplicaOnlineException(("No broker in ISR for partition " +
-                "%s is alive. Live brokers are: [%s],".format(topicAndPartition, controllerContext.liveBrokerIds)) +
-                " ISR brokers are: [%s]".format(currentLeaderAndIsr.isr.mkString(",")))
+              var zkUpdateSucceeded = false
+              while (!zkUpdateSucceeded) {
+                val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topicAndPartition.topic,
+                  topicAndPartition.partition, currentLeaderAndIsr.copy(leader = -1), controllerContext.epoch,
+                  currentLeaderAndIsr.zkVersion)
+                zkUpdateSucceeded = updateSucceeded
+              }
+              throw new NoReplicaOnlineException(s"No broker in ISR for partition $topicAndPartition is alive." +
+                s" Live brokers are: [${liveBrokerIds.mkString(",")}], ISR brokers are: [${currentLeaderAndIsr.isr.mkString(",")}]")
             }
 
             debug("No broker in ISR is alive for %s. Pick the leader from the alive assigned replicas: %s"
