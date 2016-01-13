@@ -13,20 +13,19 @@
 package org.apache.kafka.clients.producer;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import jdk.nashorn.internal.codegen.CompilerConstants;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.producer.internals.C3ProducerInterceptor;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.common.Cluster;
@@ -147,6 +146,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerConfig producerConfig;
     private final long maxBlockTimeMs;
     private final int requestTimeoutMs;
+
+    // we should probably incapsulate these two params into a class -- like stackable
+    // interceptors class, hopefully common for both consumer and producer interceptor
+    private final List<ProducerInterceptor<K, V>> interceptors;
+    private AtomicLong nextRecordCorrelationId = new AtomicLong();
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -315,6 +319,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
+            // POC implementation just creates a list and adds one interceptor
+            // we will get all interceptors from config in specified order
+            this.interceptors = new ArrayList<>();
+            this.interceptors.add(new C3ProducerInterceptor<K, V>());
             log.debug("Kafka producer started");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed
@@ -330,6 +338,34 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             return acksString.trim().toLowerCase().equals("all") ? -1 : Integer.parseInt(acksString.trim());
         } catch (NumberFormatException e) {
             throw new ConfigException("Invalid configuration value for 'acks': " + acksString);
+        }
+    }
+
+    private class ProducerInterceptorCallback<K, V> implements Callback {
+        private final Callback clientCallback;
+        private final List<ProducerInterceptor<K, V>> interceptors;
+        private final long correlationId;
+
+        public ProducerInterceptorCallback(Callback clientCallback, List<ProducerInterceptor<K, V>> interceptors, long correlationId) {
+            this.clientCallback = clientCallback;
+            this.interceptors = interceptors;
+            this.correlationId = correlationId;
+        }
+
+        public ProducerInterceptor.SerializedKeyValue onStart(TopicPartition tp, ProducerRecord<K, V> record, byte[] serializedKey, byte[] serializedValue) {
+            ProducerInterceptor.SerializedKeyValue serializedKeyValue = new ProducerInterceptor.SerializedKeyValue(serializedKey, serializedValue);
+            for (ProducerInterceptor<K, V> interceptor: this.interceptors) {
+                serializedKeyValue = interceptor.onProduceStart(tp, record, serializedKeyValue, this.correlationId);
+            }
+            return serializedKeyValue;
+        }
+
+        public void onCompletion(RecordMetadata metadata, Exception exception) {
+            for (ProducerInterceptor<K, V> interceptor: this.interceptors) {
+                interceptor.onProduceComplete(metadata, exception, this.correlationId);
+            }
+            if (clientCallback != null)
+                clientCallback.onCompletion(metadata, exception);
         }
     }
 
@@ -410,7 +446,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
+        ProducerInterceptorCallback<K, V> interceptorCallback = null;
         try {
+            interceptorCallback = new ProducerInterceptorCallback<>(callback, this.interceptors, this.nextRecordCorrelationId.incrementAndGet());
             // first make sure the metadata for the topic is available
             long waitedOnMetadataMs = waitOnMetadata(record.topic(), this.maxBlockTimeMs);
             long remainingWaitMs = Math.max(0, this.maxBlockTimeMs - waitedOnMetadataMs);
@@ -434,8 +472,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(serializedKey, serializedValue);
             ensureValidRecordSize(serializedSize);
             TopicPartition tp = new TopicPartition(record.topic(), partition);
+            ProducerInterceptor.SerializedKeyValue serializedKeyValue = interceptorCallback.onStart(tp, record, serializedKey, serializedValue);
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
-            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, serializedKey, serializedValue, callback, remainingWaitMs);
+            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, serializedKeyValue.serializedKey, serializedKeyValue.serializedValue, interceptorCallback, remainingWaitMs);
             if (result.batchIsFull || result.newBatchCreated) {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
@@ -446,8 +485,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // for other exceptions throw directly
         } catch (ApiException e) {
             log.debug("Exception occurred during message send:", e);
-            if (callback != null)
-                callback.onCompletion(null, e);
+            if (interceptorCallback != null)
+                interceptorCallback.onCompletion(null, e);
             this.errors.record();
             return new FutureFailure(e);
         } catch (InterruptedException e) {
