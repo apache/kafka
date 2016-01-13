@@ -35,6 +35,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 
+import java.util.Collections;
 import java.util.Set;
 
 /**
@@ -286,7 +287,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.addProcessor(aggregateName, aggregateSupplier, sourceName);
         topology.addStateStore(aggregateStore, aggregateName);
 
-        return new KTableImpl<>(topology, aggregateName, aggregateSupplier, sourceNodes);
+        // return the KTable representation with the intermediate topic as the sources
+        return new KTableImpl<>(topology, aggregateName, aggregateSupplier, Collections.singleton(sourceName));
     }
 
     @Override
