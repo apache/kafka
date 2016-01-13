@@ -362,8 +362,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
               val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
               val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
-              val brokerById = curBrokers.map(broker => broker.id -> broker).toMap
-              val newBrokers = newBrokerIds.flatMap(brokerById.get)
+              val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
               controllerContext.liveBrokers = curBrokers
               info("Newly added brokers: %s, deleted brokers: %s, all live brokers: %s"
                 .format(newBrokerIds.mkString(","), deadBrokerIds.mkString(","), controllerContext.liveBrokerIds.mkString(",")))
