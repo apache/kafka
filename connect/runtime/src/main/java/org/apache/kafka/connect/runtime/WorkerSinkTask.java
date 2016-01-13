@@ -71,6 +71,7 @@ class WorkerSinkTask implements WorkerTask {
     private Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets;
     private Map<TopicPartition, OffsetAndMetadata> currentOffsets;
     private boolean pausedForRedelivery;
+    private RuntimeException rebalanceException;
 
     public WorkerSinkTask(ConnectorTaskId id, SinkTask task, WorkerConfig workerConfig,
                           Converter keyConverter, Converter valueConverter, Time time) {
@@ -84,6 +85,7 @@ class WorkerSinkTask implements WorkerTask {
         this.messageBatch = new ArrayList<>();
         this.currentOffsets = new HashMap<>();
         this.pausedForRedelivery = false;
+        this.rebalanceException = null;
     }
 
     @Override
@@ -145,7 +147,7 @@ class WorkerSinkTask implements WorkerTask {
         // Ensure we're in the group so that if start() wants to rewind offsets, it will have an assignment of partitions
         // to work with. Any rewinding will be handled immediately when polling starts.
         try {
-            consumer.poll(0);
+            pollConsumer(0);
         } catch (WakeupException e) {
             log.error("Sink task {} was stopped before completing join group. Task initialization and start is being skipped", this);
             return false;
@@ -168,7 +170,7 @@ class WorkerSinkTask implements WorkerTask {
             }
 
             log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
-            ConsumerRecords<byte[], byte[]> msgs = consumer.poll(timeoutMs);
+            ConsumerRecords<byte[], byte[]> msgs = pollConsumer(timeoutMs);
             assert messageBatch.isEmpty() || msgs.isEmpty();
             log.trace("{} polling returned {} messages", id, msgs.count());
 
@@ -235,6 +237,19 @@ class WorkerSinkTask implements WorkerTask {
         return "WorkerSinkTask{" +
                 "id=" + id +
                 '}';
+    }
+
+    private ConsumerRecords<byte[], byte[]> pollConsumer(long timeoutMs) {
+        ConsumerRecords<byte[], byte[]> msgs = consumer.poll(timeoutMs);
+
+        // Exceptions raised from the task during a rebalance should be rethrown to stop the worker
+        if (rebalanceException != null) {
+            RuntimeException e = rebalanceException;
+            rebalanceException = null;
+            throw e;
+        }
+
+        return msgs;
     }
 
     private KafkaConsumer<byte[], byte[]> createConsumer() {
@@ -329,9 +344,24 @@ class WorkerSinkTask implements WorkerTask {
         context.clearOffsets();
     }
 
+    protected void abort(Throwable t) {
+        // Shutdown the task now and close resources. This should only be called from the worker's task thread
+        // TODO: Report the exception to the Worker so that it can be propagated or the task can be restarted
+
+        log.error("{} stopping due to unexpected exception", id, t);
+        try {
+            task.stop();
+        } finally {
+            close();
+        }
+    }
+
     private class HandleRebalance implements ConsumerRebalanceListener {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            if (rebalanceException != null)
+                return;
+
             lastCommittedOffsets = new HashMap<>();
             currentOffsets = new HashMap<>();
             for (TopicPartition tp : partitions) {
@@ -365,16 +395,30 @@ class WorkerSinkTask implements WorkerTask {
             // Instead of invoking the assignment callback on initialization, we guarantee the consumer is ready upon
             // task start. Since this callback gets invoked during that initial setup before we've started the task, we
             // need to guard against invoking the user's callback method during that period.
-            if (started)
-                task.onPartitionsAssigned(partitions);
+            if (started) {
+                try {
+                    task.onPartitionsAssigned(partitions);
+                } catch (RuntimeException e) {
+                    // The consumer swallows exceptions raised in the rebalance listener, so we need to store
+                    // exceptions and rethrow when poll() returns.
+                    rebalanceException = e;
+                }
+            }
         }
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
             if (started) {
-                task.onPartitionsRevoked(partitions);
-                commitOffsets(true, -1);
+                try {
+                    task.onPartitionsRevoked(partitions);
+                    commitOffsets(true, -1);
+                } catch (RuntimeException e) {
+                    // The consumer swallows exceptions raised in the rebalance listener, so we need to store
+                    // exceptions and rethrow when poll() returns.
+                    rebalanceException = e;
+                }
             }
+
             // Make sure we don't have any leftover data since offsets will be reset to committed positions
             messageBatch.clear();
         }
