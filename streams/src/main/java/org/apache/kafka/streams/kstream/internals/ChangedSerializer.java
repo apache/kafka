@@ -44,7 +44,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>> {
 
         ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + NEWFLAG_SIZE);
         buf.put(serializedKey);
-        buf.put((byte) (data.newValue != null ? 1 : 0 ));
+        buf.put((byte) (data.newValue != null ? 1 : 0));
 
         return buf.array();
     }

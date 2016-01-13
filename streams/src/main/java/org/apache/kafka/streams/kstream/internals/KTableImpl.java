@@ -27,19 +27,14 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.KeyValueToDoubleMapper;
-import org.apache.kafka.streams.kstream.KeyValueToIntMapper;
 import org.apache.kafka.streams.kstream.KeyValueToLongMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.state.RocksDBKeyValueStoreSupplier;
-import org.apache.kafka.streams.state.Serdes;
 import org.apache.kafka.streams.state.Stores;
 
-import java.util.Collection;
 import java.util.Set;
 
 /**
