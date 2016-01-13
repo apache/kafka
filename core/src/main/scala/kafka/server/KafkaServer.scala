@@ -627,8 +627,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
     for (logDir <- config.logDirs) {
       val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
-      if(brokerMetadataOpt.isDefined)
-        brokerIdSet.add(brokerMetadataOpt.get.brokerId)
+      brokerMetadataOpt.foreach { brokerMetadata =>
+        brokerIdSet.add(brokerMetadata.brokerId)
+      }
     }
 
     if(brokerIdSet.size > 1)
