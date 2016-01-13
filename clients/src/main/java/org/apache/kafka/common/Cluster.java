@@ -29,13 +29,14 @@ import java.util.Set;
  */
 public final class Cluster {
 
+    private final boolean isBootstrapConfigured;
     private final List<Node> nodes;
     private final Set<String> unauthorizedTopics;
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
     private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
-    private final Map<Integer, List<PartitionInfo>> partitionsByNode;
-    private final Map<Integer, Node> nodesById;
+    private final Map<String, List<PartitionInfo>> partitionsByNodeId;
+    private final Map<String, Node> nodesById;
 
     /**
      * Create a new cluster with the given nodes and partitions
@@ -45,14 +46,23 @@ public final class Cluster {
     public Cluster(Collection<Node> nodes,
                    Collection<PartitionInfo> partitions,
                    Set<String> unauthorizedTopics) {
+        this(false, nodes, partitions, unauthorizedTopics);
+    }
+
+    private Cluster(boolean isBootstrapConfigured,
+                    Collection<Node> nodes,
+                    Collection<PartitionInfo> partitions,
+                    Set<String> unauthorizedTopics) {
+        this.isBootstrapConfigured = isBootstrapConfigured;
+
         // make a randomized, unmodifiable copy of the nodes
         List<Node> copy = new ArrayList<>(nodes);
         Collections.shuffle(copy);
         this.nodes = Collections.unmodifiableList(copy);
-        
+
         this.nodesById = new HashMap<>();
-        for (Node node : nodes)
-            this.nodesById.put(node.id(), node);
+        for (Node node: nodes)
+            this.nodesById.put(node.idString(), node);
 
         // index the partitions by topic/partition for quick lookup
         this.partitionsByTopicPartition = new HashMap<>(partitions.size());
@@ -63,9 +73,9 @@ public final class Cluster {
         // unmodifiable so we can hand them out in user-facing apis without risk
         // of the client modifying the contents
         HashMap<String, List<PartitionInfo>> partsForTopic = new HashMap<>();
-        HashMap<Integer, List<PartitionInfo>> partsForNode = new HashMap<>();
+        HashMap<String, List<PartitionInfo>> partsForNode = new HashMap<>();
         for (Node n : this.nodes) {
-            partsForNode.put(n.id(), new ArrayList<PartitionInfo>());
+            partsForNode.put(n.idString(), new ArrayList<PartitionInfo>());
         }
         for (PartitionInfo p : partitions) {
             if (!partsForTopic.containsKey(p.topic()))
@@ -74,7 +84,7 @@ public final class Cluster {
             psTopic.add(p);
 
             if (p.leader() != null) {
-                List<PartitionInfo> psNode = Utils.notNull(partsForNode.get(p.leader().id()));
+                List<PartitionInfo> psNode = Utils.notNull(partsForNode.get(p.leader().idString()));
                 psNode.add(p);
             }
         }
@@ -91,9 +101,9 @@ public final class Cluster {
             }
             this.availablePartitionsByTopic.put(topic, Collections.unmodifiableList(availablePartitions));
         }
-        this.partitionsByNode = new HashMap<>(partsForNode.size());
-        for (Map.Entry<Integer, List<PartitionInfo>> entry : partsForNode.entrySet())
-            this.partitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
+        this.partitionsByNodeId = new HashMap<>(partsForNode.size());
+        for (Map.Entry<String, List<PartitionInfo>> entry : partsForNode.entrySet())
+            this.partitionsByNodeId.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
 
         this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
     }
@@ -115,7 +125,7 @@ public final class Cluster {
         int nodeId = -1;
         for (InetSocketAddress address : addresses)
             nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
-        return new Cluster(nodes, new ArrayList<PartitionInfo>(0), Collections.<String>emptySet());
+        return new Cluster(true, nodes, new ArrayList<PartitionInfo>(0), Collections.<String>emptySet());
     }
 
     /**
@@ -133,14 +143,14 @@ public final class Cluster {
     public List<Node> nodes() {
         return this.nodes;
     }
-    
+
     /**
-     * Get the node by the node id (or null if no such node exists)
-     * @param id The id of the node
+     * Get the node by the node id
+     * @param nodeId The id of the node
      * @return The node, or null if no such node exists
      */
-    public Node nodeById(int id) {
-        return this.nodesById.get(id);
+    public Node nodesById(String nodeId) {
+        return this.nodesById.get(nodeId);
     }
 
     /**
@@ -188,8 +198,8 @@ public final class Cluster {
      * @param nodeId The node id
      * @return A list of partitions
      */
-    public List<PartitionInfo> partitionsForNode(int nodeId) {
-        return this.partitionsByNode.get(nodeId);
+    public List<PartitionInfo> partitionsForNode(String nodeId) {
+        return this.partitionsByNodeId.get(nodeId);
     }
 
     /**
@@ -212,6 +222,10 @@ public final class Cluster {
 
     public Set<String> unauthorizedTopics() {
         return unauthorizedTopics;
+    }
+
+    public boolean isBootstrapConfigured() {
+        return isBootstrapConfigured;
     }
 
     @Override
