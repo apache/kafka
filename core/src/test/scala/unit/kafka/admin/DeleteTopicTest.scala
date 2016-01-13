@@ -188,8 +188,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     // re-create topic on same replicas
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, expectedReplicaAssignment)
     // wait until leader is elected
-    val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0, 1000)
-    assertTrue("New leader should be elected after re-creating topic test", leaderIdOpt.isDefined)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0, 1000)
     // check if all replica logs are created
     TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined),
       "Replicas for topic test not created.")
@@ -211,8 +210,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     // test the topic path exists
     assertTrue("Topic test mistakenly deleted", zkUtils.pathExists(getTopicPath(topic)))
     // topic test should have a leader
-    val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0, 1000)
-    assertTrue("Leader should exist for topic test", leaderIdOpt.isDefined)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0, 1000)
     servers.foreach(_.shutdown())
   }
 
