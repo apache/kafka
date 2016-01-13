@@ -41,7 +41,7 @@ public class ErrorsTest {
     public void testUniqueExceptions() {
         Set<Class> exceptionSet = new HashSet<>();
         for (Errors error : Errors.values()) {
-            if(error != Errors.NONE)
+            if (error != Errors.NONE)
                 exceptionSet.add(error.exception().getClass());
         }
         assertEquals("Exceptions must be unique", exceptionSet.size(), Errors.values().length - 1); // Ignore NONE
@@ -50,7 +50,7 @@ public class ErrorsTest {
     @Test
     public void testExceptionsAreNotGeneric() {
         for (Errors error : Errors.values()) {
-            if(error != Errors.NONE)
+            if (error != Errors.NONE)
                 assertNotEquals("Generic ApiException should not be used", error.exception().getClass(), ApiException.class);
         }
     }
