@@ -66,7 +66,7 @@ class OfflinePartitionLeaderSelector(zkUtils: ZkUtils, controllerContext: Contro
               var zkUpdateSucceeded = false
               while (!zkUpdateSucceeded) {
                 val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topicAndPartition.topic,
-                  topicAndPartition.partition, currentLeaderAndIsr.copy(leader = -1), controllerContext.epoch,
+                  topicAndPartition.partition, currentLeaderAndIsr.copy(leader = LeaderAndIsr.NoLeader), controllerContext.epoch,
                   currentLeaderAndIsr.zkVersion)
                 zkUpdateSucceeded = updateSucceeded
               }
