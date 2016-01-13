@@ -25,16 +25,16 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 /**
- * KTable map functions are not exposed to public APIs, but only used for keyed aggregations.
+ * KTable repartition map functions are not exposed to public APIs, but only used for keyed aggregations.
  *
  * Given the input, it can output at most two records (one mapped from old value and one mapped from new value).
  */
-public class KTableMap<K1, V1, K2, V2> implements KTableProcessorSupplier<K1, V1, KeyValue<K2, V2>> {
+public class KTableRepartitionMap<K1, V1, K2, V2> implements KTableProcessorSupplier<K1, V1, KeyValue<K2, V2>> {
 
     private final KTableImpl<K1, ?, V1> parent;
     private final KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper;
 
-    public KTableMap(KTableImpl<K1, ?, V1> parent, KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper) {
+    public KTableRepartitionMap(KTableImpl<K1, ?, V1> parent, KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper) {
         this.parent = parent;
         this.mapper = mapper;
     }
@@ -60,7 +60,7 @@ public class KTableMap<K1, V1, K2, V2> implements KTableProcessorSupplier<K1, V1
     @Override
     public void enableSendingOldValues() {
         // this should never be called
-        throw new KafkaException("KTableMap should always require sending old values.");
+        throw new KafkaException("KTableRepartitionMap should always require sending old values.");
     }
 
     private KeyValue<K2, V2> computeValue(K1 key, V1 value) {

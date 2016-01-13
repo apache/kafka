@@ -60,21 +60,21 @@ public class KTableAggregate<K, V, T> implements ProcessorSupplier<K, Change<V>>
 
             T newAgg = null;
 
-            // old value
+            // first try to remove the old value
             if (value.oldValue != null) {
                 newAgg = aggregator.remove(key, value.oldValue, oldAgg);
-                store.put(key, newAgg);
             }
 
-            // new value
+            // then try to add the new new value
             if (value.newValue != null) {
                 newAgg = aggregator.add(key, value.newValue, newAgg != null ? newAgg : oldAgg);
-                store.put(key, newAgg);
             }
 
-            if (newAgg != null) {
-                context().forward(key, new Change<>(newAgg, oldAgg));
-            }
+            // update the store with the new value
+            store.put(key, newAgg);
+
+            // send the old / new pair
+            context().forward(key, new Change<>(newAgg, oldAgg));
         }
     }
 }

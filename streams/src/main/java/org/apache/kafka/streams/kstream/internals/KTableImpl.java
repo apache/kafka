@@ -262,7 +262,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         ChangedSerializer<V1> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
         ChangedDeserializer<V1> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
 
-        KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableMap<>(this, selector);
+        KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
 
         ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableAggregate<>(name, aggregatorSupplier.get());
 
