@@ -21,17 +21,23 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class KTableAggregate<K, V, T> implements ProcessorSupplier<K, Change<V>> {
+public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T> {
 
     private final String storeName;
     private final Aggregator<K, V, T> aggregator;
 
+    private boolean sendOldValues = false;
+
     KTableAggregate(String storeName, Aggregator<K, V, T> aggregator) {
         this.storeName = storeName;
         this.aggregator = aggregator;
+    }
+
+    @Override
+    public void enableSendingOldValues() {
+        sendOldValues = true;
     }
 
     @Override
@@ -74,7 +80,39 @@ public class KTableAggregate<K, V, T> implements ProcessorSupplier<K, Change<V>>
             store.put(key, newAgg);
 
             // send the old / new pair
-            context().forward(key, new Change<>(newAgg, oldAgg));
+            if (sendOldValues)
+                context().forward(key, new Change<>(newAgg, oldAgg));
+            else
+                context().forward(key, new Change<>(newAgg, null));
         }
+    }
+
+    @Override
+    public KTableValueGetterSupplier<K, T> view() {
+
+        return new KTableValueGetterSupplier<K, T>() {
+
+            public KTableValueGetter<K, T> get() {
+                return new KTableAggregateValueGetter();
+            }
+
+        };
+    }
+
+    private class KTableAggregateValueGetter implements KTableValueGetter<K, T> {
+
+        private KeyValueStore<K, T> store;
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void init(ProcessorContext context) {
+            store = (KeyValueStore<K, T>) context.getStateStore(storeName);
+        }
+
+        @Override
+        public T get(K key) {
+            return store.get(key);
+        }
+
     }
 }
