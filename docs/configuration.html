@@ -48,7 +48,7 @@ Overrides can also be changed or set later using the alter topic command. This e
 To remove an override you can do
 <pre>
 <b> &gt; bin/kafka-topics.sh --zookeeper localhost:2181 --alter --topic my-topic
-    --deleteConfig max.message.bytes</b>
+    --delete-config max.message.bytes</b>
 </pre>
 
 The following are the topic-level configurations. The server's default configuration for this property is given under the Server Default Property heading, setting this default in the server config allows you to change the default given to topics that have no override specified.
