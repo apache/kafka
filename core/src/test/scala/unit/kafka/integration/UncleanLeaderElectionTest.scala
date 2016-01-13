@@ -44,8 +44,8 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   var configProps1: Properties = null
   var configProps2: Properties = null
 
-  var configs: Seq[KafkaConfig] = Seq.empty[KafkaConfig]
-  var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
+  var configs = Seq.empty[KafkaConfig]
+  var servers = Seq.empty[KafkaServer]
 
   val random = new Random()
   val topic = "topic" + random.nextLong
@@ -64,9 +64,9 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     configProps2 = createBrokerConfig(brokerId2, zkConnect)
 
     for (configProps <- List(configProps1, configProps2)) {
-      configProps.put("controlled.shutdown.enable", String.valueOf(enableControlledShutdown))
-      configProps.put("controlled.shutdown.max.retries", String.valueOf(1))
-      configProps.put("controlled.shutdown.retry.backoff.ms", String.valueOf(1000))
+      configProps.put("controlled.shutdown.enable", enableControlledShutdown.toString)
+      configProps.put("controlled.shutdown.max.retries", "1")
+      configProps.put("controlled.shutdown.retry.backoff.ms", "1000")
     }
 
     // temporarily set loggers to a higher level so that tests run quietly
@@ -78,7 +78,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
   @After
   override def tearDown() {
-    servers.foreach(server => shutdownServer(server))
+    servers.foreach(shutdownServer)
     servers.foreach(server => CoreUtils.rm(server.config.logDirs))
 
     // restore log levels
@@ -93,9 +93,8 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   private def startBrokers(cluster: Seq[Properties]) {
     for (props <- cluster) {
       val config = KafkaConfig.fromProps(props)
-      val server = createServer(config)
       configs ++= List(config)
-      servers ++= List(server)
+      servers ++= List(createServer(config))
     }
   }
 
@@ -112,10 +111,9 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
   @Test
   def testUncleanLeaderElectionDisabled {
-	  // disable unclean leader election
-	  configProps1.put("unclean.leader.election.enable", String.valueOf(false))
-  	configProps2.put("unclean.leader.election.enable", String.valueOf(false))
-    startBrokers(Seq(configProps1, configProps2))
+    val clusterProps = Seq(configProps1, configProps2)
+    clusterProps.foreach(_.put("unclean.leader.election.enable", "false"))
+    startBrokers(clusterProps)
 
     // create topic with 1 partition, 2 replicas, one on each broker
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(partitionId -> Seq(brokerId1, brokerId2)))
@@ -126,13 +124,13 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   @Test
   def testUncleanLeaderElectionEnabledByTopicOverride {
     // disable unclean leader election globally, but enable for our specific test topic
-    configProps1.put("unclean.leader.election.enable", String.valueOf(false))
-    configProps2.put("unclean.leader.election.enable", String.valueOf(false))
-    startBrokers(Seq(configProps1, configProps2))
+    val clusterProps = Seq(configProps1, configProps2)
+    clusterProps.foreach(_.put("unclean.leader.election.enable", "false"))
+    startBrokers(clusterProps)
 
     // create topic with 1 partition, 2 replicas, one on each broker, and unclean leader election enabled
     val topicProps = new Properties()
-    topicProps.put("unclean.leader.election.enable", String.valueOf(true))
+    topicProps.put("unclean.leader.election.enable", "true")
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(partitionId -> Seq(brokerId1, brokerId2)),
       topicProps)
 
@@ -142,9 +140,9 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   @Test
   def testCleanLeaderElectionDisabledByTopicOverride {
     // enable unclean leader election globally, but disable for our specific test topic
-    configProps1.put("unclean.leader.election.enable", String.valueOf(true))
-    configProps2.put("unclean.leader.election.enable", String.valueOf(true))
-    startBrokers(Seq(configProps1, configProps2))
+    val clusterProps = Seq(configProps1, configProps2)
+    clusterProps.foreach(_.put("unclean.leader.election.enable", "true"))
+    startBrokers(clusterProps)
 
     // create topic with 1 partition, 2 replicas, one on each broker, and unclean leader election disabled
     val topicProps = new Properties()
@@ -183,14 +181,14 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     assertEquals(List("first"), consumeAllMessages(topic))
 
     // shutdown follower server
-    servers.filter(server => server.config.brokerId == followerId).map(server => shutdownServer(server))
+    servers.filter(_.config.brokerId == followerId).map(shutdownServer)
 
     sendMessage(servers, topic, "second")
     assertEquals(List("first", "second"), consumeAllMessages(topic))
 
     // shutdown leader and then restart follower
-    servers.filter(server => server.config.brokerId == leaderId).map(server => shutdownServer(server))
-    servers.filter(server => server.config.brokerId == followerId).map(server => server.startup())
+    servers.filter(_.config.brokerId == leaderId).map(shutdownServer)
+    servers.filter(_.config.brokerId == followerId).map(_.startup())
 
     // wait until new leader is (uncleanly) elected
     waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, newLeaderOpt = Some(followerId))
@@ -204,26 +202,26 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   def verifyUncleanLeaderElectionDisabled {
     // wait until leader is elected
     val leaderId = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
-    debug("Leader for " + topic  + " is elected to be: %s".format(leaderId))
-    assertTrue("Leader id is set to expected value for topic: " + topic, leaderId == brokerId1 || leaderId == brokerId2)
+    debug(s"Leader for $topic is elected to be: $leaderId")
+    assertTrue(s"Leader id is set to expected value for topic: $topic", leaderId == brokerId1 || leaderId == brokerId2)
 
     // the non-leader broker is the follower
     val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
-    debug("Follower for " + topic  + " is: %s".format(followerId))
+    debug(s"Follower for $topic is: $followerId")
 
     sendMessage(servers, topic, "first")
     waitUntilMetadataIsPropagated(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic))
 
     // shutdown follower server
-    servers.filter(server => server.config.brokerId == followerId).map(server => shutdownServer(server))
+    servers.filter(_.config.brokerId == followerId).map(shutdownServer)
 
     sendMessage(servers, topic, "second")
     assertEquals(List("first", "second"), consumeAllMessages(topic))
 
     // shutdown leader and then restart follower
-    servers.filter(server => server.config.brokerId == leaderId).map(server => shutdownServer(server))
-    servers.filter(server => server.config.brokerId == followerId).map(server => server.startup())
+    servers.filter(_.config.brokerId == leaderId).map(shutdownServer)
+    servers.filter(_.config.brokerId == followerId).map(_.startup())
 
     // verify that unclean election to non-ISR follower does not occur
     waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, newLeaderOpt = Some(-1))
@@ -235,12 +233,12 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     assertEquals(List.empty[String], consumeAllMessages(topic))
 
     // restart leader temporarily to send a successfully replicated message
-    servers.filter(server => server.config.brokerId == leaderId).map(server => server.startup())
+    servers.filter(_.config.brokerId == leaderId).map(_.startup())
     waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, newLeaderOpt = Some(leaderId))
 
     sendMessage(servers, topic, "third")
     waitUntilMetadataIsPropagated(servers, topic, partitionId)
-    servers.filter(server => server.config.brokerId == leaderId).map(server => shutdownServer(server))
+    servers.filter(_.config.brokerId == leaderId).map(shutdownServer)
 
     // verify clean leader transition to ISR follower
     waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, newLeaderOpt = Some(followerId))

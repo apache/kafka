@@ -17,10 +17,6 @@
 
 package kafka.utils
 
-import java.io.File
-import java.net.URI
-import java.security.URIParameter
-import javax.security.auth.login.Configuration
 import java.util.concurrent.CountDownLatch
 
 import kafka.cluster._
@@ -50,7 +46,6 @@ import org.apache.zookeeper.AsyncCallback.{DataCallback,StringCallback}
 import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
-import org.apache.zookeeper.ZooDefs.Ids
 import org.apache.zookeeper.ZooKeeper
 
 object ZkUtils {
@@ -173,7 +168,7 @@ class ZkUtils(val zkClient: ZkClient,
 
   def getAllBrokersInCluster(): Seq[Broker] = {
     val brokerIds = getChildrenParentMayNotExist(BrokerIdsPath).sorted
-    brokerIds.map(_.toInt).map(getBrokerInfo(_)).filter(_.isDefined).map(_.get)
+    brokerIds.map(_.toInt).flatMap(getBrokerInfo)
   }
 
   def getAllBrokerEndPointsForChannel(protocolType: SecurityProtocol): Seq[BrokerEndPoint] = {
@@ -267,11 +262,6 @@ class ZkUtils(val zkClient: ZkClient,
   /**
    * Register brokers with v2 json format (which includes multiple endpoints).
    * This format also includes default endpoints for compatibility with older clients.
-   * @param zkClient
-   * @param id
-   * @param advertisedEndpoints
-   * @param timeout
-   * @param jmxPort
    */
   def registerBrokerInZk(id: Int, host: String, port: Int, advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint], jmxPort: Int) {
     val brokerIdPath = BrokerIdsPath + "/" + id
@@ -755,7 +745,6 @@ class ZkUtils(val zkClient: ZkClient,
    * This API takes in a broker id, queries zookeeper for the broker metadata and returns the metadata for that broker
    * or throws an exception if the broker dies before the query to zookeeper finishes
    * @param brokerId The broker id
-   * @param zkClient The zookeeper client connection
    * @return An optional Broker object encapsulating the broker metadata
    */
   def getBrokerInfo(brokerId: Int): Option[Broker] = {

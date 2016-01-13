@@ -149,8 +149,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    *
    * ReplicaDeletionSuccessful -> NonExistentReplica
    * -- remove the replica from the in memory partition replica assignment cache
-
-
+   *
    * @param partitionAndReplica The replica for which the state transition is invoked
    * @param targetState The end state that the replica should be moved to
    */
