@@ -18,6 +18,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.AggregatorSupplier;
 import org.apache.kafka.streams.kstream.KStream;
@@ -33,6 +35,9 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.RocksDBKeyValueStoreSupplier;
+import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.Stores;
 
 import java.util.Collection;
 import java.util.Set;
@@ -50,6 +55,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     private static final String MAPVALUES_NAME = "KTABLE-MAPVALUES-";
 
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
+
+    private static final String SELECT_NAME = "KTABLE-SELECT-";
+
+    private static final String AGGREGATE_NAME = "KTABLE-AGGREGATE-";
 
     public static final String SOURCE_NAME = "KTABLE-SOURCE-";
 
@@ -169,47 +178,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @SuppressWarnings("unchecked")
-    KTableValueGetterSupplier<K, V> valueGetterSupplier() {
-        if (processorSupplier instanceof KTableSource) {
-            KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
-            materialize(source);
-            return new KTableSourceValueGetterSupplier<>(source.topic);
-        } else {
-            return ((KTableProcessorSupplier<K, S, V>) processorSupplier).view();
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    void enableSendingOldValues() {
-        if (!sendOldValues) {
-            if (processorSupplier instanceof KTableSource) {
-                KTableSource<K, ?> source = (KTableSource<K, V>) processorSupplier;
-                materialize(source);
-                source.enableSendingOldValues();
-            } else {
-                ((KTableProcessorSupplier<K, S, V>) processorSupplier).enableSendingOldValues();
-            }
-            sendOldValues = true;
-        }
-    }
-
-    boolean sendingOldValueEnabled() {
-        return sendOldValues;
-    }
-
-    private void materialize(KTableSource<K, ?> source) {
-        synchronized (source) {
-            if (!source.isMaterialized()) {
-                StateStoreSupplier storeSupplier =
-                        new KTableStoreSupplier<>(source.topic, keySerializer, keyDeserializer, valSerializer, valDeserializer, null);
-                // mark this state as non internal hence it is read directly from a user topic
-                topology.addStateStore(storeSupplier, false, name);
-                source.materialize();
-            }
-        }
-    }
-
-    @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
         Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
@@ -288,8 +256,40 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                                  Deserializer<V1> valueDeserializer,
                                                  Deserializer<V2> aggValueDeserializer,
                                                  String name) {
-        // TODO
-        return null;
+
+        String selectName = topology.newName(SELECT_NAME);
+        String sinkName = topology.newName(KStreamImpl.SINK_NAME);
+        String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
+        String aggregateName = topology.newName(AGGREGATE_NAME);
+
+        String topic = name + "-repartition";
+
+        ChangedSerializer<V1> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
+        ChangedDeserializer<V1> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
+
+        KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableMap<>(this, selector);
+        ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableAggregate<>(name, aggregatorSupplier.get());
+
+        StateStoreSupplier aggregateStore = Stores.create(name)
+                .withKeys(keySerializer, keyDeserializer)
+                .withValues(aggValueSerializer, aggValueDeserializer)
+                .localDatabase()
+                .build();
+
+        // select the aggregate key and values (old and new)
+        topology.addProcessor(selectName, selectSupplier, this.name);
+
+        // send the aggregate key-value pairs to the intermediate topic for partitioning
+        topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, selectName);
+
+        // read the intermediate topic
+        topology.addSource(sourceName, keyDeserializer, changedValueDeserializer, topic);
+
+        // aggregate the values with the aggregator and local store
+        topology.addProcessor(aggregateName, aggregateSupplier, sourceName);
+        topology.addStateStore(aggregateStore, aggregateName);
+
+        return new KTableImpl<>(topology, aggregateName, aggregateSupplier, sourceNodes);
     }
 
     @Override
@@ -298,28 +298,24 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                      Serializer<K1> keySerializer,
                                      Deserializer<K1> keyDeserializer,
                                      String name) {
-        // TODO
-        return null;
-    }
 
-    @Override
-    public <K1> KTable<K1, Integer> sum(KeyValueMapper<K, V, K1> keySelector,
-                                        KeyValueToIntMapper<K, V> valueSelector,
-                                        Serializer<K1> keySerializer,
-                                        Deserializer<K1> keyDeserializer,
-                                        String name) {
-        // TODO
-        return null;
-    }
+        Serializer<Long> longSerializer = new LongSerializer();
+        Deserializer<Long> longDeserializer = new LongDeserializer();
 
-    @Override
-    public <K1> KTable<K1, Double> sum(KeyValueMapper<K, V, K1> keySelector,
-                                       KeyValueToDoubleMapper<K, V> valueSelector,
-                                       Serializer<K1> keySerializer,
-                                       Deserializer<K1> keyDeserializer,
-                                       String name) {
-        // TODO
-        return null;
+        KeyValueMapper<K, V, KeyValue<K1, Long>> mapper = new KeyValueMapper<K, V, KeyValue<K1, Long>>() {
+            @Override
+            public KeyValue<K1, Long> apply(K key, V value) {
+                K1 aggKey = keySelector.apply(key, value);
+                Long aggValue = valueSelector.apply(key, value);
+
+                return new KeyValue<>(aggKey, aggValue);
+            }
+        };
+
+        return this.aggregate(new LongSumSupplier<>(), mapper,
+                keySerializer, longSerializer, longSerializer,
+                keyDeserializer, longDeserializer, longDeserializer,
+                name);
     }
 
     @Override
@@ -329,19 +325,63 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                        Deserializer<K1> keyDeserializer,
                                        Deserializer<V> valueDeserializer,
                                        String name) {
-        // TODO
-        return null;
+
+        Serializer<Long> longSerializer = new LongSerializer();
+        Deserializer<Long> longDeserializer = new LongDeserializer();
+
+        KeyValueMapper<K, V, KeyValue<K1, V>> mapper = new KeyValueMapper<K, V, KeyValue<K1, V>>() {
+            @Override
+            public KeyValue<K1, V> apply(K key, V value) {
+                K1 aggKey = keySelector.apply(key, value);
+
+                return new KeyValue<>(aggKey, value);
+            }
+        };
+
+        return this.aggregate(new CountSupplier<>(), mapper,
+                keySerializer, valueSerializer, longSerializer,
+                keyDeserializer, valueDeserializer, longDeserializer,
+                name);
     }
 
-    @Override
-    public <K1, V1 extends Comparable<V1>> KTable<K1, Collection<V1>> topK(int k,
-                                                                           KeyValueMapper<K, V, K1> keySelector,
-                                                                           Serializer<K1> keySerializer,
-                                                                           Serializer<V1> aggValueSerializer,
-                                                                           Deserializer<K1> keyDeserializer,
-                                                                           Deserializer<V1> aggValueDeserializer,
-                                                                           String name) {
-        // TODO
-        return null;
+    @SuppressWarnings("unchecked")
+    KTableValueGetterSupplier<K, V> valueGetterSupplier() {
+        if (processorSupplier instanceof KTableSource) {
+            KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
+            materialize(source);
+            return new KTableSourceValueGetterSupplier<>(source.topic);
+        } else {
+            return ((KTableProcessorSupplier<K, S, V>) processorSupplier).view();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    void enableSendingOldValues() {
+        if (!sendOldValues) {
+            if (processorSupplier instanceof KTableSource) {
+                KTableSource<K, ?> source = (KTableSource<K, V>) processorSupplier;
+                materialize(source);
+                source.enableSendingOldValues();
+            } else {
+                ((KTableProcessorSupplier<K, S, V>) processorSupplier).enableSendingOldValues();
+            }
+            sendOldValues = true;
+        }
+    }
+
+    boolean sendingOldValueEnabled() {
+        return sendOldValues;
+    }
+
+    private void materialize(KTableSource<K, ?> source) {
+        synchronized (source) {
+            if (!source.isMaterialized()) {
+                StateStoreSupplier storeSupplier =
+                        new KTableStoreSupplier<>(source.topic, keySerializer, keyDeserializer, valSerializer, valDeserializer, null);
+                // mark this state as non internal hence it is read directly from a user topic
+                topology.addStateStore(storeSupplier, false, name);
+                source.materialize();
+            }
+        }
     }
 }

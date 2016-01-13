@@ -17,36 +17,37 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.KeyValue;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2> {
+public class KTableMap<K1, V1, K2, V2> implements KTableProcessorSupplier<K1, V1, KeyValue<K2, V2>> {
 
     private final KTableImpl<K1, ?, V1> parent;
-    private final ValueMapper<V1, V2> mapper;
+    private final KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper;
 
     private boolean sendOldValues = false;
 
-    public KTableMapValues(KTableImpl<K1, ?, V1> parent, ValueMapper<V1, V2> mapper) {
+    public KTableMap(KTableImpl<K1, ?, V1> parent, KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper) {
         this.parent = parent;
         this.mapper = mapper;
     }
 
     @Override
     public Processor<K1, Change<V1>> get() {
-        return new KTableMapValuesProcessor();
+        return new KTableMapProcessor();
     }
 
     @Override
-    public KTableValueGetterSupplier<K1, V2> view() {
+    public KTableValueGetterSupplier<K1, KeyValue<K2, V2>> view() {
         final KTableValueGetterSupplier<K1, V1> parentValueGetterSupplier = parent.valueGetterSupplier();
 
-        return new KTableValueGetterSupplier<K1, V2>() {
+        return new KTableValueGetterSupplier<K1, KeyValue<K2, V2>>() {
 
-            public KTableValueGetter<K1, V2> get() {
-                return new KTableMapValuesValueGetter(parentValueGetterSupplier.get());
+            public KTableValueGetter<K1, KeyValue<K2, V2>> get() {
+                return new KTableMapValueGetter(parentValueGetterSupplier.get());
             }
 
         };
@@ -58,31 +59,31 @@ class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2>
         sendOldValues = true;
     }
 
-    private V2 computeValue(V1 value) {
-        V2 newValue = null;
+    private KeyValue<K2, V2> computeValue(K1 key, V1 value) {
+        KeyValue<K2, V2> newValue = null;
 
-        if (value != null)
-            newValue = mapper.apply(value);
+        if (key != null || value != null)
+            newValue = mapper.apply(key, value);
 
         return newValue;
     }
 
-    private class KTableMapValuesProcessor extends AbstractProcessor<K1, Change<V1>> {
+    private class KTableMapProcessor extends AbstractProcessor<K1, Change<V1>> {
 
         @Override
         public void process(K1 key, Change<V1> change) {
-            V2 newValue = computeValue(change.newValue);
-            V2 oldValue = sendOldValues ? computeValue(change.oldValue) : null;
+            KeyValue<K2, V2> newValue = computeValue(key, change.newValue);
+            KeyValue<K2, V2> oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
             context().forward(key, new Change<>(newValue, oldValue));
         }
     }
 
-    private class KTableMapValuesValueGetter implements KTableValueGetter<K1, V2> {
+    private class KTableMapValueGetter implements KTableValueGetter<K1, KeyValue<K2, V2>> {
 
         private final KTableValueGetter<K1, V1> parentGetter;
 
-        public KTableMapValuesValueGetter(KTableValueGetter<K1, V1> parentGetter) {
+        public KTableMapValueGetter(KTableValueGetter<K1, V1> parentGetter) {
             this.parentGetter = parentGetter;
         }
 
@@ -92,8 +93,8 @@ class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2>
         }
 
         @Override
-        public V2 get(K1 key) {
-            return computeValue(parentGetter.get(key));
+        public KeyValue<K2, V2> get(K1 key) {
+            return computeValue(key, parentGetter.get(key));
         }
 
     }

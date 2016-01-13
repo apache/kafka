@@ -18,18 +18,17 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.kstream.Windowed;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-public class DefaultWindowedSerializer<T> implements Serializer<Windowed<T>> {
+public class ChangedSerializer<T> implements Serializer<Change<T>> {
 
-    private static final int TIMESTAMP_SIZE = 8;
+    private static final int NEWFLAG_SIZE = 1;
 
-    private Serializer<T> inner;
+    private final Serializer<T> inner;
 
-    public DefaultWindowedSerializer(Serializer<T> inner) {
+    public ChangedSerializer(Serializer<T> inner) {
         this.inner = inner;
     }
 
@@ -39,12 +38,14 @@ public class DefaultWindowedSerializer<T> implements Serializer<Windowed<T>> {
     }
 
     @Override
-    public byte[] serialize(String topic, Windowed<T> data) {
-        byte[] serializedKey = inner.serialize(topic, data.value());
+    public byte[] serialize(String topic, Change<T> data) {
+        // the changed value should either be null on new or old value
 
-        ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + TIMESTAMP_SIZE);
+        byte[] serializedKey = inner.serialize(topic, data.newValue != null ? data.newValue : data.oldValue);
+
+        ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + NEWFLAG_SIZE);
         buf.put(serializedKey);
-        buf.putLong(data.window().start());
+        buf.put((byte) (data.newValue != null ? 1 : 0 ));
 
         return buf.array();
     }

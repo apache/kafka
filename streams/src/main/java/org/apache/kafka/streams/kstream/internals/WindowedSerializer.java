@@ -17,19 +17,19 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.Windowed;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-public class DefaultWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
+public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
 
     private static final int TIMESTAMP_SIZE = 8;
 
-    private Deserializer<T> inner;
+    private Serializer<T> inner;
 
-    public DefaultWindowedDeserializer(Deserializer<T> inner) {
+    public WindowedSerializer(Serializer<T> inner) {
         this.inner = inner;
     }
 
@@ -39,16 +39,14 @@ public class DefaultWindowedDeserializer<T> implements Deserializer<Windowed<T>>
     }
 
     @Override
-    public Windowed<T> deserialize(String topic, byte[] data) {
+    public byte[] serialize(String topic, Windowed<T> data) {
+        byte[] serializedKey = inner.serialize(topic, data.value());
 
-        byte[] bytes = new byte[data.length - TIMESTAMP_SIZE];
+        ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + TIMESTAMP_SIZE);
+        buf.put(serializedKey);
+        buf.putLong(data.window().start());
 
-        System.arraycopy(data, 0, bytes, 0, bytes.length);
-
-        long start = ByteBuffer.wrap(data).getLong(data.length - TIMESTAMP_SIZE);
-
-        // always read as unlimited window
-        return new Windowed<T>(inner.deserialize(topic, bytes), new UnlimitedWindow(start));
+        return buf.array();
     }
 
 
