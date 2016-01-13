@@ -53,22 +53,27 @@ public class KTableAggregate<K, V, T> implements ProcessorSupplier<K, Change<V>>
 
         @Override
         public void process(K key, Change<V> value) {
+            T oldAgg = store.get(key);
+
+            if (oldAgg == null)
+                oldAgg = aggregator.initialValue();
+
             T newAgg = null;
 
             // old value
             if (value.oldValue != null) {
-                newAgg = aggregator.remove(key, value.newValue, store.get(key));
+                newAgg = aggregator.remove(key, value.oldValue, oldAgg);
                 store.put(key, newAgg);
             }
 
             // new value
             if (value.newValue != null) {
-                newAgg = aggregator.add(key, value.newValue, store.get(key));
+                newAgg = aggregator.add(key, value.newValue, newAgg != null ? newAgg : oldAgg);
                 store.put(key, newAgg);
             }
 
             if (newAgg != null) {
-                context().forward(key, newAgg);
+                context().forward(key, new Change<>(newAgg, oldAgg));
             }
         }
     }

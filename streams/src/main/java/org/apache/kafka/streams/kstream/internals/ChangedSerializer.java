@@ -39,8 +39,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>> {
 
     @Override
     public byte[] serialize(String topic, Change<T> data) {
-        // the changed value should either be null on new or old value
-
+        // only one of the old / new values would be not null
         byte[] serializedKey = inner.serialize(topic, data.newValue != null ? data.newValue : data.oldValue);
 
         ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + NEWFLAG_SIZE);

@@ -268,6 +268,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         ChangedDeserializer<V1> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
 
         KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableMap<>(this, selector);
+
         ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableAggregate<>(name, aggregatorSupplier.get());
 
         StateStoreSupplier aggregateStore = Stores.create(name)
@@ -276,8 +277,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                 .localDatabase()
                 .build();
 
-        // select the aggregate key and values (old and new)
+        // select the aggregate key and values (old and new), it would require parent to send old values
         topology.addProcessor(selectName, selectSupplier, this.name);
+        this.enableSendingOldValues();
 
         // send the aggregate key-value pairs to the intermediate topic for partitioning
         topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, selectName);
@@ -293,8 +295,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1> KTable<K1, Long> sum(KeyValueMapper<K, V, K1> keySelector,
-                                     KeyValueToLongMapper<K, V> valueSelector,
+    public <K1> KTable<K1, Long> sum(final KeyValueMapper<K, V, K1> keySelector,
+                                     final KeyValueToLongMapper<K, V> valueSelector,
                                      Serializer<K1> keySerializer,
                                      Deserializer<K1> keyDeserializer,
                                      String name) {
@@ -312,14 +314,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             }
         };
 
-        return this.aggregate(new LongSumSupplier<>(), mapper,
+        return this.<K1, Long, Long>aggregate(new LongSumSupplier<K1>(), mapper,
                 keySerializer, longSerializer, longSerializer,
                 keyDeserializer, longDeserializer, longDeserializer,
                 name);
     }
 
     @Override
-    public <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> keySelector,
+    public <K1> KTable<K1, Long> count(final KeyValueMapper<K, V, K1> keySelector,
                                        Serializer<K1> keySerializer,
                                        Serializer<V> valueSerializer,
                                        Deserializer<K1> keyDeserializer,
@@ -338,7 +340,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             }
         };
 
-        return this.aggregate(new CountSupplier<>(), mapper,
+        return this.<K1, V, Long>aggregate(new CountSupplier<K1, V>(), mapper,
                 keySerializer, valueSerializer, longSerializer,
                 keyDeserializer, valueDeserializer, longDeserializer,
                 name);

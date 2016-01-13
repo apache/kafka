@@ -39,7 +39,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-public class KTableMapValuesImplTest {
+public class KTableMapValuesTest {
 
     private final Serializer<String> strSerializer = new StringSerializer();
     private final Deserializer<String> strDeserializer = new StringDeserializer();

@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
+
 class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2> {
 
     private final KTableImpl<K1, ?, V1> parent;

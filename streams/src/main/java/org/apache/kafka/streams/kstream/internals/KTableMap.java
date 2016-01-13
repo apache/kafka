@@ -17,18 +17,22 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
+/**
+ * KTable map functions are not exposed to public APIs, but only used for keyed aggregations.
+ *
+ * Given the input, it can output at most two records (one mapped from old value and one mapped from new value).
+ */
 public class KTableMap<K1, V1, K2, V2> implements KTableProcessorSupplier<K1, V1, KeyValue<K2, V2>> {
 
     private final KTableImpl<K1, ?, V1> parent;
     private final KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper;
-
-    private boolean sendOldValues = false;
 
     public KTableMap(KTableImpl<K1, ?, V1> parent, KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper) {
         this.parent = parent;
@@ -55,8 +59,8 @@ public class KTableMap<K1, V1, K2, V2> implements KTableProcessorSupplier<K1, V1
 
     @Override
     public void enableSendingOldValues() {
-        parent.enableSendingOldValues();
-        sendOldValues = true;
+        // this should never be called
+        throw new KafkaException("KTableMap should always require sending old values.");
     }
 
     private KeyValue<K2, V2> computeValue(K1 key, V1 value) {
@@ -72,10 +76,14 @@ public class KTableMap<K1, V1, K2, V2> implements KTableProcessorSupplier<K1, V1
 
         @Override
         public void process(K1 key, Change<V1> change) {
-            KeyValue<K2, V2> newValue = computeValue(key, change.newValue);
-            KeyValue<K2, V2> oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
+            KeyValue<K2, V2> newPair = computeValue(key, change.newValue);
 
-            context().forward(key, new Change<>(newValue, oldValue));
+            context().forward(newPair.key, new Change<>(newPair.value, null));
+
+            if (change.oldValue != null) {
+                KeyValue<K2, V2> oldPair = computeValue(key, change.oldValue);
+                context().forward(oldPair.key, new Change<>(null, oldPair.value));
+            }
         }
     }
 
