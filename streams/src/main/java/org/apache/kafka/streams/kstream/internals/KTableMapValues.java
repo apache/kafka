@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
+
 class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2> {
 
     private final KTableImpl<K1, ?, V1> parent;
@@ -36,7 +37,7 @@ class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2>
 
     @Override
     public Processor<K1, Change<V1>> get() {
-        return new KTableMapProcessor();
+        return new KTableMapValuesProcessor();
     }
 
     @Override
@@ -67,16 +68,15 @@ class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2>
         return newValue;
     }
 
-    private class KTableMapProcessor extends AbstractProcessor<K1, Change<V1>> {
+    private class KTableMapValuesProcessor extends AbstractProcessor<K1, Change<V1>> {
 
         @Override
         public void process(K1 key, Change<V1> change) {
             V2 newValue = computeValue(change.newValue);
             V2 oldValue = sendOldValues ? computeValue(change.oldValue) : null;
 
-            context().forward(key, new Change(newValue, oldValue));
+            context().forward(key, new Change<>(newValue, oldValue));
         }
-
     }
 
     private class KTableMapValuesValueGetter implements KTableValueGetter<K1, V2> {
