@@ -71,7 +71,7 @@ class OffsetCheckpoint(val file: File) extends Logging {
   def read(): Map[TopicAndPartition, Long] = {
 
     def malformedLineException(line: String) =
-      throw new IOException(s"Malformed line in offset checkpoint file: $line'")
+      new IOException(s"Malformed line in offset checkpoint file: $line'")
 
     lock synchronized {
       val reader = new BufferedReader(new FileReader(file))
@@ -104,7 +104,7 @@ class OffsetCheckpoint(val file: File) extends Logging {
             throw new IOException("Unrecognized version of the highwatermark checkpoint file: " + version)
         }
       } catch {
-        case e: NumberFormatException => malformedLineException(line)
+        case e: NumberFormatException => throw malformedLineException(line)
       } finally {
         reader.close()
       }
