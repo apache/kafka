@@ -297,7 +297,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       if(host == null || host.trim.isEmpty)
         new InetSocketAddress(port)
       else
-        new InetSocketAddress(host, port)
+        new InetSocketAddress(host.trim, port)
     val serverChannel = ServerSocketChannel.open()
     serverChannel.configureBlocking(false)
     serverChannel.socket().setReceiveBufferSize(recvBufferSize)
