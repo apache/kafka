@@ -82,15 +82,7 @@ public class OffsetCheckpoint {
                 writer.close();
             }
 
-            // swap new offset checkpoint file with previous one
-            if (!temp.renameTo(file)) {
-                // renameTo() fails on Windows if the destination file exists.
-                file.delete();
-                if (!temp.renameTo(file))
-                    throw new IOException(String.format("File rename from %s to %s failed.",
-                        temp.getAbsolutePath(),
-                        file.getAbsolutePath()));
-            }
+            Utils.atomicMoveWithFallback(temp.toPath(), file.toPath());
         }
     }
 
