@@ -30,11 +30,20 @@ object ReplicationUtils extends Logging {
 
   private val IsrChangeNotificationPrefix = "isr_change_"
 
-  def updateLeaderAndIsr(zkUtils: ZkUtils, topic: String, partitionId: Int, newLeaderAndIsr: LeaderAndIsr, controllerEpoch: Int,
-    zkVersion: Int): (Boolean,Int) = {
+  /**
+    * Helper function for updateLeaderAndIsr. Performs all operations before calling Zookeeper
+    */
+  private def updateLeaderAndIsrPreZk(zkUtils: ZkUtils, topic: String, partitionId: Int, newLeaderAndIsr: LeaderAndIsr, controllerEpoch: Int): (String,String) = {
     debug("Updated ISR for partition [%s,%d] to %s".format(topic, partitionId, newLeaderAndIsr.isr.mkString(",")))
     val path = getTopicPartitionLeaderAndIsrPath(topic, partitionId)
     val newLeaderData = zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
+    (path, newLeaderData)
+  }
+
+  def updateLeaderAndIsr(zkUtils: ZkUtils, topic: String, partitionId: Int, newLeaderAndIsr: LeaderAndIsr, controllerEpoch: Int,
+    zkVersion: Int): (Boolean,Int) = {
+    val (path, newLeaderData) = updateLeaderAndIsrPreZk(zkUtils, topic, partitionId, newLeaderAndIsr, controllerEpoch)
+
     // use the epoch of the controller that made the leadership decision, instead of the current controller epoch
     val updatePersistentPath: (Boolean, Int) = zkUtils.conditionalUpdatePersistentPath(path, newLeaderData, zkVersion, Some(checkLeaderAndIsrZkData))
     updatePersistentPath
@@ -45,15 +54,15 @@ object ReplicationUtils extends Logging {
     */
   def updateLeaderAndIsrAsync(zkUtils: ZkUtils, topic: String, partitionId: Int, newLeaderAndIsr: LeaderAndIsr, controllerEpoch: Int,
                               zkVersion: Int, topCallback: (Boolean, Int, scala.Any) => Unit, topCtx: scala.Any) = {
-    debug("Updated (async) ISR for partition [%s,%d] to %s".format(topic, partitionId, newLeaderAndIsr.isr.mkString(",")))
-    val internalCtx = (topCallback, topCtx)
+    val (path, newLeaderData) = updateLeaderAndIsrPreZk(zkUtils, topic, partitionId, newLeaderAndIsr, controllerEpoch)
+
     def updateCallback(success: Boolean, newVersion: Int, internalCtx: scala.Any): Unit = {
       val (topCallback, topCtx) = internalCtx.asInstanceOf[((Boolean, Int, scala.Any) => Unit, scala.Any)]
       topCallback(success, newVersion, topCtx)
     }
-    val path = getTopicPartitionLeaderAndIsrPath(topic, partitionId)
-    val newLeaderData = zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
+
     // use the epoch of the controller that made the leadership decision, instead of the current controller epoch
+    val internalCtx = (topCallback, topCtx)
     zkUtils.conditionalUpdatePersistentPathAsync(path, newLeaderData, zkVersion, Some(checkLeaderAndIsrZkDataAsync), updateCallback, internalCtx)
   }
 
@@ -65,9 +74,11 @@ object ReplicationUtils extends Logging {
     debug("Added " + isrChangeNotificationPath + " for " + isrChangeSet)
   }
 
-  def checkLeaderAndIsrZkData(zkUtils: ZkUtils, path: String, expectedLeaderAndIsrInfo: String): (Boolean,Int) = {
+  /**
+    * Helper for checkLeaderAndIsrZkData, performs checks after read from ZK
+    */
+  private def checkLeaderAndIsrZkDataPostZk(zkUtils: ZkUtils, path: String, writtenLeaderAndIsrInfo: (Option[String], Stat), expectedLeaderAndIsrInfo: String): (Boolean,Int) = {
     try {
-      val writtenLeaderAndIsrInfo = zkUtils.readDataMaybeNull(path)
       val writtenLeaderOpt = writtenLeaderAndIsrInfo._1
       val writtenStat = writtenLeaderAndIsrInfo._2
       val expectedLeader = parseLeaderAndIsr(expectedLeaderAndIsrInfo, path, writtenStat)
@@ -88,6 +99,16 @@ object ReplicationUtils extends Logging {
     (false,-1)
   }
 
+  def checkLeaderAndIsrZkData(zkUtils: ZkUtils, path: String, expectedLeaderAndIsrInfo: String): (Boolean,Int) = {
+    try {
+      val writtenLeaderAndIsrInfo = zkUtils.readDataMaybeNull(path)
+      return checkLeaderAndIsrZkDataPostZk(zkUtils, path, writtenLeaderAndIsrInfo, expectedLeaderAndIsrInfo)
+    } catch {
+      case e1: Exception =>
+    }
+    (false,-1)
+  }
+
   /**
     * Asynchronous version of checkLeaderAndIsrZkData
     */
@@ -95,21 +116,10 @@ object ReplicationUtils extends Logging {
       topCallback: (Boolean,Int,scala.Any) => Unit, topCtx: scala.Any) = {
     val internalCtx = (topCallback, topCtx)
 
-    def internalCallback(writtenLeaderOpt: Option[String], stat: Stat, internalCtx: scala.Any): Unit = {
+    def internalCallback(writtenLeaderAndIsrInfo: (Option[String], Stat), internalCtx: scala.Any): Unit = {
       val (topCallback, topCtx) = internalCtx.asInstanceOf[((Boolean, Int, scala.Any) => Unit, scala.Any)]
-      val expectedLeader = parseLeaderAndIsr(expectedLeaderAndIsrInfo, path, stat)
-      writtenLeaderOpt match {
-        case Some(writtenData) =>
-          val writtenLeader = parseLeaderAndIsr(writtenData, path, stat)
-          (expectedLeader, writtenLeader) match {
-            case (Some(expectedLeader), Some(writtenLeader)) =>
-              if (expectedLeader == writtenLeader)
-                return topCallback(true, stat.getVersion(), topCtx)
-            case _ =>
-          }
-        case None =>
-      }
-      return topCallback(false, -1, topCtx)
+      val (success, version) = checkLeaderAndIsrZkDataPostZk(zkUtils, path, writtenLeaderAndIsrInfo, expectedLeaderAndIsrInfo)
+      topCallback(success, version, topCtx)
     }
 
     zkUtils.readDataMaybeNullAsync(path, internalCallback, internalCtx)

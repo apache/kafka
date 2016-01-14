@@ -471,16 +471,17 @@ class ZkUtils(val zkClient: ZkClient,
         case Code.OK =>
           debug("Conditional (async) update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
             .format(path, data, expectVersion, stat.getVersion))
-          return callback(true, stat.getVersion, ctx)
+           callback(true, stat.getVersion, ctx)
         case Code.BADVERSION =>
           optionalCheckerAsync match {
             case Some(checker) =>
-              return checker(zkUtils, path, data, callback, ctx)
-            case _ => debug("Checker method is not passed skipping zkData match")
+              checker(zkUtils, path, data, callback, ctx)
+            case _ =>
+              debug("Checker method is not passed skipping zkData match")
+              warn("Conditional update (async) of path %s with data %s and expected version %d failed due to bad version".format(path, data,
+                expectVersion))
+              callback(false, -1, ctx)
           }
-          warn("Conditional update (async) of path %s with data %s and expected version %d failed due to bad version".format(path, data,
-            expectVersion))
-          return callback(false, -1, ctx)
         case Code.CONNECTIONLOSS | Code.SESSIONEXPIRED =>
           // retry
           warn("Conditional update (async) of path %s with data %s and expected version %d failed due to connection/session loss %d. Retrying.".format(path, data,
@@ -593,17 +594,17 @@ class ZkUtils(val zkClient: ZkClient,
                       ctx: Object,
                       readData: Array[Byte],
                       stat: Stat) {
-      val (path, topCallback, topCtx) = ctx.asInstanceOf[(String, (Option[String], Stat, scala.Any) => Unit, scala.Any)]
+      val (path, topCallback, topCtx) = ctx.asInstanceOf[(String, ((Option[String], Stat), scala.Any) => Unit, scala.Any)]
       Code.get(rc) match {
         case Code.OK =>
           val dataStr : Option[String] = Some(ZKStringSerializer.deserialize(readData).asInstanceOf[String])
-          topCallback(dataStr, stat, topCtx)
+          topCallback((dataStr, stat), topCtx)
         case Code.NONODE | Code.CONNECTIONLOSS | Code.SESSIONEXPIRED=>
           info("The node at %s has gone away while reading it, ".format(path))
           readDataMaybeNullAsync(path, topCallback, topCtx)
         case _ =>
           warn("ZooKeeper event while getting znode data: %s %s".format(path, Code.get(rc)))
-          topCallback(None, stat, topCtx)
+          topCallback((None, stat), topCtx)
       }
     }
   }
@@ -611,7 +612,7 @@ class ZkUtils(val zkClient: ZkClient,
   /**
     * Asynchronous version of readDataMaybeNull
     */
-  def readDataMaybeNullAsync(path: String, callback: (Option[String], Stat, scala.Any) => Unit, ctx: scala.Any): Unit = {
+  def readDataMaybeNullAsync(path: String, callback: ((Option[String], Stat), scala.Any) => Unit, ctx: scala.Any): Unit = {
     val internalCtx = (path, callback, ctx)
     this.zkConnection.getZookeeper.getData(path, false, new readDataMaybeNullCallback, internalCtx)
   }
