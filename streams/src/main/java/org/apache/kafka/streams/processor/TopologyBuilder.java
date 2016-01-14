@@ -487,7 +487,7 @@ public class TopologyBuilder {
 
                     // if some of the topics are internal, add them to the internal topics
                     for (String topic : topics) {
-                        if (internalSourceTopics.contains(topic))
+                        if (this.internalTopicNames.contains(topic))
                             internalSourceTopics.add(topic);
                     }
                 }
