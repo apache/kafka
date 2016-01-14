@@ -66,9 +66,9 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
     private int numStandbyReplicas;
     private Map<Integer, TopologyBuilder.TopicsInfo> topicGroups;
     private Map<TopicPartition, Set<TaskId>> partitionToTaskIds;
-    private Map<String, Set<TaskId>> stateNameToTaskIds;
+    private Map<String, Set<TaskId>> stateChangelogTopicToTaskIds;
+    private Map<String, Set<TaskId>> internalSourceTopicToTaskIds;
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
-
 
     // TODO: the following ZK dependency should be removed after KIP-4
     private static final String ZK_TOPIC_PATH = "/brokers/topics";
@@ -296,13 +296,24 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         Map<TaskId, Set<TopicPartition>> partitionsForTask = streamThread.partitionGrouper.partitionGroups(sourceTopicGroups, metadata);
 
         // add tasks to state topic subscribers
-        stateNameToTaskIds = new HashMap<>();
+        stateChangelogTopicToTaskIds = new HashMap<>();
+        internalSourceTopicToTaskIds = new HashMap<>();
         for (TaskId task : partitionsForTask.keySet()) {
-            for (String stateName : topicGroups.get(task.topicGroupId).stateNames) {
-                Set<TaskId> tasks = stateNameToTaskIds.get(stateName);
+            for (String stateName : topicGroups.get(task.topicGroupId).stateChangelogTopics) {
+                Set<TaskId> tasks = stateChangelogTopicToTaskIds.get(stateName);
                 if (tasks == null) {
                     tasks = new HashSet<>();
-                    stateNameToTaskIds.put(stateName, tasks);
+                    stateChangelogTopicToTaskIds.put(stateName, tasks);
+                }
+
+                tasks.add(task);
+            }
+
+            for (String topicName : topicGroups.get(task.topicGroupId).interSourceTopics) {
+                Set<TaskId> tasks = internalSourceTopicToTaskIds.get(topicName);
+                if (tasks == null) {
+                    tasks = new HashSet<>();
+                    internalSourceTopicToTaskIds.put(topicName, tasks);
                 }
 
                 tasks.add(task);
@@ -363,12 +374,16 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
             }
         }
 
-        // if ZK is specified, get the tasks for each state topic and validate the topic partitions
+        // if ZK is specified, get the tasks / internal topics for each state topic and validate the topic partitions
         if (zkClient != null) {
             log.debug("Starting to validate changelog topics in partition assignor.");
 
-            for (Map.Entry<String, Set<TaskId>> entry : stateNameToTaskIds.entrySet()) {
-                String topic = streamThread.jobId + "-" + entry.getKey() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
+            Map<String, Set<TaskId>> topicToTaskIds = new HashMap<>();
+            topicToTaskIds.putAll(stateChangelogTopicToTaskIds);
+            topicToTaskIds.putAll(internalSourceTopicToTaskIds);
+
+            for (Map.Entry<String, Set<TaskId>> entry : topicToTaskIds.entrySet()) {
+                String topic = streamThread.jobId + "-" + entry.getKey();
 
                 // the expected number of partitions is the max value of TaskId.partition + 1
                 int numPartitions = 0;
@@ -455,7 +470,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
 
     /* For Test Only */
     public Set<TaskId> tasksForState(String stateName) {
-        return stateNameToTaskIds.get(stateName);
+        return stateChangelogTopicToTaskIds.get(stateName + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX);
     }
 
     public Set<TaskId> tasksForPartition(TopicPartition partition) {

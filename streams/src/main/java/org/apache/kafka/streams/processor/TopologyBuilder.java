@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.QuickUnion;
 import org.apache.kafka.streams.processor.internals.SinkNode;
@@ -57,6 +58,8 @@ public class TopologyBuilder {
     private final Map<String, StateStoreFactory> stateFactories = new HashMap<>();
 
     private final Set<String> sourceTopicNames = new HashSet<>();
+
+    private final Set<String> internalTopicNames = new HashSet<>();
 
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
     private final List<Set<String>> copartitionSourceGroups = new ArrayList<>();
@@ -152,18 +155,20 @@ public class TopologyBuilder {
 
     public static class TopicsInfo {
         public Set<String> sourceTopics;
-        public Set<String> stateNames;
+        public Set<String> interSourceTopics;
+        public Set<String> stateChangelogTopics;
 
-        public TopicsInfo(Set<String> sourceTopics, Set<String> stateNames) {
+        public TopicsInfo(Set<String> sourceTopics, Set<String> interSourceTopics, Set<String> stateChangelogTopics) {
             this.sourceTopics = sourceTopics;
-            this.stateNames = stateNames;
+            this.interSourceTopics = interSourceTopics;
+            this.stateChangelogTopics = stateChangelogTopics;
         }
 
         @Override
         public boolean equals(Object o) {
             if (o instanceof TopicsInfo) {
                 TopicsInfo other = (TopicsInfo) o;
-                return other.sourceTopics.equals(this.sourceTopics) && other.stateNames.equals(this.stateNames);
+                return other.sourceTopics.equals(this.sourceTopics) && other.stateChangelogTopics.equals(this.stateChangelogTopics);
             } else {
                 return false;
             }
@@ -171,7 +176,7 @@ public class TopologyBuilder {
 
         @Override
         public int hashCode() {
-            long n = ((long) sourceTopics.hashCode() << 32) | (long) stateNames.hashCode();
+            long n = ((long) sourceTopics.hashCode() << 32) | (long) stateChangelogTopics.hashCode();
             return (int) (n % 0xFFFFFFFFL);
         }
     }
@@ -424,6 +429,18 @@ public class TopologyBuilder {
         return this;
     }
 
+    /**
+     * Adds an internal topic
+     *
+     * @param topicName the name of the topic
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public final TopologyBuilder addInternalTopic(String topicName) {
+        this.internalTopicNames.add(topicName);
+
+        return this;
+    }
+
     private void connectProcessorAndStateStore(String processorName, String stateStoreName) {
         if (!stateFactories.containsKey(stateStoreName))
             throw new TopologyException("StateStore " + stateStoreName + " is not added yet.");
@@ -460,24 +477,33 @@ public class TopologyBuilder {
 
         for (Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
             Set<String> sourceTopics = new HashSet<>();
-            Set<String> stateNames = new HashSet<>();
+            Set<String> internalSourceTopics = new HashSet<>();
+            Set<String> stateChangelogTopics = new HashSet<>();
             for (String node : entry.getValue()) {
                 // if the node is a source node, add to the source topics
                 String[] topics = nodeToTopics.get(node);
-                if (topics != null)
+                if (topics != null) {
                     sourceTopics.addAll(Arrays.asList(topics));
+
+                    // if some of the topics are internal, add them to the internal topics
+                    for (String topic : topics) {
+                        if (internalSourceTopics.contains(topic))
+                            internalSourceTopics.add(topic);
+                    }
+                }
 
                 // if the node is connected to a state, add to the state topics
                 for (StateStoreFactory stateFactory : stateFactories.values()) {
 
                     if (stateFactory.isInternal && stateFactory.users.contains(node)) {
-                        stateNames.add(stateFactory.supplier.name());
+                        stateChangelogTopics.add(stateFactory.supplier.name() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX);
                     }
                 }
             }
             topicGroups.put(entry.getKey(), new TopicsInfo(
                     Collections.unmodifiableSet(sourceTopics),
-                    Collections.unmodifiableSet(stateNames)));
+                    Collections.unmodifiableSet(internalSourceTopics),
+                    Collections.unmodifiableSet(stateChangelogTopics)));
         }
 
         return Collections.unmodifiableMap(topicGroups);
