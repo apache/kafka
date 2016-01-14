@@ -13,47 +13,30 @@
 
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.utils.Serializer;
 import org.junit.Test;
 
-import java.io.ByteArrayOutputStream;
-import java.io.ObjectOutputStream;
-import java.io.ObjectInputStream;
 import java.io.IOException;
-import java.io.FileInputStream;
-import java.io.File;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
 
-public class SerializeCompatibilityTopicPartition {
+public class SerializeCompatibilityTopicPartition extends Serializer {
 
     public static String topicName = "mytopic";
     public static int    partNum   = 5;
-    public static String fileName  = "tpserializedfile";
+    public static String fileName  = "serializedData/topicPartitionSerializedfile";
 
     @Test
     public void testTopicPartitionSerialization() throws IOException, ClassNotFoundException {
         //assert TopicPartition is serializable and de-serialization renders the clone of original properly
         TopicPartition origTp = new TopicPartition(topicName, partNum);
 
-        ByteArrayOutputStream arrayOutputStream = new ByteArrayOutputStream();
-        ObjectOutputStream ooStream = new ObjectOutputStream(arrayOutputStream);
-        ooStream.writeObject(origTp);
-        arrayOutputStream.close();
-        ooStream.close();
+        serialize(origTp);
 
         // assert serialized TopicPartition object in file (tpserializedfile under resources folder) is
         // de-serializable into TopicPartition and compatible
-        ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(classLoader.getResource(fileName).getFile());
-        FileInputStream fis = new FileInputStream(file);
-
-        ObjectInputStream inputStream = new ObjectInputStream(fis);
-
-        Object deserializedObject = inputStream.readObject();
-
-        fis.close();
-        inputStream.close();
+        Object deserializedObject = deSerialize(fileName);
 
         assertTrue(deserializedObject instanceof TopicPartition);
 

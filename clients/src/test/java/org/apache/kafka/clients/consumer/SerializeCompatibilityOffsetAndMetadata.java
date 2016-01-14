@@ -13,45 +13,31 @@
 
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.utils.Serializer;
 import org.junit.Test;
 
-import java.io.ByteArrayOutputStream;
-import java.io.ObjectOutputStream;
-import java.io.ObjectInputStream;
 import java.io.IOException;
-import java.io.File;
-import java.io.FileInputStream;
 
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
 
-public class SerializeCompatibilityOffsetAndMetadata {
+public class SerializeCompatibilityOffsetAndMetadata extends Serializer {
     public static String metadata = "test commit metadata";
     public static long    offset   = 10;
-    public static String fileName  = "oamserializedfile";
+    public static String fileName  = "serializedData/offsetAndMetadataSerializedfile";
 
     @Test
     public void testOffsetMetadataSerialization() throws IOException, ClassNotFoundException {
         //assert OffsetAndMetadata is serializable
         OffsetAndMetadata origOAM = new OffsetAndMetadata(offset, metadata);
 
-        ByteArrayOutputStream arrayOutputStream = new ByteArrayOutputStream();
-        ObjectOutputStream ooStream = new ObjectOutputStream(arrayOutputStream);
-        ooStream.writeObject(origOAM);
-        arrayOutputStream.close();
-        ooStream.close();
+        serialize(origOAM);
 
 
         // assert serialized OffsetAndMetadata object in file (oamserializedfile under resources folder) is
         // de-serializable into OffsetAndMetadata and compatible
-        ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(classLoader.getResource(fileName).getFile());
-        FileInputStream fis = new FileInputStream(file);
-
-        ObjectInputStream inputStream = new ObjectInputStream(fis);
-
-        Object deserializedObject = inputStream.readObject();
+        Object deserializedObject = deSerialize(fileName);
 
         assertTrue(deserializedObject instanceof OffsetAndMetadata);
 
