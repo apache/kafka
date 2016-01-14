@@ -20,8 +20,6 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
-import java.util.Collection;
-
 /**
  * KTable is an abstraction of a change log stream.
  *
@@ -152,9 +150,11 @@ public interface KTable<K, V> {
      */
     <K1, V1, V2> KTable<K1, V2> aggregate(AggregatorSupplier<K1, V1, V2> aggregatorSupplier,
                                           KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                          Serializer<K> keySerializer,
+                                          Serializer<K1> keySerializer,
+                                          Serializer<V1> valueSerializer,
                                           Serializer<V2> aggValueSerializer,
-                                          Deserializer<K> keyDeserializer,
+                                          Deserializer<K1> keyDeserializer,
+                                          Deserializer<V1> valueDeserializer,
                                           Deserializer<V2> aggValueDeserializer,
                                           String name);
 
@@ -167,35 +167,9 @@ public interface KTable<K, V> {
      */
     <K1> KTable<K1, Long> sum(KeyValueMapper<K, V, K1> keySelector,
                               KeyValueToLongMapper<K, V> valueSelector,
-                              Serializer<K> keySerializer,
-                              Deserializer<K> keyDeserializer,
+                              Serializer<K1> keySerializer,
+                              Deserializer<K1> keyDeserializer,
                               String name);
-
-    /**
-     * Sum extracted integer values of this table by the selected aggregation key
-     *
-     * @param keySelector the class of KeyValueMapper to select the aggregation key
-     * @param valueSelector the class of KeyValueToIntMapper to extract the long integer from value
-     * @param name the name of the resulted table
-     */
-    <K1> KTable<K1, Integer> sum(KeyValueMapper<K, V, K1> keySelector,
-                                 KeyValueToIntMapper<K, V> valueSelector,
-                                 Serializer<K> keySerializer,
-                                 Deserializer<K> keyDeserializer,
-                                 String name);
-
-    /**
-     * Sum extracted double decimal values of this table by the selected aggregation key
-     *
-     * @param keySelector the class of KeyValueMapper to select the aggregation key
-     * @param valueSelector the class of KeyValueToDoubleMapper to extract the long integer from value
-     * @param name the name of the resulted table
-     */
-    <K1> KTable<K1, Double> sum(KeyValueMapper<K, V, K1> keySelector,
-                                KeyValueToDoubleMapper<K, V> valueSelector,
-                                Serializer<K> keySerializer,
-                                Deserializer<K> keyDeserializer,
-                                String name);
 
     /**
      * Count number of records of this table by the selected aggregation key
@@ -204,22 +178,10 @@ public interface KTable<K, V> {
      * @param name the name of the resulted table
      */
     <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> keySelector,
-                                Serializer<K> keySerializer,
-                                Deserializer<K> keyDeserializer,
+                                Serializer<K1> keySerializer,
+                                Serializer<V> valueSerializer,
+                                Deserializer<K1> keyDeserializer,
+                                Deserializer<V> valueDeserializer,
                                 String name);
 
-    /**
-     * Get the top-k values of this table by the selected aggregation key
-     *
-     * @param k parameter of the top-k computation
-     * @param keySelector the class of KeyValueMapper to select the aggregation key
-     * @param name the name of the resulted table
-     */
-    <K1, V1 extends Comparable<V1>> KTable<K1, Collection<V1>> topK(int k,
-                                                                    KeyValueMapper<K, V, K1> keySelector,
-                                                                    Serializer<K> keySerializer,
-                                                                    Serializer<V1> aggValueSerializer,
-                                                                    Deserializer<K> keyDeserializer,
-                                                                    Deserializer<V1> aggValueDeserializer,
-                                                                    String name);
 }

@@ -250,16 +250,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serializer<K> keySerialzier,
-            Serializer<V> thisValueSerialzier,
-            Serializer<V1> otherValueSerialzier,
-            Deserializer<K> keyDeserialier,
-            Deserializer<V> thisValueDeserialzier,
-            Deserializer<V1> otherValueDeserialzier) {
+            Serializer<K> keySerializer,
+            Serializer<V> thisValueSerializer,
+            Serializer<V1> otherValueSerializer,
+            Deserializer<K> keyDeserializer,
+            Deserializer<V> thisValueDeserializer,
+            Deserializer<V1> otherValueDeserializer) {
 
         return join(other, joiner, windows,
-                keySerialzier, thisValueSerialzier, otherValueSerialzier,
-                keyDeserialier, thisValueDeserialzier, otherValueDeserialzier, false);
+                keySerializer, thisValueSerializer, otherValueSerializer,
+                keyDeserializer, thisValueDeserializer, otherValueDeserializer, false);
     }
 
     @Override
@@ -267,16 +267,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serializer<K> keySerialzier,
-            Serializer<V> thisValueSerialzier,
-            Serializer<V1> otherValueSerialzier,
-            Deserializer<K> keyDeserialier,
-            Deserializer<V> thisValueDeserialzier,
-            Deserializer<V1> otherValueDeserialzier) {
+            Serializer<K> keySerializer,
+            Serializer<V> thisValueSerializer,
+            Serializer<V1> otherValueSerializer,
+            Deserializer<K> keyDeserializer,
+            Deserializer<V> thisValueDeserializer,
+            Deserializer<V1> otherValueDeserializer) {
 
         return join(other, joiner, windows,
-                keySerialzier, thisValueSerialzier, otherValueSerialzier,
-                keyDeserialier, thisValueDeserialzier, otherValueDeserialzier, true);
+                keySerializer, thisValueSerializer, otherValueSerializer,
+                keyDeserializer, thisValueDeserializer, otherValueDeserializer, true);
     }
 
     @SuppressWarnings("unchecked")
@@ -284,12 +284,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serializer<K> keySerialzier,
-            Serializer<V> thisValueSerialzier,
-            Serializer<V1> otherValueSerialzier,
-            Deserializer<K> keyDeserialier,
-            Deserializer<V> thisValueDeserialzier,
-            Deserializer<V1> otherValueDeserialzier,
+            Serializer<K> keySerializer,
+            Serializer<V> thisValueSerializer,
+            Serializer<V1> otherValueSerializer,
+            Deserializer<K> keyDeserializer,
+            Deserializer<V> thisValueDeserializer,
+            Deserializer<V1> otherValueDeserializer,
             boolean outer) {
 
         Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
@@ -301,7 +301,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                         windows.after,
                         windows.maintainMs(),
                         windows.segments,
-                        new Serdes<>("", keySerialzier, keyDeserialier, thisValueSerialzier, thisValueDeserialzier),
+                        new Serdes<>("", keySerializer, keyDeserializer, thisValueSerializer, thisValueDeserializer),
                         null);
 
         RocksDBWindowStoreSupplier<K, V1> otherWindow =
@@ -311,7 +311,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                         windows.after,
                         windows.maintainMs(),
                         windows.segments,
-                        new Serdes<>("", keySerialzier, keyDeserialier, otherValueSerialzier, otherValueDeserialzier),
+                        new Serdes<>("", keySerializer, keyDeserializer, otherValueSerializer, otherValueDeserializer),
                         null);
 
         KStreamJoinWindow<K, V> thisWindowedStream = new KStreamJoinWindow<>(thisWindow.name());
@@ -344,10 +344,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serializer<K> keySerialzier,
-            Serializer<V1> otherValueSerialzier,
-            Deserializer<K> keyDeserialier,
-            Deserializer<V1> otherValueDeserialzier) {
+            Serializer<K> keySerializer,
+            Serializer<V1> otherValueSerializer,
+            Deserializer<K> keyDeserializer,
+            Deserializer<V1> otherValueDeserializer) {
 
         Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
@@ -358,7 +358,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                         windows.after,
                         windows.maintainMs(),
                         windows.segments,
-                        new Serdes<>("", keySerialzier, keyDeserialier, otherValueSerialzier, otherValueDeserialzier),
+                        new Serdes<>("", keySerializer, keyDeserializer, otherValueSerializer, otherValueDeserializer),
                         null);
 
         KStreamJoinWindow<K, V1> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name());

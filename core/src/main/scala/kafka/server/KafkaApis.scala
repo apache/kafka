@@ -233,7 +233,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (errorCode != Errors.NONE.code) {
           debug("Offset commit request with correlation id %d from client %s on partition %s failed due to %s"
             .format(offsetCommitRequest.correlationId, offsetCommitRequest.clientId,
-              topicAndPartition, Errors.forCode(errorCode).exception.getClass.getName))
+              topicAndPartition, Errors.forCode(errorCode).exceptionName))
         }
       }
       val combinedCommitStatus = mergedCommitStatus ++ invalidRequestsInfo.map(_._1 -> Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
@@ -336,7 +336,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             produceRequest.correlationId,
             produceRequest.clientId,
             topicAndPartition,
-            Errors.forCode(status.error).exception.getClass.getName))
+            Errors.forCode(status.error).exceptionName))
         }
       }
 
@@ -348,7 +348,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           // the producer client will know that some error has happened and will refresh its metadata
           if (errorInResponse) {
             val exceptionsSummary = mergedResponseStatus.map { case (topicAndPartition, status) =>
-              topicAndPartition -> Errors.forCode(status.error).exception.getClass.getName
+              topicAndPartition -> Errors.forCode(status.error).exceptionName
             }.mkString(", ")
             info(
               s"Closing connection due to error during produce request with correlation id ${produceRequest.correlationId} " +
@@ -418,7 +418,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (data.error != Errors.NONE.code) {
           debug("Fetch request with correlation id %d from client %s on partition %s failed due to %s"
             .format(fetchRequest.correlationId, fetchRequest.clientId,
-            topicAndPartition, Errors.forCode(data.error).exception.getClass.getName))
+            topicAndPartition, Errors.forCode(data.error).exceptionName))
         }
         // record the bytes out metrics only when the response is being sent
         BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesOutRate.mark(data.messages.sizeInBytes)

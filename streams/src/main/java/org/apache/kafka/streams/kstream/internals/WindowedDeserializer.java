@@ -23,13 +23,13 @@ import org.apache.kafka.streams.kstream.Windowed;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-public class DefaultWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
+public class WindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     private static final int TIMESTAMP_SIZE = 8;
 
     private Deserializer<T> inner;
 
-    public DefaultWindowedDeserializer(Deserializer<T> inner) {
+    public WindowedDeserializer(Deserializer<T> inner) {
         this.inner = inner;
     }
 
