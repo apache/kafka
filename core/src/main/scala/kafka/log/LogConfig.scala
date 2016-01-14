@@ -109,7 +109,7 @@ object LogConfig {
   val FlushIntervalDoc = "The number of messages that can be written to the log before a flush is forced"
   val FlushMsDoc = "The amount of time the log can have dirty data before a flush is forced"
   val RetentionSizeDoc = "The approximate total number of bytes this log can use"
-  val RetentionMsDoc = "The approximate maximum age of the last segment that is retained"
+  val RetentionMsDoc = "The approximate maximum number of milli seconds of the last segment that is retained."
   val MaxIndexSizeDoc = "The maximum size of an index file"
   val MaxMessageSizeDoc = "The maximum size of a message"
   val IndexIntervalDoc = "The approximate number of bytes between index entries"
