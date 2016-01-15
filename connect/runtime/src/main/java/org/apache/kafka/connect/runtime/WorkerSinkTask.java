@@ -344,18 +344,6 @@ class WorkerSinkTask implements WorkerTask {
         context.clearOffsets();
     }
 
-    protected void abort(Throwable t) {
-        // Shutdown the task now and close resources. This should only be called from the worker's task thread
-        // TODO: Report the exception to the Worker so that it can be propagated or the task can be restarted
-
-        log.error("{} stopping due to unexpected exception", id, t);
-        try {
-            task.stop();
-        } finally {
-            close();
-        }
-    }
-
     private class HandleRebalance implements ConsumerRebalanceListener {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {

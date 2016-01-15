@@ -50,20 +50,16 @@ class WorkerSinkTaskThread extends ShutdownableThread {
 
     @Override
     public void execute() {
-        try {
-            // Try to join and start. If we're interrupted before this completes, bail.
-            if (!task.joinConsumerGroupAndStart())
-                return;
+        // Try to join and start. If we're interrupted before this completes, bail.
+        if (!task.joinConsumerGroupAndStart())
+            return;
 
-            while (getRunning()) {
-                iteration();
-            }
-
-            // Make sure any uncommitted data has committed
-            task.commitOffsets(true, -1);
-        } catch (Throwable t) {
-            task.abort(t);
+        while (getRunning()) {
+            iteration();
         }
+
+        // Make sure any uncommitted data has committed
+        task.commitOffsets(true, -1);
     }
 
     public void iteration() {
