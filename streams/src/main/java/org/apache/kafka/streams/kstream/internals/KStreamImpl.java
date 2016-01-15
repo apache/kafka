@@ -38,11 +38,9 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.RocksDBWindowStoreSupplier;
 import org.apache.kafka.streams.state.Serdes;
-import org.apache.kafka.streams.state.Stores;
 
 import java.lang.reflect.Array;
 import java.util.Collection;
@@ -320,11 +318,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                         new Serdes<>("", keySerializer, keyDeserializer, otherValueSerializer, otherValueDeserializer),
                         null);
 
-        KStreamJoinWindow<K, V> thisWindowedStream = new KStreamJoinWindow<>(otherWindow.name(), windows.before + windows.after + 1, windows.maintainMs());
+        KStreamJoinWindow<K, V> thisWindowedStream = new KStreamJoinWindow<>(thisWindow.name(), windows.before + windows.after + 1, windows.maintainMs());
         KStreamJoinWindow<K, V1> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name(), windows.before + windows.after + 1, windows.maintainMs());
 
-        KStreamKStreamJoin<K, R, V, V1> joinThis = new KStreamKStreamJoin<>(otherWindow.name(), windows.before, windows.after, joiner, true);
-        KStreamKStreamJoin<K, R, V, V1> joinOther = new KStreamKStreamJoin<>(otherWindow.name(), windows.before, windows.after, joiner, true);
+        KStreamKStreamJoin<K, R, V, V1> joinThis = new KStreamKStreamJoin<>(otherWindow.name(), windows.before, windows.after, joiner, outer);
+        KStreamKStreamJoin<K, R, V1, V> joinOther = new KStreamKStreamJoin<>(thisWindow.name(), windows.before, windows.after, reverseJoiner(joiner), outer);
 
         KStreamPassThrough<K, R> joinMerge = new KStreamPassThrough<>();
 
@@ -397,8 +395,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                        Serializer<K> keySerializer,
                                                                        Serializer<T> aggValueSerializer,
                                                                        Deserializer<K> keyDeserializer,
-                                                                       Deserializer<T> aggValueDeserializer,
-                                                                       String name) {
+                                                                       Deserializer<T> aggValueDeserializer) {
 
         // TODO: this agg window operator is only used for casting K to Windowed<K> for
         // KTableProcessorSupplier, which is a bit awkward and better be removed in the future
@@ -406,13 +403,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String aggWindowName = topology.newName(WINDOWED_NAME);
 
         ProcessorSupplier<K, V> aggWindowSupplier = new KStreamAggWindow<>();
-        ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamAggregate<>(windows, name, aggregatorSupplier.get());
+        ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamAggregate<>(windows, windows.name(), aggregatorSupplier.get());
 
-        StateStoreSupplier aggregateStore = Stores.create(name)
-                .withKeys(new WindowedSerializer<>(keySerializer), new WindowedDeserializer<K>(keyDeserializer))
-                .withValues(aggValueSerializer, aggValueDeserializer)
-                .localDatabase()
-                .build();
+        RocksDBWindowStoreSupplier<K, T> aggregateStore =
+                new RocksDBWindowStoreSupplier<>(
+                        windows.name(),
+                        windows.maintainMs(),
+                        windows.segments,
+                        new Serdes<>("", keySerializer, keyDeserializer, aggValueSerializer, aggValueDeserializer),
+                        null);
 
         // aggregate the values with the aggregator and local store
         topology.addProcessor(aggWindowName, aggWindowSupplier, this.name);

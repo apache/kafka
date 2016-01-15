@@ -23,20 +23,25 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class Windows<W extends Window> {
 
+    private static final int DEFAULT_NUM_SEGMENTS = 3;
+
     private static final long DEFAULT_EMIT_DURATION = 1000L;
 
     private static final long DEFAULT_MAINTAIN_DURATION = 24 * 60 * 60 * 1000L;   // one day
 
     private static final AtomicInteger NAME_INDEX = new AtomicInteger(0);
 
+    protected String name;
+
     private long emitDuration;
 
     private long maintainDuration;
 
-    protected String name;
+    public int segments;
 
     protected Windows(String name) {
         this.name = name;
+        this.segments = DEFAULT_NUM_SEGMENTS;
         this.emitDuration = DEFAULT_EMIT_DURATION;
         this.maintainDuration = DEFAULT_MAINTAIN_DURATION;
     }
@@ -59,6 +64,19 @@ public abstract class Windows<W extends Window> {
      */
     public Windows until(long duration) {
         this.maintainDuration = duration;
+
+        return this;
+    }
+
+    /**
+     * Specifies the number of segments to be used for rolling the window store,
+     * this function is not exposed to users but can be called by developers that extend this JoinWindows specs
+     *
+     * @param segments
+     * @return
+     */
+    protected Windows segments(int segments) {
+        this.segments = segments;
 
         return this;
     }

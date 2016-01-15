@@ -278,8 +278,7 @@ public interface KStream<K, V> {
                                                                 Serializer<K> keySerializer,
                                                                 Serializer<T> aggValueSerializer,
                                                                 Deserializer<K> keyDeserializer,
-                                                                Deserializer<T> aggValueDeserializer,
-                                                                String name);
+                                                                Deserializer<T> aggValueDeserializer);
 
     /**
      * Sum extracted long integer values of this stream by key on a window basis.
