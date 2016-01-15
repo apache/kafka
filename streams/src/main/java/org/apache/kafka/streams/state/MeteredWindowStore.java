@@ -21,6 +21,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamingMetrics;
+import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 
@@ -97,20 +98,25 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     @Override
-    public WindowStoreIterator<V> fetch(K key, long timestamp) {
-        return new MeteredWindowStoreIterator<>(this.inner.fetch(key, timestamp), this.rangeTime);
+    public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
+        return new MeteredWindowStoreIterator<>(this.inner.fetch(key, timeFrom, timeTo), this.rangeTime);
     }
 
     @Override
     public void put(K key, V value) {
-        putAndReturnInternalKey(key, value);
+        putAndReturnInternalKey(key, value, -1L);
     }
 
     @Override
-    public byte[] putAndReturnInternalKey(K key, V value) {
+    public void put(K key, V value, long timestamp) {
+        putAndReturnInternalKey(key, value, timestamp);
+    }
+
+    @Override
+    public byte[] putAndReturnInternalKey(K key, V value, long timestamp) {
         long startNs = time.nanoseconds();
         try {
-            byte[] binKey = this.inner.putAndReturnInternalKey(key, value);
+            byte[] binKey = this.inner.putAndReturnInternalKey(key, value, timestamp);
 
             if (loggingEnabled) {
                 changeLogger.add(binKey);
@@ -174,7 +180,7 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
         }
 
         @Override
-        public E next() {
+        public KeyValue<Long, E> next() {
             return iter.next();
         }
 

@@ -38,8 +38,10 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.RocksDBWindowStoreSupplier;
 import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.Stores;
 
 import java.lang.reflect.Array;
 import java.util.Collection;
@@ -297,8 +299,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         RocksDBWindowStoreSupplier<K, V> thisWindow =
                 new RocksDBWindowStoreSupplier<>(
                         windows.name() + "-this",
-                        windows.before,
-                        windows.after,
                         windows.maintainMs(),
                         windows.segments,
                         new Serdes<>("", keySerializer, keyDeserializer, thisValueSerializer, thisValueDeserializer),
@@ -307,18 +307,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         RocksDBWindowStoreSupplier<K, V1> otherWindow =
                 new RocksDBWindowStoreSupplier<>(
                         windows.name() + "-other",
-                        windows.before,
-                        windows.after,
                         windows.maintainMs(),
                         windows.segments,
                         new Serdes<>("", keySerializer, keyDeserializer, otherValueSerializer, otherValueDeserializer),
                         null);
 
-        KStreamJoinWindow<K, V> thisWindowedStream = new KStreamJoinWindow<>(thisWindow.name());
-        KStreamJoinWindow<K, V1> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name());
+        KStreamJoinWindow<K, V> thisWindowedStream = new KStreamJoinWindow<>(otherWindow.name(), windows.before + windows.after + 1, windows.maintainMs());
+        KStreamJoinWindow<K, V1> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name(), windows.before + windows.after + 1, windows.maintainMs());
 
-        KStreamKStreamJoin<K, R, V, V1> joinThis = new KStreamKStreamJoin<>(otherWindow.name(), joiner, outer);
-        KStreamKStreamJoin<K, R, V1, V> joinOther = new KStreamKStreamJoin<>(thisWindow.name(), reverseJoiner(joiner), outer);
+        KStreamKStreamJoin<K, R, V, V1> joinThis = new KStreamKStreamJoin<>(otherWindow.name(), windows.before, windows.after, joiner, true);
+        KStreamKStreamJoin<K, R, V, V1> joinOther = new KStreamKStreamJoin<>(otherWindow.name(), windows.before, windows.after, joiner, true);
+
         KStreamPassThrough<K, R> joinMerge = new KStreamPassThrough<>();
 
         String thisWindowStreamName = topology.newName(WINDOWED_NAME);
@@ -354,15 +353,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         RocksDBWindowStoreSupplier<K, V1> otherWindow =
                 new RocksDBWindowStoreSupplier<>(
                         windows.name() + "-this",
-                        windows.before,
-                        windows.after,
                         windows.maintainMs(),
                         windows.segments,
                         new Serdes<>("", keySerializer, keyDeserializer, otherValueSerializer, otherValueDeserializer),
                         null);
 
-        KStreamJoinWindow<K, V1> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name());
-        KStreamKStreamJoin<K, R, V, V1> joinThis = new KStreamKStreamJoin<>(otherWindow.name(), joiner, true);
+        KStreamJoinWindow<K, V1> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name(), windows.before + windows.after + 1, windows.maintainMs());
+        KStreamKStreamJoin<K, R, V, V1> joinThis = new KStreamKStreamJoin<>(otherWindow.name(), windows.before, windows.after, joiner, true);
 
         String otherWindowStreamName = topology.newName(WINDOWED_NAME);
         String joinThisName = topology.newName(LEFTJOIN_NAME);
@@ -392,9 +389,30 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                        Serializer<K> keySerializer,
                                                                        Serializer<T> aggValueSerializer,
                                                                        Deserializer<K> keyDeserializer,
-                                                                       Deserializer<T> aggValueDeserializer) {
-        // TODO
-        return null;
+                                                                       Deserializer<T> aggValueDeserializer,
+                                                                       String name) {
+
+        // TODO: this agg window operator is only used for casting K to Windowed<K> for
+        // KTableProcessorSupplier, which is a bit awkward and better be removed in the future
+        String aggregateName = topology.newName(AGGREGATE_NAME);
+        String aggWindowName = topology.newName(WINDOWED_NAME);
+
+        ProcessorSupplier<K, V> aggWindowSupplier = new KStreamAggWindow<>();
+        ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamAggregate<>(windows, name, aggregatorSupplier.get());
+
+        StateStoreSupplier aggregateStore = Stores.create(name)
+                .withKeys(new WindowedSerializer<>(keySerializer), new WindowedDeserializer<K>(keyDeserializer))
+                .withValues(aggValueSerializer, aggValueDeserializer)
+                .localDatabase()
+                .build();
+
+        // aggregate the values with the aggregator and local store
+        topology.addProcessor(aggWindowName, aggWindowSupplier, this.name);
+        topology.addProcessor(aggregateName, aggregateSupplier, aggWindowName);
+        topology.addStateStore(aggregateStore, aggregateName);
+
+        // return the KTable representation with the intermediate topic as the sources
+        return new KTableImpl<>(topology, aggregateName, aggregateSupplier, sourceNodes);
     }
 
     @Override

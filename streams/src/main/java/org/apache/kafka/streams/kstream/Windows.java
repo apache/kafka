@@ -17,7 +17,8 @@
 
 package org.apache.kafka.streams.kstream;
 
-import java.util.Collection;
+
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class Windows<W extends Window> {
@@ -74,7 +75,7 @@ public abstract class Windows<W extends Window> {
         return prefix + String.format("%010d", NAME_INDEX.getAndIncrement());
     }
 
-    abstract boolean equalTo(Windows other);
+    public abstract boolean equalTo(Windows other);
 
-    abstract Collection<W> windowsFor(long timestamp);
+    public abstract Map<Long, W> windowsFor(long timestamp);
 }

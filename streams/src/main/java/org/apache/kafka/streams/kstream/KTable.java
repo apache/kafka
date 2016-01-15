@@ -111,10 +111,10 @@ public interface KTable<K, V> {
      * @param other the instance of KTable joined with this stream
      * @param joiner ValueJoiner
      * @param <V1>   the value type of the other stream
-     * @param <V2>   the value type of the new stream
+     * @param <R>   the value type of the new stream
      * @return the instance of KTable
      */
-    <V1, V2> KTable<K, V2> join(KTable<K, V1> other, ValueJoiner<V, V1, V2> joiner);
+    <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
      * Combines values of this KTable with another KTable using Outer Join.
@@ -122,10 +122,10 @@ public interface KTable<K, V> {
      * @param other the instance of KTable joined with this stream
      * @param joiner ValueJoiner
      * @param <V1>   the value type of the other stream
-     * @param <V2>   the value type of the new stream
+     * @param <R>   the value type of the new stream
      * @return the instance of KTable
      */
-    <V1, V2> KTable<K, V2> outerJoin(KTable<K, V1> other, ValueJoiner<V, V1, V2> joiner);
+    <V1, R> KTable<K, R> outerJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
      * Combines values of this KTable with another KTable using Left Join.
@@ -133,10 +133,10 @@ public interface KTable<K, V> {
      * @param other the instance of KTable joined with this stream
      * @param joiner ValueJoiner
      * @param <V1>   the value type of the other stream
-     * @param <V2>   the value type of the new stream
+     * @param <R>   the value type of the new stream
      * @return the instance of KTable
      */
-    <V1, V2> KTable<K, V2> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, V2> joiner);
+    <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
      * Aggregate values of this table by the selected key.
@@ -148,14 +148,14 @@ public interface KTable<K, V> {
      * @param <V1>   the value type of the aggregated table
      * @return the instance of KTable
      */
-    <K1, V1, V2> KTable<K1, V2> aggregate(AggregatorSupplier<K1, V1, V2> aggregatorSupplier,
+    <K1, V1, T> KTable<K1, T> aggregate(AggregatorSupplier<K1, V1, T> aggregatorSupplier,
                                           KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
                                           Serializer<K1> keySerializer,
                                           Serializer<V1> valueSerializer,
-                                          Serializer<V2> aggValueSerializer,
+                                          Serializer<T> aggValueSerializer,
                                           Deserializer<K1> keyDeserializer,
                                           Deserializer<V1> valueDeserializer,
-                                          Deserializer<V2> aggValueDeserializer,
+                                          Deserializer<T> aggValueDeserializer,
                                           String name);
 
     /**

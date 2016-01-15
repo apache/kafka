@@ -32,17 +32,13 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
-    private final long windowBefore;
-    private final long windowAfter;
     private final long retentionPeriod;
     private final int numSegments;
     private final Serdes serdes;
     private final Time time;
 
-    public RocksDBWindowStoreSupplier(String name, long windowBefore, long windowAfter, long retentionPeriod, int numSegments, Serdes<K, V> serdes, Time time) {
+    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, Serdes<K, V> serdes, Time time) {
         this.name = name;
-        this.windowBefore = windowBefore;
-        this.windowAfter = windowAfter;
         this.retentionPeriod = retentionPeriod;
         this.numSegments = numSegments;
         this.serdes = serdes;
@@ -54,7 +50,7 @@ public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        return new MeteredWindowStore<>(new RocksDBWindowStore<K, V>(name, windowBefore, windowAfter, retentionPeriod, numSegments, serdes), "rocksdb-window", time);
+        return new MeteredWindowStore<>(new RocksDBWindowStore<K, V>(name, retentionPeriod, numSegments, serdes), "rocksdb-window", time);
     }
 
 }

@@ -185,11 +185,11 @@ public interface KStream<K, V> {
      * @param otherValueDeserializer value deserializer for other stream,
      *                      if not specified the default serializer defined in the configs will be used
      * @param <V1>   the value type of the other stream
-     * @param <V2>   the value type of the new stream
+     * @param <R>   the value type of the new stream
      */
-    <V1, V2> KStream<K, V2> join(
+    <V1, R> KStream<K, R> join(
             KStream<K, V1> otherStream,
-            ValueJoiner<V, V1, V2> joiner,
+            ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
             Serializer<K> keySerializer,
             Serializer<V> thisValueSerializer,
@@ -217,11 +217,11 @@ public interface KStream<K, V> {
      * @param otherValueDeserializer value deserializer for other stream,
      *                      if not specified the default serializer defined in the configs will be used
      * @param <V1>   the value type of the other stream
-     * @param <V2>   the value type of the new stream
+     * @param <R>   the value type of the new stream
      */
-    <V1, V2> KStream<K, V2> outerJoin(
+    <V1, R> KStream<K, R> outerJoin(
             KStream<K, V1> otherStream,
-            ValueJoiner<V, V1, V2> joiner,
+            ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
             Serializer<K> keySerializer,
             Serializer<V> thisValueSerializer,
@@ -245,11 +245,11 @@ public interface KStream<K, V> {
      * @param otherValueDeserializer value deserializer for other stream,
      *                      if not specified the default serializer defined in the configs will be used
      * @param <V1>   the value type of the other stream
-     * @param <V2>   the value type of the new stream
+     * @param <R>   the value type of the new stream
      */
-    <V1, V2> KStream<K, V2> leftJoin(
+    <V1, R> KStream<K, R> leftJoin(
             KStream<K, V1> otherStream,
-            ValueJoiner<V, V1, V2> joiner,
+            ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
             Serializer<K> keySerializer,
             Serializer<V1> otherValueSerializer,
@@ -278,7 +278,8 @@ public interface KStream<K, V> {
                                                                 Serializer<K> keySerializer,
                                                                 Serializer<T> aggValueSerializer,
                                                                 Deserializer<K> keyDeserializer,
-                                                                Deserializer<T> aggValueDeserializer);
+                                                                Deserializer<T> aggValueDeserializer,
+                                                                String name);
 
     /**
      * Sum extracted long integer values of this stream by key on a window basis.
