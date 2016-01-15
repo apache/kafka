@@ -46,6 +46,8 @@ import java.util.Set;
  */
 public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, V> {
 
+    private static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
+
     private static final String FILTER_NAME = "KTABLE-FILTER-";
 
     private static final String MAPVALUES_NAME = "KTABLE-MAPVALUES-";
@@ -258,7 +260,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
         String aggregateName = topology.newName(AGGREGATE_NAME);
 
-        String topic = name + "-repartition";
+        String topic = name + REPARTITION_TOPIC_SUFFIX;
 
         ChangedSerializer<V1> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
         ChangedDeserializer<V1> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
@@ -278,6 +280,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         this.enableSendingOldValues();
 
         // send the aggregate key-value pairs to the intermediate topic for partitioning
+        topology.addInternalTopic(topic);
         topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, selectName);
 
         // read the intermediate topic
