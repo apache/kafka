@@ -39,6 +39,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.RocksDBWindowStoreSupplier;
 import org.apache.kafka.streams.state.Serdes;
 import org.apache.kafka.streams.state.Stores;
@@ -212,11 +213,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         to(topic, null, null);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
         String name = topology.newName(SINK_NAME);
+        StreamPartitioner<K, V> streamPartitioner = null;
 
-        topology.addSink(name, topic, keySerializer, valSerializer, this.name);
+        if (keySerializer != null && keySerializer instanceof WindowedSerializer) {
+            WindowedSerializer<Object> windowedSerializer = (WindowedSerializer<Object>) keySerializer;
+            streamPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(windowedSerializer);
+        }
+
+        topology.addSink(name, topic, keySerializer, valSerializer, streamPartitioner, this.name);
     }
 
     @Override
