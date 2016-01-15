@@ -65,7 +65,7 @@ public class HoppingWindows extends Windows<HoppingWindow> {
     public Map<Long, HoppingWindow> windowsFor(long timestamp) {
         long enclosed = (size - 1) / period;
 
-        long windowStart = Math.max(0, timestamp - timestamp % size - enclosed * period);
+        long windowStart = Math.max(0, timestamp - timestamp % period - enclosed * period);
 
         Map<Long, HoppingWindow> windows = new HashMap<>();
         while (windowStart <= timestamp) {
