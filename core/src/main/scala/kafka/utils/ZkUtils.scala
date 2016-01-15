@@ -483,7 +483,13 @@ class ZkUtils(val zkClient: ZkClient,
               callback(false, -1, ctx)
           }
         case Code.CONNECTIONLOSS | Code.SESSIONEXPIRED =>
-          // retry
+          /**
+            * When there is a ConnectionLossException during the conditional update, zkClient will retry the update and may fail
+            * since the previous update may have succeeded (but the stored zkVersion no longer matches the expected one).
+            * In this case, we will run the optionalChecker to further check if the previous write did indeed succeeded.
+            * This is the same invariant followed in the synchronous version of conditionalUpdatePersistentPath, which
+            * uses retries in the zkClient.writeDataReturnStat code path
+            */
           warn("Conditional update (async) of path %s with data %s and expected version %d failed due to connection/session loss %d. Retrying.".format(path, data,
             expectVersion, Code.get(rc).intValue()))
           zkHandle.setData(path, ZKStringSerializer.serialize(data), expectVersion, new conditionalUpdatePersistentPathCallback, internalCtx)

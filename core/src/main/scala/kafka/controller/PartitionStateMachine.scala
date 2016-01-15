@@ -108,41 +108,50 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     info("Stopped partition state machine")
   }
 
+
   def handleStateChangeCallback(ctx: scala.Any): Unit = {
-    val latch: CountDownLatch = ctx.asInstanceOf[CountDownLatch]
-    latch.countDown()
+    val latch: Option[CountDownLatch] = ctx.asInstanceOf[Option[CountDownLatch]]
+    latch.get.countDown()
   }
 
   /**
     * This API invokes the OnlinePartition state change on all partitions in either the NewPartition or OfflinePartition
     * state. This is called on a successful controller election and on broker changes
-    * @param async: if true, all changes are done asynchronously. In either case, this function returns when all
-    *             changes have completed.
+    * @param async: if true, all partitions are changed asynchronously. In either sync or async case, this function itself
+    *             only returns when all partition changes are complete
     */
   def triggerOnlinePartitionStateChange(async: Boolean) {
-    val latch: CountDownLatch = new CountDownLatch(partitionState.size)
+    var numCountdown = 0
+    var latch = None: Option[CountDownLatch]
     try {
       brokerRequestBatch.newBatch()
+      if (async == true) {
+        // get number of partitions we need to wait for
+        for ((topicAndPartition, partitionState) <- partitionState
+             if (!controller.deleteTopicManager.isTopicQueuedUpForDeletion(topicAndPartition.topic))) {
+          if (partitionState.equals(OfflinePartition) || partitionState.equals(NewPartition)) {
+            numCountdown = numCountdown + 1
+          }
+        }
+        latch = Some(new CountDownLatch(numCountdown))
+      }
+
       // try to move all partitions in NewPartition or OfflinePartition state to OnlinePartition state except partitions
       // that belong to topics to be deleted
       for ((topicAndPartition, partitionState) <- partitionState
            if (!controller.deleteTopicManager.isTopicQueuedUpForDeletion(topicAndPartition.topic))) {
         if (partitionState.equals(OfflinePartition) || partitionState.equals(NewPartition)) {
-          if (async == true) {
-            handleStateChangeAsync(topicAndPartition.topic, topicAndPartition.partition, OnlinePartition, controller.offlinePartitionSelector,
-              handleStateChangeCallback, latch)
-          } else {
-            handleStateChange(topicAndPartition.topic, topicAndPartition.partition, OnlinePartition, controller.offlinePartitionSelector,
-              (new CallbackBuilder).build)
-          }
-        } else {
-          if (async == true) {
-            handleStateChangeCallback(latch)
-          }
+         if (async == true) {
+           handleStateChangeAsync(topicAndPartition.topic, topicAndPartition.partition, OnlinePartition, controller.offlinePartitionSelector,
+             handleStateChangeCallback, latch)
+         } else {
+           handleStateChange(topicAndPartition.topic, topicAndPartition.partition, OnlinePartition, controller.offlinePartitionSelector,
+             (new CallbackBuilder).build)
+         }
         }
       }
       if (async == true) {
-        latch.await()
+        latch.get.await
       }
       brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
     } catch {
@@ -150,9 +159,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       // TODO: It is not enough to bail out and log an error, it is important to trigger leader election for those partitions
     }
   }
-
-
-
 
   def partitionsInState(state: PartitionState): Set[TopicAndPartition] = {
     partitionState.filter(p => p._2 == state).keySet
@@ -310,6 +316,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       case t: Throwable =>
         stateChangeLogger.error("Controller %d epoch %d initiated state change for partition %s from %s to %s failed"
           .format(controllerId, controller.epoch, topicAndPartition, currState, targetState), t)
+        topCallback(topCtx)
     }
   }
 
@@ -486,6 +493,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
     } catch {
       case lenne: LeaderElectionNotNeededException => // swallow
+        topCallback(topCtx)
       case nroe: NoReplicaOnlineException => throw nroe
       case sce: Throwable =>
         val failMsg = "encountered error while electing leader for partition %s due to: %s.".format(TopicAndPartition(topic, partition), sce.getMessage)
@@ -501,9 +509,10 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       // retry until it succeeds
       if (!updateSucceeded) {
         return electLeaderForPartitionAsync(topic, partition, leaderSelector, topCallback, topCtx)
+      } else {
+        electLeaderForPartitionPostZk(topic, partition, newLeaderAndIsr, newVersion)
+        topCallback(topCtx)
       }
-      electLeaderForPartitionPostZk(topic, partition, newLeaderAndIsr, newVersion)
-      topCallback(topCtx)
     }
   }
 
