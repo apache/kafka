@@ -15,25 +15,40 @@ package org.apache.kafka.common.utils;
 
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.ObjectOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.ObjectInputStream;
 
-/**
- * Created by praveendevarao on 14/01/16.
- */
 public class Serializer {
 
-    public void serialize(Object toSerialize) throws IOException {
+    public byte[] serialize(Object toSerialize) throws IOException {
+        byte[] byteArray = null;
         ByteArrayOutputStream arrayOutputStream = new ByteArrayOutputStream();
         ObjectOutputStream ooStream = new ObjectOutputStream(arrayOutputStream);
+
         ooStream.writeObject(toSerialize);
-        arrayOutputStream.close();
+        byteArray = arrayOutputStream.toByteArray();
+
         ooStream.close();
+        arrayOutputStream.close();
+        return byteArray;
     }
 
-    public Object deSerialize(String fileName) throws IOException, ClassNotFoundException {
+    public Object deserialize(byte[] byteArray) throws IOException, ClassNotFoundException {
+        ByteArrayInputStream arrayInputStream = new ByteArrayInputStream(byteArray);
+        ObjectInputStream inputStream = new ObjectInputStream(arrayInputStream);
+
+        Object deserializedObject = inputStream.readObject();
+
+        inputStream.close();
+        arrayInputStream.close();
+
+        return deserializedObject;
+    }
+
+    public Object deserialize(String fileName) throws IOException, ClassNotFoundException {
         ClassLoader classLoader = getClass().getClassLoader();
         File file = new File(classLoader.getResource(fileName).getFile());
         FileInputStream fis = new FileInputStream(file);

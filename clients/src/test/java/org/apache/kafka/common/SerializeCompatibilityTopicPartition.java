@@ -21,34 +21,47 @@ import java.io.IOException;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
 
+/**
+ * This test ensures TopicPartition class is serializable and is serialization compatible.
+ * Note: this ensures only serialization compatibility backwards but would not be able to ensure the reverse i.e.
+ * deserialize a object of new version of the class into a Old version class will not be ensured.
+ */
 public class SerializeCompatibilityTopicPartition extends Serializer {
 
-    public static String topicName = "mytopic";
-    public static int    partNum   = 5;
-    public static String fileName  = "serializedData/topicPartitionSerializedfile";
+    private String topicName = "mytopic";
+    private int    partNum   = 5;
+    private String fileName  = "serializedData/topicPartitionSerializedfile";
+
+    private void checkValues(TopicPartition deSerTP) {
+        //assert deserialized values are same as original
+        //not using assertEquals for partition number to ensure the type casting will catch any change in datatype
+        assertTrue("partition number should be " + partNum + " and of type int. Got " + deSerTP.partition(), partNum == (int) deSerTP.partition());
+        assertEquals("topic should be " + topicName + " but got " + deSerTP.topic(), topicName, deSerTP.topic());
+    }
 
     @Test
     public void testTopicPartitionSerialization() throws IOException, ClassNotFoundException {
-        //assert TopicPartition is serializable and de-serialization renders the clone of original properly
+        //assert TopicPartition is serializable and deserialization renders the clone of original properly
         TopicPartition origTp = new TopicPartition(topicName, partNum);
+        byte[] byteArray = serialize(origTp);
 
-        serialize(origTp);
 
-        // assert serialized TopicPartition object in file (tpserializedfile under resources folder) is
-        // de-serializable into TopicPartition and compatible
-        Object deserializedObject = deSerialize(fileName);
+        //deserialize the byteArray and check if the values are same as original
+        Object deserializedObject = deserialize(byteArray);
 
         assertTrue(deserializedObject instanceof TopicPartition);
 
-        if (deserializedObject instanceof TopicPartition) {
-            TopicPartition deSerTP = (TopicPartition) deserializedObject;
-            //assert topic is of type String
-            assertTrue("topic should be of type String", deSerTP.topic() instanceof String);
+        checkValues((TopicPartition) deserializedObject);
+    }
 
-            //assert de-serialized values are same as original
-            //not using assertEquals for partition number to ensure the type casting will catch any change in datatype
-            assertTrue("partition number should be " + partNum + " and of type int. Got " + deSerTP.partition(), partNum == (int) deSerTP.partition());
-            assertEquals("topic should be " + topicName + " but got " + deSerTP.topic(), topicName, deSerTP.topic());
-        }
+    @Test
+    public void testTopiPartitionSerializationCompatibility() throws IOException, ClassNotFoundException {
+        // assert serialized TopicPartition object in file (serializedData/topicPartitionSerializedfile) is
+        // deserializable into TopicPartition and is compatible
+        Object deserializedObject = deserialize(fileName);
+
+        assertTrue(deserializedObject instanceof TopicPartition);
+
+        checkValues((TopicPartition) deserializedObject);
     }
 }

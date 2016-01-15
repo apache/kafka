@@ -22,34 +22,45 @@ import java.io.IOException;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
 
+/**
+ * This test case ensures OffsetAndMetadata class is serializable and is serialization compatible.
+ * Note: this ensures only serialization compatibility backwards but would not be able to ensure the reverse i.e.
+ * deserialize a object of new version of the class into a Old version class will not be ensured.
+ */
 public class SerializeCompatibilityOffsetAndMetadata extends Serializer {
-    public static String metadata = "test commit metadata";
-    public static long    offset   = 10;
-    public static String fileName  = "serializedData/offsetAndMetadataSerializedfile";
+    private String metadata = "test commit metadata";
+    private long    offset   = 10;
+    private String fileName  = "serializedData/offsetAndMetadataSerializedfile";
+
+    private void checkValues(OffsetAndMetadata deSerOAM) {
+        //assert deserialized values are same as original
+        //not using assertEquals for offset to ensure the type casting will catch any change in datatype
+        assertTrue("Offset should be " + offset + " and of type long. Got " + deSerOAM.offset(), offset == (long) deSerOAM.offset());
+        assertEquals("metadata should be " + metadata + " but got " + deSerOAM.metadata(), metadata, deSerOAM.metadata());
+    }
 
     @Test
     public void testOffsetMetadataSerialization() throws IOException, ClassNotFoundException {
         //assert OffsetAndMetadata is serializable
         OffsetAndMetadata origOAM = new OffsetAndMetadata(offset, metadata);
+        byte[] byteArray =  serialize(origOAM);
 
-        serialize(origOAM);
-
-
-        // assert serialized OffsetAndMetadata object in file (oamserializedfile under resources folder) is
-        // de-serializable into OffsetAndMetadata and compatible
-        Object deserializedObject = deSerialize(fileName);
+        //deserialize the byteArray and check if the values are same as original
+        Object deserializedObject = deserialize(byteArray);
 
         assertTrue(deserializedObject instanceof OffsetAndMetadata);
 
-        if (deserializedObject instanceof OffsetAndMetadata) {
-            OffsetAndMetadata deSerOAM = (OffsetAndMetadata) deserializedObject;
-            //assert metadata is of type String
-            assertTrue(deSerOAM.metadata() instanceof String);
+        checkValues((OffsetAndMetadata) deserializedObject);
+    }
 
-            //assert de-serialized values are same as original
-            //not using assertEquals for offset to ensure the type casting will catch any change in datatype
-            assertTrue("Offset should be " + offset + " and of type long. Got " + deSerOAM.offset(), offset == (long) deSerOAM.offset());
-            assertEquals("metadata should be " + metadata + " but got " + deSerOAM.metadata(), metadata, deSerOAM.metadata());
-        }
+    @Test
+    public void testOffsetMetadataSerializationCompatibility() throws IOException, ClassNotFoundException {
+        // assert serialized OffsetAndMetadata object in file (oamserializedfile under resources folder) is
+        // deserializable into OffsetAndMetadata and is compatible
+        Object deserializedObject = deserialize(fileName);
+
+        assertTrue(deserializedObject instanceof OffsetAndMetadata);
+
+        checkValues((OffsetAndMetadata) deserializedObject);
     }
 }
