@@ -28,7 +28,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
