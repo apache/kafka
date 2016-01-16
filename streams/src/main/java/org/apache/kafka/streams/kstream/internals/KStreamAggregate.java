@@ -26,7 +26,9 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -84,7 +86,7 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
                 timeTo = windowStartMs > timeTo ? windowStartMs : timeTo;
             }
 
-            Iterator<KeyValue<Long, T>> iter = windowStore.fetch(key, timeFrom, timeTo);
+            WindowStoreIterator<T> iter = windowStore.fetch(key, timeFrom, timeTo);
 
             // for each matching window, try to update the corresponding key and send to the downstream
             while (iter.hasNext()) {
@@ -104,7 +106,7 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
                     // update the store with the new value
                     windowStore.put(key, newAgg, window.start());
 
-                    // send the new aggregate pair
+                    // forward the aggregated change pair
                     if (sendOldValues)
                         context().forward(new Windowed<>(key, window), new Change<>(newAgg, oldAgg));
                     else
@@ -113,6 +115,8 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
                     matchedWindows.remove(entry.key);
                 }
             }
+
+            iter.close();
 
             // create the new window for the rest of unmatched window that do not exist yet
             for (long windowStartMs : matchedWindows.keySet()) {

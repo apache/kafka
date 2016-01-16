@@ -307,6 +307,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                         windows.name() + "-this",
                         windows.maintainMs(),
                         windows.segments,
+                        true,
                         new Serdes<>("", keySerializer, keyDeserializer, thisValueSerializer, thisValueDeserializer),
                         null);
 
@@ -315,6 +316,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                         windows.name() + "-other",
                         windows.maintainMs(),
                         windows.segments,
+                        true,
                         new Serdes<>("", keySerializer, keyDeserializer, otherValueSerializer, otherValueDeserializer),
                         null);
 
@@ -361,6 +363,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                         windows.name() + "-this",
                         windows.maintainMs(),
                         windows.segments,
+                        true,
                         new Serdes<>("", keySerializer, keyDeserializer, otherValueSerializer, otherValueDeserializer),
                         null);
 
@@ -410,6 +413,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                         windows.name(),
                         windows.maintainMs(),
                         windows.segments,
+                        false,
                         new Serdes<>("", keySerializer, keyDeserializer, aggValueSerializer, aggValueDeserializer),
                         null);
 

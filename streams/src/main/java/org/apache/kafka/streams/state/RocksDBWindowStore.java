@@ -92,6 +92,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
                 iterators[index].remove();
         }
 
+        @Override
         public void close() {
             for (KeyValueIterator<byte[], byte[]> iterator : iterators) {
                 iterator.close();
@@ -101,6 +102,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     private final String name;
     private final long segmentInterval;
+    private final boolean retainDuplicates;
     private final Segment[] segments;
     private final Serdes<K, V> serdes;
     private final SimpleDateFormat formatter;
@@ -109,7 +111,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private long currentSegmentId = -1L;
     private int seqnum = 0;
 
-    public RocksDBWindowStore(String name, long retentionPeriod, int numSegments, Serdes<K, V> serdes) {
+    public RocksDBWindowStore(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serdes<K, V> serdes) {
         this.name = name;
 
         // The segment interval must be greater than MIN_SEGMENT_INTERVAL
@@ -117,6 +119,8 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
         this.segments = new Segment[numSegments];
         this.serdes = serdes;
+
+        this.retainDuplicates = retainDuplicates;
 
         // Create a date formatter. Formatted timestamps are used as segment name suffixes
         this.formatter = new SimpleDateFormat("yyyyMMddHHmm");
@@ -178,7 +182,8 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
         // If the record is within the retention period, put it in the store.
         if (segmentId > currentSegmentId - segments.length) {
-            seqnum = (seqnum + 1) & 0x7FFFFFFF;
+            if (retainDuplicates)
+                seqnum = (seqnum + 1) & 0x7FFFFFFF;
             byte[] binaryKey = WindowStoreUtil.toBinaryKey(key, timestamp, seqnum, serdes);
             getSegment(segmentId).put(binaryKey, serdes.rawValue(value));
             return binaryKey;
