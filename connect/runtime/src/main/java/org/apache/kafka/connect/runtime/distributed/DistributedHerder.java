@@ -758,9 +758,11 @@ public class DistributedHerder implements Herder, Runnable {
     }
 
     // Common handling for requests that get config data. Checks if we are in sync with the current config, which allows
-    // us to answer requests directly. If we are not, handles invoking the callback with the appropriate error.
+    // us to answer requests directly. If we are not, handles invoking the callback with the appropriate error;
+    // Note that the configState's offset can be bigger than assignment's offset; Because if updating an existing
+    // connector, the connector can pick up the config change without a rebalance;
     private boolean checkConfigSynced(Callback<?> callback) {
-        if (assignment == null || configState.offset() != assignment.offset()) {
+        if (assignment == null || configState.offset() < assignment.offset()) {
             if (!isLeader())
                 callback.onCompletion(new NotLeaderException("Cannot get config data because config is not in sync and this is not the leader", leaderUrl()), null);
             else
