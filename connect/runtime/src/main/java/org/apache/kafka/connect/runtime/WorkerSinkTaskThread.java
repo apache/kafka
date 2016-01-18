@@ -67,11 +67,9 @@ class WorkerSinkTaskThread extends ShutdownableThread {
 
         // Maybe commit
         if (!committing && now >= nextCommit) {
-            synchronized (this) {
-                committing = true;
-                commitSeqno += 1;
-                commitStarted = now;
-            }
+            committing = true;
+            commitSeqno += 1;
+            commitStarted = now;
             task.commitOffsets(false, commitSeqno);
             nextCommit += task.workerConfig().getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
         }
@@ -91,22 +89,20 @@ class WorkerSinkTaskThread extends ShutdownableThread {
     }
 
     public void onCommitCompleted(Throwable error, long seqno) {
-        synchronized (this) {
-            if (commitSeqno != seqno) {
-                log.debug("Got callback for timed out commit {}: {}, but most recent commit is {}",
-                        this,
-                        seqno, commitSeqno);
+        if (commitSeqno != seqno) {
+            log.debug("Got callback for timed out commit {}: {}, but most recent commit is {}",
+                    this,
+                    seqno, commitSeqno);
+        } else {
+            if (error != null) {
+                log.error("Commit of {} offsets threw an unexpected exception: ", task, error);
+                commitFailures++;
             } else {
-                if (error != null) {
-                    log.error("Commit of {} offsets threw an unexpected exception: ", task, error);
-                    commitFailures++;
-                } else {
-                    log.debug("Finished {} offset commit successfully in {} ms",
-                            task, task.time().milliseconds() - commitStarted);
-                    commitFailures = 0;
-                }
-                committing = false;
+                log.debug("Finished {} offset commit successfully in {} ms",
+                        task, task.time().milliseconds() - commitStarted);
+                commitFailures = 0;
             }
+            committing = false;
         }
     }
 

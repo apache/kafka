@@ -29,6 +29,7 @@ import java.util.concurrent.TimeUnit
 import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.network.TransportLayer
+import org.apache.kafka.common.utils.Utils
 
 /**
  * An on-disk message set. An optional start and end position can be applied to the message set
@@ -291,12 +292,11 @@ class FileMessageSet private[kafka](@volatile var file: File,
 
   /**
    * Rename the file that backs this message set
-   * @return true iff the rename was successful
+   * @throws IOException if rename fails.
    */
-  def renameTo(f: File): Boolean = {
-    val success = this.file.renameTo(f)
-    this.file = f
-    success
+  def renameTo(f: File) {
+    try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+    finally this.file = f
   }
 
 }
