@@ -51,6 +51,14 @@ public abstract class Type {
      */
     public abstract int sizeOf(Object o);
 
+    /**
+     * Check if the type supports null values
+     * @return whether or not null is a valid value for the type implementation
+     */
+    public boolean isNullable() {
+        return false;
+    }
+
     public static final Type INT8 = new Type() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
@@ -246,5 +254,64 @@ public abstract class Type {
                 throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
         }
     };
+
+    public static final Type NULLABLE_BYTES = new Type() {
+        @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o == null) {
+                buffer.putInt(-1);
+                return;
+            }
+
+            ByteBuffer arg = (ByteBuffer) o;
+            int pos = arg.position();
+            buffer.putInt(arg.remaining());
+            buffer.put(arg);
+            arg.position(pos);
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            int size = buffer.getInt();
+            if (size < 0)
+                return null;
+
+            ByteBuffer val = buffer.slice();
+            val.limit(size);
+            buffer.position(buffer.position() + size);
+            return val;
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            if (o == null)
+                return 4;
+
+            ByteBuffer buffer = (ByteBuffer) o;
+            return 4 + buffer.remaining();
+        }
+
+        @Override
+        public String toString() {
+            return "NULLABLE_BYTES";
+        }
+
+        @Override
+        public ByteBuffer validate(Object item) {
+            if (item == null)
+                return null;
+
+            if (item instanceof ByteBuffer)
+                return (ByteBuffer) item;
+
+            throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
+        }
+    };
+
 
 }

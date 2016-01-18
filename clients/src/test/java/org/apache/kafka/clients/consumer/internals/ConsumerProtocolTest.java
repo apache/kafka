@@ -33,16 +33,25 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class ConsumerProtocolTest {
 
     @Test
     public void serializeDeserializeMetadata() {
         Subscription subscription = new Subscription(Arrays.asList("foo", "bar"));
-
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
         Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
         assertEquals(subscription.topics(), parsedSubscription.topics());
+    }
+
+    @Test
+    public void serializeDeserializeNullSubscriptionUserData() {
+        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"), null);
+        ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
+        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
+        assertEquals(subscription.topics(), parsedSubscription.topics());
+        assertNull(subscription.userData());
     }
 
     @Test
@@ -79,6 +88,15 @@ public class ConsumerProtocolTest {
         ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(partitions));
         PartitionAssignor.Assignment parsedAssignment = ConsumerProtocol.deserializeAssignment(buffer);
         assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
+    }
+
+    @Test
+    public void deserializeNullAssignmentUserData() {
+        List<TopicPartition> partitions = Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 2));
+        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(partitions, null));
+        PartitionAssignor.Assignment parsedAssignment = ConsumerProtocol.deserializeAssignment(buffer);
+        assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
+        assertNull(parsedAssignment.userData());
     }
 
     @Test
