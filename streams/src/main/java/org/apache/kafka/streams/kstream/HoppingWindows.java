@@ -19,8 +19,8 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.kstream.internals.HoppingWindow;
 
-import java.util.Collection;
-import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 public class HoppingWindows extends Windows<HoppingWindow> {
 
@@ -62,9 +62,22 @@ public class HoppingWindows extends Windows<HoppingWindow> {
     }
 
     @Override
-    public Collection<HoppingWindow> windowsFor(long timestamp) {
-        // TODO
-        return Collections.<HoppingWindow>emptyList();
+    public Map<Long, HoppingWindow> windowsFor(long timestamp) {
+        long enclosed = (size - 1) / period;
+
+        long windowStart = Math.max(0, timestamp - timestamp % period - enclosed * period);
+
+        Map<Long, HoppingWindow> windows = new HashMap<>();
+        while (windowStart <= timestamp) {
+            // add the window
+            HoppingWindow window = new HoppingWindow(windowStart, windowStart + this.size);
+            windows.put(windowStart, window);
+
+            // advance the step period
+            windowStart += this.period;
+        }
+
+        return windows;
     }
 
     @Override

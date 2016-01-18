@@ -20,6 +20,7 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.text.SimpleDateFormat;
@@ -33,6 +34,8 @@ import java.util.SimpleTimeZone;
 public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     public static final long MIN_SEGMENT_INTERVAL = 60 * 1000; // one minute
+
+    private static final long USE_CURRENT_TIMESTAMP = -1L;
 
     private static class Segment extends RocksDBStore<byte[], byte[]> {
         public final long id;
@@ -73,11 +76,14 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
 
         @Override
-        public V next() {
+        public KeyValue<Long, V> next() {
             if (index >= iterators.length)
                 throw new NoSuchElementException();
 
-            return serdes.valueFrom(iterators[index].next().value());
+            Entry<byte[], byte[]> entry = iterators[index].next();
+
+            return new KeyValue<>(WindowStoreUtil.timestampFromBinaryKey(entry.key()),
+                                  serdes.valueFrom(entry.value()));
         }
 
         @Override
@@ -86,6 +92,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
                 iterators[index].remove();
         }
 
+        @Override
         public void close() {
             for (KeyValueIterator<byte[], byte[]> iterator : iterators) {
                 iterator.close();
@@ -94,9 +101,8 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     private final String name;
-    private final long windowBefore;
-    private final long windowAfter;
     private final long segmentInterval;
+    private final boolean retainDuplicates;
     private final Segment[] segments;
     private final Serdes<K, V> serdes;
     private final SimpleDateFormat formatter;
@@ -105,20 +111,16 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private long currentSegmentId = -1L;
     private int seqnum = 0;
 
-    public RocksDBWindowStore(String name, long windowBefore, long windowAfter, long retentionPeriod, int numSegments, Serdes<K, V> serdes) {
+    public RocksDBWindowStore(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serdes<K, V> serdes) {
         this.name = name;
-        this.windowBefore = windowBefore;
-        this.windowAfter = windowAfter;
-
-        // The retention period must be at least two times as long as the total window size
-        if ((this.windowBefore + this.windowAfter + 1) * 2 > retentionPeriod)
-            retentionPeriod = (this.windowBefore + this.windowAfter + 1) * 2;
 
         // The segment interval must be greater than MIN_SEGMENT_INTERVAL
         this.segmentInterval = Math.max(retentionPeriod / (numSegments - 1), MIN_SEGMENT_INTERVAL);
 
         this.segments = new Segment[numSegments];
         this.serdes = serdes;
+
+        this.retainDuplicates = retainDuplicates;
 
         // Create a date formatter. Formatted timestamps are used as segment name suffixes
         this.formatter = new SimpleDateFormat("yyyyMMddHHmm");
@@ -158,12 +160,18 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void put(K key, V value) {
-        putAndReturnInternalKey(key, value);
+        putAndReturnInternalKey(key, value, USE_CURRENT_TIMESTAMP);
     }
 
     @Override
-    public byte[] putAndReturnInternalKey(K key, V value) {
-        long timestamp = context.timestamp();
+    public void put(K key, V value, long timestamp) {
+        putAndReturnInternalKey(key, value, timestamp);
+    }
+
+    @Override
+    public byte[] putAndReturnInternalKey(K key, V value, long t) {
+        long timestamp = t == USE_CURRENT_TIMESTAMP ? context.timestamp() : t;
+
         long segmentId = segmentId(timestamp);
 
         if (segmentId > currentSegmentId) {
@@ -174,7 +182,8 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
         // If the record is within the retention period, put it in the store.
         if (segmentId > currentSegmentId - segments.length) {
-            seqnum = (seqnum + 1) & 0x7FFFFFFF;
+            if (retainDuplicates)
+                seqnum = (seqnum + 1) & 0x7FFFFFFF;
             byte[] binaryKey = WindowStoreUtil.toBinaryKey(key, timestamp, seqnum, serdes);
             getSegment(segmentId).put(binaryKey, serdes.rawValue(value));
             return binaryKey;
@@ -213,10 +222,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public WindowStoreIterator<V> fetch(K key, long timestamp) {
-        long timeFrom = Math.max(0L, timestamp - windowBefore);
-        long timeTo = Math.max(0L, timestamp + windowAfter);
-
+    public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
         long segFrom = segmentId(timeFrom);
         long segTo = segmentId(Math.max(0L, timeTo));
 

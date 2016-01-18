@@ -23,12 +23,12 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamKTableLeftJoin<K, V, V1, V2> implements ProcessorSupplier<K, V1> {
+class KStreamKTableLeftJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
     private final KTableValueGetterSupplier<K, V2> valueGetterSupplier;
-    private final ValueJoiner<V1, V2, V> joiner;
+    private final ValueJoiner<V1, V2, R> joiner;
 
-    KStreamKTableLeftJoin(KTableImpl<K, ?, V2> table, ValueJoiner<V1, V2, V> joiner) {
+    KStreamKTableLeftJoin(KTableImpl<K, ?, V2> table, ValueJoiner<V1, V2, R> joiner) {
         this.valueGetterSupplier = table.valueGetterSupplier();
         this.joiner = joiner;
     }

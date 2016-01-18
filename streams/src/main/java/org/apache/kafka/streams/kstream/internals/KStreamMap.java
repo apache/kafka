@@ -23,23 +23,23 @@ import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamMap<K1, V1, K2, V2> implements ProcessorSupplier<K1, V1> {
+class KStreamMap<K, V, K1, V1> implements ProcessorSupplier<K, V> {
 
-    private final KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper;
+    private final KeyValueMapper<K, V, KeyValue<K1, V1>> mapper;
 
-    public KStreamMap(KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper) {
+    public KStreamMap(KeyValueMapper<K, V, KeyValue<K1, V1>> mapper) {
         this.mapper = mapper;
     }
 
     @Override
-    public Processor<K1, V1> get() {
+    public Processor<K, V> get() {
         return new KStreamMapProcessor();
     }
 
-    private class KStreamMapProcessor extends AbstractProcessor<K1, V1> {
+    private class KStreamMapProcessor extends AbstractProcessor<K, V> {
         @Override
-        public void process(K1 key, V1 value) {
-            KeyValue<K2, V2> newPair = mapper.apply(key, value);
+        public void process(K key, V value) {
+            KeyValue<K1, V1> newPair = mapper.apply(key, value);
             context().forward(newPair.key, newPair.value);
         }
     }

@@ -17,29 +17,35 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamMapValues<K, V, V1> implements ProcessorSupplier<K, V> {
-
-    private final ValueMapper<V, V1> mapper;
-
-    public KStreamMapValues(ValueMapper<V, V1> mapper) {
-        this.mapper = mapper;
-    }
+public class KStreamAggWindow<K, V> implements ProcessorSupplier<K, V> {
 
     @Override
     public Processor<K, V> get() {
-        return new KStreamMapProcessor();
+        return new KStreamAggWindowProcessor();
     }
 
-    private class KStreamMapProcessor extends AbstractProcessor<K, V> {
+    private class KStreamAggWindowProcessor extends AbstractProcessor<K, V> {
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void init(ProcessorContext context) {
+            super.init(context);
+        }
+
         @Override
         public void process(K key, V value) {
-            V1 newValue = mapper.apply(value);
-            context().forward(key, newValue);
+            // create a dummy window just for wrapping the timestamp
+            long timestamp = context().timestamp();
+
+            // send the new aggregate value
+            context().forward(new Windowed<>(key, new UnlimitedWindow(timestamp)), new Change<>(value, null));
         }
     }
+
 }
