@@ -60,7 +60,7 @@ public class WordCountJob {
         final Serializer<String> stringSerializer = new StringSerializer();
         final Deserializer<String> stringDeserializer = new StringDeserializer();
 
-        KStream<String, String> source = builder.stream("streams-input");
+        KStream<String, String> source = builder.stream("streams-file-input");
 
         KTable<Windowed<String>, String> counts = source
                 .flatMapValues(new ValueMapper<String, Iterable<String>>() {

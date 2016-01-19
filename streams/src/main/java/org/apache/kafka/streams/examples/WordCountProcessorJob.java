@@ -98,7 +98,7 @@ public class WordCountProcessorJob {
 
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
-        props.put(StreamingConfig.JOB_ID_CONFIG, "streams-wordcount-processor4");
+        props.put(StreamingConfig.JOB_ID_CONFIG, "streams-wordcount-processor");
         props.put(StreamingConfig.STATE_DIR_CONFIG, "/tmp/streams");
         props.put(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamingConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
@@ -114,12 +114,12 @@ public class WordCountProcessorJob {
 
         TopologyBuilder builder = new TopologyBuilder();
 
-        builder.addSource("Source", "streams-input");
+        builder.addSource("Source", "streams-file-input");
 
         builder.addProcessor("Process", new MyProcessorSupplier(), "Source");
         builder.addStateStore(Stores.create("Counts").withStringKeys().withIntegerValues().inMemory().build(), "Process");
 
-        builder.addSink("Sink", "streams-wordcount-processor-output", "Process");
+        builder.addSink("Sink", "streams-wordcount-output", "Process");
 
         KafkaStreaming streaming = new KafkaStreaming(builder, config);
         streaming.start();

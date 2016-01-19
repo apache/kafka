@@ -59,11 +59,11 @@ public class PageViewJob {
         final Serializer<String> stringSerializer = new StringSerializer();
         final Deserializer<String> stringDeserializer = new StringDeserializer();
 
-        KStream<String, JsonNode> views = builder.stream("streams-pageview");
+        KStream<String, JsonNode> views = builder.stream("streams-pageview-input");
 
         KStream<String, JsonNode> viewsByUser = views.map((dummy, record) -> new KeyValue<>(record.get("user").textValue(), record));
 
-        KTable<String, JsonNode> users = builder.table("streams-userprofile");
+        KTable<String, JsonNode> users = builder.table("streams-userprofile-input");
 
         KTable<String, String> userRegions = users.mapValues(record -> record.get("region").textValue());
 
@@ -85,7 +85,7 @@ public class PageViewJob {
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageview-stats", new Serializer<Windowed<String>>() {
+        regionCount.to("streams-pageviewstats-output", new Serializer<Windowed<String>>() {
             @Override
             public void configure(Map<String, ?> configs, boolean isKey) {
                 // do nothing
