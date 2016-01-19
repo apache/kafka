@@ -46,8 +46,11 @@ public abstract class AbstractStream<K> {
 
     protected Set<String> ensureJoinableWith(AbstractStream<K> other) {
 
-        if (this.keyType == null || other.keyType == null)
-            throw new InsufficientTypeInfoException();
+        if (this.keyType == null)
+            throw new InsufficientTypeInfoException("key type of this stream");
+
+        if (other.keyType == null)
+            throw new InsufficientTypeInfoException("key type of other stream");
 
         if (!this.keyType.equals(other.keyType))
             throw new TopologyException("not joinable: key types do not match");
@@ -77,18 +80,11 @@ public abstract class AbstractStream<K> {
     }
 
     protected <T> Serializer<T> getSerializer(Type type) {
-        return getSerializer(type, null);
-    }
-
-    protected <T> Serializer<T> getSerializer(Type type, Serializer<T> defaultSerializer) {
 
         if (type == null)
             throw new InsufficientTypeInfoException();
 
         Serializer<T> serializer = topology.getSerializer(type);
-
-        if (serializer == null)
-            serializer = defaultSerializer;
 
         if (serializer == null)
             throw new TopologyException("unable to find a serializer for a type " + type);
@@ -97,18 +93,11 @@ public abstract class AbstractStream<K> {
     }
 
     protected <T> Deserializer<T> getDeserializer(Type type) {
-        return getDeserializer(type, null);
-    }
-
-    protected <T> Deserializer<T> getDeserializer(Type type, Deserializer<T> defaultDeserializer) {
 
         if (type == null)
             throw new InsufficientTypeInfoException();
 
         Deserializer<T> deserializer = topology.getDeserializer(type);
-
-        if (deserializer == null)
-            deserializer = defaultDeserializer;
 
         if (deserializer == null)
             throw new TopologyException("unable to find a serializer for a type " + type);

@@ -42,6 +42,8 @@ public class KStreamBuilder extends TopologyBuilder {
     private final AtomicInteger index = new AtomicInteger(0);
     private final Map<Type, Serializer> registeredSerializers = new HashMap<>();
     private final Map<Type, Deserializer> registeredDeserializers = new HashMap<>();
+    private Serializer defaultSerializer = null;
+    private Deserializer defaultDeserializer = null;
 
     /**
      * Defines an explicit type information. It is used when registering a serializer and/or a deserializer for a type.
@@ -75,7 +77,7 @@ public class KStreamBuilder extends TopologyBuilder {
     }
 
     /**
-     * Register a default serializer for the specified type.
+     * Register a serializer for the specified type.
      * <p>
      * Examples,
      * <pre>
@@ -85,7 +87,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * </p>
      *
      * @param type the Class instance or Type instance created by Type.define() method
-     * @param serializer the default Serializer instance for this type
+     * @param serializer the instance of Serializer for this type
      */
     public void register(Type type, Serializer<?> serializer) {
         try {
@@ -112,7 +114,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * </p>
      *
      * @param type the Class instance or Type instance created by Type.define() method
-     * @param deserializer the default Deserializer instance for this type
+     * @param deserializer the instance of Deserializer for this type
      */
     public void register(Type type, Deserializer<?> deserializer) {
         try {
@@ -129,7 +131,7 @@ public class KStreamBuilder extends TopologyBuilder {
     }
 
     /**
-     * Register a default serializer and a default deserializer for the specified type.
+     * Register a serializer and a deserializer for the specified type.
      * <p>
      * Examples,
      * <pre>
@@ -140,12 +142,47 @@ public class KStreamBuilder extends TopologyBuilder {
      * </p>
      *
      * @param type the Class instance or Type instance created by Type.define() method
+     * @param serializer the instance of Serializer for this type
+     * @param deserializer the instance Deserializer for this type
+     */
+    public void register(Type type, Serializer<?> serializer, Deserializer<?> deserializer) {
+        register(type, serializer);
+        register(type, deserializer);
+    }
+
+    /**
+     * Register a default serializer.
+     *
+     * @param serializer the instance of the default Serializer
+     */
+    public void registerDefault(Serializer<?> serializer) {
+        if (defaultSerializer != null)
+            throw new TopologyException("the default serializer already registered");
+
+        defaultSerializer = serializer;
+    }
+
+    /**
+     * Register a default deserializer.
+     *
+     * @param deserializer the instance of the default Deserializer
+     */
+    public void registerDefault(Deserializer<?> deserializer) {
+        if (defaultDeserializer == null)
+            throw new TopologyException("the default deserializer already registered");
+
+        defaultDeserializer = deserializer;
+    }
+
+    /**
+     * Register a default serializer and a default deserializer for the specified type.
+     *
      * @param serializer the default Serializer instance for this type
      * @param deserializer the default Deserializer instance for this type
      */
-    public void register(java.lang.reflect.Type type, Serializer<?> serializer, Deserializer<?> deserializer) {
-        register(type, serializer);
-        register(type, deserializer);
+    public void registerDefault(Serializer<?> serializer, Deserializer<?> deserializer) {
+        registerDefault(serializer);
+        registerDefault(deserializer);
     }
 
 
@@ -200,10 +237,7 @@ public class KStreamBuilder extends TopologyBuilder {
 
             String name = newName(KStreamImpl.SOURCE_NAME);
 
-            addSource(name,
-                    registeredDeserializers.get(convertedKeyType),
-                    registeredDeserializers.get(convertedValueType),
-                    topics);
+            addSource(name, getDeserializer(convertedKeyType), getDeserializer(convertedValueType), topics);
 
             return new KStreamImpl<>(this, name, Collections.singleton(name), convertedKeyType, convertedValueType);
 
@@ -309,21 +343,25 @@ public class KStreamBuilder extends TopologyBuilder {
         return prefix + String.format("%010d", index.getAndIncrement());
     }
 
+    @SuppressWarnings("unchecked")
     public <T> Serializer<T> getSerializer(Type type) {
         if (type != null) {
-            return registeredSerializers.get(type);
+            return nvl(registeredSerializers.get(type), defaultSerializer);
         } else {
-            return null;
+            return defaultSerializer;
         }
     }
 
+    @SuppressWarnings("unchecked")
     public <T> Deserializer<T> getDeserializer(Type type) {
         if (type != null) {
-            return registeredDeserializers.get(type);
+            return nvl(registeredDeserializers.get(type), defaultDeserializer);
         } else {
-            return null;
+            return defaultDeserializer;
         }
     }
 
-
+    private static <T> T nvl(T value, T defaultValue) {
+        return (value == null) ? defaultValue : value;
+    }
 }

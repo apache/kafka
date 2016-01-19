@@ -27,4 +27,8 @@ public class InsufficientTypeInfoException extends TopologyException {
         super("insufficient type information");
     }
 
+    public InsufficientTypeInfoException(String msg) {
+        super("insufficient type information: " + msg);
+    }
+
 }

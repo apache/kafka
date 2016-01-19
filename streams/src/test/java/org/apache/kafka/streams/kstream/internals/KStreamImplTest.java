@@ -118,7 +118,7 @@ public class KStreamImplTest {
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of("join-0"));
+        }, JoinWindows.of("join-0")).returns(String.class, Integer.class);
 
         KStream<String, Integer> stream5 = streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
             @Override

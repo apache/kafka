@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.AggregatorSupplier;
+import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -39,6 +40,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TopologyException;
 import org.apache.kafka.streams.state.RocksDBWindowStoreSupplier;
 import org.apache.kafka.streams.state.Serdes;
 
@@ -213,26 +215,56 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                  Deserializer<V> valDeserializer) {
         to(topic, keySerializer, valSerializer);
 
-        return topology.stream(keyDeserializer, valDeserializer, topic);
+        if (keyDeserializer == null)
+            throw new TopologyException("null deserializer for key");
+
+        if (valDeserializer == null)
+            throw new TopologyException("null deserializer for value");
+
+        return topology.stream(keyDeserializer, valDeserializer, topic).returns(keyType, valueType);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public KStream<K, V> through(String topic) {
-        return through(topic, null, null, null, null);
+        if (keyType == null)
+            throw new InsufficientTypeInfoException("key type");
+
+        if (valueType == null)
+            throw new InsufficientTypeInfoException("value type");
+
+        return through(topic,
+                (Serializer<K>) getSerializer(keyType),
+                (Serializer<V>) getSerializer(valueType),
+                (Deserializer<K>) getDeserializer(keyType),
+                (Deserializer<V>) getDeserializer(valueType));
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void to(String topic) {
-        to(topic, null, null);
+        if (keyType == null)
+            throw new InsufficientTypeInfoException("key type");
+
+        if (valueType == null)
+            throw new InsufficientTypeInfoException("value type");
+
+        to(topic, (Serializer<K>) getSerializer(keyType), (Serializer<V>) getSerializer(valueType));
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
+        if (keySerializer == null)
+            throw new TopologyException("null serializer for key");
+
+        if (valSerializer == null)
+            throw new TopologyException("null serializer for value");
+
         String name = topology.newName(SINK_NAME);
         StreamPartitioner<K, V> streamPartitioner = null;
 
-        if (keySerializer != null && keySerializer instanceof WindowedSerializer) {
+        if (keySerializer instanceof WindowedSerializer) {
             WindowedSerializer<Object> windowedSerializer = (WindowedSerializer<Object>) keySerializer;
             streamPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(windowedSerializer);
         }

@@ -67,7 +67,7 @@ public interface KTable<K, V> {
 
     /**
      * Sends key-value to a topic, also creates a new instance of KTable from the topic.
-     * This is equivalent to calling to(topic) and table(topic).
+     * The serializers/deserializers are determined from the key/value type infos of this stream.
      *
      * @param topic           the topic name
      * @return the instance of KTable that consumes the given topic
@@ -79,20 +79,17 @@ public interface KTable<K, V> {
      * This is equivalent to calling to(topic) and table(topic).
      *
      * @param topic           the topic name
-     * @param keySerializer   key serializer used to send key-value pairs,
-     *                        if not specified the default key serializer defined in the configuration will be used
-     * @param valSerializer   value serializer used to send key-value pairs,
-     *                        if not specified the default value serializer defined in the configuration will be used
-     * @param keyDeserializer key deserializer used to create the new KStream,
-     *                        if not specified the default key deserializer defined in the configuration will be used
-     * @param valDeserializer value deserializer used to create the new KStream,
-     *                        if not specified the default value deserializer defined in the configuration will be used
+     * @param keySerializer   key serializer used to send key-value pairs
+     * @param valSerializer   value serializer used to send key-value pairs
+     * @param keyDeserializer key deserializer used to create the new KStream
+     * @param valDeserializer value deserializer used to create the new KStream
      * @return the new stream that consumes the given topic
      */
     KTable<K, V> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer);
 
     /**
      * Sends key-value to a topic using default serializers specified in the config.
+     * The serializers/deserializers are determined from the key/value type infos of this stream.
      *
      * @param topic         the topic name
      */
@@ -102,10 +99,8 @@ public interface KTable<K, V> {
      * Sends key-value to a topic.
      *
      * @param topic         the topic name
-     * @param keySerializer key serializer used to send key-value pairs,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param valSerializer value serializer used to send key-value pairs,
-     *                      if not specified the default serializer defined in the configs will be used
+     * @param keySerializer key serializer used to send key-value pairs
+     * @param valSerializer value serializer used to send key-value pairs
      */
     void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer);
 
