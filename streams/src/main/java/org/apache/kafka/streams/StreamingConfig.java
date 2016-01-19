@@ -121,12 +121,12 @@ public class StreamingConfig extends AbstractConfig {
         CONFIG = new ConfigDef().define(JOB_ID_CONFIG,
                                         Type.STRING,
                                         "",
-                                        Importance.MEDIUM,
+                                        Importance.HIGH,
                                         StreamingConfig.JOB_ID_DOC)
                                 .define(CLIENT_ID_CONFIG,
                                         Type.STRING,
                                         "",
-                                        Importance.MEDIUM,
+                                        Importance.HIGH,
                                         CommonClientConfigs.CLIENT_ID_DOC)
                                 .define(ZOOKEEPER_CONNECT_CONFIG,
                                         Type.STRING,
@@ -141,7 +141,7 @@ public class StreamingConfig extends AbstractConfig {
                                 .define(COMMIT_INTERVAL_MS_CONFIG,
                                         Type.LONG,
                                         30000,
-                                        Importance.HIGH,
+                                        Importance.MEDIUM,
                                         COMMIT_INTERVAL_MS_DOC)
                                 .define(POLL_MS_CONFIG,
                                         Type.LONG,
@@ -179,25 +179,25 @@ public class StreamingConfig extends AbstractConfig {
                                         ProducerConfig.KEY_SERIALIZER_CLASS_DOC)
                                 .define(VALUE_SERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
-                                        Importance.HIGH,
+                                        Importance.LOW,
                                         ProducerConfig.VALUE_SERIALIZER_CLASS_DOC)
                                 .define(KEY_DESERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
-                                        Importance.HIGH,
+                                        Importance.LOW,
                                         ConsumerConfig.KEY_DESERIALIZER_CLASS_DOC)
                                 .define(VALUE_DESERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
-                                        Importance.HIGH,
+                                        Importance.LOW,
                                         ConsumerConfig.VALUE_DESERIALIZER_CLASS_DOC)
                                 .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                                         Type.CLASS,
                                         WALLCLOCK_TIMESTAMP_EXTRACTOR,
-                                        Importance.HIGH,
+                                        Importance.LOW,
                                         TIMESTAMP_EXTRACTOR_CLASS_DOC)
                                 .define(PARTITION_GROUPER_CLASS_CONFIG,
                                         Type.CLASS,
                                         DefaultPartitionGrouper.class,
-                                        Importance.HIGH,
+                                        Importance.LOW,
                                         PARTITION_GROUPER_CLASS_DOC)
                                 .define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.STRING,
