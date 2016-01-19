@@ -137,6 +137,44 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 
+  @Test
+  def testBrokerMetadataOnIdCollision() {
+    // Start a good server
+    val propsA = TestUtils.createBrokerConfig(1, zkConnect)
+    val configA = KafkaConfig.fromProps(propsA)
+    val serverA = new KafkaServer(configA)
+    serverA.startup()
+
+    // Start a server that collides on the broker id
+    val propsB = TestUtils.createBrokerConfig(1, zkConnect)
+    val configB = KafkaConfig.fromProps(propsB)
+    val serverB = new KafkaServer(configB)
+    intercept[RuntimeException] {
+      serverB.startup()
+    }
+
+    // verify no broker metadata was written
+    serverB.config.logDirs.foreach { logDir =>
+      val brokerMetaFile = new File(logDir + File.separator + brokerMetaPropsFile)
+      assertFalse(brokerMetaFile.exists())
+    }
+
+    // adjust the broker config and start again
+    propsB.setProperty(KafkaConfig.BrokerIdProp, "2")
+    val newConfigB = KafkaConfig.fromProps(propsB)
+    val newServerB = new KafkaServer(newConfigB)
+    newServerB.startup()
+
+    serverA.shutdown()
+    newServerB.shutdown()
+    // verify correct broker metadata was written
+    assertTrue(verifyBrokerMetadata(serverA.config.logDirs,1))
+    assertTrue(verifyBrokerMetadata(newServerB.config.logDirs,2))
+    CoreUtils.rm(serverA.config.logDirs)
+    CoreUtils.rm(newServerB.config.logDirs)
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+  }
+
   def verifyBrokerMetadata(logDirs: Seq[String], brokerId: Int): Boolean = {
     for(logDir <- logDirs) {
       val brokerMetadataOpt = (new BrokerMetadataCheckpoint(
