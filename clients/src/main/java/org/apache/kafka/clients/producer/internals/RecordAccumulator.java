@@ -374,15 +374,18 @@ public final class RecordAccumulator {
     }
 
     /**
-     * Get the deque for the given topic-partition, creating it if necessary. Since new topics will only be added rarely
-     * we copy-on-write the hashmap
+     * Get the deque for the given topic-partition, creating it if necessary.
      */
     private Deque<RecordBatch> dequeFor(TopicPartition tp) {
         Deque<RecordBatch> d = this.batches.get(tp);
         if (d != null)
             return d;
-        this.batches.putIfAbsent(tp, new ArrayDeque<RecordBatch>());
-        return this.batches.get(tp);
+        d = new ArrayDeque<>();
+        Deque<RecordBatch> previous = this.batches.putIfAbsent(tp, d);
+        if (previous == null)
+            return d;
+        else
+            return previous;
     }
 
     /**
