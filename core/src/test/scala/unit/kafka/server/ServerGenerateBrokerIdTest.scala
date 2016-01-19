@@ -82,6 +82,22 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testDisableGeneratedBrokerId() {
+    val props3 = TestUtils.createBrokerConfig(3, zkConnect)
+    props3.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
+    // Set reserve broker ids to cause collision and ensure disabling broker id generation ignores the setting
+    props3.put(KafkaConfig.MaxReservedBrokerIdProp, "0")
+    val config3 = KafkaConfig.fromProps(props3)
+    val server3 = new KafkaServer(config3)
+    server3.startup()
+    assertEquals(server3.config.brokerId,3)
+    server3.shutdown()
+    assertTrue(verifyBrokerMetadata(server3.config.logDirs,3))
+    CoreUtils.rm(server3.config.logDirs)
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+  }
+
+  @Test
   def testMultipleLogDirsMetaProps() {
     // add multiple logDirs and check if the generate brokerId is stored in all of them
     val logDirs = props1.getProperty("log.dir")+ "," + TestUtils.tempDir().getAbsolutePath +
