@@ -17,10 +17,14 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.processor.TopologyException;
 
+import java.lang.reflect.Type;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -29,19 +33,30 @@ public abstract class AbstractStream<K> {
     protected final KStreamBuilder topology;
     protected final String name;
     protected final Set<String> sourceNodes;
+    protected final Type keyType;
+    protected final Type valueType;
 
-    public AbstractStream(KStreamBuilder topology, String name, Set<String> sourceNodes) {
+    public AbstractStream(KStreamBuilder topology, String name, Set<String> sourceNodes, Type keyType, Type valueType) {
         this.topology = topology;
         this.name = name;
         this.sourceNodes = sourceNodes;
+        this.keyType = keyType;
+        this.valueType = valueType;
     }
 
     protected Set<String> ensureJoinableWith(AbstractStream<K> other) {
+
+        if (this.keyType == null || other.keyType == null)
+            throw new InsufficientTypeInfoException();
+
+        if (!this.keyType.equals(other.keyType))
+            throw new TopologyException("not joinable: key types do not match");
+
         Set<String> thisSourceNodes = sourceNodes;
         Set<String> otherSourceNodes = other.sourceNodes;
 
         if (thisSourceNodes == null || otherSourceNodes == null)
-            throw new KafkaException("not joinable");
+            throw new TopologyException("not joinable");
 
         Set<String> allSourceNodes = new HashSet<>();
         allSourceNodes.addAll(thisSourceNodes);
@@ -59,6 +74,46 @@ public abstract class AbstractStream<K> {
                 return joiner.apply(value1, value2);
             }
         };
+    }
+
+    protected <T> Serializer<T> getSerializer(Type type) {
+        return getSerializer(type, null);
+    }
+
+    protected <T> Serializer<T> getSerializer(Type type, Serializer<T> defaultSerializer) {
+
+        if (type == null)
+            throw new InsufficientTypeInfoException();
+
+        Serializer<T> serializer = topology.getSerializer(type);
+
+        if (serializer == null)
+            serializer = defaultSerializer;
+
+        if (serializer == null)
+            throw new TopologyException("unable to find a serializer for a type " + type);
+
+        return serializer;
+    }
+
+    protected <T> Deserializer<T> getDeserializer(Type type) {
+        return getDeserializer(type, null);
+    }
+
+    protected <T> Deserializer<T> getDeserializer(Type type, Deserializer<T> defaultDeserializer) {
+
+        if (type == null)
+            throw new InsufficientTypeInfoException();
+
+        Deserializer<T> deserializer = topology.getDeserializer(type);
+
+        if (deserializer == null)
+            deserializer = defaultDeserializer;
+
+        if (deserializer == null)
+            throw new TopologyException("unable to find a serializer for a type " + type);
+
+        return deserializer;
     }
 
 }

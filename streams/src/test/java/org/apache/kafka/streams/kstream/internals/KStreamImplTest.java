@@ -17,10 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -36,21 +34,19 @@ import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 
-
 public class KStreamImplTest {
 
     @Test
     public void testNumProcesses() {
-        final Serializer<String> stringSerializer = new StringSerializer();
-        final Deserializer<String> stringDeserializer = new StringDeserializer();
-        final Serializer<Integer> integerSerializer = new IntegerSerializer();
-        final Deserializer<Integer> integerDeserializer = new IntegerDeserializer();
 
         final KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> source1 = builder.stream(stringDeserializer, stringDeserializer, "topic-1", "topic-2");
+        builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+        builder.register(String.class, new StringSerializer(), new StringDeserializer());
 
-        KStream<String, String> source2 = builder.stream(stringDeserializer, stringDeserializer, "topic-3", "topic-4");
+        KStream<String, String> source1 = builder.stream(String.class, String.class, "topic-1", "topic-2");
+
+        KStream<String, String> source2 = builder.stream(new StringDeserializer(), new StringDeserializer(), "topic-3", "topic-4");
 
         KStream<String, String> stream1 =
             source1.filter(new Predicate<String, String>() {
@@ -65,19 +61,27 @@ public class KStreamImplTest {
                 }
             });
 
-        KStream<String, Integer> stream2 = stream1.mapValues(new ValueMapper<String, Integer>() {
-            @Override
-            public Integer apply(String value) {
-                return new Integer(value);
-            }
-        });
+        KStream<String, Integer> stream2 = stream1
+                .mapValues(
+                        new ValueMapper<String, Integer>() {
+                            @Override
+                            public Integer apply(String value) {
+                                return new Integer(value);
+                            }
+                        }
+                )
+                .returns(String.class, Integer.class);
 
-        KStream<String, Integer> stream3 = source2.flatMapValues(new ValueMapper<String, Iterable<Integer>>() {
-            @Override
-            public Iterable<Integer> apply(String value) {
-                return Collections.singletonList(new Integer(value));
-            }
-        });
+        KStream<String, Integer> stream3 = source2
+                .flatMapValues(
+                        new ValueMapper<String, Iterable<Integer>>() {
+                            @Override
+                            public Iterable<Integer> apply(String value) {
+                                return Collections.singletonList(new Integer(value));
+                            }
+                        }
+                )
+                .returns(String.class, Integer.class);
 
         KStream<String, Integer>[] streams2 = stream2.branch(
                 new Predicate<String, Integer>() {
@@ -114,14 +118,14 @@ public class KStreamImplTest {
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of("join-0"), stringSerializer, integerSerializer, integerSerializer, stringDeserializer, integerDeserializer, integerDeserializer);
+        }, JoinWindows.of("join-0"));
 
         KStream<String, Integer> stream5 = streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of("join-1"), stringSerializer, integerSerializer, integerSerializer, stringDeserializer, integerDeserializer, integerDeserializer);
+        }, JoinWindows.of("join-1"));
 
         stream4.to("topic-5");
 

@@ -42,35 +42,36 @@ import org.apache.kafka.streams.state.RocksDBWindowStoreSupplier;
 import org.apache.kafka.streams.state.Serdes;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.Type;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
 public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V> {
 
-    private static final String FILTER_NAME = "KSTREAM-FILTER-";
+    public static final String FILTER_NAME = "KSTREAM-FILTER-";
 
-    private static final String MAP_NAME = "KSTREAM-MAP-";
+    public static final String MAP_NAME = "KSTREAM-MAP-";
 
-    private static final String MAPVALUES_NAME = "KSTREAM-MAPVALUES-";
+    public static final String MAPVALUES_NAME = "KSTREAM-MAPVALUES-";
 
-    private static final String FLATMAP_NAME = "KSTREAM-FLATMAP-";
+    public static final String FLATMAP_NAME = "KSTREAM-FLATMAP-";
 
-    private static final String FLATMAPVALUES_NAME = "KSTREAM-FLATMAPVALUES-";
+    public static final String FLATMAPVALUES_NAME = "KSTREAM-FLATMAPVALUES-";
 
-    private static final String TRANSFORM_NAME = "KSTREAM-TRANSFORM-";
+    public static final String TRANSFORM_NAME = "KSTREAM-TRANSFORM-";
 
-    private static final String TRANSFORMVALUES_NAME = "KSTREAM-TRANSFORMVALUES-";
+    public static final String TRANSFORMVALUES_NAME = "KSTREAM-TRANSFORMVALUES-";
 
-    private static final String PROCESSOR_NAME = "KSTREAM-PROCESSOR-";
+    public static final String PROCESSOR_NAME = "KSTREAM-PROCESSOR-";
 
-    private static final String BRANCH_NAME = "KSTREAM-BRANCH-";
+    public static final String BRANCH_NAME = "KSTREAM-BRANCH-";
 
-    private static final String BRANCHCHILD_NAME = "KSTREAM-BRANCHCHILD-";
+    public static final String BRANCHCHILD_NAME = "KSTREAM-BRANCHCHILD-";
 
-    private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
+    public static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
 
-    private static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
+    public static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
 
     public static final String SINK_NAME = "KSTREAM-SINK-";
 
@@ -88,8 +89,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     public static final String SOURCE_NAME = "KSTREAM-SOURCE-";
 
-    public KStreamImpl(KStreamBuilder topology, String name, Set<String> sourceNodes) {
-        super(topology, name, sourceNodes);
+    public KStreamImpl(KStreamBuilder topology, String name, Set<String> sourceNodes, Type keyType, Type valueType) {
+        super(topology, name, sourceNodes, keyType, valueType);
+    }
+
+    @Override
+    public KStream<K, V> returns(Type keyType, Type valueType) {
+        return new KStreamImpl<>(topology, name, sourceNodes, keyType, valueType);
     }
 
     @Override
@@ -98,7 +104,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamFilter<>(predicate, false), this.name);
 
-        return new KStreamImpl<>(topology, name, sourceNodes);
+        return new KStreamImpl<>(topology, name, sourceNodes, keyType, valueType);
     }
 
     @Override
@@ -107,7 +113,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamFilter<>(predicate, true), this.name);
 
-        return new KStreamImpl<>(topology, name, sourceNodes);
+        return new KStreamImpl<>(topology, name, sourceNodes, keyType, valueType);
     }
 
     @Override
@@ -116,7 +122,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamMap<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name, null);
+        return new KStreamImpl<>(topology, name, null, null, null);
     }
 
     @Override
@@ -125,7 +131,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamMapValues<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name, sourceNodes);
+        return new KStreamImpl<>(topology, name, sourceNodes, keyType, null);
     }
 
     @Override
@@ -134,7 +140,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamFlatMap<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name, null);
+        return new KStreamImpl<>(topology, name, null, null, null);
     }
 
     @Override
@@ -143,7 +149,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamFlatMapValues<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name, sourceNodes);
+        return new KStreamImpl<>(topology, name, sourceNodes, keyType, null);
     }
 
     @Override
@@ -159,7 +165,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
             topology.addProcessor(childName, new KStreamPassThrough<K, V>(), branchName);
 
-            branchChildren[i] = new KStreamImpl<>(topology, childName, sourceNodes);
+            branchChildren[i] = new KStreamImpl<>(topology, childName, sourceNodes, keyType, valueType);
         }
 
         return branchChildren;
@@ -186,7 +192,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamPassThrough<>(), parentNames);
 
-        return new KStreamImpl<>(topology, name, allSourceNodes);
+        // inherit types from the first stream
+        Type keyType = null;
+        Type valueType = null;
+        if (streams.length > 0) {
+            keyType = ((KStreamImpl) streams[0]).keyType;
+            valueType = ((KStreamImpl) streams[0]).valueType;
+        }
+
+        return new KStreamImpl<>(topology, name, allSourceNodes, keyType, valueType);
     }
 
     @Override
@@ -224,7 +238,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         topology.addProcessor(name, new KStreamTransform<>(transformerSupplier), this.name);
         topology.connectProcessorAndStateStores(name, stateStoreNames);
 
-        return new KStreamImpl<>(topology, name, null);
+        return new KStreamImpl<>(topology, name, null, null, null);
     }
 
     @Override
@@ -234,7 +248,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         topology.addProcessor(name, new KStreamTransformValues<>(valueTransformerSupplier), this.name);
         topology.connectProcessorAndStateStores(name, stateStoreNames);
 
-        return new KStreamImpl<>(topology, name, sourceNodes);
+        return new KStreamImpl<>(topology, name, sourceNodes, keyType, null);
     }
 
     @Override
@@ -249,34 +263,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public <V1, R> KStream<K, R> join(
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
-            JoinWindows windows,
-            Serializer<K> keySerializer,
-            Serializer<V> thisValueSerializer,
-            Serializer<V1> otherValueSerializer,
-            Deserializer<K> keyDeserializer,
-            Deserializer<V> thisValueDeserializer,
-            Deserializer<V1> otherValueDeserializer) {
+            JoinWindows windows) {
 
-        return join(other, joiner, windows,
-                keySerializer, thisValueSerializer, otherValueSerializer,
-                keyDeserializer, thisValueDeserializer, otherValueDeserializer, false);
+        return join(other, joiner, windows, false);
     }
 
     @Override
     public <V1, R> KStream<K, R> outerJoin(
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
-            JoinWindows windows,
-            Serializer<K> keySerializer,
-            Serializer<V> thisValueSerializer,
-            Serializer<V1> otherValueSerializer,
-            Deserializer<K> keyDeserializer,
-            Deserializer<V> thisValueDeserializer,
-            Deserializer<V1> otherValueDeserializer) {
+            JoinWindows windows) {
 
-        return join(other, joiner, windows,
-                keySerializer, thisValueSerializer, otherValueSerializer,
-                keyDeserializer, thisValueDeserializer, otherValueDeserializer, true);
+        return join(other, joiner, windows, true);
     }
 
     @SuppressWarnings("unchecked")
@@ -284,15 +282,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serializer<K> keySerializer,
-            Serializer<V> thisValueSerializer,
-            Serializer<V1> otherValueSerializer,
-            Deserializer<K> keyDeserializer,
-            Deserializer<V> thisValueDeserializer,
-            Deserializer<V1> otherValueDeserializer,
             boolean outer) {
 
-        Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
+        KStreamImpl<K, V1> otherStream = (KStreamImpl<K, V1>) other;
+
+        Serializer<K> keySerializer = getSerializer(this.keyType);
+        Serializer<V> thisValueSerializer = getSerializer(this.valueType);
+        Serializer<V1> otherValueSerializer = getSerializer(otherStream.valueType);
+        Deserializer<K> keyDeserializer = getDeserializer(this.keyType);
+        Deserializer<V> thisValueDeserializer = getDeserializer(this.valueType);
+        Deserializer<V1> otherValueDeserializer = getDeserializer(otherStream.valueType);
+
+        Set<String> allSourceNodes = ensureJoinableWith(otherStream);
 
         RocksDBWindowStoreSupplier<K, V> thisWindow =
                 new RocksDBWindowStoreSupplier<>(
@@ -328,14 +329,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String joinMergeName = topology.newName(MERGE_NAME);
 
         topology.addProcessor(thisWindowStreamName, thisWindowedStream, this.name);
-        topology.addProcessor(otherWindowStreamName, otherWindowedStream, ((KStreamImpl) other).name);
+        topology.addProcessor(otherWindowStreamName, otherWindowedStream, otherStream.name);
         topology.addProcessor(joinThisName, joinThis, thisWindowStreamName);
         topology.addProcessor(joinOtherName, joinOther, otherWindowStreamName);
         topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
         topology.addStateStore(thisWindow, thisWindowStreamName, otherWindowStreamName);
         topology.addStateStore(otherWindow, thisWindowStreamName, otherWindowStreamName);
 
-        return new KStreamImpl<>(topology, joinMergeName, allSourceNodes);
+        return new KStreamImpl<>(topology, joinMergeName, allSourceNodes, keyType, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -343,13 +344,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public <V1, R> KStream<K, R> leftJoin(
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
-            JoinWindows windows,
-            Serializer<K> keySerializer,
-            Serializer<V1> otherValueSerializer,
-            Deserializer<K> keyDeserializer,
-            Deserializer<V1> otherValueDeserializer) {
+            JoinWindows windows) {
 
-        Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
+        KStreamImpl<K, V1> otherStream = (KStreamImpl<K, V1>) other;
+
+        Serializer<K> keySerializer = getSerializer(this.keyType);
+        Serializer<V1> otherValueSerializer = getSerializer(otherStream.valueType);
+        Deserializer<K> keyDeserializer = getDeserializer(this.keyType);
+        Deserializer<V1> otherValueDeserializer = getDeserializer(otherStream.valueType);
+
+        Set<String> allSourceNodes = ensureJoinableWith(otherStream);
 
         RocksDBWindowStoreSupplier<K, V1> otherWindow =
                 new RocksDBWindowStoreSupplier<>(
@@ -367,11 +371,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String otherWindowStreamName = topology.newName(WINDOWED_NAME);
         String joinThisName = topology.newName(LEFTJOIN_NAME);
 
-        topology.addProcessor(otherWindowStreamName, otherWindowedStream, ((KStreamImpl) other).name);
+        topology.addProcessor(otherWindowStreamName, otherWindowedStream, otherStream.name);
         topology.addProcessor(joinThisName, joinThis, this.name);
         topology.addStateStore(otherWindow, joinThisName, otherWindowStreamName);
 
-        return new KStreamImpl<>(topology, joinThisName, allSourceNodes);
+        return new KStreamImpl<>(topology, joinThisName, allSourceNodes, keyType, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -383,7 +387,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamKTableLeftJoin<>((KTableImpl<K, ?, V1>) other, joiner), this.name);
 
-        return new KStreamImpl<>(topology, name, allSourceNodes);
+        return new KStreamImpl<>(topology, name, allSourceNodes, keyType, null);
     }
 
     @Override

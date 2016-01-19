@@ -20,6 +20,8 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
+import java.lang.reflect.Type;
+
 /**
  * KTable is an abstraction of a change log stream.
  *
@@ -28,6 +30,15 @@ import org.apache.kafka.common.serialization.Serializer;
  * @param <V> the type of values
  */
 public interface KTable<K, V> {
+
+    /**
+     * Explicitly specifies the information of the key type and the value type.
+     *
+     * @param keyType an instance of Type that represents the key type
+     * @param valueType an instance of Type that represents the value type
+     * @return the new instance of KTable with explicit type information
+     */
+    KTable<K, V> returns(Type keyType, Type valueType);
 
     /**
      * Creates a new instance of KTable consists of all elements of this stream which satisfy a predicate

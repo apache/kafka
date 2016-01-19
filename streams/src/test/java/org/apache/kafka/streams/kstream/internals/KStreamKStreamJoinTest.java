@@ -44,11 +44,6 @@ public class KStreamKStreamJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    private IntegerSerializer keySerializer = new IntegerSerializer();
-    private StringSerializer valSerializer = new StringSerializer();
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
-
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
         public String apply(String value1, String value2) {
@@ -63,6 +58,9 @@ public class KStreamKStreamJoinTest {
 
             KStreamBuilder builder = new KStreamBuilder();
 
+            builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
             KStream<Integer, String> stream1;
@@ -71,10 +69,9 @@ public class KStreamKStreamJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(keyDeserializer, valDeserializer, topic1);
-            stream2 = builder.stream(keyDeserializer, valDeserializer, topic2);
-            joined = stream1.join(stream2, joiner, JoinWindows.of("test").within(100),
-                    keySerializer, valSerializer, valSerializer, keyDeserializer, valDeserializer, valDeserializer);
+            stream1 = builder.stream(Integer.class, String.class, topic1);
+            stream2 = builder.stream(new IntegerDeserializer(), new StringDeserializer(), topic2);
+            joined = stream1.join(stream2, joiner, JoinWindows.of("test").within(100));
             joined.process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
@@ -169,6 +166,9 @@ public class KStreamKStreamJoinTest {
 
             KStreamBuilder builder = new KStreamBuilder();
 
+            builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
             KStream<Integer, String> stream1;
@@ -177,10 +177,9 @@ public class KStreamKStreamJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(keyDeserializer, valDeserializer, topic1);
-            stream2 = builder.stream(keyDeserializer, valDeserializer, topic2);
-            joined = stream1.outerJoin(stream2, joiner, JoinWindows.of("test").within(100),
-                    keySerializer, valSerializer, valSerializer, keyDeserializer, valDeserializer, valDeserializer);
+            stream1 = builder.stream(Integer.class, String.class, topic1);
+            stream2 = builder.stream(new IntegerDeserializer(), new StringDeserializer(), topic2);
+            joined = stream1.outerJoin(stream2, joiner, JoinWindows.of("test").within(100));
             joined.process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
@@ -277,6 +276,9 @@ public class KStreamKStreamJoinTest {
 
             KStreamBuilder builder = new KStreamBuilder();
 
+            builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
             KStream<Integer, String> stream1;
@@ -285,10 +287,9 @@ public class KStreamKStreamJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(keyDeserializer, valDeserializer, topic1);
-            stream2 = builder.stream(keyDeserializer, valDeserializer, topic2);
-            joined = stream1.join(stream2, joiner, JoinWindows.of("test").within(100),
-                    keySerializer, valSerializer, valSerializer, keyDeserializer, valDeserializer, valDeserializer);
+            stream1 = builder.stream(Integer.class, String.class, topic1);
+            stream2 = builder.stream(new IntegerDeserializer(), new StringDeserializer(), topic2);
+            joined = stream1.join(stream2, joiner, JoinWindows.of("test").within(100));
             joined.process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();

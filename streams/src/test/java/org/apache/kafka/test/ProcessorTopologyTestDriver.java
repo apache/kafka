@@ -61,7 +61,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * Although the driver doesn't use a real Kafka broker, it does simulate Kafka {@link org.apache.kafka.clients.consumer.Consumer}s
  * and {@link org.apache.kafka.clients.producer.Producer}s that read and write raw {@code byte[]} messages. You can either deal
  * with messages that have {@code byte[]} keys and values, or you can supply the {@link Serializer}s and {@link Deserializer}s
- * that the driver can use to convert the keys and values into objects.
+ * that the driver can use to resolve the keys and values into objects.
  *
  * <h2>Driver setup</h2>
  * <p>
