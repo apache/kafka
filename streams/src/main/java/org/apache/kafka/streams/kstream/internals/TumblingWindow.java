@@ -20,19 +20,19 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Window;
 
-public class SlidingWindow extends Window {
+public class TumblingWindow extends Window {
 
-    public SlidingWindow(long start, long end) {
+    public TumblingWindow(long start, long end) {
         super(start, end);
     }
 
     @Override
     public boolean overlap(Window other) {
-        return super.overlap(other) && other.getClass().equals(SlidingWindow.class);
+        return super.overlap(other) && other.getClass().equals(TumblingWindow.class);
     }
 
     @Override
     public boolean equalsTo(Window other) {
-        return super.equalsTo(other) && other.getClass().equals(SlidingWindow.class);
+        return super.equalsTo(other) && other.getClass().equals(TumblingWindow.class);
     }
 }

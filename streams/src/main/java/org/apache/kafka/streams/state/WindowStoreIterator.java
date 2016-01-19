@@ -19,8 +19,10 @@
 
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.kstream.KeyValue;
+
 import java.util.Iterator;
 
-public interface WindowStoreIterator<E> extends Iterator<E> {
+public interface WindowStoreIterator<E> extends Iterator<KeyValue<Long, E>> {
     void close();
 }

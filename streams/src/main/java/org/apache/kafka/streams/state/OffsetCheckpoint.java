@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -55,7 +56,6 @@ public class OffsetCheckpoint {
     private final Object lock;
 
     public OffsetCheckpoint(File file) throws IOException {
-        new File(file + ".tmp").delete(); // try to delete any existing temp files for cleanliness
         this.file = file;
         this.lock = new Object();
     }
@@ -71,26 +71,16 @@ public class OffsetCheckpoint {
                 writeIntLine(writer, VERSION);
                 writeIntLine(writer, offsets.size());
 
-                // write the entries
                 for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet())
                     writeEntry(writer, entry.getKey(), entry.getValue());
 
-                // flush the buffer and then fsync the underlying file
                 writer.flush();
                 fileOutputStream.getFD().sync();
             } finally {
                 writer.close();
             }
 
-            // swap new offset checkpoint file with previous one
-            if (!temp.renameTo(file)) {
-                // renameTo() fails on Windows if the destination file exists.
-                file.delete();
-                if (!temp.renameTo(file))
-                    throw new IOException(String.format("File rename from %s to %s failed.",
-                        temp.getAbsolutePath(),
-                        file.getAbsolutePath()));
-            }
+            Utils.atomicMoveWithFallback(temp.toPath(), file.toPath());
         }
     }
 
@@ -122,7 +112,7 @@ public class OffsetCheckpoint {
                 switch (version) {
                     case 0:
                         int expectedSize = readInt(reader);
-                        Map<TopicPartition, Long> offsets = new HashMap<TopicPartition, Long>();
+                        Map<TopicPartition, Long> offsets = new HashMap<>();
                         String line = reader.readLine();
                         while (line != null) {
                             String[] pieces = line.split("\\s+");

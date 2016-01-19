@@ -18,18 +18,18 @@
 package org.apache.kafka.streams.kstream;
 
 
-import org.apache.kafka.streams.kstream.internals.SlidingWindow;
+import org.apache.kafka.streams.kstream.internals.TumblingWindow;
 
-import java.util.Collection;
 import java.util.Collections;
+import java.util.Map;
 
-public class SlidingWindows extends Windows<SlidingWindow> {
+public class TumblingWindows extends Windows<TumblingWindow> {
 
     private static final long DEFAULT_SIZE_MS = 1000L;
 
     public final long size;
 
-    private SlidingWindows(String name, long size) {
+    private TumblingWindows(String name, long size) {
         super(name);
 
         this.size = size;
@@ -38,29 +38,30 @@ public class SlidingWindows extends Windows<SlidingWindow> {
     /**
      * Returns a half-interval sliding window definition with the default window size
      */
-    public static SlidingWindows of(String name) {
-        return new SlidingWindows(name, DEFAULT_SIZE_MS);
+    public static TumblingWindows of(String name) {
+        return new TumblingWindows(name, DEFAULT_SIZE_MS);
     }
 
     /**
      * Returns a half-interval sliding window definition with the window size in milliseconds
      */
-    public SlidingWindows with(long size) {
-        return new SlidingWindows(this.name, size);
+    public TumblingWindows with(long size) {
+        return new TumblingWindows(this.name, size);
     }
 
     @Override
-    public Collection<SlidingWindow> windowsFor(long timestamp) {
-        // TODO
-        return Collections.<SlidingWindow>emptyList();
+    public Map<Long, TumblingWindow> windowsFor(long timestamp) {
+        long windowStart = timestamp - timestamp % size;
+
+        return Collections.singletonMap(windowStart, new TumblingWindow(windowStart, windowStart + size));
     }
 
     @Override
     public boolean equalTo(Windows other) {
-        if (!other.getClass().equals(SlidingWindows.class))
+        if (!other.getClass().equals(TumblingWindows.class))
             return false;
 
-        SlidingWindows otherWindows = (SlidingWindows) other;
+        TumblingWindows otherWindows = (TumblingWindows) other;
 
         return this.size == otherWindows.size;
     }

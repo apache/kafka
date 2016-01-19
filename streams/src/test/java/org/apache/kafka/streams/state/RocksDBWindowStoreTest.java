@@ -53,13 +53,11 @@ public class RocksDBWindowStoreTest {
     private final long windowSize = 3;
     private final Serdes<Integer, String> serdes = Serdes.withBuiltinTypes("", Integer.class, String.class);
 
-
-    protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context, long windowBefore, long windowAfter, Serdes<K, V> serdes) {
-        StateStoreSupplier supplier = new RocksDBWindowStoreSupplier<>("window", windowBefore, windowAfter, retentionPeriod, numSegments, serdes, null);
+    protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context, Serdes<K, V> serdes) {
+        StateStoreSupplier supplier = new RocksDBWindowStoreSupplier<>("window", retentionPeriod, numSegments, true, serdes, null);
         WindowStore<K, V> store = (WindowStore<K, V>) supplier.get();
         store.init(context);
         return store;
-
     }
 
     @Test
@@ -83,7 +81,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerializer, byteArrayDeserializer, byteArraySerializer, byteArrayDeserializer,
                     recordCollector);
 
-            WindowStore<Integer, String> store = createWindowStore(context, windowSize, windowSize, serdes);
+            WindowStore<Integer, String> store = createWindowStore(context, serdes);
             try {
                 long startTime = segmentSize - 4L;
 
@@ -100,12 +98,12 @@ public class RocksDBWindowStoreTest {
                 context.setTime(startTime + 5L);
                 store.put(5, "five");
 
-                assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime + 0L)));
-                assertEquals(Utils.mkList("one"), toList(store.fetch(1, startTime + 1L)));
-                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + 2L)));
-                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + 3L)));
-                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + 4L)));
-                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + 5L)));
+                assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime + 0L - windowSize, startTime + 0L + windowSize)));
+                assertEquals(Utils.mkList("one"), toList(store.fetch(1, startTime + 1L - windowSize, startTime + 1L + windowSize)));
+                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + 2L - windowSize, startTime + 2L + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + 3L - windowSize, startTime + 3L + windowSize)));
+                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + 4L - windowSize, startTime + 4L + windowSize)));
+                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + 5L - windowSize, startTime + 5L + windowSize)));
 
                 context.setTime(startTime + 3L);
                 store.put(2, "two+1");
@@ -120,21 +118,21 @@ public class RocksDBWindowStoreTest {
                 context.setTime(startTime + 8L);
                 store.put(2, "two+6");
 
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime - 2L)));
-                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime - 1L)));
-                assertEquals(Utils.mkList("two", "two+1"), toList(store.fetch(2, startTime)));
-                assertEquals(Utils.mkList("two", "two+1", "two+2"), toList(store.fetch(2, startTime + 1L)));
-                assertEquals(Utils.mkList("two", "two+1", "two+2", "two+3"), toList(store.fetch(2, startTime + 2L)));
-                assertEquals(Utils.mkList("two", "two+1", "two+2", "two+3", "two+4"), toList(store.fetch(2, startTime + 3L)));
-                assertEquals(Utils.mkList("two", "two+1", "two+2", "two+3", "two+4", "two+5"), toList(store.fetch(2, startTime + 4L)));
-                assertEquals(Utils.mkList("two", "two+1", "two+2", "two+3", "two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 5L)));
-                assertEquals(Utils.mkList("two+1", "two+2", "two+3", "two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 6L)));
-                assertEquals(Utils.mkList("two+2", "two+3", "two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 7L)));
-                assertEquals(Utils.mkList("two+3", "two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 8L)));
-                assertEquals(Utils.mkList("two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 9L)));
-                assertEquals(Utils.mkList("two+5", "two+6"), toList(store.fetch(2, startTime + 10L)));
-                assertEquals(Utils.mkList("two+6"), toList(store.fetch(2, startTime + 11L)));
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 12L)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime - 2L - windowSize, startTime - 2L + windowSize)));
+                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime - 1L - windowSize, startTime - 1L + windowSize)));
+                assertEquals(Utils.mkList("two", "two+1"), toList(store.fetch(2, startTime - windowSize, startTime + windowSize)));
+                assertEquals(Utils.mkList("two", "two+1", "two+2"), toList(store.fetch(2, startTime + 1L - windowSize, startTime + 1L + windowSize)));
+                assertEquals(Utils.mkList("two", "two+1", "two+2", "two+3"), toList(store.fetch(2, startTime + 2L - windowSize, startTime + 2L + windowSize)));
+                assertEquals(Utils.mkList("two", "two+1", "two+2", "two+3", "two+4"), toList(store.fetch(2, startTime + 3L - windowSize, startTime + 3L + windowSize)));
+                assertEquals(Utils.mkList("two", "two+1", "two+2", "two+3", "two+4", "two+5"), toList(store.fetch(2, startTime + 4L - windowSize, startTime + 4L + windowSize)));
+                assertEquals(Utils.mkList("two", "two+1", "two+2", "two+3", "two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 5L - windowSize, startTime + 5L + windowSize)));
+                assertEquals(Utils.mkList("two+1", "two+2", "two+3", "two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 6L - windowSize, startTime + 6L + windowSize)));
+                assertEquals(Utils.mkList("two+2", "two+3", "two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 7L - windowSize, startTime + 7L + windowSize)));
+                assertEquals(Utils.mkList("two+3", "two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 8L - windowSize, startTime + 8L + windowSize)));
+                assertEquals(Utils.mkList("two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 9L - windowSize, startTime + 9L + windowSize)));
+                assertEquals(Utils.mkList("two+5", "two+6"), toList(store.fetch(2, startTime + 10L - windowSize, startTime + 10L + windowSize)));
+                assertEquals(Utils.mkList("two+6"), toList(store.fetch(2, startTime + 11L - windowSize, startTime + 11L + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 12L - windowSize, startTime + 12L + windowSize)));
 
                 // Flush the store and verify all current entries were properly flushed ...
                 store.flush();
@@ -179,7 +177,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerializer, byteArrayDeserializer, byteArraySerializer, byteArrayDeserializer,
                     recordCollector);
 
-            WindowStore<Integer, String> store = createWindowStore(context, windowSize, 0, serdes);
+            WindowStore<Integer, String> store = createWindowStore(context, serdes);
             try {
                 long startTime = segmentSize - 4L;
 
@@ -196,12 +194,12 @@ public class RocksDBWindowStoreTest {
                 context.setTime(startTime + 5L);
                 store.put(5, "five");
 
-                assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime + 0L)));
-                assertEquals(Utils.mkList("one"), toList(store.fetch(1, startTime + 1L)));
-                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + 2L)));
-                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + 3L)));
-                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + 4L)));
-                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + 5L)));
+                assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime + 0L - windowSize, startTime + 0L)));
+                assertEquals(Utils.mkList("one"), toList(store.fetch(1, startTime + 1L - windowSize, startTime + 1L)));
+                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + 2L - windowSize, startTime + 2L)));
+                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + 3L - windowSize, startTime + 3L)));
+                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + 4L - windowSize, startTime + 4L)));
+                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + 5L - windowSize, startTime + 5L)));
 
                 context.setTime(startTime + 3L);
                 store.put(2, "two+1");
@@ -216,21 +214,21 @@ public class RocksDBWindowStoreTest {
                 context.setTime(startTime + 8L);
                 store.put(2, "two+6");
 
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime - 1L)));
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 0L)));
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 1L)));
-                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + 2L)));
-                assertEquals(Utils.mkList("two", "two+1"), toList(store.fetch(2, startTime + 3L)));
-                assertEquals(Utils.mkList("two", "two+1", "two+2"), toList(store.fetch(2, startTime + 4L)));
-                assertEquals(Utils.mkList("two", "two+1", "two+2", "two+3"), toList(store.fetch(2, startTime + 5L)));
-                assertEquals(Utils.mkList("two+1", "two+2", "two+3", "two+4"), toList(store.fetch(2, startTime + 6L)));
-                assertEquals(Utils.mkList("two+2", "two+3", "two+4", "two+5"), toList(store.fetch(2, startTime + 7L)));
-                assertEquals(Utils.mkList("two+3", "two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 8L)));
-                assertEquals(Utils.mkList("two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 9L)));
-                assertEquals(Utils.mkList("two+5", "two+6"), toList(store.fetch(2, startTime + 10L)));
-                assertEquals(Utils.mkList("two+6"), toList(store.fetch(2, startTime + 11L)));
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 12L)));
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 13L)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime - 1L - windowSize, startTime - 1L)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 0L - windowSize, startTime + 0L)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 1L - windowSize, startTime + 1L)));
+                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + 2L - windowSize, startTime + 2L)));
+                assertEquals(Utils.mkList("two", "two+1"), toList(store.fetch(2, startTime + 3L - windowSize, startTime + 3L)));
+                assertEquals(Utils.mkList("two", "two+1", "two+2"), toList(store.fetch(2, startTime + 4L - windowSize, startTime + 4L)));
+                assertEquals(Utils.mkList("two", "two+1", "two+2", "two+3"), toList(store.fetch(2, startTime + 5L - windowSize, startTime + 5L)));
+                assertEquals(Utils.mkList("two+1", "two+2", "two+3", "two+4"), toList(store.fetch(2, startTime + 6L - windowSize, startTime + 6L)));
+                assertEquals(Utils.mkList("two+2", "two+3", "two+4", "two+5"), toList(store.fetch(2, startTime + 7L - windowSize, startTime + 7L)));
+                assertEquals(Utils.mkList("two+3", "two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 8L - windowSize, startTime + 8L)));
+                assertEquals(Utils.mkList("two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 9L - windowSize, startTime + 9L)));
+                assertEquals(Utils.mkList("two+5", "two+6"), toList(store.fetch(2, startTime + 10L - windowSize, startTime + 10L)));
+                assertEquals(Utils.mkList("two+6"), toList(store.fetch(2, startTime + 11L - windowSize, startTime + 11L)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 12L - windowSize, startTime + 12L)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 13L - windowSize, startTime + 13L)));
 
                 // Flush the store and verify all current entries were properly flushed ...
                 store.flush();
@@ -275,7 +273,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerializer, byteArrayDeserializer, byteArraySerializer, byteArrayDeserializer,
                     recordCollector);
 
-            WindowStore<Integer, String> store = createWindowStore(context, 0, windowSize, serdes);
+            WindowStore<Integer, String> store = createWindowStore(context, serdes);
             try {
                 long startTime = segmentSize - 4L;
 
@@ -292,12 +290,12 @@ public class RocksDBWindowStoreTest {
                 context.setTime(startTime + 5L);
                 store.put(5, "five");
 
-                assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime + 0L)));
-                assertEquals(Utils.mkList("one"), toList(store.fetch(1, startTime + 1L)));
-                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + 2L)));
-                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + 3L)));
-                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + 4L)));
-                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + 5L)));
+                assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime + 0L, startTime + 0L + windowSize)));
+                assertEquals(Utils.mkList("one"), toList(store.fetch(1, startTime + 1L, startTime + 1L + windowSize)));
+                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + 2L, startTime + 2L + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + 3L, startTime + 3L + windowSize)));
+                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + 4L, startTime + 4L + windowSize)));
+                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + 5L, startTime + 5L + windowSize)));
 
                 context.setTime(startTime + 3L);
                 store.put(2, "two+1");
@@ -312,21 +310,21 @@ public class RocksDBWindowStoreTest {
                 context.setTime(startTime + 8L);
                 store.put(2, "two+6");
 
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime - 2L)));
-                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime - 1L)));
-                assertEquals(Utils.mkList("two", "two+1"), toList(store.fetch(2, startTime)));
-                assertEquals(Utils.mkList("two", "two+1", "two+2"), toList(store.fetch(2, startTime + 1L)));
-                assertEquals(Utils.mkList("two", "two+1", "two+2", "two+3"), toList(store.fetch(2, startTime + 2L)));
-                assertEquals(Utils.mkList("two+1", "two+2", "two+3", "two+4"), toList(store.fetch(2, startTime + 3L)));
-                assertEquals(Utils.mkList("two+2", "two+3", "two+4", "two+5"), toList(store.fetch(2, startTime + 4L)));
-                assertEquals(Utils.mkList("two+3", "two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 5L)));
-                assertEquals(Utils.mkList("two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 6L)));
-                assertEquals(Utils.mkList("two+5", "two+6"), toList(store.fetch(2, startTime + 7L)));
-                assertEquals(Utils.mkList("two+6"), toList(store.fetch(2, startTime + 8L)));
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 9L)));
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 10L)));
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 11L)));
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 12L)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime - 2L, startTime - 2L + windowSize)));
+                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime - 1L, startTime - 1L + windowSize)));
+                assertEquals(Utils.mkList("two", "two+1"), toList(store.fetch(2, startTime, startTime + windowSize)));
+                assertEquals(Utils.mkList("two", "two+1", "two+2"), toList(store.fetch(2, startTime + 1L, startTime + 1L + windowSize)));
+                assertEquals(Utils.mkList("two", "two+1", "two+2", "two+3"), toList(store.fetch(2, startTime + 2L, startTime + 2L + windowSize)));
+                assertEquals(Utils.mkList("two+1", "two+2", "two+3", "two+4"), toList(store.fetch(2, startTime + 3L, startTime + 3L + windowSize)));
+                assertEquals(Utils.mkList("two+2", "two+3", "two+4", "two+5"), toList(store.fetch(2, startTime + 4L, startTime + 4L + windowSize)));
+                assertEquals(Utils.mkList("two+3", "two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 5L, startTime + 5L + windowSize)));
+                assertEquals(Utils.mkList("two+4", "two+5", "two+6"), toList(store.fetch(2, startTime + 6L, startTime + 6L + windowSize)));
+                assertEquals(Utils.mkList("two+5", "two+6"), toList(store.fetch(2, startTime + 7L, startTime + 7L + windowSize)));
+                assertEquals(Utils.mkList("two+6"), toList(store.fetch(2, startTime + 8L, startTime + 8L + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 9L, startTime + 9L + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 10L, startTime + 10L + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 11L, startTime + 11L + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 12L, startTime + 12L + windowSize)));
 
                 // Flush the store and verify all current entries were properly flushed ...
                 store.flush();
@@ -371,14 +369,14 @@ public class RocksDBWindowStoreTest {
                     byteArraySerializer, byteArrayDeserializer, byteArraySerializer, byteArrayDeserializer,
                     recordCollector);
 
-            WindowStore<Integer, String> store = createWindowStore(context, windowSize, windowSize, serdes);
+            WindowStore<Integer, String> store = createWindowStore(context, serdes);
             try {
                 long startTime = segmentSize - 4L;
 
                 context.setTime(startTime);
                 store.put(0, "zero");
 
-                assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime)));
+                assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
 
                 context.setTime(startTime);
                 store.put(0, "zero");
@@ -387,11 +385,11 @@ public class RocksDBWindowStoreTest {
                 context.setTime(startTime);
                 store.put(0, "zero++");
 
-                assertEquals(Utils.mkList("zero", "zero", "zero+", "zero++"), toList(store.fetch(0, startTime)));
-                assertEquals(Utils.mkList("zero", "zero", "zero+", "zero++"), toList(store.fetch(0, startTime + 1L)));
-                assertEquals(Utils.mkList("zero", "zero", "zero+", "zero++"), toList(store.fetch(0, startTime + 2L)));
-                assertEquals(Utils.mkList("zero", "zero", "zero+", "zero++"), toList(store.fetch(0, startTime + 3L)));
-                assertEquals(Utils.mkList(), toList(store.fetch(0, startTime + 4L)));
+                assertEquals(Utils.mkList("zero", "zero", "zero+", "zero++"), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
+                assertEquals(Utils.mkList("zero", "zero", "zero+", "zero++"), toList(store.fetch(0, startTime + 1L - windowSize, startTime + 1L + windowSize)));
+                assertEquals(Utils.mkList("zero", "zero", "zero+", "zero++"), toList(store.fetch(0, startTime + 2L - windowSize, startTime + 2L + windowSize)));
+                assertEquals(Utils.mkList("zero", "zero", "zero+", "zero++"), toList(store.fetch(0, startTime + 3L - windowSize, startTime + 3L + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(0, startTime + 4L - windowSize, startTime + 4L + windowSize)));
 
                 // Flush the store and verify all current entries were properly flushed ...
                 store.flush();
@@ -430,7 +428,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerializer, byteArrayDeserializer, byteArraySerializer, byteArrayDeserializer,
                     recordCollector);
 
-            WindowStore<Integer, String> store = createWindowStore(context, windowSize, windowSize, serdes);
+            WindowStore<Integer, String> store = createWindowStore(context, serdes);
             RocksDBWindowStore<Integer, String> inner =
                     (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
             try {
@@ -461,51 +459,52 @@ public class RocksDBWindowStoreTest {
                 store.put(5, "five");
                 assertEquals(Utils.mkSet(2L, 3L, 4L), inner.segmentIds());
 
-                assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime)));
-                assertEquals(Utils.mkList("one"), toList(store.fetch(1, startTime + incr)));
-                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + incr * 2)));
-                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + incr * 3)));
-                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + incr * 4)));
-                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + incr * 5)));
+                assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
+                assertEquals(Utils.mkList("one"), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
+                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + incr * 2 - windowSize, startTime + incr * 2 + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + incr * 3 - windowSize, startTime + incr * 3 + windowSize)));
+                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + incr * 4 - windowSize, startTime + incr * 4 + windowSize)));
+                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + incr * 5 - windowSize, startTime + incr * 5 + windowSize)));
 
                 context.setTime(startTime + incr * 6);
                 store.put(6, "six");
                 assertEquals(Utils.mkSet(3L, 4L, 5L), inner.segmentIds());
 
-                assertEquals(Utils.mkList(), toList(store.fetch(0, startTime)));
-                assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr)));
-                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + incr * 2)));
-                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + incr * 3)));
-                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + incr * 4)));
-                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + incr * 5)));
-                assertEquals(Utils.mkList("six"), toList(store.fetch(6, startTime + incr * 6)));
+                assertEquals(Utils.mkList(), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
+                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + incr * 2 - windowSize, startTime + incr * 2 + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + incr * 3 - windowSize, startTime + incr * 3 + windowSize)));
+                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + incr * 4 - windowSize, startTime + incr * 4 + windowSize)));
+                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + incr * 5 - windowSize, startTime + incr * 5 + windowSize)));
+                assertEquals(Utils.mkList("six"), toList(store.fetch(6, startTime + incr * 6 - windowSize, startTime + incr * 6 + windowSize)));
+
 
                 context.setTime(startTime + incr * 7);
                 store.put(7, "seven");
                 assertEquals(Utils.mkSet(3L, 4L, 5L), inner.segmentIds());
 
-                assertEquals(Utils.mkList(), toList(store.fetch(0, startTime)));
-                assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr)));
-                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + incr * 2)));
-                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + incr * 3)));
-                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + incr * 4)));
-                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + incr * 5)));
-                assertEquals(Utils.mkList("six"), toList(store.fetch(6, startTime + incr * 6)));
-                assertEquals(Utils.mkList("seven"), toList(store.fetch(7, startTime + incr * 7)));
+                assertEquals(Utils.mkList(), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
+                assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime + incr * 2 - windowSize, startTime + incr * 2 + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + incr * 3 - windowSize, startTime + incr * 3 + windowSize)));
+                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + incr * 4 - windowSize, startTime + incr * 4 + windowSize)));
+                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + incr * 5 - windowSize, startTime + incr * 5 + windowSize)));
+                assertEquals(Utils.mkList("six"), toList(store.fetch(6, startTime + incr * 6 - windowSize, startTime + incr * 6 + windowSize)));
+                assertEquals(Utils.mkList("seven"), toList(store.fetch(7, startTime + incr * 7 - windowSize, startTime + incr * 7 + windowSize)));
 
                 context.setTime(startTime + incr * 8);
                 store.put(8, "eight");
                 assertEquals(Utils.mkSet(4L, 5L, 6L), inner.segmentIds());
 
-                assertEquals(Utils.mkList(), toList(store.fetch(0, startTime)));
-                assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr)));
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + incr * 2)));
-                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + incr * 3)));
-                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + incr * 4)));
-                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + incr * 5)));
-                assertEquals(Utils.mkList("six"), toList(store.fetch(6, startTime + incr * 6)));
-                assertEquals(Utils.mkList("seven"), toList(store.fetch(7, startTime + incr * 7)));
-                assertEquals(Utils.mkList("eight"), toList(store.fetch(8, startTime + incr * 8)));
+                assertEquals(Utils.mkList(), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + incr * 2 - windowSize, startTime + incr * 2 + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + incr * 3 - windowSize, startTime + incr * 3 + windowSize)));
+                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + incr * 4 - windowSize, startTime + incr * 4 + windowSize)));
+                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + incr * 5 - windowSize, startTime + incr * 5 + windowSize)));
+                assertEquals(Utils.mkList("six"), toList(store.fetch(6, startTime + incr * 6 - windowSize, startTime + incr * 6 + windowSize)));
+                assertEquals(Utils.mkList("seven"), toList(store.fetch(7, startTime + incr * 7 - windowSize, startTime + incr * 7 + windowSize)));
+                assertEquals(Utils.mkList("eight"), toList(store.fetch(8, startTime + incr * 8 - windowSize, startTime + incr * 8 + windowSize)));
 
                 // check segment directories
                 store.flush();
@@ -546,7 +545,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerializer, byteArrayDeserializer, byteArraySerializer, byteArrayDeserializer,
                     recordCollector);
 
-            WindowStore<Integer, String> store = createWindowStore(context, windowSize, windowSize, serdes);
+            WindowStore<Integer, String> store = createWindowStore(context, serdes);
             try {
                 context.setTime(startTime);
                 store.put(0, "zero");
@@ -595,7 +594,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerializer, byteArrayDeserializer, byteArraySerializer, byteArrayDeserializer,
                     recordCollector);
 
-            WindowStore<Integer, String> store = createWindowStore(context, windowSize, windowSize, serdes);
+            WindowStore<Integer, String> store = createWindowStore(context, serdes);
             RocksDBWindowStore<Integer, String> inner =
                     (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
 
@@ -604,15 +603,15 @@ public class RocksDBWindowStoreTest {
 
                 assertEquals(Utils.mkSet(4L, 5L, 6L), inner.segmentIds());
 
-                assertEquals(Utils.mkList(), toList(store.fetch(0, startTime)));
-                assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr)));
-                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + incr * 2)));
-                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + incr * 3)));
-                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + incr * 4)));
-                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + incr * 5)));
-                assertEquals(Utils.mkList("six"), toList(store.fetch(6, startTime + incr * 6)));
-                assertEquals(Utils.mkList("seven"), toList(store.fetch(7, startTime + incr * 7)));
-                assertEquals(Utils.mkList("eight"), toList(store.fetch(8, startTime + incr * 8)));
+                assertEquals(Utils.mkList(), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + incr * 2 - windowSize, startTime + incr * 2 + windowSize)));
+                assertEquals(Utils.mkList(), toList(store.fetch(3, startTime + incr * 3 - windowSize, startTime + incr * 3 + windowSize)));
+                assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + incr * 4 - windowSize, startTime + incr * 4 + windowSize)));
+                assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + incr * 5 - windowSize, startTime + incr * 5 + windowSize)));
+                assertEquals(Utils.mkList("six"), toList(store.fetch(6, startTime + incr * 6 - windowSize, startTime + incr * 6 + windowSize)));
+                assertEquals(Utils.mkList("seven"), toList(store.fetch(7, startTime + incr * 7 - windowSize, startTime + incr * 7 + windowSize)));
+                assertEquals(Utils.mkList("eight"), toList(store.fetch(8, startTime + incr * 8 - windowSize, startTime + incr * 8 + windowSize)));
 
                 // check segment directories
                 store.flush();
@@ -633,7 +632,7 @@ public class RocksDBWindowStoreTest {
     private <E> List<E> toList(WindowStoreIterator<E> iterator) {
         ArrayList<E> list = new ArrayList<>();
         while (iterator.hasNext()) {
-            list.add(iterator.next());
+            list.add(iterator.next().value);
         }
         return list;
     }
