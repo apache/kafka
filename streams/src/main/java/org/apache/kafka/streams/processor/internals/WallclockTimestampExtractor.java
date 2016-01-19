@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.examples;
+package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.processor.TimestampExtractor;

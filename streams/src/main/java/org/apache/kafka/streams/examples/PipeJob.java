@@ -36,16 +36,15 @@ public class PipeJob {
         props.put(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class);
 
-        props.put(StreamingConfig.COMMIT_INTERVAL_MS_CONFIG, "3600000");
+        // can specify underlying client configs if necessary
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         StreamingConfig config = new StreamingConfig(props);
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        builder.stream("connect-test").to("streams-pipe-test");
+        builder.stream("streams-input").to("streams-pipe-output");
 
         KafkaStreaming kstream = new KafkaStreaming(builder, config);
         kstream.start();

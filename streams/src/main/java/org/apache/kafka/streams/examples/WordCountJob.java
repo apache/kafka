@@ -19,8 +19,6 @@ package org.apache.kafka.streams.examples;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -44,14 +42,15 @@ public class WordCountJob {
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
         props.put(StreamingConfig.JOB_ID_CONFIG, "streams-wordcount");
+        props.put(StreamingConfig.STATE_DIR_CONFIG, "/tmp/streams");
         props.put(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(StreamingConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
         props.put(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class);
 
-        props.put(StreamingConfig.COMMIT_INTERVAL_MS_CONFIG, "3600000");
+        // can specify underlying client configs if necessary
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         StreamingConfig config = new StreamingConfig(props);
@@ -61,21 +60,29 @@ public class WordCountJob {
         final Serializer<String> stringSerializer = new StringSerializer();
         final Deserializer<String> stringDeserializer = new StringDeserializer();
 
-        KStream<String, String> source = builder.stream("connect-test");
+        KStream<String, String> source = builder.stream("streams-input");
 
-        KTable<Windowed<String>, Long> counts = source.flatMapValues(new ValueMapper<String, Iterable<String>>() {
-            @Override
-            public Iterable<String> apply(String value) {
-                return Arrays.asList(value.toLowerCase().split(" "));
-            }
-        }).map(new KeyValueMapper<String, String, KeyValue<String, String>>() {
-            @Override
-            public KeyValue<String, String> apply(String key, String value) {
-                return new KeyValue<String, String>(value, value);
-            }
-        }).countByKey(UnlimitedWindows.of("Counts").startOn(0L), stringSerializer, stringDeserializer);
+        KTable<Windowed<String>, String> counts = source
+                .flatMapValues(new ValueMapper<String, Iterable<String>>() {
+                    @Override
+                    public Iterable<String> apply(String value) {
+                        return Arrays.asList(value.toLowerCase().split(" "));
+                    }
+                }).map(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+                    @Override
+                    public KeyValue<String, String> apply(String key, String value) {
+                        return new KeyValue<String, String>(value, value);
+                    }
+                })
+                .countByKey(UnlimitedWindows.of("Counts").startOn(0L), stringSerializer, stringDeserializer)
+                .mapValues(new ValueMapper<Long, String>() {
+                    @Override
+                    public String apply(Long value) {
+                        return value.toString();
+                    }
+                });
 
-        counts.to("streams-wordcount-test", new Serializer<Windowed<String>>() {
+        counts.to("streams-wordcount-output", new Serializer<Windowed<String>>() {
             @Override
             public void configure(Map<String, ?> configs, boolean isKey) {
                 // do nothing
@@ -90,7 +97,7 @@ public class WordCountJob {
             public void close() {
                 // do nothing
             }
-        }, new LongSerializer());
+        }, stringSerializer);
 
         KafkaStreaming kstream = new KafkaStreaming(builder, config);
         kstream.start();

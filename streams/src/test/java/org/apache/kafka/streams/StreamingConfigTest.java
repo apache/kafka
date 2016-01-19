@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.examples.WallclockTimestampExtractor;
+import org.apache.kafka.streams.processor.internals.WallclockTimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.junit.Before;
 import org.junit.Test;

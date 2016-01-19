@@ -74,11 +74,6 @@ public class StreamingConfig extends AbstractConfig {
     public static final String TOTAL_RECORDS_TO_PROCESS = "total.records.to.process";
     private static final String TOTAL_RECORDS_TO_DOC = "Exit after processing this many records.";
 
-    /** <code>window.time.ms</code> */
-    public static final String WINDOW_TIME_MS_CONFIG = "window.time.ms";
-    private static final String WINDOW_TIME_MS_DOC = "Setting this to a non-negative value will cause the processor to get called "
-                                                     + "with this frequency even if there is no message.";
-
     /** <code>timestamp.extractor</code> */
     public static final String TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "timestamp.extractor";
     private static final String TIMESTAMP_EXTRACTOR_CLASS_DOC = "Timestamp extractor class that implements the <code>TimestampExtractor</code> interface.";
@@ -119,6 +114,8 @@ public class StreamingConfig extends AbstractConfig {
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
     private static final String SYSTEM_TEMP_DIRECTORY = System.getProperty("java.io.tmpdir");
+
+    private static final String WALLCLOCK_TIMESTAMP_EXTRACTOR = "org.apache.kafka.streams.processor.internals.WallclockTimestampExtractor";
 
     static {
         CONFIG = new ConfigDef().define(JOB_ID_CONFIG,
@@ -176,11 +173,6 @@ public class StreamingConfig extends AbstractConfig {
                                         -1L,
                                         Importance.LOW,
                                         TOTAL_RECORDS_TO_DOC)
-                                .define(WINDOW_TIME_MS_CONFIG,
-                                        Type.LONG,
-                                        -1L,
-                                        Importance.MEDIUM,
-                                        WINDOW_TIME_MS_DOC)
                                 .define(KEY_SERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
                                         Importance.HIGH,
@@ -199,6 +191,7 @@ public class StreamingConfig extends AbstractConfig {
                                         ConsumerConfig.VALUE_DESERIALIZER_CLASS_DOC)
                                 .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                                         Type.CLASS,
+                                        WALLCLOCK_TIMESTAMP_EXTRACTOR,
                                         Importance.HIGH,
                                         TIMESTAMP_EXTRACTOR_CLASS_DOC)
                                 .define(PARTITION_GROUPER_CLASS_CONFIG,
