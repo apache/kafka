@@ -29,28 +29,28 @@ import org.apache.kafka.streams.processor.ProcessorContext;
  *
  * Given the input, it can output at most two records (one mapped from old value and one mapped from new value).
  */
-public class KTableRepartitionMap<K1, V1, K2, V2> implements KTableProcessorSupplier<K1, V1, KeyValue<K2, V2>> {
+public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSupplier<K, V, KeyValue<K1, V1>> {
 
-    private final KTableImpl<K1, ?, V1> parent;
-    private final KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper;
+    private final KTableImpl<K, ?, V> parent;
+    private final KeyValueMapper<K, V, KeyValue<K1, V1>> mapper;
 
-    public KTableRepartitionMap(KTableImpl<K1, ?, V1> parent, KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper) {
+    public KTableRepartitionMap(KTableImpl<K, ?, V> parent, KeyValueMapper<K, V, KeyValue<K1, V1>> mapper) {
         this.parent = parent;
         this.mapper = mapper;
     }
 
     @Override
-    public Processor<K1, Change<V1>> get() {
+    public Processor<K, Change<V>> get() {
         return new KTableMapProcessor();
     }
 
     @Override
-    public KTableValueGetterSupplier<K1, KeyValue<K2, V2>> view() {
-        final KTableValueGetterSupplier<K1, V1> parentValueGetterSupplier = parent.valueGetterSupplier();
+    public KTableValueGetterSupplier<K, KeyValue<K1, V1>> view() {
+        final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parent.valueGetterSupplier();
 
-        return new KTableValueGetterSupplier<K1, KeyValue<K2, V2>>() {
+        return new KTableValueGetterSupplier<K, KeyValue<K1, V1>>() {
 
-            public KTableValueGetter<K1, KeyValue<K2, V2>> get() {
+            public KTableValueGetter<K, KeyValue<K1, V1>> get() {
                 return new KTableMapValueGetter(parentValueGetterSupplier.get());
             }
 
@@ -63,8 +63,8 @@ public class KTableRepartitionMap<K1, V1, K2, V2> implements KTableProcessorSupp
         throw new KafkaException("KTableRepartitionMap should always require sending old values.");
     }
 
-    private KeyValue<K2, V2> computeValue(K1 key, V1 value) {
-        KeyValue<K2, V2> newValue = null;
+    private KeyValue<K1, V1> computeValue(K key, V value) {
+        KeyValue<K1, V1> newValue = null;
 
         if (key != null || value != null)
             newValue = mapper.apply(key, value);
@@ -72,26 +72,26 @@ public class KTableRepartitionMap<K1, V1, K2, V2> implements KTableProcessorSupp
         return newValue;
     }
 
-    private class KTableMapProcessor extends AbstractProcessor<K1, Change<V1>> {
+    private class KTableMapProcessor extends AbstractProcessor<K, Change<V>> {
 
         @Override
-        public void process(K1 key, Change<V1> change) {
-            KeyValue<K2, V2> newPair = computeValue(key, change.newValue);
+        public void process(K key, Change<V> change) {
+            KeyValue<K1, V1> newPair = computeValue(key, change.newValue);
 
             context().forward(newPair.key, new Change<>(newPair.value, null));
 
             if (change.oldValue != null) {
-                KeyValue<K2, V2> oldPair = computeValue(key, change.oldValue);
+                KeyValue<K1, V1> oldPair = computeValue(key, change.oldValue);
                 context().forward(oldPair.key, new Change<>(null, oldPair.value));
             }
         }
     }
 
-    private class KTableMapValueGetter implements KTableValueGetter<K1, KeyValue<K2, V2>> {
+    private class KTableMapValueGetter implements KTableValueGetter<K, KeyValue<K1, V1>> {
 
-        private final KTableValueGetter<K1, V1> parentGetter;
+        private final KTableValueGetter<K, V> parentGetter;
 
-        public KTableMapValueGetter(KTableValueGetter<K1, V1> parentGetter) {
+        public KTableMapValueGetter(KTableValueGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
         }
 
@@ -101,7 +101,7 @@ public class KTableRepartitionMap<K1, V1, K2, V2> implements KTableProcessorSupp
         }
 
         @Override
-        public KeyValue<K2, V2> get(K1 key) {
+        public KeyValue<K1, V1> get(K key) {
             return computeValue(key, parentGetter.get(key));
         }
 

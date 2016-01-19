@@ -222,6 +222,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         @Override
         public void close() {
+            iter.dispose();
         }
 
     }

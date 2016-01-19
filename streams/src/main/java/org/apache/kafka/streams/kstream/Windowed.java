@@ -35,4 +35,9 @@ public class Windowed<T> {
     public Window window() {
         return window;
     }
+
+    @Override
+    public String toString() {
+        return "[" + value + "@" + window.start() + "]";
+    }
 }

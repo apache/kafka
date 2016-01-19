@@ -16,7 +16,7 @@
 
 if [ $# -lt 1 ];
 then
-	echo "USAGE: $0 zookeeper.properties"
+	echo "USAGE: $0 [-daemon] zookeeper.properties"
 	exit 1
 fi
 base_dir=$(dirname $0)

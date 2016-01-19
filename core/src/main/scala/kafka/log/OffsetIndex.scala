@@ -17,6 +17,8 @@
 
 package kafka.log
 
+import org.apache.kafka.common.utils.Utils
+
 import scala.math._
 import java.io._
 import java.nio._
@@ -338,12 +340,11 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   
   /**
    * Rename the file that backs this offset index
-   * @return true iff the rename was successful
+   * @throws IOException if rename fails
    */
-  def renameTo(f: File): Boolean = {
-    val success = this.file.renameTo(f)
-    this.file = f
-    success
+  def renameTo(f: File) {
+    try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+    finally this.file = f
   }
   
   /**

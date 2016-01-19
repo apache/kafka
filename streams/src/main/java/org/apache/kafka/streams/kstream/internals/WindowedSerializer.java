@@ -49,9 +49,13 @@ public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
         return buf.array();
     }
 
-
     @Override
     public void close() {
         inner.close();
     }
+
+    public byte[] serializeBaseKey(String topic, Windowed<T> data) {
+        return inner.serialize(topic, data.value());
+    }
+
 }
