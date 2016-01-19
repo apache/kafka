@@ -21,7 +21,7 @@ package kafka.network;
 import java.net._
 import javax.net.ssl._
 import java.io._
-import java.util
+import java.util.HashMap
 import java.util.Random
 import java.nio.ByteBuffer
 
@@ -108,7 +108,7 @@ class SocketServerTest extends JUnitSuite {
     val ack = SyncProducerConfig.DefaultRequiredAcks
 
     val emptyHeader = new RequestHeader(apiKey, clientId, correlationId)
-    val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new util.HashMap[TopicPartition, ByteBuffer]())
+    val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new HashMap[TopicPartition, ByteBuffer]())
 
     val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf + emptyRequest.sizeOf)
     emptyHeader.writeTo(byteBuffer)
@@ -253,7 +253,7 @@ class SocketServerTest extends JUnitSuite {
       val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
       val ack = SyncProducerConfig.DefaultRequiredAcks
       val emptyHeader = new RequestHeader(apiKey, clientId, correlationId)
-      val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new util.HashMap[TopicPartition, ByteBuffer]())
+      val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new HashMap[TopicPartition, ByteBuffer]())
 
       val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf() + emptyRequest.sizeOf())
       emptyHeader.writeTo(byteBuffer)

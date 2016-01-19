@@ -29,7 +29,7 @@ import kafka.utils.{Logging, SystemTime}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
-import org.apache.kafka.common.requests.{ProduceRequest, AbstractRequest, RequestHeader}
+import org.apache.kafka.common.requests.{RequestSend, ProduceRequest, AbstractRequest, RequestHeader}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.log4j.Logger
 
@@ -40,11 +40,7 @@ object RequestChannel extends Logging {
   def getShutdownReceive() = {
     val emptyRequestHeader = new RequestHeader(ApiKeys.PRODUCE.id, "", 0)
     val emptyProduceRequest = new ProduceRequest(0, 0, new HashMap[TopicPartition, ByteBuffer]())
-    val byteBuffer = ByteBuffer.allocate(emptyRequestHeader.sizeOf() + emptyProduceRequest.sizeOf())
-    emptyRequestHeader.writeTo(byteBuffer)
-    emptyProduceRequest.writeTo(byteBuffer)
-    byteBuffer.rewind()
-    byteBuffer
+    RequestSend.serialize(emptyRequestHeader, emptyProduceRequest.toStruct)
   }
 
   case class Session(principal: KafkaPrincipal, clientAddress: InetAddress)
