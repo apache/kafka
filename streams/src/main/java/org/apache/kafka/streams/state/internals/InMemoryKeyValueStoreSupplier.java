@@ -25,7 +25,6 @@ import org.apache.kafka.streams.state.Entry;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Serdes;
-import org.apache.kafka.streams.state.Stores;
 
 import java.util.Iterator;
 import java.util.List;
@@ -39,7 +38,7 @@ import java.util.TreeMap;
  * @param <K> The key type
  * @param <V> The value type
  *
- * @see Stores#create(String, org.apache.kafka.streams.StreamingConfig)
+ * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
@@ -47,7 +46,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
     private final Serdes serdes;
     private final Time time;
 
-    protected InMemoryKeyValueStoreSupplier(String name, Serdes<K, V> serdes, Time time) {
+    public InMemoryKeyValueStoreSupplier(String name, Serdes<K, V> serdes, Time time) {
         this.name = name;
         this.serdes = serdes;
         this.time = time;

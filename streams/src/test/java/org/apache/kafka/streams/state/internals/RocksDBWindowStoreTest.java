@@ -32,9 +32,6 @@ import org.apache.kafka.streams.state.Serdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.WindowStoreUtil;
-import org.apache.kafka.streams.state.internals.MeteredWindowStore;
-import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
-import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Test;
 

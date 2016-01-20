@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-import java.io.OutputStream;
 
 
 /**
@@ -166,24 +165,6 @@ public interface KStream<K, V> {
      * @param stateStoreNames the names of the state store used by the processor
      */
     void process(ProcessorSupplier<K, V> processorSupplier, String... stateStoreNames);
-
-    /**
-     * Print the content of this stream to the output stream
-     *
-     * @param out           the output stream
-     * @param keySerializer key serializer used to send key-value pairs,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param valSerializer value serializer used to send key-value pairs,
-     *                      if not specified the default serializer defined in the configs will be used
-     */
-    void print(OutputStream out, Serializer<K> keySerializer, Serializer<V> valSerializer);
-
-    /**
-     * Print the content of this stream to the output stream using default serializers specified in the config.
-     *
-     * @param out           the output stream
-     */
-    void print(OutputStream out);
 
     /**
      * Combines values of this stream with another KStream using Windowed Inner Join.

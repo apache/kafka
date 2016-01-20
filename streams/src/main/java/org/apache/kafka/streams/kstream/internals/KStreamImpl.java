@@ -17,11 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -38,16 +35,11 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.streams.state.Serdes;
 
-import java.io.IOException;
-import java.io.OutputStream;
 import java.lang.reflect.Array;
 import java.util.HashSet;
 import java.util.Set;
@@ -81,8 +73,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public static final String OUTERTHIS_NAME = "KSTREAM-OUTERTHIS-";
 
     public static final String OUTEROTHER_NAME = "KSTREAM-OUTEROTHER-";
-
-    private static final String PRINT_NAME = "KSTREAM-PRINT-";
 
     private static final String PROCESSOR_NAME = "KSTREAM-PROCESSOR-";
 
@@ -235,69 +225,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
 
         topology.addSink(name, topic, keySerializer, valSerializer, streamPartitioner, this.name);
-    }
-
-    @Override
-    public void print(OutputStream out) {
-        print(out, null, null);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public void print(final OutputStream out, final Serializer<K> keySerializer, final Serializer<V> valSerializer) {
-        final String name = topology.newName(PRINT_NAME);
-
-        final Serializer<Long> timestampSerializer = new LongSerializer();
-        final Serializer<String> stringSerializer = new StringSerializer();
-
-        final byte[] startBytes = stringSerializer.serialize(null, name + " : < @");
-        final byte[] endBytes = stringSerializer.serialize(null, ">");
-        final byte[] separatorBytes = stringSerializer.serialize(null, ", ");
-        final byte[] newlineBytes = stringSerializer.serialize(null, System.getProperty("line.separator"));
-        final byte[] pairBytes = stringSerializer.serialize(null, " => ");
-
-        topology.addProcessor(name, new ProcessorSupplier<K, V>() {
-            @Override
-            public Processor<K, V> get() {
-                return new AbstractProcessor<K, V>() {
-                    Serializer<K> kSerializer;
-                    Serializer<V> vSerializer;
-
-                    @Override
-                    public void init(ProcessorContext context) {
-                        super.init(context);
-
-                        kSerializer = keySerializer == null ? (Serializer<K>) context.keySerializer() : keySerializer;
-                        vSerializer = valSerializer == null ? (Serializer<V>) context.valueSerializer() : valSerializer;
-                    }
-
-                    @Override
-                    public void process(K key, V value) {
-                        // timestamp
-                        byte[] timestampBytes = timestampSerializer.serialize(null, context().timestamp());
-
-                        // key
-                        byte[] keyBytes = kSerializer.serialize(null, key);
-
-                        // value
-                        byte[] valBytes = vSerializer.serialize(null, value);
-
-                        try {
-                            out.write(startBytes);
-                            out.write(timestampBytes);
-                            out.write(separatorBytes);
-                            out.write(keyBytes);
-                            out.write(pairBytes);
-                            out.write(valBytes);
-                            out.write(endBytes);
-                            out.write(newlineBytes);
-                        } catch (IOException e) {
-                            throw new KafkaException("Error while printing key-value pair", e);
-                        }
-                    }
-                };
-            }
-        }, this.name);
     }
 
     @Override

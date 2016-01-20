@@ -17,7 +17,20 @@
 
 package org.apache.kafka.streams.kstream;
 
-public interface AggregatorSupplier<K, V, T> {
+public class Count<K> implements Aggregator<K, Long, Long> {
 
-    Aggregator<K, V, T> get();
+    @Override
+    public Long initialValue(K aggKey) {
+        return 0L;
+    }
+
+    @Override
+    public Long add(K aggKey, Long value, Long aggregate) {
+        return aggregate + 1L;
+    }
+
+    @Override
+    public Long remove(K aggKey, Long value, Long aggregate) {
+        return aggregate - 1L;
+    }
 }

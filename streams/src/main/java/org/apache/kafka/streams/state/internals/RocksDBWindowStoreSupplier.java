@@ -20,17 +20,15 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Serdes;
-import org.apache.kafka.streams.state.Stores;
 
 /**
- * A {@link KeyValueStore} that stores all entries in a local RocksDB database.
+ * A {@link org.apache.kafka.streams.state.KeyValueStore} that stores all entries in a local RocksDB database.
  *
  * @param <K> the type of keys
  * @param <V> the type of values
  *
- * @see Stores#create(String)
+ * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
 
