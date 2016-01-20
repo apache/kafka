@@ -17,17 +17,16 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.AggregatorSupplier;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValue;
-import org.apache.kafka.streams.kstream.KeyValueToLongMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -39,60 +38,68 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.streams.state.Serdes;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.lang.reflect.Array;
 import java.util.HashSet;
 import java.util.Set;
 
 public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V> {
 
-    private static final String FILTER_NAME = "KSTREAM-FILTER-";
-
-    private static final String MAP_NAME = "KSTREAM-MAP-";
-
-    private static final String MAPVALUES_NAME = "KSTREAM-MAPVALUES-";
-
-    private static final String FLATMAP_NAME = "KSTREAM-FLATMAP-";
-
-    private static final String FLATMAPVALUES_NAME = "KSTREAM-FLATMAPVALUES-";
-
-    private static final String TRANSFORM_NAME = "KSTREAM-TRANSFORM-";
-
-    private static final String TRANSFORMVALUES_NAME = "KSTREAM-TRANSFORMVALUES-";
-
-    private static final String PROCESSOR_NAME = "KSTREAM-PROCESSOR-";
+    private static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
 
     private static final String BRANCH_NAME = "KSTREAM-BRANCH-";
 
     private static final String BRANCHCHILD_NAME = "KSTREAM-BRANCHCHILD-";
 
-    private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
+    private static final String FILTER_NAME = "KSTREAM-FILTER-";
 
-    private static final String SELECT_NAME = "KSTREAM-SELECT-";
+    private static final String FLATMAP_NAME = "KSTREAM-FLATMAP-";
 
-    private static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
-
-    private static final String REDUCE_NAME = "KSTREAM-REDUCE-";
-
-    public static final String SINK_NAME = "KSTREAM-SINK-";
+    private static final String FLATMAPVALUES_NAME = "KSTREAM-FLATMAPVALUES-";
 
     public static final String JOINTHIS_NAME = "KSTREAM-JOINTHIS-";
 
     public static final String JOINOTHER_NAME = "KSTREAM-JOINOTHER-";
 
+    public static final String LEFTJOIN_NAME = "KSTREAM-LEFTJOIN-";
+
+    private static final String MAP_NAME = "KSTREAM-MAP-";
+
+    private static final String MAPVALUES_NAME = "KSTREAM-MAPVALUES-";
+
+    public static final String MERGE_NAME = "KSTREAM-MERGE-";
+
     public static final String OUTERTHIS_NAME = "KSTREAM-OUTERTHIS-";
 
     public static final String OUTEROTHER_NAME = "KSTREAM-OUTEROTHER-";
 
-    public static final String LEFTJOIN_NAME = "KSTREAM-LEFTJOIN-";
+    private static final String PRINT_NAME = "KSTREAM-PRINT-";
 
-    public static final String MERGE_NAME = "KSTREAM-MERGE-";
+    private static final String PROCESSOR_NAME = "KSTREAM-PROCESSOR-";
+
+    private static final String REDUCE_NAME = "KSTREAM-REDUCE-";
+
+    private static final String SELECT_NAME = "KSTREAM-SELECT-";
+
+    public static final String SINK_NAME = "KSTREAM-SINK-";
 
     public static final String SOURCE_NAME = "KSTREAM-SOURCE-";
+
+    private static final String TRANSFORM_NAME = "KSTREAM-TRANSFORM-";
+
+    private static final String TRANSFORMVALUES_NAME = "KSTREAM-TRANSFORMVALUES-";
+
+    private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
+
 
     public KStreamImpl(KStreamBuilder topology, String name, Set<String> sourceNodes) {
         super(topology, name, sourceNodes);
@@ -228,6 +235,69 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
 
         topology.addSink(name, topic, keySerializer, valSerializer, streamPartitioner, this.name);
+    }
+
+    @Override
+    public void print(OutputStream out) {
+        print(out, null, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public void print(final OutputStream out, final Serializer<K> keySerializer, final Serializer<V> valSerializer) {
+        final String name = topology.newName(PRINT_NAME);
+
+        final Serializer<Long> timestampSerializer = new LongSerializer();
+        final Serializer<String> stringSerializer = new StringSerializer();
+
+        final byte[] startBytes = stringSerializer.serialize(null, name + " : < @");
+        final byte[] endBytes = stringSerializer.serialize(null, ">");
+        final byte[] separatorBytes = stringSerializer.serialize(null, ", ");
+        final byte[] newlineBytes = stringSerializer.serialize(null, System.getProperty("line.separator"));
+        final byte[] pairBytes = stringSerializer.serialize(null, " => ");
+
+        topology.addProcessor(name, new ProcessorSupplier<K, V>() {
+            @Override
+            public Processor<K, V> get() {
+                return new AbstractProcessor<K, V>() {
+                    Serializer<K> kSerializer;
+                    Serializer<V> vSerializer;
+
+                    @Override
+                    public void init(ProcessorContext context) {
+                        super.init(context);
+
+                        kSerializer = keySerializer == null ? (Serializer<K>) context.keySerializer() : keySerializer;
+                        vSerializer = valSerializer == null ? (Serializer<V>) context.valueSerializer() : valSerializer;
+                    }
+
+                    @Override
+                    public void process(K key, V value) {
+                        // timestamp
+                        byte[] timestampBytes = timestampSerializer.serialize(null, context().timestamp());
+
+                        // key
+                        byte[] keyBytes = kSerializer.serialize(null, key);
+
+                        // value
+                        byte[] valBytes = vSerializer.serialize(null, value);
+
+                        try {
+                            out.write(startBytes);
+                            out.write(timestampBytes);
+                            out.write(separatorBytes);
+                            out.write(keyBytes);
+                            out.write(pairBytes);
+                            out.write(valBytes);
+                            out.write(endBytes);
+                            out.write(newlineBytes);
+                        } catch (IOException e) {
+                            throw new KafkaException("Error while printing key-value pair", e);
+                        }
+                    }
+                };
+            }
+        }, this.name);
     }
 
     @Override

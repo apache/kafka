@@ -46,33 +46,34 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
 
-    private static final String FILTER_NAME = "KTABLE-FILTER-";
-
-    private static final String MAPVALUES_NAME = "KTABLE-MAPVALUES-";
-
-    private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
-
-    private static final String SELECT_NAME = "KTABLE-SELECT-";
-
     private static final String AGGREGATE_NAME = "KTABLE-AGGREGATE-";
 
-    private static final String REDUCE_NAME = "KTABLE-REDUCE-";
-
-    public static final String SOURCE_NAME = "KTABLE-SOURCE-";
+    private static final String FILTER_NAME = "KTABLE-FILTER-";
 
     public static final String JOINTHIS_NAME = "KTABLE-JOINTHIS-";
 
     public static final String JOINOTHER_NAME = "KTABLE-JOINOTHER-";
 
-    public static final String OUTERTHIS_NAME = "KTABLE-OUTERTHIS-";
-
-    public static final String OUTEROTHER_NAME = "KTABLE-OUTEROTHER-";
-
     public static final String LEFTTHIS_NAME = "KTABLE-LEFTTHIS-";
 
     public static final String LEFTOTHER_NAME = "KTABLE-LEFTOTHER-";
 
+    private static final String MAPVALUES_NAME = "KTABLE-MAPVALUES-";
+
     public static final String MERGE_NAME = "KTABLE-MERGE-";
+
+    public static final String OUTERTHIS_NAME = "KTABLE-OUTERTHIS-";
+
+    public static final String OUTEROTHER_NAME = "KTABLE-OUTEROTHER-";
+
+    private static final String REDUCE_NAME = "KTABLE-REDUCE-";
+
+    private static final String SELECT_NAME = "KTABLE-SELECT-";
+
+    public static final String SOURCE_NAME = "KTABLE-SOURCE-";
+
+    private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
+
 
     public final ProcessorSupplier<K, ?> processorSupplier;
 
