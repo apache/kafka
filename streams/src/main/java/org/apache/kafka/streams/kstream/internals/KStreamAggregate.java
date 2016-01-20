@@ -97,7 +97,7 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
                     T oldAgg = entry.value;
 
                     if (oldAgg == null)
-                        oldAgg = aggregator.initialValue();
+                        oldAgg = aggregator.initialValue(key);
 
                     // try to add the new new value (there will never be old value)
                     T newAgg = aggregator.add(key, value, oldAgg);
@@ -119,7 +119,7 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
 
             // create the new window for the rest of unmatched window that do not exist yet
             for (long windowStartMs : matchedWindows.keySet()) {
-                T oldAgg = aggregator.initialValue();
+                T oldAgg = aggregator.initialValue(key);
                 T newAgg = aggregator.add(key, value, oldAgg);
 
                 windowStore.put(key, newAgg, windowStartMs);

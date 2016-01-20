@@ -15,12 +15,17 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.state;
+package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.Entry;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.Stores;
 
 import java.util.Iterator;
 import java.util.List;

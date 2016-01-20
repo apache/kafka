@@ -21,12 +21,14 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.AggregatorSupplier;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueToLongMapper;
+import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
@@ -39,7 +41,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.state.RocksDBWindowStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.streams.state.Serdes;
 
 import java.lang.reflect.Array;
@@ -73,6 +75,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     private static final String SELECT_NAME = "KSTREAM-SELECT-";
 
     private static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
+
+    private static final String REDUCE_NAME = "KSTREAM-REDUCE-";
 
     public static final String SINK_NAME = "KSTREAM-SINK-";
 
@@ -394,7 +398,41 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(AggregatorSupplier<K, V, T> aggregatorSupplier,
+    public <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
+                                                                 Windows<W> windows,
+                                                                 Serializer<K> keySerializer,
+                                                                 Serializer<V> aggValueSerializer,
+                                                                 Deserializer<K> keyDeserializer,
+                                                                 Deserializer<V> aggValueDeserializer) {
+
+        // TODO: this agg window operator is only used for casting K to Windowed<K> for
+        // KTableProcessorSupplier, which is a bit awkward and better be removed in the future
+        String reduceName = topology.newName(REDUCE_NAME);
+        String selectName = topology.newName(SELECT_NAME);
+
+        ProcessorSupplier<K, V> aggWindowSupplier = new KStreamAggWindow<>();
+        ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamReduce<>(windows, windows.name(), reducer);
+
+        RocksDBWindowStoreSupplier<K, V> aggregateStore =
+                new RocksDBWindowStoreSupplier<>(
+                        windows.name(),
+                        windows.maintainMs(),
+                        windows.segments,
+                        false,
+                        new Serdes<>("", keySerializer, keyDeserializer, aggValueSerializer, aggValueDeserializer),
+                        null);
+
+        // aggregate the values with the aggregator and local store
+        topology.addProcessor(selectName, aggWindowSupplier, this.name);
+        topology.addProcessor(reduceName, aggregateSupplier, selectName);
+        topology.addStateStore(aggregateStore, reduceName);
+
+        // return the KTable representation with the intermediate topic as the sources
+        return new KTableImpl<>(topology, reduceName, aggregateSupplier, sourceNodes);
+    }
+
+    @Override
+    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Aggregator<K, V, T> aggregator,
                                                                        Windows<W> windows,
                                                                        Serializer<K> keySerializer,
                                                                        Serializer<T> aggValueSerializer,
@@ -407,7 +445,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String selectName = topology.newName(SELECT_NAME);
 
         ProcessorSupplier<K, V> aggWindowSupplier = new KStreamAggWindow<>();
-        ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamAggregate<>(windows, windows.name(), aggregatorSupplier.get());
+        ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamAggregate<>(windows, windows.name(), aggregator);
 
         RocksDBWindowStoreSupplier<K, T> aggregateStore =
                 new RocksDBWindowStoreSupplier<>(
@@ -425,40 +463,5 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(topology, aggregateName, aggregateSupplier, sourceNodes);
-    }
-
-    @Override
-    public <W extends Window> KTable<Windowed<K>, Long> sumByKey(final KeyValueToLongMapper<K, V> valueSelector,
-                                                                 Windows<W> windows,
-                                                                 Serializer<K> keySerializer,
-                                                                 Deserializer<K> keyDeserializer) {
-
-        KStream<K, Long> selected = this.map(new KeyValueMapper<K, V, KeyValue<K, Long>>() {
-            @Override
-            public KeyValue<K, Long> apply(K key, V value) {
-                return new KeyValue<>(key, valueSelector.apply(key, value));
-            }
-        });
-
-        return selected.<Long, W>aggregateByKey(new LongSumSupplier<K>(),
-                windows,
-                keySerializer,
-                new LongSerializer(),
-                keyDeserializer,
-                new LongDeserializer());
-    }
-
-
-    @Override
-    public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
-                                                                   Serializer<K> keySerializer,
-                                                                   Deserializer<K> keyDeserializer) {
-
-        return this.<Long, W>aggregateByKey(new CountSupplier<K, V>(),
-                windows,
-                keySerializer,
-                new LongSerializer(),
-                keyDeserializer,
-                new LongDeserializer());
     }
 }

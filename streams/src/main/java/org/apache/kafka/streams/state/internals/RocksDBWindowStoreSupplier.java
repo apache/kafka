@@ -15,11 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.state;
+package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.Stores;
 
 /**
  * A {@link KeyValueStore} that stores all entries in a local RocksDB database.
@@ -29,14 +32,20 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
  *
  * @see Stores#create(String)
  */
-public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
+public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
+    private final long retentionPeriod;
+    private final boolean retainDuplicates;
+    private final int numSegments;
     private final Serdes serdes;
     private final Time time;
 
-    protected RocksDBKeyValueStoreSupplier(String name, Serdes<K, V> serdes, Time time) {
+    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serdes<K, V> serdes, Time time) {
         this.name = name;
+        this.retentionPeriod = retentionPeriod;
+        this.retainDuplicates = retainDuplicates;
+        this.numSegments = numSegments;
         this.serdes = serdes;
         this.time = time;
     }
@@ -46,7 +55,7 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        return new MeteredKeyValueStore<>(new RocksDBStore<K, V>(name, serdes), serdes, "rocksdb-state", time);
+        return new MeteredWindowStore<>(new RocksDBWindowStore<K, V>(name, retentionPeriod, numSegments, retainDuplicates, serdes), "rocksdb-window", time);
     }
 
 }

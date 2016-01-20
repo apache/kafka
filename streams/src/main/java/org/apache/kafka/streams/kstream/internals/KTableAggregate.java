@@ -30,7 +30,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
     private boolean sendOldValues = false;
 
-    KTableAggregate(String storeName, Aggregator<K, V, T> aggregator) {
+    public KTableAggregate(String storeName, Aggregator<K, V, T> aggregator) {
         this.storeName = storeName;
         this.aggregator = aggregator;
     }
@@ -62,7 +62,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             T oldAgg = store.get(key);
 
             if (oldAgg == null)
-                oldAgg = aggregator.initialValue();
+                oldAgg = aggregator.initialValue(key);
 
             T newAgg = oldAgg;
 
