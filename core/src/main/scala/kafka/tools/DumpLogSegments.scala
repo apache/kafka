@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -63,7 +63,7 @@ object DumpLogSegments {
       CommandLineUtils.printUsageAndDie(parser, "Parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
 
     val options = parser.parse(args : _*)
-    
+
     CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 
     val print = if(options.has(printOpt)) true else false
@@ -71,7 +71,7 @@ object DumpLogSegments {
     val files = options.valueOf(filesOpt).split(",")
     val maxMessageSize = options.valueOf(maxMessageSizeOpt).intValue()
     val isDeepIteration = if(options.has(deepIterationOpt)) true else false
-  
+
     val messageParser = if (options.has(offsetsOpt)) {
       new OffsetsMessageParser
     } else {
@@ -110,7 +110,7 @@ object DumpLogSegments {
       }
     }
   }
-  
+
   /* print out the contents of the index */
   private def dumpIndex(file: File,
                         verifyOnly: Boolean,
@@ -168,10 +168,10 @@ object DumpLogSegments {
 
     private def parseOffsets(offsetKey: OffsetKey, payload: ByteBuffer) = {
       val group = offsetKey.key.group
-      val (topic, partition)  = offsetKey.key.topicPartition.asTuple
+      val topicPartition = offsetKey.key.topicPartition
       val offset = GroupMetadataManager.readOffsetMessageValue(payload)
 
-      val keyString = s"offset::${group}:${topic}:${partition}"
+      val keyString = s"offset::${group}:${topicPartition.topic}:${topicPartition.partition}"
       val valueString = if (offset.metadata.isEmpty)
         String.valueOf(offset.offset)
       else
@@ -293,5 +293,5 @@ object DumpLogSegments {
       }
     }
   }
-  
+
 }
