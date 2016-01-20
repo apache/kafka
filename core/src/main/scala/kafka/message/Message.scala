@@ -127,7 +127,7 @@ object Message {
  *
  * Default constructor wraps an existing ByteBuffer with the Message object with no change to the contents.
  */
-class Message(val buffer: ByteBuffer) {
+class Message(val buffer: ByteBuffer, val wrapperMessageTimestamp: Long = Message.NoTimestamp) {
   
   import kafka.message.Message._
 
@@ -282,7 +282,12 @@ class Message(val buffer: ByteBuffer) {
   def timestamp: Long = {
     if (magic == MagicValue_V0)
       throw new IllegalStateException("The message with magic byte 0 does not have a timestamp")
-    buffer.getLong(TimestampOffset)
+
+    val timestamp = buffer.getLong(TimestampOffset)
+    if (timestamp == Message.InheritedTimestamp)
+      wrapperMessageTimestamp
+    else
+      timestamp
   }
   
   /**

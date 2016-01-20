@@ -185,11 +185,14 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
     val now = System.currentTimeMillis()
     assertEquals("message set size should not change", messages.size, validatedMessages.size)
-    for (messageAndOffset <- validatedMessages)
+    for (messageAndOffset <- validatedMessages) {
+      messageAndOffset.message.ensureValid()
       assertTrue(messageAndOffset.message.timestamp >= startTime && messageAndOffset.message.timestamp <= now)
+    }
 
     assertEquals("message set size should not change", compressedMessages.size, validatedCompressedMessages.size)
     for (messageAndOffset <- validatedCompressedMessages) {
+      messageAndOffset.message.ensureValid()
       assertTrue(s"Timestamp of message ${messageAndOffset.message}} should be between $startTime and $now",
         messageAndOffset.message.timestamp >= startTime && messageAndOffset.message.timestamp <= now)
     }
@@ -198,6 +201,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     assertEquals("message set size should not change", compressedMessagesWithoutRecompression.size,
       validatedCompressedMessagesWithoutRecompression.size)
     for (messageAndOffset <- validatedCompressedMessagesWithoutRecompression) {
+      messageAndOffset.message.ensureValid()
       assertTrue(s"Timestamp of message ${messageAndOffset.message}} should be between $startTime and $now",
         messageAndOffset.message.timestamp >= startTime && messageAndOffset.message.timestamp <= now)
     }

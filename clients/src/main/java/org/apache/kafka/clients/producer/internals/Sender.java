@@ -41,6 +41,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestSend;
@@ -243,7 +244,7 @@ public class Sender implements Runnable {
                                                                                                   .request()
                                                                                                   .destination());
             for (RecordBatch batch : batches.values())
-                completeBatch(batch, Errors.NETWORK_EXCEPTION, -1L, correlationId, now);
+                completeBatch(batch, Errors.NETWORK_EXCEPTION, -1L, Record.NO_TIMESTAMP, correlationId, now);
         } else {
             log.trace("Received produce response from node {} with correlation id {}",
                       response.request().request().destination(),
@@ -251,13 +252,15 @@ public class Sender implements Runnable {
             // if we have a response, parse it
             if (response.hasResponse()) {
                 ProduceResponse produceResponse = new ProduceResponse(response.responseBody());
-                for (Map.Entry<TopicPartition, ProduceResponse.PartitionResponse> entry : produceResponse.responses()
-                                                                                                         .entrySet()) {
+                for (Map.Entry<TopicPartition, ProduceResponse.PartitionResponse> entry : produceResponse.responses().entrySet()) {
                     TopicPartition tp = entry.getKey();
                     ProduceResponse.PartitionResponse partResp = entry.getValue();
                     Errors error = Errors.forCode(partResp.errorCode);
                     RecordBatch batch = batches.get(tp);
-                    completeBatch(batch, error, partResp.baseOffset, correlationId, now);
+                    completeBatch(batch, error, partResp.baseOffset, partResp.timestamp, correlationId, now);
+                    if (error == Errors.NONE)
+                        metadata.recordTopicTimestampType(tp.topic(),
+                            partResp.timestamp >= 0 ? Record.TimestampType.LogAppendTime : Record.TimestampType.CreateTime);
                 }
                 this.sensors.recordLatency(response.request().request().destination(), response.requestLatencyMs());
                 this.sensors.recordThrottleTime(response.request().request().destination(),
@@ -265,7 +268,7 @@ public class Sender implements Runnable {
             } else {
                 // this is the acks = 0 case, just complete all requests
                 for (RecordBatch batch : batches.values())
-                    completeBatch(batch, Errors.NONE, -1L, correlationId, now);
+                    completeBatch(batch, Errors.NONE, -1L, Record.NO_TIMESTAMP, correlationId, now);
             }
         }
     }
@@ -276,10 +279,11 @@ public class Sender implements Runnable {
      * @param batch The record batch
      * @param error The error (or null if none)
      * @param baseOffset The base offset assigned to the records if successful
+     * @param timestamp The timestamp returned by the broker for this batch
      * @param correlationId The correlation id for the request
      * @param now The current POSIX time stamp in milliseconds
      */
-    private void completeBatch(RecordBatch batch, Errors error, long baseOffset, long correlationId, long now) {
+    private void completeBatch(RecordBatch batch, Errors error, long baseOffset, long timestamp, long correlationId, long now) {
         if (error != Errors.NONE && canRetry(batch, error)) {
             // retry
             log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
@@ -296,7 +300,7 @@ public class Sender implements Runnable {
             else
                 exception = error.exception();
             // tell the user the result of their request
-            batch.done(baseOffset, exception);
+            batch.done(baseOffset, timestamp, exception);
             this.accumulator.deallocate(batch);
             if (error != Errors.NONE)
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);

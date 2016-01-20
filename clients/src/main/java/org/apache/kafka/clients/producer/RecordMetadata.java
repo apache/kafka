@@ -24,18 +24,20 @@ import org.apache.kafka.common.TopicPartition;
 public final class RecordMetadata {
 
     private final long offset;
+    private final long timestamp;
     private final TopicPartition topicPartition;
 
-    private RecordMetadata(TopicPartition topicPartition, long offset) {
+    private RecordMetadata(TopicPartition topicPartition, long offset, long timestamp) {
         super();
         this.offset = offset;
+        this.timestamp = timestamp;
         this.topicPartition = topicPartition;
     }
 
-    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset) {
+    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset, long timestamp) {
         // ignore the relativeOffset if the base offset is -1,
         // since this indicates the offset is unknown
-        this(topicPartition, baseOffset == -1 ? baseOffset : baseOffset + relativeOffset);
+        this(topicPartition, baseOffset == -1 ? baseOffset : baseOffset + relativeOffset, timestamp);
     }
 
     /**
@@ -43,6 +45,13 @@ public final class RecordMetadata {
      */
     public long offset() {
         return this.offset;
+    }
+
+    /**
+     * The timestamp of the record in the topic/partition.
+     */
+    public long timestamp() {
+        return timestamp;
     }
 
     /**

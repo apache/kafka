@@ -152,7 +152,7 @@ public class StandbyTaskTest {
             restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 
             task.update(partition1,
-                    records(new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, recordKey, recordValue))
+                    records(new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, recordKey, recordValue))
             );
 
         } finally {
@@ -171,9 +171,9 @@ public class StandbyTaskTest {
             restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 
             for (ConsumerRecord<Integer, Integer> record : Arrays.asList(
-                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 10, 1, 100),
-                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 20, 2, 100),
-                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 30, 3, 100))) {
+                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 10, 0L, 1, 100),
+                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 20, 0L, 2, 100),
+                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 30, 0L, 3, 100))) {
                 restoreStateConsumer.bufferRecord(record);
             }
 
@@ -234,11 +234,11 @@ public class StandbyTaskTest {
             restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 
             for (ConsumerRecord<Integer, Integer> record : Arrays.asList(
-                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 10, 1, 100),
-                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 20, 2, 100),
-                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 30, 3, 100),
-                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 40, 4, 100),
-                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 50, 5, 100))) {
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 10, 0L, 1, 100),
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 20, 0L, 2, 100),
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 30, 0L, 3, 100),
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 40, 0L, 4, 100),
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 50, 0L, 5, 100))) {
                 restoreStateConsumer.bufferRecord(record);
             }
 

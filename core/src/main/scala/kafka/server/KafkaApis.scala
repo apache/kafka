@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.{InvalidTopicException, NotLeaderForPartit
 ClusterAuthorizationException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ProtoUtils, ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.types.Schema
 import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse,
 DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse,
 LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse,
@@ -330,7 +331,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
 
+<<<<<<< HEAD
       val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ => new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1))
+=======
+      val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ =>
+        ProducerResponseStatus(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, Message.NoTimestamp))
+>>>>>>> Added timestamp and relative offset to clients package.
 
       var errorInResponse = false
 
@@ -431,10 +437,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Only send messages with magic value 1 when client supports it and server has this format on disk.
       val magicValueToUse =
         if (fetchRequest.versionId > 1 && config.messageFormatVersion.onOrAfter(KAFKA_0_10_0_DV0))
-          // TODO: Change magic value to 1 after o.a.k.client side change is done.
-          // We cannot send message format 1 back yet, because replica fetcher thread uses o.a.k.clients schema
-          // that does not have magic value 1 yet.
-          Message.MagicValue_V0
+          Message.MagicValue_V1
         else
           Message.MagicValue_V0
 

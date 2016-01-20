@@ -176,7 +176,7 @@ class MessageTest extends JUnitSuite {
   def testInValidMagicByte() {
     new Message("hello".getBytes, 0L, 2)
   }
-  
+
   @Test
   def testIsHashable() {
     // this is silly, but why not

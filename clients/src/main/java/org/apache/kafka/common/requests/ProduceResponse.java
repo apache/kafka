@@ -52,6 +52,7 @@ public class ProduceResponse extends AbstractRequestResponse {
      */
 
     private static final String BASE_OFFSET_KEY_NAME = "base_offset";
+    private static final String TIMESTAMP_KEY_NAME = "timestamp";
 
     private final Map<TopicPartition, PartitionResponse> responses;
     private final int throttleTime;
@@ -91,8 +92,9 @@ public class ProduceResponse extends AbstractRequestResponse {
                 int partition = partRespStruct.getInt(PARTITION_KEY_NAME);
                 short errorCode = partRespStruct.getShort(ERROR_CODE_KEY_NAME);
                 long offset = partRespStruct.getLong(BASE_OFFSET_KEY_NAME);
+                long timestamp = partRespStruct.getLong(TIMESTAMP_KEY_NAME);
                 TopicPartition tp = new TopicPartition(topic, partition);
-                responses.put(tp, new PartitionResponse(errorCode, offset));
+                responses.put(tp, new PartitionResponse(errorCode, offset, timestamp));
             }
         }
         this.throttleTime = struct.getInt(THROTTLE_TIME_KEY_NAME);
@@ -107,9 +109,12 @@ public class ProduceResponse extends AbstractRequestResponse {
             List<Struct> partitionArray = new ArrayList<Struct>();
             for (Map.Entry<Integer, PartitionResponse> partitionEntry : entry.getValue().entrySet()) {
                 PartitionResponse part = partitionEntry.getValue();
-                Struct partStruct = topicData.instance(PARTITION_RESPONSES_KEY_NAME).set(PARTITION_KEY_NAME,
-                                                                                         partitionEntry.getKey()).set(
-                    ERROR_CODE_KEY_NAME, part.errorCode).set(BASE_OFFSET_KEY_NAME, part.baseOffset);
+                Struct partStruct = topicData.instance(PARTITION_RESPONSES_KEY_NAME)
+                        .set(PARTITION_KEY_NAME, partitionEntry.getKey())
+                        .set(ERROR_CODE_KEY_NAME, part.errorCode)
+                        .set(BASE_OFFSET_KEY_NAME, part.baseOffset);
+                if (partStruct.hasField(TIMESTAMP_KEY_NAME))
+                        partStruct.set(TIMESTAMP_KEY_NAME, part.timestamp);
                 partitionArray.add(partStruct);
             }
             topicData.set(PARTITION_RESPONSES_KEY_NAME, partitionArray.toArray());
@@ -129,10 +134,12 @@ public class ProduceResponse extends AbstractRequestResponse {
     public static final class PartitionResponse {
         public short errorCode;
         public long baseOffset;
+        public long timestamp;
 
-        public PartitionResponse(short errorCode, long baseOffset) {
+        public PartitionResponse(short errorCode, long baseOffset, long timestamp) {
             this.errorCode = errorCode;
             this.baseOffset = baseOffset;
+            this.timestamp = timestamp;
         }
 
         @Override
@@ -143,6 +150,8 @@ public class ProduceResponse extends AbstractRequestResponse {
             b.append(errorCode);
             b.append(",offset: ");
             b.append(baseOffset);
+            b.append(",timestamp: ");
+            b.append(timestamp);
             b.append('}');
             return b.toString();
         }

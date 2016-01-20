@@ -26,7 +26,7 @@ import kafka.cluster.{Partition, Replica}
 import kafka.common._
 import kafka.controller.KafkaController
 import kafka.log.{LogAppendInfo, LogManager}
-import kafka.message.{InvalidMessageException, ByteBufferMessageSet, MessageSet}
+import kafka.message.{Message, InvalidMessageException, ByteBufferMessageSet, MessageSet}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.apache.kafka.common.errors.{OffsetOutOfRangeException, RecordBatchTooLargeException, ReplicaNotAvailableException, RecordTooLargeException,
@@ -332,7 +332,7 @@ class ReplicaManager(val config: KafkaConfig,
         topicPartition ->
                 ProducePartitionStatus(
                   result.info.lastOffset + 1, // required offset
-                  new PartitionResponse(result.errorCode, result.info.firstOffset)) // response status
+                  new PartitionResponse(result.errorCode, result.info.firstOffset, result.info.timestamp)) // response status
       }
 
       if (delayedRequestRequired(requiredAcks, messagesPerPartition, localProduceResults)) {
@@ -358,9 +358,9 @@ class ReplicaManager(val config: KafkaConfig,
       // Just return an error and don't handle the request at all
       val responseStatus = messagesPerPartition.map {
         case (topicAndPartition, messageSet) =>
-          (topicAndPartition ->
-                  new PartitionResponse(Errors.INVALID_REQUIRED_ACKS.code,
-                    LogAppendInfo.UnknownLogAppendInfo.firstOffset))
+          (topicAndPartition -> new PartitionResponse(Errors.INVALID_REQUIRED_ACKS.code,
+                                                      LogAppendInfo.UnknownLogAppendInfo.firstOffset,
+                                                      Message.NoTimestamp))
       }
       responseCallback(responseStatus)
     }

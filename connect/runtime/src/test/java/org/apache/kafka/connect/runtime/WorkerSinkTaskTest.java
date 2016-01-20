@@ -290,7 +290,7 @@ public class WorkerSinkTaskTest {
                     public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
                         List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
                         for (int i = 0; i < numMessages; i++)
-                            records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned + i, RAW_KEY, RAW_VALUE));
+                            records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned + i, 0L, RAW_KEY, RAW_VALUE));
                         recordsReturned += numMessages;
                         return new ConsumerRecords<>(
                                 numMessages > 0 ?

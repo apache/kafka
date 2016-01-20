@@ -614,12 +614,13 @@ public class Fetcher<K, V> {
             if (this.checkCrcs)
                 logEntry.record().ensureValid();
             long offset = logEntry.offset();
+            long timestamp = logEntry.record().timestamp();
             ByteBuffer keyBytes = logEntry.record().key();
             K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), Utils.toArray(keyBytes));
             ByteBuffer valueBytes = logEntry.record().value();
             V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), Utils.toArray(valueBytes));
 
-            return new ConsumerRecord<>(partition.topic(), partition.partition(), offset, key, value);
+            return new ConsumerRecord<>(partition.topic(), partition.partition(), offset, timestamp, key, value);
         } catch (KafkaException e) {
             throw e;
         } catch (RuntimeException e) {

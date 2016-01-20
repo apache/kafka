@@ -76,7 +76,7 @@ public class RecordQueue {
             Object key = source.deserializeKey(rawRecord.topic(), rawRecord.key());
             Object value = source.deserializeValue(rawRecord.topic(), rawRecord.value());
 
-            ConsumerRecord<Object, Object> record = new ConsumerRecord<>(rawRecord.topic(), rawRecord.partition(), rawRecord.offset(), key, value);
+            ConsumerRecord<Object, Object> record = new ConsumerRecord<>(rawRecord.topic(), rawRecord.partition(), rawRecord.offset(), rawRecord.timestamp(), key, value);
             long timestamp = timestampExtractor.extract(record);
 
             StampedRecord stampedRecord = new StampedRecord(record, timestamp);
