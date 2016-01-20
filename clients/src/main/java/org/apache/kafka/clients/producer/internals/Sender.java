@@ -289,11 +289,14 @@ public class Sender implements Runnable {
                      error);
             this.accumulator.reenqueue(batch, now);
             this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount);
-        } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-            batch.done(baseOffset, new TopicAuthorizationException(batch.topicPartition.topic()));
         } else {
+            RuntimeException exception;
+            if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
+                exception = new TopicAuthorizationException(batch.topicPartition.topic());
+            else
+                exception = error.exception();
             // tell the user the result of their request
-            batch.done(baseOffset, error.exception());
+            batch.done(baseOffset, exception);
             this.accumulator.deallocate(batch);
             if (error != Errors.NONE)
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
