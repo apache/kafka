@@ -29,11 +29,17 @@ public class ClientUtilsTest {
         check("mydomain.com:8080");
         check("[::1]:8000");
         check("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "mydomain.com:10000");
+        check("some.invalid.hostname.foo.bar:9999", "mydomain.com:10000");
     }
 
     @Test(expected = ConfigException.class)
     public void testNoPort() {
         check("127.0.0.1");
+    }
+    
+    @Test(expected = ConfigException.class)
+    public void testOnlyBadHostname() {
+        check("some.invalid.hostname.foo.bar:9999");
     }
 
     private void check(String... url) {
