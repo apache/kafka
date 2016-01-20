@@ -115,34 +115,12 @@ public interface KStream<K, V> {
     KStream<K, V> through(String topic);
 
     /**
-     * Sends key-value to a topic, also creates a new instance of KStream from the topic.
-     * This is equivalent to calling to(topic) and from(topic).
-     *
-     * @param topic           the topic name
-     * @param keySerializer   key serializer used to send key-value pairs
-     * @param valSerializer   value serializer used to send key-value pairs
-     * @param keyDeserializer key deserializer used to create the new KStream
-     * @param valDeserializer value deserializer used to create the new KStream
-     * @return the instance of KStream that consumes the given topic
-     */
-    KStream<K, V> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer);
-
-    /**
      * Sends key-value to a topic using default serializers specified in the config.
      * The serializers are determined from the key/value type infos of this stream.
      *
      * @param topic         the topic name
      */
     void to(String topic);
-
-    /**
-     * Sends key-value to a topic.
-     *
-     * @param topic         the topic name
-     * @param keySerializer key serializer used to send key-value pairs
-     * @param valSerializer value serializer used to send key-value pairs
-     */
-    void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer);
 
     /**
      * Applies a stateful transformation to all elements in this stream.

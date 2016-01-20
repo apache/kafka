@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.AggregatorSupplier;
-import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -38,6 +37,8 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.type.Resolver;
+import org.apache.kafka.streams.kstream.type.TypeException;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyException;
@@ -208,58 +209,25 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public KStream<K, V> through(String topic,
-                                 Serializer<K> keySerializer,
-                                 Serializer<V> valSerializer,
-                                 Deserializer<K> keyDeserializer,
-                                 Deserializer<V> valDeserializer) {
-        to(topic, keySerializer, valSerializer);
-
-        if (keyDeserializer == null)
-            throw new TopologyException("null deserializer for key");
-
-        if (valDeserializer == null)
-            throw new TopologyException("null deserializer for value");
-
-        return topology.stream(keyDeserializer, valDeserializer, topic).returns(keyType, valueType);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
     public KStream<K, V> through(String topic) {
-        if (keyType == null)
-            throw new InsufficientTypeInfoException("key type");
+        to(topic);
 
-        if (valueType == null)
-            throw new InsufficientTypeInfoException("value type");
-
-        return through(topic,
-                (Serializer<K>) getSerializer(keyType),
-                (Serializer<V>) getSerializer(valueType),
-                (Deserializer<K>) getDeserializer(keyType),
-                (Deserializer<V>) getDeserializer(valueType));
+        return topology.stream(keyType, valueType, topic);
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public void to(String topic) {
-        if (keyType == null)
-            throw new InsufficientTypeInfoException("key type");
 
-        if (valueType == null)
-            throw new InsufficientTypeInfoException("value type");
+        Serializer<K> keySerializer;
+        Type windowedRawKeyType = Resolver.isWindowedKeyType(keyType);
+        if (windowedRawKeyType != null) {
+            keySerializer = new WindowedSerializer(getSerializer(windowedRawKeyType));
+        } else {
+            keySerializer = getSerializer(keyType);
+        }
 
-        to(topic, (Serializer<K>) getSerializer(keyType), (Serializer<V>) getSerializer(valueType));
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
-        if (keySerializer == null)
-            throw new TopologyException("null serializer for key");
-
-        if (valSerializer == null)
-            throw new TopologyException("null serializer for value");
+        Serializer<V> valSerializer = getSerializer(valueType);
 
         String name = topology.newName(SINK_NAME);
         StreamPartitioner<K, V> streamPartitioner = null;
@@ -460,7 +428,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         topology.addStateStore(aggregateStore, aggregateName);
 
         // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(topology, aggregateName, aggregateSupplier, sourceNodes, null, null);
+        try {
+            return new KTableImpl<>(topology, aggregateName, aggregateSupplier, sourceNodes, KStreamBuilder.define(Windowed.class, keyType), null);
+        } catch (TypeException ex) {
+            throw new TopologyException("failed to define a windowed key type", ex);
+        }
     }
 
     @Override

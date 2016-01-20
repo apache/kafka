@@ -48,11 +48,6 @@ public class KTableKTableLeftJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    private IntegerSerializer keySerializer = new IntegerSerializer();
-    private StringSerializer valSerializer = new StringSerializer();
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
-
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
         public String apply(String value1, String value2) {
@@ -81,6 +76,9 @@ public class KTableKTableLeftJoinTest {
 
             KStreamBuilder builder = new KStreamBuilder();
 
+            builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
             KTable<Integer, String> table1;
@@ -89,8 +87,8 @@ public class KTableKTableLeftJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            table1 = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic1);
-            table2 = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
+            table1 = builder.table(Integer.class, String.class, topic1);
+            table2 = builder.table(Integer.class, String.class, topic2);
             joined = table1.leftJoin(table2, joiner);
             joined.toStream().process(processor);
 
@@ -181,6 +179,9 @@ public class KTableKTableLeftJoinTest {
 
             KStreamBuilder builder = new KStreamBuilder();
 
+            builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
             KTable<Integer, String> table1;
@@ -188,8 +189,8 @@ public class KTableKTableLeftJoinTest {
             KTable<Integer, String> joined;
             MockProcessorSupplier<Integer, String> proc;
 
-            table1 = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic1);
-            table2 = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
+            table1 = builder.table(Integer.class, String.class, topic1);
+            table2 = builder.table(Integer.class, String.class, topic2);
             joined = table1.leftJoin(table2, joiner);
 
             proc = new MockProcessorSupplier<>();
@@ -269,6 +270,9 @@ public class KTableKTableLeftJoinTest {
 
             KStreamBuilder builder = new KStreamBuilder();
 
+            builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
             KTable<Integer, String> table1;
@@ -276,8 +280,8 @@ public class KTableKTableLeftJoinTest {
             KTable<Integer, String> joined;
             MockProcessorSupplier<Integer, String> proc;
 
-            table1 = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic1);
-            table2 = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
+            table1 = builder.table(Integer.class, String.class, topic1);
+            table2 = builder.table(Integer.class, String.class, topic2);
             joined = table1.leftJoin(table2, joiner);
 
             ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();

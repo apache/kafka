@@ -34,12 +34,11 @@ public class KStreamTransformTest {
 
     private String topicName = "topic";
 
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private IntegerDeserializer valDeserializer = new IntegerDeserializer();
-
     @Test
     public void testTransform() {
         KStreamBuilder builder = new KStreamBuilder();
+
+        builder.register(Integer.class, new IntegerDeserializer());
 
         TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>> transformerSupplier =
             new TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>>() {
@@ -73,7 +72,7 @@ public class KStreamTransformTest {
 
         KStream<Integer, Integer> stream;
         MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keyDeserializer, valDeserializer, topicName);
+        stream = builder.stream(Integer.class, Integer.class, topicName);
         stream.transform(transformerSupplier).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);

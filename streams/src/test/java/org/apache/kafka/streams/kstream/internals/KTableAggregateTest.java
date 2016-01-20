@@ -78,9 +78,12 @@ public class KTableAggregateTest {
 
         try {
             final KStreamBuilder builder = new KStreamBuilder();
+
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             String topic1 = "topic1";
 
-            KTable<String, String> table1 = builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
+            KTable<String, String> table1 = builder.table(String.class, String.class, topic1);
             KTable<String, String> table2 = table1.<String, String, String>aggregate(new StringCanonizeSupplier(),
                     new NoOpKeyValueMapper<String, String>(),
                     strSerializer,

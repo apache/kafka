@@ -18,7 +18,7 @@
 package org.apache.kafka.streams.kstream.type;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streams.kstream.Windowed;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -37,14 +37,10 @@ public class Resolver {
     }
 
     /**
-     * Infers the type from an instance of Deserializer. This returns null when there is not sufficient information to
+     * Resolves the type from an method return type. This returns null when there is not sufficient information to
      * determine fully resolved type.
      */
-    public static Type resolveFromDeserializer(Deserializer<?> deserializer) {
-        return getReturnType(deserializer, "deserialize", String.class, byte[].class);
-    }
-
-    private static Type getReturnType(Object obj, String methodName, Class... argTypes) {
+    public static Type resolveFromMethodReturnType(Object obj, String methodName, Class... argTypes) {
         try {
             Method method = obj.getClass().getMethod(methodName, argTypes);
             return resolve(method.getGenericReturnType());
@@ -126,4 +122,12 @@ public class Resolver {
         }
     }
 
+    public static Type isWindowedKeyType(Type type) {
+        if (type instanceof TypeWithTypeArgs) {
+            TypeWithTypeArgs ptype = (TypeWithTypeArgs) type;
+            if (ptype.rawType.equals(Windowed.class))
+                return ptype.typeArgs[0];
+        }
+        return null;
+    }
 }

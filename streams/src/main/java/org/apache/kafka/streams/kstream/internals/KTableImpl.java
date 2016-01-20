@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.AggregatorSupplier;
-import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -34,7 +33,6 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.processor.TopologyException;
 import org.apache.kafka.streams.state.Stores;
 
 import java.lang.reflect.Type;
@@ -148,59 +146,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public KTable<K, V> through(String topic,
-                                Serializer<K> keySerializer,
-                                Serializer<V> valSerializer,
-                                Deserializer<K> keyDeserializer,
-                                Deserializer<V> valDeserializer) {
-        to(topic, keySerializer, valSerializer);
-
-        if (keyDeserializer == null)
-            throw new TopologyException("null deserializer for key");
-
-        if (valDeserializer == null)
-            throw new TopologyException("null deserializer for value");
-
-        return topology.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic).returns(keyType, valueType);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
     public KTable<K, V> through(String topic) {
-        if (keyType == null)
-            throw new InsufficientTypeInfoException("key type");
+        to(topic);
 
-        if (valueType == null)
-            throw new InsufficientTypeInfoException("value type");
-
-        return through(topic,
-                (Serializer<K>) getSerializer(keyType),
-                (Serializer<V>) getSerializer(valueType),
-                (Deserializer<K>) getDeserializer(keyType),
-                (Deserializer<V>) getDeserializer(valueType));
+        return topology.table(keyType, valueType, topic);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void to(String topic) {
-        if (keyType == null)
-            throw new InsufficientTypeInfoException("key type");
-
-        if (valueType == null)
-            throw new InsufficientTypeInfoException("value type");
-
-        to(topic, (Serializer<K>) getSerializer(keyType), (Serializer<V>) getSerializer(valueType));
-    }
-
-    @Override
-    public void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
-        if (keySerializer == null)
-            throw new TopologyException("null serializer for key");
-
-        if (valSerializer == null)
-            throw new TopologyException("null serializer for value");
-
-        this.toStream().to(topic, keySerializer, valSerializer);
+        this.toStream().to(topic);
     }
 
     @Override

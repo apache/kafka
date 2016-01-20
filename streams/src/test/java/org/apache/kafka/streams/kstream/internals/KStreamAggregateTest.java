@@ -80,9 +80,11 @@ public class KStreamAggregateTest {
 
         try {
             final KStreamBuilder builder = new KStreamBuilder();
+
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
             String topic1 = "topic1";
 
-            KStream<String, String> stream1 = builder.stream(strDeserializer, strDeserializer, topic1);
+            KStream<String, String> stream1 = builder.stream(String.class, String.class, topic1);
             KTable<Windowed<String>, String> table2 = stream1.aggregateByKey(new StringCanonizeSupplier(),
                     HoppingWindows.of("topic1-Canonized").with(10L).every(5L),
                     strSerializer,

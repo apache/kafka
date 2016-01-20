@@ -84,12 +84,7 @@ public abstract class AbstractStream<K> {
         if (type == null)
             throw new InsufficientTypeInfoException();
 
-        Serializer<T> serializer = topology.getSerializer(type);
-
-        if (serializer == null)
-            throw new TopologyException("unable to find a serializer for a type " + type);
-
-        return serializer;
+        return topology.getSerializer(type);
     }
 
     protected <T> Deserializer<T> getDeserializer(Type type) {
@@ -97,12 +92,7 @@ public abstract class AbstractStream<K> {
         if (type == null)
             throw new InsufficientTypeInfoException();
 
-        Deserializer<T> deserializer = topology.getDeserializer(type);
-
-        if (deserializer == null)
-            throw new TopologyException("unable to find a serializer for a type " + type);
-
-        return deserializer;
+        return topology.getDeserializer(type);
     }
 
 }

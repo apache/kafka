@@ -42,6 +42,9 @@ public class KStreamBranchTest {
     public void testKStreamBranch() {
         KStreamBuilder builder = new KStreamBuilder();
 
+        builder.register(Integer.class, new IntegerDeserializer());
+        builder.register(String.class, new StringDeserializer());
+
         Predicate<Integer, String> isEven = new Predicate<Integer, String>() {
             @Override
             public boolean test(Integer key, String value) {
@@ -67,7 +70,7 @@ public class KStreamBranchTest {
         KStream<Integer, String>[] branches;
         MockProcessorSupplier<Integer, String>[] processors;
 
-        stream = builder.stream(keyDeserializer, valDeserializer, topicName);
+        stream = builder.stream(Integer.class, String.class, topicName);
         branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
         assertEquals(3, branches.length);

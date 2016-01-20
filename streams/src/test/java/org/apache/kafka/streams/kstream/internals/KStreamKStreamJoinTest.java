@@ -70,7 +70,7 @@ public class KStreamKStreamJoinTest {
 
             processor = new MockProcessorSupplier<>();
             stream1 = builder.stream(Integer.class, String.class, topic1);
-            stream2 = builder.stream(new IntegerDeserializer(), new StringDeserializer(), topic2);
+            stream2 = builder.stream(Integer.class, String.class, topic2);
             joined = stream1.join(stream2, joiner, JoinWindows.of("test").within(100));
             joined.process(processor);
 
@@ -178,7 +178,7 @@ public class KStreamKStreamJoinTest {
 
             processor = new MockProcessorSupplier<>();
             stream1 = builder.stream(Integer.class, String.class, topic1);
-            stream2 = builder.stream(new IntegerDeserializer(), new StringDeserializer(), topic2);
+            stream2 = builder.stream(Integer.class, String.class, topic2);
             joined = stream1.outerJoin(stream2, joiner, JoinWindows.of("test").within(100));
             joined.process(processor);
 
@@ -288,7 +288,7 @@ public class KStreamKStreamJoinTest {
 
             processor = new MockProcessorSupplier<>();
             stream1 = builder.stream(Integer.class, String.class, topic1);
-            stream2 = builder.stream(new IntegerDeserializer(), new StringDeserializer(), topic2);
+            stream2 = builder.stream(Integer.class, String.class, topic2);
             joined = stream1.join(stream2, joiner, JoinWindows.of("test").within(100));
             joined.process(processor);
 

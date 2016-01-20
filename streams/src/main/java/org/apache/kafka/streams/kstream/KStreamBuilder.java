@@ -185,61 +185,37 @@ public class KStreamBuilder extends TopologyBuilder {
         registerDefault(deserializer);
     }
 
-
-    /**
-     * Creates a KStream instance for the specified topic.
-     * The default deserializers specified in the config are used.
-     *
-     * @param topics          the topic names, if empty default to all the topics in the config
-     * @return KStream
-     */
-    public <K, V> KStream<K, V> stream(String... topics) {
-        return stream((Type) null, (Type) null, topics);
-    }
-
     /**
      * Creates a KStream instance for the specified topic.
      *
-     * @param keyDeserializer key deserializer used to read this source KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
-     * @param valDeserializer value deserializer used to read this source KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
-     * @param topics          the topic names, if empty default to all the topics in the config
-     * @return KStream
-     */
-    public <K, V> KStream<K, V> stream(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
-        String name = newName(KStreamImpl.SOURCE_NAME);
-
-        addSource(name, keyDeserializer, valDeserializer, topics);
-
-        return new KStreamImpl<>(this, name, Collections.singleton(name),
-                // infer type from key deserializers
-                (keyDeserializer != null) ? Resolver.resolveFromDeserializer(keyDeserializer) : null,
-                // infer type from value deserializers
-                (valDeserializer != null) ? Resolver.resolveFromDeserializer(valDeserializer) : null);
-    }
-
-    /**
-     * Creates a KStream instance for the specified topic.
-     *
-     * @param keyType an instance of Type that represents the key type. If the deserializer is registered for this type,
-     *                the registered deserializers is used to read this source KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
-     * @param valueType an instance of Type that represents the value type. If the deserializer is registered for this type,
-     *                the registered deserializers is used to read this source KStream
+     * @param keyType         an instance of Type that represents the key type. If the deserializer is registered for this type,
+     *                        the registered deserializers is used to read this source KStream,
+     *                        If there is no such deserializer, the default deserializer will be used.
+     * @param valueType       an instance of Type that represents the value type. If the deserializer is registered for this type,
+     *                        the registered deserializers is used to read this source KStream
+     *                        If there is no such deserializer, the default deserializer will be used.
      * @param topics          the topic names, if empty default to all the topics in the config
      * @return KStream
      */
     public <K, V> KStream<K, V> stream(Type keyType, Type valueType, String... topics) {
-        try {
-            Type convertedKeyType = (keyType != null) ? Resolver.resolve(keyType) : null;
-            Type convertedValueType = (valueType != null) ? Resolver.resolve(valueType) : null;
+        if (keyType == null)
+            throw new TopologyException("the key type should not be null");
 
+        if (valueType == null)
+            throw new TopologyException("the value type should not be null");
+
+        try {
             String name = newName(KStreamImpl.SOURCE_NAME);
 
-            addSource(name, getDeserializer(convertedKeyType), getDeserializer(convertedValueType), topics);
+            Type resolvedKeyType = Resolver.resolve(keyType);
+            Type resolvedValueType = Resolver.resolve(valueType);
 
-            return new KStreamImpl<>(this, name, Collections.singleton(name), convertedKeyType, convertedValueType);
+            Deserializer<K> keyDeserializer = getDeserializer(resolvedKeyType);
+            Deserializer<K> valDeserializer = getDeserializer(resolvedValueType);
+
+            addSource(name, keyDeserializer, valDeserializer, topics);
+
+            return new KStreamImpl<>(this, name, Collections.singleton(name), resolvedKeyType, resolvedValueType);
 
         } catch (TypeException ex) {
             throw new TopologyException("failed to create a stream", ex);
@@ -248,81 +224,39 @@ public class KStreamBuilder extends TopologyBuilder {
 
     /**
      * Creates a KTable instance for the specified topic.
-     * The default deserializers specified in the config are used.
      *
-     * @param topic          the topic name
-     * @return KTable
-     */
-    public <K, V> KTable<K, V> table(String topic) {
-        return table((Type) null, (Type) null, topic);
-    }
-
-    /**
-     * Creates a KTable instance for the specified topic.
-     *
-     * @param keySerializer   key serializer used to send key-value pairs,
-     *                        if not specified the default key serializer defined in the configuration will be used
-     * @param valSerializer   value serializer used to send key-value pairs,
-     *                        if not specified the default value serializer defined in the configuration will be used
-     * @param keyDeserializer key deserializer used to read this source KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
-     * @param valDeserializer value deserializer used to read this source KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
-     * @param topic          the topic name
-     * @return KStream
-     */
-    public <K, V> KTable<K, V> table(Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String topic) {
-        String source = newName(KStreamImpl.SOURCE_NAME);
-        String name = newName(KTableImpl.SOURCE_NAME);
-
-        addSource(source, keyDeserializer, valDeserializer, topic);
-
-        ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(topic);
-        addProcessor(name, processorSupplier, source);
-
-        return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source),
-                keySerializer,
-                valSerializer,
-                keyDeserializer,
-                valDeserializer,
-                // infer type from key deserializers
-                (keyDeserializer != null) ? Resolver.resolveFromDeserializer(keyDeserializer) : null,
-                // infer type from value deserializers
-                (valDeserializer != null) ? Resolver.resolveFromDeserializer(valDeserializer) : null);
-    }
-
-    /**
-     * Creates a KTable instance for the specified topic.
-     *
-     * @param keyType an instance of Type that represents the key type. If the deserializer is registered for this type,
-     *                the registered deserializers is used to read this source KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
-     * @param valueType an instance of Type that represents the value type. If the deserializer is registered for this type,
-     *                the registered deserializers is used to read this source KStream
+     * @param keyType        an instance of Type that represents the key type.
+     *                       If the serializer/deserializer are registered for this type,
+     *                       the registered serializer/deserializer will be used to read this source KStream,
+     *                       If there is no such serializer/deserializer, the default serializer/deserializer will be used
+     * @param valueType      an instance of Type that represents the value type.
+     *                       If the serializer/deserializer are registered for this type,
+     *                       the registered serializer/deserializers will be used to read this source KStream
+     *                       If there is no such serializer/deserializer, the default serializer/deserializer will be used
      * @param topic          the topic name
      * @return KStream
      */
     @SuppressWarnings("unchecked")
     public <K, V> KTable<K, V> table(Type keyType, Type valueType, String topic) {
         try {
-            Type convertedKeyType = (keyType != null) ? Resolver.resolve(keyType) : null;
-            Type convertedValueType = (valueType != null) ? Resolver.resolve(valueType) : null;
+            Type resolvedKeyType = Resolver.resolve(keyType);
+            Type resolvedValueType = Resolver.resolve(valueType);
 
             String source = newName(KStreamImpl.SOURCE_NAME);
             String name = newName(KTableImpl.SOURCE_NAME);
 
-            addSource(source, getDeserializer(convertedKeyType), getDeserializer(convertedValueType), topic);
+            Serializer<K> keySerializer = getSerializer(resolvedKeyType);
+            Serializer<V> valSerializer = getSerializer(resolvedValueType);
+            Deserializer<K> keyDeserializer = getDeserializer(resolvedKeyType);
+            Deserializer<V> valDeserializer = getDeserializer(resolvedValueType);
+
+            addSource(source, keyDeserializer, valDeserializer, topic);
 
             ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(topic);
             addProcessor(name, processorSupplier, source);
 
             return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source),
-                    (Serializer<K>) getSerializer(convertedKeyType),
-                    (Serializer<V>) getSerializer(convertedValueType),
-                    (Deserializer<K>) getDeserializer(convertedKeyType),
-                    (Deserializer<V>) getDeserializer(convertedValueType),
-                    convertedKeyType,
-                    convertedValueType);
+                    keySerializer, valSerializer, keyDeserializer, valDeserializer, keyType, valueType);
 
         } catch (TypeException ex) {
             throw new TopologyException("failed to create a stream", ex);
@@ -345,20 +279,34 @@ public class KStreamBuilder extends TopologyBuilder {
 
     @SuppressWarnings("unchecked")
     public <T> Serializer<T> getSerializer(Type type) {
+        Serializer<T> serializer;
+
         if (type != null) {
-            return nvl(registeredSerializers.get(type), defaultSerializer);
+            serializer = nvl(registeredSerializers.get(type), defaultSerializer);
         } else {
-            return defaultSerializer;
+            serializer = defaultSerializer;
         }
+
+        if (serializer == null)
+            throw new TopologyException("failed to find a serializer for a type " + type);
+
+        return serializer;
     }
 
     @SuppressWarnings("unchecked")
     public <T> Deserializer<T> getDeserializer(Type type) {
+        Deserializer<T> deserializer;
+
         if (type != null) {
-            return nvl(registeredDeserializers.get(type), defaultDeserializer);
+            deserializer = nvl(registeredDeserializers.get(type), defaultDeserializer);
         } else {
-            return defaultDeserializer;
+            deserializer = defaultDeserializer;
         }
+
+        if (deserializer == null)
+            throw new TopologyException("failed to find a deserializer for a type " + type);
+
+        return deserializer;
     }
 
     private static <T> T nvl(T value, T defaultValue) {

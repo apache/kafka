@@ -17,10 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
@@ -40,18 +38,16 @@ import static org.junit.Assert.assertNull;
 
 public class KTableFilterTest {
 
-    private final Serializer<String> strSerializer = new StringSerializer();
-    private final Deserializer<String> strDeserializer = new StringDeserializer();
-    private final Serializer<Integer> intSerializer = new IntegerSerializer();
-    private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
-
     @Test
     public void testKTable() {
         final KStreamBuilder builder = new KStreamBuilder();
 
+        builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+        builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
         String topic1 = "topic1";
 
-        KTable<String, Integer> table1 = builder.table(strSerializer, intSerializer, strDeserializer, intDeserializer, topic1);
+        KTable<String, Integer> table1 = builder.table(String.class, Integer.class, topic1);
 
         KTable<String, Integer> table2 = table1.filter(new Predicate<String, Integer>() {
             @Override
@@ -90,10 +86,13 @@ public class KTableFilterTest {
         try {
             final KStreamBuilder builder = new KStreamBuilder();
 
+            builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             String topic1 = "topic1";
 
             KTableImpl<String, Integer, Integer> table1 =
-                    (KTableImpl<String, Integer, Integer>) builder.table(strSerializer, intSerializer, strDeserializer, intDeserializer, topic1);
+                    (KTableImpl<String, Integer, Integer>) builder.<String, Integer>table(String.class, Integer.class, topic1);
             KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
                     new Predicate<String, Integer>() {
                         @Override
@@ -175,10 +174,13 @@ public class KTableFilterTest {
         try {
             final KStreamBuilder builder = new KStreamBuilder();
 
+            builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             String topic1 = "topic1";
 
             KTableImpl<String, Integer, Integer> table1 =
-                    (KTableImpl<String, Integer, Integer>) builder.table(strSerializer, intSerializer, strDeserializer, intDeserializer, topic1);
+                    (KTableImpl<String, Integer, Integer>) builder.<String, Integer>table(String.class, Integer.class, topic1);
             KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
                     new Predicate<String, Integer>() {
                         @Override
@@ -230,10 +232,13 @@ public class KTableFilterTest {
         try {
             final KStreamBuilder builder = new KStreamBuilder();
 
+            builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             String topic1 = "topic1";
 
             KTableImpl<String, Integer, Integer> table1 =
-                    (KTableImpl<String, Integer, Integer>) builder.table(strSerializer, intSerializer, strDeserializer, intDeserializer, topic1);
+                    (KTableImpl<String, Integer, Integer>) builder.<String, Integer>table(String.class, Integer.class, topic1);
             KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
                     new Predicate<String, Integer>() {
                         @Override

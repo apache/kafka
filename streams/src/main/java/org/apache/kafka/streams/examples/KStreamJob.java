@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.examples;
 
+import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -36,16 +37,15 @@ public class KStreamJob {
         Properties props = new Properties();
         props.put(StreamingConfig.JOB_ID_CONFIG, "example-kstream");
         props.put(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
-        props.put(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class);
         StreamingConfig config = new StreamingConfig(props);
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> stream1 = builder.stream("topic1");
+        builder.register(String.class, new StringSerializer(), new StringDeserializer());
+        builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+
+        KStream<String, String> stream1 = builder.stream(String.class, String.class, "topic1");
 
         KStream<String, Integer> stream2 =
             stream1.map(new KeyValueMapper<String, String, KeyValue<String, Integer>>() {

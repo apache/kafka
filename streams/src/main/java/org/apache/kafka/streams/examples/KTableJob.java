@@ -18,7 +18,8 @@
 package org.apache.kafka.streams.examples;
 
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -41,10 +42,6 @@ public class KTableJob {
         Properties props = new Properties();
         props.put(StreamingConfig.JOB_ID_CONFIG, "example-ktable");
         props.put(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
-        props.put(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class);
         StreamingConfig config = new StreamingConfig(props);
 
@@ -53,8 +50,12 @@ public class KTableJob {
 
         KStreamBuilder builder = new KStreamBuilder();
 
+        builder.register(String.class, new StringSerializer(), new StringDeserializer());
+        builder.register(Long.class, new LongSerializer(), new LongDeserializer());
+
+
         // stream aggregate
-        KStream<String, Long> stream1 = builder.stream("topic1");
+        KStream<String, Long> stream1 = builder.stream(String.class, Long.class, "topic1");
 
         @SuppressWarnings("unchecked")
         KTable<Windowed<String>, Long> wtable1 = stream1.sumByKey(new KeyValueToLongMapper<String, Long>() {
@@ -65,7 +66,7 @@ public class KTableJob {
         }, HoppingWindows.of("window1").with(500L).every(500L).emit(1000L).until(1000L * 60 * 60 * 24 /* one day */), stringSerializer, stringDeserializer);
 
         // table aggregation
-        KTable<String, String> table1 = builder.table("topic2");
+        KTable<String, String> table1 = builder.table(String.class, String.class, "topic2");
 
         KTable<String, Long> table2 = table1.sum(new KeyValueMapper<String, String, String>() {
             @Override

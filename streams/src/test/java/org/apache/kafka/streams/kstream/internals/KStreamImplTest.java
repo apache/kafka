@@ -46,7 +46,7 @@ public class KStreamImplTest {
 
         KStream<String, String> source1 = builder.stream(String.class, String.class, "topic-1", "topic-2");
 
-        KStream<String, String> source2 = builder.stream(new StringDeserializer(), new StringDeserializer(), "topic-3", "topic-4");
+        KStream<String, String> source2 = builder.stream(String.class, String.class, "topic-3", "topic-4");
 
         KStream<String, String> stream1 =
             source1.filter(new Predicate<String, String>() {
