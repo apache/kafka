@@ -114,7 +114,7 @@ object AdminUtils extends Logging {
       throw new AdminOperationException("The topic %s does not exist".format(topic))
 
     val existingReplicaListForPartitionZero = existingPartitionsReplicaList.find(p => p._1.partition == 0) match {
-      case None => throw new AdminOperationException("PartitionId should start from 0")
+      case None => throw new AdminOperationException("the topic does not have partition with id 0, it should never happen")
       case Some(headPartitionReplica) => headPartitionReplica._2
     }
     val partitionsToAdd = numPartitions - existingPartitionsReplicaList.size
