@@ -41,6 +41,7 @@ ec2_az = nil # Uses set by AWS
 ec2_ami = "ami-9eaa1cf6"
 ec2_instance_type = "m3.medium"
 ec2_user = "ubuntu"
+ec2_instance_name_prefix = "kafka-vagrant"
 ec2_security_groups = nil
 ec2_subnet_id = nil
 # Only override this by setting it to false if you're running in a VPC and you
@@ -154,7 +155,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   def name_node(node, name)
     node.vm.hostname = name
     node.vm.provider :aws do |aws|
-      aws.tags = { 'Name' => "kafka-vagrant-" + Socket.gethostname + "-" + name }
+      aws.tags = { 'Name' => ec2_instance_name_prefix + "-" + Socket.gethostname + "-" + name }
     end
   end
 
