@@ -22,9 +22,9 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-class KTableKTableOuterJoin<K, V, V1, V2> extends KTableKTableAbstractJoin<K, V, V1, V2> {
+class KTableKTableOuterJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
 
-    KTableKTableOuterJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<V1, V2, V> joiner) {
+    KTableKTableOuterJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<V1, V2, R> joiner) {
         super(table1, table2, joiner);
     }
 
@@ -34,10 +34,10 @@ class KTableKTableOuterJoin<K, V, V1, V2> extends KTableKTableAbstractJoin<K, V,
     }
 
     @Override
-    public KTableValueGetterSupplier<K, V> view() {
-        return new KTableValueGetterSupplier<K, V>() {
+    public KTableValueGetterSupplier<K, R> view() {
+        return new KTableValueGetterSupplier<K, R>() {
 
-            public KTableValueGetter<K, V> get() {
+            public KTableValueGetter<K, R> get() {
                 return new KTableKTableOuterJoinValueGetter(valueGetterSupplier1.get(), valueGetterSupplier2.get());
             }
 
@@ -61,8 +61,8 @@ class KTableKTableOuterJoin<K, V, V1, V2> extends KTableKTableAbstractJoin<K, V,
 
         @Override
         public void process(K key, Change<V1> change) {
-            V newValue = null;
-            V oldValue = null;
+            R newValue = null;
+            R oldValue = null;
             V2 value2 = valueGetter.get(key);
 
             if (change.newValue != null || value2 != null)
@@ -77,7 +77,7 @@ class KTableKTableOuterJoin<K, V, V1, V2> extends KTableKTableAbstractJoin<K, V,
         }
     }
 
-    private class KTableKTableOuterJoinValueGetter implements KTableValueGetter<K, V> {
+    private class KTableKTableOuterJoinValueGetter implements KTableValueGetter<K, R> {
 
         private final KTableValueGetter<K, V1> valueGetter1;
         private final KTableValueGetter<K, V2> valueGetter2;
@@ -94,8 +94,8 @@ class KTableKTableOuterJoin<K, V, V1, V2> extends KTableKTableAbstractJoin<K, V,
         }
 
         @Override
-        public V get(K key) {
-            V newValue = null;
+        public R get(K key) {
+            R newValue = null;
             V1 value1 = valueGetter1.get(key);
             V2 value2 = valueGetter2.get(key);
 

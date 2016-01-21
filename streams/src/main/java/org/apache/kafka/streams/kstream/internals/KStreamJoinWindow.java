@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -26,9 +27,14 @@ import org.apache.kafka.streams.state.WindowStore;
 class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
 
     private final String windowName;
+    private final long windowSizeMs;
+    private final long retentionPeriodMs;
 
-    KStreamJoinWindow(String windowName) {
+
+    KStreamJoinWindow(String windowName, long windowSizeMs, long retentionPeriodMs) {
         this.windowName = windowName;
+        this.windowSizeMs = windowSizeMs;
+        this.retentionPeriodMs = retentionPeriodMs;
     }
 
     @Override
@@ -46,6 +52,9 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
             super.init(context);
 
             window = (WindowStore<K, V>) context.getStateStore(windowName);
+
+            if (windowSizeMs * 2 > retentionPeriodMs)
+                throw new KafkaException("The retention period must be at least two times the join window size.");
         }
 
         @Override

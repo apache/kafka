@@ -20,12 +20,14 @@ package kafka.coordinator
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.utils.CoreUtils._
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.{ArrayOf, Struct, Schema, Field}
 import org.apache.kafka.common.protocol.types.Type.STRING
 import org.apache.kafka.common.protocol.types.Type.INT32
 import org.apache.kafka.common.protocol.types.Type.INT64
 import org.apache.kafka.common.protocol.types.Type.BYTES
+import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 
 import kafka.utils._
@@ -35,7 +37,6 @@ import kafka.log.FileMessageSet
 import kafka.metrics.KafkaMetricsGroup
 import kafka.common.TopicAndPartition
 import kafka.tools.MessageFormatter
-import kafka.api.ProducerResponseStatus
 import kafka.server.ReplicaManager
 
 import scala.collection._
@@ -47,8 +48,8 @@ import java.util.concurrent.TimeUnit
 import com.yammer.metrics.core.Gauge
 
 
-case class DelayedStore(messageSet: Map[TopicAndPartition, MessageSet],
-                        callback: Map[TopicAndPartition, ProducerResponseStatus] => Unit)
+case class DelayedStore(messageSet: Map[TopicPartition, MessageSet],
+                        callback: Map[TopicPartition, PartitionResponse] => Unit)
 
 class GroupMetadataManager(val brokerId: Int,
                            val config: OffsetConfig,
@@ -171,7 +172,7 @@ class GroupMetadataManager(val brokerId: Int,
       bytes = GroupMetadataManager.groupMetadataValue(group, groupAssignment)
     )
 
-    val groupMetadataPartition = TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, partitionFor(group.groupId))
+    val groupMetadataPartition = new TopicPartition(GroupCoordinator.GroupMetadataTopicName, partitionFor(group.groupId))
 
     val groupMetadataMessageSet = Map(groupMetadataPartition ->
       new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, message))
@@ -179,7 +180,7 @@ class GroupMetadataManager(val brokerId: Int,
     val generationId = group.generationId
 
     // set the callback function to insert the created group into cache after log append completed
-    def putCacheCallback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) {
+    def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
       // the append response should only contain the topics partition
       if (responseStatus.size != 1 || ! responseStatus.contains(groupMetadataPartition))
         throw new IllegalStateException("Append status %s should only have one partition %s"
@@ -190,30 +191,30 @@ class GroupMetadataManager(val brokerId: Int,
       val status = responseStatus(groupMetadataPartition)
 
       var responseCode = Errors.NONE.code
-      if (status.error != Errors.NONE.code) {
+      if (status.errorCode != Errors.NONE.code) {
         debug("Metadata from group %s with generation %d failed when appending to log due to %s"
-          .format(group.groupId, generationId, Errors.forCode(status.error).exceptionName))
+          .format(group.groupId, generationId, Errors.forCode(status.errorCode).exceptionName))
 
         // transform the log append error code to the corresponding the commit status error code
-        responseCode = if (status.error == Errors.UNKNOWN_TOPIC_OR_PARTITION.code) {
+        responseCode = if (status.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code) {
           Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code
-        } else if (status.error == Errors.NOT_LEADER_FOR_PARTITION.code) {
+        } else if (status.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code) {
           Errors.NOT_COORDINATOR_FOR_GROUP.code
-        } else if (status.error == Errors.REQUEST_TIMED_OUT.code) {
+        } else if (status.errorCode == Errors.REQUEST_TIMED_OUT.code) {
           Errors.REBALANCE_IN_PROGRESS.code
-        } else if (status.error == Errors.MESSAGE_TOO_LARGE.code
-          || status.error == Errors.RECORD_LIST_TOO_LARGE.code
-          || status.error == Errors.INVALID_FETCH_SIZE.code) {
+        } else if (status.errorCode == Errors.MESSAGE_TOO_LARGE.code
+          || status.errorCode == Errors.RECORD_LIST_TOO_LARGE.code
+          || status.errorCode == Errors.INVALID_FETCH_SIZE.code) {
 
           error("Appending metadata message for group %s generation %d failed due to %s, returning UNKNOWN error code to the client"
-            .format(group.groupId, generationId, Errors.forCode(status.error).exceptionName))
+            .format(group.groupId, generationId, Errors.forCode(status.errorCode).exceptionName))
 
           Errors.UNKNOWN.code
         } else {
           error("Appending metadata message for group %s generation %d failed due to unexpected error: %s"
-            .format(group.groupId, generationId, status.error))
+            .format(group.groupId, generationId, status.errorCode))
 
-          status.error
+          status.errorCode
         }
       }
 
@@ -254,13 +255,13 @@ class GroupMetadataManager(val brokerId: Int,
       )
     }.toSeq
 
-    val offsetTopicPartition = TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, partitionFor(groupId))
+    val offsetTopicPartition = new TopicPartition(GroupCoordinator.GroupMetadataTopicName, partitionFor(groupId))
 
     val offsetsAndMetadataMessageSet = Map(offsetTopicPartition ->
       new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, messages:_*))
 
     // set the callback function to insert offsets into cache after log append completed
-    def putCacheCallback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) {
+    def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
       // the append response should only contain the topics partition
       if (responseStatus.size != 1 || ! responseStatus.contains(offsetTopicPartition))
         throw new IllegalStateException("Append status %s should only have one partition %s"
@@ -271,26 +272,26 @@ class GroupMetadataManager(val brokerId: Int,
       val status = responseStatus(offsetTopicPartition)
 
       val responseCode =
-        if (status.error == Errors.NONE.code) {
+        if (status.errorCode == Errors.NONE.code) {
           filteredOffsetMetadata.foreach { case (topicAndPartition, offsetAndMetadata) =>
             putOffset(GroupTopicPartition(groupId, topicAndPartition), offsetAndMetadata)
           }
           Errors.NONE.code
         } else {
           debug("Offset commit %s from group %s consumer %s with generation %d failed when appending to log due to %s"
-            .format(filteredOffsetMetadata, groupId, consumerId, generationId, Errors.forCode(status.error).exceptionName))
+            .format(filteredOffsetMetadata, groupId, consumerId, generationId, Errors.forCode(status.errorCode).exceptionName))
 
           // transform the log append error code to the corresponding the commit status error code
-          if (status.error == Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+          if (status.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
             Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code
-          else if (status.error == Errors.NOT_LEADER_FOR_PARTITION.code)
+          else if (status.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code)
             Errors.NOT_COORDINATOR_FOR_GROUP.code
-          else if (status.error == Errors.MESSAGE_TOO_LARGE.code
-            || status.error == Errors.RECORD_LIST_TOO_LARGE.code
-            || status.error == Errors.INVALID_FETCH_SIZE.code)
+          else if (status.errorCode == Errors.MESSAGE_TOO_LARGE.code
+            || status.errorCode == Errors.RECORD_LIST_TOO_LARGE.code
+            || status.errorCode == Errors.INVALID_FETCH_SIZE.code)
             Errors.INVALID_COMMIT_OFFSET_SIZE.code
           else
-            status.error
+            status.errorCode
         }
 
 
