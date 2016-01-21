@@ -202,14 +202,14 @@ import java.util.regex.Pattern;
  *     props.put(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(props);
  *     consumer.subscribe(Arrays.asList(&quot;foo&quot;, &quot;bar&quot;));
- *     int commitInterval = 200;
+ *     final int minBatchSize = 200;
  *     List&lt;ConsumerRecord&lt;String, String&gt;&gt; buffer = new ArrayList&lt;&gt;();
  *     while (true) {
  *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(100);
  *         for (ConsumerRecord&lt;String, String&gt; record : records) {
  *             buffer.add(record);
  *         }
- *         if (buffer.size() &gt;= commitInterval) {
+ *         if (buffer.size() &gt;= minBatchSize) {
  *             insertIntoDb(buffer);
  *             consumer.commitSync();
  *             buffer.clear();
