@@ -22,8 +22,8 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.state.MeteredKeyValueStore;
-import org.apache.kafka.streams.state.RocksDBStore;
+import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
+import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.apache.kafka.streams.state.Serdes;
 
 /**

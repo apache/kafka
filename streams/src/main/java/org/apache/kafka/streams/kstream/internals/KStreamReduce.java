@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.KeyValue;
+import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
@@ -31,18 +31,18 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import java.util.Iterator;
 import java.util.Map;
 
-public class KStreamAggregate<K, V, T, W extends Window> implements KTableProcessorSupplier<Windowed<K>, V, T> {
+public class KStreamReduce<K, V, W extends Window> implements KTableProcessorSupplier<Windowed<K>, V, V> {
 
     private final String storeName;
     private final Windows<W> windows;
-    private final Aggregator<K, V, T> aggregator;
+    private final Reducer<V> reducer;
 
     private boolean sendOldValues = false;
 
-    public KStreamAggregate(Windows<W> windows, String storeName, Aggregator<K, V, T> aggregator) {
+    public KStreamReduce(Windows<W> windows, String storeName, Reducer<V> reducer) {
         this.windows = windows;
         this.storeName = storeName;
-        this.aggregator = aggregator;
+        this.reducer = reducer;
     }
 
     @Override
@@ -57,14 +57,14 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
 
     private class KStreamAggregateProcessor extends AbstractProcessor<Windowed<K>, Change<V>> {
 
-        private WindowStore<K, T> windowStore;
+        private WindowStore<K, V> windowStore;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
 
-            windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
+            windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
         }
 
         @Override
@@ -85,22 +85,24 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
                 timeTo = windowStartMs > timeTo ? windowStartMs : timeTo;
             }
 
-            WindowStoreIterator<T> iter = windowStore.fetch(key, timeFrom, timeTo);
+            WindowStoreIterator<V> iter = windowStore.fetch(key, timeFrom, timeTo);
 
             // for each matching window, try to update the corresponding key and send to the downstream
             while (iter.hasNext()) {
-                KeyValue<Long, T> entry = iter.next();
+                KeyValue<Long, V> entry = iter.next();
                 W window = matchedWindows.get(entry.key);
 
                 if (window != null) {
 
-                    T oldAgg = entry.value;
-
-                    if (oldAgg == null)
-                        oldAgg = aggregator.initialValue(key);
+                    V oldAgg = entry.value;
+                    V newAgg = oldAgg;
 
                     // try to add the new new value (there will never be old value)
-                    T newAgg = aggregator.add(key, value, oldAgg);
+                    if (newAgg == null) {
+                        newAgg = value;
+                    } else {
+                        newAgg = reducer.apply(newAgg, value);
+                    }
 
                     // update the store with the new value
                     windowStore.put(key, newAgg, window.start());
@@ -119,50 +121,44 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
 
             // create the new window for the rest of unmatched window that do not exist yet
             for (long windowStartMs : matchedWindows.keySet()) {
-                T oldAgg = aggregator.initialValue(key);
-                T newAgg = aggregator.add(key, value, oldAgg);
+                windowStore.put(key, value, windowStartMs);
 
-                windowStore.put(key, newAgg, windowStartMs);
-
-                // send the new aggregate pair
-                if (sendOldValues)
-                    context().forward(new Windowed<>(key, matchedWindows.get(windowStartMs)), new Change<>(newAgg, oldAgg));
-                else
-                    context().forward(new Windowed<>(key, matchedWindows.get(windowStartMs)), new Change<>(newAgg, null));
+                // send the new aggregate pair (there will be no old value)
+                context().forward(new Windowed<>(key, matchedWindows.get(windowStartMs)), new Change<>(value, null));
             }
         }
     }
 
     @Override
-    public KTableValueGetterSupplier<Windowed<K>, T> view() {
+    public KTableValueGetterSupplier<Windowed<K>, V> view() {
 
-        return new KTableValueGetterSupplier<Windowed<K>, T>() {
+        return new KTableValueGetterSupplier<Windowed<K>, V>() {
 
-            public KTableValueGetter<Windowed<K>, T> get() {
+            public KTableValueGetter<Windowed<K>, V> get() {
                 return new KStreamAggregateValueGetter();
             }
 
         };
     }
 
-    private class KStreamAggregateValueGetter implements KTableValueGetter<Windowed<K>, T> {
+    private class KStreamAggregateValueGetter implements KTableValueGetter<Windowed<K>, V> {
 
-        private WindowStore<K, T> windowStore;
+        private WindowStore<K, V> windowStore;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
-            windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
+            windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
         }
 
         @SuppressWarnings("unchecked")
         @Override
-        public T get(Windowed<K> windowedKey) {
+        public V get(Windowed<K> windowedKey) {
             K key = windowedKey.value();
             W window = (W) windowedKey.window();
 
             // this iterator should only contain one element
-            Iterator<KeyValue<Long, T>> iter = windowStore.fetch(key, window.start(), window.start());
+            Iterator<KeyValue<Long, V>> iter = windowStore.fetch(key, window.start(), window.start());
 
             return iter.next().value;
         }

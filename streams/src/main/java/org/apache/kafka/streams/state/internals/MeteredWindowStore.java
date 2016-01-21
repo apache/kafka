@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.state;
+package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
@@ -24,6 +24,9 @@ import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
 public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
 
