@@ -15,38 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.AggregatorSupplier;
+public class Count<K> implements Aggregator<K, Long, Long> {
 
-public class CountSupplier<K, V> implements AggregatorSupplier<K, V, Long> {
-
-    private class Count implements Aggregator<K, V, Long> {
-
-        @Override
-        public Long initialValue() {
-            return 0L;
-        }
-
-        @Override
-        public Long add(K aggKey, V value, Long aggregate) {
-            return aggregate + 1;
-        }
-
-        @Override
-        public Long remove(K aggKey, V value, Long aggregate) {
-            return aggregate - 1;
-        }
-
-        @Override
-        public Long merge(Long aggr1, Long aggr2) {
-            return aggr1 + aggr2;
-        }
+    @Override
+    public Long initialValue(K aggKey) {
+        return 0L;
     }
 
     @Override
-    public Aggregator<K, V, Long> get() {
-        return new Count();
+    public Long add(K aggKey, Long value, Long aggregate) {
+        return aggregate + 1L;
+    }
+
+    @Override
+    public Long remove(K aggKey, Long value, Long aggregate) {
+        return aggregate - 1L;
     }
 }

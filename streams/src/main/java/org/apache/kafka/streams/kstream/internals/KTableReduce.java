@@ -17,22 +17,24 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T> {
+public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private final String storeName;
-    private final Aggregator<K, V, T> aggregator;
+    private final Reducer<V> addReducer;
+    private final Reducer<V> removeReducer;
 
     private boolean sendOldValues = false;
 
-    public KTableAggregate(String storeName, Aggregator<K, V, T> aggregator) {
+    public KTableReduce(String storeName, Reducer<V> addReducer, Reducer<V> removeReducer) {
         this.storeName = storeName;
-        this.aggregator = aggregator;
+        this.addReducer = addReducer;
+        this.removeReducer = removeReducer;
     }
 
     @Override
@@ -47,33 +49,33 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
     private class KTableAggregateProcessor extends AbstractProcessor<K, Change<V>> {
 
-        private KeyValueStore<K, T> store;
+        private KeyValueStore<K, V> store;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
 
-            store = (KeyValueStore<K, T>) context.getStateStore(storeName);
+            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
         }
 
         @Override
         public void process(K key, Change<V> value) {
-            T oldAgg = store.get(key);
+            V oldAgg = store.get(key);
+            V newAgg = oldAgg;
 
-            if (oldAgg == null)
-                oldAgg = aggregator.initialValue(key);
-
-            T newAgg = oldAgg;
-
-            // first try to remove the old value
-            if (value.oldValue != null) {
-                newAgg = aggregator.remove(key, value.oldValue, newAgg);
+            // first try to add the new new value
+            if (value.newValue != null) {
+                if (newAgg == null) {
+                    newAgg = value.newValue;
+                } else {
+                    newAgg = addReducer.apply(newAgg, value.newValue);
+                }
             }
 
-            // then try to add the new new value
-            if (value.newValue != null) {
-                newAgg = aggregator.add(key, value.newValue, newAgg);
+            // then try to remove the old value
+            if (value.oldValue != null) {
+                newAgg = removeReducer.apply(newAgg, value.oldValue);
             }
 
             // update the store with the new value
@@ -88,29 +90,29 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
     }
 
     @Override
-    public KTableValueGetterSupplier<K, T> view() {
+    public KTableValueGetterSupplier<K, V> view() {
 
-        return new KTableValueGetterSupplier<K, T>() {
+        return new KTableValueGetterSupplier<K, V>() {
 
-            public KTableValueGetter<K, T> get() {
+            public KTableValueGetter<K, V> get() {
                 return new KTableAggregateValueGetter();
             }
 
         };
     }
 
-    private class KTableAggregateValueGetter implements KTableValueGetter<K, T> {
+    private class KTableAggregateValueGetter implements KTableValueGetter<K, V> {
 
-        private KeyValueStore<K, T> store;
+        private KeyValueStore<K, V> store;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
-            store = (KeyValueStore<K, T>) context.getStateStore(storeName);
+            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
         }
 
         @Override
-        public T get(K key) {
+        public V get(K key) {
             return store.get(key);
         }
 
