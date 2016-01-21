@@ -152,7 +152,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     override.vm.synced_folder ".", "/vagrant", type: "rsync", :rsync_excludes => ['.git', 'core/data/', 'logs/', 'tests/results/', 'results/']
   end
 
-  def name_node(node, name)
+  def name_node(node, name, ec2_instance_name_prefix)
     node.vm.hostname = name
     node.vm.provider :aws do |aws|
       aws.tags = { 'Name' => ec2_instance_name_prefix + "-" + Socket.gethostname + "-" + name }
@@ -171,7 +171,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     name = "zk" + i.to_s
     zookeepers.push(name)
     config.vm.define name do |zookeeper|
-      name_node(zookeeper, name)
+      name_node(zookeeper, name, ec2_instance_name_prefix)
       ip_address = "192.168.50." + (10 + i).to_s
       assign_local_ip(zookeeper, ip_address)
       zookeeper.vm.provision "shell", path: "vagrant/base.sh"
@@ -183,7 +183,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   (1..num_brokers).each { |i|
     name = "broker" + i.to_s
     config.vm.define name do |broker|
-      name_node(broker, name)
+      name_node(broker, name, ec2_instance_name_prefix)
       ip_address = "192.168.50." + (50 + i).to_s
       assign_local_ip(broker, ip_address)
       # We need to be careful about what we list as the publicly routable
@@ -200,7 +200,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   (1..num_workers).each { |i|
     name = "worker" + i.to_s
     config.vm.define name do |worker|
-      name_node(worker, name)
+      name_node(worker, name, ec2_instance_name_prefix)
       ip_address = "192.168.50." + (100 + i).to_s
       assign_local_ip(worker, ip_address)
       worker.vm.provision "shell", path: "vagrant/base.sh"
