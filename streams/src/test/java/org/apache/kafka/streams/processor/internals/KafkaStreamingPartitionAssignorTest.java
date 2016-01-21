@@ -29,7 +29,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.StreamConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
@@ -89,13 +89,13 @@ public class KafkaStreamingPartitionAssignorTest {
     private Properties configProps() {
         return new Properties() {
             {
-                setProperty(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-                setProperty(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-                setProperty(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-                setProperty(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-                setProperty(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "org.apache.kafka.test.MockTimestampExtractor");
-                setProperty(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
-                setProperty(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
+                setProperty(StreamConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+                setProperty(StreamConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+                setProperty(StreamConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+                setProperty(StreamConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+                setProperty(StreamConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "org.apache.kafka.test.MockTimestampExtractor");
+                setProperty(StreamConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
+                setProperty(StreamConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
             }
         };
     }
@@ -105,7 +105,7 @@ public class KafkaStreamingPartitionAssignorTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testSubscription() throws Exception {
-        StreamingConfig config = new StreamingConfig(configProps());
+        StreamConfig config = new StreamConfig(configProps());
 
         MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
         MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
@@ -152,7 +152,7 @@ public class KafkaStreamingPartitionAssignorTest {
 
     @Test
     public void testAssignBasic() throws Exception {
-        StreamingConfig config = new StreamingConfig(configProps());
+        StreamConfig config = new StreamConfig(configProps());
 
         MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
         MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
@@ -224,7 +224,7 @@ public class KafkaStreamingPartitionAssignorTest {
 
     @Test
     public void testAssignWithNewTasks() throws Exception {
-        StreamingConfig config = new StreamingConfig(configProps());
+        StreamConfig config = new StreamConfig(configProps());
 
         MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
         MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
@@ -288,7 +288,7 @@ public class KafkaStreamingPartitionAssignorTest {
 
     @Test
     public void testAssignWithStates() throws Exception {
-        StreamingConfig config = new StreamingConfig(configProps());
+        StreamConfig config = new StreamConfig(configProps());
 
         MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
         MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
@@ -353,8 +353,8 @@ public class KafkaStreamingPartitionAssignorTest {
     @Test
     public void testAssignWithStandbyReplicas() throws Exception {
         Properties props = configProps();
-        props.setProperty(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG, "1");
-        StreamingConfig config = new StreamingConfig(props);
+        props.setProperty(StreamConfig.NUM_STANDBY_REPLICAS_CONFIG, "1");
+        StreamConfig config = new StreamConfig(props);
 
         MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
         MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
@@ -470,7 +470,7 @@ public class KafkaStreamingPartitionAssignorTest {
 
     @Test
     public void testOnAssignment() throws Exception {
-        StreamingConfig config = new StreamingConfig(configProps());
+        StreamConfig config = new StreamConfig(configProps());
 
         MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
         MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);

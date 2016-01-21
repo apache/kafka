@@ -20,8 +20,8 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.StreamingConfig;
-import org.apache.kafka.streams.StreamingMetrics;
+import org.apache.kafka.streams.StreamConfig;
+import org.apache.kafka.streams.StreamMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -36,7 +36,7 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     private static final Logger log = LoggerFactory.getLogger(StandbyContextImpl.class);
 
     private final TaskId id;
-    private final StreamingMetrics metrics;
+    private final StreamMetrics metrics;
     private final ProcessorStateManager stateMgr;
 
     private final Serializer<?> keySerializer;
@@ -47,9 +47,9 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     private boolean initialized;
 
     public StandbyContextImpl(TaskId id,
-                              StreamingConfig config,
+                              StreamConfig config,
                               ProcessorStateManager stateMgr,
-                              StreamingMetrics metrics) {
+                              StreamMetrics metrics) {
         this.id = id;
         this.metrics = metrics;
         this.stateMgr = stateMgr;
@@ -105,7 +105,7 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     }
 
     @Override
-    public StreamingMetrics metrics() {
+    public StreamMetrics metrics() {
         return metrics;
     }
 

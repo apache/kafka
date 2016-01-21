@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>
  * This processing is defined by using the {@link TopologyBuilder} class or its superclass KStreamBuilder to specify
  * the transformation.
- * The {@link KafkaStreaming} instance will be responsible for the lifecycle of these processors. It will instantiate and
+ * The {@link Streams} instance will be responsible for the lifecycle of these processors. It will instantiate and
  * start one or more of these processors to process the Kafka partitions assigned to this particular instance.
  * <p>
  * This streaming instance will co-ordinate with any other instances (whether in this same process, on other processes
@@ -47,7 +47,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * consumed. If instances are added or die, the corresponding {@link StreamThread} instances will be shutdown or
  * started in the appropriate processes to balance processing load.
  * <p>
- * Internally the {@link KafkaStreaming} instance contains a normal {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}
+ * Internally the {@link Streams} instance contains a normal {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}
  * and {@link org.apache.kafka.clients.consumer.KafkaConsumer KafkaConsumer} instance that is used for reading input and writing output.
  * <p>
  * A simple example might look like this:
@@ -59,19 +59,19 @@ import java.util.concurrent.atomic.AtomicInteger;
  *    props.put("key.serializer", StringSerializer.class);
  *    props.put("value.serializer", IntegerSerializer.class);
  *    props.put("timestamp.extractor", MyTimestampExtractor.class);
- *    StreamingConfig config = new StreamingConfig(props);
+ *    StreamConfig config = new StreamConfig(props);
  *
  *    KStreamBuilder builder = new KStreamBuilder();
  *    builder.from("topic1").mapValue(value -&gt; value.length()).to("topic2");
  *
- *    KafkaStreaming streaming = new KafkaStreaming(builder, config);
+ *    Streams streaming = new Streams(builder, config);
  *    streaming.start();
  * </pre>
  *
  */
-public class KafkaStreaming {
+public class Streams {
 
-    private static final Logger log = LoggerFactory.getLogger(KafkaStreaming.class);
+    private static final Logger log = LoggerFactory.getLogger(Streams.class);
     private static final AtomicInteger STREAMING_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.streams";
 
@@ -89,31 +89,31 @@ public class KafkaStreaming {
     // usage only and should not be exposed to users at all.
     private final UUID processId;
 
-    public KafkaStreaming(TopologyBuilder builder, StreamingConfig config) throws Exception {
+    public Streams(TopologyBuilder builder, StreamConfig config) throws Exception {
         // create the metrics
         Time time = new SystemTime();
 
         this.processId = UUID.randomUUID();
 
-        String jobId = config.getString(StreamingConfig.JOB_ID_CONFIG);
+        String jobId = config.getString(StreamConfig.JOB_ID_CONFIG);
         if (jobId.length() <= 0)
             jobId = "kafka-streams";
 
-        String clientId = config.getString(StreamingConfig.CLIENT_ID_CONFIG);
+        String clientId = config.getString(StreamConfig.CLIENT_ID_CONFIG);
         if (clientId.length() <= 0)
             clientId = jobId + "-" + STREAMING_CLIENT_ID_SEQUENCE.getAndIncrement();
 
-        List<MetricsReporter> reporters = config.getConfiguredInstances(StreamingConfig.METRIC_REPORTER_CLASSES_CONFIG,
+        List<MetricsReporter> reporters = config.getConfiguredInstances(StreamConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);
         reporters.add(new JmxReporter(JMX_PREFIX));
 
-        MetricConfig metricConfig = new MetricConfig().samples(config.getInt(StreamingConfig.METRICS_NUM_SAMPLES_CONFIG))
-            .timeWindow(config.getLong(StreamingConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
+        MetricConfig metricConfig = new MetricConfig().samples(config.getInt(StreamConfig.METRICS_NUM_SAMPLES_CONFIG))
+            .timeWindow(config.getLong(StreamConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                 TimeUnit.MILLISECONDS);
 
         Metrics metrics = new Metrics(metricConfig, reporters, time);
 
-        this.threads = new StreamThread[config.getInt(StreamingConfig.NUM_STREAM_THREADS_CONFIG)];
+        this.threads = new StreamThread[config.getInt(StreamConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
             this.threads[i] = new StreamThread(builder, config, jobId, clientId, processId, metrics, time);
         }

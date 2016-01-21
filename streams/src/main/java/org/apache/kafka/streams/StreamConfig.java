@@ -34,7 +34,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
-public class StreamingConfig extends AbstractConfig {
+public class StreamConfig extends AbstractConfig {
 
     private static final ConfigDef CONFIG;
 
@@ -125,7 +125,7 @@ public class StreamingConfig extends AbstractConfig {
                                         Type.STRING,
                                         "",
                                         Importance.MEDIUM,
-                                        StreamingConfig.JOB_ID_DOC)
+                                        StreamConfig.JOB_ID_DOC)
                                 .define(CLIENT_ID_CONFIG,
                                         Type.STRING,
                                         "",
@@ -135,7 +135,7 @@ public class StreamingConfig extends AbstractConfig {
                                         Type.STRING,
                                         "",
                                         Importance.HIGH,
-                                        StreamingConfig.ZOOKEEPER_CONNECT_DOC)
+                                        StreamConfig.ZOOKEEPER_CONNECT_DOC)
                                 .define(STATE_DIR_CONFIG,
                                         Type.STRING,
                                         SYSTEM_TEMP_DIRECTORY,
@@ -233,7 +233,7 @@ public class StreamingConfig extends AbstractConfig {
         public static final String STREAM_THREAD_INSTANCE = "__stream.thread.instance__";
     }
 
-    public StreamingConfig(Map<?, ?> props) {
+    public StreamConfig(Map<?, ?> props) {
         super(CONFIG, props);
     }
 
@@ -242,10 +242,10 @@ public class StreamingConfig extends AbstractConfig {
 
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
-        props.put(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG));
+        props.put(StreamConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamConfig.NUM_STANDBY_REPLICAS_CONFIG));
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, KafkaStreamingPartitionAssignor.class.getName());
 
-        props.put(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
+        props.put(StreamConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
 
         return props;
     }
@@ -268,10 +268,10 @@ public class StreamingConfig extends AbstractConfig {
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         // remove properties that are not required for consumers
-        props.remove(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG);
-        props.remove(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG);
-        props.remove(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
-        props.remove(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG);
+        props.remove(StreamConfig.KEY_SERIALIZER_CLASS_CONFIG);
+        props.remove(StreamConfig.VALUE_SERIALIZER_CLASS_CONFIG);
+        props.remove(StreamConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        props.remove(StreamConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
         return props;
     }
@@ -283,9 +283,9 @@ public class StreamingConfig extends AbstractConfig {
         props.put(ProducerConfig.LINGER_MS_CONFIG, "100");
 
         // remove properties that are not required for producers
-        props.remove(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG);
-        props.remove(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
-        props.remove(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        props.remove(StreamConfig.KEY_DESERIALIZER_CLASS_CONFIG);
+        props.remove(StreamConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
+        props.remove(StreamConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
 
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
 
@@ -293,19 +293,19 @@ public class StreamingConfig extends AbstractConfig {
     }
 
     public Serializer keySerializer() {
-        return getConfiguredInstance(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
+        return getConfiguredInstance(StreamConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
     }
 
     public Serializer valueSerializer() {
-        return getConfiguredInstance(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
+        return getConfiguredInstance(StreamConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
     }
 
     public Deserializer keyDeserializer() {
-        return getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+        return getConfiguredInstance(StreamConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
     }
 
     public Deserializer valueDeserializer() {
-        return getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+        return getConfiguredInstance(StreamConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
     }
 
     public static void main(String[] args) {
