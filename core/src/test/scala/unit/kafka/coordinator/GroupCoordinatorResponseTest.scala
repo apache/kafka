@@ -17,6 +17,7 @@
 
 package kafka.coordinator
 
+import org.apache.kafka.common.record.Record
 import org.junit.Assert._
 
 import kafka.common.{OffsetAndMetadata, TopicAndPartition}
@@ -833,7 +834,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
       EasyMock.capture(capturedArgument))).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
         Map(new TopicPartition(GroupCoordinator.GroupMetadataTopicName, groupPartitionId) ->
-          new PartitionResponse(Errors.NONE.code, 0L)
+          new PartitionResponse(Errors.NONE.code, 0L, Record.NO_TIMESTAMP)
         )
       )})
     EasyMock.replay(replicaManager)
@@ -909,7 +910,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
       EasyMock.capture(capturedArgument))).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
         Map(new TopicPartition(GroupCoordinator.GroupMetadataTopicName, groupPartitionId) ->
-          new PartitionResponse(Errors.NONE.code, 0L)
+          new PartitionResponse(Errors.NONE.code, 0L, Record.NO_TIMESTAMP)
         )
       )})
     EasyMock.replay(replicaManager)

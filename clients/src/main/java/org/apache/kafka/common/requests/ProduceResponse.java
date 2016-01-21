@@ -74,9 +74,20 @@ public class ProduceResponse extends AbstractRequestResponse {
      * @param throttleTime Time in milliseconds the response was throttled
      */
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTime) {
-        super(new Struct(CURRENT_SCHEMA));
+        this(responses, throttleTime, (int) ProtoUtils.latestVersion(ApiKeys.PRODUCE.id));
+    }
+
+    /**
+     * Constructor for specific version
+     * @param responses Produced data grouped by topic-partition
+     * @param throttleTime Time in milliseconds the response was throttled
+     * @param version the version of schema to use.
+     */
+    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTime, int version) {
+        super(new Struct(ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, version)));
         initCommonFields(responses);
-        struct.set(THROTTLE_TIME_KEY_NAME, throttleTime);
+        if (version > 0)
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTime);
         this.responses = responses;
         this.throttleTime = throttleTime;
     }

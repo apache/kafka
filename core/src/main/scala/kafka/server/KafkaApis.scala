@@ -331,12 +331,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
 
-<<<<<<< HEAD
-      val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ => new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1))
-=======
       val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ =>
-        ProducerResponseStatus(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, Message.NoTimestamp))
->>>>>>> Added timestamp and relative offset to clients package.
+        new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, Message.NoTimestamp))
 
       var errorInResponse = false
 
@@ -373,7 +369,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           val respHeader = new ResponseHeader(request.header.correlationId)
           val respBody = request.header.apiVersion match {
             case 0 => new ProduceResponse(mergedResponseStatus.asJava)
-            case 1 => new ProduceResponse(mergedResponseStatus.asJava, delayTimeMs)
+            case 1 => new ProduceResponse(mergedResponseStatus.asJava, delayTimeMs, 1)
+            case 2 => new ProduceResponse(mergedResponseStatus.asJava, delayTimeMs, 2)
             // This case shouldn't happen unless a new version of ProducerRequest is added without
             // updating this part of the code to handle it properly.
             case _ => throw new IllegalArgumentException("Version %d of ProducerRequest is not handled. Code must be updated."

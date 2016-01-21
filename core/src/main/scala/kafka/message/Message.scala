@@ -165,8 +165,8 @@ class Message(val buffer: ByteBuffer, val wrapperMessageTimestamp: Long = Messag
     if (codec.codec > 0)
       attributes =  (attributes | (CompressionCodeMask & codec.codec)).toByte
     buffer.put(attributes)
-    // Only put timestamp when "magic" value is 1
-    if (magic == MagicValue_V1)
+    // Only put timestamp when "magic" value is greater than 0
+    if (magic > MagicValue_V0)
       buffer.putLong(timestamp)
     if(key == null) {
       buffer.putInt(-1)

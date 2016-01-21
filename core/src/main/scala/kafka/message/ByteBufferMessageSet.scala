@@ -531,6 +531,19 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       throw new InvalidMessageException("Compacted topic cannot accept message without key.")
   }
 
+  /**
+   * This method validates the timestamps of a message.
+   * 1. If the message is using create time, this method checks if it is with acceptable range.
+   * 2. If the message is using log append time, this method will overwrite the timestamp of the message.
+   *
+   * The return value of this method indicates whether the timestamp of a message is overwritten.
+   * In case 1, the method either throw exception (the timestamp is out of range) or return false.
+   * In case 2, the method returns:
+   *    a) True, if the timestamp of the message has been overwritten. This means re-compression is required if the
+   *       the message is an inner message of a compressed message.
+   *    b) False, if the timestamp is not overwritten. This only occurs when the timestamp of an inner message from a
+   *       compressed message is already set to [[Message.InheritedTimestamp]]
+   */
   private def validateTimestamps(message: Message,
                                  now: Long,
                                  timestampType: TimestampType,
@@ -545,7 +558,9 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         message.buffer.putLong(Message.TimestampOffset, now)
         // We have to update crc after updating the timestamp.
         Utils.writeUnsignedInt(message.buffer, Message.CrcOffset, message.computeChecksum())
+        overwritten = true
       } else {
+        // We only overwrite the timestamp if necessary
         if (message.timestamp != Message.InheritedTimestamp) {
           message.buffer.putLong(Message.TimestampOffset, Message.InheritedTimestamp)
           // We have to update crc after updating the timestamp.
@@ -553,7 +568,6 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
           overwritten = true
         }
       }
-
     }
     overwritten
   }

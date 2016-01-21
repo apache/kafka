@@ -20,7 +20,7 @@ package kafka.api
 import java.nio.ByteBuffer
 import java.nio.channels.GatheringByteChannel
 
-import kafka.common.{TopicAndPartition, ErrorMapping}
+import kafka.common.TopicAndPartition
 import kafka.message.{NoCompressionCodec, Message, MessageSet, ByteBufferMessageSet}
 import kafka.api.ApiUtils._
 import org.apache.kafka.common.KafkaException

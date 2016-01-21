@@ -441,7 +441,7 @@ class ReplicaManager(val config: KafkaConfig,
           case imse: CorruptRecordException =>
             (topicPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(imse)))
           case ime : InvalidMessageException =>
-            (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(ime)))
+            (topicPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(ime)))
           case t: Throwable =>
             BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).failedProduceRequestRate.mark()
             BrokerTopicStats.getBrokerAllTopicsStats.failedProduceRequestRate.mark()
