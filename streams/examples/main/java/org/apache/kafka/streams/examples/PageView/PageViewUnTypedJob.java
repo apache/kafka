@@ -15,17 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.examples;
+package org.apache.kafka.streams.examples.pageview;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.connect.json.JsonSerializer;
 import org.apache.kafka.connect.json.JsonDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.streams.kstream.Count;
 import org.apache.kafka.streams.kstream.HoppingWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.StreamingConfig;
@@ -33,13 +36,12 @@ import org.apache.kafka.streams.KafkaStreaming;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValue;
-import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
 
-import java.util.Map;
 import java.util.Properties;
 
-public class PageViewJob {
+public class PageViewUnTypedJob {
 
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
@@ -58,6 +60,9 @@ public class PageViewJob {
 
         final Serializer<String> stringSerializer = new StringSerializer();
         final Deserializer<String> stringDeserializer = new StringDeserializer();
+        final Serializer<Long> longSerializer = new LongSerializer();
+        final Deserializer<Long> longDeserializer = new LongDeserializer();
+
 
         KStream<String, JsonNode> views = builder.stream("streams-pageview-input");
 
@@ -67,40 +72,35 @@ public class PageViewJob {
 
         KTable<String, String> userRegions = users.mapValues(record -> record.get("region").textValue());
 
-        KTable<Windowed<String>, String> regionCount = viewsByUser
+        KStream<JsonNode, JsonNode> regionCount = viewsByUser
                 .leftJoin(userRegions, (view, region) -> {
                     ObjectNode jNode = JsonNodeFactory.instance.objectNode();
 
-                    return jNode.put("user", view.get("user").textValue())
+                    return (JsonNode) jNode.put("user", view.get("user").textValue())
                             .put("page", view.get("page").textValue())
                             .put("region", region);
                 })
                 .map((user, viewRegion) -> new KeyValue<>(viewRegion.get("region").textValue(), viewRegion))
-                .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000), stringSerializer, stringDeserializer)
-                .mapValues(new ValueMapper<Long, String>() {
+                .aggregateByKey(new Count<String, JsonNode>(), HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000),
+                        stringSerializer, longSerializer,
+                        stringDeserializer, longDeserializer)
+                .toStream()
+                .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<JsonNode, JsonNode>>() {
                     @Override
-                    public String apply(Long value) {
-                        return value.toString();
+                    public KeyValue<JsonNode, JsonNode> apply(Windowed<String> key, Long value) {
+                        ObjectNode keyNode = JsonNodeFactory.instance.objectNode();
+                        keyNode.put("window-start", key.window().start())
+                                .put("region", key.window().start());
+
+                        ObjectNode valueNode = JsonNodeFactory.instance.objectNode();
+                        keyNode.put("count", value);
+
+                        return new KeyValue<JsonNode, JsonNode>((JsonNode) keyNode, (JsonNode) valueNode);
                     }
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-output", new Serializer<Windowed<String>>() {
-            @Override
-            public void configure(Map<String, ?> configs, boolean isKey) {
-                // do nothing
-            }
-
-            @Override
-            public byte[] serialize(String topic, Windowed<String> data) {
-                return stringSerializer.serialize(topic, data.value());
-            }
-
-            @Override
-            public void close() {
-                // do nothing
-            }
-        }, stringSerializer);
+        regionCount.to("streams-pageviewstats-output");
 
         KafkaStreaming kstream = new KafkaStreaming(builder, config);
         kstream.start();

@@ -15,18 +15,24 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.examples;
+package org.apache.kafka.streams.examples.wordcount;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.connect.json.JsonSerializer;
+import org.apache.kafka.streams.kstream.Count;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.KafkaStreaming;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.UnlimitedWindows;
@@ -34,7 +40,6 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
 
 import java.util.Arrays;
-import java.util.Map;
 import java.util.Properties;
 
 public class WordCountJob {
@@ -59,10 +64,13 @@ public class WordCountJob {
 
         final Serializer<String> stringSerializer = new StringSerializer();
         final Deserializer<String> stringDeserializer = new StringDeserializer();
+        final Serializer<Long> longSerializer = new LongSerializer();
+        final Deserializer<Long> longDeserializer = new LongDeserializer();
+        final Serializer<JsonNode> JsonSerializer = new JsonSerializer();
 
         KStream<String, String> source = builder.stream("streams-file-input");
 
-        KTable<Windowed<String>, String> counts = source
+        KStream<String, JsonNode> counts = source
                 .flatMapValues(new ValueMapper<String, Iterable<String>>() {
                     @Override
                     public Iterable<String> apply(String value) {
@@ -74,30 +82,23 @@ public class WordCountJob {
                         return new KeyValue<String, String>(value, value);
                     }
                 })
-                .countByKey(UnlimitedWindows.of("Counts").startOn(0L), stringSerializer, stringDeserializer)
-                .mapValues(new ValueMapper<Long, String>() {
+                .aggregateByKey(new Count<>(), UnlimitedWindows.of("Counts").startOn(0L),
+                        stringSerializer, longSerializer,
+                        stringDeserializer, longDeserializer)
+                .toStream()
+                .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<String, JsonNode>>() {
                     @Override
-                    public String apply(Long value) {
-                        return value.toString();
+                    public KeyValue<String, JsonNode> apply(Windowed<String> key, Long value) {
+                        ObjectNode jNode = JsonNodeFactory.instance.objectNode();
+
+                        jNode.put("word", key.value())
+                                .put("count", value);
+
+                        return new KeyValue<String, JsonNode>("", jNode);
                     }
                 });
 
-        counts.to("streams-wordcount-output", new Serializer<Windowed<String>>() {
-            @Override
-            public void configure(Map<String, ?> configs, boolean isKey) {
-                // do nothing
-            }
-
-            @Override
-            public byte[] serialize(String topic, Windowed<String> data) {
-                return stringSerializer.serialize(topic, data.value());
-            }
-
-            @Override
-            public void close() {
-                // do nothing
-            }
-        }, stringSerializer);
+        counts.to("streams-wordcount-output", stringSerializer, JsonSerializer);
 
         KafkaStreaming kstream = new KafkaStreaming(builder, config);
         kstream.start();
