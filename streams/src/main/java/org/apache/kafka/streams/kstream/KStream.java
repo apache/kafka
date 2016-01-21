@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 
+
 /**
  * KStream is an abstraction of a stream of key-value pairs.
  *
@@ -268,35 +269,28 @@ public interface KStream<K, V> {
     /**
      * Aggregate values of this stream by key on a window basis.
      *
-     * @param aggregatorSupplier the class of aggregatorSupplier
+     * @param reducer the class of Reducer
+     * @param windows the specification of the aggregation window
+     */
+    <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
+                                                             Windows<W> windows,
+                                                             Serializer<K> keySerializer,
+                                                             Serializer<V> aggValueSerializer,
+                                                             Deserializer<K> keyDeserializer,
+                                                             Deserializer<V> aggValueDeserializer);
+
+    /**
+     * Aggregate values of this stream by key on a window basis.
+     *
+     * @param aggregator the class of Aggregator
      * @param windows the specification of the aggregation window
      * @param <T>   the value type of the aggregated table
      */
-    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(AggregatorSupplier<K, V, T> aggregatorSupplier,
+    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Aggregator<K, V, T> aggregator,
                                                                 Windows<W> windows,
                                                                 Serializer<K> keySerializer,
                                                                 Serializer<T> aggValueSerializer,
                                                                 Deserializer<K> keyDeserializer,
                                                                 Deserializer<T> aggValueDeserializer);
-
-    /**
-     * Sum extracted long integer values of this stream by key on a window basis.
-     *
-     * @param valueSelector the class of KeyValueToLongMapper to extract the long integer from value
-     * @param windows the specification of the aggregation window
-     */
-    <W extends Window> KTable<Windowed<K>, Long> sumByKey(KeyValueToLongMapper<K, V> valueSelector,
-                                                          Windows<W> windows,
-                                                          Serializer<K> keySerializer,
-                                                          Deserializer<K> keyDeserializer);
-
-    /**
-     * Count number of records of this stream by key on a window basis.
-     *
-     * @param windows the specification of the aggregation window
-     */
-    <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
-                                                            Serializer<K> keySerializer,
-                                                            Deserializer<K> keyDeserializer);
 
 }
