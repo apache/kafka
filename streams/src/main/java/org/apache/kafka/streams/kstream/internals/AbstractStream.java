@@ -103,11 +103,11 @@ public abstract class AbstractStream<K> {
         return topology.getDeserializer(type);
     }
 
-    public static Type getWindowedKeyType(Type type) {
+    public static Type getWindowedRawKeyType(Type type) {
         if (type == null)
             throw new InsufficientTypeInfoException();
 
-        return Resolver.getWindowedKeyType(type);
+        return Resolver.getWindowedRawKeyType(type);
     }
 
     public static Type getKeyTypeFromKeyValueType(Type type) {

@@ -121,7 +121,7 @@ public class Resolver {
 
         Map<TypeVariable, Type> env = resolveTypeArguments(functionalInterface, function.getClass());
 
-        return resolveReturnType(methods[0], env);
+        return resolve(methods[0].getGenericReturnType(), env);
     }
 
     private static Map<TypeVariable, Type> resolveTypeArguments(Class interfaceClass, Type implementationType) throws TypeException {
@@ -150,7 +150,7 @@ public class Resolver {
 
         Map<TypeVariable, Type> env = resolveTypeArguments(interfaceClass, implementationType);
 
-        return resolveReturnType(method, env);
+        return resolve(method.getGenericReturnType(), env);
     }
 
     // resolve type arguments of the interfaceClass from the implementationType
@@ -213,16 +213,16 @@ public class Resolver {
 
         // go up the class hierarchy
 
-        for (Type sup : objClass.getGenericInterfaces()) {
-            Map<TypeVariable, Type> resolvedTypeArgs = resolveTypeArguments(interfaceClass, sup, typeArgs);
+        for (Type superType : objClass.getGenericInterfaces()) {
+            Map<TypeVariable, Type> resolvedTypeArgs = resolveTypeArguments(interfaceClass, superType, typeArgs);
 
             if (resolvedTypeArgs != null)
                 return resolvedTypeArgs;
         }
 
-        Type supType = objClass.getGenericSuperclass();
-        if (supType != null) {
-            Map<TypeVariable, Type> resolvedTypeArgs = resolveTypeArguments(interfaceClass, supType, typeArgs);
+        Type superType = objClass.getGenericSuperclass();
+        if (superType != null) {
+            Map<TypeVariable, Type> resolvedTypeArgs = resolveTypeArguments(interfaceClass, superType, typeArgs);
 
             if (resolvedTypeArgs != null)
                 return resolvedTypeArgs;
@@ -239,22 +239,7 @@ public class Resolver {
      */
     public static Type resolveElementTypeFromIterableType(Type iterableType) throws TypeException {
         if (iterableType != null) {
-            Map<TypeVariable, Type> typeArgs = null;
-
-            if (iterableType instanceof Class) {
-                typeArgs = resolveTypeArguments(Iterable.class, iterableType);
-            } else if (iterableType instanceof ParametricType) {
-                ParametricType ptype = (ParametricType) iterableType;
-                TypeVariable[] tVars = ptype.rawType.getTypeParameters();
-                Type[] tArgs = ptype.typeArgs;
-
-                Map<TypeVariable, Type> env = new HashMap<>();
-                for (int i = 0; i < tVars.length; i++) {
-                    env.put(tVars[i], tArgs[i]);
-                }
-
-                typeArgs = resolveTypeArguments(Iterable.class, ptype.rawType, env);
-            }
+            Map<TypeVariable, Type> typeArgs = resolveTypeArguments(Iterable.class, iterableType);
 
             if (typeArgs == null)
                 return null;
@@ -265,11 +250,7 @@ public class Resolver {
         }
     }
 
-    private static Type resolveReturnType(Method method, Map<TypeVariable, Type> env) throws TypeException {
-        return resolve(method.getGenericReturnType(), env);
-    }
-
-    public static Type getWindowedKeyType(Type type) {
+    public static Type getWindowedRawKeyType(Type type) {
         if (type instanceof ParametricType) {
             ParametricType ptype = (ParametricType) type;
             if (ptype.rawType.equals(Windowed.class))

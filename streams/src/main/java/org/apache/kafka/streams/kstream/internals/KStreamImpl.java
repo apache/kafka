@@ -248,7 +248,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public void to(String topic) {
 
         Serializer<K> keySerializer;
-        Type windowedRawKeyType = getWindowedKeyType(keyType);
+        Type windowedRawKeyType = getWindowedRawKeyType(keyType);
         if (windowedRawKeyType != null) {
             keySerializer = new WindowedSerializer(getSerializer(windowedRawKeyType));
         } else {
