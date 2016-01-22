@@ -17,22 +17,48 @@
  * under the License.
  */
 
-package org.apache.kafka.streams.kstream.type.internal;
+package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Transformer;
+import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.type.TypeException;
 import org.apache.kafka.streams.kstream.type.Types;
-import org.junit.Assert;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.junit.Test;
 
 import java.lang.reflect.Type;
 
 import static org.junit.Assert.assertEquals;
 
-public class ResolverTest {
+public class AbstractStreamTest {
+
+    private static class TestTransformer implements Transformer<Integer, Long, KeyValue<String, Short>> {
+        @Override
+        public void init(ProcessorContext context){
+        }
+
+        @Override
+        public KeyValue<String, Short> transform(Integer key, Long value) {
+            return null;
+        }
+
+        @Override
+        public void punctuate(long timestamp) {
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    private static class TestTransformerSupplier implements TransformerSupplier<Integer, Long, KeyValue<String, Short>> {
+        public TestTransformer get() {
+            return new TestTransformer();
+        }
+    };
 
     @Test
     public void testResolveReturnType() {
@@ -45,11 +71,7 @@ public class ResolverTest {
             }
         };
 
-        try {
-            returnType = Resolver.resolveReturnType(KeyValueMapper.class, kvMapper);
-        } catch (TypeException ex) {
-            returnType = null;
-        }
+        returnType = AbstractStream.resolveReturnType(kvMapper);
 
         assertEquals((Type) String.class, returnType);
 
@@ -60,14 +82,9 @@ public class ResolverTest {
             }
         };
 
-        try {
-            returnType = Resolver.resolveReturnType(ValueMapper.class, vMapper);
-        } catch (TypeException ex) {
-            returnType = null;
-        }
+        returnType = AbstractStream.resolveReturnType(vMapper);
 
         assertEquals((Type) String.class, returnType);
-
 
         ValueJoiner vJoiner = new ValueJoiner<Integer, Integer, Long>() {
             @Override
@@ -76,41 +93,20 @@ public class ResolverTest {
             }
         };
 
-        try {
-            returnType = Resolver.resolveReturnType(ValueJoiner.class, vJoiner);
-        } catch (TypeException ex) {
-            returnType = null;
-        }
+        returnType = AbstractStream.resolveReturnType(vJoiner);
 
         assertEquals((Type) Long.class, returnType);
     }
 
     @Test
-    public void testKeyValueTypeFromKeyValueMapper() throws Exception {
+    public void testResolveReturnTypeFromSupplier() throws Exception {
         Type returnType;
 
-        KeyValueMapper kvMapper = new KeyValueMapper<Integer, Long, KeyValue<String, Short>>() {
-            @Override
-            public KeyValue<String, Short> apply(Integer key, Long value) {
-                return null;
-            }
-        };
+        TestTransformerSupplier transformerSupplier = new TestTransformerSupplier();
 
-        try {
-            returnType = Resolver.resolveReturnType(KeyValueMapper.class, kvMapper);
-        } catch (TypeException ex) {
-            returnType = null;
-        }
+        returnType = AbstractStream.resolveReturnType(Transformer.class, "transform", transformerSupplier);
 
-        Assert.assertEquals(Types.type(KeyValue.class, String.class, Short.class), returnType);
-
-        Type keyType = Resolver.getKeyTypeFromKeyValueType(returnType);
-
-        assertEquals((Type) String.class, keyType);
-
-        Type valueType = Resolver.getValueTypeFromKeyValueType(returnType);
-
-        assertEquals((Type) Short.class, valueType);
+        assertEquals(Types.type(KeyValue.class, String.class, Short.class), returnType);
     }
 
 }

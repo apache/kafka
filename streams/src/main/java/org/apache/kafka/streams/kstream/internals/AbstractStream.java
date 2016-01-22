@@ -22,8 +22,12 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Transformer;
+import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.type.internal.Resolver;
 import org.apache.kafka.streams.kstream.type.TypeException;
 import org.apache.kafka.streams.processor.TopologyException;
@@ -99,15 +103,11 @@ public abstract class AbstractStream<K> {
         return topology.getDeserializer(type);
     }
 
-    protected Type resolve(Type type) throws TypeException {
-        return Resolver.resolve(type);
-    }
-
-    protected Type isWindowedKeyType(Type type) {
+    public static Type getWindowedKeyType(Type type) {
         if (type == null)
             throw new InsufficientTypeInfoException();
 
-        return Resolver.isWindowedKeyType(type);
+        return Resolver.getWindowedKeyType(type);
     }
 
     public static Type getKeyTypeFromKeyValueType(Type type) {
@@ -118,28 +118,49 @@ public abstract class AbstractStream<K> {
         return (type != null) ? Resolver.getValueTypeFromKeyValueType(type) : null;
     }
 
-    protected Type resolveReturnType(Object func) {
+    public static Type resolveReturnType(Object function) {
         try {
             Class funcInterface;
 
-            if (func instanceof KeyValueMapper) {
+            if (function instanceof KeyValueMapper) {
                 funcInterface = KeyValueMapper.class;
-            } else if (func instanceof ValueMapper) {
+            } else if (function instanceof ValueMapper) {
                 funcInterface = ValueMapper.class;
-            } else if (func instanceof ValueJoiner) {
+            } else if (function instanceof ValueJoiner) {
                 funcInterface = ValueJoiner.class;
             } else {
                 return null;
             }
 
-            return Resolver.resolveReturnType(funcInterface, func.getClass());
+            return Resolver.resolveReturnType(funcInterface, function);
 
         } catch (TypeException ex) {
             return null;
         }
     }
 
-    protected Type resolveElementTypeFromIterable(Type iterableType) {
+    public static Type resolveReturnType(Class interfaceClass, String methodName, Object supplier) {
+        try {
+            Class supplierInterface;
+
+            if (interfaceClass.equals(Transformer.class)) {
+                supplierInterface = TransformerSupplier.class;
+            } else if (interfaceClass.equals(ValueTransformer.class)) {
+                supplierInterface = ValueTransformerSupplier.class;
+            } else {
+                return null;
+            }
+
+            Type implementationType = Resolver.resolveReturnType(supplierInterface, supplier);
+
+            return Resolver.resolveReturnType(interfaceClass, methodName, implementationType);
+
+        } catch (TypeException ex) {
+            return null;
+        }
+    }
+
+    public static Type resolveElementTypeFromIterable(Type iterableType) {
         try {
             return Resolver.resolveElementTypeFromIterableType(iterableType);
         } catch (TypeException ex) {

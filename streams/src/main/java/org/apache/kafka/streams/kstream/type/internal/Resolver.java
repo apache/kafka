@@ -25,82 +25,151 @@ import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 public class Resolver {
 
+    /**
+     * Resolves the type. If something cannot be resolved due to insufficient information, TypeException will be thrown.
+     * @param type
+     * @return Type
+     * @throws TypeException
+     */
     public static Type resolve(Type type) throws TypeException {
+        return resolve(type, Collections.<TypeVariable, Type>emptyMap());
+    }
+
+    private static Type resolve(Type type, Map<TypeVariable, Type> env) throws TypeException {
         if (type instanceof Class) {
             Class<?> rawType = (Class) type;
             TypeVariable[] typeArgs = rawType.getTypeParameters();
 
             if (typeArgs == null || typeArgs.length == 0) {
+                // No type parameters. check if this is an array type
                 if (rawType.isArray()) {
-                    return new ArrayType(rawType.getComponentType());
+                    return new ArrayType(resolve(rawType.getComponentType(), env));
                 } else {
                     return type;
                 }
             } else {
-                Type[] resolvedTypeArgs = resolve(typeArgs);
-                return new ParametricType(rawType, resolvedTypeArgs);
+                // There are type parameters. resolve them.
+                try {
+                    Type[] resolvedTypeArgs = resolve(typeArgs, env);
+
+                    return new ParametricType(rawType, resolvedTypeArgs);
+
+                } catch (TypeException ex) {
+                    throw new TypeException("failed to resolve type: " + type, ex);
+                }
             }
-        } else if (type instanceof ParametricType) {
-            return type;
         } else if (type instanceof ParameterizedType) {
             try {
                 ParameterizedType parameterizedType = (ParameterizedType) type;
                 Class<?> rawType = (Class) parameterizedType.getRawType();
-                Type[] resolvedTypeArgs = resolve(parameterizedType.getActualTypeArguments());
+                Type[] resolvedTypeArgs = resolve(parameterizedType.getActualTypeArguments(), env);
 
                 return new ParametricType(rawType, resolvedTypeArgs);
 
             } catch (TypeException ex) {
                 throw new TypeException("failed to resolve type: " + type, ex);
             }
+        } else if (type instanceof TypeVariable) {
+            // Try to resolve using the environment
+            Type resolved = env.get(type);
+
+            if (resolved == null)
+                throw new TypeException("failed to resolve type variable: " + type);
+
+            return resolved;
+
+        } else if (type instanceof ParametricType) {
+            // This is already resolved.
+            return type;
+
+        } else if (type instanceof ArrayType) {
+            // This is already resolved.
+            return type;
 
         } else {
             throw new TypeException("failed to resolve type: " + type);
         }
     }
 
-    public static Type resolveReturnType(Class target, Class descendant) throws TypeException {
-        Map<TypeVariable, Type> typeArgs = resolveTypeArguments(target, descendant);
-
-        return (typeArgs != null) ? typeArgs.get(getTypeVariableOfReturnType(target)) : null;
-    }
-
-    private static Type[] resolve(Type[] typeArgs) throws TypeException {
-        Type[] converted = new Type[typeArgs.length];
+    private static Type[] resolve(Type[] typeArgs, Map<TypeVariable, Type> env) throws TypeException {
+        Type[] resolved = new Type[typeArgs.length];
 
         for (int i = 0; i < typeArgs.length; i++) {
-            converted[i] = resolve(typeArgs[i]);
+            resolved[i] = resolve(typeArgs[i], env);
         }
 
-        return converted;
+        return resolved;
     }
 
-    public static Map<TypeVariable, Type> resolveTypeArguments(Class target, Type descendant) throws TypeException {
-        return resolveTypeArguments(target, descendant, new HashMap<TypeVariable, Type>());
+    /**
+     * Resolves the return type of the function represented by the functionalInterface
+     * @param functionalInterface
+     * @param function
+     * @return Type, null if not resolved
+     * @throws TypeException
+     */
+    public static Type resolveReturnType(Class functionalInterface, Object function) throws TypeException {
+        Method[] methods = functionalInterface.getDeclaredMethods();
+        if (methods.length != 1)
+            throw new TypeException("internal error: failed to determine the function method");
+
+        Map<TypeVariable, Type> env = resolveTypeArguments(functionalInterface, function.getClass());
+
+        return resolveReturnType(methods[0], env);
     }
 
-    private static Map<TypeVariable, Type> resolveTypeArguments(Class target, Type descendant, Map<TypeVariable, Type> env) throws TypeException {
+    private static Map<TypeVariable, Type> resolveTypeArguments(Class interfaceClass, Type implementationType) throws TypeException {
+        return resolveTypeArguments(interfaceClass, implementationType, Collections.<TypeVariable, Type>emptyMap());
+    }
+
+    /**
+     * Resolves the return type of the method of implementationType implementing interfaceClass
+     * @param interfaceClass
+     * @param implementationType
+     * @return Type, null if not resolved
+     * @throws TypeException
+     */
+    public static Type resolveReturnType(Class interfaceClass, String methodName, Type implementationType) throws TypeException {
+        Method[] methods = interfaceClass.getDeclaredMethods();
+
+        Method method = null;
+        for (Method m : methods) {
+            if (methodName.equals(m.getName())) {
+                method = m;
+                break;
+            }
+        }
+        if (method == null)
+            throw new TypeException("internal error: failed to determine the method");
+
+        Map<TypeVariable, Type> env = resolveTypeArguments(interfaceClass, implementationType);
+
+        return resolveReturnType(method, env);
+    }
+
+    // resolve type arguments of the interfaceClass from the implementationType
+    private static Map<TypeVariable, Type> resolveTypeArguments(Class interfaceClass, Type implementationType, Map<TypeVariable, Type> env) {
 
         Map<TypeVariable, Type> typeArgs = new HashMap<>();
-        Map<TypeVariable, Type> resolvedTypeArgs;
         Class objClass = null;
 
-        if (descendant instanceof Class) {
-            objClass = (Class) descendant;
+        if (implementationType instanceof Class) {
+            objClass = (Class) implementationType;
 
             if (objClass.equals((Class) Object.class))
                 return null;
 
-            if (objClass.equals(target))
+            if (objClass.equals(interfaceClass))
                 return typeArgs;
 
-        } else if (descendant instanceof ParameterizedType) {
-            ParameterizedType parameterizedType = (ParameterizedType) descendant;
+        } else if (implementationType instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) implementationType;
             objClass = (Class) parameterizedType.getRawType();
 
             if (objClass.equals((Class) Object.class))
@@ -110,20 +179,32 @@ public class Resolver {
             Type[] tArgs = parameterizedType.getActualTypeArguments();
 
             for (int i = 0; i < tVars.length; i++) {
-                if (tArgs[i] instanceof TypeVariable) {
-                    Type arg = env.get((TypeVariable) tArgs[i]);
-                    if (arg != null)
-                        typeArgs.put(tVars[i], arg);
-                } else if (tArgs[i] instanceof ParameterizedType) {
-                    Type arg = resolveParameterizedType((ParameterizedType) tArgs[i], env);
-                    if (arg != null)
-                        typeArgs.put(tVars[i], arg);
-                } else if (tArgs[i] instanceof Class) {
-                    typeArgs.put(tVars[i], tArgs[i]);
+                try {
+                    Type arg = resolve(tArgs[i], env);
+                    typeArgs.put(tVars[i], arg);
+                } catch (TypeException ex) {
+                    // failed to resolve
                 }
             }
 
-            if (objClass.equals(target))
+            if (objClass.equals(interfaceClass))
+                return typeArgs;
+
+        } else if (implementationType instanceof ParametricType) {
+            ParametricType parametericType = (ParametricType) implementationType;
+            objClass = parametericType.rawType;
+
+            if (objClass.equals((Class) Object.class))
+                return null;
+
+            TypeVariable[] tVars = objClass.getTypeParameters();
+            Type[] tArgs = parametericType.typeArgs;
+
+            for (int i = 0; i < tVars.length; i++) {
+                typeArgs.put(tVars[i], tArgs[i]);
+            }
+
+            if (objClass.equals(interfaceClass))
                 return typeArgs;
         }
 
@@ -133,7 +214,7 @@ public class Resolver {
         // go up the class hierarchy
 
         for (Type sup : objClass.getGenericInterfaces()) {
-            resolvedTypeArgs = resolveTypeArguments(target, sup, typeArgs);
+            Map<TypeVariable, Type> resolvedTypeArgs = resolveTypeArguments(interfaceClass, sup, typeArgs);
 
             if (resolvedTypeArgs != null)
                 return resolvedTypeArgs;
@@ -141,7 +222,7 @@ public class Resolver {
 
         Type supType = objClass.getGenericSuperclass();
         if (supType != null) {
-            resolvedTypeArgs = resolveTypeArguments(target, supType, typeArgs);
+            Map<TypeVariable, Type> resolvedTypeArgs = resolveTypeArguments(interfaceClass, supType, typeArgs);
 
             if (resolvedTypeArgs != null)
                 return resolvedTypeArgs;
@@ -150,25 +231,12 @@ public class Resolver {
         return null;
     }
 
-    private static Type resolveParameterizedType(ParameterizedType type, Map<TypeVariable, Type> envTypeArgs) throws TypeException {
-        Type[] typeArgs = type.getActualTypeArguments();
-        Type[] resolvedTypeArgs = new Type[typeArgs.length];
-        for (int i = 0; i < typeArgs.length; i++) {
-            if (typeArgs[i] instanceof Class) {
-                resolvedTypeArgs[i] = typeArgs[i];
-            } else if (typeArgs[i] instanceof TypeVariable) {
-                Type resolvedType = envTypeArgs.get(typeArgs[i]);
-                if (resolvedType == null)
-                    return null;
-
-                resolvedTypeArgs[i] = resolvedType;
-            } else {
-                return null;
-            }
-        }
-        return new ParametricType((Class) type.getRawType(), resolvedTypeArgs);
-    }
-
+    /**
+     * Resolves the element type of iterableType
+     * @param iterableType
+     * @return Type, null if not resolved
+     * @throws TypeException
+     */
     public static Type resolveElementTypeFromIterableType(Type iterableType) throws TypeException {
         if (iterableType != null) {
             Map<TypeVariable, Type> typeArgs = null;
@@ -197,20 +265,11 @@ public class Resolver {
         }
     }
 
-    private static final TypeVariable getTypeVariableOfReturnType(Class<?> funcClass) throws TypeException {
-        Method[] methods = funcClass.getDeclaredMethods();
-        if (methods.length != 1)
-            throw new TypeException("internal error: failed to determine the function method");
-
-        Type returnType = methods[0].getGenericReturnType();
-        if (!(returnType instanceof TypeVariable))
-            throw new TypeException("internal error: failed ot determine the return type variable");
-
-        return (TypeVariable) returnType;
+    private static Type resolveReturnType(Method method, Map<TypeVariable, Type> env) throws TypeException {
+        return resolve(method.getGenericReturnType(), env);
     }
 
-
-    public static Type isWindowedKeyType(Type type) {
+    public static Type getWindowedKeyType(Type type) {
         if (type instanceof ParametricType) {
             ParametricType ptype = (ParametricType) type;
             if (ptype.rawType.equals(Windowed.class))

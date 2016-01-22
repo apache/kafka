@@ -38,6 +38,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.type.TypeException;
 import org.apache.kafka.streams.kstream.type.Types;
+import org.apache.kafka.streams.kstream.type.internal.Resolver;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyException;
@@ -103,7 +104,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public KStream<K, V> returns(Type keyType, Type valueType) {
         try {
-            return new KStreamImpl<>(topology, name, sourceNodes, resolve(keyType), resolve(valueType));
+            return new KStreamImpl<>(topology, name, sourceNodes, Resolver.resolve(keyType), Resolver.resolve(valueType));
         } catch (TypeException ex) {
             throw new TopologyException("failed to resolve a type of the stream", ex);
         }
@@ -112,7 +113,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public KStream<K, V> returnsValue(Type valueType) {
         try {
-            return new KStreamImpl<>(topology, name, sourceNodes, keyType, resolve(valueType));
+            return new KStreamImpl<>(topology, name, sourceNodes, keyType, Resolver.resolve(valueType));
         } catch (TypeException ex) {
             throw new TopologyException("failed to resolve a type of the stream", ex);
         }
@@ -247,7 +248,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public void to(String topic) {
 
         Serializer<K> keySerializer;
-        Type windowedRawKeyType = isWindowedKeyType(keyType);
+        Type windowedRawKeyType = getWindowedKeyType(keyType);
         if (windowedRawKeyType != null) {
             keySerializer = new WindowedSerializer(getSerializer(windowedRawKeyType));
         } else {
