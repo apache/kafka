@@ -104,6 +104,18 @@ public class StreamThread extends Thread {
     private final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
 
+    static File makeStateDir(String jobId, String baseDirName) {
+        File baseDir = new File(baseDirName);
+        if (!baseDir.exists())
+            baseDir.mkdir();
+
+        File stateDir = new File(baseDir, jobId);
+        if (!stateDir.exists())
+            stateDir.mkdir();
+
+        return stateDir;
+    }
+
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
@@ -167,8 +179,7 @@ public class StreamThread extends Thread {
         this.standbyRecords = new HashMap<>();
 
         // read in task specific config values
-        this.stateDir = new File(this.config.getString(StreamingConfig.STATE_DIR_CONFIG));
-        this.stateDir.mkdir();
+        this.stateDir = makeStateDir(this.jobId, this.config.getString(StreamingConfig.STATE_DIR_CONFIG));
         this.pollTimeMs = config.getLong(StreamingConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamingConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.cleanTimeMs = config.getLong(StreamingConfig.STATE_CLEANUP_DELAY_MS_CONFIG);

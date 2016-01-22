@@ -200,7 +200,7 @@ public class StandbyTaskTest {
 
             task.close();
 
-            File taskDir = new File(baseDir, jobId + "-" + taskId.toString());
+            File taskDir = new File(StreamThread.makeStateDir(jobId, baseDir.getCanonicalPath()), taskId.toString());
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
             Map<TopicPartition, Long> offsets = checkpoint.read();
 
@@ -298,7 +298,7 @@ public class StandbyTaskTest {
 
             task.close();
 
-            File taskDir = new File(baseDir, jobId + "-" + taskId.toString());
+            File taskDir = new File(StreamThread.makeStateDir(jobId, baseDir.getCanonicalPath()), taskId.toString());
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
             Map<TopicPartition, Long> offsets = checkpoint.read();
 
