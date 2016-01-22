@@ -27,14 +27,14 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
-import org.apache.kafka.streams.processor.internals.KafkaStreamingPartitionAssignor;
+import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
-public class StreamingConfig extends AbstractConfig {
+public class StreamsConfig extends AbstractConfig {
 
     private static final ConfigDef CONFIG;
 
@@ -73,11 +73,6 @@ public class StreamingConfig extends AbstractConfig {
     /** <code>total.records.to.process</code> */
     public static final String TOTAL_RECORDS_TO_PROCESS = "total.records.to.process";
     private static final String TOTAL_RECORDS_TO_DOC = "Exit after processing this many records.";
-
-    /** <code>window.time.ms</code> */
-    public static final String WINDOW_TIME_MS_CONFIG = "window.time.ms";
-    private static final String WINDOW_TIME_MS_DOC = "Setting this to a non-negative value will cause the processor to get called "
-                                                     + "with this frequency even if there is no message.";
 
     /** <code>timestamp.extractor</code> */
     public static final String TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "timestamp.extractor";
@@ -121,30 +116,58 @@ public class StreamingConfig extends AbstractConfig {
     private static final String SYSTEM_TEMP_DIRECTORY = System.getProperty("java.io.tmpdir");
 
     static {
-        CONFIG = new ConfigDef().define(JOB_ID_CONFIG,
+        CONFIG = new ConfigDef().define(JOB_ID_CONFIG,      // required with no default value
                                         Type.STRING,
-                                        "",
-                                        Importance.MEDIUM,
-                                        StreamingConfig.JOB_ID_DOC)
+                                        Importance.HIGH,
+                                        StreamsConfig.JOB_ID_DOC)
+                                .define(BOOTSTRAP_SERVERS_CONFIG,       // required with no default value
+                                        Type.STRING,
+                                        Importance.HIGH,
+                                        CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
                                 .define(CLIENT_ID_CONFIG,
                                         Type.STRING,
                                         "",
-                                        Importance.MEDIUM,
+                                        Importance.HIGH,
                                         CommonClientConfigs.CLIENT_ID_DOC)
                                 .define(ZOOKEEPER_CONNECT_CONFIG,
                                         Type.STRING,
                                         "",
                                         Importance.HIGH,
-                                        StreamingConfig.ZOOKEEPER_CONNECT_DOC)
+                                        StreamsConfig.ZOOKEEPER_CONNECT_DOC)
                                 .define(STATE_DIR_CONFIG,
                                         Type.STRING,
                                         SYSTEM_TEMP_DIRECTORY,
-                                        Importance.MEDIUM,
+                                        Importance.HIGH,
                                         STATE_DIR_DOC)
+                                .define(KEY_SERIALIZER_CLASS_CONFIG,        // required with no default value
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        ProducerConfig.KEY_SERIALIZER_CLASS_DOC)
+                                .define(VALUE_SERIALIZER_CLASS_CONFIG,      // required with no default value
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        ProducerConfig.VALUE_SERIALIZER_CLASS_DOC)
+                                .define(KEY_DESERIALIZER_CLASS_CONFIG,      // required with no default value
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        ConsumerConfig.KEY_DESERIALIZER_CLASS_DOC)
+                                .define(VALUE_DESERIALIZER_CLASS_CONFIG,    // required with no default value
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        ConsumerConfig.VALUE_DESERIALIZER_CLASS_DOC)
+                                .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        Importance.MEDIUM,
+                                        TIMESTAMP_EXTRACTOR_CLASS_DOC)
+                                .define(PARTITION_GROUPER_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        DefaultPartitionGrouper.class,
+                                        Importance.MEDIUM,
+                                        PARTITION_GROUPER_CLASS_DOC)
                                 .define(COMMIT_INTERVAL_MS_CONFIG,
                                         Type.LONG,
                                         30000,
-                                        Importance.HIGH,
+                                        Importance.LOW,
                                         COMMIT_INTERVAL_MS_DOC)
                                 .define(POLL_MS_CONFIG,
                                         Type.LONG,
@@ -176,40 +199,6 @@ public class StreamingConfig extends AbstractConfig {
                                         -1L,
                                         Importance.LOW,
                                         TOTAL_RECORDS_TO_DOC)
-                                .define(WINDOW_TIME_MS_CONFIG,
-                                        Type.LONG,
-                                        -1L,
-                                        Importance.MEDIUM,
-                                        WINDOW_TIME_MS_DOC)
-                                .define(KEY_SERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Importance.HIGH,
-                                        ProducerConfig.KEY_SERIALIZER_CLASS_DOC)
-                                .define(VALUE_SERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Importance.HIGH,
-                                        ProducerConfig.VALUE_SERIALIZER_CLASS_DOC)
-                                .define(KEY_DESERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Importance.HIGH,
-                                        ConsumerConfig.KEY_DESERIALIZER_CLASS_DOC)
-                                .define(VALUE_DESERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Importance.HIGH,
-                                        ConsumerConfig.VALUE_DESERIALIZER_CLASS_DOC)
-                                .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Importance.HIGH,
-                                        TIMESTAMP_EXTRACTOR_CLASS_DOC)
-                                .define(PARTITION_GROUPER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        DefaultPartitionGrouper.class,
-                                        Importance.HIGH,
-                                        PARTITION_GROUPER_CLASS_DOC)
-                                .define(BOOTSTRAP_SERVERS_CONFIG,
-                                        Type.STRING,
-                                        Importance.HIGH,
-                                        CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         "",
@@ -233,7 +222,7 @@ public class StreamingConfig extends AbstractConfig {
         public static final String STREAM_THREAD_INSTANCE = "__stream.thread.instance__";
     }
 
-    public StreamingConfig(Map<?, ?> props) {
+    public StreamsConfig(Map<?, ?> props) {
         super(CONFIG, props);
     }
 
@@ -242,10 +231,10 @@ public class StreamingConfig extends AbstractConfig {
 
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
-        props.put(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG));
-        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, KafkaStreamingPartitionAssignor.class.getName());
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG));
+        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
 
-        props.put(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
+        props.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
 
         return props;
     }
@@ -268,10 +257,10 @@ public class StreamingConfig extends AbstractConfig {
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         // remove properties that are not required for consumers
-        props.remove(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG);
-        props.remove(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG);
-        props.remove(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
-        props.remove(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG);
+        props.remove(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG);
+        props.remove(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG);
+        props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        props.remove(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
         return props;
     }
@@ -283,9 +272,9 @@ public class StreamingConfig extends AbstractConfig {
         props.put(ProducerConfig.LINGER_MS_CONFIG, "100");
 
         // remove properties that are not required for producers
-        props.remove(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG);
-        props.remove(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
-        props.remove(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        props.remove(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG);
+        props.remove(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
+        props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
 
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
 
@@ -293,19 +282,19 @@ public class StreamingConfig extends AbstractConfig {
     }
 
     public Serializer keySerializer() {
-        return getConfiguredInstance(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
+        return getConfiguredInstance(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
     }
 
     public Serializer valueSerializer() {
-        return getConfiguredInstance(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
+        return getConfiguredInstance(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
     }
 
     public Deserializer keyDeserializer() {
-        return getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+        return getConfiguredInstance(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
     }
 
     public Deserializer valueDeserializer() {
-        return getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+        return getConfiguredInstance(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
     }
 
     public static void main(String[] args) {

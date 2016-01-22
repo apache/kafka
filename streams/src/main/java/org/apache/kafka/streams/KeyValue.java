@@ -15,28 +15,23 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.state;
+package org.apache.kafka.streams;
 
-public class Entry<K, V> {
+public class KeyValue<K, V> {
 
-    private final K key;
-    private final V value;
+    public final K key;
+    public final V value;
 
-    public Entry(K key, V value) {
+    public KeyValue(K key, V value) {
         this.key = key;
         this.value = value;
     }
 
-    public K key() {
-        return key;
-    }
-
-    public V value() {
-        return value;
+    public static <K, V> KeyValue<K, V> pair(K key, V value) {
+        return new KeyValue<>(key, value);
     }
 
     public String toString() {
-        return "Entry(" + key() + ", " + value() + ")";
+        return "KeyValue(" + key + ", " + value + ")";
     }
-
 }

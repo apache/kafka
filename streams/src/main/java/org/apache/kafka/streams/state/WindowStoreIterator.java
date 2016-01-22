@@ -19,7 +19,7 @@
 
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.streams.kstream.KeyValue;
+import org.apache.kafka.streams.KeyValue;
 
 import java.util.Iterator;
 
