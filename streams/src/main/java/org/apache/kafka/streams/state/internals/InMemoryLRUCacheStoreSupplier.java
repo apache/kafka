@@ -17,10 +17,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.state.Entry;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Serdes;
@@ -131,9 +131,9 @@ public class InMemoryLRUCacheStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         @Override
-        public void putAll(List<Entry<K, V>> entries) {
-            for (Entry<K, V> entry : entries)
-                put(entry.key(), entry.value());
+        public void putAll(List<KeyValue<K, V>> entries) {
+            for (KeyValue<K, V> entry : entries)
+                put(entry.key, entry.value);
         }
 
         @Override
@@ -179,9 +179,9 @@ public class InMemoryLRUCacheStoreSupplier<K, V> implements StateStoreSupplier {
             }
 
             @Override
-            public Entry<K, V> next() {
+            public KeyValue<K, V> next() {
                 lastKey = keys.next();
-                return new Entry<>(lastKey, entries.get(lastKey));
+                return new KeyValue<>(lastKey, entries.get(lastKey));
             }
 
             @Override

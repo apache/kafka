@@ -39,8 +39,8 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StreamingConfig;
-import org.apache.kafka.streams.StreamingMetrics;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -67,14 +67,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class StreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
-    private static final AtomicInteger STREAMING_THREAD_ID_SEQUENCE = new AtomicInteger(1);
+    private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     public final PartitionGrouper partitionGrouper;
     public final String jobId;
     public final String clientId;
     public final UUID processId;
 
-    protected final StreamingConfig config;
+    protected final StreamsConfig config;
     protected final TopologyBuilder builder;
     protected final Set<String> sourceTopics;
     protected final Producer<byte[], byte[]> producer;
@@ -93,9 +93,9 @@ public class StreamThread extends Thread {
     private final long cleanTimeMs;
     private final long commitTimeMs;
     private final long totalRecordsToProcess;
-    private final StreamingMetricsImpl sensors;
+    private final StreamsMetricsImpl sensors;
 
-    private KafkaStreamingPartitionAssignor partitionAssignor = null;
+    private StreamPartitionAssignor partitionAssignor = null;
 
     private long lastClean;
     private long lastCommit;
@@ -134,17 +134,17 @@ public class StreamThread extends Thread {
     };
 
     public StreamThread(TopologyBuilder builder,
-                        StreamingConfig config,
+                        StreamsConfig config,
                         String jobId,
                         String clientId,
                         UUID processId,
                         Metrics metrics,
-                        Time time) throws Exception {
+                        Time time) {
         this(builder, config, null , null, null, jobId, clientId, processId, metrics, time);
     }
 
     StreamThread(TopologyBuilder builder,
-                 StreamingConfig config,
+                 StreamsConfig config,
                  Producer<byte[], byte[]> producer,
                  Consumer<byte[], byte[]> consumer,
                  Consumer<byte[], byte[]> restoreConsumer,
@@ -152,8 +152,8 @@ public class StreamThread extends Thread {
                  String clientId,
                  UUID processId,
                  Metrics metrics,
-                 Time time) throws Exception {
-        super("StreamThread-" + STREAMING_THREAD_ID_SEQUENCE.getAndIncrement());
+                 Time time) {
+        super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
 
         this.jobId = jobId;
         this.config = config;
@@ -161,7 +161,7 @@ public class StreamThread extends Thread {
         this.sourceTopics = builder.sourceTopics();
         this.clientId = clientId;
         this.processId = processId;
-        this.partitionGrouper = config.getConfiguredInstance(StreamingConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
+        this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
 
         // set the producer and consumer clients
         this.producer = (producer != null) ? producer : createProducer();
@@ -179,23 +179,23 @@ public class StreamThread extends Thread {
         this.standbyRecords = new HashMap<>();
 
         // read in task specific config values
-        this.stateDir = makeStateDir(this.jobId, this.config.getString(StreamingConfig.STATE_DIR_CONFIG));
-        this.pollTimeMs = config.getLong(StreamingConfig.POLL_MS_CONFIG);
-        this.commitTimeMs = config.getLong(StreamingConfig.COMMIT_INTERVAL_MS_CONFIG);
-        this.cleanTimeMs = config.getLong(StreamingConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
-        this.totalRecordsToProcess = config.getLong(StreamingConfig.TOTAL_RECORDS_TO_PROCESS);
+        this.stateDir = makeStateDir(this.jobId, this.config.getString(StreamsConfig.STATE_DIR_CONFIG));
+        this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
+        this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+        this.cleanTimeMs = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
+        this.totalRecordsToProcess = config.getLong(StreamsConfig.TOTAL_RECORDS_TO_PROCESS);
 
         this.lastClean = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommit = time.milliseconds();
         this.recordsProcessed = 0;
         this.time = time;
 
-        this.sensors = new StreamingMetricsImpl(metrics);
+        this.sensors = new StreamsMetricsImpl(metrics);
 
         this.running = new AtomicBoolean(true);
     }
 
-    public void partitionAssignor(KafkaStreamingPartitionAssignor partitionAssignor) {
+    public void partitionAssignor(StreamPartitionAssignor partitionAssignor) {
         this.partitionAssignor = partitionAssignor;
     }
 
@@ -238,7 +238,7 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * Shutdown this streaming thread.
+     * Shutdown this stream thread.
      */
     public void close() {
         running.set(false);
@@ -685,7 +685,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    private class StreamingMetricsImpl implements StreamingMetrics {
+    private class StreamsMetricsImpl implements StreamsMetrics {
         final Metrics metrics;
         final String metricGrpName;
         final Map<String, String> metricTags;
@@ -697,10 +697,10 @@ public class StreamThread extends Thread {
         final Sensor taskCreationSensor;
         final Sensor taskDestructionSensor;
 
-        public StreamingMetricsImpl(Metrics metrics) {
+        public StreamsMetricsImpl(Metrics metrics) {
 
             this.metrics = metrics;
-            this.metricGrpName = "streaming-metrics";
+            this.metricGrpName = "stream-metrics";
             this.metricTags = new LinkedHashMap<>();
             this.metricTags.put("client-id", clientId + "-" + getName());
 
@@ -746,7 +746,7 @@ public class StreamThread extends Thread {
             for (int i = 0; i < tags.length; i += 2)
                 tagMap.put(tags[i], tags[i + 1]);
 
-            String metricGroupName = "streaming-" + scopeName + "-metrics";
+            String metricGroupName = "stream-" + scopeName + "-metrics";
 
             // first add the global operation metrics if not yet, with the global tags only
             Sensor parent = metrics.sensor(scopeName + "-" + operationName);

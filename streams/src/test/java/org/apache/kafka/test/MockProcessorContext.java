@@ -18,7 +18,8 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.streams.StreamingMetrics;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -26,7 +27,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.state.Entry;
 
 import java.io.File;
 import java.util.Collections;
@@ -123,8 +123,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public StreamingMetrics metrics() {
-        return new StreamingMetrics() {
+    public StreamsMetrics metrics() {
+        return new StreamsMetrics() {
             @Override
             public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
                 return null;
@@ -192,10 +192,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return Collections.unmodifiableMap(storeMap);
     }
 
-    public void restore(String storeName, List<Entry<byte[], byte[]>> changeLog) {
+    public void restore(String storeName, List<KeyValue<byte[], byte[]>> changeLog) {
         StateRestoreCallback restoreCallback = restoreFuncs.get(storeName);
-        for (Entry<byte[], byte[]> entry : changeLog) {
-            restoreCallback.restore(entry.key(), entry.value());
+        for (KeyValue<byte[], byte[]> entry : changeLog) {
+            restoreCallback.restore(entry.key, entry.value);
         }
     }
 }
