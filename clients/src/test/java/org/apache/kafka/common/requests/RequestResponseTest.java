@@ -81,7 +81,7 @@ public class RequestResponseTest {
                 createOffsetFetchRequest().getErrorResponse(0, new UnknownServerException()),
                 createOffsetFetchResponse(),
                 createProduceRequest(),
-                createProduceRequest().getErrorResponse(0, new UnknownServerException()),
+                createProduceRequest().getErrorResponse(1, new UnknownServerException()),
                 createProduceResponse(),
                 createStopReplicaRequest(),
                 createStopReplicaRequest().getErrorResponse(0, new UnknownServerException()),

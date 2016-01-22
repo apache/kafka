@@ -103,7 +103,9 @@ public class ProduceRequest extends AbstractRequest {
 
         switch (versionId) {
             case 0:
-                return new ProduceResponse(responseMap, 0);
+                return new ProduceResponse(responseMap);
+            case 1:
+                return new ProduceResponse(responseMap, ProduceResponse.DEFAULT_THROTTLE_TIME);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.PRODUCE.id)));
@@ -120,6 +122,10 @@ public class ProduceRequest extends AbstractRequest {
 
     public Map<TopicPartition, ByteBuffer> partitionRecords() {
         return partitionRecords;
+    }
+
+    public void clearPartitionRecords() {
+        partitionRecords.clear();
     }
 
     public static ProduceRequest parse(ByteBuffer buffer, int versionId) {
