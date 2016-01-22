@@ -20,7 +20,7 @@ package kafka.tools
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.regex.Pattern
+import java.util.regex.{PatternSyntaxException, Pattern}
 import java.util.{Collections, Properties}
 
 import com.yammer.metrics.core.Gauge
@@ -385,8 +385,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     override def run() {
       info("Starting mirror maker thread " + threadName)
-      mirrorMakerConsumer.init()
       try {
+        mirrorMakerConsumer.init()
+
         // We need the two while loop to make sure when old consumer is used, even there is no message we
         // still commit offset. When new consumer is used, this is handled by poll(timeout).
         while (!exitingOnSendFailure && !shuttingDown) {
@@ -515,8 +516,17 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     override def init() {
       debug("Initiating new consumer")
       val consumerRebalanceListener = new InternalRebalanceListenerForNewConsumer(this, customRebalanceListener)
-      if (whitelistOpt.isDefined)
-        consumer.subscribe(Pattern.compile(whitelistOpt.get), consumerRebalanceListener)
+      if (whitelistOpt.isDefined) {
+        val patternOpt: Option[Pattern] = try {
+          Some(Pattern.compile(whitelistOpt.get))
+        } catch {
+          case pse: PatternSyntaxException =>
+            error("Invalid expression syntax: %s".format(whitelistOpt.get))
+            throw pse
+        }
+
+        consumer.subscribe(patternOpt.get, consumerRebalanceListener)
+      }
     }
 
     // New consumer always hasNext
