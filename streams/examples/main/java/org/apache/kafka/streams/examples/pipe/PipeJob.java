@@ -45,6 +45,6 @@ public class PipeJob {
         builder.stream("streams-file-input").to("streams-pipe-output");
 
         KafkaStreams streams = new KafkaStreams(builder, props);
-            streams.start();
+        streams.start();
     }
 }

@@ -34,7 +34,6 @@ import org.rocksdb.RocksIterator;
 import org.rocksdb.WriteOptions;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -67,12 +66,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private RocksDB db;
 
     private int cacheSize = DEFAULT_CACHE_SIZE;
-    private InMemoryLRUCacheStoreSupplier.MemoryLRUCache<K, CacheEntry> cache;
-
-    private class CacheEntry {
-        public V value;
-        public boolean dirty;
-    }
+    private InMemoryLRUCacheStoreSupplier.MemoryLRUCache<K, V> cache;
 
     public RocksDBStore withCacheSize(int cacheSize) {
         this.cacheSize = cacheSize;
@@ -112,23 +106,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         this.dbDir = new File(new File(this.context.stateDir(), DB_FILE_DIR), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
 
-        this.cache = this.cacheSize > 0 ? new InMemoryLRUCacheStoreSupplier.MemoryLRUCache<K, CacheEntry>(name, this.cacheSize)
-                .whenEldestRemoved(new InMemoryLRUCacheStoreSupplier.EldestEntryRemovalListener<K, CacheEntry>() {
+        this.cache = this.cacheSize > 0 ? new InMemoryLRUCacheStoreSupplier.MemoryLRUCache<K, V>(name, this.cacheSize)
+                .whenEldestRemoved(new InMemoryLRUCacheStoreSupplier.EldestEntryRemovalListener<K, V>() {
                     @Override
-                    public void apply(K key, CacheEntry entry) {
-                        // only consider flushing the whole store if the evicting entry is dirty
-                        if (entry.dirty) {
-                            List<KeyValue<K, V>> batch = new ArrayList<>(cacheSize);
-                            KeyValueIterator<K, CacheEntry> iter = cache.all();
-                            while(iter.hasNext()) {
-                                KeyValue<K, CacheEntry> e = iter.next();
-                                batch.add(new KeyValue<>(e.key, e.value.value));
-
-                                // mark the entry as not dirty anymore
-                            }
-                            putAll(batch);
-
-                        }
+                    public void apply(K key, V value) {
+                        // write the entry to the rocksDB file
+                        putInternal(key, value);
                     }
                 })
                 : null;
@@ -162,6 +145,21 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public V get(K key) {
+        if (cache != null) {
+            V value = cache.get(key);
+
+            if (value == null) {
+                value = getInternal(key);
+                cache.put(key, value);
+            }
+
+            return value;
+        } else {
+            return getInternal(key);
+        }
+    }
+
+    private V getInternal(K key) {
         try {
             return serdes.valueFrom(this.db.get(serdes.rawKey(key)));
         } catch (RocksDBException e) {
@@ -172,19 +170,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void put(K key, V value) {
-        try {
-            if (value == null) {
-                if (cache != null) {
-                    cache.put(key, value);
-                }
-
-                db.remove(wOptions, serdes.rawKey(key));
-            } else {
-                db.put(wOptions, serdes.rawKey(key), serdes.rawValue(value));
-            }
-        } catch (RocksDBException e) {
-            // TODO: this needs to be handled more accurately
-            throw new KafkaException("Error while executing put " + key.toString() + " from store " + this.name, e);
+        if (cache != null) {
+            cache.put(key, value);
+        } else {
+            putInternal(key, value);
         }
     }
 

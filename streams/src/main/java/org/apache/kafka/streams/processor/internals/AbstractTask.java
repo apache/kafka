@@ -57,7 +57,8 @@ public abstract class AbstractTask {
 
         // create the processor state manager
         try {
-            File stateFile = new File(config.getString(StreamsConfig.STATE_DIR_CONFIG), id.toString());
+            File jobStateDir = StreamThread.makeStateDir(jobId, config.getString(StreamsConfig.STATE_DIR_CONFIG));
+            File stateFile = new File(jobStateDir.getCanonicalPath(), id.toString());
             // if partitions is null, this is a standby task
             this.stateMgr = new ProcessorStateManager(jobId, id.partition, partitions, stateFile, restoreConsumer, isStandby);
         } catch (IOException e) {

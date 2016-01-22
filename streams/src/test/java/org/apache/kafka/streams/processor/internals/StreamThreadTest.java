@@ -59,8 +59,9 @@ import java.util.UUID;
 
 public class StreamThreadTest {
 
-    private String clientId = "clientId";
-    private UUID processId = UUID.randomUUID();
+    private final String clientId = "clientId";
+    private final String jobId = "stream-thread-test";
+    private final UUID processId = UUID.randomUUID();
 
     private TopicPartition t1p1 = new TopicPartition("topic1", 1);
     private TopicPartition t1p2 = new TopicPartition("topic1", 2);
@@ -117,8 +118,8 @@ public class StreamThreadTest {
                 setProperty(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
                 setProperty(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
                 setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "org.apache.kafka.test.MockTimestampExtractor");
+                setProperty(StreamsConfig.JOB_ID_CONFIG, jobId);
                 setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
-                setProperty(StreamsConfig.JOB_ID_CONFIG, "stream-thread-test");
                 setProperty(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
             }
         };
@@ -128,13 +129,14 @@ public class StreamThreadTest {
         public boolean committed = false;
 
         public TestStreamTask(TaskId id,
+                              String jobId,
                               Collection<TopicPartition> partitions,
                               ProcessorTopology topology,
                               Consumer<byte[], byte[]> consumer,
                               Producer<byte[], byte[]> producer,
                               Consumer<byte[], byte[]> restoreConsumer,
                               StreamsConfig config) {
-            super(id, "jobId", partitions, topology, consumer, producer, restoreConsumer, config, null);
+            super(id, jobId, partitions, topology, consumer, producer, restoreConsumer, config, null);
         }
 
         @Override
@@ -161,11 +163,11 @@ public class StreamThreadTest {
         builder.addSource("source3", "topic3");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source2", "source3");
 
-        StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", clientId, processId, new Metrics(), new SystemTime()) {
+        StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, jobId, clientId, processId, new Metrics(), new SystemTime()) {
             @Override
             protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
                 ProcessorTopology topology = builder.build(id.topicGroupId);
-                return new TestStreamTask(id, partitionsForTask, topology, consumer, producer, mockRestoreConsumer, config);
+                return new TestStreamTask(id, jobId, partitionsForTask, topology, consumer, producer, mockRestoreConsumer, config);
             }
         };
 
@@ -264,10 +266,12 @@ public class StreamThreadTest {
 
             StreamsConfig config = new StreamsConfig(props);
 
-            File stateDir1 = new File(baseDir, task1.toString());
-            File stateDir2 = new File(baseDir, task2.toString());
-            File stateDir3 = new File(baseDir, task3.toString());
-            File extraDir = new File(baseDir, "X");
+            File jobDir = new File(baseDir, jobId);
+            jobDir.mkdir();
+            File stateDir1 = new File(jobDir, task1.toString());
+            File stateDir2 = new File(jobDir, task2.toString());
+            File stateDir3 = new File(jobDir, task3.toString());
+            File extraDir = new File(jobDir, "X");
             stateDir1.mkdir();
             stateDir2.mkdir();
             stateDir3.mkdir();
@@ -281,7 +285,7 @@ public class StreamThreadTest {
             TopologyBuilder builder = new TopologyBuilder();
             builder.addSource("source1", "topic1");
 
-            StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", clientId,  processId, new Metrics(), mockTime) {
+            StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, jobId, clientId,  processId, new Metrics(), mockTime) {
                 @Override
                 public void maybeClean() {
                     super.maybeClean();
@@ -290,7 +294,7 @@ public class StreamThreadTest {
                 @Override
                 protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
                     ProcessorTopology topology = builder.build(id.topicGroupId);
-                    return new TestStreamTask(id, partitionsForTask, topology, consumer, producer, mockRestoreConsumer, config);
+                    return new TestStreamTask(id, jobId, partitionsForTask, topology, consumer, producer, mockRestoreConsumer, config);
                 }
             };
 
@@ -403,7 +407,7 @@ public class StreamThreadTest {
             TopologyBuilder builder = new TopologyBuilder();
             builder.addSource("source1", "topic1");
 
-            StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", clientId,  processId, new Metrics(), mockTime) {
+            StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, jobId, clientId,  processId, new Metrics(), mockTime) {
                 @Override
                 public void maybeCommit() {
                     super.maybeCommit();
@@ -412,7 +416,7 @@ public class StreamThreadTest {
                 @Override
                 protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
                     ProcessorTopology topology = builder.build(id.topicGroupId);
-                    return new TestStreamTask(id, partitionsForTask, topology, consumer, producer, mockRestoreConsumer, config);
+                    return new TestStreamTask(id, jobId, partitionsForTask, topology, consumer, producer, mockRestoreConsumer, config);
                 }
             };
 

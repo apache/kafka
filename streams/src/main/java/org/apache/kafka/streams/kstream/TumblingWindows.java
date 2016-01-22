@@ -20,7 +20,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.kstream.internals.TumblingWindow;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
