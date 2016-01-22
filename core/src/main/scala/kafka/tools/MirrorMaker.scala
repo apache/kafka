@@ -517,15 +517,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       debug("Initiating new consumer")
       val consumerRebalanceListener = new InternalRebalanceListenerForNewConsumer(this, customRebalanceListener)
       if (whitelistOpt.isDefined) {
-        val patternOpt: Option[Pattern] = try {
-          Some(Pattern.compile(whitelistOpt.get))
+        try {
+          consumer.subscribe(Pattern.compile(whitelistOpt.get), consumerRebalanceListener)
         } catch {
           case pse: PatternSyntaxException =>
             error("Invalid expression syntax: %s".format(whitelistOpt.get))
             throw pse
         }
-
-        consumer.subscribe(patternOpt.get, consumerRebalanceListener)
       }
     }
 
