@@ -359,8 +359,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * records waiting to be sent. This allows sending many records in parallel without blocking to wait for the
      * response after each one.
      * <p>
-     * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to and the offset
-     * it was assigned.
+     * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to, the offset
+     * it was assigned and the timestamp of the record.
      * <p>
      * Since the send call is asynchronous it returns a {@link java.util.concurrent.Future Future} for the
      * {@link RecordMetadata} that will be assigned to this record. Invoking {@link java.util.concurrent.Future#get()
@@ -529,7 +529,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     private long getTimestamp(String topic, Long timestamp) {
-        // If log append times is used for the topic, we overwrite the timestamp to avoid server side re-compression.
+        // If log append time is used for the topic, and we are sending records with timestamp other than INHERITED_TIMESTAMP,
+        // the broker will overwrite the timestamp and do the re-compression if compression codec is configured.
+        // To avoid broker side re-compression, we overwrite the timestamp to INHERITED_TIMESTAMP if the topic is using
+        // log append time.
         if (metadata.isUsingLogAppendTime(topic))
             return Record.INHERITED_TIMESTAMP;
         else if (timestamp == null)

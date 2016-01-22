@@ -21,6 +21,15 @@ import org.apache.kafka.common.record.Record;
  * If a valid partition number is specified that partition will be used when sending the record. If no partition is
  * specified but a key is present a partition will be chosen using a hash of the key. If neither key nor partition is
  * present a partition will be assigned in a round-robin fashion.
+ * <p>
+ * The record also has an associated timestamp. If user did not provide a timestamp, the producer will stamp the record
+ * with a timestamp depending on what is the timestamp type used by the topic.
+ * <li>
+ * If the topic is configured to use {@link org.apache.kafka.common.record.Record.TimestampType#CreateTime CreateTime}
+ * the timestamp will be the producer current time.
+ * <li>
+ * If the topic is configured to use {@link org.apache.kafka.common.record.Record.TimestampType#LogAppendTime LogAppendTime}
+ * the timestamp will be the time when Kafka broker accepts the record.
  */
 public final class ProducerRecord<K, V> {
 
