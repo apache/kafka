@@ -21,7 +21,11 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.type.internal.Resolver;
+import org.apache.kafka.streams.kstream.type.TypeException;
 import org.apache.kafka.streams.processor.TopologyException;
 
 import java.lang.reflect.Type;
@@ -93,6 +97,54 @@ public abstract class AbstractStream<K> {
             throw new InsufficientTypeInfoException();
 
         return topology.getDeserializer(type);
+    }
+
+    protected Type resolve(Type type) throws TypeException {
+        return Resolver.resolve(type);
+    }
+
+    protected Type isWindowedKeyType(Type type) {
+        if (type == null)
+            throw new InsufficientTypeInfoException();
+
+        return Resolver.isWindowedKeyType(type);
+    }
+
+    public static Type getKeyTypeFromKeyValueType(Type type) {
+        return (type != null) ? Resolver.getKeyTypeFromKeyValueType(type) : null;
+    }
+
+    public static Type getValueTypeFromKeyValueType(Type type) {
+        return (type != null) ? Resolver.getValueTypeFromKeyValueType(type) : null;
+    }
+
+    protected Type resolveReturnType(Object func) {
+        try {
+            Class funcInterface;
+
+            if (func instanceof KeyValueMapper) {
+                funcInterface = KeyValueMapper.class;
+            } else if (func instanceof ValueMapper) {
+                funcInterface = ValueMapper.class;
+            } else if (func instanceof ValueJoiner) {
+                funcInterface = ValueJoiner.class;
+            } else {
+                return null;
+            }
+
+            return Resolver.resolveReturnType(funcInterface, func.getClass());
+
+        } catch (TypeException ex) {
+            return null;
+        }
+    }
+
+    protected Type resolveElementTypeFromIterable(Type iterableType) {
+        try {
+            return Resolver.resolveElementTypeFromIterableType(iterableType);
+        } catch (TypeException ex) {
+            return null;
+        }
     }
 
 }

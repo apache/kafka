@@ -23,7 +23,7 @@ import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.type.TypeException;
-import org.apache.kafka.streams.kstream.type.Resolver;
+import org.apache.kafka.streams.kstream.type.internal.Resolver;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.TopologyException;
@@ -44,33 +44,6 @@ public class KStreamBuilder extends TopologyBuilder {
     private final Map<Type, Deserializer> registeredDeserializers = new HashMap<>();
     private Serializer defaultSerializer = null;
     private Deserializer defaultDeserializer = null;
-
-    /**
-     * Defines an explicit type information. It is used when registering a serializer and/or a deserializer for a type.
-     * And it also used to give an explicit return type information to functions given to KStream/KTable methods.
-     * <p>
-     * Example,
-     * <pre>
-     *     // assuming that the define method is declared using
-     *     // import static org.apache.kafka.streams.kstream.KStreamBuilder.define;
-     *
-     *     builder.register(define(MyGenericClass.class, String.class),
-     *         new MyGenericClassDeSerializer(), new MyGenericClassDeserializer())
-     * </pre>
-     * </p>
-     *
-     * @param type the Class instance for this type
-     * @param typeArgs type arguments
-     * @return Type instance
-     * @throws TypeException
-     */
-    public static Type define(Class<?> type, Type... typeArgs) throws TypeException {
-        if (typeArgs != null && typeArgs.length > 0) {
-            return Resolver.getTypeWithTypeArgs(type, typeArgs);
-        } else {
-            return type;
-        }
-    }
 
     public KStreamBuilder() {
         super();
@@ -245,8 +218,6 @@ public class KStreamBuilder extends TopologyBuilder {
             String source = newName(KStreamImpl.SOURCE_NAME);
             String name = newName(KTableImpl.SOURCE_NAME);
 
-            Serializer<K> keySerializer = getSerializer(resolvedKeyType);
-            Serializer<V> valSerializer = getSerializer(resolvedValueType);
             Deserializer<K> keyDeserializer = getDeserializer(resolvedKeyType);
             Deserializer<V> valDeserializer = getDeserializer(resolvedValueType);
 
@@ -255,8 +226,7 @@ public class KStreamBuilder extends TopologyBuilder {
             ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(topic);
             addProcessor(name, processorSupplier, source);
 
-            return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source),
-                    keySerializer, valSerializer, keyDeserializer, valDeserializer, keyType, valueType);
+            return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keyType, valueType);
 
         } catch (TypeException ex) {
             throw new TopologyException("failed to create a stream", ex);

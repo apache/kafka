@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -35,8 +36,8 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.kstream.type.Resolver;
 import org.apache.kafka.streams.kstream.type.TypeException;
+import org.apache.kafka.streams.kstream.type.Types;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyException;
@@ -101,7 +102,20 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public KStream<K, V> returns(Type keyType, Type valueType) {
-        return new KStreamImpl<>(topology, name, sourceNodes, keyType, valueType);
+        try {
+            return new KStreamImpl<>(topology, name, sourceNodes, resolve(keyType), resolve(valueType));
+        } catch (TypeException ex) {
+            throw new TopologyException("failed to resolve a type of the stream", ex);
+        }
+    }
+
+    @Override
+    public KStream<K, V> returnsValue(Type valueType) {
+        try {
+            return new KStreamImpl<>(topology, name, sourceNodes, keyType, resolve(valueType));
+        } catch (TypeException ex) {
+            throw new TopologyException("failed to resolve a type of the stream", ex);
+        }
     }
 
     @Override
@@ -128,7 +142,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamMap<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name, null, null, null);
+        Type mappedType = resolveReturnType(mapper);
+
+        return new KStreamImpl<>(topology, name, null, getKeyTypeFromKeyValueType(mappedType), getValueTypeFromKeyValueType(mappedType));
     }
 
     @Override
@@ -137,7 +153,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamMapValues<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name, sourceNodes, keyType, null);
+        return new KStreamImpl<>(topology, name, sourceNodes, keyType, resolveReturnType(mapper));
     }
 
     @Override
@@ -146,7 +162,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamFlatMap<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name, null, null, null);
+        Type iterableType = resolveReturnType(mapper);
+        Type elementType = null;
+        if (iterableType != null)
+            elementType = resolveElementTypeFromIterable(iterableType);
+
+        return new KStreamImpl<>(topology, name, null, getKeyTypeFromKeyValueType(elementType), getValueTypeFromKeyValueType(elementType));
     }
 
     @Override
@@ -155,7 +176,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamFlatMapValues<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name, sourceNodes, keyType, null);
+        Type iterableType = resolveReturnType(mapper);
+        Type elementType = null;
+        if (iterableType != null)
+            elementType = resolveElementTypeFromIterable(iterableType);
+
+        return new KStreamImpl<>(topology, name, sourceNodes, keyType, elementType);
     }
 
     @Override
@@ -221,7 +247,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public void to(String topic) {
 
         Serializer<K> keySerializer;
-        Type windowedRawKeyType = Resolver.isWindowedKeyType(keyType);
+        Type windowedRawKeyType = isWindowedKeyType(keyType);
         if (windowedRawKeyType != null) {
             keySerializer = new WindowedSerializer(getSerializer(windowedRawKeyType));
         } else {
@@ -345,7 +371,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         topology.addStateStore(thisWindow, thisWindowStreamName, otherWindowStreamName);
         topology.addStateStore(otherWindow, thisWindowStreamName, otherWindowStreamName);
 
-        return new KStreamImpl<>(topology, joinMergeName, allSourceNodes, keyType, null);
+        return new KStreamImpl<>(topology, joinMergeName, allSourceNodes, keyType, resolveReturnType(joiner));
     }
 
     @SuppressWarnings("unchecked")
@@ -383,7 +409,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         topology.addProcessor(joinThisName, joinThis, this.name);
         topology.addStateStore(otherWindow, joinThisName, otherWindowStreamName);
 
-        return new KStreamImpl<>(topology, joinThisName, allSourceNodes, keyType, null);
+        return new KStreamImpl<>(topology, joinThisName, allSourceNodes, keyType, resolveReturnType(joiner));
     }
 
     @SuppressWarnings("unchecked")
@@ -395,7 +421,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamKTableLeftJoin<>((KTableImpl<K, ?, V1>) other, joiner), this.name);
 
-        return new KStreamImpl<>(topology, name, allSourceNodes, keyType, null);
+        return new KStreamImpl<>(topology, name, allSourceNodes, keyType, resolveReturnType(joiner));
     }
 
     @Override
@@ -432,40 +458,54 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Aggregator<K, V, T> aggregator,
-                                                                       Windows<W> windows,
-                                                                       Serializer<T> aggValueSerializer,
-                                                                       Deserializer<T> aggValueDeserializer) {
-        Serializer<K> keySerializer = getSerializer(keyType);
-        Deserializer<K> keyDeserializer = getDeserializer(keyType);
-
+    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(final Aggregator<K, V, T> aggregator,
+                                                                       final Windows<W> windows) {
         // TODO: this agg window operator is only used for casting K to Windowed<K> for
         // KTableProcessorSupplier, which is a bit awkward and better be removed in the future
-        String aggregateName = topology.newName(AGGREGATE_NAME);
+        final String aggregateName = topology.newName(AGGREGATE_NAME);
         String selectName = topology.newName(SELECT_NAME);
 
         ProcessorSupplier<K, V> aggWindowSupplier = new KStreamAggWindow<>();
         ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamAggregate<>(windows, windows.name(), aggregator);
 
-        RocksDBWindowStoreSupplier<K, T> aggregateStore =
-                new RocksDBWindowStoreSupplier<>(
-                        windows.name(),
-                        windows.maintainMs(),
-                        windows.segments,
-                        false,
-                        new Serdes<>("", keySerializer, keyDeserializer, aggValueSerializer, aggValueDeserializer),
-                        null);
-
         // aggregate the values with the aggregator and local store
         topology.addProcessor(selectName, aggWindowSupplier, this.name);
         topology.addProcessor(aggregateName, aggregateSupplier, selectName);
-        topology.addStateStore(aggregateStore, aggregateName);
 
-        // return the KTable representation with the intermediate topic as the sources
+        Type windowedKeyType;
         try {
-            return new KTableImpl<>(topology, aggregateName, aggregateSupplier, sourceNodes, KStreamBuilder.define(Windowed.class, keyType), null);
+            if (keyType == null)
+                throw new InsufficientTypeInfoException("key type");
+
+            windowedKeyType = Types.type(Windowed.class, keyType);
         } catch (TypeException ex) {
             throw new TopologyException("failed to define a windowed key type", ex);
         }
+
+        final KTable<Windowed<K>, T> aggTable = new KTableImpl<>(topology, aggregateName, aggregateSupplier, sourceNodes, windowedKeyType, null);
+        final Serializer<K> aggKeySerializer = getSerializer(keyType);
+        final Deserializer<K> aggKeyDeserializer = getDeserializer(keyType);
+
+        // return the KTable representation with the intermediate topic as the sources
+        return new LazyKTableWrapper<Windowed<K>, T>(topology, windowedKeyType, null) {
+            @Override
+            protected KTable<Windowed<K>, T> create(Type keyType, Type valueType) {
+                Serializer<T> aggValueSerializer = getSerializer(valueType);
+                Deserializer<T> aggValueDeserializer = getDeserializer(valueType);
+
+                RocksDBWindowStoreSupplier<K, T> aggregateStore =
+                        new RocksDBWindowStoreSupplier<>(
+                                windows.name(),
+                                windows.maintainMs(),
+                                windows.segments,
+                                false,
+                                new Serdes<>("", aggKeySerializer, aggKeyDeserializer, aggValueSerializer, aggValueDeserializer),
+                                null);
+
+                topology.addStateStore(aggregateStore, aggregateName);
+
+                return aggTable;
+            }
+        };
     }
 }

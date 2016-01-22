@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.lang.reflect.Type;
@@ -40,6 +38,14 @@ public interface KStream<K, V> {
      * @return the new instance of KStream with explicit type information
      */
     KStream<K, V> returns(Type keyType, Type valueType);
+
+    /**
+     * Explicitly specifies the information of the value type.
+     *
+     * @param valueType an instance of Type that represents the value type
+     * @return the new instance of KStream with explicit type information
+     */
+    KStream<K, V> returnsValue(Type valueType);
 
     /**
      * Creates a new instance of KStream consists of all elements of this stream which satisfy a predicate
@@ -217,9 +223,6 @@ public interface KStream<K, V> {
      * @param windows the specification of the aggregation window
      * @param <T>   the value type of the aggregated table
      */
-    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Aggregator<K, V, T> aggregator,
-                                                                Windows<W> windows,
-                                                                Serializer<T> aggValueSerializer,
-                                                                Deserializer<T> aggValueDeserializer);
+    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Aggregator<K, V, T> aggregator, Windows<W> windows);
 
 }

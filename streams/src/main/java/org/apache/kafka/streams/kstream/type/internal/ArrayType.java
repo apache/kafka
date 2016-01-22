@@ -15,49 +15,37 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.type;
+package org.apache.kafka.streams.kstream.type.internal;
 
-import java.util.Arrays;
+import org.apache.kafka.streams.kstream.type.TypeException;
 
-class TypeWithTypeArgs implements java.lang.reflect.Type {
+import java.lang.reflect.Type;
 
-    final Class<?> rawType;
-    final java.lang.reflect.Type[] typeArgs;
+public class ArrayType implements Type {
 
-    TypeWithTypeArgs(Class<?> type, java.lang.reflect.Type[] typeArgs) throws TypeException {
-        Resolver.verify(type, typeArgs);
+    final Type componentType;
 
-        this.rawType = type;
-        this.typeArgs = typeArgs;
+    public ArrayType(Type componentType) throws TypeException {
+        this.componentType = Resolver.resolve(componentType);
     }
 
 
     @Override
     public int hashCode() {
-        return (rawType.hashCode() * 31) ^ Arrays.hashCode(typeArgs);
+        return componentType.hashCode() ^ "ArrayType".hashCode();
     }
 
     @Override
     public boolean equals(Object other) {
-        if (other instanceof TypeWithTypeArgs) {
-            TypeWithTypeArgs that = (TypeWithTypeArgs) other;
-            return this.rawType.equals(that.rawType) && Arrays.equals(this.typeArgs, that.typeArgs);
+        if (other instanceof ArrayType) {
+            ArrayType that = (ArrayType) other;
+            return this.componentType.equals(that.componentType);
         }
         return false;
     }
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder(rawType.toString());
-
-        sb.append('<');
-        sb.append(typeArgs[0]);
-        for (int i = 1; i < typeArgs.length; i++) {
-            sb.append(',');
-            sb.append(typeArgs[i]);
-        }
-        sb.append('>');
-
-        return sb.toString();
+        return "array<" + componentType.toString() + ">";
     }
 }

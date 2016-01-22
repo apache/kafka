@@ -41,6 +41,14 @@ public interface KTable<K, V> {
     KTable<K, V> returns(Type keyType, Type valueType);
 
     /**
+     * Explicitly specifies the information of the value type.
+     *
+     * @param valueType an instance of Type that represents the value type
+     * @return the new instance of KTable with explicit type information
+     */
+    KTable<K, V> returnsValue(Type valueType);
+
+    /**
      * Creates a new instance of KTable consists of all elements of this stream which satisfy a predicate
      *
      * @param predicate the instance of Predicate

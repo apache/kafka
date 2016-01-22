@@ -27,12 +27,8 @@ public class TopologyException extends KafkaException {
         super(message);
     }
 
-    public TopologyException(String name, Object value) {
-        this(name, value, null);
-    }
-
-    public TopologyException(String name, Object value, String message) {
-        super("Invalid topology building" + (message == null ? "" : ": " + message));
+    public TopologyException(String message, Exception ex) {
+        super(message, ex);
     }
 
 }

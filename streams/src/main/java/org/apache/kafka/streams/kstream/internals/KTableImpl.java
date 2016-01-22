@@ -29,8 +29,11 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.type.internal.Resolver;
+import org.apache.kafka.streams.kstream.type.TypeException;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.TopologyException;
 import org.apache.kafka.streams.state.Stores;
 
 import java.lang.reflect.Type;
@@ -78,11 +81,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     public final ProcessorSupplier<K, ?> processorSupplier;
 
-    private final Serializer<K> keySerializer;
-    private final Serializer<V> valSerializer;
-    private final Deserializer<K> keyDeserializer;
-    private final Deserializer<V> valDeserializer;
-
     private boolean sendOldValues = false;
 
     public KTableImpl(KStreamBuilder topology,
@@ -91,30 +89,26 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       Set<String> sourceNodes,
                       Type keyType,
                       Type valueType) {
-        this(topology, name, processorSupplier, sourceNodes, null, null, null, null, keyType, valueType);
-    }
-
-    public KTableImpl(KStreamBuilder topology,
-                      String name,
-                      ProcessorSupplier<K, ?> processorSupplier,
-                      Set<String> sourceNodes,
-                      Serializer<K> keySerializer,
-                      Serializer<V> valSerializer,
-                      Deserializer<K> keyDeserializer,
-                      Deserializer<V> valDeserializer,
-                      Type keyType,
-                      Type valueType) {
         super(topology, name, sourceNodes, keyType, valueType);
         this.processorSupplier = processorSupplier;
-        this.keySerializer = keySerializer;
-        this.valSerializer = valSerializer;
-        this.keyDeserializer = keyDeserializer;
-        this.valDeserializer = valDeserializer;
     }
 
     @Override
     public KTable<K, V> returns(Type keyType, Type valueType) {
-        return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, keySerializer, valSerializer, keyDeserializer, valDeserializer, keyType, valueType);
+        try {
+            return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, Resolver.resolve(keyType), Resolver.resolve(valueType));
+        } catch (TypeException ex) {
+            throw new TopologyException("failed to resolve a type of the stream", ex);
+        }
+    }
+
+    @Override
+    public KTable<K, V> returnsValue(Type valueType) {
+        try {
+            return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, keyType, Resolver.resolve(valueType));
+        } catch (TypeException ex) {
+            throw new TopologyException("failed to resolve a type of the stream", ex);
+        }
     }
 
     @Override
@@ -384,6 +378,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     private void materialize(KTableSource<K, ?> source) {
         synchronized (source) {
             if (!source.isMaterialized()) {
+                Serializer<K> keySerializer = getSerializer(keyType);
+                Serializer<V> valSerializer = getSerializer(valueType);
+                Deserializer<K> keyDeserializer = getDeserializer(keyType);
+                Deserializer<V> valDeserializer = getDeserializer(valueType);
+
                 StateStoreSupplier storeSupplier =
                         new KTableStoreSupplier<>(source.topic, keySerializer, keyDeserializer, valSerializer, valDeserializer, null);
                 // mark this state as non internal hence it is read directly from a user topic
