@@ -137,7 +137,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         topology.addProcessor(name, processorSupplier, this.name);
 
-        return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, keyType, null);
+        return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, keyType, resolveReturnType(mapper));
     }
 
     @Override
@@ -190,7 +190,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.addProcessor(joinOtherName, joinOther, otherTable.name);
         topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
 
-        return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, keyType, null);
+        return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, keyType, resolveReturnType(joiner));
     }
 
     @SuppressWarnings("unchecked")
@@ -244,7 +244,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.addProcessor(joinOtherName, joinOther, otherTable.name);
         topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
 
-        return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, keyType, null);
+        return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, keyType, resolveReturnType(joiner));
     }
 
     @Override
