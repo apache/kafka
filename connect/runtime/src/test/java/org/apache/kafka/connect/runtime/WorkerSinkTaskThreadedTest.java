@@ -56,7 +56,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -100,7 +99,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private Converter valueConverter;
     private WorkerSinkTask workerTask;
     @Mock private KafkaConsumer<byte[], byte[]> consumer;
-    private WorkerSinkTaskThread workerThread;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
 
     private long recordsReturned;
@@ -119,7 +117,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerProps.put("internal.value.converter.schemas.enable", "false");
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
-                WorkerSinkTask.class, new String[]{"createConsumer", "createWorkerThread"},
+                WorkerSinkTask.class, new String[]{"createConsumer"},
                 taskId, sinkTask, workerConfig, keyConverter, valueConverter, time);
 
         recordsReturned = 0;
@@ -130,14 +128,13 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         expectInitializeTask();
         Capture<Collection<SinkRecord>> capturedRecords = expectPolls(1L);
         expectStopTask(10L);
-        EasyMock.expect(workerThread.awaitShutdown(EasyMock.anyLong(), EasyMock.<TimeUnit>anyObject())).andReturn(true);
 
         PowerMock.replayAll();
 
-        workerTask.start(TASK_PROPS);
+        workerTask.initialize(TASK_PROPS);
         workerTask.joinConsumerGroupAndStart();
         for (int i = 0; i < 10; i++) {
-            workerThread.iteration();
+            workerTask.iteration();
         }
         workerTask.stop();
         workerTask.awaitStop(Long.MAX_VALUE);
@@ -168,18 +165,17 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
         expectOffsetFlush(1L, null, null, 0, true);
         expectStopTask(2);
-        EasyMock.expect(workerThread.awaitShutdown(EasyMock.anyLong(), EasyMock.<TimeUnit>anyObject())).andReturn(true);
 
         PowerMock.replayAll();
 
-        workerTask.start(TASK_PROPS);
+        workerTask.initialize(TASK_PROPS);
         workerTask.joinConsumerGroupAndStart();
         // First iteration gets one record
-        workerThread.iteration();
+        workerTask.iteration();
         // Second triggers commit, gets a second offset
-        workerThread.iteration();
+        workerTask.iteration();
         // Commit finishes synchronously for testing so we can check this immediately
-        assertEquals(0, workerThread.commitFailures());
+        assertEquals(0, workerTask.commitFailures());
         workerTask.stop();
         workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
@@ -203,17 +199,16 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         consumer.seek(TOPIC_PARTITION3, FIRST_OFFSET);
         PowerMock.expectLastCall();
         expectStopTask(2);
-        EasyMock.expect(workerThread.awaitShutdown(EasyMock.anyLong(), EasyMock.<TimeUnit>anyObject())).andReturn(true);
 
         PowerMock.replayAll();
 
-        workerTask.start(TASK_PROPS);
+        workerTask.initialize(TASK_PROPS);
         workerTask.joinConsumerGroupAndStart();
         // Second iteration triggers commit
-        workerThread.iteration();
-        workerThread.iteration();
-        assertEquals(1, workerThread.commitFailures());
-        assertEquals(false, Whitebox.getInternalState(workerThread, "committing"));
+        workerTask.iteration();
+        workerTask.iteration();
+        assertEquals(1, workerTask.commitFailures());
+        assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
         workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
@@ -237,18 +232,17 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         consumer.seek(TOPIC_PARTITION3, FIRST_OFFSET);
         PowerMock.expectLastCall();
         expectStopTask(2);
-        EasyMock.expect(workerThread.awaitShutdown(EasyMock.anyLong(), EasyMock.<TimeUnit>anyObject())).andReturn(true);
 
         PowerMock.replayAll();
 
-        workerTask.start(TASK_PROPS);
+        workerTask.initialize(TASK_PROPS);
         workerTask.joinConsumerGroupAndStart();
         // Second iteration triggers first commit, third iteration triggers second (failing) commit
-        workerThread.iteration();
-        workerThread.iteration();
-        workerThread.iteration();
-        assertEquals(1, workerThread.commitFailures());
-        assertEquals(false, Whitebox.getInternalState(workerThread, "committing"));
+        workerTask.iteration();
+        workerTask.iteration();
+        workerTask.iteration();
+        assertEquals(1, workerTask.commitFailures());
+        assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
         workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
@@ -263,18 +257,17 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
         expectOffsetFlush(1L, null, new Exception(), 0, true);
         expectStopTask(2);
-        EasyMock.expect(workerThread.awaitShutdown(EasyMock.anyLong(), EasyMock.<TimeUnit>anyObject())).andReturn(true);
 
         PowerMock.replayAll();
 
-        workerTask.start(TASK_PROPS);
+        workerTask.initialize(TASK_PROPS);
         workerTask.joinConsumerGroupAndStart();
         // Second iteration triggers commit
-        workerThread.iteration();
-        workerThread.iteration();
+        workerTask.iteration();
+        workerTask.iteration();
         // TODO Response to consistent failures?
-        assertEquals(1, workerThread.commitFailures());
-        assertEquals(false, Whitebox.getInternalState(workerThread, "committing"));
+        assertEquals(1, workerTask.commitFailures());
+        assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
         workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
@@ -290,21 +283,20 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT / 2);
         expectOffsetFlush(2L, null, null, WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, false);
         expectStopTask(4);
-        EasyMock.expect(workerThread.awaitShutdown(EasyMock.anyLong(), EasyMock.<TimeUnit>anyObject())).andReturn(true);
 
         PowerMock.replayAll();
 
-        workerTask.start(TASK_PROPS);
+        workerTask.initialize(TASK_PROPS);
         workerTask.joinConsumerGroupAndStart();
         // Third iteration triggers commit, fourth gives a chance to trigger the timeout but doesn't
         // trigger another commit
-        workerThread.iteration();
-        workerThread.iteration();
-        workerThread.iteration();
-        workerThread.iteration();
+        workerTask.iteration();
+        workerTask.iteration();
+        workerTask.iteration();
+        workerTask.iteration();
         // TODO Response to consistent failures?
-        assertEquals(1, workerThread.commitFailures());
-        assertEquals(false, Whitebox.getInternalState(workerThread, "committing"));
+        assertEquals(1, workerTask.commitFailures());
+        assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
         workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
@@ -366,15 +358,14 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         PowerMock.expectLastCall();
 
         expectStopTask(0);
-        EasyMock.expect(workerThread.awaitShutdown(EasyMock.anyLong(), EasyMock.<TimeUnit>anyObject())).andReturn(true);
 
         PowerMock.replayAll();
 
-        workerTask.start(TASK_PROPS);
+        workerTask.initialize(TASK_PROPS);
         workerTask.joinConsumerGroupAndStart();
-        workerThread.iteration();
-        workerThread.iteration();
-        workerThread.iteration();
+        workerTask.iteration();
+        workerTask.iteration();
+        workerTask.iteration();
         workerTask.stop();
         workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
@@ -410,14 +401,12 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         });
 
         expectStopTask(3);
-        EasyMock.expect(workerThread.awaitShutdown(EasyMock.anyLong(), EasyMock.<TimeUnit>anyObject())).andReturn(true);
-
         PowerMock.replayAll();
 
-        workerTask.start(TASK_PROPS);
+        workerTask.initialize(TASK_PROPS);
         workerTask.joinConsumerGroupAndStart();
-        workerThread.iteration();
-        workerThread.iteration();
+        workerTask.iteration();
+        workerTask.iteration();
         workerTask.stop();
         workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
@@ -427,14 +416,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
     private void expectInitializeTask() throws Exception {
         PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
-
-        workerThread = PowerMock.createPartialMock(WorkerSinkTaskThread.class, new String[]{"start", "awaitShutdown"},
-                workerTask, "mock-worker-thread", time,
-                workerConfig);
-        PowerMock.expectPrivate(workerTask, "createWorkerThread")
-                .andReturn(workerThread);
-        workerThread.start();
-        PowerMock.expectLastCall();
 
         consumer.subscribe(EasyMock.eq(Arrays.asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
@@ -526,10 +507,10 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     }
 
     private Capture<OffsetCommitCallback> expectOffsetFlush(final long expectedMessages,
-                                                              final RuntimeException flushError,
-                                                              final Exception consumerCommitError,
-                                                              final long consumerCommitDelayMs,
-                                                              final boolean invokeCallback)
+                                                            final RuntimeException flushError,
+                                                            final Exception consumerCommitError,
+                                                            final long consumerCommitDelayMs,
+                                                            final boolean invokeCallback)
             throws Exception {
         final long finalOffset = FIRST_OFFSET + expectedMessages;
 

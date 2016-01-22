@@ -31,7 +31,6 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.ShutdownableThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,20 +46,18 @@ import java.util.concurrent.TimeoutException;
 /**
  * WorkerTask that uses a SourceTask to ingest data into Kafka.
  */
-class WorkerSourceTask implements WorkerTask {
+class WorkerSourceTask extends AbstractWorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSourceTask.class);
 
     private static final long SEND_FAILED_BACKOFF_MS = 100;
 
-    private final ConnectorTaskId id;
+    private final WorkerConfig workerConfig;
     private final SourceTask task;
     private final Converter keyConverter;
     private final Converter valueConverter;
     private KafkaProducer<byte[], byte[]> producer;
-    private WorkerSourceTaskThread workThread;
     private final OffsetStorageReader offsetReader;
     private final OffsetStorageWriter offsetWriter;
-    private final WorkerConfig workerConfig;
     private final Time time;
 
     private List<SourceRecord> toSend;
@@ -73,19 +70,28 @@ class WorkerSourceTask implements WorkerTask {
     private boolean flushing;
     private CountDownLatch stopRequestedLatch;
 
-    public WorkerSourceTask(ConnectorTaskId id, SourceTask task,
-                            Converter keyConverter, Converter valueConverter,
+    private Map<String, String> taskConfig;
+    private boolean finishedStart = false;
+    private boolean startedShutdownBeforeStartCompleted = false;
+
+    public WorkerSourceTask(ConnectorTaskId id,
+                            SourceTask task,
+                            Converter keyConverter,
+                            Converter valueConverter,
                             KafkaProducer<byte[], byte[]> producer,
-                            OffsetStorageReader offsetReader, OffsetStorageWriter offsetWriter,
-                            WorkerConfig workerConfig, Time time) {
-        this.id = id;
+                            OffsetStorageReader offsetReader,
+                            OffsetStorageWriter offsetWriter,
+                            WorkerConfig workerConfig,
+                            Time time) {
+        super(id);
+
+        this.workerConfig = workerConfig;
         this.task = task;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
         this.producer = producer;
         this.offsetReader = offsetReader;
         this.offsetWriter = offsetWriter;
-        this.workerConfig = workerConfig;
         this.time = time;
 
         this.toSend = null;
@@ -97,37 +103,60 @@ class WorkerSourceTask implements WorkerTask {
     }
 
     @Override
-    public void start(Map<String, String> props) {
-        workThread = new WorkerSourceTaskThread("WorkerSourceTask-" + id, props);
-        workThread.start();
+    public void initialize(Map<String, String> config) {
+        this.taskConfig = config;
+    }
+
+    protected void close() {
+        // nothing to do
     }
 
     @Override
     public void stop() {
-        if (workThread != null) {
-            workThread.startGracefulShutdown();
-            stopRequestedLatch.countDown();
+        super.stop();
+        stopRequestedLatch.countDown();
+        synchronized (this) {
+            if (finishedStart)
+                task.stop();
+            else
+                startedShutdownBeforeStartCompleted = true;
         }
     }
 
     @Override
-    public boolean awaitStop(long timeoutMs) {
-        boolean success = true;
-        if (workThread != null) {
-            try {
-                success = workThread.awaitShutdown(timeoutMs, TimeUnit.MILLISECONDS);
-                if (!success)
-                    workThread.forceShutdown();
-            } catch (InterruptedException e) {
-                success = false;
+    public void execute() {
+        try {
+            task.initialize(new WorkerSourceTaskContext(offsetReader));
+            task.start(taskConfig);
+            log.info("Source task {} finished initialization and start", this);
+            synchronized (this) {
+                if (startedShutdownBeforeStartCompleted) {
+                    task.stop();
+                    return;
+                }
+                finishedStart = true;
             }
-        }
-        return success;
-    }
 
-    @Override
-    public void close() {
-        // Nothing to do
+            while (!isStopping()) {
+                if (toSend == null)
+                    toSend = task.poll();
+                if (toSend == null)
+                    continue;
+                if (!sendRecords())
+                    stopRequestedLatch.await(SEND_FAILED_BACKOFF_MS, TimeUnit.MILLISECONDS);
+            }
+        } catch (InterruptedException e) {
+            // Ignore and allow to exit.
+        } catch (Throwable t) {
+            log.error("Task {} threw an uncaught and unrecoverable exception", id);
+            log.error("Task is being killed and will not recover until manually restarted:", t);
+            // It should still be safe to let this fall through and commit offsets since this exception would have
+            // simply resulted in not getting more records but all the existing records should be ok to flush
+            // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit
+            // to fail.
+        }
+
+        commitOffsets();
     }
 
     /**
@@ -321,67 +350,6 @@ class WorkerSourceTask implements WorkerTask {
         outstandingMessages = outstandingMessagesBacklog;
         outstandingMessagesBacklog = temp;
         flushing = false;
-    }
-
-
-    private class WorkerSourceTaskThread extends ShutdownableThread {
-        private Map<String, String> workerProps;
-        private boolean finishedStart;
-        private boolean startedShutdownBeforeStartCompleted;
-
-        public WorkerSourceTaskThread(String name, Map<String, String> workerProps) {
-            super(name);
-            this.workerProps = workerProps;
-            this.finishedStart = false;
-            this.startedShutdownBeforeStartCompleted = false;
-        }
-
-        @Override
-        public void execute() {
-            try {
-                task.initialize(new WorkerSourceTaskContext(offsetReader));
-                task.start(workerProps);
-                log.info("Source task {} finished initialization and start", this);
-                synchronized (this) {
-                    if (startedShutdownBeforeStartCompleted) {
-                        task.stop();
-                        return;
-                    }
-                    finishedStart = true;
-                }
-
-                while (getRunning()) {
-                    if (toSend == null)
-                        toSend = task.poll();
-                    if (toSend == null)
-                        continue;
-                    if (!sendRecords())
-                        stopRequestedLatch.await(SEND_FAILED_BACKOFF_MS, TimeUnit.MILLISECONDS);
-                }
-            } catch (InterruptedException e) {
-                // Ignore and allow to exit.
-            } catch (Throwable t) {
-                log.error("Task {} threw an uncaught and unrecoverable exception", id);
-                log.error("Task is being killed and will not recover until manually restarted:", t);
-                // It should still be safe to let this fall through and commit offsets since this exception would have
-                // simply resulted in not getting more records but all the existing records should be ok to flush
-                // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit
-                // to fail.
-            }
-
-            commitOffsets();
-        }
-
-        @Override
-        public void startGracefulShutdown() {
-            super.startGracefulShutdown();
-            synchronized (this) {
-                if (finishedStart)
-                    task.stop();
-                else
-                    startedShutdownBeforeStartCompleted = true;
-            }
-        }
     }
 
     @Override

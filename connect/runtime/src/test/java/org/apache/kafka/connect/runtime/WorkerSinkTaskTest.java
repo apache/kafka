@@ -97,8 +97,6 @@ public class WorkerSinkTaskTest {
     @Mock
     private Converter valueConverter;
     @Mock
-    private WorkerSinkTaskThread workerThread;
-    @Mock
     private KafkaConsumer<byte[], byte[]> consumer;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
 
@@ -116,7 +114,7 @@ public class WorkerSinkTaskTest {
         workerProps.put("internal.value.converter.schemas.enable", "false");
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
-                WorkerSinkTask.class, new String[]{"createConsumer", "createWorkerThread"},
+                WorkerSinkTask.class, new String[]{"createConsumer"},
                 taskId, sinkTask, workerConfig, keyConverter, valueConverter, time);
 
         recordsReturned = 0;
@@ -152,7 +150,7 @@ public class WorkerSinkTaskTest {
 
         PowerMock.replayAll();
 
-        workerTask.start(TASK_PROPS);
+        workerTask.initialize(TASK_PROPS);
         workerTask.joinConsumerGroupAndStart();
         workerTask.poll(Long.MAX_VALUE);
         workerTask.poll(Long.MAX_VALUE);
@@ -169,7 +167,7 @@ public class WorkerSinkTaskTest {
 
         PowerMock.replayAll();
 
-        workerTask.start(TASK_PROPS);
+        workerTask.initialize(TASK_PROPS);
         workerTask.joinConsumerGroupAndStart();
         try {
             workerTask.poll(Long.MAX_VALUE);
@@ -190,7 +188,7 @@ public class WorkerSinkTaskTest {
 
         PowerMock.replayAll();
 
-        workerTask.start(TASK_PROPS);
+        workerTask.initialize(TASK_PROPS);
         workerTask.joinConsumerGroupAndStart();
         try {
             workerTask.poll(Long.MAX_VALUE);
@@ -205,11 +203,6 @@ public class WorkerSinkTaskTest {
 
     private void expectInitializeTask() throws Exception {
         PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
-        PowerMock.expectPrivate(workerTask, "createWorkerThread")
-                .andReturn(workerThread);
-        workerThread.start();
-        PowerMock.expectLastCall();
-
         consumer.subscribe(EasyMock.eq(Arrays.asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 
@@ -255,9 +248,6 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall();
 
         consumer.commitSync(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
-        EasyMock.expectLastCall();
-
-        workerThread.onCommitCompleted(EasyMock.<Throwable>isNull(), EasyMock.anyLong());
         EasyMock.expectLastCall();
 
         EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);

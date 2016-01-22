@@ -48,36 +48,43 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
  * WorkerTask that uses a SinkTask to export data from Kafka.
  */
-class WorkerSinkTask implements WorkerTask {
+class WorkerSinkTask extends AbstractWorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSinkTask.class);
 
-    private final ConnectorTaskId id;
-    private final SinkTask task;
     private final WorkerConfig workerConfig;
+    private final SinkTask task;
+    private Map<String, String> taskConfig;
     private final Time time;
     private final Converter keyConverter;
     private final Converter valueConverter;
-    private WorkerSinkTaskThread workThread;
-    private Map<String, String> taskProps;
     private KafkaConsumer<byte[], byte[]> consumer;
     private WorkerSinkTaskContext context;
-    private boolean started;
     private final List<SinkRecord> messageBatch;
     private Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets;
     private Map<TopicPartition, OffsetAndMetadata> currentOffsets;
-    private boolean pausedForRedelivery;
     private RuntimeException rebalanceException;
+    private long nextCommit;
+    private int commitSeqno;
+    private long commitStarted;
+    private int commitFailures;
+    private boolean pausedForRedelivery;
+    private boolean committing;
+    private boolean started;
 
-    public WorkerSinkTask(ConnectorTaskId id, SinkTask task, WorkerConfig workerConfig,
-                          Converter keyConverter, Converter valueConverter, Time time) {
-        this.id = id;
-        this.task = task;
+    public WorkerSinkTask(ConnectorTaskId id,
+                          SinkTask task,
+                          WorkerConfig workerConfig,
+                          Converter keyConverter,
+                          Converter valueConverter,
+                          Time time) {
+        super(id);
+
         this.workerConfig = workerConfig;
+        this.task = task;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
         this.time = time;
@@ -86,48 +93,96 @@ class WorkerSinkTask implements WorkerTask {
         this.currentOffsets = new HashMap<>();
         this.pausedForRedelivery = false;
         this.rebalanceException = null;
+        this.nextCommit = time.milliseconds() +
+                workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+        this.committing = false;
+        this.commitSeqno = 0;
+        this.commitStarted = -1;
+        this.commitFailures = 0;
     }
 
     @Override
-    public void start(Map<String, String> props) {
-        taskProps = props;
-        consumer = createConsumer();
-        context = new WorkerSinkTaskContext(consumer);
-
-        workThread = createWorkerThread();
-        workThread.start();
+    public void initialize(Map<String, String> taskConfig) {
+        this.taskConfig = taskConfig;
+        this.consumer = createConsumer();
+        this.context = new WorkerSinkTaskContext(consumer);
     }
 
     @Override
     public void stop() {
         // Offset commit is handled upon exit in work thread
-        if (workThread != null)
-            workThread.startGracefulShutdown();
+        super.stop();
         consumer.wakeup();
     }
 
     @Override
-    public boolean awaitStop(long timeoutMs) {
-        boolean success = true;
-        if (workThread != null) {
-            try {
-                success = workThread.awaitShutdown(timeoutMs, TimeUnit.MILLISECONDS);
-                if (!success)
-                    workThread.forceShutdown();
-            } catch (InterruptedException e) {
-                success = false;
-            }
-        }
+    protected void close() {
+        // FIXME Kafka needs to add a timeout parameter here for us to properly obey the timeout
+        // passed in
         task.stop();
-        return success;
+        if (consumer != null)
+            consumer.close();
     }
 
     @Override
-    public void close() {
-        // FIXME Kafka needs to add a timeout parameter here for us to properly obey the timeout
-        // passed in
-        if (consumer != null)
-            consumer.close();
+    public void execute() {
+        // Try to join and start. If we're interrupted before this completes, bail.
+        if (!joinConsumerGroupAndStart())
+            return;
+
+        while (!isStopping())
+            iteration();
+
+        // Make sure any uncommitted data has committed
+        commitOffsets(true, -1);
+    }
+
+    protected void iteration() {
+        long now = time.milliseconds();
+
+        // Maybe commit
+        if (!committing && now >= nextCommit) {
+            committing = true;
+            commitSeqno += 1;
+            commitStarted = now;
+            commitOffsets(false, commitSeqno);
+            nextCommit += workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+        }
+
+        // Check for timed out commits
+        long commitTimeout = commitStarted + workerConfig.getLong(
+                WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
+        if (committing && now >= commitTimeout) {
+            log.warn("Commit of {} offsets timed out", this);
+            commitFailures++;
+            committing = false;
+        }
+
+        // And process messages
+        long timeoutMs = Math.max(nextCommit - now, 0);
+        poll(timeoutMs);
+    }
+
+    private void onCommitCompleted(Throwable error, long seqno) {
+        if (commitSeqno != seqno) {
+            log.debug("Got callback for timed out commit {}: {}, but most recent commit is {}",
+                    this,
+                    seqno, commitSeqno);
+        } else {
+            if (error != null) {
+                log.error("Commit of {} offsets threw an unexpected exception: ", this, error);
+                commitFailures++;
+            } else {
+                log.debug("Finished {} offset commit successfully in {} ms",
+                        this, time.milliseconds() - commitStarted);
+                commitFailures = 0;
+            }
+            committing = false;
+        }
+    }
+
+    public int commitFailures() {
+        return commitFailures;
     }
 
     /**
@@ -136,8 +191,8 @@ class WorkerSinkTask implements WorkerTask {
      *
      * @returns true if successful, false if joining the consumer group was interrupted
      */
-    public boolean joinConsumerGroupAndStart() {
-        String topicsStr = taskProps.get(SinkTask.TOPICS_CONFIG);
+    protected boolean joinConsumerGroupAndStart() {
+        String topicsStr = taskConfig.get(SinkTask.TOPICS_CONFIG);
         if (topicsStr == null || topicsStr.isEmpty())
             throw new ConnectException("Sink tasks require a list of topics.");
         String[] topics = topicsStr.split(",");
@@ -153,14 +208,14 @@ class WorkerSinkTask implements WorkerTask {
             return false;
         }
         task.initialize(context);
-        task.start(taskProps);
+        task.start(taskConfig);
         log.info("Sink task {} finished initialization and start", this);
         started = true;
         return true;
     }
 
     /** Poll for new messages with the given timeout. Should only be invoked by the worker thread. */
-    public void poll(long timeoutMs) {
+    protected void poll(long timeoutMs) {
         try {
             rewind();
             long retryTimeout = context.timeout();
@@ -185,7 +240,7 @@ class WorkerSinkTask implements WorkerTask {
      * Starts an offset commit by flushing outstanding messages from the task and then starting
      * the write commit. This should only be invoked by the WorkerSinkTaskThread.
      **/
-    public void commitOffsets(boolean sync, final int seqno) {
+    private void commitOffsets(boolean sync, final int seqno) {
         log.info("{} Committing offsets", this);
 
         final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(currentOffsets);
@@ -200,7 +255,7 @@ class WorkerSinkTask implements WorkerTask {
                 consumer.seek(entry.getKey(), entry.getValue().offset());
             }
             currentOffsets = new HashMap<>(lastCommittedOffsets);
-            workThread.onCommitCompleted(t, seqno);
+            onCommitCompleted(t, seqno);
             return;
         }
 
@@ -208,28 +263,20 @@ class WorkerSinkTask implements WorkerTask {
             try {
                 consumer.commitSync(offsets);
                 lastCommittedOffsets = offsets;
-                workThread.onCommitCompleted(null, seqno);
+                onCommitCompleted(null, seqno);
             } catch (KafkaException e) {
-                workThread.onCommitCompleted(e, seqno);
+                onCommitCompleted(e, seqno);
             }
         } else {
             OffsetCommitCallback cb = new OffsetCommitCallback() {
                 @Override
                 public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {
                     lastCommittedOffsets = offsets;
-                    workThread.onCommitCompleted(error, seqno);
+                    onCommitCompleted(error, seqno);
                 }
             };
             consumer.commitAsync(offsets, cb);
         }
-    }
-
-    public Time time() {
-        return time;
-    }
-
-    public WorkerConfig workerConfig() {
-        return workerConfig;
     }
 
     @Override
@@ -277,10 +324,6 @@ class WorkerSinkTask implements WorkerTask {
         return newConsumer;
     }
 
-    private WorkerSinkTaskThread createWorkerThread() {
-        return new WorkerSinkTaskThread(this, "WorkerSinkTask-" + id, time, workerConfig);
-    }
-
     private void convertMessages(ConsumerRecords<byte[], byte[]> msgs) {
         for (ConsumerRecord<byte[], byte[]> msg : msgs) {
             log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
@@ -321,8 +364,8 @@ class WorkerSinkTask implements WorkerTask {
                 consumer.pause(tp);
             // Let this exit normally, the batch will be reprocessed on the next loop.
         } catch (Throwable t) {
-            log.error("Task {} threw an uncaught and unrecoverable exception", id);
-            log.error("Task is being killed and will not recover until manually restarted:", t);
+            log.error("Task {} threw an uncaught and unrecoverable exception", id, t);
+            log.error("Task is being killed and will not recover until manually restarted:");
             throw new ConnectException("Exiting WorkerSinkTask due to unrecoverable exception.");
         }
     }

@@ -24,12 +24,12 @@ import java.util.Map;
  * used by {@link Worker} to manage the tasks. Implementations combine a user-specified Task with
  * Kafka to create a data flow.
  */
-interface WorkerTask {
+interface WorkerTask extends Runnable {
     /**
-     * Start the Task
+     * Initialize the task for execution.
      * @param props initial configuration
      */
-    void start(Map<String, String> props);
+    void initialize(Map<String, String> props);
 
     /**
      * Stop this task from processing messages. This method does not block, it only triggers
@@ -45,10 +45,4 @@ interface WorkerTask {
      */
     boolean awaitStop(long timeoutMs);
 
-    /**
-     * Close this task. This is different from #{@link #stop} and #{@link #awaitStop} in that the
-     * stop methods ensure processing has stopped but may leave resources allocated. This method
-     * should clean up all resources.
-     */
-    void close();
 }
