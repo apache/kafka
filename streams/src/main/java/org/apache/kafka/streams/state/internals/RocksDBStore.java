@@ -188,6 +188,19 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
     }
 
+    private void putInternal(K key, V value) {
+        try {
+            if (value == null) {
+                db.remove(wOptions, serdes.rawKey(key));
+            } else {
+                db.put(wOptions, serdes.rawKey(key), serdes.rawValue(value));
+            }
+        } catch (RocksDBException e) {
+            // TODO: this needs to be handled more accurately
+            throw new KafkaException("Error while executing put " + key.toString() + " from store " + this.name, e);
+        }
+    }
+
     @Override
     public void putAll(List<KeyValue<K, V>> entries) {
         for (KeyValue<K, V> entry : entries)
