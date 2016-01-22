@@ -20,7 +20,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.kstream.internals.TumblingWindow;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 public class TumblingWindows extends Windows<TumblingWindow> {
@@ -53,7 +53,11 @@ public class TumblingWindows extends Windows<TumblingWindow> {
     public Map<Long, TumblingWindow> windowsFor(long timestamp) {
         long windowStart = timestamp - timestamp % size;
 
-        return Collections.singletonMap(windowStart, new TumblingWindow(windowStart, windowStart + size));
+        // we cannot use Collections.singleMap since it does not support remove() call
+        Map<Long, TumblingWindow> windows = new HashMap<>();
+        windows.put(windowStart, new TumblingWindow(windowStart, windowStart + size));
+
+        return windows;
     }
 
     @Override

@@ -104,6 +104,18 @@ public class StreamThread extends Thread {
     private final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
 
+    static File makeStateDir(String jobId, String baseDirName) {
+        File baseDir = new File(baseDirName);
+        if (!baseDir.exists())
+            baseDir.mkdir();
+
+        File stateDir = new File(baseDir, jobId);
+        if (!stateDir.exists())
+            stateDir.mkdir();
+
+        return stateDir;
+    }
+
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
@@ -167,8 +179,7 @@ public class StreamThread extends Thread {
         this.standbyRecords = new HashMap<>();
 
         // read in task specific config values
-        this.stateDir = new File(this.config.getString(StreamsConfig.STATE_DIR_CONFIG));
-        this.stateDir.mkdir();
+        this.stateDir = makeStateDir(this.jobId, this.config.getString(StreamsConfig.STATE_DIR_CONFIG));
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.cleanTimeMs = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
@@ -452,14 +463,15 @@ public class StreamThread extends Thread {
             if (stateDirs != null) {
                 for (File dir : stateDirs) {
                     try {
-                        TaskId id = TaskId.parse(dir.getName());
+                        String dirName = dir.getName();
+                        TaskId id = TaskId.parse(dirName.substring(dirName.lastIndexOf("-") + 1));
 
                         // try to acquire the exclusive lock on the state directory
                         FileLock directoryLock = null;
                         try {
                             directoryLock = ProcessorStateManager.lockStateDirectory(dir);
                             if (directoryLock != null) {
-                                log.info("Deleting obsolete state directory {} after delayed {} ms.", dir.getAbsolutePath(), cleanTimeMs);
+                                log.info("Deleting obsolete state directory {} for task {} after delayed {} ms.", dir.getAbsolutePath(), id, cleanTimeMs);
                                 Utils.delete(dir);
                             }
                         } catch (IOException e) {
