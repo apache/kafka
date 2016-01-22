@@ -18,31 +18,27 @@
 package org.apache.kafka.streams.kstream;
 
 
-import org.apache.kafka.streams.kstream.internals.SlidingWindow;
+import org.apache.kafka.streams.kstream.internals.TumblingWindow;
 
-import java.util.Collection;
+import java.util.Map;
 
 /**
  * This class is used to specify the behaviour of windowed joins.
  */
-public class JoinWindows extends Windows<SlidingWindow> {
-
-    private static final int DEFAULT_NUM_SEGMENTS = 3;
+public class JoinWindows extends Windows<TumblingWindow> {
 
     public final long before;
     public final long after;
-    public final int segments;
 
-    private JoinWindows(String name, long before, long after, int segments) {
+    private JoinWindows(String name, long before, long after) {
         super(name);
 
         this.after = after;
         this.before = before;
-        this.segments = segments;
     }
 
     public static JoinWindows of(String name) {
-        return new JoinWindows(name, 0L, 0L, DEFAULT_NUM_SEGMENTS);
+        return new JoinWindows(name, 0L, 0L);
     }
 
     /**
@@ -53,7 +49,7 @@ public class JoinWindows extends Windows<SlidingWindow> {
      * @return
      */
     public JoinWindows within(long timeDifference) {
-        return new JoinWindows(this.name, timeDifference, timeDifference, this.segments);
+        return new JoinWindows(this.name, timeDifference, timeDifference);
     }
 
     /**
@@ -65,7 +61,7 @@ public class JoinWindows extends Windows<SlidingWindow> {
      * @return
      */
     public JoinWindows before(long timeDifference) {
-        return new JoinWindows(this.name, timeDifference, this.after, this.segments);
+        return new JoinWindows(this.name, timeDifference, this.after);
     }
 
     /**
@@ -77,22 +73,11 @@ public class JoinWindows extends Windows<SlidingWindow> {
      * @return
      */
     public JoinWindows after(long timeDifference) {
-        return new JoinWindows(this.name, this.before, timeDifference, this.segments);
-    }
-
-    /**
-     * Specifies the number of segments to be used for rolling the window store,
-     * this function is not exposed to users but can be called by developers that extend this JoinWindows specs
-     *
-     * @param segments
-     * @return
-     */
-    protected JoinWindows segments(int segments) {
-        return new JoinWindows(name, before, after, segments);
+        return new JoinWindows(this.name, this.before, timeDifference);
     }
 
     @Override
-    public Collection<SlidingWindow> windowsFor(long timestamp) {
+    public Map<Long, TumblingWindow> windowsFor(long timestamp) {
         // this function should never be called
         throw new UnsupportedOperationException("windowsFor() is not supported in JoinWindows");
     }

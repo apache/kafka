@@ -20,8 +20,6 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
-import java.util.Collection;
-
 /**
  * KTable is an abstraction of a change log stream.
  *
@@ -113,10 +111,10 @@ public interface KTable<K, V> {
      * @param other the instance of KTable joined with this stream
      * @param joiner ValueJoiner
      * @param <V1>   the value type of the other stream
-     * @param <V2>   the value type of the new stream
+     * @param <R>   the value type of the new stream
      * @return the instance of KTable
      */
-    <V1, V2> KTable<K, V2> join(KTable<K, V1> other, ValueJoiner<V, V1, V2> joiner);
+    <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
      * Combines values of this KTable with another KTable using Outer Join.
@@ -124,10 +122,10 @@ public interface KTable<K, V> {
      * @param other the instance of KTable joined with this stream
      * @param joiner ValueJoiner
      * @param <V1>   the value type of the other stream
-     * @param <V2>   the value type of the new stream
+     * @param <R>   the value type of the new stream
      * @return the instance of KTable
      */
-    <V1, V2> KTable<K, V2> outerJoin(KTable<K, V1> other, ValueJoiner<V, V1, V2> joiner);
+    <V1, R> KTable<K, R> outerJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
      * Combines values of this KTable with another KTable using Left Join.
@@ -135,91 +133,48 @@ public interface KTable<K, V> {
      * @param other the instance of KTable joined with this stream
      * @param joiner ValueJoiner
      * @param <V1>   the value type of the other stream
-     * @param <V2>   the value type of the new stream
+     * @param <R>   the value type of the new stream
      * @return the instance of KTable
      */
-    <V1, V2> KTable<K, V2> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, V2> joiner);
+    <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
-     * Aggregate values of this table by the selected key.
+     * Reduce values of this table by the selected key.
      *
-     * @param aggregatorSupplier the class of AggregatorSupplier
+     * @param addReducer the class of Reducer
+     * @param removeReducer the class of Reducer
      * @param selector the KeyValue mapper that select the aggregate key
      * @param name the name of the resulted table
      * @param <K1>   the key type of the aggregated table
      * @param <V1>   the value type of the aggregated table
      * @return the instance of KTable
      */
-    <K1, V1, V2> KTable<K1, V2> aggregate(AggregatorSupplier<K1, V1, V2> aggregatorSupplier,
-                                          KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                          Serializer<K> keySerializer,
-                                          Serializer<V2> aggValueSerializer,
-                                          Deserializer<K> keyDeserializer,
-                                          Deserializer<V2> aggValueDeserializer,
-                                          String name);
+    <K1, V1> KTable<K1, V1> reduce(Reducer<V1> addReducer,
+                                   Reducer<V1> removeReducer,
+                                   KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
+                                   Serializer<K1> keySerializer,
+                                   Serializer<V1> valueSerializer,
+                                   Deserializer<K1> keyDeserializer,
+                                   Deserializer<V1> valueDeserializer,
+                                   String name);
 
     /**
-     * Sum extracted long integer values of this table by the selected aggregation key
+     * Aggregate values of this table by the selected key.
      *
-     * @param keySelector the class of KeyValueMapper to select the aggregation key
-     * @param valueSelector the class of KeyValueToLongMapper to extract the long integer from value
+     * @param aggregator the class of Aggregator
+     * @param selector the KeyValue mapper that select the aggregate key
      * @param name the name of the resulted table
+     * @param <K1>   the key type of the aggregated table
+     * @param <V1>   the value type of the aggregated table
+     * @return the instance of KTable
      */
-    <K1> KTable<K1, Long> sum(KeyValueMapper<K, V, K1> keySelector,
-                              KeyValueToLongMapper<K, V> valueSelector,
-                              Serializer<K> keySerializer,
-                              Deserializer<K> keyDeserializer,
-                              String name);
-
-    /**
-     * Sum extracted integer values of this table by the selected aggregation key
-     *
-     * @param keySelector the class of KeyValueMapper to select the aggregation key
-     * @param valueSelector the class of KeyValueToIntMapper to extract the long integer from value
-     * @param name the name of the resulted table
-     */
-    <K1> KTable<K1, Integer> sum(KeyValueMapper<K, V, K1> keySelector,
-                                 KeyValueToIntMapper<K, V> valueSelector,
-                                 Serializer<K> keySerializer,
-                                 Deserializer<K> keyDeserializer,
-                                 String name);
-
-    /**
-     * Sum extracted double decimal values of this table by the selected aggregation key
-     *
-     * @param keySelector the class of KeyValueMapper to select the aggregation key
-     * @param valueSelector the class of KeyValueToDoubleMapper to extract the long integer from value
-     * @param name the name of the resulted table
-     */
-    <K1> KTable<K1, Double> sum(KeyValueMapper<K, V, K1> keySelector,
-                                KeyValueToDoubleMapper<K, V> valueSelector,
-                                Serializer<K> keySerializer,
-                                Deserializer<K> keyDeserializer,
-                                String name);
-
-    /**
-     * Count number of records of this table by the selected aggregation key
-     *
-     * @param keySelector the class of KeyValueMapper to select the aggregation key
-     * @param name the name of the resulted table
-     */
-    <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> keySelector,
-                                Serializer<K> keySerializer,
-                                Deserializer<K> keyDeserializer,
-                                String name);
-
-    /**
-     * Get the top-k values of this table by the selected aggregation key
-     *
-     * @param k parameter of the top-k computation
-     * @param keySelector the class of KeyValueMapper to select the aggregation key
-     * @param name the name of the resulted table
-     */
-    <K1, V1 extends Comparable<V1>> KTable<K1, Collection<V1>> topK(int k,
-                                                                    KeyValueMapper<K, V, K1> keySelector,
-                                                                    Serializer<K> keySerializer,
-                                                                    Serializer<V1> aggValueSerializer,
-                                                                    Deserializer<K> keyDeserializer,
-                                                                    Deserializer<V1> aggValueDeserializer,
-                                                                    String name);
+    <K1, V1, T> KTable<K1, T> aggregate(Aggregator<K1, V1, T> aggregator,
+                                        KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
+                                        Serializer<K1> keySerializer,
+                                        Serializer<V1> valueSerializer,
+                                        Serializer<T> aggValueSerializer,
+                                        Deserializer<K1> keyDeserializer,
+                                        Deserializer<V1> valueDeserializer,
+                                        Deserializer<T> aggValueDeserializer,
+                                        String name);
 }

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
@@ -54,6 +55,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(WorkerSinkTask.class)
@@ -156,6 +160,48 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testErrorInRebalancePartitionRevocation() throws Exception {
+        RuntimeException exception = new RuntimeException("Revocation error");
+
+        expectInitializeTask();
+        expectRebalanceRevocationError(exception);
+
+        PowerMock.replayAll();
+
+        workerTask.start(TASK_PROPS);
+        workerTask.joinConsumerGroupAndStart();
+        try {
+            workerTask.poll(Long.MAX_VALUE);
+            fail("Poll should have raised the rebalance exception");
+        } catch (RuntimeException e) {
+            assertEquals(exception, e);
+        }
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testErrorInRebalancePartitionAssignment() throws Exception {
+        RuntimeException exception = new RuntimeException("Assignment error");
+
+        expectInitializeTask();
+        expectRebalanceAssignmentError(exception);
+
+        PowerMock.replayAll();
+
+        workerTask.start(TASK_PROPS);
+        workerTask.joinConsumerGroupAndStart();
+        try {
+            workerTask.poll(Long.MAX_VALUE);
+            fail("Poll should have raised the rebalance exception");
+        } catch (RuntimeException e) {
+            assertEquals(exception, e);
+        }
+
+        PowerMock.verifyAll();
+    }
+
 
     private void expectInitializeTask() throws Exception {
         PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
@@ -181,6 +227,54 @@ public class WorkerSinkTaskTest {
         PowerMock.expectLastCall();
         sinkTask.start(TASK_PROPS);
         PowerMock.expectLastCall();
+    }
+
+    private void expectRebalanceRevocationError(RuntimeException e) {
+        final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2);
+
+        sinkTask.onPartitionsRevoked(partitions);
+        EasyMock.expectLastCall().andThrow(e);
+
+        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
+                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+                    @Override
+                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                        rebalanceListener.getValue().onPartitionsRevoked(partitions);
+                        return ConsumerRecords.empty();
+                    }
+                });
+    }
+
+    private void expectRebalanceAssignmentError(RuntimeException e) {
+        final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2);
+
+        sinkTask.onPartitionsRevoked(partitions);
+        EasyMock.expectLastCall();
+
+        sinkTask.flush(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
+        EasyMock.expectLastCall();
+
+        consumer.commitSync(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
+        EasyMock.expectLastCall();
+
+        workerThread.onCommitCompleted(EasyMock.<Throwable>isNull(), EasyMock.anyLong());
+        EasyMock.expectLastCall();
+
+        EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
+        EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(FIRST_OFFSET);
+
+        sinkTask.onPartitionsAssigned(partitions);
+        EasyMock.expectLastCall().andThrow(e);
+
+        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
+                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+                    @Override
+                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                        rebalanceListener.getValue().onPartitionsRevoked(partitions);
+                        rebalanceListener.getValue().onPartitionsAssigned(partitions);
+                        return ConsumerRecords.empty();
+                    }
+                });
     }
 
     private void expectConsumerPoll(final int numMessages) {

@@ -46,7 +46,7 @@ public class PartitionInfo {
     }
 
     /**
-     * The node id of the node currently acting as a leader for this partition or -1 if there is no leader
+     * The node id of the node currently acting as a leader for this partition or null if there is no leader
      */
     public Node leader() {
         return leader;

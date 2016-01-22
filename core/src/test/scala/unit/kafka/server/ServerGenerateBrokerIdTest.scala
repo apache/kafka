@@ -82,6 +82,22 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testDisableGeneratedBrokerId() {
+    val props3 = TestUtils.createBrokerConfig(3, zkConnect)
+    props3.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
+    // Set reserve broker ids to cause collision and ensure disabling broker id generation ignores the setting
+    props3.put(KafkaConfig.MaxReservedBrokerIdProp, "0")
+    val config3 = KafkaConfig.fromProps(props3)
+    val server3 = new KafkaServer(config3)
+    server3.startup()
+    assertEquals(server3.config.brokerId,3)
+    server3.shutdown()
+    assertTrue(verifyBrokerMetadata(server3.config.logDirs,3))
+    CoreUtils.rm(server3.config.logDirs)
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+  }
+
+  @Test
   def testMultipleLogDirsMetaProps() {
     // add multiple logDirs and check if the generate brokerId is stored in all of them
     val logDirs = props1.getProperty("log.dir")+ "," + TestUtils.tempDir().getAbsolutePath +
@@ -118,6 +134,44 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     }
     server1.shutdown()
     CoreUtils.rm(server1.config.logDirs)
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+  }
+
+  @Test
+  def testBrokerMetadataOnIdCollision() {
+    // Start a good server
+    val propsA = TestUtils.createBrokerConfig(1, zkConnect)
+    val configA = KafkaConfig.fromProps(propsA)
+    val serverA = new KafkaServer(configA)
+    serverA.startup()
+
+    // Start a server that collides on the broker id
+    val propsB = TestUtils.createBrokerConfig(1, zkConnect)
+    val configB = KafkaConfig.fromProps(propsB)
+    val serverB = new KafkaServer(configB)
+    intercept[RuntimeException] {
+      serverB.startup()
+    }
+
+    // verify no broker metadata was written
+    serverB.config.logDirs.foreach { logDir =>
+      val brokerMetaFile = new File(logDir + File.separator + brokerMetaPropsFile)
+      assertFalse(brokerMetaFile.exists())
+    }
+
+    // adjust the broker config and start again
+    propsB.setProperty(KafkaConfig.BrokerIdProp, "2")
+    val newConfigB = KafkaConfig.fromProps(propsB)
+    val newServerB = new KafkaServer(newConfigB)
+    newServerB.startup()
+
+    serverA.shutdown()
+    newServerB.shutdown()
+    // verify correct broker metadata was written
+    assertTrue(verifyBrokerMetadata(serverA.config.logDirs,1))
+    assertTrue(verifyBrokerMetadata(newServerB.config.logDirs,2))
+    CoreUtils.rm(serverA.config.logDirs)
+    CoreUtils.rm(newServerB.config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 

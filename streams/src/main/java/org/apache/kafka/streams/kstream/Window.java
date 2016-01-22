@@ -48,4 +48,23 @@ public abstract class Window {
     public boolean equalsTo(Window other) {
         return this.start() == other.start() && this.end() == other.end();
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this)
+            return true;
+
+        if (!(obj instanceof Window))
+            return false;
+
+        Window other = (Window) obj;
+
+        return this.equalsTo(other) && this.start == other.start && this.end == other.end;
+    }
+
+    @Override
+    public int hashCode() {
+        long n = (this.start << 32) | this.end;
+        return (int) (n % 0xFFFFFFFFL);
+    }
 }
