@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Kafka Streaming allows for performing continuous computation on input coming from one or more input topics and
+ * Kafka Streams allows for performing continuous computation on input coming from one or more input topics and
  * sends output to zero or more output topics.
  * <p>
  * This processing is defined by using the {@link TopologyBuilder} class or its superclass KStreamBuilder to specify
@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * The {@link Streams} instance will be responsible for the lifecycle of these processors. It will instantiate and
  * start one or more of these processors to process the Kafka partitions assigned to this particular instance.
  * <p>
- * This streaming instance will co-ordinate with any other instances (whether in this same process, on other processes
+ * This {@link Streams} instance will co-ordinate with any other instances (whether in this same process, on other processes
  * on this machine, or on remote machines). These processes will divide up the work so that all partitions are being
  * consumed. If instances are added or die, the corresponding {@link StreamThread} instances will be shutdown or
  * started in the appropriate processes to balance processing load.
@@ -64,15 +64,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  *    KStreamBuilder builder = new KStreamBuilder();
  *    builder.from("topic1").mapValue(value -&gt; value.length()).to("topic2");
  *
- *    Streams streaming = new Streams(builder, config);
- *    streaming.start();
+ *    Streams streams = new Streams(builder, config);
+ *    streams.start();
  * </pre>
  *
  */
 public class Streams {
 
     private static final Logger log = LoggerFactory.getLogger(Streams.class);
-    private static final AtomicInteger STREAMING_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
+    private static final AtomicInteger STREAM_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.streams";
 
     // container states
@@ -95,13 +95,12 @@ public class Streams {
 
         this.processId = UUID.randomUUID();
 
+        // JobId is a required config and hence should always have value
         String jobId = config.getString(StreamConfig.JOB_ID_CONFIG);
-        if (jobId.length() <= 0)
-            jobId = "kafka-streams";
 
         String clientId = config.getString(StreamConfig.CLIENT_ID_CONFIG);
         if (clientId.length() <= 0)
-            clientId = jobId + "-" + STREAMING_CLIENT_ID_SEQUENCE.getAndIncrement();
+            clientId = jobId + "-" + STREAM_CLIENT_ID_SEQUENCE.getAndIncrement();
 
         List<MetricsReporter> reporters = config.getConfiguredInstances(StreamConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);

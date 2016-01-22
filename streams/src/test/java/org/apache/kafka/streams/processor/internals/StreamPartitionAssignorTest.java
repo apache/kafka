@@ -51,7 +51,7 @@ import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
 
-public class KafkaStreamingPartitionAssignorTest {
+public class StreamPartitionAssignorTest {
 
     private TopicPartition t1p0 = new TopicPartition("topic1", 0);
     private TopicPartition t1p1 = new TopicPartition("topic1", 1);
@@ -135,7 +135,7 @@ public class KafkaStreamingPartitionAssignorTest {
             }
         };
 
-        KafkaStreamingPartitionAssignor partitionAssignor = new KafkaStreamingPartitionAssignor();
+        StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
         partitionAssignor.configure(config.getConsumerConfigs(thread, "test", clientId));
 
         PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1", "topic2"));
@@ -179,7 +179,7 @@ public class KafkaStreamingPartitionAssignorTest {
 
         StreamThread thread10 = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", client1, uuid1, new Metrics(), new SystemTime());
 
-        KafkaStreamingPartitionAssignor partitionAssignor = new KafkaStreamingPartitionAssignor();
+        StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
         partitionAssignor.configure(config.getConsumerConfigs(thread10, "test", client1));
 
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
@@ -250,7 +250,7 @@ public class KafkaStreamingPartitionAssignorTest {
 
         StreamThread thread10 = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", client1, uuid1, new Metrics(), new SystemTime());
 
-        KafkaStreamingPartitionAssignor partitionAssignor = new KafkaStreamingPartitionAssignor();
+        StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
         partitionAssignor.configure(config.getConsumerConfigs(thread10, "test", client1));
 
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
@@ -322,7 +322,7 @@ public class KafkaStreamingPartitionAssignorTest {
 
         StreamThread thread10 = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", client1, uuid1, new Metrics(), new SystemTime());
 
-        KafkaStreamingPartitionAssignor partitionAssignor = new KafkaStreamingPartitionAssignor();
+        StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
         partitionAssignor.configure(config.getConsumerConfigs(thread10, "test", client1));
 
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
@@ -382,7 +382,7 @@ public class KafkaStreamingPartitionAssignorTest {
 
         StreamThread thread10 = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", client1, uuid1, new Metrics(), new SystemTime());
 
-        KafkaStreamingPartitionAssignor partitionAssignor = new KafkaStreamingPartitionAssignor();
+        StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
         partitionAssignor.configure(config.getConsumerConfigs(thread10, "test", client1));
 
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
@@ -488,7 +488,7 @@ public class KafkaStreamingPartitionAssignorTest {
 
         StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", client1, uuid, new Metrics(), new SystemTime());
 
-        KafkaStreamingPartitionAssignor partitionAssignor = new KafkaStreamingPartitionAssignor();
+        StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
         partitionAssignor.configure(config.getConsumerConfigs(thread, "test", client1));
 
         List<TaskId> activeTaskList = Utils.mkList(task0, task3);

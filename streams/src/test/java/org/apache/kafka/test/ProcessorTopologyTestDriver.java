@@ -139,7 +139,7 @@ public class ProcessorTopologyTestDriver {
 
     /**
      * Create a new test driver instance.
-     * @param config the streaming configuration for the topology
+     * @param config the stream configuration for the topology
      * @param builder the topology builder that will be used to create the topology instance
      * @param storeNames the optional names of the state stores that are used by the topology
      */

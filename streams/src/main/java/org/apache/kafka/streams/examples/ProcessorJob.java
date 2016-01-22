@@ -109,7 +109,7 @@ public class ProcessorJob {
 
         builder.addSink("SINK", "topic-sink", new StringSerializer(), new IntegerSerializer(), "PROCESS");
 
-        Streams streaming = new Streams(builder, config);
-        streaming.start();
+        Streams streams = new Streams(builder, config);
+        streams.start();
     }
 }

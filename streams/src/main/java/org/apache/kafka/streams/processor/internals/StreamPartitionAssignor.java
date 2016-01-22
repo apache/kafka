@@ -57,9 +57,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Configurable {
+public class StreamPartitionAssignor implements PartitionAssignor, Configurable {
 
-    private static final Logger log = LoggerFactory.getLogger(KafkaStreamingPartitionAssignor.class);
+    private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
 
     private StreamThread streamThread;
 
@@ -230,7 +230,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
 
     @Override
     public String name() {
-        return "streaming";
+        return "stream";
     }
 
     @Override
@@ -251,7 +251,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
         // This assigns tasks to consumer clients in two steps.
-        // 1. using TaskAssignor tasks are assigned to streaming clients.
+        // 1. using TaskAssignor to assign tasks to consumer clients.
         //    - Assign a task to a client which was running it previously.
         //      If there is no such client, assign a task to a client which has its valid local state.
         //    - A client may have more than one stream threads.

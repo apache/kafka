@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class StreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
-    private static final AtomicInteger STREAMING_THREAD_ID_SEQUENCE = new AtomicInteger(1);
+    private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     public final PartitionGrouper partitionGrouper;
     public final String jobId;
@@ -95,7 +95,7 @@ public class StreamThread extends Thread {
     private final long totalRecordsToProcess;
     private final StreamMetricsImpl sensors;
 
-    private KafkaStreamingPartitionAssignor partitionAssignor = null;
+    private StreamPartitionAssignor partitionAssignor = null;
 
     private long lastClean;
     private long lastCommit;
@@ -141,7 +141,7 @@ public class StreamThread extends Thread {
                  UUID processId,
                  Metrics metrics,
                  Time time) throws Exception {
-        super("StreamThread-" + STREAMING_THREAD_ID_SEQUENCE.getAndIncrement());
+        super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
 
         this.jobId = jobId;
         this.config = config;
@@ -184,7 +184,7 @@ public class StreamThread extends Thread {
         this.running = new AtomicBoolean(true);
     }
 
-    public void partitionAssignor(KafkaStreamingPartitionAssignor partitionAssignor) {
+    public void partitionAssignor(StreamPartitionAssignor partitionAssignor) {
         this.partitionAssignor = partitionAssignor;
     }
 
@@ -227,7 +227,7 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * Shutdown this streaming thread.
+     * Shutdown this stream thread.
      */
     public void close() {
         running.set(false);
@@ -688,7 +688,7 @@ public class StreamThread extends Thread {
         public StreamMetricsImpl(Metrics metrics) {
 
             this.metrics = metrics;
-            this.metricGrpName = "streaming-metrics";
+            this.metricGrpName = "stream-metrics";
             this.metricTags = new LinkedHashMap<>();
             this.metricTags.put("client-id", clientId + "-" + getName());
 
@@ -734,7 +734,7 @@ public class StreamThread extends Thread {
             for (int i = 0; i < tags.length; i += 2)
                 tagMap.put(tags[i], tags[i + 1]);
 
-            String metricGroupName = "streaming-" + scopeName + "-metrics";
+            String metricGroupName = "stream-" + scopeName + "-metrics";
 
             // first add the global operation metrics if not yet, with the global tags only
             Sensor parent = metrics.sensor(scopeName + "-" + operationName);

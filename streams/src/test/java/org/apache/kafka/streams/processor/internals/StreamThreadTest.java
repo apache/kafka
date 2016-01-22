@@ -470,7 +470,7 @@ public class StreamThreadTest {
 
     private void initPartitionGrouper(StreamConfig config, StreamThread thread) {
 
-        KafkaStreamingPartitionAssignor partitionAssignor = new KafkaStreamingPartitionAssignor();
+        StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
 
         partitionAssignor.configure(config.getConsumerConfigs(thread, thread.jobId, thread.clientId));
 

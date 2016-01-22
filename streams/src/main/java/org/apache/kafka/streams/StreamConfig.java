@@ -27,7 +27,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
-import org.apache.kafka.streams.processor.internals.KafkaStreamingPartitionAssignor;
+import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 
 import java.util.Map;
@@ -74,11 +74,6 @@ public class StreamConfig extends AbstractConfig {
     public static final String TOTAL_RECORDS_TO_PROCESS = "total.records.to.process";
     private static final String TOTAL_RECORDS_TO_DOC = "Exit after processing this many records.";
 
-    /** <code>window.time.ms</code> */
-    public static final String WINDOW_TIME_MS_CONFIG = "window.time.ms";
-    private static final String WINDOW_TIME_MS_DOC = "Setting this to a non-negative value will cause the processor to get called "
-                                                     + "with this frequency even if there is no message.";
-
     /** <code>timestamp.extractor</code> */
     public static final String TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "timestamp.extractor";
     private static final String TIMESTAMP_EXTRACTOR_CLASS_DOC = "Timestamp extractor class that implements the <code>TimestampExtractor</code> interface.";
@@ -121,15 +116,18 @@ public class StreamConfig extends AbstractConfig {
     private static final String SYSTEM_TEMP_DIRECTORY = System.getProperty("java.io.tmpdir");
 
     static {
-        CONFIG = new ConfigDef().define(JOB_ID_CONFIG,
+        CONFIG = new ConfigDef().define(JOB_ID_CONFIG,      // required with no default value
                                         Type.STRING,
-                                        "",
-                                        Importance.MEDIUM,
+                                        Importance.HIGH,
                                         StreamConfig.JOB_ID_DOC)
+                                .define(BOOTSTRAP_SERVERS_CONFIG,       // required with no default value
+                                        Type.STRING,
+                                        Importance.HIGH,
+                                        CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
                                 .define(CLIENT_ID_CONFIG,
                                         Type.STRING,
                                         "",
-                                        Importance.MEDIUM,
+                                        Importance.HIGH,
                                         CommonClientConfigs.CLIENT_ID_DOC)
                                 .define(ZOOKEEPER_CONNECT_CONFIG,
                                         Type.STRING,
@@ -139,12 +137,37 @@ public class StreamConfig extends AbstractConfig {
                                 .define(STATE_DIR_CONFIG,
                                         Type.STRING,
                                         SYSTEM_TEMP_DIRECTORY,
-                                        Importance.MEDIUM,
+                                        Importance.HIGH,
                                         STATE_DIR_DOC)
+                                .define(KEY_SERIALIZER_CLASS_CONFIG,        // required with no default value
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        ProducerConfig.KEY_SERIALIZER_CLASS_DOC)
+                                .define(VALUE_SERIALIZER_CLASS_CONFIG,      // required with no default value
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        ProducerConfig.VALUE_SERIALIZER_CLASS_DOC)
+                                .define(KEY_DESERIALIZER_CLASS_CONFIG,      // required with no default value
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        ConsumerConfig.KEY_DESERIALIZER_CLASS_DOC)
+                                .define(VALUE_DESERIALIZER_CLASS_CONFIG,    // required with no default value
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        ConsumerConfig.VALUE_DESERIALIZER_CLASS_DOC)
+                                .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        Importance.MEDIUM,
+                                        TIMESTAMP_EXTRACTOR_CLASS_DOC)
+                                .define(PARTITION_GROUPER_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        DefaultPartitionGrouper.class,
+                                        Importance.MEDIUM,
+                                        PARTITION_GROUPER_CLASS_DOC)
                                 .define(COMMIT_INTERVAL_MS_CONFIG,
                                         Type.LONG,
                                         30000,
-                                        Importance.HIGH,
+                                        Importance.LOW,
                                         COMMIT_INTERVAL_MS_DOC)
                                 .define(POLL_MS_CONFIG,
                                         Type.LONG,
@@ -176,40 +199,6 @@ public class StreamConfig extends AbstractConfig {
                                         -1L,
                                         Importance.LOW,
                                         TOTAL_RECORDS_TO_DOC)
-                                .define(WINDOW_TIME_MS_CONFIG,
-                                        Type.LONG,
-                                        -1L,
-                                        Importance.MEDIUM,
-                                        WINDOW_TIME_MS_DOC)
-                                .define(KEY_SERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Importance.HIGH,
-                                        ProducerConfig.KEY_SERIALIZER_CLASS_DOC)
-                                .define(VALUE_SERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Importance.HIGH,
-                                        ProducerConfig.VALUE_SERIALIZER_CLASS_DOC)
-                                .define(KEY_DESERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Importance.HIGH,
-                                        ConsumerConfig.KEY_DESERIALIZER_CLASS_DOC)
-                                .define(VALUE_DESERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Importance.HIGH,
-                                        ConsumerConfig.VALUE_DESERIALIZER_CLASS_DOC)
-                                .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Importance.HIGH,
-                                        TIMESTAMP_EXTRACTOR_CLASS_DOC)
-                                .define(PARTITION_GROUPER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        DefaultPartitionGrouper.class,
-                                        Importance.HIGH,
-                                        PARTITION_GROUPER_CLASS_DOC)
-                                .define(BOOTSTRAP_SERVERS_CONFIG,
-                                        Type.STRING,
-                                        Importance.HIGH,
-                                        CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         "",
@@ -243,7 +232,7 @@ public class StreamConfig extends AbstractConfig {
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
         props.put(StreamConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamConfig.NUM_STANDBY_REPLICAS_CONFIG));
-        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, KafkaStreamingPartitionAssignor.class.getName());
+        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
 
         props.put(StreamConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
 
