@@ -34,33 +34,34 @@ import static org.junit.Assert.assertNull;
 
 
 
-public class StreamConfigTest {
+public class StreamsConfigTest {
 
     private Properties props = new Properties();
-    private StreamConfig streamConfig;
+    private StreamsConfig streamsConfig;
     private StreamThread streamThreadPlaceHolder;
 
 
     @Before
     public void setUp() {
-        props.put(StreamConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(StreamConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
-        props.put(StreamConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(StreamConfig.VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
-        props.put(StreamConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class);
-        streamConfig = new StreamConfig(props);
+        props.put(StreamsConfig.JOB_ID_CONFIG, "streams-config-test");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
+        props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
+        props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class);
+        streamsConfig = new StreamsConfig(props);
     }
 
     @Test
     public void testGetProducerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamConfig.getProducerConfigs("client");
+        Map<String, Object> returnedProps = streamsConfig.getProducerConfigs("client");
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-producer");
     }
 
     @Test
     public void testGetConsumerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamConfig.getConsumerConfigs(streamThreadPlaceHolder, "example-job", "client");
+        Map<String, Object> returnedProps = streamsConfig.getConsumerConfigs(streamThreadPlaceHolder, "example-job", "client");
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-consumer");
         assertEquals(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), "example-job");
 
@@ -68,7 +69,7 @@ public class StreamConfigTest {
 
     @Test
     public void testGetRestoreConsumerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamConfig.getRestoreConsumerConfigs("client");
+        Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs("client");
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-restore-consumer");
         assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
     }

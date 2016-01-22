@@ -22,8 +22,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.StreamConfig;
-import org.apache.kafka.streams.StreamMetrics;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
@@ -67,8 +67,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @param consumer              the instance of {@link Consumer}
      * @param producer              the instance of {@link Producer}
      * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
-     * @param config                the {@link StreamConfig} specified by the user
-     * @param metrics               the {@link StreamMetrics} created by the thread
+     * @param config                the {@link StreamsConfig} specified by the user
+     * @param metrics               the {@link StreamsMetrics} created by the thread
      */
     public StreamTask(TaskId id,
                       String jobId,
@@ -77,11 +77,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       Consumer<byte[], byte[]> consumer,
                       Producer<byte[], byte[]> producer,
                       Consumer<byte[], byte[]> restoreConsumer,
-                      StreamConfig config,
-                      StreamMetrics metrics) {
+                      StreamsConfig config,
+                      StreamsMetrics metrics) {
         super(id, jobId, partitions, topology, consumer, restoreConsumer, config, false);
         this.punctuationQueue = new PunctuationQueue();
-        this.maxBufferedSize = config.getInt(StreamConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
 
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
@@ -93,7 +93,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             partitionQueues.put(partition, queue);
         }
 
-        TimestampExtractor timestampExtractor = config.getConfiguredInstance(StreamConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+        TimestampExtractor timestampExtractor = config.getConfiguredInstance(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
         this.partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
 
         // initialize the consumed offset cache

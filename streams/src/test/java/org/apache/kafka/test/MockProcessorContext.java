@@ -19,7 +19,7 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamMetrics;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -123,8 +123,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public StreamMetrics metrics() {
-        return new StreamMetrics() {
+    public StreamsMetrics metrics() {
+        return new StreamsMetrics() {
             @Override
             public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
                 return null;

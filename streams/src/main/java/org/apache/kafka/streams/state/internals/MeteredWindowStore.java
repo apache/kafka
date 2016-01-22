@@ -20,7 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamMetrics;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -40,7 +40,7 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
     private Sensor rangeTime;
     private Sensor flushTime;
     private Sensor restoreTime;
-    private StreamMetrics metrics;
+    private StreamsMetrics metrics;
 
     private boolean loggingEnabled = true;
     private StoreChangeLogger<byte[], byte[]> changeLogger = null;

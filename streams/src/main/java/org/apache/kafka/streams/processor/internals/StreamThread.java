@@ -39,8 +39,8 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StreamConfig;
-import org.apache.kafka.streams.StreamMetrics;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -74,7 +74,7 @@ public class StreamThread extends Thread {
     public final String clientId;
     public final UUID processId;
 
-    protected final StreamConfig config;
+    protected final StreamsConfig config;
     protected final TopologyBuilder builder;
     protected final Set<String> sourceTopics;
     protected final Producer<byte[], byte[]> producer;
@@ -93,7 +93,7 @@ public class StreamThread extends Thread {
     private final long cleanTimeMs;
     private final long commitTimeMs;
     private final long totalRecordsToProcess;
-    private final StreamMetricsImpl sensors;
+    private final StreamsMetricsImpl sensors;
 
     private StreamPartitionAssignor partitionAssignor = null;
 
@@ -122,17 +122,17 @@ public class StreamThread extends Thread {
     };
 
     public StreamThread(TopologyBuilder builder,
-                        StreamConfig config,
+                        StreamsConfig config,
                         String jobId,
                         String clientId,
                         UUID processId,
                         Metrics metrics,
-                        Time time) throws Exception {
+                        Time time) {
         this(builder, config, null , null, null, jobId, clientId, processId, metrics, time);
     }
 
     StreamThread(TopologyBuilder builder,
-                 StreamConfig config,
+                 StreamsConfig config,
                  Producer<byte[], byte[]> producer,
                  Consumer<byte[], byte[]> consumer,
                  Consumer<byte[], byte[]> restoreConsumer,
@@ -140,7 +140,7 @@ public class StreamThread extends Thread {
                  String clientId,
                  UUID processId,
                  Metrics metrics,
-                 Time time) throws Exception {
+                 Time time) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
 
         this.jobId = jobId;
@@ -149,7 +149,7 @@ public class StreamThread extends Thread {
         this.sourceTopics = builder.sourceTopics();
         this.clientId = clientId;
         this.processId = processId;
-        this.partitionGrouper = config.getConfiguredInstance(StreamConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
+        this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
 
         // set the producer and consumer clients
         this.producer = (producer != null) ? producer : createProducer();
@@ -167,19 +167,19 @@ public class StreamThread extends Thread {
         this.standbyRecords = new HashMap<>();
 
         // read in task specific config values
-        this.stateDir = new File(this.config.getString(StreamConfig.STATE_DIR_CONFIG));
+        this.stateDir = new File(this.config.getString(StreamsConfig.STATE_DIR_CONFIG));
         this.stateDir.mkdir();
-        this.pollTimeMs = config.getLong(StreamConfig.POLL_MS_CONFIG);
-        this.commitTimeMs = config.getLong(StreamConfig.COMMIT_INTERVAL_MS_CONFIG);
-        this.cleanTimeMs = config.getLong(StreamConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
-        this.totalRecordsToProcess = config.getLong(StreamConfig.TOTAL_RECORDS_TO_PROCESS);
+        this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
+        this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+        this.cleanTimeMs = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
+        this.totalRecordsToProcess = config.getLong(StreamsConfig.TOTAL_RECORDS_TO_PROCESS);
 
         this.lastClean = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommit = time.milliseconds();
         this.recordsProcessed = 0;
         this.time = time;
 
-        this.sensors = new StreamMetricsImpl(metrics);
+        this.sensors = new StreamsMetricsImpl(metrics);
 
         this.running = new AtomicBoolean(true);
     }
@@ -673,7 +673,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    private class StreamMetricsImpl implements StreamMetrics {
+    private class StreamsMetricsImpl implements StreamsMetrics {
         final Metrics metrics;
         final String metricGrpName;
         final Map<String, String> metricTags;
@@ -685,7 +685,7 @@ public class StreamThread extends Thread {
         final Sensor taskCreationSensor;
         final Sensor taskDestructionSensor;
 
-        public StreamMetricsImpl(Metrics metrics) {
+        public StreamsMetricsImpl(Metrics metrics) {
 
             this.metrics = metrics;
             this.metricGrpName = "stream-metrics";

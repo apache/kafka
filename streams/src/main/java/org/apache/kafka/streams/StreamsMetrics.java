@@ -19,7 +19,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.metrics.Sensor;
 
-public interface StreamMetrics {
+public interface StreamsMetrics {
 
     Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags);
 

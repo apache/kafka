@@ -23,7 +23,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.StreamConfig;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
@@ -204,9 +204,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      */
     @Override
     public void configure(Map<String, ?> configs) {
-        numStandbyReplicas = (Integer) configs.get(StreamConfig.NUM_STANDBY_REPLICAS_CONFIG);
+        numStandbyReplicas = (Integer) configs.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
-        Object o = configs.get(StreamConfig.InternalConfig.STREAM_THREAD_INSTANCE);
+        Object o = configs.get(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE);
         if (o == null) {
             KafkaException ex = new KafkaException("StreamThread is not specified");
             log.error(ex.getMessage(), ex);
@@ -224,8 +224,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         this.topicGroups = streamThread.builder.topicGroups();
 
-        if (configs.containsKey(StreamConfig.ZOOKEEPER_CONNECT_CONFIG))
-            zkClient = new ZkClient((String) configs.get(StreamConfig.ZOOKEEPER_CONNECT_CONFIG), 30 * 1000, 30 * 1000, new ZKStringSerializer());
+        if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG))
+            zkClient = new ZkClient((String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG), 30 * 1000, 30 * 1000, new ZKStringSerializer());
     }
 
     @Override
@@ -236,7 +236,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     @Override
     public Subscription subscription(Set<String> topics) {
         // Adds the following information to subscription
-        // 1. Client UUID (a unique id assigned to an instance of Streams)
+        // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
         // 2. Task ids of previously running tasks
         // 3. Task ids of valid local states on the client's state directory.
 

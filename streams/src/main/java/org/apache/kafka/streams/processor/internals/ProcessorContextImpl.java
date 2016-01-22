@@ -20,8 +20,8 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.StreamConfig;
-import org.apache.kafka.streams.StreamMetrics;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -38,7 +38,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
 
     private final TaskId id;
     private final StreamTask task;
-    private final StreamMetrics metrics;
+    private final StreamsMetrics metrics;
     private final RecordCollector collector;
     private final ProcessorStateManager stateMgr;
 
@@ -52,10 +52,10 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     @SuppressWarnings("unchecked")
     public ProcessorContextImpl(TaskId id,
                                 StreamTask task,
-                                StreamConfig config,
+                                StreamsConfig config,
                                 RecordCollector collector,
                                 ProcessorStateManager stateMgr,
-                                StreamMetrics metrics) {
+                                StreamsMetrics metrics) {
         this.id = id;
         this.task = task;
         this.metrics = metrics;
@@ -113,7 +113,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public StreamMetrics metrics() {
+    public StreamsMetrics metrics() {
         return metrics;
     }
 

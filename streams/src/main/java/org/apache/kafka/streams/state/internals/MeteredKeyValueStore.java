@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamMetrics;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.common.metrics.Sensor;
@@ -47,7 +47,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private Sensor rangeTime;
     private Sensor flushTime;
     private Sensor restoreTime;
-    private StreamMetrics metrics;
+    private StreamsMetrics metrics;
 
     private boolean loggingEnabled = true;
     private StoreChangeLogger<K, V> changeLogger = null;
