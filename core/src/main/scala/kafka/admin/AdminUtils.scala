@@ -113,23 +113,31 @@ object AdminUtils extends Logging {
     if (existingPartitionsReplicaList.size == 0)
       throw new AdminOperationException("The topic %s does not exist".format(topic))
 
-    val existingReplicaList = existingPartitionsReplicaList.head._2
+    val existingReplicaListForPartitionZero = existingPartitionsReplicaList.find(p => p._1.partition == 0) match {
+      case None => throw new AdminOperationException("the topic does not have partition with id 0, it should never happen")
+      case Some(headPartitionReplica) => headPartitionReplica._2
+    }
     val partitionsToAdd = numPartitions - existingPartitionsReplicaList.size
     if (partitionsToAdd <= 0)
       throw new AdminOperationException("The number of partitions for a topic can only be increased")
 
     // create the new partition replication list
     val brokerList = zkUtils.getSortedBrokerList()
-    val newPartitionReplicaList = if (replicaAssignmentStr == null || replicaAssignmentStr == "")
-      AdminUtils.assignReplicasToBrokers(brokerList, partitionsToAdd, existingReplicaList.size, existingReplicaList.head, existingPartitionsReplicaList.size)
+    val newPartitionReplicaList = if (replicaAssignmentStr == null || replicaAssignmentStr == "") {
+      var startIndex = brokerList.indexWhere(_ >= existingReplicaListForPartitionZero.head)
+      if(startIndex < 0) {
+        startIndex = 0
+      }
+      AdminUtils.assignReplicasToBrokers(brokerList, partitionsToAdd, existingReplicaListForPartitionZero.size, startIndex, existingPartitionsReplicaList.size)
+    }
     else
       getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet, existingPartitionsReplicaList.size, checkBrokerAvailable)
 
     // check if manual assignment has the right replication factor
-    val unmatchedRepFactorList = newPartitionReplicaList.values.filter(p => (p.size != existingReplicaList.size))
+    val unmatchedRepFactorList = newPartitionReplicaList.values.filter(p => (p.size != existingReplicaListForPartitionZero.size))
     if (unmatchedRepFactorList.size != 0)
       throw new AdminOperationException("The replication factor in manual replication assignment " +
-        " is not equal to the existing replication factor for the topic " + existingReplicaList.size)
+        " is not equal to the existing replication factor for the topic " + existingReplicaListForPartitionZero.size)
 
     info("Add partition list for %s is %s".format(topic, newPartitionReplicaList))
     val partitionReplicaList = existingPartitionsReplicaList.map(p => p._1.partition -> p._2)
