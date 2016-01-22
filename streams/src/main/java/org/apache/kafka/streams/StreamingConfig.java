@@ -113,8 +113,6 @@ public class StreamingConfig extends AbstractConfig {
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
-    private static final String SYSTEM_TEMP_DIRECTORY = System.getProperty("java.io.tmpdir");
-
     private static final String WALLCLOCK_TIMESTAMP_EXTRACTOR = "org.apache.kafka.streams.processor.internals.WallclockTimestampExtractor";
 
     static {
@@ -135,7 +133,7 @@ public class StreamingConfig extends AbstractConfig {
                                         StreamingConfig.ZOOKEEPER_CONNECT_DOC)
                                 .define(STATE_DIR_CONFIG,
                                         Type.STRING,
-                                        SYSTEM_TEMP_DIRECTORY,
+                                        "/tmp/kafka-streams",
                                         Importance.MEDIUM,
                                         STATE_DIR_DOC)
                                 .define(COMMIT_INTERVAL_MS_CONFIG,
