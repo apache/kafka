@@ -19,8 +19,10 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.state.Entry;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.Serdes;
@@ -30,6 +32,8 @@ import org.apache.kafka.streams.state.WindowStoreUtil;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashSet;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.SimpleTimeZone;
@@ -39,6 +43,19 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public static final long MIN_SEGMENT_INTERVAL = 60 * 1000; // one minute
 
     private static final long USE_CURRENT_TIMESTAMP = -1L;
+
+    private static class Segment extends RocksDBStore<byte[], byte[]> {
+        public final long id;
+
+        Segment(String name, long id) {
+            super(name, WindowStoreUtil.INNER_SERDES);
+            this.id = id;
+        }
+
+        public void destroy() {
+            Utils.delete(dbDir);
+        }
+    }
 
     private static class RocksDBWindowStoreIterator<V> implements WindowStoreIterator<V> {
         private final Serdes<?, V> serdes;
@@ -73,7 +90,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
             Entry<byte[], byte[]> entry = iterators[index].next();
 
             return new KeyValue<>(WindowStoreUtil.timestampFromBinaryKey(entry.key()),
-                                  serdes.valueFrom(entry.value()));
+                    serdes.valueFrom(entry.value()));
         }
 
         @Override
@@ -91,24 +108,39 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     private final String name;
-    private final Serdes<K, V> serdes;
+    private final long segmentInterval;
     private final boolean retainDuplicates;
-
+    private final Segment[] segments;
+    private final Serdes<K, V> serdes;
     private final SimpleDateFormat formatter;
-    private final RollingRocksDBStore rollingDB;
 
     private ProcessorContext context;
     private int seqnum = 0;
+    private long currentSegmentId = -1L;
+    private boolean loggingEnabled = true;
+
+    private StoreChangeLogger<byte[], byte[]> changeLogger = null;
 
     public RocksDBWindowStore(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serdes<K, V> serdes) {
         this.name = name;
+
+        // The segment interval must be greater than MIN_SEGMENT_INTERVAL
+        this.segmentInterval = Math.max(retentionPeriod / (numSegments - 1), MIN_SEGMENT_INTERVAL);
+
+        this.segments = new Segment[numSegments];
         this.serdes = serdes;
+
         this.retainDuplicates = retainDuplicates;
-        this.rollingDB = new RollingRocksDBStore(name, retentionPeriod, numSegments);
 
         // Create a date formatter. Formatted timestamps are used as segment name suffixes
         this.formatter = new SimpleDateFormat("yyyyMMddHHmm");
         this.formatter.setTimeZone(new SimpleTimeZone(0, "GMT"));
+    }
+
+    public RocksDBWindowStore<K, V> disableLogging() {
+        loggingEnabled = false;
+
+        return this;
     }
 
     @Override
@@ -119,7 +151,17 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     @Override
     public void init(ProcessorContext context) {
         this.context = context;
-        rollingDB.init(context);
+
+        this.changeLogger = this.loggingEnabled ?
+                new StoreChangeLogger<>(name, context, Serdes.withBuiltinTypes("", byte[].class, byte[].class)) : null;
+
+        // register and possibly restore the state from the logs
+        context.register(this, loggingEnabled, new StateRestoreCallback() {
+            @Override
+            public void restore(byte[] key, byte[] value) {
+                putInternal(key, value);
+            }
+        });
     }
 
     @Override
@@ -129,63 +171,149 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void flush() {
-        rollingDB.flush();
+        for (Segment segment : segments) {
+            if (segment != null)
+                segment.flush();
+        }
+
+        if (loggingEnabled)
+            changeLogger.logChange(this.getter);
     }
 
     @Override
     public void close() {
-        rollingDB.flush();
+        for (Segment segment : segments) {
+            if (segment != null)
+                segment.close();
+        }
     }
 
     @Override
     public void put(K key, V value) {
-        put(key, value, USE_CURRENT_TIMESTAMP);
+        putAndReturnInternalKey(key, value, USE_CURRENT_TIMESTAMP);
     }
 
     @Override
-    public void put(K key, V value, long t) {
-        // determine timestamp to use
+    public void put(K key, V value, long timestamp) {
+        putAndReturnInternalKey(key, value, timestamp);
+
+        if (loggingEnabled)
+            changeLogger.logChange(this.getter);
+    }
+
+    private byte[] putAndReturnInternalKey(K key, V value, long t) {
         long timestamp = t == USE_CURRENT_TIMESTAMP ? context.timestamp() : t;
 
-        // serialize the key and value
-        if (retainDuplicates)
-            seqnum = (seqnum + 1) & 0x7FFFFFFF;
+        long segmentId = segmentId(timestamp);
 
-        byte[] binaryKey = WindowStoreUtil.toBinaryKey(key, timestamp, seqnum, serdes);
-        byte[] binaryValue = serdes.rawValue(value);
-
-        rollingDB.putAndReturnKey(binaryKey, binaryValue, timestamp);
-
-        if (loggingEnabled) {
-            changeLogger.add(binKey);
-            changeLogger.maybeLogChange(this.getter);
+        if (segmentId > currentSegmentId) {
+            // A new segment will be created. Clean up old segments first.
+            currentSegmentId = segmentId;
+            cleanup();
         }
 
+        // If the record is within the retention period, put it in the store.
+        if (segmentId > currentSegmentId - segments.length) {
+            if (retainDuplicates)
+                seqnum = (seqnum + 1) & 0x7FFFFFFF;
+            byte[] binaryKey = WindowStoreUtil.toBinaryKey(key, timestamp, seqnum, serdes);
+            getSegment(segmentId).put(binaryKey, serdes.rawValue(value));
+            return binaryKey;
+        } else {
+            return null;
+        }
+    }
+
+    private void putInternal(byte[] binaryKey, byte[] binaryValue) {
+        long segmentId = segmentId(WindowStoreUtil.timestampFromBinaryKey(binaryKey));
+
+        if (segmentId > currentSegmentId) {
+            // A new segment will be created. Clean up old segments first.
+            currentSegmentId = segmentId;
+            cleanup();
+        }
+
+        // If the record is within the retention period, put it in the store.
+        if (segmentId > currentSegmentId - segments.length)
+            getSegment(segmentId).put(binaryKey, binaryValue);
+    }
+
+    private byte[] getInternal(byte[] binaryKey) {
+        long segmentId = segmentId(WindowStoreUtil.timestampFromBinaryKey(binaryKey));
+
+        Segment segment = segments[(int) (segmentId % segments.length)];
+
+        if (segment != null && segment.id == segmentId) {
+            return segment.get(binaryKey);
+        } else {
+            return null;
+        }
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
+        long segFrom = segmentId(timeFrom);
+        long segTo = segmentId(Math.max(0L, timeTo));
+
         byte[] binaryFrom = WindowStoreUtil.toBinaryKey(key, timeFrom, 0, serdes);
-        byte[] binaryTo = WindowStoreUtil.toBinaryKey(key, timeTo + 1L, 0, serdes);
+        byte[] binaryUntil = WindowStoreUtil.toBinaryKey(key, timeTo + 1L, 0, serdes);
 
-        ArrayList<KeyValueIterator<byte[], byte[]>> iters = rollingDB.iterators(timeFrom, timeTo, binaryFrom, binaryTo);
+        ArrayList<KeyValueIterator<byte[], byte[]>> iterators = new ArrayList<>();
 
-        if (iters.size() > 0) {
-            return new RocksDBWindowStoreIterator<>(serdes, iters.toArray(new KeyValueIterator[iters.size()]));
+        for (long segmentId = segFrom; segmentId <= segTo; segmentId++) {
+            Segment segment = segments[(int) (segmentId % segments.length)];
+
+            if (segment != null && segment.id == segmentId)
+                iterators.add(segment.range(binaryFrom, binaryUntil));
+        }
+
+        if (iterators.size() > 0) {
+            return new RocksDBWindowStoreIterator<>(serdes, iterators.toArray(new KeyValueIterator[iterators.size()]));
         } else {
             return new RocksDBWindowStoreIterator<>(serdes);
         }
     }
 
-    // this method is public since it is used by test
-    public String directorySuffix(long segmentId) {
-        return rollingDB.directorySuffix(segmentId);
+    private Segment getSegment(long segmentId) {
+        int index = (int) (segmentId % segments.length);
+
+        if (segments[index] == null) {
+            segments[index] = new Segment(name + "-" + directorySuffix(segmentId), segmentId);
+            segments[index].init(context);
+        }
+
+        return segments[index];
     }
 
-    // this method is public since it is used by test
+    private void cleanup() {
+        for (int i = 0; i < segments.length; i++) {
+            if (segments[i] != null && segments[i].id <= currentSegmentId - segments.length) {
+                segments[i].close();
+                segments[i].destroy();
+                segments[i] = null;
+            }
+        }
+    }
+
+    public long segmentId(long timestamp) {
+        return timestamp / segmentInterval;
+    }
+
+    public String directorySuffix(long segmentId) {
+        return formatter.format(new Date(segmentId * segmentInterval));
+    }
+
+    // this method is used by a test
     public Set<Long> segmentIds() {
-        return rollingDB.segmentIds();
+        HashSet<Long> segmentIds = new HashSet<>();
+
+        for (Segment segment : segments) {
+            if (segment != null)
+                segmentIds.add(segment.id);
+        }
+
+        return segmentIds;
     }
 
 }
