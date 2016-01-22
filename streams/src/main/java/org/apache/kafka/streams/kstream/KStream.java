@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.lang.reflect.Type;
@@ -213,8 +214,7 @@ public interface KStream<K, V> {
      * @param reducer the class of Reducer
      * @param windows the specification of the aggregation window
      */
-    <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
-                                                             Windows<W> windows);
+    <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer, Windows<W> windows);
 
     /**
      * Aggregate values of this stream by key on a window basis.

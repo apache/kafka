@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream.type.internal;
 
-import org.apache.kafka.streams.kstream.KeyValue;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.type.TypeException;
 

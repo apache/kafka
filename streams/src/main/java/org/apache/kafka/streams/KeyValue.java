@@ -17,11 +17,21 @@
 
 package org.apache.kafka.streams;
 
-import org.apache.kafka.common.metrics.Sensor;
+public class KeyValue<K, V> {
 
-public interface StreamingMetrics {
+    public final K key;
+    public final V value;
 
-    Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags);
+    public KeyValue(K key, V value) {
+        this.key = key;
+        this.value = value;
+    }
 
-    void recordLatency(Sensor sensor, long startNs, long endNs);
+    public static <K, V> KeyValue<K, V> pair(K key, V value) {
+        return new KeyValue<>(key, value);
+    }
+
+    public String toString() {
+        return "KeyValue(" + key + ", " + value + ")";
+    }
 }

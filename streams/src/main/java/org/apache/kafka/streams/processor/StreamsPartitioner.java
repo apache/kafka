@@ -33,19 +33,19 @@ package org.apache.kafka.streams.processor;
  * An upstream topology producing messages to that topic can use a custom <i>stream partitioner</i> to precisely and consistently
  * determine to which partition each message should be written.
  * <p>
- * To do this, create a <code>StreamPartitioner</code> implementation, and when you build your topology specify that custom partitioner
- * when {@link TopologyBuilder#addSink(String, String, org.apache.kafka.common.serialization.Serializer, org.apache.kafka.common.serialization.Serializer, StreamPartitioner, String...) adding a sink}
+ * To do this, create a <code>StreamsPartitioner</code> implementation, and when you build your topology specify that custom partitioner
+ * when {@link TopologyBuilder#addSink(String, String, org.apache.kafka.common.serialization.Serializer, org.apache.kafka.common.serialization.Serializer, StreamsPartitioner, String...) adding a sink}
  * for that topic.
  * <p>
- * All StreamPartitioner implementations should be stateless and a pure function so they can be shared across topic and sink nodes.
+ * All StreamsPartitioner implementations should be stateless and a pure function so they can be shared across topic and sink nodes.
  * 
  * @param <K> the type of keys
  * @param <V> the type of values
  * @see TopologyBuilder#addSink(String, String, org.apache.kafka.common.serialization.Serializer,
- *      org.apache.kafka.common.serialization.Serializer, StreamPartitioner, String...)
- * @see TopologyBuilder#addSink(String, String, StreamPartitioner, String...)
+ *      org.apache.kafka.common.serialization.Serializer, StreamsPartitioner, String...)
+ * @see TopologyBuilder#addSink(String, String, StreamsPartitioner, String...)
  */
-public interface StreamPartitioner<K, V> {
+public interface StreamsPartitioner<K, V> {
 
     /**
      * Determine the partition number for a message with the given key and value and the current number of partitions.

@@ -14,29 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.protocol;
 
-package org.apache.kafka.streams.state;
+import org.junit.Test;
 
-public class Entry<K, V> {
-
-    private final K key;
-    private final V value;
-
-    public Entry(K key, V value) {
-        this.key = key;
-        this.value = value;
+public class ProtoUtilsTest {
+    @Test(expected = IllegalArgumentException.class)
+    public void schemaVersionOutOfRange() {
+        ProtoUtils.requestSchema(ApiKeys.PRODUCE.id, Protocol.REQUESTS[ApiKeys.PRODUCE.id].length);
     }
-
-    public K key() {
-        return key;
-    }
-
-    public V value() {
-        return value;
-    }
-
-    public String toString() {
-        return "Entry(" + key() + ", " + value() + ")";
-    }
-
 }

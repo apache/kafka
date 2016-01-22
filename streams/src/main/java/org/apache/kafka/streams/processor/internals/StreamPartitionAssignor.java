@@ -23,7 +23,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
@@ -57,9 +57,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Configurable {
+public class StreamPartitionAssignor implements PartitionAssignor, Configurable {
 
-    private static final Logger log = LoggerFactory.getLogger(KafkaStreamingPartitionAssignor.class);
+    private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
 
     private StreamThread streamThread;
 
@@ -204,9 +204,9 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
      */
     @Override
     public void configure(Map<String, ?> configs) {
-        numStandbyReplicas = (Integer) configs.get(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG);
+        numStandbyReplicas = (Integer) configs.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
-        Object o = configs.get(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE);
+        Object o = configs.get(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE);
         if (o == null) {
             KafkaException ex = new KafkaException("StreamThread is not specified");
             log.error(ex.getMessage(), ex);
@@ -224,19 +224,19 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
 
         this.topicGroups = streamThread.builder.topicGroups();
 
-        if (configs.containsKey(StreamingConfig.ZOOKEEPER_CONNECT_CONFIG))
-            zkClient = new ZkClient((String) configs.get(StreamingConfig.ZOOKEEPER_CONNECT_CONFIG), 30 * 1000, 30 * 1000, new ZKStringSerializer());
+        if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG))
+            zkClient = new ZkClient((String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG), 30 * 1000, 30 * 1000, new ZKStringSerializer());
     }
 
     @Override
     public String name() {
-        return "streaming";
+        return "stream";
     }
 
     @Override
     public Subscription subscription(Set<String> topics) {
         // Adds the following information to subscription
-        // 1. Client UUID (a unique id assigned to an instance of KafkaStreaming)
+        // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
         // 2. Task ids of previously running tasks
         // 3. Task ids of valid local states on the client's state directory.
 
@@ -251,7 +251,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
         // This assigns tasks to consumer clients in two steps.
-        // 1. using TaskAssignor tasks are assigned to streaming clients.
+        // 1. using TaskAssignor to assign tasks to consumer clients.
         //    - Assign a task to a client which was running it previously.
         //      If there is no such client, assign a task to a client which has its valid local state.
         //    - A client may have more than one stream threads.
