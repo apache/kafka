@@ -19,7 +19,6 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.Entry;
@@ -31,8 +30,6 @@ import org.apache.kafka.streams.state.WindowStoreUtil;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashSet;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.SimpleTimeZone;
@@ -42,19 +39,6 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public static final long MIN_SEGMENT_INTERVAL = 60 * 1000; // one minute
 
     private static final long USE_CURRENT_TIMESTAMP = -1L;
-
-    private static class Segment extends RocksDBStore<byte[], byte[]> {
-        public final long id;
-
-        Segment(String name, long id) {
-            super(name, WindowStoreUtil.INNER_SERDES);
-            this.id = id;
-        }
-
-        public void destroy() {
-            Utils.delete(dbDir);
-        }
-    }
 
     private static class RocksDBWindowStoreIterator<V> implements WindowStoreIterator<V> {
         private final Serdes<?, V> serdes;
@@ -108,26 +92,19 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     private final String name;
     private final Serdes<K, V> serdes;
-    private final long segmentInterval;
     private final boolean retainDuplicates;
 
     private final SimpleDateFormat formatter;
-    private final RollingRocksDBStore<K, V> rollingDB;
+    private final RollingRocksDBStore rollingDB;
 
     private ProcessorContext context;
     private int seqnum = 0;
 
     public RocksDBWindowStore(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serdes<K, V> serdes) {
         this.name = name;
-
         this.serdes = serdes;
-
-        // The segment interval must be greater than MIN_SEGMENT_INTERVAL
-        this.segmentInterval = Math.max(retentionPeriod / (numSegments - 1), MIN_SEGMENT_INTERVAL);
-
         this.retainDuplicates = retainDuplicates;
-
-        this.rollingDB = new RollingRocksDBStore<>(retentionPeriod, numSegments, retainDuplicates, serdes);
+        this.rollingDB = new RollingRocksDBStore(name, retentionPeriod, numSegments);
 
         // Create a date formatter. Formatted timestamps are used as segment name suffixes
         this.formatter = new SimpleDateFormat("yyyyMMddHHmm");
@@ -142,6 +119,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     @Override
     public void init(ProcessorContext context) {
         this.context = context;
+        rollingDB.init(context);
     }
 
     @Override
@@ -176,13 +154,22 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         byte[] binaryKey = WindowStoreUtil.toBinaryKey(key, timestamp, seqnum, serdes);
         byte[] binaryValue = serdes.rawValue(value);
 
-        rollingDB.putAndReturnInternalKey(key, value, timestamp);
+        rollingDB.putAndReturnKey(binaryKey, binaryValue, timestamp);
+
+        if (loggingEnabled) {
+            changeLogger.add(binKey);
+            changeLogger.maybeLogChange(this.getter);
+        }
+
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
-        ArrayList<KeyValueIterator<byte[], byte[]>> iters = rollingDB.iterators(key, timeFrom, timeTo);
+        byte[] binaryFrom = WindowStoreUtil.toBinaryKey(key, timeFrom, 0, serdes);
+        byte[] binaryTo = WindowStoreUtil.toBinaryKey(key, timeTo + 1L, 0, serdes);
+
+        ArrayList<KeyValueIterator<byte[], byte[]>> iters = rollingDB.iterators(timeFrom, timeTo, binaryFrom, binaryTo);
 
         if (iters.size() > 0) {
             return new RocksDBWindowStoreIterator<>(serdes, iters.toArray(new KeyValueIterator[iters.size()]));
@@ -191,13 +178,9 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
     }
 
-    public long segmentId(long timestamp) {
-        return timestamp / segmentInterval;
-    }
-
     // this method is public since it is used by test
     public String directorySuffix(long segmentId) {
-        return formatter.format(new Date(segmentId * segmentInterval));
+        return rollingDB.directorySuffix(segmentId);
     }
 
     // this method is public since it is used by test

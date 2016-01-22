@@ -107,43 +107,21 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void put(K key, V value) {
-        putAndReturnInternalKey(key, value, -1L);
-    }
-
-    @Override
-    public void put(K key, V value, long timestamp) {
-        putAndReturnInternalKey(key, value, timestamp);
-    }
-
-    @Override
-    public byte[] putAndReturnInternalKey(K key, V value, long timestamp) {
         long startNs = time.nanoseconds();
         try {
-            byte[] binKey = this.inner.putAndReturnInternalKey(key, value, timestamp);
-
-            if (loggingEnabled) {
-                changeLogger.add(binKey);
-                changeLogger.maybeLogChange(this.getter);
-            }
-
-            return binKey;
+            this.inner.put(key, value);
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
     }
 
     @Override
-    public void putInternal(byte[] binaryKey, byte[] binaryValue) {
-        inner.putInternal(binaryKey, binaryValue);
-    }
-
-    @Override
-    public byte[] getInternal(byte[] binaryKey) {
+    public void put(K key, V value, long timestamp) {
         long startNs = time.nanoseconds();
         try {
-            return this.inner.getInternal(binaryKey);
+            this.inner.put(key, value, timestamp);
         } finally {
-            this.metrics.recordLatency(this.getTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
     }
 
