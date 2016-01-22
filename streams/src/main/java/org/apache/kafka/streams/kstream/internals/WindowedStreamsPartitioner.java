@@ -18,18 +18,18 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.StreamsPartitioner;
 
-public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Windowed<K>, V> {
+public class WindowedStreamsPartitioner<K, V> implements StreamsPartitioner<Windowed<K>, V> {
 
     private final WindowedSerializer<K> serializer;
 
-    public WindowedStreamPartitioner(WindowedSerializer<K> serializer) {
+    public WindowedStreamsPartitioner(WindowedSerializer<K> serializer) {
         this.serializer = serializer;
     }
 
     /**
-     * WindowedStreamPartitioner determines the partition number for a message with the given windowed key and value
+     * WindowedStreamsPartitioner determines the partition number for a message with the given windowed key and value
      * and the current number of partitions. The partition number id determined by the original key of the windowed key
      * using the same logic as DefaultPartitioner so that the topic is partitioned by the original key.
      *

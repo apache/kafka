@@ -15,20 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.streams;
 
-public class KeyValue<K, V> {
+import org.apache.kafka.common.metrics.Sensor;
 
-    public final K key;
-    public final V value;
+public interface StreamsMetrics {
 
-    public KeyValue(K key, V value) {
-        this.key = key;
-        this.value = value;
-    }
+    Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags);
 
-    public static <K, V> KeyValue<K, V> pair(K key, V value) {
-        return new KeyValue<>(key, value);
-    }
-
+    void recordLatency(Sensor sensor, long startNs, long endNs);
 }

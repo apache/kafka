@@ -18,9 +18,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.streams.kstream.KeyValue;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.Entry;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Serdes;
@@ -119,11 +118,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                     public void apply(K key, CacheEntry entry) {
                         // only consider flushing the whole store if the evicting entry is dirty
                         if (entry.dirty) {
-                            List<Entry<K, V>> batch = new ArrayList<>(cacheSize);
+                            List<KeyValue<K, V>> batch = new ArrayList<>(cacheSize);
                             KeyValueIterator<K, CacheEntry> iter = cache.all();
                             while(iter.hasNext()) {
-                                Entry<K, CacheEntry> e = iter.next();
-                                batch.add(new Entry<>(e.key(), e.value().value));
+                                KeyValue<K, CacheEntry> e = iter.next();
+                                batch.add(new KeyValue<>(e.key, e.value.value));
 
                                 // mark the entry as not dirty anymore
                             }
@@ -190,9 +189,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void putAll(List<Entry<K, V>> entries) {
-        for (Entry<K, V> entry : entries)
-            put(entry.key(), entry.value());
+    public void putAll(List<KeyValue<K, V>> entries) {
+        for (KeyValue<K, V> entry : entries)
+            put(entry.key, entry.value);
     }
 
     @Override
@@ -243,8 +242,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return iter.key();
         }
 
-        protected Entry<K, V> getEntry() {
-            return new Entry<>(serdes.keyFrom(iter.key()), serdes.valueFrom(iter.value()));
+        protected KeyValue<K, V> getKeyValue() {
+            return new KeyValue<>(serdes.keyFrom(iter.key()), serdes.valueFrom(iter.value()));
         }
 
         @Override
@@ -253,11 +252,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
 
         @Override
-        public Entry<K, V> next() {
+        public KeyValue<K, V> next() {
             if (!hasNext())
                 throw new NoSuchElementException();
 
-            Entry<K, V> entry = this.getEntry();
+            KeyValue<K, V> entry = this.getKeyValue();
             iter.next();
             return entry;
         }

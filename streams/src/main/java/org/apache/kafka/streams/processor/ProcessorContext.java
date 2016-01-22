@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.StreamingMetrics;
+import org.apache.kafka.streams.StreamsMetrics;
 
 import java.io.File;
 
@@ -70,9 +70,9 @@ public interface ProcessorContext {
     /**
      * Returns Metrics instance
      *
-     * @return StreamingMetrics
+     * @return StreamsMetrics
      */
-    StreamingMetrics metrics();
+    StreamsMetrics metrics();
 
     /**
      * Registers and possibly restores the specified storage engine.

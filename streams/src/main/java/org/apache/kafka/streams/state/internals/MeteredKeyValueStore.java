@@ -18,13 +18,13 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.streams.StreamingMetrics;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.state.Entry;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Serdes;
@@ -54,7 +54,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private Sensor rangeTime;
     private Sensor flushTime;
     private Sensor restoreTime;
-    private StreamingMetrics metrics;
+    private StreamsMetrics metrics;
 
     private boolean loggingEnabled = true;
     private StoreChangeLogger<K, V> changeLogger = null;
@@ -148,14 +148,14 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void putAll(List<Entry<K, V>> entries) {
+    public void putAll(List<KeyValue<K, V>> entries) {
         long startNs = time.nanoseconds();
         try {
             this.inner.putAll(entries);
 
             if (loggingEnabled) {
-                for (Entry<K, V> entry : entries) {
-                    K key = entry.key();
+                for (KeyValue<K, V> entry : entries) {
+                    K key = entry.key;
                     changeLogger.add(key);
                 }
                 changeLogger.maybeLogChange(this.getter);
@@ -238,7 +238,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         }
 
         @Override
-        public Entry<K1, V1> next() {
+        public KeyValue<K1, V1> next() {
             return iter.next();
         }
 

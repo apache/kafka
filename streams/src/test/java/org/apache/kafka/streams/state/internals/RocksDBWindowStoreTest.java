@@ -24,10 +24,10 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.state.Entry;
 import org.apache.kafka.streams.state.Serdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -69,12 +69,12 @@ public class RocksDBWindowStoreTest {
     public void testPutAndFetch() throws IOException {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
-            final List<Entry<byte[], byte[]>> changeLog = new ArrayList<>();
+            final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerializer, byteArraySerializer);
             RecordCollector recordCollector = new RecordCollector(producer) {
                 @Override
                 public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                    changeLog.add(new Entry<>(
+                    changeLog.add(new KeyValue<>(
                                     keySerializer.serialize(record.topic(), record.key()),
                                     valueSerializer.serialize(record.topic(), record.value()))
                     );
@@ -165,12 +165,12 @@ public class RocksDBWindowStoreTest {
     public void testPutAndFetchBefore() throws IOException {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
-            final List<Entry<byte[], byte[]>> changeLog = new ArrayList<>();
+            final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerializer, byteArraySerializer);
             RecordCollector recordCollector = new RecordCollector(producer) {
                 @Override
                 public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                    changeLog.add(new Entry<>(
+                    changeLog.add(new KeyValue<>(
                                     keySerializer.serialize(record.topic(), record.key()),
                                     valueSerializer.serialize(record.topic(), record.value()))
                     );
@@ -261,12 +261,12 @@ public class RocksDBWindowStoreTest {
     public void testPutAndFetchAfter() throws IOException {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
-            final List<Entry<byte[], byte[]>> changeLog = new ArrayList<>();
+            final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerializer, byteArraySerializer);
             RecordCollector recordCollector = new RecordCollector(producer) {
                 @Override
                 public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                    changeLog.add(new Entry<>(
+                    changeLog.add(new KeyValue<>(
                                     keySerializer.serialize(record.topic(), record.key()),
                                     valueSerializer.serialize(record.topic(), record.value()))
                     );
@@ -357,12 +357,12 @@ public class RocksDBWindowStoreTest {
     public void testPutSameKeyTimestamp() throws IOException {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
-            final List<Entry<byte[], byte[]>> changeLog = new ArrayList<>();
+            final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerializer, byteArraySerializer);
             RecordCollector recordCollector = new RecordCollector(producer) {
                 @Override
                 public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                    changeLog.add(new Entry<>(
+                    changeLog.add(new KeyValue<>(
                                     keySerializer.serialize(record.topic(), record.key()),
                                     valueSerializer.serialize(record.topic(), record.value()))
                     );
@@ -416,12 +416,12 @@ public class RocksDBWindowStoreTest {
     public void testRolling() throws IOException {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
-            final List<Entry<byte[], byte[]>> changeLog = new ArrayList<>();
+            final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerializer, byteArraySerializer);
             RecordCollector recordCollector = new RecordCollector(producer) {
                 @Override
                 public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                    changeLog.add(new Entry<>(
+                    changeLog.add(new KeyValue<>(
                                     keySerializer.serialize(record.topic(), record.key()),
                                     valueSerializer.serialize(record.topic(), record.value()))
                     );
@@ -528,7 +528,7 @@ public class RocksDBWindowStoreTest {
 
     @Test
     public void testRestore() throws IOException {
-        final List<Entry<byte[], byte[]>> changeLog = new ArrayList<>();
+        final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
         long startTime = segmentSize * 2;
         long incr = segmentSize / 2;
 
@@ -538,7 +538,7 @@ public class RocksDBWindowStoreTest {
             RecordCollector recordCollector = new RecordCollector(producer) {
                 @Override
                 public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                    changeLog.add(new Entry<>(
+                    changeLog.add(new KeyValue<>(
                                     keySerializer.serialize(record.topic(), record.key()),
                                     valueSerializer.serialize(record.topic(), record.value()))
                     );
@@ -587,7 +587,7 @@ public class RocksDBWindowStoreTest {
             RecordCollector recordCollector = new RecordCollector(producer) {
                 @Override
                 public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                    changeLog.add(new Entry<>(
+                    changeLog.add(new KeyValue<>(
                                     keySerializer.serialize(record.topic(), record.key()),
                                     valueSerializer.serialize(record.topic(), record.value()))
                     );
@@ -655,13 +655,13 @@ public class RocksDBWindowStoreTest {
         return set;
     }
 
-    private Map<Integer, Set<String>> entriesByKey(List<Entry<byte[], byte[]>> changeLog, long startTime) {
+    private Map<Integer, Set<String>> entriesByKey(List<KeyValue<byte[], byte[]>> changeLog, long startTime) {
         HashMap<Integer, Set<String>> entriesByKey = new HashMap<>();
 
-        for (Entry<byte[], byte[]> entry : changeLog) {
-            long timestamp = WindowStoreUtil.timestampFromBinaryKey(entry.key());
-            Integer key = WindowStoreUtil.keyFromBinaryKey(entry.key(), serdes);
-            String value = entry.value() == null ? null : serdes.valueFrom(entry.value());
+        for (KeyValue<byte[], byte[]> entry : changeLog) {
+            long timestamp = WindowStoreUtil.timestampFromBinaryKey(entry.key);
+            Integer key = WindowStoreUtil.keyFromBinaryKey(entry.key, serdes);
+            String value = entry.value == null ? null : serdes.valueFrom(entry.value);
 
             Set<String> entries = entriesByKey.get(key);
             if (entries == null) {
