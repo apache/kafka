@@ -31,6 +31,13 @@ import org.apache.kafka.streams.state.Serdes;
 
 import java.util.List;
 
+/**
+ * Metered KeyValueStore wrapper is used for both recording operation metrics and Kafka based logging purposes, and hence its
+ * inner KeyValueStore implementation do not need to provide its own logging functionality.
+ *
+ * @param <K>
+ * @param <V>
+ */
 public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     protected final KeyValueStore<K, V> inner;

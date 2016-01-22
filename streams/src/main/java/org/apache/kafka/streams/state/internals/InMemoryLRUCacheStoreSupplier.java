@@ -69,7 +69,7 @@ public class InMemoryLRUCacheStoreSupplier<K, V> implements StateStoreSupplier {
         return store;
     }
 
-    private static interface EldestEntryRemovalListener<K, V> {
+    public static interface EldestEntryRemovalListener<K, V> {
         public void apply(K key, V value);
     }
 
@@ -100,8 +100,10 @@ public class InMemoryLRUCacheStoreSupplier<K, V> implements StateStoreSupplier {
             };
         }
 
-        protected void whenEldestRemoved(EldestEntryRemovalListener<K, V> listener) {
+        public MemoryLRUCache<K, V> whenEldestRemoved(EldestEntryRemovalListener<K, V> listener) {
             this.listener = listener;
+
+            return this;
         }
 
         @Override
@@ -161,6 +163,10 @@ public class InMemoryLRUCacheStoreSupplier<K, V> implements StateStoreSupplier {
         @Override
         public void close() {
             // do-nothing
+        }
+
+        public void clearKeys() {
+            keys.clear();
         }
 
         private static class CacheIterator<K, V> implements KeyValueIterator<K, V> {

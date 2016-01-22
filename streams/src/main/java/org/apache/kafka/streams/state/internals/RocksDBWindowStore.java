@@ -113,6 +113,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private final Segment[] segments;
     private final Serdes<K, V> serdes;
     private final SimpleDateFormat formatter;
+    private final StoreChangeLogger.ValueGetter<byte[], byte[]> getter;
 
     private ProcessorContext context;
     private int seqnum = 0;
@@ -134,7 +135,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
         this.getter = new StoreChangeLogger.ValueGetter<byte[], byte[]>() {
             public byte[] get(byte[] key) {
-                return inner.getInternal(key);
+                return getInternal(key);
             }
         };
 
@@ -197,6 +198,9 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     @Override
     public void put(K key, V value) {
         putAndReturnInternalKey(key, value, USE_CURRENT_TIMESTAMP);
+
+        if (loggingEnabled)
+            changeLogger.logChange(this.getter);
     }
 
     @Override
@@ -302,15 +306,16 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
     }
 
-    public long segmentId(long timestamp) {
+    private long segmentId(long timestamp) {
         return timestamp / segmentInterval;
     }
 
+    // this method is defined public since it is used for unit tests
     public String directorySuffix(long segmentId) {
         return formatter.format(new Date(segmentId * segmentInterval));
     }
 
-    // this method is used by a test
+    // this method is defined public since it is used for unit tests
     public Set<Long> segmentIds() {
         HashSet<Long> segmentIds = new HashSet<>();
 
