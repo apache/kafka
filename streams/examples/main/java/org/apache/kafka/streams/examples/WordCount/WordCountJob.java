@@ -92,9 +92,9 @@ public class WordCountJob {
                         ObjectNode jNode = JsonNodeFactory.instance.objectNode();
 
                         jNode.put("word", key.value())
-                                .put("count", value);
+                             .put("count", value);
 
-                        return new KeyValue<String, JsonNode>("", jNode);
+                        return new KeyValue<String, JsonNode>(null, jNode);
                     }
                 });
 

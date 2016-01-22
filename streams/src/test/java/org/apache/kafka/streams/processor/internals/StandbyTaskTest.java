@@ -93,6 +93,7 @@ public class StandbyTaskTest {
                 setProperty(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
                 setProperty(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
                 setProperty(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "org.apache.kafka.test.MockTimestampExtractor");
+                setProperty(StreamingConfig.JOB_ID_CONFIG, jobId);
                 setProperty(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
                 setProperty(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
                 setProperty(StreamingConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath());
@@ -199,7 +200,7 @@ public class StandbyTaskTest {
 
             task.close();
 
-            File taskDir = new File(baseDir, taskId.toString());
+            File taskDir = new File(baseDir, jobId + "-" + taskId.toString());
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
             Map<TopicPartition, Long> offsets = checkpoint.read();
 
@@ -297,7 +298,7 @@ public class StandbyTaskTest {
 
             task.close();
 
-            File taskDir = new File(baseDir, taskId.toString());
+            File taskDir = new File(baseDir, jobId + "-" + taskId.toString());
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
             Map<TopicPartition, Long> offsets = checkpoint.read();
 

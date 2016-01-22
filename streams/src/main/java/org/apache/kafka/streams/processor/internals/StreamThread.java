@@ -452,14 +452,15 @@ public class StreamThread extends Thread {
             if (stateDirs != null) {
                 for (File dir : stateDirs) {
                     try {
-                        TaskId id = TaskId.parse(dir.getName());
+                        String dirName = dir.getName();
+                        TaskId id = TaskId.parse(dirName.substring(dirName.lastIndexOf("-") + 1));
 
                         // try to acquire the exclusive lock on the state directory
                         FileLock directoryLock = null;
                         try {
                             directoryLock = ProcessorStateManager.lockStateDirectory(dir);
                             if (directoryLock != null) {
-                                log.info("Deleting obsolete state directory {} after delayed {} ms.", dir.getAbsolutePath(), cleanTimeMs);
+                                log.info("Deleting obsolete state directory {} for task {} after delayed {} ms.", dir.getAbsolutePath(), id, cleanTimeMs);
                                 Utils.delete(dir);
                             }
                         } catch (IOException e) {
