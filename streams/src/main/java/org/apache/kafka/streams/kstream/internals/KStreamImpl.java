@@ -26,8 +26,10 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -247,8 +249,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public void to(String topic) {
 
+        if (keyType == null)
+            throw new InsufficientTypeInfoException();
+
         Serializer<K> keySerializer;
-        Type windowedRawKeyType = getWindowedRawKeyType(keyType);
+        Type windowedRawKeyType = Resolver.getWindowedRawKeyType(keyType);
         if (windowedRawKeyType != null) {
             keySerializer = new WindowedSerializer(getSerializer(windowedRawKeyType));
         } else {
@@ -275,7 +280,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         topology.addProcessor(name, new KStreamTransform<>(transformerSupplier), this.name);
         topology.connectProcessorAndStateStores(name, stateStoreNames);
 
-        return new KStreamImpl<>(topology, name, null, null, null);
+        Type mappedType = resolveReturnType(Transformer.class, "transform", transformerSupplier);
+
+        return new KStreamImpl<>(topology, name, null, getKeyTypeFromKeyValueType(mappedType), getValueTypeFromKeyValueType(mappedType));
     }
 
     @Override
@@ -285,7 +292,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         topology.addProcessor(name, new KStreamTransformValues<>(valueTransformerSupplier), this.name);
         topology.connectProcessorAndStateStores(name, stateStoreNames);
 
-        return new KStreamImpl<>(topology, name, sourceNodes, keyType, null);
+        return new KStreamImpl<>(topology, name, sourceNodes, keyType,
+                resolveReturnType(ValueTransformer.class, "transform", valueTransformerSupplier));
     }
 
     @Override

@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.type.internal.Resolver;
 import org.apache.kafka.streams.kstream.type.TypeException;
 import org.apache.kafka.streams.processor.TopologyException;
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.HashSet;
 import java.util.Set;
@@ -103,13 +104,6 @@ public abstract class AbstractStream<K> {
         return topology.getDeserializer(type);
     }
 
-    public static Type getWindowedRawKeyType(Type type) {
-        if (type == null)
-            throw new InsufficientTypeInfoException();
-
-        return Resolver.getWindowedRawKeyType(type);
-    }
-
     public static Type getKeyTypeFromKeyValueType(Type type) {
         return (type != null) ? Resolver.getKeyTypeFromKeyValueType(type) : null;
     }
@@ -153,7 +147,19 @@ public abstract class AbstractStream<K> {
 
             Type implementationType = Resolver.resolveReturnType(supplierInterface, supplier);
 
-            return Resolver.resolveReturnType(interfaceClass, methodName, implementationType);
+            Method[] methods = interfaceClass.getDeclaredMethods();
+
+            Method method = null;
+            for (Method m : methods) {
+                if (methodName.equals(m.getName())) {
+                    method = m;
+                    break;
+                }
+            }
+            if (method == null)
+                return null;
+
+            return Resolver.resolveReturnType(method, implementationType);
 
         } catch (TypeException ex) {
             return null;

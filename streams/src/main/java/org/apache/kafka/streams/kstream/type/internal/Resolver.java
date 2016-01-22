@@ -33,7 +33,8 @@ public class Resolver {
 
     /**
      * Resolves the type. If something cannot be resolved due to insufficient information, TypeException will be thrown.
-     * @param type
+     *
+     * @param type the type to resolve
      * @return Type
      * @throws TypeException
      */
@@ -97,11 +98,11 @@ public class Resolver {
         }
     }
 
-    private static Type[] resolve(Type[] typeArgs, Map<TypeVariable, Type> env) throws TypeException {
-        Type[] resolved = new Type[typeArgs.length];
+    private static Type[] resolve(Type[] types, Map<TypeVariable, Type> env) throws TypeException {
+        Type[] resolved = new Type[types.length];
 
-        for (int i = 0; i < typeArgs.length; i++) {
-            resolved[i] = resolve(typeArgs[i], env);
+        for (int i = 0; i < types.length; i++) {
+            resolved[i] = resolve(types[i], env);
         }
 
         return resolved;
@@ -109,9 +110,9 @@ public class Resolver {
 
     /**
      * Resolves the return type of the function represented by the functionalInterface
-     * @param functionalInterface
-     * @param function
-     * @return Type, null if not resolved
+     * @param functionalInterface the Class object of the functional interface
+     * @param function the instance of the functional interface
+     * @return Type
      * @throws TypeException
      */
     public static Type resolveReturnType(Class functionalInterface, Object function) throws TypeException {
@@ -124,33 +125,22 @@ public class Resolver {
         return resolve(methods[0].getGenericReturnType(), env);
     }
 
-    private static Map<TypeVariable, Type> resolveTypeArguments(Class interfaceClass, Type implementationType) throws TypeException {
-        return resolveTypeArguments(interfaceClass, implementationType, Collections.<TypeVariable, Type>emptyMap());
-    }
-
     /**
-     * Resolves the return type of the method of implementationType implementing interfaceClass
-     * @param interfaceClass
-     * @param implementationType
-     * @return Type, null if not resolved
+     * Resolves the return type of the method implemented by implementationType
+     * @param method the method
+     * @param implementationType the type that implements the method
+     * @return Type
      * @throws TypeException
      */
-    public static Type resolveReturnType(Class interfaceClass, String methodName, Type implementationType) throws TypeException {
-        Method[] methods = interfaceClass.getDeclaredMethods();
-
-        Method method = null;
-        for (Method m : methods) {
-            if (methodName.equals(m.getName())) {
-                method = m;
-                break;
-            }
-        }
-        if (method == null)
-            throw new TypeException("internal error: failed to determine the method");
-
-        Map<TypeVariable, Type> env = resolveTypeArguments(interfaceClass, implementationType);
+    public static Type resolveReturnType(Method method, Type implementationType) throws TypeException {
+        Map<TypeVariable, Type> env = resolveTypeArguments(method.getDeclaringClass(), implementationType);
 
         return resolve(method.getGenericReturnType(), env);
+    }
+
+    // resolve type arguments of the interfaceClass from the implementationType
+    private static Map<TypeVariable, Type> resolveTypeArguments(Class interfaceClass, Type implementationType) throws TypeException {
+        return resolveTypeArguments(interfaceClass, implementationType, Collections.<TypeVariable, Type>emptyMap());
     }
 
     // resolve type arguments of the interfaceClass from the implementationType
@@ -234,17 +224,14 @@ public class Resolver {
     /**
      * Resolves the element type of iterableType
      * @param iterableType
-     * @return Type, null if not resolved
+     * @return Type
      * @throws TypeException
      */
     public static Type resolveElementTypeFromIterableType(Type iterableType) throws TypeException {
         if (iterableType != null) {
             Map<TypeVariable, Type> typeArgs = resolveTypeArguments(Iterable.class, iterableType);
 
-            if (typeArgs == null)
-                return null;
-
-            return typeArgs.get(Iterable.class.getTypeParameters()[0]);
+            return resolve(Iterable.class.getTypeParameters()[0], typeArgs);
         } else {
             return null;
         }

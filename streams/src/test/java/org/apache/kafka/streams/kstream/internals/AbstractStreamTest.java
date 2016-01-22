@@ -25,6 +25,8 @@ import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.type.Types;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.junit.Test;
@@ -57,6 +59,31 @@ public class AbstractStreamTest {
     private static class TestTransformerSupplier implements TransformerSupplier<Integer, Long, KeyValue<String, Short>> {
         public TestTransformer get() {
             return new TestTransformer();
+        }
+    };
+
+    private static class TestValueTransformer implements ValueTransformer<Long, String> {
+        @Override
+        public void init(ProcessorContext context){
+        }
+
+        @Override
+        public String transform(Long value) {
+            return null;
+        }
+
+        @Override
+        public void punctuate(long timestamp) {
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    private static class TestValueTransformerSupplier implements ValueTransformerSupplier<Long, String> {
+        public TestValueTransformer get() {
+            return new TestValueTransformer();
         }
     };
 
@@ -107,6 +134,12 @@ public class AbstractStreamTest {
         returnType = AbstractStream.resolveReturnType(Transformer.class, "transform", transformerSupplier);
 
         assertEquals(Types.type(KeyValue.class, String.class, Short.class), returnType);
+
+        TestValueTransformerSupplier valueTransformerSupplier = new TestValueTransformerSupplier();
+
+        returnType = AbstractStream.resolveReturnType(ValueTransformer.class, "transform", valueTransformerSupplier);
+
+        assertEquals((Type) String.class, returnType);
     }
 
 }
