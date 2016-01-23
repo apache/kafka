@@ -64,7 +64,8 @@ object AclCommand {
       val props = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala.map(_.split("="))
       props.foreach(pair => {
         if (pair.length != 2) {
-          println(s"Skipping invalid authorizer property ${pair.deep.mkString(",")}")
+          println(s"Invalid authorizer property ${pair.deep.mkString(",")}")
+          System.exit(-1)
         } else {
           authorizerProperties += (pair(0).trim -> pair(1).trim)
         }
