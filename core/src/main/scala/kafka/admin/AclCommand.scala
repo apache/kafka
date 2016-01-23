@@ -62,14 +62,12 @@ object AclCommand {
     var authorizerProperties = Map.empty[String, Any]
     if (opts.options.has(opts.authorizerPropertiesOpt)) {
       val props = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala.map(_.split("="))
-      props.foreach(pair => {
-        if (pair.length != 2) {
-          println(s"Invalid authorizer property ${pair.deep.mkString(",")}")
+      props.foreach {
+        case Array(key: String, value: String) => authorizerProperties += (key.trim -> value.trim)
+        case array =>
+          println(s"Invalid authorizer property ${array.mkString(",")}")
           System.exit(-1)
-        } else {
-          authorizerProperties += (pair(0).trim -> pair(1).trim)
-        }
-      })
+      }
     }
 
     val authorizerClass = opts.options.valueOf(opts.authorizerOpt)
