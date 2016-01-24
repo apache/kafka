@@ -149,10 +149,10 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
         -----END CERTIFICATE-----
         subject=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=Sriharsha Chintalapani
         issuer=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=kafka/emailAddress=test@test.com</pre>
-        If the certificate does not show up or if there are any other error messages than your keystore is not setup properly.</li>
+        If the certificate does not show up or if there are any other error messages then your keystore is not setup properly.</li>
 
     <li><h4><a id="security_configclients" href="#security_configclients">Configuring Kafka Clients</a></h4>
-        SSL is supported only for the new Kafka Producer and Consumer, the older API is not supported. The configs for SSL will be same for both producer and consumer.<br>
+        SSL is supported only for the new Kafka Producer and Consumer, the older API is not supported. The configs for SSL will be the same for both producer and consumer.<br>
         If client authentication is not required in the broker, then the following is a minimal configuration example:
         <pre>
         security.protocol=SSL
