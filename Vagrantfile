@@ -62,12 +62,12 @@ end
 # stopped, skipping the update in that case since it's impossible to update
 # nodes in that state.
 Object.const_get("VagrantPlugins").const_get("HostManager").const_get("HostsFile").class_eval do
-  alias_method :old_update_guest, :update_guest
   def update_guest(machine)
     state_id = machine.state.id
     return if state_id == :not_created || state_id == :stopped
     old_update_guest(machine)
   end
+  alias_method :old_update_guest, :update_guest
 end
 
 # TODO(ksweeney): RAM requirements are not empirical and can probably be significantly lowered.
