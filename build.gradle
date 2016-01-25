@@ -17,7 +17,7 @@ import org.ajoberstar.grgit.Grgit
 
 buildscript {
   repositories {
-    mavenCentral()
+    maven {url 'http://repo1.maven.org/maven2'}
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
 
@@ -42,7 +42,7 @@ allprojects {
   apply plugin: 'idea'
   apply plugin: 'eclipse'
   repositories {
-    mavenCentral()
+    maven {url 'http://repo1.maven.org/maven2'}
   }
 }
 

@@ -256,7 +256,8 @@ public class DistributedHerder implements Herder, Runnable {
                 try {
                     worker.stopConnector(connectorName);
                 } catch (ConnectException e) {
-                    log.error("failed to stop connector " + connectorName, e);
+                    log.error("Failed to stop connector " + connectorName, e);
+                    worker.tryStartConnector(connectorName);
                 }
                 // The update may be a deletion, so verify we actually need to restart the connector
                 if (remains) {
@@ -290,6 +291,7 @@ public class DistributedHerder implements Herder, Runnable {
                     worker.stopConnector(connName);
                 } catch (Throwable t) {
                     log.error("Failed to shut down connector " + connName, t);
+                    worker.tryStartConnector(connName);
                 }
             }
             for (ConnectorTaskId taskId : new HashSet<>(worker.taskIds())) {
@@ -297,6 +299,7 @@ public class DistributedHerder implements Herder, Runnable {
                     worker.stopTask(taskId);
                 } catch (Throwable t) {
                     log.error("Failed to shut down task " + taskId, t);
+                    worker.tryStartTask(taskId);
                 }
             }
 
@@ -902,7 +905,8 @@ public class DistributedHerder implements Herder, Runnable {
                         try {
                             worker.stopConnector(connectorName);
                         } catch (ConnectException e) {
-                            log.error("failed to stop connector " + connectorName);
+                            log.error("Failed to stop connector " + connectorName);
+                            worker.tryStartConnector(connectorName);
                         }
                     }
                     // TODO: We need to at least commit task offsets, but if we could commit offsets & pause them instead of
@@ -913,7 +917,8 @@ public class DistributedHerder implements Herder, Runnable {
                         try {
                             worker.stopTask(taskId);
                         } catch (ConnectException e) {
-                            log.error("failed to stop task " + taskId);
+                            log.error("Failed to stop task " + taskId);
+                            worker.tryStartTask(taskId);
                         }
                     }
 
