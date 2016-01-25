@@ -213,13 +213,12 @@ object AdminClient {
   def create(config: AdminConfig): AdminClient = {
     val time = new SystemTime
     val metrics = new Metrics(time)
-    val metadata = new Metadata
     val channelBuilder = ClientUtils.createChannelBuilder(config.values())
 
     val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
     val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls)
     val bootstrapCluster = Cluster.bootstrap(brokerAddresses)
-    metadata.update(bootstrapCluster, 0)
+    val metadata = new Metadata(bootstrapCluster, 0)
 
     val selector = new Selector(
       DefaultConnectionMaxIdleMs,

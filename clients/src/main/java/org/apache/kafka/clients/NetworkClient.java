@@ -53,10 +53,10 @@ public class NetworkClient implements KafkaClient {
 
     private final MetadataUpdater metadataUpdater;
 
-    /* a list of bootstrap nodes */
-    private final List<Node> bootstrapNodes;
+    /* a list of initial (bootstrap) nodes */
+    private final List<Node> initialNodes;
 
-    /* random offset into bootstrapNodes list */
+    /* random offset into initialNodes list */
     private final Random randOffset;
 
     /* the state of each node's connection */
@@ -139,7 +139,7 @@ public class NetworkClient implements KafkaClient {
         this.correlation = 0;
         this.randOffset = new Random();
         this.requestTimeoutMs = requestTimeoutMs;
-        this.bootstrapNodes = this.metadataUpdater.fetchNodes();
+        this.initialNodes = this.metadataUpdater.fetchNodes();
         this.time = time;
     }
 
@@ -371,11 +371,11 @@ public class NetworkClient implements KafkaClient {
         }
 
         // if we found no node in the current list, try one from the bootstrap nodes
-        if (found == null && bootstrapNodes.size() > 0) {
-            offset = randOffset.nextInt(bootstrapNodes.size());
-            for (int i = 0; i < bootstrapNodes.size(); i++) {
-                int idx = (offset + i) % bootstrapNodes.size();
-                Node node = bootstrapNodes.get(idx);
+        if (found == null && initialNodes.size() > 0) {
+            offset = randOffset.nextInt(initialNodes.size());
+            for (int i = 0; i < initialNodes.size(); i++) {
+                int idx = (offset + i) % initialNodes.size();
+                Node node = initialNodes.get(idx);
                 log.debug("No node found. Trying previously-seen node with ID {}", node.id());
                 if (!this.connectionStates.isBlackedOut(node.idString(), now)) {
                     found = node;

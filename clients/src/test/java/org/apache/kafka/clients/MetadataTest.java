@@ -38,7 +38,7 @@ public class MetadataTest {
 
     private long refreshBackoffMs = 100;
     private long metadataExpireMs = 1000;
-    private Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs);
+    private Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, Cluster.empty(), 0L);
     private AtomicReference<String> backgroundError = new AtomicReference<String>();
 
     @After
