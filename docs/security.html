@@ -149,10 +149,10 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
         -----END CERTIFICATE-----
         subject=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=Sriharsha Chintalapani
         issuer=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=kafka/emailAddress=test@test.com</pre>
-        If the certificate does not show up or if there are any other error messages than your keystore is not setup properly.</li>
+        If the certificate does not show up or if there are any other error messages then your keystore is not setup properly.</li>
 
     <li><h4><a id="security_configclients" href="#security_configclients">Configuring Kafka Clients</a></h4>
-        SSL is supported only for the new Kafka Producer and Consumer, the older API is not supported. The configs for SSL will be same for both producer and consumer.<br>
+        SSL is supported only for the new Kafka Producer and Consumer, the older API is not supported. The configs for SSL will be the same for both producer and consumer.<br>
         If client authentication is not required in the broker, then the following is a minimal configuration example:
         <pre>
         security.protocol=SSL
@@ -283,6 +283,9 @@ One can also add super users in broker.properties like the following (note that 
 By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting a customized PrincipalBuilder in broker.properties like the following.
 <pre>principal.builder.class=CustomizedPrincipalBuilderClass</pre>
 By default, the SASL user name will be the primary part of the Kerberos principal. One can change that by setting <code>sasl.kerberos.principal.to.local.rules</code> to a customized rule in broker.properties.
+The format of <code>sasl.kerberos.principal.to.local.rules</code> is a list where each rule works in the same way as the auth_to_local in <a href="http://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html">Kerberos configuration file (krb5.conf)</a>. Each rules starts with RULE: and contains an expression in the format [n:string](regexp)s/pattern/replacement/g. See the kerberos documentation for more details. An example of adding a rule to properly translate user@MYDOMAIN.COM to user while also keeping the default rule in place is:
+<pre>sasl.kerberos.principal.to.local.rules=RULE:[1:$1@$0](.*@MYDOMAIN.COM)s/@.*//,DEFAULT</pre>
+
 <h4><a id="security_authz_cli" href="#security_authz_cli">Command Line Interface</a></h4>
 Kafka Authorization management CLI can be found under bin directory with all the other CLIs. The CLI script is called <b>kafka-acls.sh</b>. Following lists all the options that the script supports:
 <p></p>

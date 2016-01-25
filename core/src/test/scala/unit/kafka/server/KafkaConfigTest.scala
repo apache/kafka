@@ -408,7 +408,7 @@ class KafkaConfigTest {
         case KafkaConfig.RequestTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
-          
+
         case KafkaConfig.PortProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.HostNameProp => // ignore string
         case KafkaConfig.AdvertisedHostNameProp => //ignore string
@@ -526,6 +526,7 @@ class KafkaConfigTest {
     defaults.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
     // For ZkConnectionTimeoutMs
     defaults.put(KafkaConfig.ZkSessionTimeoutMsProp, "1234")
+    defaults.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
     defaults.put(KafkaConfig.MaxReservedBrokerIdProp, "1")
     defaults.put(KafkaConfig.BrokerIdProp, "1")
     defaults.put(KafkaConfig.HostNameProp, "127.0.0.1")
@@ -542,6 +543,7 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(defaults)
     Assert.assertEquals("127.0.0.1:2181", config.zkConnect)
     Assert.assertEquals(1234, config.zkConnectionTimeoutMs)
+    Assert.assertEquals(false, config.brokerIdGenerationEnable)
     Assert.assertEquals(1, config.maxReservedBrokerId)
     Assert.assertEquals(1, config.brokerId)
     Assert.assertEquals("127.0.0.1", config.hostName)

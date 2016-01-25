@@ -88,6 +88,7 @@ public class Compressor {
 
     public long writtenUncompressed;
     public long numRecords;
+    public float compressionRate;
 
     public Compressor(ByteBuffer buffer, CompressionType type, int blockSize) {
         this.type = type;
@@ -95,6 +96,7 @@ public class Compressor {
 
         this.numRecords = 0;
         this.writtenUncompressed = 0;
+        this.compressionRate = 1;
 
         if (type != CompressionType.NONE) {
             // for compressed records, leave space for the header and the shallow message metadata
@@ -116,11 +118,7 @@ public class Compressor {
     }
 
     public double compressionRate() {
-        ByteBuffer buffer = bufferStream.buffer();
-        if (this.writtenUncompressed == 0)
-            return 1.0;
-        else
-            return (double) buffer.position() / this.writtenUncompressed;
+        return compressionRate;
     }
 
     public void close() {
@@ -151,7 +149,7 @@ public class Compressor {
             buffer.position(pos);
 
             // update the compression ratio
-            float compressionRate = (float) buffer.position() / this.writtenUncompressed;
+            this.compressionRate = (float) buffer.position() / this.writtenUncompressed;
             TYPE_TO_RATE[type.id] = TYPE_TO_RATE[type.id] * COMPRESSION_RATE_DAMPING_FACTOR +
                 compressionRate * (1 - COMPRESSION_RATE_DAMPING_FACTOR);
         }

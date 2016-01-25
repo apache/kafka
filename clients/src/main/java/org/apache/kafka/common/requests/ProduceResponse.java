@@ -43,7 +43,7 @@ public class ProduceResponse extends AbstractRequestResponse {
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     public static final long INVALID_OFFSET = -1L;
-    private static final int DEFAULT_THROTTLE_TIME = 0;
+    public static final int DEFAULT_THROTTLE_TIME = 0;
 
     /**
      * Possible error code:

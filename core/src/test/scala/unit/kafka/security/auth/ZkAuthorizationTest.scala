@@ -118,7 +118,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
   def testZkMigration() {
     val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false) 
     try {
-      testMigration(unsecureZkUtils, zkUtils)
+      testMigration(zkConnect, unsecureZkUtils, zkUtils)
     } finally {
       unsecureZkUtils.close()
     }
@@ -132,7 +132,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
   def testZkAntiMigration() {
     val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
     try {
-      testMigration(zkUtils, unsecureZkUtils)
+      testMigration(zkConnect, zkUtils, unsecureZkUtils)
     } finally {
       unsecureZkUtils.close()
     }
@@ -169,11 +169,12 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
    */
   @Test
   def testChroot {
+    val zkUrl = zkConnect + "/kafka"
     zkUtils.createPersistentPath("/kafka")
-    val unsecureZkUtils = ZkUtils(zkConnect + "/kafka", 6000, 6000, false)
-    val secureZkUtils = ZkUtils(zkConnect + "/kafka", 6000, 6000, true)
+    val unsecureZkUtils = ZkUtils(zkUrl, 6000, 6000, false)
+    val secureZkUtils = ZkUtils(zkUrl, 6000, 6000, true)
     try {
-      testMigration(unsecureZkUtils, secureZkUtils)
+      testMigration(zkUrl, unsecureZkUtils, secureZkUtils)
     } finally {
       unsecureZkUtils.close()
       secureZkUtils.close()
@@ -181,11 +182,11 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
   }
 
   /**
-   * Exercises the migration tool. It is used by two test cases:
-   * testZkMigration and testZkAntiMigration.
+   * Exercises the migration tool. It is used in these test cases:
+   * testZkMigration, testZkAntiMigration, testChroot.
    */
-  private def testMigration(firstZk: ZkUtils, secondZk: ZkUtils) {
-    info(s"zkConnect string: $zkConnect")
+  private def testMigration(zkUrl: String, firstZk: ZkUtils, secondZk: ZkUtils) {
+    info(s"zkConnect string: $zkUrl")
     for (path <- firstZk.securePersistentZkPaths) {
       info(s"Creating $path")
       firstZk.makeSurePersistentPathExists(path)
@@ -193,11 +194,19 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
       // traversal of the data tree
       firstZk.createPersistentPath(s"$path/fpjwashere", "")
     }
+    // Getting security option to determine how to verify ACLs.
+    // Additionally, we create the consumers znode (not in
+    // securePersistentZkPaths) to make sure that we don't
+    // add ACLs to it.
     val secureOpt: String  = secondZk.isSecure match {
-      case true => "secure"
-      case false => "unsecure"
+      case true =>
+        firstZk.createPersistentPath(ZkUtils.ConsumersPath)
+        "secure"
+      case false =>
+        secondZk.createPersistentPath(ZkUtils.ConsumersPath)
+        "unsecure"
     }
-    ZkSecurityMigrator.run(Array(s"--zookeeper.acl=$secureOpt", s"--zookeeper.connect=$zkConnect"))
+    ZkSecurityMigrator.run(Array(s"--zookeeper.acl=$secureOpt", s"--zookeeper.connect=$zkUrl"))
     info("Done with migration")
     for (path <- secondZk.securePersistentZkPaths) {
       val listParent = (secondZk.zkConnection.getAcl(path)).getKey
@@ -207,6 +216,9 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
       val listChild = (secondZk.zkConnection.getAcl(childPath)).getKey
       assertTrue(childPath, isAclCorrect(listChild, secondZk.isSecure))
     }
+    // Check consumers path.
+    val consumersAcl = (firstZk.zkConnection.getAcl(ZkUtils.ConsumersPath)).getKey
+    assertTrue(ZkUtils.ConsumersPath, isAclCorrect(consumersAcl, false))
   }
 
   /**
