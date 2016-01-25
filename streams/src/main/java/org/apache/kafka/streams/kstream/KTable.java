@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 
 import java.lang.reflect.Type;
@@ -145,10 +143,6 @@ public interface KTable<K, V> {
     <K1, V1> KTable<K1, V1> reduce(Reducer<V1> addReducer,
                                    Reducer<V1> removeReducer,
                                    KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                   Serializer<K1> keySerializer,
-                                   Serializer<V1> valueSerializer,
-                                   Deserializer<K1> keyDeserializer,
-                                   Deserializer<V1> valueDeserializer,
                                    String name);
 
     /**
@@ -163,11 +157,5 @@ public interface KTable<K, V> {
      */
     <K1, V1, T> KTable<K1, T> aggregate(Aggregator<K1, V1, T> aggregator,
                                         KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                        Serializer<K1> keySerializer,
-                                        Serializer<V1> valueSerializer,
-                                        Serializer<T> aggValueSerializer,
-                                        Deserializer<K1> keyDeserializer,
-                                        Deserializer<V1> valueDeserializer,
-                                        Deserializer<T> aggValueDeserializer,
                                         String name);
 }

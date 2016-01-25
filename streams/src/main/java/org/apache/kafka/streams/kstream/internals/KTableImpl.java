@@ -250,13 +250,19 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public <K1, V1, T> KTable<K1, T> aggregate(Aggregator<K1, V1, T> aggregator,
                                                KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                               Serializer<K1> keySerializer,
-                                               Serializer<V1> valueSerializer,
-                                               Serializer<T> aggValueSerializer,
-                                               Deserializer<K1> keyDeserializer,
-                                               Deserializer<V1> valueDeserializer,
-                                               Deserializer<T> aggValueDeserializer,
                                                String name) {
+
+        Type mappedType = resolveReturnType(selector);
+        Type selectKeyType = getKeyTypeFromKeyValueType(mappedType);
+        Type selectValueType = getValueTypeFromKeyValueType(mappedType);
+        Type aggValueType = resolveReturnType(Aggregator.class, "initialValue", aggregator);
+
+        Serializer<K1> keySerializer = getSerializer(selectKeyType);
+        Serializer<V1> valueSerializer = getSerializer(selectValueType);
+        Serializer<T> aggValueSerializer = getSerializer(aggValueType);
+        Deserializer<K1> keyDeserializer = getDeserializer(selectKeyType);
+        Deserializer<V1> valueDeserializer = getDeserializer(selectValueType);
+        Deserializer<T> aggValueDeserializer = getDeserializer(aggValueType);
 
         String selectName = topology.newName(SELECT_NAME);
         String sinkName = topology.newName(KStreamImpl.SINK_NAME);
@@ -301,11 +307,20 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public <K1, V1> KTable<K1, V1> reduce(Reducer<V1> addReducer,
                                           Reducer<V1> removeReducer,
                                           KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                          Serializer<K1> keySerializer,
-                                          Serializer<V1> valueSerializer,
-                                          Deserializer<K1> keyDeserializer,
-                                          Deserializer<V1> valueDeserializer,
                                           String name) {
+
+        Type addType = resolveReturnType(addReducer);
+        Type removeType = resolveReturnType(removeReducer);
+        Type mappedType = resolveReturnType(KeyValueMapper.class);
+        Type selectKeyType = getKeyTypeFromKeyValueType(mappedType);
+        Type selectValueType = getValueTypeFromKeyValueType(mappedType);
+
+        ensureConsistentTypes(addType, removeType, selectValueType);
+
+        Serializer<K1> keySerializer = getSerializer(selectKeyType);
+        Serializer<V1> valueSerializer = getSerializer(selectValueType);
+        Deserializer<K1> keyDeserializer = getDeserializer(selectKeyType);
+        Deserializer<V1> valueDeserializer = getDeserializer(selectValueType);
 
         String selectName = topology.newName(SELECT_NAME);
         String sinkName = topology.newName(KStreamImpl.SINK_NAME);

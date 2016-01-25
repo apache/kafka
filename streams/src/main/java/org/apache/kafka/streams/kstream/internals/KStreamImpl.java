@@ -280,7 +280,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         topology.addProcessor(name, new KStreamTransform<>(transformerSupplier), this.name);
         topology.connectProcessorAndStateStores(name, stateStoreNames);
 
-        Type mappedType = resolveReturnType(Transformer.class, "transform", transformerSupplier);
+        Type mappedType = resolveReturnTypeFromSupplier(Transformer.class, "transform", transformerSupplier);
 
         return new KStreamImpl<>(topology, name, null, getKeyTypeFromKeyValueType(mappedType), getValueTypeFromKeyValueType(mappedType));
     }
@@ -293,7 +293,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         topology.connectProcessorAndStateStores(name, stateStoreNames);
 
         return new KStreamImpl<>(topology, name, sourceNodes, keyType,
-                resolveReturnType(ValueTransformer.class, "transform", valueTransformerSupplier));
+                resolveReturnTypeFromSupplier(ValueTransformer.class, "transform", valueTransformerSupplier));
     }
 
     @Override

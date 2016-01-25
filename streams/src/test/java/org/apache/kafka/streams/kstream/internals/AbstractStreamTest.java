@@ -131,13 +131,13 @@ public class AbstractStreamTest {
 
         TestTransformerSupplier transformerSupplier = new TestTransformerSupplier();
 
-        returnType = AbstractStream.resolveReturnType(Transformer.class, "transform", transformerSupplier);
+        returnType = AbstractStream.resolveReturnTypeFromSupplier(Transformer.class, "transform", transformerSupplier);
 
         assertEquals(Types.type(KeyValue.class, String.class, Short.class), returnType);
 
         TestValueTransformerSupplier valueTransformerSupplier = new TestValueTransformerSupplier();
 
-        returnType = AbstractStream.resolveReturnType(ValueTransformer.class, "transform", valueTransformerSupplier);
+        returnType = AbstractStream.resolveReturnTypeFromSupplier(ValueTransformer.class, "transform", valueTransformerSupplier);
 
         assertEquals((Type) String.class, returnType);
     }

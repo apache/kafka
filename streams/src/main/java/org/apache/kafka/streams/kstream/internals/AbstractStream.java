@@ -19,6 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.InconsistentTypeInfoException;
 import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -133,7 +135,28 @@ public abstract class AbstractStream<K> {
         }
     }
 
-    public static Type resolveReturnType(Class interfaceClass, String methodName, Object supplier) {
+    public static Type resolveReturnType(Class interfaceClass, String methodName, Object implementation) {
+        try {
+            Method[] methods = interfaceClass.getDeclaredMethods();
+
+            Method method = null;
+            for (Method m : methods) {
+                if (methodName.equals(m.getName())) {
+                    method = m;
+                    break;
+                }
+            }
+            if (method == null)
+                return null;
+
+            return Resolver.resolveReturnType(method, implementation.getClass());
+
+        } catch (TypeException ex) {
+            return null;
+        }
+    }
+
+    public static Type resolveReturnTypeFromSupplier(Class interfaceClass, String methodName, Object supplier) {
         try {
             Class supplierInterface;
 
@@ -141,6 +164,8 @@ public abstract class AbstractStream<K> {
                 supplierInterface = TransformerSupplier.class;
             } else if (interfaceClass.equals(ValueTransformer.class)) {
                 supplierInterface = ValueTransformerSupplier.class;
+            } else if (interfaceClass.equals(Aggregator.class)) {
+                supplierInterface = Aggregator.class;
             } else {
                 return null;
             }
@@ -171,6 +196,19 @@ public abstract class AbstractStream<K> {
             return Resolver.resolveElementTypeFromIterableType(iterableType);
         } catch (TypeException ex) {
             return null;
+        }
+    }
+
+    public static void ensureConsistentTypes(Type... types) {
+        Type type = null;
+
+        for (Type t : types) {
+            if (type == null) {
+                type = t;
+            } else {
+                if (type != t)
+                    throw new InconsistentTypeInfoException(types);
+            }
         }
     }
 

@@ -70,14 +70,8 @@ public class KTableAggregateTest {
             String topic1 = "topic1";
 
             KTable<String, String> table1 = builder.table(String.class, String.class, topic1);
-            KTable<String, String> table2 = table1.<String, String, String>aggregate(new StringCanonizer(),
-                    new NoOpKeyValueMapper<String, String>(),
-                    strSerializer,
-                    strSerializer,
-                    strSerializer,
-                    strDeserializer,
-                    strDeserializer,
-                    strDeserializer,
+            KTable<String, String> table2 = table1.aggregate(new StringCanonizer(),
+                    new NoOpKeyValueMapper<String, String>() { }, // capture types by creating an anonymous subclass
                     "topic1-Canonized");
 
             MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
