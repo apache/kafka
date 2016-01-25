@@ -65,8 +65,7 @@ object AclCommand {
       props.foreach {
         case Array(key: String, value: String) => authorizerProperties += (key.trim -> value.trim)
         case array =>
-          println(s"Invalid authorizer property ${array.mkString(",")}")
-          System.exit(-1)
+          throw new IllegalArgumentException(s"Invalid authorizer property ${array.mkString(",")}")
       }
     }
 
