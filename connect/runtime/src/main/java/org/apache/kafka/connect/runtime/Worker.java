@@ -70,7 +70,6 @@ public class Worker {
     private Converter internalValueConverter;
     private OffsetBackingStore offsetBackingStore;
     private HashMap<String, ConnectorProfile> connectors = new HashMap<>();
-//    private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<>();
     private HashMap<ConnectorTaskId, TaskProfile> tasks = new HashMap<>();
     private KafkaProducer<byte[], byte[]> producer;
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
