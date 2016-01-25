@@ -56,7 +56,7 @@ public class Windowed<T> {
 
     @Override
     public int hashCode() {
-        long n = (window.hashCode() << 32) | value.hashCode();
+        long n = ((long) window.hashCode() << 32) | value.hashCode();
         return (int) (n % 0xFFFFFFFFL);
     }
 }
