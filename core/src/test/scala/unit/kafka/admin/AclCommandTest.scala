@@ -20,6 +20,7 @@ import java.io.StringReader
 import java.util.Properties
 
 import kafka.admin.AclCommand
+import kafka.admin.AclCommand.AclCommandOptions
 import kafka.security.auth._
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
@@ -106,6 +107,12 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
       }
       testRemove(resourcesToAcls.keys.flatten.toSet, resourceCommand, args, brokerProps)
     }
+  }
+
+  @Test (expected = classOf[IllegalArgumentException])
+  def testInvalidAuthorizerProperty() {
+    val args = Array("--authorizer-properties", "zookeeper.connect " + zkConnect)
+    AclCommand.withAuthorizer(new AclCommandOptions(args))(null)
   }
 
   private def testRemove(resources: Set[Resource], resourceCmd: Array[String], args: Array[String], brokerProps: Properties) {
