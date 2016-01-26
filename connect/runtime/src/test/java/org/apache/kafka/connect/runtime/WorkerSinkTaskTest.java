@@ -225,7 +225,7 @@ public class WorkerSinkTaskTest {
     private void expectRebalanceRevocationError(RuntimeException e) {
         final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2);
 
-        sinkTask.onPartitionsRevoked(partitions);
+        sinkTask.onPartitionsRevoked(new HashSet<>(partitions));
         EasyMock.expectLastCall().andThrow(e);
 
         EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
@@ -241,7 +241,7 @@ public class WorkerSinkTaskTest {
     private void expectRebalanceAssignmentError(RuntimeException e) {
         final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2);
 
-        sinkTask.onPartitionsRevoked(partitions);
+        sinkTask.onPartitionsRevoked(new HashSet<>(partitions));
         EasyMock.expectLastCall();
 
         sinkTask.flush(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
