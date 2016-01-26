@@ -43,7 +43,7 @@ class EchoServer extends Thread {
 
     public EchoServer(Map<String, ?> configs) throws Exception {
         this.protocol =  configs.containsKey("security.protocol") ?
-            SecurityProtocol.valueOf((String) configs.get("security.protocol")) : SecurityProtocol.PLAINTEXT;
+            SecurityProtocol.forName((String) configs.get("security.protocol")) : SecurityProtocol.PLAINTEXT;
         if (protocol == SecurityProtocol.SSL) {
             this.sslFactory = new SslFactory(Mode.SERVER);
             this.sslFactory.configure(configs);
