@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -42,8 +43,7 @@ import org.apache.kafka.streams.kstream.type.TypeException;
 import org.apache.kafka.streams.kstream.type.Types;
 import org.apache.kafka.streams.kstream.type.internal.Resolver;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StreamsPartitioner;
-import org.apache.kafka.streams.processor.TopologyException;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.streams.state.Serdes;
 
@@ -108,7 +108,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         try {
             return new KStreamImpl<>(topology, name, sourceNodes, Resolver.resolve(keyType), Resolver.resolve(valueType));
         } catch (TypeException ex) {
-            throw new TopologyException("failed to resolve a type of the stream", ex);
+            throw new TopologyBuilderException("failed to resolve a type of the stream", ex);
         }
     }
 
@@ -117,7 +117,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         try {
             return new KStreamImpl<>(topology, name, sourceNodes, keyType, Resolver.resolve(valueType));
         } catch (TypeException ex) {
-            throw new TopologyException("failed to resolve a type of the stream", ex);
+            throw new TopologyBuilderException("failed to resolve a type of the stream", ex);
         }
     }
 
@@ -263,14 +263,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Serializer<V> valSerializer = getSerializer(valueType);
 
         String name = topology.newName(SINK_NAME);
-        StreamsPartitioner<K, V> streamsPartitioner = null;
+        StreamPartitioner<K, V> streamPartitioner = null;
 
         if (keySerializer instanceof WindowedSerializer) {
             WindowedSerializer<Object> windowedSerializer = (WindowedSerializer<Object>) keySerializer;
-            streamsPartitioner = (StreamsPartitioner<K, V>) new WindowedStreamsPartitioner<Object, V>(windowedSerializer);
+            streamPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(windowedSerializer);
         }
 
-        topology.addSink(name, topic, keySerializer, valSerializer, streamsPartitioner, this.name);
+        topology.addSink(name, topic, keySerializer, valSerializer, streamPartitioner, this.name);
     }
 
     @Override
@@ -488,7 +488,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
             windowedKeyType = Types.type(Windowed.class, keyType);
         } catch (TypeException ex) {
-            throw new TopologyException("failed to define a windowed key type", ex);
+            throw new TopologyBuilderException("failed to define a windowed key type", ex);
         }
 
         final KTable<Windowed<K>, T> aggTable = new KTableImpl<>(topology, aggregateName, aggregateSupplier, sourceNodes, windowedKeyType, null);

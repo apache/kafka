@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
@@ -26,7 +27,6 @@ import org.apache.kafka.streams.kstream.type.TypeException;
 import org.apache.kafka.streams.kstream.type.internal.Resolver;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
-import org.apache.kafka.streams.processor.TopologyException;
 
 import java.lang.reflect.Type;
 import java.util.Collections;
@@ -67,12 +67,12 @@ public class KStreamBuilder extends TopologyBuilder {
             Type convertedType = Resolver.resolve(type);
 
             if (registeredSerializers.containsKey(convertedType))
-                throw new TopologyException("a serializer already registered for this type: " + type.toString());
+                throw new TopologyBuilderException("a serializer already registered for this type: " + type.toString());
 
             registeredSerializers.put(convertedType, serializer);
 
         } catch (TypeException ex) {
-            throw new TopologyException("failed to register serializer for this type: " + type);
+            throw new TopologyBuilderException("failed to register serializer for this type: " + type);
         }
     }
 
@@ -94,12 +94,12 @@ public class KStreamBuilder extends TopologyBuilder {
             Type convertedType = Resolver.resolve(type);
 
             if (registeredDeserializers.containsKey(convertedType))
-                throw new TopologyException("a deserializer already registered for this type: " + type.toString());
+                throw new TopologyBuilderException("a deserializer already registered for this type: " + type.toString());
 
             registeredDeserializers.put(convertedType, deserializer);
 
         } catch (TypeException ex) {
-            throw new TopologyException("failed to register deserializer for this type: " + type);
+            throw new TopologyBuilderException("failed to register deserializer for this type: " + type);
         }
     }
 
@@ -130,7 +130,7 @@ public class KStreamBuilder extends TopologyBuilder {
      */
     public void registerDefault(Serializer<?> serializer) {
         if (defaultSerializer != null)
-            throw new TopologyException("the default serializer already registered");
+            throw new TopologyBuilderException("the default serializer already registered");
 
         defaultSerializer = serializer;
     }
@@ -142,7 +142,7 @@ public class KStreamBuilder extends TopologyBuilder {
      */
     public void registerDefault(Deserializer<?> deserializer) {
         if (defaultDeserializer == null)
-            throw new TopologyException("the default deserializer already registered");
+            throw new TopologyBuilderException("the default deserializer already registered");
 
         defaultDeserializer = deserializer;
     }
@@ -172,10 +172,10 @@ public class KStreamBuilder extends TopologyBuilder {
      */
     public <K, V> KStream<K, V> stream(Type keyType, Type valueType, String... topics) {
         if (keyType == null)
-            throw new TopologyException("the key type should not be null");
+            throw new TopologyBuilderException("the key type should not be null");
 
         if (valueType == null)
-            throw new TopologyException("the value type should not be null");
+            throw new TopologyBuilderException("the value type should not be null");
 
         try {
             String name = newName(KStreamImpl.SOURCE_NAME);
@@ -191,7 +191,7 @@ public class KStreamBuilder extends TopologyBuilder {
             return new KStreamImpl<>(this, name, Collections.singleton(name), resolvedKeyType, resolvedValueType);
 
         } catch (TypeException ex) {
-            throw new TopologyException("failed to create a stream", ex);
+            throw new TopologyBuilderException("failed to create a stream", ex);
         }
     }
 
@@ -229,7 +229,7 @@ public class KStreamBuilder extends TopologyBuilder {
             return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keyType, valueType);
 
         } catch (TypeException ex) {
-            throw new TopologyException("failed to create a stream", ex);
+            throw new TopologyBuilderException("failed to create a stream", ex);
         }
     }
 
@@ -258,7 +258,7 @@ public class KStreamBuilder extends TopologyBuilder {
         }
 
         if (serializer == null)
-            throw new TopologyException("failed to find a serializer for a type " + type);
+            throw new TopologyBuilderException("failed to find a serializer for a type " + type);
 
         return serializer;
     }
@@ -274,7 +274,7 @@ public class KStreamBuilder extends TopologyBuilder {
         }
 
         if (deserializer == null)
-            throw new TopologyException("failed to find a deserializer for a type " + type);
+            throw new TopologyBuilderException("failed to find a deserializer for a type " + type);
 
         return deserializer;
     }

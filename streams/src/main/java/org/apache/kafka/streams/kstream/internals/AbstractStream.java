@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.InconsistentTypeInfoException;
 import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Transformer;
@@ -32,7 +33,6 @@ import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.type.internal.Resolver;
 import org.apache.kafka.streams.kstream.type.TypeException;
-import org.apache.kafka.streams.processor.TopologyException;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
@@ -64,13 +64,13 @@ public abstract class AbstractStream<K> {
             throw new InsufficientTypeInfoException("key type of other stream");
 
         if (!this.keyType.equals(other.keyType))
-            throw new TopologyException("not joinable: key types do not match");
+            throw new TopologyBuilderException("not joinable: key types do not match");
 
         Set<String> thisSourceNodes = sourceNodes;
         Set<String> otherSourceNodes = other.sourceNodes;
 
         if (thisSourceNodes == null || otherSourceNodes == null)
-            throw new TopologyException("not joinable");
+            throw new TopologyBuilderException(this.name + " and " + other.name + " are not joinable");
 
         Set<String> allSourceNodes = new HashSet<>();
         allSourceNodes.addAll(thisSourceNodes);

@@ -15,20 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.processor;
+package org.apache.kafka.streams.errors;
 
-import org.apache.kafka.common.KafkaException;
-
-public class TopologyException extends KafkaException {
+public class TaskIdFormatException extends StreamsException {
 
     private static final long serialVersionUID = 1L;
 
-    public TopologyException(String message) {
-        super(message);
+    public TaskIdFormatException(String taskString) {
+        super("Task id cannot be parsed correctly" + (taskString == null ? "" : " from " + taskString));
     }
-
-    public TopologyException(String message, Exception ex) {
-        super(message, ex);
-    }
-
 }

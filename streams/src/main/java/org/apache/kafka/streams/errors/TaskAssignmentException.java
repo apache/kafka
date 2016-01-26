@@ -14,15 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.errors;
 
-package org.apache.kafka.streams.examples;
+/**
+ * The run time exception class for stream task assignments
+ */
+public class TaskAssignmentException extends StreamsException {
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.processor.TimestampExtractor;
+    private final static long serialVersionUID = 1L;
 
-public class WallclockTimestampExtractor implements TimestampExtractor {
-    @Override
-    public long extract(ConsumerRecord<Object, Object> record) {
-        return System.currentTimeMillis();
+    public TaskAssignmentException(String s) {
+        super(s);
+    }
+
+    public TaskAssignmentException(String s, Throwable throwable) {
+        super(s, throwable);
+    }
+
+    public TaskAssignmentException(Throwable throwable) {
+        super(throwable);
     }
 }

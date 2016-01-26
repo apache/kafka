@@ -17,9 +17,9 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.processor.TopologyException;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 
-public class InsufficientTypeInfoException extends TopologyException {
+public class InsufficientTypeInfoException extends TopologyBuilderException {
 
     private static final long serialVersionUID = 1L;
 

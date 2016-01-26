@@ -15,9 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.streams.errors;
 
-public interface KeyValueToDoubleMapper<K, V> {
+public class TopologyBuilderException extends StreamsException {
 
-    double apply(K key, V value);
+    private static final long serialVersionUID = 1L;
+
+    public TopologyBuilderException(String message) {
+        super("Invalid topology building" + (message == null ? "" : ": " + message));
+    }
+
+    public TopologyBuilderException(String message, Throwable ex) {
+        super("Invalid topology building" + (message == null ? "" : ": " + message), ex);
+    }
+
 }

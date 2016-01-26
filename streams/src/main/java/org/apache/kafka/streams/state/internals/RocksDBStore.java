@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -102,13 +102,13 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 dir.getParentFile().mkdirs();
                 return RocksDB.open(options, dir.toString());
             } else {
-                throw new KafkaException("Change log is not supported for store " + this.name + " since it is TTL based.");
+                throw new ProcessorStateException("Change log is not supported for store " + this.name + " since it is TTL based.");
                 // TODO: support TTL with change log?
                 // return TtlDB.open(options, dir.toString(), ttl, false);
             }
         } catch (RocksDBException e) {
             // TODO: this needs to be handled more accurately
-            throw new KafkaException("Error opening store " + this.name + " at location " + dir.toString(), e);
+            throw new ProcessorStateException("Error opening store " + this.name + " at location " + dir.toString(), e);
         }
     }
 
@@ -128,7 +128,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return serdes.valueFrom(this.db.get(serdes.rawKey(key)));
         } catch (RocksDBException e) {
             // TODO: this needs to be handled more accurately
-            throw new KafkaException("Error while executing get " + key.toString() + " from store " + this.name, e);
+            throw new ProcessorStateException("Error while executing get " + key.toString() + " from store " + this.name, e);
         }
     }
 
@@ -142,7 +142,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             }
         } catch (RocksDBException e) {
             // TODO: this needs to be handled more accurately
-            throw new KafkaException("Error while executing put " + key.toString() + " from store " + this.name, e);
+            throw new ProcessorStateException("Error while executing put " + key.toString() + " from store " + this.name, e);
         }
     }
 
@@ -177,7 +177,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             db.flush(fOptions);
         } catch (RocksDBException e) {
             // TODO: this needs to be handled more accurately
-            throw new KafkaException("Error while executing flush from store " + this.name, e);
+            throw new ProcessorStateException("Error while executing flush from store " + this.name, e);
         }
     }
 

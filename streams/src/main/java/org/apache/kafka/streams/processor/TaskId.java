@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.streams.errors.TaskIdFormatException;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -38,7 +40,7 @@ public class TaskId implements Comparable<TaskId> {
 
     public static TaskId parse(String string) {
         int index = string.indexOf('_');
-        if (index <= 0 || index + 1 >= string.length()) throw new TaskIdFormatException();
+        if (index <= 0 || index + 1 >= string.length()) throw new TaskIdFormatException(string);
 
         try {
             int topicGroupId = Integer.parseInt(string.substring(0, index));
@@ -46,7 +48,7 @@ public class TaskId implements Comparable<TaskId> {
 
             return new TaskId(topicGroupId, partition);
         } catch (Exception e) {
-            throw new TaskIdFormatException();
+            throw new TaskIdFormatException(string);
         }
     }
 
@@ -92,8 +94,5 @@ public class TaskId implements Comparable<TaskId> {
                     (this.partition < other.partition ? -1 :
                         (this.partition > other.partition ? 1 :
                             0)));
-    }
-
-    public static class TaskIdFormatException extends RuntimeException {
     }
 }

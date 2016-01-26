@@ -24,12 +24,13 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
-import org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentException;
+import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,7 +133,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
             return partitions;
         } catch (IOException e) {
-            throw new KafkaException(e);
+            throw new StreamsException("Error while reading topic metadata from ZK for internal topic " + topic, e);
         }
     }
 
@@ -158,7 +159,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
             zkClient.createPersistent(ZK_TOPIC_PATH + "/" + topic, data, ZooDefs.Ids.OPEN_ACL_UNSAFE);
         } catch (JsonProcessingException e) {
-            throw new KafkaException(e);
+            throw new StreamsException("Error while creating topic metadata in ZK for internal topic " + topic, e);
         }
     }
 
@@ -193,7 +194,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
             zkClient.writeData(ZK_TOPIC_PATH + "/" + topic, data);
         } catch (JsonProcessingException e) {
-            throw new KafkaException(e);
+            throw new StreamsException("Error while updating topic metadata in ZK for internal topic " + topic, e);
         }
     }
 

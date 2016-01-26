@@ -33,7 +33,7 @@ import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
 
-public class WindowedStreamsPartitionerTest {
+public class WindowedStreamPartitionerTest {
 
     private String topicName = "topic";
 
@@ -59,7 +59,7 @@ public class WindowedStreamsPartitionerTest {
         DefaultPartitioner defaultPartitioner = new DefaultPartitioner();
 
         WindowedSerializer<Integer> windowedSerializer = new WindowedSerializer<>(keySerializer);
-        WindowedStreamsPartitioner<Integer, String> streamPartitioner = new WindowedStreamsPartitioner<>(windowedSerializer);
+        WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(windowedSerializer);
 
         for (int k = 0; k < 10; k++) {
             Integer key = rand.nextInt();

@@ -41,6 +41,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskIdFormatException;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -104,6 +107,18 @@ public class StreamThread extends Thread {
     private final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
 
+    static File makeStateDir(String jobId, String baseDirName) {
+        File baseDir = new File(baseDirName);
+        if (!baseDir.exists())
+            baseDir.mkdir();
+
+        File stateDir = new File(baseDir, jobId);
+        if (!stateDir.exists())
+            stateDir.mkdir();
+
+        return stateDir;
+    }
+
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
@@ -115,6 +130,8 @@ public class StreamThread extends Thread {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             commitAll();
+            // TODO: right now upon partition revocation, we always remove all the tasks;
+            // this behavior can be optimized to only remove affected tasks in the future
             removeStreamTasks();
             removeStandbyTasks();
             lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
@@ -167,8 +184,7 @@ public class StreamThread extends Thread {
         this.standbyRecords = new HashMap<>();
 
         // read in task specific config values
-        this.stateDir = new File(this.config.getString(StreamsConfig.STATE_DIR_CONFIG));
-        this.stateDir.mkdir();
+        this.stateDir = makeStateDir(this.jobId, this.config.getString(StreamsConfig.STATE_DIR_CONFIG));
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.cleanTimeMs = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
@@ -218,8 +234,13 @@ public class StreamThread extends Thread {
 
         try {
             runLoop();
-        } catch (RuntimeException e) {
-            log.error("Uncaught error during processing in thread [" + this.getName() + "]: ", e);
+        } catch (KafkaException e) {
+            // just re-throw the exception as it should be logged already
+            throw e;
+        } catch (Exception e) {
+            // we have caught all Kafka related exceptions, and other runtime exceptions
+            // should be due to user application errors
+            log.error("Streams application error during processing in thread [" + this.getName() + "]: ", e);
             throw e;
         } finally {
             shutdown();
@@ -240,11 +261,19 @@ public class StreamThread extends Thread {
     private void shutdown() {
         log.info("Shutting down stream thread [" + this.getName() + "]");
 
-        // Exceptions should not prevent this call from going through all shutdown steps.
+        // We need to first remove the tasks before shutting down the underlying clients
+        // as they may be required in the previous steps; and exceptions should not
+        // prevent this call from going through all shutdown steps.
         try {
             commitAll();
         } catch (Throwable e) {
             // already logged in commitAll()
+        }
+        try {
+            removeStreamTasks();
+            removeStandbyTasks();
+        } catch (Throwable e) {
+            // already logged in removeStreamTasks() and removeStandbyTasks()
         }
         try {
             producer.close();
@@ -261,70 +290,60 @@ public class StreamThread extends Thread {
         } catch (Throwable e) {
             log.error("Failed to close restore consumer in thread [" + this.getName() + "]: ", e);
         }
-        try {
-            removeStreamTasks();
-            removeStandbyTasks();
-        } catch (Throwable e) {
-            // already logged in removeStreamTasks() and removeStandbyTasks()
-        }
 
         log.info("Stream thread shutdown complete [" + this.getName() + "]");
     }
 
     private void runLoop() {
-        try {
-            int totalNumBuffered = 0;
-            boolean requiresPoll = true;
+        int totalNumBuffered = 0;
+        boolean requiresPoll = true;
 
-            ensureCopartitioning(builder.copartitionGroups());
+        ensureCopartitioning(builder.copartitionGroups());
 
-            consumer.subscribe(new ArrayList<>(sourceTopics), rebalanceListener);
+        consumer.subscribe(new ArrayList<>(sourceTopics), rebalanceListener);
 
-            while (stillRunning()) {
-                // try to fetch some records if necessary
-                if (requiresPoll) {
-                    requiresPoll = false;
+        while (stillRunning()) {
+            // try to fetch some records if necessary
+            if (requiresPoll) {
+                requiresPoll = false;
 
-                    long startPoll = time.milliseconds();
+                long startPoll = time.milliseconds();
 
-                    ConsumerRecords<byte[], byte[]> records = consumer.poll(totalNumBuffered == 0 ? this.pollTimeMs : 0);
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(totalNumBuffered == 0 ? this.pollTimeMs : 0);
 
-                    if (!records.isEmpty()) {
-                        for (TopicPartition partition : records.partitions()) {
-                            StreamTask task = activeTasksByPartition.get(partition);
-                            task.addRecords(partition, records.records(partition));
-                        }
+                if (!records.isEmpty()) {
+                    for (TopicPartition partition : records.partitions()) {
+                        StreamTask task = activeTasksByPartition.get(partition);
+                        task.addRecords(partition, records.records(partition));
                     }
-
-                    long endPoll = time.milliseconds();
-                    sensors.pollTimeSensor.record(endPoll - startPoll);
                 }
 
-                totalNumBuffered = 0;
-
-                if (!activeTasks.isEmpty()) {
-                    // try to process one record from each task
-                    for (StreamTask task : activeTasks.values()) {
-                        long startProcess = time.milliseconds();
-
-                        totalNumBuffered += task.process();
-                        requiresPoll = requiresPoll || task.requiresPoll();
-
-                        sensors.processTimeSensor.record(time.milliseconds() - startProcess);
-                    }
-
-                    maybePunctuate();
-                } else {
-                    // even when no task is assigned, we must poll to get a task.
-                    requiresPoll = true;
-                }
-                maybeCommit();
-                maybeUpdateStandbyTasks();
-
-                maybeClean();
+                long endPoll = time.milliseconds();
+                sensors.pollTimeSensor.record(endPoll - startPoll);
             }
-        } catch (Exception e) {
-            throw new KafkaException(e);
+
+            totalNumBuffered = 0;
+
+            if (!activeTasks.isEmpty()) {
+                // try to process one record from each task
+                for (StreamTask task : activeTasks.values()) {
+                    long startProcess = time.milliseconds();
+
+                    totalNumBuffered += task.process();
+                    requiresPoll = requiresPoll || task.requiresPoll();
+
+                    sensors.processTimeSensor.record(time.milliseconds() - startProcess);
+                }
+
+                maybePunctuate();
+            } else {
+                // even when no task is assigned, we must poll to get a task.
+                requiresPoll = true;
+            }
+            maybeCommit();
+            maybeUpdateStandbyTasks();
+
+            maybeClean();
         }
     }
 
@@ -385,8 +404,8 @@ public class StreamThread extends Thread {
                 if (task.maybePunctuate(now))
                     sensors.punctuateTimeSensor.record(time.milliseconds() - now);
 
-            } catch (Exception e) {
-                log.error("Failed to commit active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+            } catch (KafkaException e) {
+                log.error("Failed to punctuate active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
                 throw e;
             }
         }
@@ -407,7 +426,7 @@ public class StreamThread extends Thread {
                 try {
                     if (task.commitNeeded())
                         commitOne(task, time.milliseconds());
-                } catch (Exception e) {
+                } catch (KafkaException e) {
                     log.error("Failed to commit active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
                     throw e;
                 }
@@ -433,7 +452,7 @@ public class StreamThread extends Thread {
     private void commitOne(AbstractTask task, long now) {
         try {
             task.commit();
-        } catch (Exception e) {
+        } catch (KafkaException e) {
             log.error("Failed to commit " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
             throw e;
         }
@@ -452,14 +471,15 @@ public class StreamThread extends Thread {
             if (stateDirs != null) {
                 for (File dir : stateDirs) {
                     try {
-                        TaskId id = TaskId.parse(dir.getName());
+                        String dirName = dir.getName();
+                        TaskId id = TaskId.parse(dirName.substring(dirName.lastIndexOf("-") + 1));
 
                         // try to acquire the exclusive lock on the state directory
                         FileLock directoryLock = null;
                         try {
                             directoryLock = ProcessorStateManager.lockStateDirectory(dir);
                             if (directoryLock != null) {
-                                log.info("Deleting obsolete state directory {} after delayed {} ms.", dir.getAbsolutePath(), cleanTimeMs);
+                                log.info("Deleting obsolete state directory {} for task {} after delayed {} ms.", dir.getAbsolutePath(), id, cleanTimeMs);
                                 Utils.delete(dir);
                             }
                         } catch (IOException e) {
@@ -473,7 +493,7 @@ public class StreamThread extends Thread {
                                 }
                             }
                         }
-                    } catch (TaskId.TaskIdFormatException e) {
+                    } catch (TaskIdFormatException e) {
                         // there may be some unknown files that sits in the same directory,
                         // we should ignore these files instead trying to delete them as well
                     }
@@ -511,7 +531,7 @@ public class StreamThread extends Thread {
                     if (new File(dir, ProcessorStateManager.CHECKPOINT_FILE_NAME).exists())
                         tasks.add(id);
 
-                } catch (TaskId.TaskIdFormatException e) {
+                } catch (TaskIdFormatException e) {
                     // there may be some unknown files that sits in the same directory,
                     // we should ignore these files instead trying to delete them as well
                 }
@@ -531,7 +551,7 @@ public class StreamThread extends Thread {
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
         if (partitionAssignor == null)
-            throw new KafkaException("Partition assignor has not been initialized while adding stream tasks: this should not happen.");
+            throw new IllegalStateException("Partition assignor has not been initialized while adding stream tasks: this should not happen.");
 
         HashMap<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<>();
 
@@ -558,7 +578,7 @@ public class StreamThread extends Thread {
 
                 for (TopicPartition partition : partitions)
                     activeTasksByPartition.put(partition, task);
-            } catch (Exception e) {
+            } catch (StreamsException e) {
                 log.error("Failed to create an active task #" + taskId + " in thread [" + this.getName() + "]: ", e);
                 throw e;
             }
@@ -566,7 +586,6 @@ public class StreamThread extends Thread {
     }
 
     private void removeStreamTasks() {
-        // TODO: change this clearing tasks behavior
         for (StreamTask task : activeTasks.values()) {
             closeOne(task);
         }
@@ -582,7 +601,7 @@ public class StreamThread extends Thread {
         log.info("Removing a task {}", task.id());
         try {
             task.close();
-        } catch (Exception e) {
+        } catch (StreamsException e) {
             log.error("Failed to close a " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
             throw e;
         }
@@ -603,7 +622,7 @@ public class StreamThread extends Thread {
 
     private void addStandbyTasks() {
         if (partitionAssignor == null)
-            throw new KafkaException("Partition assignor has not been initialized while adding standby tasks: this should not happen.");
+            throw new IllegalStateException("Partition assignor has not been initialized while adding standby tasks: this should not happen.");
 
         Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
@@ -661,14 +680,14 @@ public class StreamThread extends Thread {
             List<PartitionInfo> infos = consumer.partitionsFor(topic);
 
             if (infos == null)
-                throw new KafkaException("topic not found: " + topic);
+                throw new TopologyBuilderException("Topic not found: " + topic);
 
             if (numPartitions == -1) {
                 numPartitions = infos.size();
             } else if (numPartitions != infos.size()) {
                 String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
                 Arrays.sort(topics);
-                throw new KafkaException("topics not copartitioned: [" + Utils.mkString(Arrays.asList(topics), ",") + "]");
+                throw new TopologyBuilderException("Topics not copartitioned: [" + Utils.mkString(Arrays.asList(topics), ",") + "]");
             }
         }
     }

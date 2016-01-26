@@ -15,9 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.streams.processor.internals;
 
-public interface KeyValueToIntMapper<K, V> {
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.streams.processor.TimestampExtractor;
 
-    int apply(K key, V value);
+public class WallclockTimestampExtractor implements TimestampExtractor {
+    @Override
+    public long extract(ConsumerRecord<Object, Object> record) {
+        return System.currentTimeMillis();
+    }
 }

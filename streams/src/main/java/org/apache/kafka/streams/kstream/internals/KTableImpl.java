@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -33,7 +34,6 @@ import org.apache.kafka.streams.kstream.type.internal.Resolver;
 import org.apache.kafka.streams.kstream.type.TypeException;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.processor.TopologyException;
 import org.apache.kafka.streams.state.Stores;
 
 import java.lang.reflect.Type;
@@ -98,7 +98,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         try {
             return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, Resolver.resolve(keyType), Resolver.resolve(valueType));
         } catch (TypeException ex) {
-            throw new TopologyException("failed to resolve a type of the stream", ex);
+            throw new TopologyBuilderException("failed to resolve a type of the stream", ex);
         }
     }
 
@@ -107,7 +107,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         try {
             return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, keyType, Resolver.resolve(valueType));
         } catch (TypeException ex) {
-            throw new TopologyException("failed to resolve a type of the stream", ex);
+            throw new TopologyBuilderException("failed to resolve a type of the stream", ex);
         }
     }
 

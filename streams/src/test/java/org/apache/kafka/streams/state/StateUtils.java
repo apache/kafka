@@ -50,7 +50,7 @@ public class StateUtils {
             });
             return dir;
         } catch (IOException ex) {
-            throw new RuntimeException("failed to create a temp dir", ex);
+            throw new RuntimeException("Failed to create a temp dir", ex);
         }
     }
 

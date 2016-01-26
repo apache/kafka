@@ -17,11 +17,11 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.processor.TopologyException;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 
 import java.lang.reflect.Type;
 
-public class InconsistentTypeInfoException extends TopologyException {
+public class InconsistentTypeInfoException extends TopologyBuilderException {
 
     private static final long serialVersionUID = 1L;
 

@@ -413,6 +413,56 @@ class KafkaService(JmxMixin, Service):
         self.logger.info("Leader for topic %s and partition %d is now: %d" % (topic, partition, leader_idx))
         return self.get_node(leader_idx)
 
+    def list_consumer_groups(self, node=None, new_consumer=False, command_config=None):
+        """ Get list of consumer groups.
+        """
+        if node is None:
+            node = self.nodes[0]
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        if new_consumer:
+            cmd = "/opt/%s/bin/kafka-consumer-groups.sh --new-consumer --bootstrap-server %s %s --list" % \
+                  (kafka_dir(node), self.bootstrap_servers(self.security_protocol), command_config)
+        else:
+            cmd = "/opt/%s/bin/kafka-consumer-groups.sh --zookeeper %s %s --list" % \
+                  (kafka_dir(node), self.zk.connect_setting(), command_config)
+        output = ""
+        self.logger.debug(cmd)
+        for line in node.account.ssh_capture(cmd):
+            if not line.startswith("SLF4J"):
+                output += line
+        self.logger.debug(output)
+        return output
+
+    def describe_consumer_group(self, group, node=None, new_consumer=False, command_config=None):
+        """ Describe a consumer group.
+        """
+        if node is None:
+            node = self.nodes[0]
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        if new_consumer:
+            cmd = "/opt/%s/bin/kafka-consumer-groups.sh --new-consumer --bootstrap-server %s %s --group %s --describe" % \
+                  (kafka_dir(node), self.bootstrap_servers(self.security_protocol), command_config, group)
+        else:
+            cmd = "/opt/%s/bin/kafka-consumer-groups.sh --zookeeper %s %s --group %s --describe" % \
+                  (kafka_dir(node), self.zk.connect_setting(), command_config, group)
+        output = ""
+        self.logger.debug(cmd)
+        for line in node.account.ssh_capture(cmd):
+            if not (line.startswith("SLF4J") or line.startswith("GROUP, TOPIC") or line.startswith("Could not fetch offset")):
+                output += line
+        self.logger.debug(output)
+        return output
+
     def bootstrap_servers(self, protocol='PLAINTEXT'):
         """Return comma-delimited list of brokers in this cluster formatted as HOSTNAME1:PORT1,HOSTNAME:PORT2,...
 
