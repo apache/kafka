@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -32,7 +32,7 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
         this.windowName = windowName;
 
         if (windowSizeMs * 2 > retentionPeriodMs)
-            throw new KafkaException("The retention period of the join window "
+            throw new TopologyBuilderException("The retention period of the join window "
                     + windowName + " must at least two times its window size.");
     }
 
