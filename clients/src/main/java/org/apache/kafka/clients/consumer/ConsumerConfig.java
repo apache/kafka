@@ -315,7 +315,7 @@ public class ConsumerConfig extends AbstractConfig {
         newConfigs.putAll(configs);
         if (keyDeserializer != null)
             newConfigs.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass());
-        if (keyDeserializer != null)
+        if (valueDeserializer != null)
             newConfigs.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
         return newConfigs;
     }
@@ -327,7 +327,7 @@ public class ConsumerConfig extends AbstractConfig {
         newProperties.putAll(properties);
         if (keyDeserializer != null)
             newProperties.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
-        if (keyDeserializer != null)
+        if (valueDeserializer != null)
             newProperties.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
         return newProperties;
     }

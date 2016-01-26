@@ -52,32 +52,37 @@ object Broker {
    *                "SSL://host1:9093"]
    */
   def createBroker(id: Int, brokerInfoString: String): Broker = {
-    if(brokerInfoString == null)
-      throw new BrokerNotAvailableException("Broker id %s does not exist".format(id))
+    if (brokerInfoString == null)
+      throw new BrokerNotAvailableException(s"Broker id $id does not exist")
     try {
       Json.parseFull(brokerInfoString) match {
         case Some(m) =>
           val brokerInfo = m.asInstanceOf[Map[String, Any]]
           val version = brokerInfo("version").asInstanceOf[Int]
-          val endpoints = version match {
-            case 1 =>
+          val endpoints =
+            if (version < 1)
+              throw new KafkaException(s"Unsupported version of broker registration: $brokerInfoString")
+            else if (version == 1) {
               val host = brokerInfo("host").asInstanceOf[String]
               val port = brokerInfo("port").asInstanceOf[Int]
               Map(SecurityProtocol.PLAINTEXT -> new EndPoint(host, port, SecurityProtocol.PLAINTEXT))
-            case 2 =>
+            }
+            else {
               val listeners = brokerInfo("endpoints").asInstanceOf[List[String]]
-              listeners.map(listener => {
+              listeners.map { listener =>
                 val ep = EndPoint.createEndPoint(listener)
                 (ep.protocolType, ep)
-              }).toMap
-            case _ => throw new KafkaException("Unknown version of broker registration. Only versions 1 and 2 are supported." + brokerInfoString)
-          }
+              }.toMap
+            }
+
+
           new Broker(id, endpoints)
         case None =>
-          throw new BrokerNotAvailableException("Broker id %d does not exist".format(id))
+          throw new BrokerNotAvailableException(s"Broker id $id does not exist")
       }
     } catch {
-      case t: Throwable => throw new KafkaException("Failed to parse the broker info from zookeeper: " + brokerInfoString, t)
+      case t: Throwable =>
+        throw new KafkaException(s"Failed to parse the broker info from zookeeper: $brokerInfoString", t)
     }
   }
 
