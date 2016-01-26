@@ -53,7 +53,7 @@ object SimpleConsumerPerformance {
       ))
     var offset: Long = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
 
-    val startMs = System.currentTimeMillis
+    val startMs = SystemTime.relativeMilliseconds
     var done = false
     var totalBytesRead = 0L
     var totalMessagesRead = 0L
@@ -96,7 +96,7 @@ object SimpleConsumerPerformance {
             (totalBytesRead*1.0)/(1024*1024), totalMBRead/elapsed,
             totalMessagesRead, (totalMessagesRead-lastMessagesRead)/elapsed))
         }
-        lastReportTime = SystemTime.milliseconds
+        lastReportTime = SystemTime.relativeMilliseconds
         lastBytesRead = totalBytesRead
         lastMessagesRead = totalMessagesRead
         consumedInterval = 0

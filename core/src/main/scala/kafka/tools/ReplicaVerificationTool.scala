@@ -59,7 +59,7 @@ object ReplicaVerificationTool extends Logging {
   val dateFormat = new SimpleDateFormat(dateFormatString)
 
   def getCurrentTimeString() = {
-    ReplicaVerificationTool.dateFormat.format(new Date(SystemTime.milliseconds))
+    ReplicaVerificationTool.dateFormat.format(new Date(SystemTime.absoluteMilliseconds))
   }
 
   def main(args: Array[String]): Unit = {
@@ -205,7 +205,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
   private val messageSetCache = new Pool[TopicAndPartition, Pool[Int, FetchResponsePartitionData]]
   private val fetcherBarrier = new AtomicReference(new CountDownLatch(expectedNumFetchers))
   private val verificationBarrier = new AtomicReference(new CountDownLatch(1))
-  @volatile private var lastReportTime = SystemTime.milliseconds
+  @volatile private var lastReportTime = SystemTime.absoluteMilliseconds
   private var maxLag: Long = -1L
   private var offsetWithMaxLag: Long = -1L
   private var maxLagTopicAndPartition: TopicAndPartition = null
@@ -326,7 +326,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
       }
       fetchResponsePerReplica.clear()
     }
-    val currentTimeMs = SystemTime.milliseconds
+    val currentTimeMs = SystemTime.absoluteMilliseconds
     if (currentTimeMs - lastReportTime > reportInterval) {
       println(ReplicaVerificationTool.dateFormat.format(new Date(currentTimeMs)) + ": max lag is "
         + maxLag + " for partition " + maxLagTopicAndPartition + " at offset " + offsetWithMaxLag

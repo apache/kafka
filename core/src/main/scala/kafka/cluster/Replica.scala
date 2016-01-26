@@ -45,7 +45,7 @@ class Replica(val brokerId: Int,
     }
   }
 
-  private[this] val lastCaughtUpTimeMsUnderlying = new AtomicLong(time.milliseconds)
+  private[this] val lastCaughtUpTimeMsUnderlying = new AtomicLong(time.relativeMilliseconds)
 
   def lastCaughtUpTimeMs = lastCaughtUpTimeMsUnderlying.get()
 
@@ -57,7 +57,7 @@ class Replica(val brokerId: Int,
      * This means that the replica is fully caught up.
      */
     if(logReadResult.isReadFromLogEnd) {
-      lastCaughtUpTimeMsUnderlying.set(time.milliseconds)
+      lastCaughtUpTimeMsUnderlying.set(time.relativeMilliseconds)
     }
   }
 

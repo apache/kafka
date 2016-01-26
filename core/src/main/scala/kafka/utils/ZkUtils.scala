@@ -275,7 +275,7 @@ class ZkUtils(val zkClient: ZkClient,
    */
   def registerBrokerInZk(id: Int, host: String, port: Int, advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint], jmxPort: Int) {
     val brokerIdPath = BrokerIdsPath + "/" + id
-    val timestamp = SystemTime.milliseconds.toString
+    val timestamp = SystemTime.absoluteMilliseconds.toString
 
     val brokerInfo = Json.encode(Map("version" -> 2, "host" -> host, "port" -> port, "endpoints"->advertisedEndpoints.values.map(_.connectionString).toArray, "jmx_port" -> jmxPort, "timestamp" -> timestamp))
     registerBrokerInZk(brokerIdPath, brokerInfo)

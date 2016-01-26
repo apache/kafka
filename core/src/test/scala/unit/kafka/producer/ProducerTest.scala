@@ -304,7 +304,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     // any requests should be accepted and queue up, but not handled
     server1.requestHandlerPool.shutdown()
 
-    val t1 = SystemTime.milliseconds
+    val t1 = SystemTime.absoluteMilliseconds
     try {
       // this message should be assigned to partition 0 whose leader is on broker 0, but
       // broker 0 will not response within timeoutMs millis.
@@ -315,7 +315,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     } finally {
       producer.close()
     }
-    val t2 = SystemTime.milliseconds
+    val t2 = SystemTime.absoluteMilliseconds
 
     // make sure we don't wait fewer than timeoutMs
     assertTrue((t2-t1) >= timeoutMs)

@@ -84,7 +84,7 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
     if (notifications.nonEmpty) {
       info(s"Processing notification(s) to $seqNodeRoot")
       try {
-        val now = time.milliseconds
+        val now = time.absoluteMilliseconds
         for (notification <- notifications) {
           val changeId = changeNumber(notification)
           if (changeId > lastExecutedChange) {

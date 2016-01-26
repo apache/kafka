@@ -58,15 +58,15 @@ class ProducerSendThread[K,V](val threadName: String,
   }
 
   private def processEvents() {
-    var lastSend = SystemTime.milliseconds
+    var lastSend = SystemTime.relativeMilliseconds
     var events = new ArrayBuffer[KeyedMessage[K,V]]
     var full: Boolean = false
 
     // drain the queue until you get a shutdown command
-    Iterator.continually(queue.poll(scala.math.max(0, (lastSend + queueTime) - SystemTime.milliseconds), TimeUnit.MILLISECONDS))
+    Iterator.continually(queue.poll(scala.math.max(0, (lastSend + queueTime) - SystemTime.absoluteMilliseconds), TimeUnit.MILLISECONDS))
                       .takeWhile(item => if(item != null) item ne shutdownCommand else true).foreach {
       currentQueueItem =>
-        val elapsed = (SystemTime.milliseconds - lastSend)
+        val elapsed = (SystemTime.relativeMilliseconds - lastSend)
         // check if the queue time is reached. This happens when the poll method above returns after a timeout and
         // returns a null object
         val expired = currentQueueItem == null
@@ -86,7 +86,7 @@ class ProducerSendThread[K,V](val threadName: String,
             debug("Batch full. Sending..")
           // if either queue time has reached or batch size has reached, dispatch to event handler
           tryToHandle(events)
-          lastSend = SystemTime.milliseconds
+          lastSend = SystemTime.relativeMilliseconds
           events = new ArrayBuffer[KeyedMessage[K,V]]
         }
     }

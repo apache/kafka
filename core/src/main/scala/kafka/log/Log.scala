@@ -78,7 +78,7 @@ class Log(val dir: File,
   private val lock = new Object
 
   /* last time it was flushed */
-  private val lastflushedTime = new AtomicLong(time.milliseconds)
+  private val lastflushedTime = new AtomicLong(time.absoluteMilliseconds)
 
   def initFileSize() : Int = {
     if (config.preallocate)
@@ -592,7 +592,7 @@ class Log(val dir: File,
   private def maybeRoll(messagesSize: Int): LogSegment = {
     val segment = activeSegment
     if (segment.size > config.segmentSize - messagesSize ||
-        segment.size > 0 && time.milliseconds - segment.created > config.segmentMs - segment.rollJitterMs ||
+        segment.size > 0 && time.absoluteMilliseconds - segment.created > config.segmentMs - segment.rollJitterMs ||
         segment.index.isFull) {
       debug("Rolling new log segment in %s (log_size = %d/%d, index_size = %d/%d, age_ms = %d/%d)."
             .format(name,
@@ -600,7 +600,7 @@ class Log(val dir: File,
                     config.segmentSize,
                     segment.index.entries,
                     segment.index.maxEntries,
-                    time.milliseconds - segment.created,
+                    time.absoluteMilliseconds - segment.created,
                     config.segmentMs - segment.rollJitterMs))
       roll()
     } else {
@@ -614,7 +614,7 @@ class Log(val dir: File,
    * @return The newly rolled segment
    */
   def roll(): LogSegment = {
-    val start = time.nanoseconds
+    val start = time.relativeNanoseconds
     lock synchronized {
       val newOffset = logEndOffset
       val logFile = logFilename(dir, newOffset)
@@ -673,13 +673,13 @@ class Log(val dir: File,
     if (offset <= this.recoveryPoint)
       return
     debug("Flushing log '" + name + " up to offset " + offset + ", last flushed: " + lastFlushTime + " current time: " +
-          time.milliseconds + " unflushed = " + unflushedMessages)
+          time.absoluteMilliseconds + " unflushed = " + unflushedMessages)
     for(segment <- logSegments(this.recoveryPoint, offset))
       segment.flush()
     lock synchronized {
       if(offset > this.recoveryPoint) {
         this.recoveryPoint = offset
-        lastflushedTime.set(time.milliseconds)
+        lastflushedTime.set(time.absoluteMilliseconds)
       }
     }
   }

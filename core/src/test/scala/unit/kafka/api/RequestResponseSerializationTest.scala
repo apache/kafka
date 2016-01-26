@@ -156,7 +156,7 @@ object SerializationTestUtils {
   def createTestOffsetCommitRequestV2: OffsetCommitRequest = {
     new OffsetCommitRequest(
       groupId = "group 1",
-      retentionMs = SystemTime.milliseconds,
+      retentionMs = SystemTime.absoluteMilliseconds,
       requestInfo=collection.immutable.Map(
       TopicAndPartition(topic1, 0) -> OffsetAndMetadata(42L, "some metadata"),
       TopicAndPartition(topic1, 1) -> OffsetAndMetadata(100L, OffsetMetadata.NoMetadata)
@@ -168,8 +168,8 @@ object SerializationTestUtils {
       versionId = 1,
       groupId = "group 1",
       requestInfo = collection.immutable.Map(
-      TopicAndPartition(topic1, 0) -> OffsetAndMetadata(42L, "some metadata", SystemTime.milliseconds),
-      TopicAndPartition(topic1, 1) -> OffsetAndMetadata(100L, OffsetMetadata.NoMetadata, SystemTime.milliseconds)
+      TopicAndPartition(topic1, 0) -> OffsetAndMetadata(42L, "some metadata", SystemTime.absoluteMilliseconds),
+      TopicAndPartition(topic1, 1) -> OffsetAndMetadata(100L, OffsetMetadata.NoMetadata, SystemTime.absoluteMilliseconds)
     ))
   }
 

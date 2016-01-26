@@ -276,7 +276,7 @@ object TestPurgatoryPerformance {
 
     private class Scheduled(val operation: FakeOperation) extends Delayed {
       def getDelay(unit: TimeUnit): Long = {
-        unit.convert(max(operation.completesAt - SystemTime.milliseconds, 0), TimeUnit.MILLISECONDS)
+        unit.convert(max(operation.completesAt - SystemTime.absoluteMilliseconds, 0), TimeUnit.MILLISECONDS)
       }
 
       def compareTo(d: Delayed): Int = {

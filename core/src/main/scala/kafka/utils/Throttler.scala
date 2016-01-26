@@ -42,14 +42,14 @@ class Throttler(val desiredRatePerSec: Double,
   
   private val lock = new Object
   private val meter = newMeter(metricName, units, TimeUnit.SECONDS)
-  private var periodStartNs: Long = time.nanoseconds
+  private var periodStartNs: Long = time.relativeNanoseconds
   private var observedSoFar: Double = 0.0
   
   def maybeThrottle(observed: Double) {
     meter.mark(observed.toLong)
     lock synchronized {
       observedSoFar += observed
-      val now = time.nanoseconds
+      val now = time.relativeNanoseconds
       val elapsedNs = now - periodStartNs
       // if we have completed an interval AND we have observed something, maybe
       // we should take a little nap

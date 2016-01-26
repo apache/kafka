@@ -101,7 +101,7 @@ object RequestChannel extends Logging {
     trace("Processor %d received request : %s".format(processor, requestDesc(true)))
 
     def updateRequestMetrics() {
-      val endTimeMs = SystemTime.milliseconds
+      val endTimeMs = SystemTime.absoluteMilliseconds
       // In some corner cases, apiLocalCompleteTimeMs may not be set when the request completes if the remote
       // processing time is really small. This value is set in KafkaApis from a request handling thread.
       // This may be read in a network thread before the actual update happens in KafkaApis which will cause us to
@@ -149,7 +149,7 @@ object RequestChannel extends Logging {
   }
 
   case class Response(processor: Int, request: Request, responseSend: Send, responseAction: ResponseAction) {
-    request.responseCompleteTimeMs = SystemTime.milliseconds
+    request.responseCompleteTimeMs = SystemTime.absoluteMilliseconds
 
     def this(processor: Int, request: Request, responseSend: Send) =
       this(processor, request, responseSend, if (responseSend == null) NoOpAction else SendAction)
@@ -229,7 +229,7 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   def receiveResponse(processor: Int): RequestChannel.Response = {
     val response = responseQueues(processor).poll()
     if (response != null)
-      response.request.responseDequeueTimeMs = SystemTime.milliseconds
+      response.request.responseDequeueTimeMs = SystemTime.absoluteMilliseconds
     response
   }
 

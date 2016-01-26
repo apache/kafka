@@ -659,11 +659,11 @@ private case class CleanerStats(time: Time = SystemTime) {
   }
 
   def indexDone() {
-    mapCompleteTime = time.milliseconds
+    mapCompleteTime = time.relativeMilliseconds
   }
 
   def allDone() {
-    endTime = time.milliseconds
+    endTime = time.relativeMilliseconds
   }
   
   def elapsedSecs = (endTime - startTime)/1000.0
@@ -671,7 +671,7 @@ private case class CleanerStats(time: Time = SystemTime) {
   def elapsedIndexSecs = (mapCompleteTime - startTime)/1000.0
   
   def clear() {
-    startTime = time.milliseconds
+    startTime = time.absoluteMilliseconds
     mapCompleteTime = -1L
     endTime = -1L
     bytesRead = 0L

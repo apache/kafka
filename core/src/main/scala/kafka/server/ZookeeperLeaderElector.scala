@@ -59,7 +59,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
   }
 
   def elect: Boolean = {
-    val timestamp = SystemTime.milliseconds.toString
+    val timestamp = SystemTime.absoluteMilliseconds.toString
     val electString = Json.encode(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp))
    
    leaderId = getControllerID 

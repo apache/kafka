@@ -44,9 +44,9 @@ class KafkaRequestHandler(id: Int,
           // Since meter is calculated as total_recorded_value / time_window and
           // time_window is independent of the number of threads, each recorded idle
           // time should be discounted by # threads.
-          val startSelectTime = SystemTime.nanoseconds
+          val startSelectTime = SystemTime.relativeNanoseconds
           req = requestChannel.receiveRequest(300)
-          val idleTime = SystemTime.nanoseconds - startSelectTime
+          val idleTime = SystemTime.relativeNanoseconds - startSelectTime
           aggregateIdleMeter.mark(idleTime / totalHandlerThreads)
         }
 
@@ -55,7 +55,7 @@ class KafkaRequestHandler(id: Int,
             id, brokerId))
           return
         }
-        req.requestDequeueTimeMs = SystemTime.milliseconds
+        req.requestDequeueTimeMs = SystemTime.absoluteMilliseconds
         trace("Kafka request handler %d on broker %d handling request %s".format(id, brokerId, req))
         apis.handle(req)
       } catch {

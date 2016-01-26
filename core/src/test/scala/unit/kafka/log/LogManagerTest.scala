@@ -94,7 +94,7 @@ class LogManagerTest {
     }
     assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
 
-    log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
+    log.logSegments.foreach(_.log.file.setLastModified(time.absoluteMilliseconds))
 
     time.sleep(maxLogAgeMs + 1)
     assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)

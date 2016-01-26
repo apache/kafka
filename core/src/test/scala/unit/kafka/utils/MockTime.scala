@@ -34,9 +34,12 @@ class MockTime(@volatile private var currentMs: Long) extends Time {
   
   def this() = this(System.currentTimeMillis)
   
-  def milliseconds: Long = currentMs
+  def absoluteMilliseconds: Long = currentMs
 
-  def nanoseconds: Long = 
+
+  override def relativeMilliseconds: Long = currentMs
+
+  def relativeNanoseconds: Long =
     TimeUnit.NANOSECONDS.convert(currentMs, TimeUnit.MILLISECONDS)
 
   def sleep(ms: Long) {
@@ -44,6 +47,6 @@ class MockTime(@volatile private var currentMs: Long) extends Time {
     scheduler.tick()
   }
   
-  override def toString() = "MockTime(%d)".format(milliseconds)
+  override def toString() = "MockTime(%d)".format(absoluteMilliseconds)
 
 }

@@ -100,7 +100,7 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
   private def processConfigChanges(notifications: Seq[String]) {
     if (notifications.size > 0) {
       info("Processing config change notification(s)...")
-      val now = time.milliseconds
+      val now = time.absoluteMilliseconds
       for (notification <- notifications) {
         val changeId = changeNumber(notification)
 

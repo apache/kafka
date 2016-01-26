@@ -111,7 +111,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           error("Error when handling request %s".format(request.body), e)
         }
     } finally
-      request.apiLocalCompleteTimeMs = SystemTime.milliseconds
+      request.apiLocalCompleteTimeMs = SystemTime.absoluteMilliseconds
   }
 
   def handleLeaderAndIsrRequest(request: RequestChannel.Request) {
@@ -284,7 +284,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       //   - If v1 and no explicit commit timestamp is provided we use default expiration timestamp.
       //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
       //   - If v2 we use the default expiration timestamp
-      val currentTimestamp = SystemTime.milliseconds
+      val currentTimestamp = SystemTime.absoluteMilliseconds
       val defaultExpireTimestamp = offsetRetention + currentTimestamp
       val offsetData = authorizedRequestInfo.mapValues(offsetAndMetadata =>
         offsetAndMetadata.copy(
@@ -374,7 +374,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       // When this callback is triggered, the remote API call has completed
-      request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
+      request.apiRemoteCompleteTimeMs = SystemTime.absoluteMilliseconds
 
       quotaManagers(ApiKeys.PRODUCE.id).recordAndMaybeThrottle(
         request.header.clientId,
@@ -441,7 +441,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
 
       // When this callback is triggered, the remote API call has completed
-      request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
+      request.apiRemoteCompleteTimeMs = SystemTime.absoluteMilliseconds
 
       // Do not throttle replication traffic
       if (fetchRequest.isFromFollower) {
@@ -556,7 +556,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     for(i <- 0 until segsArray.length)
       offsetTimeArray(i) = (segsArray(i).baseOffset, segsArray(i).lastModified)
     if (segsArray.last.size > 0)
-      offsetTimeArray(segsArray.length) = (log.logEndOffset, SystemTime.milliseconds)
+      offsetTimeArray(segsArray.length) = (log.logEndOffset, SystemTime.absoluteMilliseconds)
 
     var startIndex = -1
     timestamp match {

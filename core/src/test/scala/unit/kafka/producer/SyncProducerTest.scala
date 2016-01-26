@@ -44,7 +44,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
 
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
-    val firstStart = SystemTime.milliseconds
+    val firstStart = SystemTime.relativeMilliseconds
     try {
       val response = producer.send(TestUtils.produceRequest("test", 0,
         new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
@@ -52,9 +52,9 @@ class SyncProducerTest extends KafkaServerTestHarness {
     } catch {
       case e: Exception => Assert.fail("Unexpected failure sending message to broker. " + e.getMessage)
     }
-    val firstEnd = SystemTime.milliseconds
+    val firstEnd = SystemTime.relativeMilliseconds
     Assert.assertTrue((firstEnd-firstStart) < 500)
-    val secondStart = SystemTime.milliseconds
+    val secondStart = SystemTime.relativeMilliseconds
     try {
       val response = producer.send(TestUtils.produceRequest("test", 0,
         new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
@@ -62,7 +62,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     } catch {
       case e: Exception => Assert.fail("Unexpected failure sending message to broker. " + e.getMessage)
     }
-    val secondEnd = SystemTime.milliseconds
+    val secondEnd = SystemTime.relativeMilliseconds
     Assert.assertTrue((secondEnd-secondStart) < 500)
     try {
       val response = producer.send(TestUtils.produceRequest("test", 0,
@@ -204,7 +204,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     // any requests should be accepted and queue up, but not handled
     server.requestHandlerPool.shutdown()
 
-    val t1 = SystemTime.milliseconds
+    val t1 = SystemTime.relativeMilliseconds
     try {
       producer.send(request)
       Assert.fail("Should have received timeout exception since request handling is stopped.")
@@ -212,7 +212,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
       case e: SocketTimeoutException => /* success */
       case e: Throwable => Assert.fail("Unexpected exception when expecting timeout: " + e)
     }
-    val t2 = SystemTime.milliseconds
+    val t2 = SystemTime.relativeMilliseconds
     // make sure we don't wait fewer than timeoutMs for a response
     Assert.assertTrue((t2-t1) >= timeoutMs)
   }

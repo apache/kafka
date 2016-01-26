@@ -293,6 +293,7 @@ class LogManager(val logDirs: Array[File],
 
   /**
    *  Delete all data in a partition and start the log at the new offset
+ *
    *  @param newOffset The new offset to start the log with
    */
   def truncateFullyAndStartAt(topicAndPartition: TopicAndPartition, newOffset: Long) {
@@ -417,7 +418,7 @@ class LogManager(val logDirs: Array[File],
   private def cleanupExpiredSegments(log: Log): Int = {
     if (log.config.retentionMs < 0)
       return 0
-    val startMs = time.milliseconds
+    val startMs = time.absoluteMilliseconds
     log.deleteOldSegments(startMs - _.lastModified > log.config.retentionMs)
   }
 
@@ -446,13 +447,13 @@ class LogManager(val logDirs: Array[File],
   def cleanupLogs() {
     debug("Beginning log cleanup...")
     var total = 0
-    val startMs = time.milliseconds
+    val startMs = time.absoluteMilliseconds
     for(log <- allLogs; if !log.config.compact) {
       debug("Garbage collecting '" + log.name + "'")
       total += cleanupExpiredSegments(log) + cleanupSegmentsToMaintainSize(log)
     }
     debug("Log cleanup completed. " + total + " files deleted in " +
-                  (time.milliseconds - startMs) / 1000 + " seconds")
+                  (time.absoluteMilliseconds - startMs) / 1000 + " seconds")
   }
 
   /**
@@ -482,7 +483,7 @@ class LogManager(val logDirs: Array[File],
 
     for ((topicAndPartition, log) <- logs) {
       try {
-        val timeSinceLastFlush = time.milliseconds - log.lastFlushTime
+        val timeSinceLastFlush = time.absoluteMilliseconds - log.lastFlushTime
         debug("Checking if flush is needed on " + topicAndPartition.topic + " flush interval  " + log.config.flushMs +
               " last flushed " + log.lastFlushTime + " time since last flush: " + timeSinceLastFlush)
         if(timeSinceLastFlush >= log.config.flushMs)

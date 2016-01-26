@@ -40,9 +40,11 @@ object Time {
  */
 trait Time {
   
-  def milliseconds: Long
+  def absoluteMilliseconds: Long
 
-  def nanoseconds: Long
+  def relativeMilliseconds: Long
+
+  def relativeNanoseconds: Long
 
   def sleep(ms: Long)
 }
@@ -51,10 +53,29 @@ trait Time {
  * The normal system implementation of time functions
  */
 object SystemTime extends Time {
-  
-  def milliseconds: Long = System.currentTimeMillis
-  
-  def nanoseconds: Long = System.nanoTime
+
+  /**
+    * Returns the number of milliseconds since midnight UTC on 1/1/1970 based on the operating system's clock.
+    *
+    * This value is likely less precise than relative time.
+    */
+  def absoluteMilliseconds: Long = System.currentTimeMillis
+
+  /**
+    * Returns the current value of the JVM's high resolution time source rounded down to milliseconds.
+    *
+    * This time value can only be used for measuring elapsed time within the JVM from which it is generated.
+    * This time value has no relation to the "wall-clock" time.
+    */
+  def relativeMilliseconds: Long = relativeNanoseconds / Time.NsPerMs
+
+  /**
+    * Returns the current value of the JVM's high resolution time source in nanoseconds.
+    *
+    * This time value can only be used for measuring elapsed time within the JVM from which it is generated.
+    * This time value has no relation to the "wall-clock" time.
+    */
+  def relativeNanoseconds: Long = System.nanoTime
   
   def sleep(ms: Long): Unit = Thread.sleep(ms)
   

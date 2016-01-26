@@ -66,11 +66,11 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     while (remainingRetries > 0 && outstandingProduceRequests.size > 0) {
       topicMetadataToRefresh ++= outstandingProduceRequests.map(_.topic)
       if (topicMetadataRefreshInterval >= 0 &&
-          SystemTime.milliseconds - lastTopicMetadataRefreshTime > topicMetadataRefreshInterval) {
+          SystemTime.absoluteMilliseconds - lastTopicMetadataRefreshTime > topicMetadataRefreshInterval) {
         CoreUtils.swallowError(brokerPartitionInfo.updateInfo(topicMetadataToRefresh.toSet, correlationId.getAndIncrement))
         sendPartitionPerTopicCache.clear()
         topicMetadataToRefresh.clear
-        lastTopicMetadataRefreshTime = SystemTime.milliseconds
+        lastTopicMetadataRefreshTime = SystemTime.absoluteMilliseconds
       }
       outstandingProduceRequests = dispatchSerializedData(outstandingProduceRequests)
       if (outstandingProduceRequests.size > 0) {

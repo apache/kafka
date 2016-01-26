@@ -43,17 +43,17 @@ class ByteBoundedBlockingQueue[E] (val queueNumMessageCapacity: Int, val queueBy
    */
   def offer(e: E, timeout: Long, unit: TimeUnit = TimeUnit.MICROSECONDS): Boolean = {
     if (e == null) throw new NullPointerException("Putting null element into queue.")
-    val startTime = SystemTime.nanoseconds
+    val startTime = SystemTime.relativeNanoseconds
     val expireTime = startTime + unit.toNanos(timeout)
     putLock synchronized {
-      var timeoutNanos = expireTime - SystemTime.nanoseconds
+      var timeoutNanos = expireTime - SystemTime.relativeNanoseconds
       while (currentByteSize.get() >= queueByteCapacity && timeoutNanos > 0) {
         // ensure that timeoutNanos > 0, otherwise (per javadoc) we have to wait until the next notify
         putLock.wait(timeoutNanos / 1000000, (timeoutNanos % 1000000).toInt)
-        timeoutNanos = expireTime - SystemTime.nanoseconds
+        timeoutNanos = expireTime - SystemTime.relativeNanoseconds
       }
       // only proceed if queue has capacity and not timeout
-      timeoutNanos = expireTime - SystemTime.nanoseconds
+      timeoutNanos = expireTime - SystemTime.relativeNanoseconds
       if (currentByteSize.get() < queueByteCapacity && timeoutNanos > 0) {
         val success = queue.offer(e, timeoutNanos, TimeUnit.NANOSECONDS)
         // only increase queue byte size if put succeeds

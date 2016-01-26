@@ -48,7 +48,7 @@ class LogSegment(val log: FileMessageSet,
                  val rollJitterMs: Long,
                  time: Time) extends Logging {
 
-  var created = time.milliseconds
+  var created = time.absoluteMilliseconds
 
   /* the number of bytes since we last added an entry in the offset index */
   private var bytesSinceLastIndexEntry = 0
@@ -219,7 +219,7 @@ class LogSegment(val log: FileMessageSet,
     index.resize(index.maxIndexSize)
     val bytesTruncated = log.truncateTo(mapping.position)
     if(log.sizeInBytes == 0)
-      created = time.milliseconds
+      created = time.absoluteMilliseconds
     bytesSinceLastIndexEntry = 0
     bytesTruncated
   }

@@ -358,7 +358,7 @@ class GroupMetadataManager(val brokerId: Int,
         }
       }
 
-      val startMs = SystemTime.milliseconds
+      val startMs = SystemTime.relativeMilliseconds
       try {
         replicaManager.logManager.getLog(topicPartition) match {
           case Some(log) =>
@@ -437,7 +437,7 @@ class GroupMetadataManager(val brokerId: Int,
 
             if (!shuttingDown.get())
               info("Finished loading offsets from %s in %d milliseconds."
-                .format(topicPartition, SystemTime.milliseconds - startMs))
+                .format(topicPartition, SystemTime.relativeMilliseconds - startMs))
           case None =>
             warn("No log found for " + topicPartition)
         }
@@ -532,7 +532,7 @@ class GroupMetadataManager(val brokerId: Int,
 
   private def deleteExpiredOffsets() {
     debug("Collecting expired offsets.")
-    val startMs = SystemTime.milliseconds
+    val startMs = SystemTime.absoluteMilliseconds
 
     val numExpiredOffsetsRemoved = inWriteLock(offsetExpireLock) {
       val expiredOffsets = offsetsCache.filter { case (groupTopicPartition, offsetAndMetadata) =>
@@ -580,7 +580,7 @@ class GroupMetadataManager(val brokerId: Int,
       }.sum
     }
 
-    info("Removed %d expired offsets in %d milliseconds.".format(numExpiredOffsetsRemoved, SystemTime.milliseconds - startMs))
+    info("Removed %d expired offsets in %d milliseconds.".format(numExpiredOffsetsRemoved, SystemTime.absoluteMilliseconds - startMs))
   }
 
   private def getHighWatermark(partitionId: Int): Long = {
