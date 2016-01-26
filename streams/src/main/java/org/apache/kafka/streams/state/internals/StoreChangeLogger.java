@@ -89,4 +89,19 @@ public class StoreChangeLogger<K, V> {
         }
     }
 
+    public boolean isDirty(K key) {
+        return this.dirty.contains(key);
+    }
+
+    public boolean isRemoved(K key) {
+        return this.removed.contains(key);
+    }
+
+    public Set<K> dirtyKeys() {
+        return this.dirty;
+    }
+
+    public Set<K> removedKeys() {
+        return this.removed;
+    }
 }

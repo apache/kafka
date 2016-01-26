@@ -20,9 +20,11 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Serdes;
+
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
@@ -60,15 +62,25 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private final WriteOptions wOptions;
     private final FlushOptions fOptions;
 
-    private Serdes<K, V> serdes;
     private ProcessorContext context;
+    private Serdes<K, V> serdes;
     protected File dbDir;
     private RocksDB db;
 
     private int cacheSize = DEFAULT_CACHE_SIZE;
     private InMemoryLRUCacheStoreSupplier.MemoryLRUCache<K, V> cache;
 
-    public RocksDBStore withCacheSize(int cacheSize) {
+    private boolean loggingEnabled = true;
+    private StoreChangeLogger<byte[], byte[]> changeLogger = null;
+    protected final StoreChangeLogger.ValueGetter<byte[], byte[]> getter;
+
+    public RocksDBStore<K, V> disableLogging() {
+        loggingEnabled = false;
+
+        return this;
+    }
+
+    public RocksDBStore<K, V> withCacheSize(int cacheSize) {
         this.cacheSize = cacheSize;
 
         return this;
@@ -97,6 +109,29 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         fOptions = new FlushOptions();
         fOptions.setWaitForFlush(true);
+
+        this.getter = new StoreChangeLogger.ValueGetter<byte[], byte[]>() {
+            public byte[] get(byte[] key) {
+                return inner.get(key);
+            }
+        };
+
+    }
+
+    private abstract class RocksDBStateRestoreCallback implements StateRestoreCallback {
+        private String storeName;
+
+        public RocksDBStateRestoreCallback(String storeName) {
+            this.storeName = storeName;
+        }
+    }
+
+    private abstract class RocksDBCacheRemovalListener implements InMemoryLRUCacheStoreSupplier.EldestEntryRemovalListener<K, V> {
+        private String storeName;
+
+        public RocksDBCacheRemovalListener(String storeName) {
+            this.storeName = storeName;
+        }
     }
 
     public void init(ProcessorContext context) {
@@ -106,15 +141,45 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         this.dbDir = new File(new File(this.context.stateDir(), DB_FILE_DIR), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
 
+        this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(name, context, Serdes.withBuiltinTypes("", byte[].class, byte[].class)) : null;
+
         this.cache = this.cacheSize > 0 ? new InMemoryLRUCacheStoreSupplier.MemoryLRUCache<K, V>(name, this.cacheSize)
-                .whenEldestRemoved(new InMemoryLRUCacheStoreSupplier.EldestEntryRemovalListener<K, V>() {
+                .whenEldestRemoved(new RocksDBCacheRemovalListener(name) {
                     @Override
                     public void apply(K key, V value) {
+                        byte[] rawKey = serdes.rawKey(key);
+
                         // write the entry to the rocksDB file
-                        putInternal(key, value);
+                        // flush all the dirty entries if this evicted entry is dirty
+                        if (changeLogger.isDirty(rawKey)) {
+                            for (byte[] dirtyKey : changeLogger.dirtyKeys()) {
+
+                            }
+                        }
+
+                        try {
+                            putInternal(rawKey, serdes.rawValue(value));
+                        } catch (RocksDBException e) {
+                            // TODO: this needs to be handled more accurately
+                            throw new KafkaException("Error while executing put key " + key.toString() +
+                                    " and value " + value.toString() + " from store " + this.storeName, e);
+                        }
                     }
                 })
                 : null;
+
+        context.register(this, loggingEnabled, new RocksDBStateRestoreCallback(name) {
+
+            @Override
+            public void restore(byte[] key, byte[] value) {
+                try {
+                    putInternal(key, value);
+                } catch (RocksDBException e) {
+                    // TODO: this needs to be handled more accurately
+                    throw new KafkaException("Error restoring store " + this.storeName, e);
+                }
+            }
+        });
     }
 
     private RocksDB openDB(File dir, Options options, int ttl) {
@@ -145,27 +210,29 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public V get(K key) {
-        if (cache != null) {
-            V value = cache.get(key);
+        byte[] rawKey = serdes.rawKey(key);
 
-            if (value == null) {
-                value = getInternal(key);
-                cache.put(key, value);
+        try {
+            if (cache != null) {
+                V value = cache.get(key);
+
+                if (value == null) {
+                    value = serdes.valueFrom(getInternal(rawKey));
+                    cache.put(key, value);
+                }
+
+                return value;
+            } else {
+                return serdes.valueFrom(getInternal(rawKey));
             }
-
-            return value;
-        } else {
-            return getInternal(key);
+        } catch (RocksDBException e) {
+            // TODO: this needs to be handled more accurately
+            throw new KafkaException("Error while executing get for key " + key.toString() + " from store " + this.name, e);
         }
     }
 
-    private V getInternal(K key) {
-        try {
-            return serdes.valueFrom(this.db.get(serdes.rawKey(key)));
-        } catch (RocksDBException e) {
-            // TODO: this needs to be handled more accurately
-            throw new KafkaException("Error while executing get " + key.toString() + " from store " + this.name, e);
-        }
+    private byte[] getInternal(byte[] rawKey) throws RocksDBException {
+        return this.db.get(rawKey);
     }
 
     @Override
@@ -173,21 +240,31 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         if (cache != null) {
             cache.put(key, value);
         } else {
-            putInternal(key, value);
+            byte[] rawKey = serdes.rawKey(key);
+            byte[] rawValue = serdes.rawValue(value);
+
+            try {
+                putInternal(rawKey, rawValue);
+            } catch (RocksDBException e) {
+                // TODO: this needs to be handled more accurately
+                throw new KafkaException("Error while executing put key " + key.toString() +
+                        " and value " + value.toString() + " from store " + this.name, e);
+            }
+
+            if (loggingEnabled) {
+                changeLogger.add(rawKey);
+                changeLogger.maybeLogChange(this.getter);
+            }
         }
     }
 
-    private void putInternal(K key, V value) {
-        try {
-            if (value == null) {
-                db.remove(wOptions, serdes.rawKey(key));
-            } else {
-                db.put(wOptions, serdes.rawKey(key), serdes.rawValue(value));
-            }
-        } catch (RocksDBException e) {
-            // TODO: this needs to be handled more accurately
-            throw new KafkaException("Error while executing put " + key.toString() + " from store " + this.name, e);
+    private void putInternal(byte[] rawKey, byte[] rawValue) throws RocksDBException {
+        if (rawValue == null) {
+            db.remove(wOptions, rawKey);
+        } else {
+            db.put(wOptions, rawKey, rawValue);
         }
+
     }
 
     @Override
@@ -223,6 +300,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             // TODO: this needs to be handled more accurately
             throw new KafkaException("Error while executing flush from store " + this.name, e);
         }
+
+        if (loggingEnabled)
+            changeLogger.logChange(this.getter);
     }
 
     @Override

@@ -41,7 +41,6 @@ import java.util.List;
 public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     protected final KeyValueStore<K, V> inner;
-    protected final StoreChangeLogger.ValueGetter getter;
     protected final Serdes<K, V> serialization;
     protected final String metricScope;
     protected final Time time;
@@ -56,25 +55,12 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private Sensor restoreTime;
     private StreamsMetrics metrics;
 
-    private boolean loggingEnabled = true;
-    private StoreChangeLogger<K, V> changeLogger = null;
-
     // always wrap the store with the metered store
     public MeteredKeyValueStore(final KeyValueStore<K, V> inner, Serdes<K, V> serialization, String metricScope, Time time) {
         this.inner = inner;
-        this.getter = new StoreChangeLogger.ValueGetter<K, V>() {
-            public V get(K key) {
-                return inner.get(key);
-            }
-        };
         this.serialization = serialization;
         this.metricScope = metricScope;
         this.time = time != null ? time : new SystemTime();
-    }
-
-    public MeteredKeyValueStore<K, V> disableLogging() {
-        loggingEnabled = false;
-        return this;
     }
 
     @Override
@@ -96,22 +82,10 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore");
 
         serialization.init(context);
-        this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(name, context, serialization) : null;
 
-        // register and possibly restore the state from the logs
         long startNs = time.nanoseconds();
-        inner.init(context);
         try {
-            final Deserializer<K> keyDeserializer = serialization.keyDeserializer();
-            final Deserializer<V> valDeserializer = serialization.valueDeserializer();
-
-            context.register(this, loggingEnabled, new StateRestoreCallback() {
-                @Override
-                public void restore(byte[] key, byte[] value) {
-                    inner.put(keyDeserializer.deserialize(name, key),
-                            valDeserializer.deserialize(name, value));
-                }
-            });
+            inner.init(context);
         } finally {
             this.metrics.recordLatency(this.restoreTime, startNs, time.nanoseconds());
         }
@@ -137,11 +111,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         long startNs = time.nanoseconds();
         try {
             this.inner.put(key, value);
-
-            if (loggingEnabled) {
-                changeLogger.add(key);
-                changeLogger.maybeLogChange(this.getter);
-            }
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
@@ -152,14 +121,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         long startNs = time.nanoseconds();
         try {
             this.inner.putAll(entries);
-
-            if (loggingEnabled) {
-                for (KeyValue<K, V> entry : entries) {
-                    K key = entry.key;
-                    changeLogger.add(key);
-                }
-                changeLogger.maybeLogChange(this.getter);
-            }
         } finally {
             this.metrics.recordLatency(this.putAllTime, startNs, time.nanoseconds());
         }
@@ -212,9 +173,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         long startNs = time.nanoseconds();
         try {
             this.inner.flush();
-
-            if (loggingEnabled)
-                changeLogger.logChange(this.getter);
         } finally {
             this.metrics.recordLatency(this.flushTime, startNs, time.nanoseconds());
         }
