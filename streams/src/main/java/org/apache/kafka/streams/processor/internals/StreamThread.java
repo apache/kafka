@@ -41,6 +41,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskIdFormatException;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -490,7 +493,7 @@ public class StreamThread extends Thread {
                                 }
                             }
                         }
-                    } catch (TaskId.TaskIdFormatException e) {
+                    } catch (TaskIdFormatException e) {
                         // there may be some unknown files that sits in the same directory,
                         // we should ignore these files instead trying to delete them as well
                     }
@@ -528,7 +531,7 @@ public class StreamThread extends Thread {
                     if (new File(dir, ProcessorStateManager.CHECKPOINT_FILE_NAME).exists())
                         tasks.add(id);
 
-                } catch (TaskId.TaskIdFormatException e) {
+                } catch (TaskIdFormatException e) {
                     // there may be some unknown files that sits in the same directory,
                     // we should ignore these files instead trying to delete them as well
                 }
@@ -548,7 +551,7 @@ public class StreamThread extends Thread {
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
         if (partitionAssignor == null)
-            throw new KafkaException("Partition assignor has not been initialized while adding stream tasks: this should not happen.");
+            throw new IllegalStateException("Partition assignor has not been initialized while adding stream tasks: this should not happen.");
 
         HashMap<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<>();
 
@@ -575,7 +578,7 @@ public class StreamThread extends Thread {
 
                 for (TopicPartition partition : partitions)
                     activeTasksByPartition.put(partition, task);
-            } catch (KafkaException e) {
+            } catch (StreamsException e) {
                 log.error("Failed to create an active task #" + taskId + " in thread [" + this.getName() + "]: ", e);
                 throw e;
             }
@@ -598,7 +601,7 @@ public class StreamThread extends Thread {
         log.info("Removing a task {}", task.id());
         try {
             task.close();
-        } catch (KafkaException e) {
+        } catch (StreamsException e) {
             log.error("Failed to close a " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
             throw e;
         }
@@ -619,7 +622,7 @@ public class StreamThread extends Thread {
 
     private void addStandbyTasks() {
         if (partitionAssignor == null)
-            throw new KafkaException("Partition assignor has not been initialized while adding standby tasks: this should not happen.");
+            throw new IllegalStateException("Partition assignor has not been initialized while adding standby tasks: this should not happen.");
 
         Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
@@ -677,14 +680,14 @@ public class StreamThread extends Thread {
             List<PartitionInfo> infos = consumer.partitionsFor(topic);
 
             if (infos == null)
-                throw new KafkaException("topic not found: " + topic);
+                throw new TopologyBuilderException("Topic not found: " + topic);
 
             if (numPartitions == -1) {
                 numPartitions = infos.size();
             } else if (numPartitions != infos.size()) {
                 String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
                 Arrays.sort(topics);
-                throw new KafkaException("topics not copartitioned: [" + Utils.mkString(Arrays.asList(topics), ",") + "]");
+                throw new TopologyBuilderException("Topics not copartitioned: [" + Utils.mkString(Arrays.asList(topics), ",") + "]");
             }
         }
     }

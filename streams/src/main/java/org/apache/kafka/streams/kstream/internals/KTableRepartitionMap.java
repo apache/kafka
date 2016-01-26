@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -60,7 +59,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
     @Override
     public void enableSendingOldValues() {
         // this should never be called
-        throw new KafkaException("KTableRepartitionMap should always require sending old values.");
+        throw new IllegalStateException("KTableRepartitionMap should always require sending old values.");
     }
 
     private KeyValue<K1, V1> computeValue(K key, V value) {

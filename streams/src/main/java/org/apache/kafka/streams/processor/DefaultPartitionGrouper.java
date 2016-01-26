@@ -61,7 +61,7 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
             List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
 
             if (infos == null)
-                throw new KafkaException("topic not found :" + topic);
+                throw new KafkaException("Topic not found during partition assignment: " + topic);
 
             int numPartitions = infos.size();
             if (numPartitions > maxNumPartitions)

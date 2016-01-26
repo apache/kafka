@@ -27,14 +27,13 @@ import org.apache.kafka.streams.state.WindowStore;
 class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
 
     private final String windowName;
-    private final long windowSizeMs;
-    private final long retentionPeriodMs;
-
 
     KStreamJoinWindow(String windowName, long windowSizeMs, long retentionPeriodMs) {
         this.windowName = windowName;
-        this.windowSizeMs = windowSizeMs;
-        this.retentionPeriodMs = retentionPeriodMs;
+
+        if (windowSizeMs * 2 > retentionPeriodMs)
+            throw new KafkaException("The retention period of the join window "
+                    + windowName + " must at least two times its window size.");
     }
 
     @Override
@@ -52,9 +51,6 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
             super.init(context);
 
             window = (WindowStore<K, V>) context.getStateStore(windowName);
-
-            if (windowSizeMs * 2 > retentionPeriodMs)
-                throw new KafkaException("The retention period must be at least two times the join window size.");
         }
 
         @Override

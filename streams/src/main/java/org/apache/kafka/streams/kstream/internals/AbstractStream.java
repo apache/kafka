@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 
@@ -41,7 +41,7 @@ public abstract class AbstractStream<K> {
         Set<String> otherSourceNodes = other.sourceNodes;
 
         if (thisSourceNodes == null || otherSourceNodes == null)
-            throw new KafkaException("not joinable");
+            throw new TopologyBuilderException(this.name + " and " + other.name + " are not joinable");
 
         Set<String> allSourceNodes = new HashSet<>();
         allSourceNodes.addAll(thisSourceNodes);

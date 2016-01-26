@@ -14,19 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals.assignment;
-
-import org.apache.kafka.common.KafkaException;
+package org.apache.kafka.streams.errors;
 
 /**
  * The run time exception class for stream task assignments
  */
-public class TaskAssignmentException extends KafkaException {
+public class TaskAssignmentException extends StreamsException {
 
     private final static long serialVersionUID = 1L;
 
-    public TaskAssignmentException(String message) {
-        super(message);
+    public TaskAssignmentException(String s) {
+        super(s);
     }
 
+    public TaskAssignmentException(String s, Throwable throwable) {
+        super(s, throwable);
+    }
+
+    public TaskAssignmentException(Throwable throwable) {
+        super(throwable);
+    }
 }
