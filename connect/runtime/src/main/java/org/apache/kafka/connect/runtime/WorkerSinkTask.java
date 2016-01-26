@@ -73,7 +73,6 @@ class WorkerSinkTask extends AbstractWorkerTask {
     private int commitFailures;
     private boolean pausedForRedelivery;
     private boolean committing;
-    private boolean started;
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
@@ -88,7 +87,6 @@ class WorkerSinkTask extends AbstractWorkerTask {
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
         this.time = time;
-        this.started = false;
         this.messageBatch = new ArrayList<>();
         this.currentOffsets = new HashMap<>();
         this.pausedForRedelivery = false;
@@ -126,10 +124,7 @@ class WorkerSinkTask extends AbstractWorkerTask {
 
     @Override
     public void execute() {
-        // Try to join and start. If we're interrupted before this completes, bail.
-        if (!joinConsumerGroupAndStart())
-            return;
-
+        initializeAndStart();
         try {
             while (!isStopping())
                 iteration();
@@ -189,32 +184,18 @@ class WorkerSinkTask extends AbstractWorkerTask {
     }
 
     /**
-     * Performs initial join process for consumer group, ensures we have an assignment, and initializes + starts the
-     * SinkTask.
-     *
-     * @returns true if successful, false if joining the consumer group was interrupted
+     * Initializes and starts the SinkTask.
      */
-    protected boolean joinConsumerGroupAndStart() {
+    protected void initializeAndStart() {
         String topicsStr = taskConfig.get(SinkTask.TOPICS_CONFIG);
         if (topicsStr == null || topicsStr.isEmpty())
             throw new ConnectException("Sink tasks require a list of topics.");
         String[] topics = topicsStr.split(",");
         log.debug("Task {} subscribing to topics {}", id, topics);
         consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
-
-        // Ensure we're in the group so that if start() wants to rewind offsets, it will have an assignment of partitions
-        // to work with. Any rewinding will be handled immediately when polling starts.
-        try {
-            pollConsumer(0);
-        } catch (WakeupException e) {
-            log.error("Sink task {} was stopped before completing join group. Task initialization and start is being skipped", this);
-            return false;
-        }
         task.initialize(context);
         task.start(taskConfig);
         log.info("Sink task {} finished initialization and start", this);
-        started = true;
-        return true;
     }
 
     /** Poll for new messages with the given timeout. Should only be invoked by the worker thread. */
@@ -344,6 +325,9 @@ class WorkerSinkTask extends AbstractWorkerTask {
     }
 
     private void deliverMessages() {
+        if (messageBatch.isEmpty())
+            return;
+
         // Finally, deliver this batch to the sink
         try {
             // Since we reuse the messageBatch buffer, ensure we give the task its own copy
@@ -452,7 +436,7 @@ class WorkerSinkTask extends AbstractWorkerTask {
             // Instead of invoking the assignment callback on initialization, we guarantee the consumer is ready upon
             // task start. Since this callback gets invoked during that initial setup before we've started the task, we
             // need to guard against invoking the user's callback method during that period.
-            if (started && rebalanceException == null) {
+            if (rebalanceException == null) {
                 try {
                     openPartitions(partitions);
                 } catch (RuntimeException e) {
@@ -465,14 +449,12 @@ class WorkerSinkTask extends AbstractWorkerTask {
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            if (started) {
-                try {
-                    closePartitions();
-                } catch (RuntimeException e) {
-                    // The consumer swallows exceptions raised in the rebalance listener, so we need to store
-                    // exceptions and rethrow when poll() returns.
-                    rebalanceException = e;
-                }
+            try {
+                closePartitions();
+            } catch (RuntimeException e) {
+                // The consumer swallows exceptions raised in the rebalance listener, so we need to store
+                // exceptions and rethrow when poll() returns.
+                rebalanceException = e;
             }
 
             // Make sure we don't have any leftover data since offsets will be reset to committed positions

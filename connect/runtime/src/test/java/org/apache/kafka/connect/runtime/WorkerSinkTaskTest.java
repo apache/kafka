@@ -123,6 +123,7 @@ public class WorkerSinkTaskTest {
     @Test
     public void testPollRedelivery() throws Exception {
         expectInitializeTask();
+        expectPollInitialAssignment();
 
         // If a retriable exception is thrown, we should redeliver the same batch, pausing the consumer in the meantime
         expectConsumerPoll(1);
@@ -151,7 +152,8 @@ public class WorkerSinkTaskTest {
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_PROPS);
-        workerTask.joinConsumerGroupAndStart();
+        workerTask.initializeAndStart();
+        workerTask.poll(Long.MAX_VALUE);
         workerTask.poll(Long.MAX_VALUE);
         workerTask.poll(Long.MAX_VALUE);
 
@@ -163,12 +165,14 @@ public class WorkerSinkTaskTest {
         RuntimeException exception = new RuntimeException("Revocation error");
 
         expectInitializeTask();
+        expectPollInitialAssignment();
         expectRebalanceRevocationError(exception);
 
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_PROPS);
-        workerTask.joinConsumerGroupAndStart();
+        workerTask.initializeAndStart();
+        workerTask.poll(Long.MAX_VALUE);
         try {
             workerTask.poll(Long.MAX_VALUE);
             fail("Poll should have raised the rebalance exception");
@@ -184,12 +188,14 @@ public class WorkerSinkTaskTest {
         RuntimeException exception = new RuntimeException("Assignment error");
 
         expectInitializeTask();
+        expectPollInitialAssignment();
         expectRebalanceAssignmentError(exception);
 
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_PROPS);
-        workerTask.joinConsumerGroupAndStart();
+        workerTask.initializeAndStart();
+        workerTask.poll(Long.MAX_VALUE);
         try {
             workerTask.poll(Long.MAX_VALUE);
             fail("Poll should have raised the rebalance exception");
@@ -205,16 +211,6 @@ public class WorkerSinkTaskTest {
         PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
         consumer.subscribe(EasyMock.eq(Arrays.asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
-
-        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(new IAnswer<ConsumerRecords<byte[], byte[]>>() {
-            @Override
-            public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
-                rebalanceListener.getValue().onPartitionsAssigned(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
-                return ConsumerRecords.empty();
-            }
-        });
-        EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
-        EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(FIRST_OFFSET);
 
         sinkTask.initialize(EasyMock.capture(sinkTaskContext));
         PowerMock.expectLastCall();
@@ -265,6 +261,23 @@ public class WorkerSinkTaskTest {
                         return ConsumerRecords.empty();
                     }
                 });
+    }
+
+    private void expectPollInitialAssignment() {
+        final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2);
+
+        sinkTask.onPartitionsAssigned(partitions);
+        EasyMock.expectLastCall();
+
+        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+            @Override
+            public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                rebalanceListener.getValue().onPartitionsAssigned(partitions);
+                return ConsumerRecords.empty();
+            }
+        });
+        EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
+        EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(FIRST_OFFSET);
     }
 
     private void expectConsumerPoll(final int numMessages) {
