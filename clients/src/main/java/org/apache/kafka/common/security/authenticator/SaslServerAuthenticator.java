@@ -18,11 +18,13 @@
 package org.apache.kafka.common.security.authenticator;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
-
+import java.util.Set;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
-
 import java.security.Principal;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
@@ -44,9 +46,11 @@ import org.ietf.jgss.GSSName;
 import org.ietf.jgss.Oid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.Authenticator;
+import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.TransportLayer;
@@ -56,7 +60,17 @@ public class SaslServerAuthenticator implements Authenticator {
 
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerAuthenticator.class);
 
-    private final SaslServer saslServer;
+    public enum SaslState {
+        INIT, AUTHENTICATE, COMPLETE, FAILED
+    }
+
+    private SaslState saslState = SaslState.INIT;
+    private Set<String> enabledMechanisms = new HashSet<>();
+    private String saslMechanism;
+    private Map<String, ?> configs;
+    private final String host;
+    private SaslServer saslServer;
+    private AuthCallbackHandler callbackHandler;
     private final Subject subject;
     private final String node;
     private final KerberosShortNamer kerberosNamer;
@@ -69,26 +83,56 @@ public class SaslServerAuthenticator implements Authenticator {
     private NetworkReceive netInBuffer;
     private NetworkSend netOutBuffer;
 
-    public SaslServerAuthenticator(String node, final Subject subject, KerberosShortNamer kerberosNameParser, int maxReceiveSize) throws IOException {
+    public SaslServerAuthenticator(String node, final Subject subject, KerberosShortNamer kerberosNameParser, String host, int maxReceiveSize) throws IOException {
         if (subject == null)
             throw new IllegalArgumentException("subject cannot be null");
-        if (subject.getPrincipals().isEmpty())
-            throw new IllegalArgumentException("subject must have at least one principal");
         this.node = node;
         this.subject = subject;
         this.kerberosNamer = kerberosNameParser;
         this.maxReceiveSize = maxReceiveSize;
-        saslServer = createSaslServer();
+        this.host = host;
     }
 
     public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) {
         this.transportLayer = transportLayer;
+        this.configs = configs;
+        try {
+            callbackHandler = new SaslServerCallbackHandler(Configuration.getConfiguration(), kerberosNamer);
+            List<String> enabledMechanisms = (List<String>) this.configs.get(SaslConfigs.SASL_ENABLED_MECHANISMS);
+            if (enabledMechanisms == null || enabledMechanisms.isEmpty())
+                this.enabledMechanisms.add((String) this.configs.get(SaslConfigs.SASL_MECHANISM));
+            else
+                this.enabledMechanisms.addAll(enabledMechanisms);
+        } catch (IOException e) {
+            throw new KafkaException(e);
+        }
     }
 
-    private SaslServer createSaslServer() throws IOException {
+    private void createSaslServer(String mechanism) throws IOException {
+        if (!enabledMechanisms.contains(mechanism)) {
+            throw new KafkaException("Client SASL mechanism \"" + mechanism + "\" not enabled in server, enabled mechanisms are " + enabledMechanisms);
+        }
+        this.saslMechanism = mechanism;
+        callbackHandler.configure(configs, Mode.SERVER, subject, saslMechanism);
+        if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
+            if (subject.getPrincipals().isEmpty())
+                throw new IllegalArgumentException("subject must have at least one principal");
+            saslServer = createSaslKerberosServer(callbackHandler, configs);
+        } else {
+            try {
+                saslServer =  Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
+                    public SaslServer run() throws SaslException {
+                        return Sasl.createSaslServer(saslMechanism, "kafka", host, configs, callbackHandler);
+                    }
+                });
+            } catch (PrivilegedActionException e) {
+                throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication", e.getCause());
+            }
+        }
+    }
+
+    private SaslServer createSaslKerberosServer(final AuthCallbackHandler saslServerCallbackHandler, final Map<String, ?> configs) throws IOException {
         // server is using a JAAS-authenticated subject: determine service principal name and hostname from kafka server's subject.
-        final SaslServerCallbackHandler saslServerCallbackHandler = new SaslServerCallbackHandler(
-                Configuration.getConfiguration(), kerberosNamer);
         final Principal servicePrincipal = subject.getPrincipals().iterator().next();
         KerberosName kerberosName;
         try {
@@ -99,9 +143,7 @@ public class SaslServerAuthenticator implements Authenticator {
         final String servicePrincipalName = kerberosName.serviceName();
         final String serviceHostname = kerberosName.hostName();
 
-        final String mech = "GSSAPI";
-
-        LOG.debug("Creating SaslServer for {} with mechanism {}", kerberosName, mech);
+        LOG.debug("Creating SaslServer for {} with mechanism {}", kerberosName, saslMechanism);
 
         // As described in http://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/jgss-features.html:
         // "To enable Java GSS to delegate to the native GSS library and its list of native mechanisms,
@@ -127,7 +169,7 @@ public class SaslServerAuthenticator implements Authenticator {
         try {
             return Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
                 public SaslServer run() throws SaslException {
-                    return Sasl.createSaslServer(mech, servicePrincipalName, serviceHostname, null, saslServerCallbackHandler);
+                    return Sasl.createSaslServer(saslMechanism, servicePrincipalName, serviceHostname, configs, saslServerCallbackHandler);
                 }
             });
         } catch (PrivilegedActionException e) {
@@ -146,8 +188,9 @@ public class SaslServerAuthenticator implements Authenticator {
         if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
             return;
 
-        if (saslServer.isComplete()) {
+        if (saslServer != null && saslServer.isComplete()) {
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
+            setSaslState(SaslState.COMPLETE);
             return;
         }
 
@@ -161,12 +204,69 @@ public class SaslServerAuthenticator implements Authenticator {
             netInBuffer.payload().get(clientToken, 0, clientToken.length);
             netInBuffer = null; // reset the networkReceive as we read all the data.
             try {
-                byte[] response = saslServer.evaluateResponse(clientToken);
-                if (response != null) {
-                    netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(response));
-                    flushNetOutBufferAndUpdateInterestOps();
+                switch (saslState) {
+                    case INIT:
+                        String clientMechanism = null;
+                        SaslMechanismResponse mechanismResponse = null;
+                        SaslException exception = null;
+                        try {
+                            SaslMechanismRequest mechanismRequest = new SaslMechanismRequest(ByteBuffer.wrap(clientToken));
+                            clientMechanism = mechanismRequest.mechanism();
+                            if (enabledMechanisms.contains(clientMechanism)) {
+                                LOG.debug("Using SASL mechanism '{}' provided by client", clientMechanism);
+                                mechanismResponse = new SaslMechanismResponse((short) 0, Collections.<String>emptyList());
+                            } else {
+                                LOG.debug("SASL mechanism '{}' provided by client is not supported", clientMechanism);
+                                mechanismResponse = new SaslMechanismResponse(SaslMechanismResponse.UNSUPPORTED_SASL_MECHANISM, enabledMechanisms);
+                                exception = new SaslException("Unsupported SASL mechanism " + clientMechanism);
+                            }
+                            clientToken = null;
+                        } catch (Exception e) {
+                            if (LOG.isDebugEnabled()) {
+                                StringBuilder tokenBuilder = new StringBuilder();
+                                for (byte b : clientToken) {
+                                    tokenBuilder.append(String.format("%02x", b));
+                                    if (tokenBuilder.length() >= 20)
+                                         break;
+                                }
+                                LOG.debug("Received client packet of length {} starting with bytes 0x{}, process as GSSAPI packet", clientToken.length, tokenBuilder);
+                            }
+                            if (enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM)) {
+                                clientMechanism = SaslConfigs.GSSAPI_MECHANISM;
+                                LOG.debug("First client packet is not a SASL mechanism request, using default mechanism GSSAPI");
+                            } else {
+                                exception = new SaslException("Exception handling first SASL packet from client, GSSAPI is not supported by server", e);
+                                mechanismResponse = new SaslMechanismResponse((short) 101, enabledMechanisms);
+                            }
+                        }
+                        if (mechanismResponse != null) {
+                            netOutBuffer = new NetworkSend(node, mechanismResponse.toByteBuffer());
+                            flushNetOutBufferAndUpdateInterestOps();
+                        }
+                        if (exception == null) {
+                            createSaslServer(clientMechanism);
+                            setSaslState(SaslState.AUTHENTICATE);
+                        } else {
+                            setSaslState(SaslState.FAILED);
+                            throw exception;
+                        }
+                        // If client provided a mechanism, start SASL authentication with next client token.
+                        // For default GSSAPI, fall through to authenticate using the client token as the first GSSAPI packet.
+                        // This is required for interoperability with 0.9.0.x clients which do not send mechanism request
+                        if (clientToken == null)
+                            break;
+                    case AUTHENTICATE:
+                        byte[] response = saslServer.evaluateResponse(clientToken);
+                        if (response != null) {
+                            netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(response));
+                            flushNetOutBufferAndUpdateInterestOps();
+                        }
+                        break;
+                    default:
+                        break;
                 }
             } catch (Exception e) {
+                setSaslState(SaslState.FAILED);
                 throw new IOException(e);
             }
         }
@@ -177,11 +277,19 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     public boolean complete() {
-        return saslServer.isComplete();
+        return saslState == SaslState.COMPLETE;
     }
 
     public void close() throws IOException {
-        saslServer.dispose();
+        if (saslServer != null)
+            saslServer.dispose();
+        if (callbackHandler != null)
+            callbackHandler.close();
+    }
+
+    private void setSaslState(SaslState saslState) {
+        this.saslState = saslState;
+        LOG.debug("Set SASL server state to " + saslState);
     }
 
     private boolean flushNetOutBufferAndUpdateInterestOps() throws IOException {

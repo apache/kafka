@@ -175,6 +175,7 @@ object Defaults {
   val SslClientAuth = SslClientAuthNone
 
   /** ********* Sasl configuration ***********/
+  val SaslMechanism = SaslConfigs.DEFAULT_SASL_MECHANISM
   val SaslKerberosKinitCmd = SaslConfigs.DEFAULT_KERBEROS_KINIT_CMD
   val SaslKerberosTicketRenewWindowFactor = SaslConfigs.DEFAULT_KERBEROS_TICKET_RENEW_WINDOW_FACTOR
   val SaslKerberosTicketRenewJitter = SaslConfigs.DEFAULT_KERBEROS_TICKET_RENEW_JITTER
@@ -337,6 +338,8 @@ object KafkaConfig {
   val SslClientAuthProp = SslConfigs.SSL_CLIENT_AUTH_CONFIG
 
   /** ********* SASL Configuration ****************/
+  val SaslMechanismProp = SaslConfigs.SASL_MECHANISM
+  val SaslEnabledMechanismsProp = SaslConfigs.SASL_ENABLED_MECHANISMS
   val SaslKerberosServiceNameProp = SaslConfigs.SASL_KERBEROS_SERVICE_NAME
   val SaslKerberosKinitCmdProp = SaslConfigs.SASL_KERBEROS_KINIT_CMD
   val SaslKerberosTicketRenewWindowFactorProp = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR
@@ -533,6 +536,8 @@ object KafkaConfig {
   val SslClientAuthDoc = SslConfigs.SSL_CLIENT_AUTH_DOC
 
   /** ********* Sasl Configuration ****************/
+  val SaslMechanismDoc = SaslConfigs.SASL_MECHANISM_DOC
+  val SaslEnabledMechanismsDoc = SaslConfigs.SASL_ENABLED_MECHANISMS_DOC
   val SaslKerberosServiceNameDoc = SaslConfigs.SASL_KERBEROS_SERVICE_NAME_DOC
   val SaslKerberosKinitCmdDoc = SaslConfigs.SASL_KERBEROS_KINIT_CMD_DOC
   val SaslKerberosTicketRenewWindowFactorDoc = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC
@@ -704,6 +709,8 @@ object KafkaConfig {
       .define(SslCipherSuitesProp, LIST, null, MEDIUM, SslCipherSuitesDoc)
 
       /** ********* Sasl Configuration ****************/
+      .define(SaslMechanismProp, STRING, Defaults.SaslMechanism, MEDIUM, SaslMechanismDoc)
+      .define(SaslEnabledMechanismsProp, LIST, null, MEDIUM, SaslEnabledMechanismsDoc)
       .define(SaslKerberosServiceNameProp, STRING, null, MEDIUM, SaslKerberosServiceNameDoc)
       .define(SaslKerberosKinitCmdProp, STRING, Defaults.SaslKerberosKinitCmd, MEDIUM, SaslKerberosKinitCmdDoc)
       .define(SaslKerberosTicketRenewWindowFactorProp, DOUBLE, Defaults.SaslKerberosTicketRenewWindowFactor, MEDIUM, SaslKerberosTicketRenewWindowFactorDoc)
@@ -894,6 +901,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val sslCipher = getList(KafkaConfig.SslCipherSuitesProp)
 
   /** ********* Sasl Configuration **************/
+  val saslMechanism = getString(KafkaConfig.SaslMechanismProp)
+  val saslEnabledMechanisms = getList(KafkaConfig.SaslEnabledMechanismsProp)
   val saslKerberosServiceName = getString(KafkaConfig.SaslKerberosServiceNameProp)
   val saslKerberosKinitCmd = getString(KafkaConfig.SaslKerberosKinitCmdProp)
   val saslKerberosTicketRenewWindowFactor = getDouble(KafkaConfig.SaslKerberosTicketRenewWindowFactorProp)

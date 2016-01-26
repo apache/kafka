@@ -19,12 +19,15 @@
 package org.apache.kafka.common.security.authenticator;
 
 import java.io.IOException;
+import java.util.Map;
 
+import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
@@ -32,9 +35,10 @@ import javax.security.sasl.AuthorizeCallback;
 import javax.security.sasl.RealmCallback;
 
 import org.apache.kafka.common.security.kerberos.KerberosName;
+import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.JaasUtils;
 
-public class SaslServerCallbackHandler implements CallbackHandler {
+public class SaslServerCallbackHandler implements AuthCallbackHandler {
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerCallbackHandler.class);
     private final KerberosShortNamer kerberosShortNamer;
 
@@ -45,6 +49,11 @@ public class SaslServerCallbackHandler implements CallbackHandler {
         this.kerberosShortNamer = kerberosNameParser;
     }
 
+    @Override
+    public void configure(Map<String, ?> configs, Mode mode, Subject subject, String saslMechanism) {
+    }
+
+    @Override
     public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
         for (Callback callback : callbacks) {
             if (callback instanceof RealmCallback) {
@@ -78,4 +87,7 @@ public class SaslServerCallbackHandler implements CallbackHandler {
         }
     }
 
+    @Override
+    public void close() {
+    }
 }

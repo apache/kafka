@@ -14,16 +14,25 @@ package kafka.api
 
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.{After, Before}
+import java.util.Properties
+import scala.collection.JavaConverters._
+import org.apache.kafka.common.config.SaslConfigs
 
 trait SaslTestHarness extends ZooKeeperTestHarness with SaslSetup {
   protected val zkSaslEnabled: Boolean
+  protected val kafkaClientSaslMechanism = "GSSAPI"
+  protected val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
+
+  // Override this list to enable client login modules for multiple mechanisms for testing
+  // of multi-mechanism brokers with clients using different mechanisms in a single JVM
+  protected def allKafkaClientSaslMechanisms = List(kafkaClientSaslMechanism)
 
   @Before
   override def setUp() {
     if (zkSaslEnabled)
-      startSasl(Both)
+      startSasl(Both, kafkaServerSaslMechanisms, allKafkaClientSaslMechanisms)
     else
-      startSasl(KafkaSasl)
+      startSasl(KafkaSasl, kafkaServerSaslMechanisms, allKafkaClientSaslMechanisms)
     super.setUp
   }
 
@@ -31,6 +40,13 @@ trait SaslTestHarness extends ZooKeeperTestHarness with SaslSetup {
   override def tearDown() {
     super.tearDown
     closeSasl()
+  }
+
+  def kafkaSaslProperties(kafkaClientSaslMechanism: String, kafkaServerSaslMechanisms: List[String]) = {
+    val props = new Properties
+    props.put(SaslConfigs.SASL_MECHANISM, kafkaClientSaslMechanism)
+    props.put(SaslConfigs.SASL_ENABLED_MECHANISMS, kafkaServerSaslMechanisms.asJava)
+    props
   }
 
 }

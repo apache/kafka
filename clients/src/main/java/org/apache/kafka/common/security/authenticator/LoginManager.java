@@ -16,51 +16,34 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.kerberos;
+package org.apache.kafka.common.security.authenticator;
 
 import javax.security.auth.Subject;
 import javax.security.auth.login.LoginException;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.Map;
 
-import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.LoginType;
-import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.security.auth.Login;
+import org.apache.kafka.common.security.kerberos.KerberosLogin;
 
 public class LoginManager {
 
     private static final EnumMap<LoginType, LoginManager> CACHED_INSTANCES = new EnumMap<>(LoginType.class);
 
     private final Login login;
-    private final String serviceName;
     private final LoginType loginType;
     private int refCount;
 
-    private LoginManager(LoginType loginType, Map<String, ?> configs) throws IOException, LoginException {
+    private LoginManager(LoginType loginType, boolean hasKerberos, Map<String, ?> configs) throws IOException, LoginException {
         this.loginType = loginType;
         String loginContext = loginType.contextName();
-        login = new Login(loginContext, configs);
-        this.serviceName = getServiceName(loginContext, configs);
-        login.startThreadIfNeeded();
-    }
-
-    private static String getServiceName(String loginContext, Map<String, ?> configs) throws IOException {
-        String jaasServiceName = JaasUtils.jaasConfig(loginContext, JaasUtils.SERVICE_NAME);
-        String configServiceName = (String) configs.get(SaslConfigs.SASL_KERBEROS_SERVICE_NAME);
-        if (jaasServiceName != null && configServiceName != null && !jaasServiceName.equals(configServiceName)) {
-            String message = "Conflicting serviceName values found in JAAS and Kafka configs " +
-                "value in JAAS file " + jaasServiceName + ", value in Kafka config " + configServiceName;
-            throw new IllegalArgumentException(message);
-        }
-
-        if (jaasServiceName != null)
-            return jaasServiceName;
-        if (configServiceName != null)
-            return configServiceName;
-
-        throw new IllegalArgumentException("No serviceName defined in either JAAS or Kafka config");
+        login = hasKerberos ? new KerberosLogin() : new DefaultLogin();
+        login.configure(configs, loginContext);
+        login.login();
     }
 
     /**
@@ -78,11 +61,11 @@ public class LoginManager {
      *                  (i.e. consumer and producer)
      * @param configs configuration as key/value pairs
      */
-    public static final LoginManager acquireLoginManager(LoginType loginType, Map<String, ?> configs) throws IOException, LoginException {
+    public static final LoginManager acquireLoginManager(LoginType loginType, boolean hasKerberos, Map<String, ?> configs) throws IOException, LoginException {
         synchronized (LoginManager.class) {
             LoginManager loginManager = CACHED_INSTANCES.get(loginType);
             if (loginManager == null) {
-                loginManager = new LoginManager(loginType, configs);
+                loginManager = new LoginManager(loginType, hasKerberos, configs);
                 CACHED_INSTANCES.put(loginType, loginManager);
             }
             return loginManager.acquire();
@@ -94,7 +77,7 @@ public class LoginManager {
     }
 
     public String serviceName() {
-        return serviceName;
+        return login.serviceName();
     }
 
     private LoginManager acquire() {
@@ -111,7 +94,7 @@ public class LoginManager {
                 throw new IllegalStateException("release called on LoginManager with refCount == 0");
             else if (refCount == 1) {
                 CACHED_INSTANCES.remove(loginType);
-                login.shutdown();
+                login.close();
             }
             --refCount;
         }
@@ -122,9 +105,8 @@ public class LoginManager {
         synchronized (LoginManager.class) {
             for (LoginType loginType : new ArrayList<>(CACHED_INSTANCES.keySet())) {
                 LoginManager loginManager = CACHED_INSTANCES.remove(loginType);
-                loginManager.login.shutdown();
+                loginManager.login.close();
             }
         }
     }
-
 }

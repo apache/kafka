@@ -69,6 +69,9 @@
       <allow pkg="org.apache.kafka.common.annotation" />
       <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.config" />
+      <subpackage name="authenticator">
+        <allow pkg="org.apache.kafka.common.protocol.types" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="protocol">

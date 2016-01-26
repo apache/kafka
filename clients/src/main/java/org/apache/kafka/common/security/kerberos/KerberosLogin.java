@@ -23,21 +23,21 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
-import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.kerberos.KerberosTicket;
 import javax.security.auth.Subject;
 
-import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator.ClientCallbackHandler;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.security.authenticator.DefaultLogin;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.utils.Shell;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.SystemTime;
-
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Date;
 import java.util.Random;
 import java.util.Set;
@@ -47,40 +47,40 @@ import java.util.Map;
  * This class is responsible for refreshing Kerberos credentials for
  * logins for both Kafka client and server.
  */
-public class Login {
-    private static final Logger log = LoggerFactory.getLogger(Login.class);
+public class KerberosLogin extends DefaultLogin {
+    private static final Logger log = LoggerFactory.getLogger(KerberosLogin.class);
 
     private static final Random RNG = new Random();
 
-    private final Thread t;
-    private final boolean isKrbTicket;
-    private final boolean isUsingTicketCache;
+    private Thread t;
+    private boolean isKrbTicket;
+    private boolean isUsingTicketCache;
 
-    private final String loginContextName;
-    private final String principal;
-    private final Time time = new SystemTime();
-    private final CallbackHandler callbackHandler = new ClientCallbackHandler();
+    private String loginContextName;
+    private String principal;
+    private Time time = new SystemTime();
 
     // LoginThread will sleep until 80% of time from last refresh to
     // ticket's expiry has been reached, at which time it will wake
     // and try to renew the ticket.
-    private final double ticketRenewWindowFactor;
+    private double ticketRenewWindowFactor;
 
     /**
      * Percentage of random jitter added to the renewal time
      */
-    private final double ticketRenewJitter;
+    private double ticketRenewJitter;
 
     // Regardless of ticketRenewWindowFactor setting above and the ticket expiry time,
     // thread will not sleep between refresh attempts any less than 1 minute (60*1000 milliseconds = 1 minute).
     // Change the '1' to e.g. 5, to change this to 5 minutes.
-    private final long minTimeBeforeRelogin;
+    private long minTimeBeforeRelogin;
 
-    private final String kinitCmd;
+    private String kinitCmd;
 
     private volatile Subject subject;
 
-    private LoginContext login;
+    private LoginContext loginContext;
+    private String serviceName;
     private long lastLogin;
 
     /**
@@ -93,16 +93,22 @@ public class Login {
      * @throws javax.security.auth.login.LoginException
      *               Thrown if authentication fails.
      */
-    public Login(final String loginContextName, Map<String, ?> configs) throws LoginException {
+    public void configure(Map<String, ?> configs, final String loginContextName) {
+        super.configure(configs, loginContextName);
         this.loginContextName = loginContextName;
         this.ticketRenewWindowFactor = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR);
         this.ticketRenewJitter = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER);
         this.minTimeBeforeRelogin = (Long) configs.get(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN);
         this.kinitCmd = (String) configs.get(SaslConfigs.SASL_KERBEROS_KINIT_CMD);
+        this.serviceName = getServiceName(configs, loginContextName);
+    }
+
+    @Override
+    public LoginContext login() throws LoginException {
 
         this.lastLogin = currentElapsedTime();
-        login = login(loginContextName);
-        subject = login.getSubject();
+        loginContext = super.login();
+        subject = loginContext.getSubject();
         isKrbTicket = !subject.getPrivateCredentials(KerberosTicket.class).isEmpty();
 
         AppConfigurationEntry[] entries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
@@ -127,7 +133,7 @@ public class Login {
             log.debug("It is not a Kerberos ticket");
             t = null;
             // if no TGT, do not bother with ticket management.
-            return;
+            return loginContext;
         }
         log.debug("It is a Kerberos ticket");
 
@@ -259,16 +265,12 @@ public class Login {
                 }
             }
         }, true);
+        t.start();
+        return loginContext;
     }
 
-    public void startThreadIfNeeded() {
-        // thread object 't' will be null if a refresh thread is not needed.
-        if (t != null) {
-            t.start();
-        }
-    }
-
-    public void shutdown() {
+    @Override
+    public void close() {
         if ((t != null) && (t.isAlive())) {
             t.interrupt();
             try {
@@ -279,27 +281,38 @@ public class Login {
         }
     }
 
+    @Override
     public Subject subject() {
         return subject;
     }
 
-    private synchronized LoginContext login(final String loginContextName) throws LoginException {
-        String jaasConfigFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM);
-        if (jaasConfigFile == null) {
-            log.debug("System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is not set, using default JAAS configuration.");
+    @Override
+    public String serviceName() {
+        return serviceName;
+    }
+
+    private String getServiceName(Map<String, ?> configs, String loginContext) {
+        String jaasServiceName;
+        try {
+            jaasServiceName = JaasUtils.jaasConfig(loginContext, JaasUtils.SERVICE_NAME);
+        } catch (IOException e) {
+            throw new KafkaException("Jaas configuration not found", e);
         }
-        AppConfigurationEntry[] configEntries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
-        if (configEntries == null) {
-            String errorMessage = "Could not find a '" + loginContextName + "' entry in the JAAS configuration. System property '" +
-                JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is " + (jaasConfigFile == null ? "not set" : jaasConfigFile);
-            throw new IllegalArgumentException(errorMessage);
+        String configServiceName = (String) configs.get(SaslConfigs.SASL_KERBEROS_SERVICE_NAME);
+        if (jaasServiceName != null && configServiceName != null && !jaasServiceName.equals(configServiceName)) {
+            String message = "Conflicting serviceName values found in JAAS and Kafka configs " +
+                "value in JAAS file " + jaasServiceName + ", value in Kafka config " + configServiceName;
+            throw new IllegalArgumentException(message);
         }
 
-        LoginContext loginContext = new LoginContext(loginContextName, callbackHandler);
-        loginContext.login();
-        log.info("Successfully logged in.");
-        return loginContext;
+        if (jaasServiceName != null)
+            return jaasServiceName;
+        if (configServiceName != null)
+            return configServiceName;
+
+        throw new IllegalArgumentException("No serviceName defined in either JAAS or Kafka config");
     }
+
 
     private long getRefreshTime(KerberosTicket tgt) {
         long start = tgt.getStartTime().getTime();
@@ -346,25 +359,25 @@ public class Login {
         if (!isKrbTicket) {
             return;
         }
-        if (login == null) {
+        if (loginContext == null) {
             throw new LoginException("Login must be done first");
         }
         if (!hasSufficientTimeElapsed()) {
             return;
         }
         log.info("Initiating logout for {}", principal);
-        synchronized (Login.class) {
+        synchronized (KerberosLogin.class) {
             // register most recent relogin attempt
             lastLogin = currentElapsedTime();
             //clear up the kerberos state. But the tokens are not cleared! As per
             //the Java kerberos login module code, only the kerberos credentials
             //are cleared
-            login.logout();
+            loginContext.logout();
             //login and also update the subject field of this instance to
             //have the new credentials (pass it to the LoginContext constructor)
-            login = new LoginContext(loginContextName, subject);
+            loginContext = new LoginContext(loginContextName, subject);
             log.info("Initiating re-login for {}", principal);
-            login.login();
+            loginContext.login();
         }
     }
 
