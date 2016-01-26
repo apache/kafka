@@ -21,10 +21,12 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.type.TypeException;
 
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -84,6 +86,19 @@ public class Resolver {
                 throw new TypeException("failed to resolve type variable: " + type);
 
             return resolved;
+
+        } else if (type instanceof GenericArrayType) {
+            try {
+                GenericArrayType arrayType = (GenericArrayType) type;
+
+                return new ArrayType(resolve(arrayType.getGenericComponentType(), env));
+
+            } catch (TypeException ex) {
+                throw new TypeException("failed to resolve type: " + type, ex);
+            }
+        } else if (type instanceof WildcardType) {
+            // Wildcard cannot be resolved
+            throw new TypeException("failed to resolve type: " + type);
 
         } else if (type instanceof ParametricType) {
             // This is already resolved.
