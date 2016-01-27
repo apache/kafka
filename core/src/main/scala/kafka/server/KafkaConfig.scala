@@ -354,19 +354,27 @@ object KafkaConfig {
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = "The authorizer class that should be used for authorization"
   /** ********* Socket Server Configuration ***********/
-  val PortDoc = "the port to listen and accept connections on"
-  val HostNameDoc = "hostname of broker. If this is set, it will only bind to this address. If this is not set, it will bind to all interfaces"
+  val PortDoc = "DEPRECATED: only used when \"listeners\" is not set. " +
+  "Use \"listeners\" instead. \n" + 
+  "the port to listen and accept connections on"
+  val HostNameDoc = "DEPRECATED: only used when \"listeners\" is not set. " +
+  "Use \"listeners\" instead. \n" +
+  "hostname of broker. If this is set, it will only bind to this address. If this is not set, it will bind to all interfaces"
   val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and their protocols.\n" +
   " Specify hostname as 0.0.0.0 to bind to all interfaces.\n" +
   " Leave hostname empty to bind to default interface.\n" +
   " Examples of legal listener lists:\n" +
   " PLAINTEXT://myhost:9092,TRACE://:9091\n" +
   " PLAINTEXT://0.0.0.0:9092, TRACE://localhost:9093\n"
-  val AdvertisedHostNameDoc = "Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
+  val AdvertisedHostNameDoc = "DEPRECATED: only used when \"advertised.listeners\" or \"listeners\" are not set. " +
+  "Use \"advertised.listeners\" instead. \n" +
+  "Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
   "need to be different from the interface to which the broker binds. If this is not set, " +
   "it will use the value for \"host.name\" if configured. Otherwise " +
   "it will use the value returned from java.net.InetAddress.getCanonicalHostName()."
-  val AdvertisedPortDoc = "The port to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
+  val AdvertisedPortDoc = "DEPRECATED: only used when \"advertised.listeners\" or \"listeners\" are not set. " +
+  "Use \"advertised.listeners\" instead. \n" +
+  "The port to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
   "need to be different from the port to which the broker binds. If this is not set, " +
   "it will publish the same port that the broker binds to."
   val AdvertisedListenersDoc = "Listeners to publish to ZooKeeper for clients to use, if different than the listeners above." +
