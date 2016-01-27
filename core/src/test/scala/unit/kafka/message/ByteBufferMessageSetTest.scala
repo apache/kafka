@@ -188,6 +188,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     for (messageAndOffset <- validatedMessages) {
       messageAndOffset.message.ensureValid()
       assertTrue(messageAndOffset.message.timestamp >= startTime && messageAndOffset.message.timestamp <= now)
+      assertEquals(TimestampType.LogAppendTime, messageAndOffset.message.timestampType)
     }
 
     assertEquals("message set size should not change", compressedMessages.size, validatedCompressedMessages.size)
@@ -195,6 +196,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       messageAndOffset.message.ensureValid()
       assertTrue(s"Timestamp of message ${messageAndOffset.message}} should be between $startTime and $now",
         messageAndOffset.message.timestamp >= startTime && messageAndOffset.message.timestamp <= now)
+      assertEquals(TimestampType.LogAppendTime, messageAndOffset.message.timestampType)
     }
     assertTrue("MessageSet should still valid", validatedCompressedMessages.shallowIterator.next().message.isValid)
 
@@ -204,6 +206,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       messageAndOffset.message.ensureValid()
       assertTrue(s"Timestamp of message ${messageAndOffset.message}} should be between $startTime and $now",
         messageAndOffset.message.timestamp >= startTime && messageAndOffset.message.timestamp <= now)
+      assertEquals(TimestampType.LogAppendTime, messageAndOffset.message.timestampType)
     }
     assertTrue("MessageSet should still valid", validatedCompressedMessagesWithoutRecompression.shallowIterator.next().message.isValid)
   }
@@ -229,10 +232,16 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                           messageTimestampType = TimestampType.CreateTime,
                                                           messageTimestampDiffMaxMs = 1000L)
 
-    for (messageAndOffset <- validatedMessages)
+    for (messageAndOffset <- validatedMessages) {
+      messageAndOffset.message.ensureValid()
       assertEquals(messageAndOffset.message.timestamp, now)
-    for (messageAndOffset <- validatedCompressedMessages)
+      assertEquals(messageAndOffset.message.timestampType, TimestampType.CreateTime)
+    }
+    for (messageAndOffset <- validatedCompressedMessages) {
+      messageAndOffset.message.ensureValid()
       assertEquals(messageAndOffset.message.timestamp, now)
+      assertEquals(messageAndOffset.message.timestampType, TimestampType.CreateTime)
+    }
   }
 
   @Test

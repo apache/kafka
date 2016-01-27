@@ -530,6 +530,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         validateTimestamp(message, now, timestampType, timestampDiffMaxMs)
         if (timestampType == TimestampType.LogAppendTime) {
           message.buffer.putLong(Message.TimestampOffset, now)
+          message.buffer.put(Message.AttributesOffset, TimestampType.setTimestampType(message.attributes, TimestampType.LogAppendTime))
           // We have to update crc after updating the timestamp.
           Utils.writeUnsignedInt(message.buffer, Message.CrcOffset, message.computeChecksum())
         }
