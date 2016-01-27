@@ -22,7 +22,6 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.record.Record;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +45,6 @@ public final class Metadata {
     private Cluster cluster;
     private boolean needUpdate;
     private final Set<String> topics;
-    private final Set<String> topicsUsingLogAppendTime;
     private final List<Listener> listeners;
     private boolean needMetadataForAllTopics;
 
@@ -72,7 +70,6 @@ public final class Metadata {
         this.cluster = Cluster.empty();
         this.needUpdate = false;
         this.topics = new HashSet<String>();
-        this.topicsUsingLogAppendTime = new HashSet<String>();
         this.listeners = new ArrayList<>();
         this.needMetadataForAllTopics = false;
     }
@@ -89,24 +86,6 @@ public final class Metadata {
      */
     public synchronized void add(String topic) {
         topics.add(topic);
-    }
-
-    /**
-     * Record the timestamp type used by a topic. This information is needed to determine whether the timestamp
-     * should be overwritten or not.
-     */
-    public synchronized void recordTopicTimestampType(String topic, Record.TimestampType timestampType) {
-        if (timestampType == Record.TimestampType.LogAppendTime)
-            topicsUsingLogAppendTime.add(topic);
-        else
-            topicsUsingLogAppendTime.remove(topic);
-    }
-
-    /**
-     * Check if the topic is using log append time or not.
-     */
-    public synchronized boolean isUsingLogAppendTime(String topic) {
-        return topicsUsingLogAppendTime.contains(topic);
     }
 
     /**

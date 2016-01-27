@@ -258,9 +258,6 @@ public class Sender implements Runnable {
                     Errors error = Errors.forCode(partResp.errorCode);
                     RecordBatch batch = batches.get(tp);
                     completeBatch(batch, error, partResp.baseOffset, partResp.timestamp, correlationId, now);
-                    if (error == Errors.NONE)
-                        metadata.recordTopicTimestampType(tp.topic(),
-                            partResp.timestamp >= 0 ? Record.TimestampType.LogAppendTime : Record.TimestampType.CreateTime);
                 }
                 this.sensors.recordLatency(response.request().request().destination(), response.requestLatencyMs());
                 this.sensors.recordThrottleTime(response.request().request().destination(),

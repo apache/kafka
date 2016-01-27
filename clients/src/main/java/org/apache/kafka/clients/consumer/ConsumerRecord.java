@@ -12,6 +12,8 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.record.Record;
+
 /**
  * A key/value pair to be received from Kafka. This consists of a topic name and a partition number, from which the
  * record is being received and an offset that points to the record in a Kafka partition.
@@ -21,6 +23,7 @@ public final class ConsumerRecord<K, V> {
     private final int partition;
     private final long offset;
     private final long timestamp;
+    private final Record.TimestampType timestampType;
     private final K key;
     private final V value;
 
@@ -34,13 +37,20 @@ public final class ConsumerRecord<K, V> {
      * @param key The key of the record, if one exists (null is allowed)
      * @param value The record contents
      */
-    public ConsumerRecord(String topic, int partition, long offset, long timestamp, K key, V value) {
+    public ConsumerRecord(String topic,
+                          int partition,
+                          long offset,
+                          long timestamp,
+                          Record.TimestampType timestampType,
+                          K key,
+                          V value) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null");
         this.topic = topic;
         this.partition = partition;
         this.offset = offset;
         this.timestamp = timestamp;
+        this.timestampType = timestampType;
         this.key = key;
         this.value = value;
     }
@@ -82,6 +92,10 @@ public final class ConsumerRecord<K, V> {
 
     public long timestamp() {
         return timestamp;
+    }
+
+    public Record.TimestampType timestampType() {
+        return timestampType;
     }
 
     @Override

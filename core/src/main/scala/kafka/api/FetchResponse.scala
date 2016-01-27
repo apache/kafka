@@ -54,29 +54,7 @@ case class FetchResponsePartitionData(error: Short = Errors.NONE.code, hw: Long 
     if (messages.hasMagicValue(toMagicValue))
       this
     else {
-      val offsets = new ArrayBuffer[Long]
-      val newMessages = new ArrayBuffer[Message]
-      messages.iterator.foreach(messageAndOffset => {
-        val message = messageAndOffset.message
-        // File message set only has shallow iterator. We need to do deep iteration here if needed.
-        if (message.compressionCodec == NoCompressionCodec) {
-          newMessages += messageAndOffset.message.toFormatVersion(toMagicValue)
-          offsets += messageAndOffset.offset
-        } else {
-          val deepIter = ByteBufferMessageSet.deepIterator(messageAndOffset)
-          for (innerMessageAndOffset <- deepIter) {
-            newMessages += innerMessageAndOffset.message.toFormatVersion(toMagicValue)
-            offsets += innerMessageAndOffset.offset
-          }
-        }
-      })
-
-      // We use the offset seq to assign offsets so the offset of the messages does not change.
-      val newMessageSet = new ByteBufferMessageSet(
-        compressionCodec = messages.headOption.map(_.message.compressionCodec).getOrElse(NoCompressionCodec),
-        offsetSeq = offsets.toSeq,
-        newMessages: _*)
-      new FetchResponsePartitionData(error, hw, newMessageSet)
+      new FetchResponsePartitionData(error, hw, messages.toMessageFormat(toMagicValue))
     }
   }
 }

@@ -20,19 +20,29 @@ package kafka.message
 import java.io.{InputStream, OutputStream}
 import java.nio.ByteBuffer
 
+import kafka.message.Message.TimestampType.TimestampType
 import org.apache.kafka.common.utils.Crc32
 
 class MessageWriter(segmentSize: Int) extends BufferingOutputStream(segmentSize) {
 
   import Message._
 
-  def write(key: Array[Byte] = null, codec: CompressionCodec, timestamp: Long, magicValue: Byte)(writePayload: OutputStream => Unit): Unit = {
+  def write(key: Array[Byte] = null,
+            codec: CompressionCodec,
+            timestamp: Long,
+            timestampType: TimestampType,
+            magicValue: Byte)(writePayload: OutputStream => Unit): Unit = {
     withCrc32Prefix {
+      // write magic value
       write(magicValue)
+      // write attributes
       var attributes: Byte = 0
       if (codec.codec > 0)
         attributes = (attributes | (CompressionCodeMask & codec.codec)).toByte
+      if (magicValue > MagicValue_V0)
+      attributes = TimestampType.setTimestampType(attributes, timestampType)
       write(attributes)
+      // Write timestamp
       if (magicValue > MagicValue_V0)
         writeLong(timestamp)
       // write the key

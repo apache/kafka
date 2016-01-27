@@ -20,6 +20,10 @@ package kafka.message
 import java.nio._
 import java.nio.channels._
 
+import kafka.log.FileMessageSet
+
+import scala.collection.mutable.ArrayBuffer
+
 /**
  * Message set helper functions
  */
@@ -60,11 +64,8 @@ object MessageSet {
    */
   def validateMagicValuesAndGetTimestamp(messages: Seq[Message]): Long = {
     val sampleMagicValue = messages.head.magic
-    val sampleTimestamp = if (sampleMagicValue > Message.MagicValue_V0) messages.head.timestamp else Message.NoTimestamp
     var largestTimestamp: Long = Message.NoTimestamp
     for (message <- messages) {
-      if (sampleTimestamp == Message.InheritedTimestamp && message.timestamp != sampleTimestamp)
-        throw new IllegalStateException("Messages in the same compressed message set should have same timestamp type")
       if (message.magic != sampleMagicValue)
         throw new IllegalStateException("Messages in the same compressed message set must have same magic value")
       if (sampleMagicValue > Message.MagicValue_V0)
@@ -104,6 +105,34 @@ abstract class MessageSet extends Iterable[MessageAndOffset] {
    * Gives the total size of this message set in bytes
    */
   def sizeInBytes: Int
+
+  /**
+   * Convert this message set to use specified message format.
+   */
+  def toMessageFormat(toMagicValue: Byte): ByteBufferMessageSet = {
+    val offsets = new ArrayBuffer[Long]
+    val newMessages = new ArrayBuffer[Message]
+    this.iterator.foreach(messageAndOffset => {
+      val message = messageAndOffset.message
+      // File message set only has shallow iterator. We need to do deep iteration here if needed.
+      if (message.compressionCodec == NoCompressionCodec || !this.isInstanceOf[FileMessageSet]) {
+        newMessages += messageAndOffset.message.toFormatVersion(toMagicValue)
+        offsets += messageAndOffset.offset
+      } else {
+        val deepIter = ByteBufferMessageSet.deepIterator(messageAndOffset)
+        for (innerMessageAndOffset <- deepIter) {
+          newMessages += innerMessageAndOffset.message.toFormatVersion(toMagicValue)
+          offsets += innerMessageAndOffset.offset
+        }
+      }
+    })
+
+    // We use the offset seq to assign offsets so the offset of the messages does not change.
+    new ByteBufferMessageSet(
+      compressionCodec = this.headOption.map(_.message.compressionCodec).getOrElse(NoCompressionCodec),
+      offsetSeq = offsets.toSeq,
+      newMessages: _*)
+  }
 
   /**
    * Print this message set's contents. If the message set has more than 100 messages, just

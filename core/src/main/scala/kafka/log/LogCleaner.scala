@@ -467,8 +467,9 @@ private[log] class Cleaner(val id: Int,
       val firstAbsoluteOffset = messages.head.offset
       var offset = -1L
       val magicValue = messages.head.message.magic
+      val timestampType = messages.head.message.timestampType
       val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messagesIterable) / 2, 1024), 1 << 16))
-      messageWriter.write(codec = compressionCodec, timestamp = messageSetTimestamp, magicValue = magicValue) { outputStream =>
+      messageWriter.write(codec = compressionCodec, timestamp = messageSetTimestamp, timestampType = timestampType, magicValue = magicValue) { outputStream =>
         val output = new DataOutputStream(CompressionFactory(compressionCodec, outputStream))
         try {
           for (messageOffset <- messages) {

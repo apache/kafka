@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -152,7 +153,7 @@ public class StandbyTaskTest {
             restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 
             task.update(partition1,
-                    records(new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, recordKey, recordValue))
+                    records(new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, Record.TimestampType.CreateTime, recordKey, recordValue))
             );
 
         } finally {
@@ -171,9 +172,9 @@ public class StandbyTaskTest {
             restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 
             for (ConsumerRecord<Integer, Integer> record : Arrays.asList(
-                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 10, 0L, 1, 100),
-                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 20, 0L, 2, 100),
-                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 30, 0L, 3, 100))) {
+                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 10, 0L, Record.TimestampType.CreateTime, 1, 100),
+                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 20, 0L, Record.TimestampType.CreateTime, 2, 100),
+                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 30, 0L, Record.TimestampType.CreateTime, 3, 100))) {
                 restoreStateConsumer.bufferRecord(record);
             }
 
@@ -234,11 +235,11 @@ public class StandbyTaskTest {
             restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 
             for (ConsumerRecord<Integer, Integer> record : Arrays.asList(
-                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 10, 0L, 1, 100),
-                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 20, 0L, 2, 100),
-                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 30, 0L, 3, 100),
-                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 40, 0L, 4, 100),
-                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 50, 0L, 5, 100))) {
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 10, 0L, Record.TimestampType.CreateTime, 1, 100),
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 20, 0L, Record.TimestampType.CreateTime, 2, 100),
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 30, 0L, Record.TimestampType.CreateTime, 3, 100),
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 40, 0L, Record.TimestampType.CreateTime, 4, 100),
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 50, 0L, Record.TimestampType.CreateTime, 5, 100))) {
                 restoreStateConsumer.bufferRecord(record);
             }
 

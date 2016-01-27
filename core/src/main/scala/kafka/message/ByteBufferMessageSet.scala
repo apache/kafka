@@ -38,6 +38,7 @@ object ByteBufferMessageSet {
   private def create(offsetAssignor: OffsetAssigner,
                      compressionCodec: CompressionCodec,
                      messageSetTimestampAssignor: (Seq[Message]) => Long,
+                     timestampType: TimestampType,
                      messages: Message*): ByteBuffer = {
     if(messages.size == 0) {
       MessageSet.Empty.buffer
@@ -52,7 +53,7 @@ object ByteBufferMessageSet {
       var offset = -1L
       val magicValue = messages.head.magic
       val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
-      messageWriter.write(codec = compressionCodec, timestamp = messageSetTimestamp, magicValue = magicValue) { outputStream =>
+      messageWriter.write(codec = compressionCodec, timestamp = messageSetTimestamp, timestampType = timestampType, magicValue = magicValue) { outputStream =>
         val output = new DataOutputStream(CompressionFactory(compressionCodec, outputStream))
         try {
           for (message <- messages) {
@@ -87,7 +88,10 @@ object ByteBufferMessageSet {
 
       val wrapperMessageOffset = wrapperMessageAndOffset.offset
       val wrapperMessage = wrapperMessageAndOffset.message
-      val wrapperMessageTimestamp = if (wrapperMessage.magic > MagicValue_V0) wrapperMessage.timestamp else NoTimestamp
+      val wrapperMessageTimestampOpt: Option[Long] =
+        if (wrapperMessage.magic > MagicValue_V0) Some(wrapperMessage.timestamp) else None
+      val wrapperMessageTimestampTypeOpt: Option[TimestampType] =
+        if (wrapperMessage.magic > MagicValue_V0) Some(wrapperMessage.timestampType) else None
       if (wrapperMessage.payload == null)
         throw new RuntimeException("wrapper message = " + wrapperMessage)
       val inputStream: InputStream = new ByteBufferBackedInputStream(wrapperMessage.payload)
@@ -147,8 +151,10 @@ object ByteBufferMessageSet {
         val bufferArray = new Array[Byte](size)
         compressed.readFully(bufferArray, 0, size)
         val buffer = ByteBuffer.wrap(bufferArray)
+
         // Override the timestamp if necessary
-        val newMessage = new Message(buffer = buffer, wrapperMessageTimestamp = wrapperMessageTimestamp)
+        val newMessage = new Message(buffer, wrapperMessageTimestampOpt, wrapperMessageTimestampTypeOpt)
+
         // Inner message and wrapper message must have same magic value
         if (newMessage.magic != wrapperMessage.magic)
           throw new IllegalStateException(s"Compressed message has magic value ${wrapperMessage.magic} " +
@@ -229,25 +235,26 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
   def this(compressionCodec: CompressionCodec, messages: Message*) {
     this(ByteBufferMessageSet.create(new OffsetAssigner(new AtomicLong(0), messages.size), compressionCodec,
-      MessageSet.validateMagicValuesAndGetTimestamp, messages:_*))
+      MessageSet.validateMagicValuesAndGetTimestamp, TimestampType.CreateTime, messages:_*))
   }
 
   def this(compressionCodec: CompressionCodec, offsetCounter: AtomicLong, messages: Message*) {
     this(ByteBufferMessageSet.create(new OffsetAssigner(offsetCounter, messages.size), compressionCodec,
-      MessageSet.validateMagicValuesAndGetTimestamp, messages:_*))
+      MessageSet.validateMagicValuesAndGetTimestamp, TimestampType.CreateTime, messages:_*))
   }
 
   def this(compressionCodec: CompressionCodec,
            offsetCounter: AtomicLong,
            messageSetTimestampAssignor: (Message*) => Long,
+           timestampType: TimestampType,
            messages: Message*) {
     this(ByteBufferMessageSet.create(new OffsetAssigner(offsetCounter, messages.size), compressionCodec,
-      messageSetTimestampAssignor, messages:_*))
+      messageSetTimestampAssignor, timestampType, messages:_*))
   }
 
   def this(compressionCodec: CompressionCodec, offsetSeq: Seq[Long], messages: Message*) {
     this(ByteBufferMessageSet.create(new OffsetAssigner(offsetSeq), compressionCodec,
-      MessageSet.validateMagicValuesAndGetTimestamp, messages:_*))
+      MessageSet.validateMagicValuesAndGetTimestamp, TimestampType.CreateTime, messages:_*))
   }
 
   def this(messages: Message*) {
@@ -376,8 +383,8 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       // check the magic value
       if (!hasMagicValue(magicValueToUse)) {
-        // up-conversion
-        convertNonCompressedMessages(offsetCounter, compactedTopic, magicValueToUse)
+        // Message format conversion
+        convertNonCompressedMessages(offsetCounter, compactedTopic, now, messageTimestampType, magicValueToUse)
       } else {
         // Do in-place validation, offset assignment and maybe set timestamp
         validateNonCompressedMessagesAndAssignOffsetInPlace(offsetCounter, now, compactedTopic, messageTimestampType,
@@ -403,9 +410,8 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         validateMessageKey(message, compactedTopic)
         if (message.magic > Message.MagicValue_V0 && magicValueToUse > Message.MagicValue_V0) {
           // Re-compression situation 3
-          // Check if we need to overwrite timestamp
-          if (validateTimestamps(message, now, messageTimestampType, messageTimestampDiffMaxMs, targetCodec))
-            requireReCompression = true
+          // Validate the timestamp
+          validateTimestamp(message, now, messageTimestampType, messageTimestampDiffMaxMs)
           // Check if we need to overwrite offset
           if (messageAndOffset.offset != expectedRelativeOffset.getAndIncrement)
             requireReCompression = true
@@ -416,10 +422,6 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         if (message.magic != magicValueToUse)
           requireReCompression = true
 
-        // The conversion have the following impact on timestamp
-        // V0 -> V1: All messages will have NoTimestamp(-2)
-        // V1 -> V0: Timestamp field will be removed
-        // V1 -> V1: All the timestamp validated above will be used
         validatedMessages += message.toFormatVersion(magicValueToUse)
       })
 
@@ -437,21 +439,32 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         new ByteBufferMessageSet(compressionCodec = targetCodec,
                                  offsetCounter = offsetCounter,
                                  messageSetTimestampAssignor = messageSetTimestampAssignor,
+                                 timestampType = messageTimestampType,
                                  messages = validatedMessages.toBuffer: _*)
       } else {
-        // Do not do re-compression but simply update the offset and timestamp field of the wrapper message.
+        // Do not do re-compression but simply update the offset, timestamp and attributes field of the wrapper message.
         buffer.putLong(0, offsetCounter.addAndGet(validatedMessages.size) - 1)
 
         if (magicValueToUse > Message.MagicValue_V0) {
           var crcUpdateNeeded = true
+          val timestampOffset = MessageSet.LogOverhead + Message.TimestampOffset
+          val attributeOffset = MessageSet.LogOverhead + Message.AttributesOffset
+          val timestamp = buffer.getLong(timestampOffset)
+          val attributes = buffer.get(attributeOffset)
           if (messageTimestampType == TimestampType.CreateTime) {
-            if (buffer.getLong(MessageSet.LogOverhead + Message.TimestampOffset) == maxTimestamp)
+            if (timestamp == maxTimestamp && TimestampType.getTimestampType(attributes) == TimestampType.CreateTime)
               // We don't need to recompute crc if the timestamp is not updated.
               crcUpdateNeeded = false
-            else
-              buffer.putLong(MessageSet.LogOverhead + Message.TimestampOffset, maxTimestamp)
-          } else if (messageTimestampType == TimestampType.LogAppendTime)
-            buffer.putLong(MessageSet.LogOverhead + Message.TimestampOffset, now)
+            else {
+              // Set timestamp type and timestamp
+              buffer.putLong(timestampOffset, maxTimestamp)
+              buffer.put(attributeOffset, TimestampType.setTimestampType(attributes, TimestampType.CreateTime))
+            }
+          } else if (messageTimestampType == TimestampType.LogAppendTime) {
+            // Set timestamp type and timestamp
+            buffer.putLong(timestampOffset, now)
+            buffer.put(attributeOffset, TimestampType.setTimestampType(attributes, TimestampType.LogAppendTime))
+          }
 
           if (crcUpdateNeeded) {
             // need to recompute the crc value
@@ -468,6 +481,8 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
   private def convertNonCompressedMessages(offsetCounter: AtomicLong,
                                            compactedTopic: Boolean,
+                                           now: Long,
+                                           timestampType: TimestampType,
                                            toMagicValue: Byte): ByteBufferMessageSet = {
     // Get message count, shallow iterator is in-place
     val sizeInBytesAfterConversion = shallowValidBytes + this.internalIterator(isShallow = true).foldLeft(0)(
@@ -486,11 +501,8 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       // Create new message buffer
       val newMessageBuffer = newBuffer.slice()
       newMessageBuffer.limit(newMessageSize)
-      // Convert message if necessary
-      if (message.magic != toMagicValue)
-        message.convertToBuffer(toMagicValue, newMessageBuffer)
-      else
-        newMessageBuffer.put(message.buffer.array(), message.buffer.arrayOffset(), message.size)
+      // Convert message
+      message.convertToBuffer(toMagicValue, newMessageBuffer, now, timestampType)
 
       newMessagePosition += MessageSet.LogOverhead + newMessageSize
     }
@@ -515,10 +527,12 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       val message = new Message(messageBuffer)
       validateMessageKey(message, compactedTopic)
       if (message.magic > Message.MagicValue_V0) {
-        validateTimestamps(message, now, timestampType, timestampDiffMaxMs, NoCompressionCodec)
-        // update CRC for the message if the timestamp is LogAppendTime
-        if (timestampType == TimestampType.LogAppendTime)
-          Utils.writeUnsignedInt(messageBuffer, Message.CrcOffset, message.computeChecksum())
+        validateTimestamp(message, now, timestampType, timestampDiffMaxMs)
+        if (timestampType == TimestampType.LogAppendTime) {
+          message.buffer.putLong(Message.TimestampOffset, now)
+          // We have to update crc after updating the timestamp.
+          Utils.writeUnsignedInt(message.buffer, Message.CrcOffset, message.computeChecksum())
+        }
       }
       messagePosition += MessageSet.LogOverhead + messageSize
     }
@@ -534,42 +548,16 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
   /**
    * This method validates the timestamps of a message.
    * 1. If the message is using create time, this method checks if it is with acceptable range.
-   * 2. If the message is using log append time, this method will overwrite the timestamp of the message.
-   *
-   * The return value of this method indicates whether the timestamp of a message is overwritten.
-   * In case 1, the method either throw exception (the timestamp is out of range) or return false.
-   * In case 2, the method returns:
-   *    a) True, if the timestamp of the message has been overwritten. This means re-compression is required if the
-   *       the message is an inner message of a compressed message.
-   *    b) False, if the timestamp is not overwritten. This only occurs when the timestamp of an inner message from a
-   *       compressed message is already set to [[Message.InheritedTimestamp]]
+   * 2. If the message is using log append time and is an uncompressed message, this method will overwrite the
+   *    timestamp of the message.
    */
-  private def validateTimestamps(message: Message,
-                                 now: Long,
-                                 timestampType: TimestampType,
-                                 timestampDiffMaxMs: Long,
-                                 compressionCodec: CompressionCodec): Boolean = {
-    var overwritten = false
+  private def validateTimestamp(message: Message,
+                                now: Long,
+                                timestampType: TimestampType,
+                                timestampDiffMaxMs: Long) {
     if (timestampType == TimestampType.CreateTime && math.abs(message.timestamp - now) > timestampDiffMaxMs)
       throw new InvalidMessageException(s"Timestamp ${message.timestamp} of message is out of range. " +
         s"The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}")
-    else if (timestampType == TimestampType.LogAppendTime) {
-      if (compressionCodec == NoCompressionCodec) {
-        message.buffer.putLong(Message.TimestampOffset, now)
-        // We have to update crc after updating the timestamp.
-        Utils.writeUnsignedInt(message.buffer, Message.CrcOffset, message.computeChecksum())
-        overwritten = true
-      } else {
-        // We only overwrite the timestamp if necessary
-        if (message.timestamp != Message.InheritedTimestamp) {
-          message.buffer.putLong(Message.TimestampOffset, Message.InheritedTimestamp)
-          // We have to update crc after updating the timestamp.
-          Utils.writeUnsignedInt(message.buffer, Message.CrcOffset, message.computeChecksum())
-          overwritten = true
-        }
-      }
-    }
-    overwritten
   }
 
   /**

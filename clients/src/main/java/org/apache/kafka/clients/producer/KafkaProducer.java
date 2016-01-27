@@ -456,7 +456,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(serializedKey, serializedValue);
             ensureValidRecordSize(serializedSize);
             TopicPartition tp = new TopicPartition(record.topic(), partition);
-            long timestamp = getTimestamp(record.topic(), record.timestamp());
+            long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey, serializedValue, callback, remainingWaitMs);
             if (result.batchIsFull || result.newBatchCreated) {
@@ -526,19 +526,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             remainingWaitMs = maxWaitMs - elapsed;
         }
         return time.milliseconds() - begin;
-    }
-
-    private long getTimestamp(String topic, Long timestamp) {
-        // If log append time is used for the topic, and we are sending records with timestamp other than INHERITED_TIMESTAMP,
-        // the broker will overwrite the timestamp and do the re-compression if compression codec is configured.
-        // To avoid broker side re-compression, we overwrite the timestamp to INHERITED_TIMESTAMP if the topic is using
-        // log append time.
-        if (metadata.isUsingLogAppendTime(topic))
-            return Record.INHERITED_TIMESTAMP;
-        else if (timestamp == null)
-            return time.milliseconds();
-        else
-            return timestamp;
     }
 
     /**

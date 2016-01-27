@@ -164,7 +164,7 @@ class MessageTest extends JUnitSuite {
 
   @Test(expected = classOf[IllegalArgumentException])
   def testInValidTimestampAndMagicValueCombination() {
-      new Message("hello".getBytes, Message.InheritedTimestamp, Message.MagicValue_V0)
+      new Message("hello".getBytes, 0L, Message.MagicValue_V0)
   }
 
   @Test(expected = classOf[IllegalArgumentException])
@@ -174,7 +174,7 @@ class MessageTest extends JUnitSuite {
 
   @Test(expected = classOf[IllegalArgumentException])
   def testInValidMagicByte() {
-    new Message("hello".getBytes, 0L, 2)
+    new Message("hello".getBytes, 0L, 2.toByte)
   }
 
   @Test

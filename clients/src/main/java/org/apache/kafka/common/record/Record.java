@@ -36,6 +36,16 @@ public final class Record {
             this.value = value;
             this.name = name;
         }
+
+        public static TimestampType getTimestampType(byte attributes) {
+            int timestampType = (attributes & TIMESTAMP_TYPE_MASK) >> TIMESTAMP_TYPE_ATTRIBUTE_OFFSET;
+            return timestampType == 0 ? CreateTime : LogAppendTime;
+        }
+
+        public static byte setTimestampType(byte attributes, TimestampType timestampType) {
+            return timestampType == CreateTime ?
+                (byte) (attributes & ~TIMESTAMP_TYPE_MASK) : (byte) (attributes | TIMESTAMP_TYPE_MASK);
+        }
     }
 
     /**
@@ -78,10 +88,17 @@ public final class Record {
     public static final byte CURRENT_MAGIC_VALUE = 1;
 
     /**
-     * Specifies the mask for the compression code. 3 bits to hold the compression codec. 0 is reserved to indicate no
+     * Specifies the mask for the compression code. 4 bits to hold the compression codec. 0 is reserved to indicate no
      * compression
      */
-    public static final int COMPRESSION_CODEC_MASK = 0x07;
+    public static final int COMPRESSION_CODEC_MASK = 0x0F;
+
+    /**
+     * Specify the mask of timestamp type.
+     * 0 for CreateTime, 1 for LogAppendTime.
+     */
+    public static final byte TIMESTAMP_TYPE_MASK = 0x10;
+    public static final int TIMESTAMP_TYPE_ATTRIBUTE_OFFSET = 4;
 
     /**
      * Compression code for uncompressed records
@@ -89,27 +106,25 @@ public final class Record {
     public static final int NO_COMPRESSION = 0;
 
     /**
-     * Timestamp value for compressed records whose timestamp inherit from wrapper record.
-     */
-    public static final long INHERITED_TIMESTAMP = -1;
-
-    /**
      * Timestamp value for records without a timestamp
      */
-    public static final long NO_TIMESTAMP = -2;
+    public static final long NO_TIMESTAMP = -1;
 
     private final ByteBuffer buffer;
-    private final long wrapperRecordTimestamp;
+    private final Long wrapperRecordTimestamp;
+    private final TimestampType timestampTypeToUse;
 
     public Record(ByteBuffer buffer) {
         this.buffer = buffer;
-        this.wrapperRecordTimestamp = NO_TIMESTAMP;
+        this.wrapperRecordTimestamp = null;
+        this.timestampTypeToUse = null;
     }
 
     // Package private constructor for inner iteration.
-    Record(ByteBuffer buffer, long wrapperRecordTimestamp) {
+    Record(ByteBuffer buffer, Long wrapperRecordTimestamp, TimestampType timestampTypeToUse) {
         this.buffer = buffer;
         this.wrapperRecordTimestamp = wrapperRecordTimestamp;
+        this.timestampTypeToUse = timestampTypeToUse;
     }
 
     /**
@@ -333,12 +348,15 @@ public final class Record {
         if (magic() == MAGIC_VALUE_V0)
             return NO_TIMESTAMP;
         else {
-            long timestamp = buffer.getLong(TIMESTAMP_OFFSET);
-            if (timestamp == INHERITED_TIMESTAMP)
+            if (timestampTypeToUse == TimestampType.LogAppendTime && wrapperRecordTimestamp != null)
                 return wrapperRecordTimestamp;
             else
-                return timestamp;
+                return buffer.getLong(TIMESTAMP_OFFSET);
         }
+    }
+
+    public TimestampType timestampType() {
+        return timestampTypeToUse == null ? TimestampType.getTimestampType(attributes()) : timestampTypeToUse;
     }
 
     /**

@@ -244,7 +244,9 @@ public class MemoryRecords implements Records {
                 while (true) {
                     try {
                         LogEntry logEntry = getNextEntryFromStream();
-                        Record recordWithTimestamp = new Record(logEntry.record().buffer(), wrapperRecordTimestamp);
+                        Record recordWithTimestamp = new Record(logEntry.record().buffer(),
+                                                                wrapperRecordTimestamp,
+                                                                entry.record().timestampType());
                         logEntries.add(new LogEntry(logEntry.offset(), recordWithTimestamp));
                     } catch (EOFException e) {
                         break;
@@ -306,12 +308,12 @@ public class MemoryRecords implements Records {
 
         private LogEntry getNextEntry() throws IOException {
             if (logEntries != null)
-                return getNextEntryFromBuffer();
+                return getNextEntryFromEntryList();
             else
                 return getNextEntryFromStream();
         }
 
-        private LogEntry getNextEntryFromBuffer() {
+        private LogEntry getNextEntryFromEntryList() {
             return logEntries.isEmpty() ? null : logEntries.remove();
         }
 

@@ -18,6 +18,8 @@
 package kafka.message
 
 import java.nio._
+import kafka.message.Message.TimestampType.TimestampType
+
 import scala.math._
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
@@ -31,6 +33,21 @@ object Message {
     type TimestampType = Value
     val CreateTime = Value(0, "CreateTime")
     val LogAppendTime = Value(1, "LogAppendTime")
+
+    def getTimestampType(attribute: Byte) = {
+      (attribute & TimestampTypeMask) >> TimestampTypeAttributeBitOffset match {
+        case 0 => CreateTime
+        case 1 => LogAppendTime
+      }
+    }
+
+    def setTimestampType(attribute: Byte, timestampType: TimestampType): Byte = {
+      if (timestampType == CreateTime)
+        (attribute & ~TimestampTypeMask).toByte
+      else
+        (attribute | TimestampTypeMask).toByte
+    }
+
   }
 
   /**
@@ -85,10 +102,16 @@ object Message {
   val CurrentMagicValue: Byte = 1
 
   /**
-   * Specifies the mask for the compression code. 3 bits to hold the compression codec.
+   * Specifies the mask for the compression code. 4 bits to hold the compression codec.
    * 0 is reserved to indicate no compression
    */
-  val CompressionCodeMask: Int = 0x07
+  val CompressionCodeMask: Int = 0x0F
+  /**
+   * Specifies the mask for timestmap type. 1 bit at the 5th least significant bit.
+   * 0 for CreateTime, 1 for LogAppendTime
+   */
+  val TimestampTypeMask: Byte = 0x10
+  val TimestampTypeAttributeBitOffset: Int = 4
 
   /**
    * Compression code for uncompressed messages
@@ -98,19 +121,15 @@ object Message {
   /**
    * To indicate timestamp is not defined so "magic" value 0 will be used.
    */
-  val NoTimestamp: Long = -2
-
-  /**
-   * Derived timestamp is used for inner messages of compressed message when message.timestamp.type is set to
-   * LogAppendTime. In that case the timestamp of the message is defined by the wrapper message's timestamp.
-   */
-  val InheritedTimestamp: Long = -1
+  val NoTimestamp: Long = -1
 
   /**
    * Give the header size difference between different message versions.
    */
   def headerSizeDiff(fromMagicValue: Byte, toMagicValue: Byte) : Int =
     MessageHeaderSizeMap(toMagicValue) - MessageHeaderSizeMap(fromMagicValue)
+
+
 }
 
 /**
@@ -127,7 +146,9 @@ object Message {
  *
  * Default constructor wraps an existing ByteBuffer with the Message object with no change to the contents.
  */
-class Message(val buffer: ByteBuffer, val wrapperMessageTimestamp: Long = Message.NoTimestamp) {
+class Message(val buffer: ByteBuffer,
+              private val wrapperMessageTimestamp: Option[Long] = None,
+              private val timestampTypeToUse: Option[TimestampType] = None) {
   
   import kafka.message.Message._
 
@@ -279,15 +300,34 @@ class Message(val buffer: ByteBuffer, val wrapperMessageTimestamp: Long = Messag
   /**
    * The timestamp of the message, only available when the "magic" value is greater than 0
    */
-  def timestamp: Long = {
+def timestamp: Long = {
     if (magic == MagicValue_V0)
       throw new IllegalStateException("The message with magic byte 0 does not have a timestamp")
 
-    val timestamp = buffer.getLong(TimestampOffset)
-    if (timestamp == Message.InheritedTimestamp)
-      wrapperMessageTimestamp
-    else
-      timestamp
+    /**
+     * The timestamp of a message is determined in the following way:
+     * 1. TimestampType = LogAppendTime and
+     *    a) WrapperMessageTimestamp is not defined - Uncompressed message using LogAppendTime
+     *    b) WrapperMessageTimestamp is defined - Compressed message using LogAppendTime
+     * 2. TimestampType = CreateTime and
+     *    a) WrapperMessageTimestamp is not defined - Uncompressed message using CreateTime
+     *    b) WrapperMessageTimestamp is defined - Compressed message using CreateTime
+     */
+    // Case 1b
+    if (timestampTypeToUse.exists(_ == TimestampType.LogAppendTime) && wrapperMessageTimestamp.isDefined)
+      wrapperMessageTimestamp.get
+    else // case 1b, 2a, 2b
+      buffer.getLong(Message.TimestampOffset)
+  }
+
+  /**
+   * The timestamp type of the message
+   */
+  def timestampType = {
+    if (magic == MagicValue_V0)
+      throw new IllegalStateException("The message with magic byte 0 does not have a timestamp")
+
+    timestampTypeToUse.getOrElse(TimestampType.getTimestampType(attributes))
   }
   
   /**
@@ -320,23 +360,29 @@ class Message(val buffer: ByteBuffer, val wrapperMessageTimestamp: Long = Messag
     }
   }
 
-  def convertToBuffer(toMagicValue: Byte, byteBuffer: ByteBuffer) {
+  def convertToBuffer(toMagicValue: Byte,
+                      byteBuffer: ByteBuffer,
+                      now: Long = NoTimestamp,
+                      timestampType: TimestampType = timestampTypeToUse.getOrElse(TimestampType.getTimestampType(attributes))) {
     if (byteBuffer.remaining() < size + headerSizeDiff(magic, toMagicValue))
       throw new IndexOutOfBoundsException("The byte buffer does not have enough capacity to hold new message format " +
         "version " + toMagicValue)
-    if (magic == Message.MagicValue_V0 && toMagicValue == Message.MagicValue_V1) {
+    if (toMagicValue == Message.MagicValue_V1) {
       // Up-conversion, reserve CRC and update magic byte
       byteBuffer.position(Message.MagicOffset)
       byteBuffer.put(Message.MagicValue_V1)
-      byteBuffer.put(attributes)
+      byteBuffer.put(TimestampType.setTimestampType(attributes, timestampType))
       // Up-conversion, insert the timestamp field
-      byteBuffer.putLong(Message.NoTimestamp)
+      if (timestampType == TimestampType.LogAppendTime)
+        byteBuffer.putLong(now)
+      else
+        byteBuffer.putLong(Message.NoTimestamp)
       byteBuffer.put(buffer.array(), buffer.arrayOffset() + Message.KeySizeOffset_V0, size - Message.KeySizeOffset_V0)
     } else {
       // Down-conversion, reserve CRC and update magic byte
       byteBuffer.position(Message.MagicOffset)
       byteBuffer.put(Message.MagicValue_V0)
-      byteBuffer.put(attributes)
+      byteBuffer.put(TimestampType.setTimestampType(attributes, TimestampType.CreateTime))
       // Down-conversion, skip the timestamp field
       byteBuffer.put(buffer.array(), buffer.arrayOffset() + Message.KeySizeOffset_V1, size - Message.KeySizeOffset_V1)
     }
@@ -369,7 +415,7 @@ class Message(val buffer: ByteBuffer, val wrapperMessageTimestamp: Long = Messag
   private def validateTimestampAndMagicValue(timestamp: Long, magic: Byte) {
     if (magic != MagicValue_V0 && magic != MagicValue_V1)
       throw new IllegalArgumentException("Invalid magic value " + magic)
-    if (timestamp < 0 && timestamp != NoTimestamp && timestamp != InheritedTimestamp)
+    if (timestamp < 0 && timestamp != NoTimestamp)
       throw new IllegalArgumentException("Invalid message timestamp " + timestamp)
     if (magic == MagicValue_V0 && timestamp != NoTimestamp)
       throw new IllegalArgumentException(s"Invalid timestamp $timestamp. Timestamp must be ${NoTimestamp} when magic = ${MagicValue_V0}")
@@ -379,7 +425,7 @@ class Message(val buffer: ByteBuffer, val wrapperMessageTimestamp: Long = Messag
     if (magic == MagicValue_V0)
       s"Message(magic = $magic, attributes = $attributes, crc = $checksum, key = $key, payload = $payload)"
     else
-      s"Message(magic = $magic, attributes = $attributes, timestamp = $timestamp, crc = $checksum, key = $key, payload = $payload)"
+      s"Message(magic = $magic, attributes = $attributes, $timestampType = $timestamp, crc = $checksum, key = $key, payload = $payload)"
   }
 
   override def equals(any: Any): Boolean = {
@@ -390,5 +436,5 @@ class Message(val buffer: ByteBuffer, val wrapperMessageTimestamp: Long = Messag
   }
   
   override def hashCode(): Int = buffer.hashCode
-  
+
 }

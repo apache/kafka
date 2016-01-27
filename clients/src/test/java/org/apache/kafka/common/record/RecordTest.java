@@ -102,7 +102,7 @@ public class RecordTest {
         byte[] payload = new byte[1000];
         Arrays.fill(payload, (byte) 1);
         List<Object[]> values = new ArrayList<Object[]>();
-        for (long timestamp : Arrays.asList(Record.NO_TIMESTAMP, Record.INHERITED_TIMESTAMP, 0L, 1L))
+        for (long timestamp : Arrays.asList(Record.NO_TIMESTAMP, 0L, 1L))
             for (byte[] key : Arrays.asList(null, "".getBytes(), "key".getBytes(), payload))
                 for (byte[] value : Arrays.asList(null, "".getBytes(), "value".getBytes(), payload))
                     for (CompressionType compression : CompressionType.values())

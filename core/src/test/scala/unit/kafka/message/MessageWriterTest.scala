@@ -20,6 +20,7 @@ package kafka.message
 import java.io.{InputStream, ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.ByteBuffer
 import java.util.Random
+import kafka.message.Message.TimestampType
 import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.junit.JUnitSuite
@@ -34,7 +35,7 @@ class MessageWriterTest extends JUnitSuite {
 
   private def mkMessageWithWriter(key: Array[Byte] = null, bytes: Array[Byte], codec: CompressionCodec): Message = {
     val writer = new MessageWriter(100)
-    writer.write(key = key, codec = codec, timestamp = Message.NoTimestamp, magicValue = Message.MagicValue_V0) { output =>
+    writer.write(key = key, codec = codec, timestamp = Message.NoTimestamp, timestampType = TimestampType.CreateTime, magicValue = Message.MagicValue_V0) { output =>
       val out = if (codec == NoCompressionCodec) output else CompressionFactory(codec, output)
       try {
         val p = rnd.nextInt(bytes.length)

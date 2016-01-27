@@ -32,6 +32,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.Time;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -182,7 +183,7 @@ public class KafkaBasedLogTest {
                 consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TP0_KEY, TP0_VALUE));
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, Record.TimestampType.CreateTime, TP0_KEY, TP0_VALUE));
                     }
                 });
                 consumer.scheduleNopPollTask();
@@ -190,7 +191,7 @@ public class KafkaBasedLogTest {
                 consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TP1_KEY, TP1_VALUE));
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, Record.TimestampType.CreateTime, TP1_KEY, TP1_VALUE));
                     }
                 });
                 consumer.schedulePollTask(new Runnable() {
@@ -297,16 +298,16 @@ public class KafkaBasedLogTest {
                 consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TP0_KEY, TP0_VALUE));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1, 0L, TP0_KEY, TP0_VALUE_NEW));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TP1_KEY, TP1_VALUE));
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, Record.TimestampType.CreateTime, TP0_KEY, TP0_VALUE));
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1, 0L, Record.TimestampType.CreateTime, TP0_KEY, TP0_VALUE_NEW));
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, Record.TimestampType.CreateTime, TP1_KEY, TP1_VALUE));
                     }
                 });
 
                 consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, 0L, TP1_KEY, TP1_VALUE_NEW));
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, 0L, Record.TimestampType.CreateTime, TP1_KEY, TP1_VALUE_NEW));
                     }
                 });
 
@@ -362,8 +363,8 @@ public class KafkaBasedLogTest {
                 consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TP0_KEY, TP0_VALUE_NEW));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TP0_KEY, TP0_VALUE_NEW));
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, Record.TimestampType.CreateTime, TP0_KEY, TP0_VALUE_NEW));
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, Record.TimestampType.CreateTime, TP0_KEY, TP0_VALUE_NEW));
                     }
                 });
 
