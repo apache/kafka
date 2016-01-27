@@ -90,12 +90,22 @@ public abstract class AbstractStream<K> {
         };
     }
 
+    @SuppressWarnings("unchecked")
     protected <T> Serializer<T> getSerializer(Type type) {
 
         if (type == null)
             throw new InsufficientTypeInfoException();
 
-        return topology.getSerializer(type);
+        Serializer<T> serializer = topology.getSerializer(type);
+
+        if (serializer == null) {
+            // If this is a windowed key, we construct a special serializer.
+            Type windowedRawKeyType = Resolver.getRawKeyTypeFromWindowedType(type);
+            if (windowedRawKeyType != null)
+                serializer = new WindowedSerializer(topology.getSerializer(windowedRawKeyType));
+        }
+
+        return serializer;
     }
 
     protected <T> Deserializer<T> getDeserializer(Type type) {

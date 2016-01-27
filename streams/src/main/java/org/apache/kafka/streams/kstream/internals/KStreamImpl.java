@@ -252,14 +252,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         if (keyType == null)
             throw new InsufficientTypeInfoException();
 
-        Serializer<K> keySerializer;
-        Type windowedRawKeyType = Resolver.getWindowedRawKeyType(keyType);
-        if (windowedRawKeyType != null) {
-            keySerializer = new WindowedSerializer(getSerializer(windowedRawKeyType));
-        } else {
-            keySerializer = getSerializer(keyType);
-        }
-
+        Serializer<K> keySerializer = getSerializer(keyType);
         Serializer<V> valSerializer = getSerializer(valueType);
 
         String name = topology.newName(SINK_NAME);

@@ -252,7 +252,7 @@ public class Resolver {
         }
     }
 
-    public static Type getWindowedRawKeyType(Type type) {
+    public static Type getRawKeyTypeFromWindowedType(Type type) {
         if (type instanceof ParametricType) {
             ParametricType ptype = (ParametricType) type;
             if (ptype.rawType.equals(Windowed.class))
