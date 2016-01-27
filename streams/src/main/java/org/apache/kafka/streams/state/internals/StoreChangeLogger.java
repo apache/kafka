@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -43,8 +44,12 @@ public class StoreChangeLogger<K, V> {
     private int partition;
     private ProcessorContext context;
 
-    // always wrap the logged store with the metered store
     public StoreChangeLogger(String topic, ProcessorContext context, Serdes<K, V> serialization) {
+        // TODO: this needs to be configurable
+        this(topic, context, serialization, 100, 100);
+    }
+
+    public StoreChangeLogger(String topic, ProcessorContext context, Serdes<K, V> serialization, int maxDirty, int maxRemoved) {
         this.topic = topic;
         this.serialization = serialization;
         this.context = context;
@@ -52,8 +57,8 @@ public class StoreChangeLogger<K, V> {
 
         this.dirty = new HashSet<>();
         this.removed = new HashSet<>();
-        this.maxDirty = 100; // TODO: this needs to be configurable
-        this.maxRemoved = 100; // TODO: this needs to be configurable
+        this.maxDirty = maxDirty;
+        this.maxRemoved = maxRemoved;
     }
 
     public void add(K key) {
@@ -87,6 +92,11 @@ public class StoreChangeLogger<K, V> {
             this.removed.clear();
             this.dirty.clear();
         }
+    }
+
+    public void clear() {
+        this.removed.clear();
+        this.dirty.clear();
     }
 
     public boolean isDirty(K key) {

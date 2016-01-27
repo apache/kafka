@@ -18,9 +18,9 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -62,7 +62,7 @@ public abstract class AbstractTask {
             // if partitions is null, this is a standby task
             this.stateMgr = new ProcessorStateManager(jobId, id.partition, partitions, stateFile, restoreConsumer, isStandby);
         } catch (IOException e) {
-            throw new KafkaException("Error while creating the state manager", e);
+            throw new ProcessorStateException("Error while creating the state manager", e);
         }
     }
 
@@ -95,7 +95,7 @@ public abstract class AbstractTask {
         try {
             stateMgr.close(recordCollectorOffsets());
         } catch (IOException e) {
-            throw new KafkaException("Error while closing the state manager in processor context", e);
+            throw new ProcessorStateException("Error while closing the state manager", e);
         }
     }
 

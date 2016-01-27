@@ -18,9 +18,9 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.errors.StreamsException;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -61,7 +61,7 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
             List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
 
             if (infos == null)
-                throw new KafkaException("topic not found :" + topic);
+                throw new StreamsException("Topic not found during partition assignment: " + topic);
 
             int numPartitions = infos.size();
             if (numPartitions > maxNumPartitions)

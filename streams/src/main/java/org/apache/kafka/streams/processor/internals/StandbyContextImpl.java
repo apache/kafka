@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
@@ -112,7 +111,7 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     @Override
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (initialized)
-            throw new KafkaException("Can only create state stores during initialization.");
+            throw new IllegalStateException("Can only create state stores during initialization.");
 
         stateMgr.register(store, loggingEnabled, stateRestoreCallback);
     }
