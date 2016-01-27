@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
  * A class encapsulating some of the logic around metadata.
  * <p>
  * This class is shared by the client thread (for partitioning) and the background sender thread.
- * 
+ *
  * Metadata is maintained for only a subset of topics, which can be added to over time. When we request metadata for a
  * topic we don't have any metadata for it will trigger a metadata update.
  */
@@ -51,23 +51,24 @@ public final class Metadata {
     /**
      * Create a metadata instance with reasonable defaults
      */
-    public Metadata() {
-        this(100L, 60 * 60 * 1000L);
+    public Metadata(Cluster initialCluster, long now) {
+        this(100L, 60 * 60 * 1000L, initialCluster, now);
     }
-
     /**
-     * Create a new Metadata instance
+     * Create a metadata instance with an initial cluster
      * @param refreshBackoffMs The minimum amount of time that must expire between metadata refreshes to avoid busy
      *        polling
      * @param metadataExpireMs The maximum amount of time that metadata can be retained without refresh
+     * @param initialCluster Initial (bootstrap) nodes. Can be empty.
+     * @param now Current time
      */
-    public Metadata(long refreshBackoffMs, long metadataExpireMs) {
+    public Metadata(long refreshBackoffMs, long metadataExpireMs, Cluster initialCluster, long now) {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
-        this.lastRefreshMs = 0L;
-        this.lastSuccessfulRefreshMs = 0L;
-        this.version = 0;
-        this.cluster = Cluster.empty();
+        this.lastRefreshMs = now;
+        this.lastSuccessfulRefreshMs = now;
+        this.version = 1;
+        this.cluster = initialCluster;
         this.needUpdate = false;
         this.topics = new HashSet<String>();
         this.listeners = new ArrayList<>();
@@ -179,7 +180,7 @@ public final class Metadata {
     public synchronized void failedUpdate(long now) {
         this.lastRefreshMs = now;
     }
-    
+
     /**
      * @return The current metadata version
      */

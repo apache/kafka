@@ -86,8 +86,7 @@ public class WorkerCoordinatorTest {
     public void setup() {
         this.time = new MockTime();
         this.client = new MockClient(time);
-        this.metadata = new Metadata(0, Long.MAX_VALUE);
-        this.metadata.update(cluster, time.milliseconds());
+        this.metadata = new Metadata(0, Long.MAX_VALUE, cluster, time.milliseconds());
         this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();

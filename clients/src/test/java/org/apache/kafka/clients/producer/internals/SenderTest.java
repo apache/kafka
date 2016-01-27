@@ -58,7 +58,7 @@ public class SenderTest {
     private MockTime time = new MockTime();
     private MockClient client = new MockClient(time);
     private int batchSize = 16 * 1024;
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, Cluster.empty(), 0L);
     private Cluster cluster = TestUtils.singletonCluster("test", 1);
     private Metrics metrics = null;
     private RecordAccumulator accumulator = null;

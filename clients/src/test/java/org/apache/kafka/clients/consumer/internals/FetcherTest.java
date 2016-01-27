@@ -76,7 +76,7 @@ public class FetcherTest {
     private long retryBackoffMs = 100;
     private MockTime time = new MockTime(1);
     private MockClient client = new MockClient(time);
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, Cluster.empty(), 0L);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
     private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);

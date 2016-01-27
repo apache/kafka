@@ -48,7 +48,7 @@ public class NetworkClientTest {
     private final int requestTimeoutMs = 1000;
     private MockTime time = new MockTime();
     private MockSelector selector = new MockSelector(time);
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, Cluster.empty(), 0L);
     private int nodeId = 1;
     private Cluster cluster = TestUtils.singletonCluster("test", nodeId);
     private Node node = cluster.nodes().get(0);
