@@ -33,6 +33,9 @@ public class StoreChangeLogger<K, V> {
         V get(K key);
     }
 
+    // TODO: these values should be configurable
+    private static final int DEFAULT_WRITE_BATCH_SIZE = 100;
+
     protected final Serdes<K, V> serialization;
 
     private final Set<K> dirty;
@@ -45,8 +48,7 @@ public class StoreChangeLogger<K, V> {
     private ProcessorContext context;
 
     public StoreChangeLogger(String topic, ProcessorContext context, Serdes<K, V> serialization) {
-        // TODO: this needs to be configurable
-        this(topic, context, serialization, 100, 100);
+        this(topic, context, serialization, DEFAULT_WRITE_BATCH_SIZE, DEFAULT_WRITE_BATCH_SIZE);
     }
 
     public StoreChangeLogger(String topic, ProcessorContext context, Serdes<K, V> serialization, int maxDirty, int maxRemoved) {
@@ -101,14 +103,6 @@ public class StoreChangeLogger<K, V> {
 
     public boolean isDirty(K key) {
         return this.dirty.contains(key);
-    }
-
-    public boolean isRemoved(K key) {
-        return this.removed.contains(key);
-    }
-
-    public Set<K> dirtyKeys() {
-        return this.dirty;
     }
 
     public Set<K> removedKeys() {

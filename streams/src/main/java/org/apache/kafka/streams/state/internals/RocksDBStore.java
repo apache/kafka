@@ -40,7 +40,9 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.NavigableSet;
 import java.util.NoSuchElementException;
+import java.util.TreeSet;
 
 public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
@@ -48,7 +50,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     // TODO: these values should be configurable
     private static final int DEFAULT_CACHE_SIZE = 1000;
-    private static final int DEFAULT_WRITE_BATCH_SIZE = 500;
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
     private static final long WRITE_BUFFER_SIZE = 32 * 1024 * 1024L;
@@ -69,18 +70,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     protected File dbDir;
     private RocksDB db;
 
-    // we use the dirty map of the changelog for the LRU cache, and hence
-    // the update of the changelog dirty map needs to be synchronized
-    // with the cache behavior; NOTE that this implementation is not thread-safe
     private boolean loggingEnabled = true;
     private int cacheSize = DEFAULT_CACHE_SIZE;
-    private int writeBatchSize = DEFAULT_WRITE_BATCH_SIZE;
 
-    protected MemoryLRUCache<K, V> cache = null;
-    protected StoreChangeLogger<K, V> cachedChangeLogger = null;
-    protected StoreChangeLogger.ValueGetter<K, V> cachedGetter = null;
-    protected StoreChangeLogger<byte[], byte[]> rawChangeLogger = null;
-    protected StoreChangeLogger.ValueGetter<byte[], byte[]> rawGetter = null;
+    // we must store the raw bytes as key in the cache since we cannot
+    // rely on users to implement their equals function to be consistent with
+    // the serializer behaviors
+    protected NavigableSet<byte[]> cacheDirtyKeys;
+    protected MemoryLRUCache<byte[], RocksDBCacheEntry> cache;
+    protected StoreChangeLogger<byte[], byte[]> changeLogger;
+    protected StoreChangeLogger.ValueGetter<byte[], byte[]> getter;
 
     public RocksDBStore<K, V> disableLogging() {
         loggingEnabled = false;
@@ -90,12 +89,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     public RocksDBStore<K, V> withCacheSize(int cacheSize) {
         this.cacheSize = cacheSize;
-
-        return this;
-    }
-
-    public RocksDBStore<K, V> withWriteBatchSize(int writeBatchSize) {
-        this.writeBatchSize = writeBatchSize;
 
         return this;
     }
@@ -125,19 +118,17 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         fOptions.setWaitForFlush(true);
     }
 
-    private abstract class RocksDBCacheRemovalListener implements MemoryLRUCache.EldestEntryRemovalListener<K, V> {
-        private StoreChangeLogger<K, V> changeLogger;
+    private class RocksDBCacheEntry {
+        public V value;
+        public boolean isDirty;
 
-        public RocksDBCacheRemovalListener(StoreChangeLogger<K, V> changeLogger) {
-            this.changeLogger = changeLogger;
+        public RocksDBCacheEntry(V value) {
+            this(value, false);
         }
-    }
 
-    private abstract class RocksDBCacheValueGetter implements StoreChangeLogger.ValueGetter<K, V> {
-        private MemoryLRUCache<K, V> cache;
-
-        public RocksDBCacheValueGetter(MemoryLRUCache<K, V> cache) {
-            this.cache = cache;
+        public RocksDBCacheEntry(V value, boolean isDirty) {
+            this.value = value;
+            this.isDirty = isDirty;
         }
     }
 
@@ -149,47 +140,48 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         this.dbDir = new File(new File(this.context.stateDir(), DB_FILE_DIR), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
 
-        final String storeName = this.name;
+        this.changeLogger = this.loggingEnabled ?
+                new StoreChangeLogger<>(name, context, Serdes.withBuiltinTypes("", byte[].class, byte[].class)) :
+                null;
 
         if (this.cacheSize > 0) {
-            // change logger is used for keeping track of cache dirty map
-            this.cachedChangeLogger = new StoreChangeLogger<K, V>(name, context, serdes, writeBatchSize, writeBatchSize);
-
-            this.cache = new MemoryLRUCache<K, V>(name, this.cacheSize)
-                    .whenEldestRemoved(new RocksDBCacheRemovalListener(this.cachedChangeLogger) {
+            this.cache = new MemoryLRUCache<byte[], RocksDBCacheEntry>(name, this.cacheSize)
+                    .whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<byte[], RocksDBCacheEntry>() {
                         @Override
-                        public void apply(K key, V value) {
+                        public void apply(byte[] key, RocksDBCacheEntry entry) {
                             // flush all the dirty entries to RocksDB if this evicted entry is dirty
-                            if (this.changeLogger.isDirty(key)) {
+                            if (entry.isDirty) {
                                 flush();
                             }
-
                         }
                     });
 
-            // value getter should read from the cache only
-            this.cachedGetter = new RocksDBCacheValueGetter(this.cache) {
+            this.cacheDirtyKeys = new TreeSet<>();
+
+            // value getter should read from the cache, and if not
+            // found then read directly from rocksDB
+            this.getter = new StoreChangeLogger.ValueGetter<byte[], byte[]>() {
                 @Override
-                public V get(K key) {
-                    return this.cache.get(key);
+                public byte[] get(byte[] key) {
+                    RocksDBCacheEntry entry = cache.get(key);
+
+                    if (entry == null) {
+                        return getInternal(key);
+                    } else {
+                        return serdes.rawValue(entry.value);
+                    }
                 }
             };
 
         } else {
             this.cache = null;
-
-            // change logger is used for keeping track of dirty map of the unsent changes
-            this.rawChangeLogger = new StoreChangeLogger<byte[], byte[]>(name, context, Serdes.withBuiltinTypes("", byte[].class, byte[].class));
+            this.cacheDirtyKeys = null;
 
             // value getter should read directly from rocksDB
-            this.rawGetter = new StoreChangeLogger.ValueGetter<byte[], byte[]>() {
+            this.getter = new StoreChangeLogger.ValueGetter<byte[], byte[]>() {
                 @Override
                 public byte[] get(byte[] key) {
-                    try {
-                        return getInternal(key);
-                    } catch (RocksDBException e) {
-                        throw new ProcessorStateException("Error while executing get for raw key of " + serdes.keyFrom(key) + " from store " + storeName, e);
-                    }
+                    return getInternal(key);
                 }
             };
         }
@@ -198,11 +190,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
             @Override
             public void restore(byte[] key, byte[] value) {
-                try {
-                    putInternal(key, value);
-                } catch (RocksDBException e) {
-                    throw new ProcessorStateException("Error restoring store " + storeName, e);
-                }
+                putInternal(key, value);
             }
         });
     }
@@ -234,71 +222,66 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public V get(K key) {
-        try {
-            if (cache != null) {
-                V value = cache.get(key);
+        byte[] rawKey = serdes.rawKey(key);
 
-                if (value == null) {
-                    // this could either mean the key-value has been removed from the cache,
-                    // or there is a cache miss; we need to use the removed map to decide which case
-                    if (cachedChangeLogger.isRemoved(key)) {
-                        return null;
-                    } else {
-                        value = serdes.valueFrom(getInternal(serdes.rawKey(key)));
-                        cache.put(key, value);
-                    }
-                }
+        if (cache != null) {
+            RocksDBCacheEntry entry = cache.get(rawKey);
+
+            if (entry == null) {
+                V value = serdes.valueFrom(getInternal(serdes.rawKey(key)));
+                cache.put(rawKey, new RocksDBCacheEntry(value));
 
                 return value;
             } else {
-                return serdes.valueFrom(getInternal(serdes.rawKey(key)));
+                return entry.value;
             }
-        } catch (RocksDBException e) {
-            throw new ProcessorStateException("Error while executing get for key " + key.toString() + " from store " + this.name, e);
+        } else {
+            return serdes.valueFrom(getInternal(serdes.rawKey(key)));
         }
     }
 
-    private byte[] getInternal(byte[] rawKey) throws RocksDBException {
-        return this.db.get(rawKey);
+    private byte[] getInternal(byte[] rawKey) {
+        try {
+            return this.db.get(rawKey);
+        } catch (RocksDBException e) {
+            throw new ProcessorStateException("Error while getting value for key " + serdes.keyFrom(rawKey) +
+                    " from store " + this.name, e);
+        }
     }
 
     @Override
     public void put(K key, V value) {
+        byte[] rawKey = serdes.rawKey(key);
+
         if (cache != null) {
-
-            if (value == null) {
-                cache.delete(key);
-                cachedChangeLogger.delete(key);
-            } else {
-                cache.put(key, value);
-                cachedChangeLogger.add(key);
-            }
-
-            if (loggingEnabled) {
-                cachedChangeLogger.maybeLogChange(this.cachedGetter);
-            }
+            cache.put(rawKey, new RocksDBCacheEntry(value, true));
+            cacheDirtyKeys.add(rawKey);
         } else {
-            byte[] rawKey = serdes.rawKey(key);
             byte[] rawValue = serdes.rawValue(value);
-
-            try {
-                putInternal(rawKey, rawValue);
-            } catch (RocksDBException e) {
-                throw new ProcessorStateException("Error while executing put key " + key.toString() +
-                        " and value " + value.toString() + " from store " + this.name, e);
-            }
-
-            if (loggingEnabled) {
-                rawChangeLogger.maybeLogChange(this.rawGetter);
-            }
+            putInternal(rawKey, rawValue);
         }
     }
 
-    private void putInternal(byte[] rawKey, byte[] rawValue) throws RocksDBException {
+    private void putInternal(byte[] rawKey, byte[] rawValue) {
         if (rawValue == null) {
-            db.remove(wOptions, rawKey);
+            try {
+                db.remove(wOptions, rawKey);
+            } catch (RocksDBException e) {
+                throw new ProcessorStateException("Error while removing key " + serdes.keyFrom(rawKey) +
+                        " from store " + this.name, e);
+            }
         } else {
-            db.put(wOptions, rawKey, rawValue);
+            try {
+                db.put(wOptions, rawKey, rawValue);
+            } catch (RocksDBException e) {
+                throw new ProcessorStateException("Error while executing put key " + serdes.keyFrom(rawKey) +
+                        " and value " + serdes.keyFrom(rawValue) + " from store " + this.name, e);
+            }
+        }
+
+        if (loggingEnabled) {
+            changeLogger.add(rawKey);
+            changeLogger.maybeLogChange(this.getter);
         }
     }
 
@@ -308,14 +291,19 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             put(entry.key, entry.value);
     }
 
-    public void putAllInternal(List<KeyValue<byte[], byte[]>> entries) throws RocksDBException {
+    // this function is only called in flush()
+    private void putAllInternal(List<KeyValue<byte[], byte[]>> entries) {
         WriteBatch batch = new WriteBatch();
 
         for (KeyValue<byte[], byte[]> entry : entries) {
             batch.put(entry.key, entry.value);
         }
 
-        db.write(wOptions, batch);
+        try {
+            db.write(wOptions, batch);
+        } catch (RocksDBException e) {
+            throw new ProcessorStateException("Error while batch writing to store " + this.name, e);
+        }
     }
 
     @Override
@@ -327,11 +315,18 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
+        // we need to flush the cache if necessary before returning the iterator
+        if ()
+        flush();
+
         return new RocksDBRangeIterator<K, V>(db.newIterator(), serdes, from, to);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
+        // we need to flush the cache if necessary before returning the iterator
+        flush();
+
         RocksIterator innerIter = db.newIterator();
         innerIter.seekToFirst();
         return new RocksDbIterator<K, V>(innerIter, serdes);
@@ -341,44 +336,50 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public void flush() {
         // flush of the cache entries if necessary
         if (cache != null) {
-            List<KeyValue<byte[], byte[]>> batchList = new ArrayList<>(cache.keys.size());
+            List<KeyValue<byte[], byte[]>> putBatch = new ArrayList<>(cache.keys.size());
+            List<byte[]> deleteBatch = new ArrayList<>(cache.keys.size());
 
-            KeyValueIterator<K, V> iter = cache.all();
-            while (iter.hasNext()) {
-                KeyValue<K, V> kv = iter.next();
+            for (byte[] rawKey : cacheDirtyKeys) {
+                RocksDBCacheEntry entry = cache.get(rawKey);
 
-                if (this.cachedChangeLogger.isDirty(kv.key)) {
-                    batchList.add(new KeyValue<>(serdes.rawKey(kv.key), serdes.rawValue(kv.value)));
+                assert (entry.isDirty);
+
+                if (entry.value != null) {
+                    putBatch.add(new KeyValue<>(rawKey, serdes.rawValue(entry.value)));
+                } else {
+                    deleteBatch.add(rawKey);
                 }
             }
 
-            try {
-                putAllInternal(batchList);
-            } catch (RocksDBException e) {
-                throw new ProcessorStateException("Error while writing batch to store " + this.name, e);
+            putAllInternal(putBatch);
+
+            if (loggingEnabled) {
+                for (KeyValue<byte[], byte[]> kv : putBatch)
+                    changeLogger.add(kv.key);
             }
 
             // check all removed entries and remove them in rocksDB
             // TODO: can this be done in batch as well?
-            for (K removedKey : this.cachedChangeLogger.removedKeys()) {
+            for (byte[] removedKey : deleteBatch) {
                 try {
-                    db.remove(wOptions, serdes.rawKey(removedKey));
+                    db.remove(wOptions, removedKey);
                 } catch (RocksDBException e) {
-                    throw new ProcessorStateException("Error while deleting with key " + removedKey.toString() + " from store " + this.name, e);
+                    throw new ProcessorStateException("Error while deleting with key " + serdes.keyFrom(removedKey) + " from store " + this.name, e);
+                }
+
+                if (loggingEnabled) {
+                    changeLogger.delete(removedKey);
                 }
             }
 
-            if (loggingEnabled) {
-                this.cachedChangeLogger.logChange(this.cachedGetter);
-            } else {
-                this.cachedChangeLogger.clear();
-            }
-        } else {
-            if (loggingEnabled)
-                this.rawChangeLogger.logChange(this.rawGetter);
+            // reset dirty set
+            cacheDirtyKeys.clear();
         }
 
         flushInternal();
+
+        if (loggingEnabled)
+            changeLogger.logChange(getter);
     }
 
     public void flushInternal() {
