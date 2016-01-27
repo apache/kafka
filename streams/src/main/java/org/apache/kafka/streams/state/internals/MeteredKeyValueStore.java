@@ -41,7 +41,6 @@ import java.util.List;
 public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     protected final KeyValueStore<K, V> inner;
-    protected final Serdes<K, V> serialization;
     protected final String metricScope;
     protected final Time time;
 
@@ -56,9 +55,8 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private StreamsMetrics metrics;
 
     // always wrap the store with the metered store
-    public MeteredKeyValueStore(final KeyValueStore<K, V> inner, Serdes<K, V> serialization, String metricScope, Time time) {
+    public MeteredKeyValueStore(final KeyValueStore<K, V> inner, String metricScope, Time time) {
         this.inner = inner;
-        this.serialization = serialization;
         this.metricScope = metricScope;
         this.time = time != null ? time : new SystemTime();
     }
@@ -80,8 +78,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.rangeTime = this.metrics.addLatencySensor(metricScope, name, "range");
         this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush");
         this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore");
-
-        serialization.init(context);
 
         long startNs = time.nanoseconds();
         try {
@@ -131,8 +127,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         long startNs = time.nanoseconds();
         try {
             V value = this.inner.delete(key);
-
-            removed(key);
 
             return value;
         } finally {

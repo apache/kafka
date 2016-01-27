@@ -43,7 +43,7 @@ public class InMemoryLRUCacheStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
     private final int capacity;
-    private final Serdes serdes;
+    private final Serdes<K, V> serdes;
     private final Time time;
 
     public InMemoryLRUCacheStoreSupplier(String name, int capacity, Serdes<K, V> serdes, Time time) {
@@ -58,8 +58,8 @@ public class InMemoryLRUCacheStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        MemoryLRUCache<K, V> cache = new MemoryLRUCache<K, V>(name, capacity);
-        final MeteredKeyValueStore<K, V> store = new MeteredKeyValueStore<>(cache, serdes, "in-memory-lru-state", time);
+        MemoryLRUCache<K, V> cache = new MemoryLRUCache<K, V>(name, serdes, capacity);
+        final MeteredKeyValueStore<K, V> store = new MeteredKeyValueStore<>(cache, "in-memory-lru-state", time);
         cache.whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<K, V>() {
             @Override
             public void apply(K key, V value) {

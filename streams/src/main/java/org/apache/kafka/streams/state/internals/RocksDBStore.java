@@ -76,10 +76,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     // we must store the raw bytes as key in the cache since we cannot
     // rely on users to implement their equals function to be consistent with
     // the serializer behaviors
-    protected NavigableSet<byte[]> cacheDirtyKeys;
-    protected MemoryLRUCache<byte[], RocksDBCacheEntry> cache;
-    protected StoreChangeLogger<byte[], byte[]> changeLogger;
-    protected StoreChangeLogger.ValueGetter<byte[], byte[]> getter;
+    private NavigableSet<K> cacheDirtyKeys;
+    private MemoryLRUCache<K, RocksDBCacheEntry> cache;
+    private StoreChangeLogger<byte[], byte[]> changeLogger;
+    private StoreChangeLogger.ValueGetter<byte[], byte[]> getter;
 
     public RocksDBStore<K, V> disableLogging() {
         loggingEnabled = false;
@@ -145,10 +145,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 null;
 
         if (this.cacheSize > 0) {
-            this.cache = new MemoryLRUCache<byte[], RocksDBCacheEntry>(name, this.cacheSize)
-                    .whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<byte[], RocksDBCacheEntry>() {
+            this.cache = new MemoryLRUCache<K, RocksDBCacheEntry>(name, this.cacheSize)
+                    .disableLogging() // do need to log changes in cache
+                    .whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<K, RocksDBCacheEntry>() {
                         @Override
-                        public void apply(byte[] key, RocksDBCacheEntry entry) {
+                        public void apply(K key, RocksDBCacheEntry entry) {
                             // flush all the dirty entries to RocksDB if this evicted entry is dirty
                             if (entry.isDirty) {
                                 flush();
@@ -157,34 +158,19 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                     });
 
             this.cacheDirtyKeys = new TreeSet<>();
-
-            // value getter should read from the cache, and if not
-            // found then read directly from rocksDB
-            this.getter = new StoreChangeLogger.ValueGetter<byte[], byte[]>() {
-                @Override
-                public byte[] get(byte[] key) {
-                    RocksDBCacheEntry entry = cache.get(key);
-
-                    if (entry == null) {
-                        return getInternal(key);
-                    } else {
-                        return serdes.rawValue(entry.value);
-                    }
-                }
-            };
-
         } else {
             this.cache = null;
             this.cacheDirtyKeys = null;
-
-            // value getter should read directly from rocksDB
-            this.getter = new StoreChangeLogger.ValueGetter<byte[], byte[]>() {
-                @Override
-                public byte[] get(byte[] key) {
-                    return getInternal(key);
-                }
-            };
         }
+
+        // value getter should always read directly from rocksDB
+        // since it is only for values that are already flushed
+        this.getter = new StoreChangeLogger.ValueGetter<byte[], byte[]>() {
+            @Override
+            public byte[] get(byte[] key) {
+                return getInternal(key);
+            }
+        };
 
         context.register(this, loggingEnabled, new StateRestoreCallback() {
 
@@ -222,14 +208,13 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public V get(K key) {
-        byte[] rawKey = serdes.rawKey(key);
-
         if (cache != null) {
-            RocksDBCacheEntry entry = cache.get(rawKey);
+            RocksDBCacheEntry entry = cache.get(key);
 
             if (entry == null) {
+                byte[] rawKey = serdes.rawKey(key);
                 V value = serdes.valueFrom(getInternal(serdes.rawKey(key)));
-                cache.put(rawKey, new RocksDBCacheEntry(value));
+                cache.put(key, new RocksDBCacheEntry(value));
 
                 return value;
             } else {
@@ -251,12 +236,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void put(K key, V value) {
-        byte[] rawKey = serdes.rawKey(key);
-
         if (cache != null) {
-            cache.put(rawKey, new RocksDBCacheEntry(value, true));
-            cacheDirtyKeys.add(rawKey);
+            cache.put(key, new RocksDBCacheEntry(value, true));
+            cacheDirtyKeys.add(key);
         } else {
+            byte[] rawKey = serdes.rawKey(key);
             byte[] rawValue = serdes.rawValue(value);
             putInternal(rawKey, rawValue);
         }
@@ -316,8 +300,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
         // we need to flush the cache if necessary before returning the iterator
-        if ()
-        flush();
+        if (cache != null)
+            flush();
 
         return new RocksDBRangeIterator<K, V>(db.newIterator(), serdes, from, to);
     }
@@ -325,7 +309,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public KeyValueIterator<K, V> all() {
         // we need to flush the cache if necessary before returning the iterator
-        flush();
+        if (cache != null)
+            flush();
 
         RocksIterator innerIter = db.newIterator();
         innerIter.seekToFirst();
@@ -339,10 +324,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             List<KeyValue<byte[], byte[]>> putBatch = new ArrayList<>(cache.keys.size());
             List<byte[]> deleteBatch = new ArrayList<>(cache.keys.size());
 
-            for (byte[] rawKey : cacheDirtyKeys) {
-                RocksDBCacheEntry entry = cache.get(rawKey);
+            for (K key : cacheDirtyKeys) {
+                RocksDBCacheEntry entry = cache.get(key);
 
                 assert (entry.isDirty);
+
+                byte[] rawKey = serdes.rawKey(key);
 
                 if (entry.value != null) {
                     putBatch.add(new KeyValue<>(rawKey, serdes.rawValue(entry.value)));

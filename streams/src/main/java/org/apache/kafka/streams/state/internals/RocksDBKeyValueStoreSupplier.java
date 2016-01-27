@@ -47,7 +47,6 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        return new MeteredKeyValueStore<>(new RocksDBStore<K, V>(name, serdes), serdes, "rocksdb-state", time);
+        return new MeteredKeyValueStore<>(new RocksDBStore<K, V>(name, serdes), "rocksdb-state", time);
     }
-
 }
