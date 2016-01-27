@@ -166,10 +166,10 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
             K key = windowedKey.value();
             W window = (W) windowedKey.window();
 
-            // this iterator should only contain one element
+            // this iterator should contain at most one element
             Iterator<KeyValue<Long, T>> iter = windowStore.fetch(key, window.start(), window.start());
 
-            return iter.next().value;
+            return iter.hasNext() ? iter.next().value : null;
         }
 
     }

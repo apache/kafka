@@ -235,6 +235,16 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testCaseInsensitiveListenerProtocol() {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.put(KafkaConfig.ListenersProp, "plaintext://localhost:9091,SsL://localhost:9092")
+
+    assert(isValidKafkaConfig(props))
+  }
+
+  @Test
   def testListenerDefaults() {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
