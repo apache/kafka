@@ -380,7 +380,7 @@ class WorkerSinkTask extends AbstractWorkerTask {
         if (partitions.isEmpty())
             return;
 
-        task.onPartitionsAssigned(partitions);
+        task.open(partitions);
     }
 
     private void closePartitions() {
@@ -393,7 +393,7 @@ class WorkerSinkTask extends AbstractWorkerTask {
         } finally {
             // Some sink implementations may not actually flush the data until close is called,
             // so the commit should follow it.
-            task.onPartitionsRevoked(currentOffsets.keySet());
+            task.close(currentOffsets.keySet());
         }
 
         commitOffsets(offsets, true, -1);

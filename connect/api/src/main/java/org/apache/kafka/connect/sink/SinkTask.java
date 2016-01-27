@@ -25,9 +25,34 @@ import java.util.Collection;
 import java.util.Map;
 
 /**
- * SinkTask is a Task takes records loaded from Kafka and sends them to another system. In
- * addition to the basic {@link #put} interface, SinkTasks must also implement {@link #flush}
- * to support offset commits.
+ * SinkTask is a Task that takes records loaded from Kafka and sends them to another system. Each task
+ * instance is assigned a set of partitions by the Connect framework and will handle all records received
+ * from those partitions. As records are fetched, they will be written to the downstream system using
+ * {@link #put(Collection)}. At a minimum, you must implement this interface along with {@link #flush(Map)},
+ * which is used to commit the offsets of records forwarded. Generally, after records have been flushed,
+ * they will not be processed again except in the case of a failure. To avoid message loss, you must ensure
+ * that flushed records have been successfully written to the downstream system.
+ *
+ * Below we describe the lifecycle of a SinkTask.
+ *
+ * <ol>
+ *     <li><b>Initialization:</b> SinkTasks are first initialized using {@link #initialize(SinkTaskContext)}
+ *     to prepare the task's context and {@link #start(Map)} to accept configuration and start any services
+ *     needed for processing.</li>
+ *     <li><b>Partition Assignment:</b> After initialization, Connect will assign the task a set of partitions
+ *     using {@link #open(Collection)}. These partitions are owned exclusively by this task until they
+ *     have been closed with {@link #close(Collection)}.</li>
+ *     <li><b>Record Processing:</b> Once partitions have been opened for writing, Connect will begin forwarding
+ *     records from Kafka using the {@link #put(Collection)} API. Periodically, Connect will ask the task
+ *     to flush records using {@link #flush(Map)}. All records with offsets , are considered "committed"
+ *     after flushing</li>
+ *     <li><b>Partition Rebalancing:</b> Occasionally, Connect will need to change the assignment of this task.
+ *     When this happens, the currently assigned partitions will be closed with {@link #close(Collection)} and
+ *     the new assignment will be opened using {@link #open(Collection)}.</li>
+ *     <li><b>Shutdown:</b> When the task needs to be shutdown, Connect will close active partitions (if there
+ *     are any) and stop the task using {@link #stop()}</li>
+  * </ol>
+ *
  */
 @InterfaceStability.Unstable
 public abstract class SinkTask implements Task {
@@ -42,6 +67,11 @@ public abstract class SinkTask implements Task {
 
     protected SinkTaskContext context;
 
+    /**
+     * Initialize the context of this task. Note that the partition assignment will be empty until
+     * Connect has opened the partitions for writing with {@link #open(Collection)}.
+     * @param context The sink task's context
+     */
     public void initialize(SinkTaskContext context) {
         this.context = context;
     }
@@ -77,24 +107,38 @@ public abstract class SinkTask implements Task {
 
     /**
      * The SinkTask use this method to create writers for newly assigned partitions in case of partition
-     * re-assignment. In partition re-assignment, some new partitions may be assigned to the SinkTask.
-     * The SinkTask needs to create writers and perform necessary recovery for the newly assigned partitions.
-     * This method will be called after partition re-assignment completes and before the SinkTask starts
+     * rebalance. This method will be called after partition re-assignment completes and before the SinkTask starts
      * fetching data. Note that any errors raised from this method will cause the task to stop.
      * @param partitions The list of partitions that are now assigned to the task (may include
      *                   partitions previously assigned to the task)
      */
+    public void open(Collection<TopicPartition> partitions) {
+        this.onPartitionsAssigned(partitions);
+    }
+
+    /**
+     * @deprecated Use {@link #open(Collection)} for partition initialization.
+     */
+    @Deprecated
     public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
     }
 
     /**
-     * The SinkTask use this method to close writers and commit offsets for partitions that are no
+     * The SinkTask use this method to close writers for partitions that are no
      * longer assigned to the SinkTask. This method will be called before a rebalance operation starts
-     * and after the SinkTask stops fetching data. Note that any errors raised from this method will cause
-     * the task to stop.
-     * @param partitions The list of partitions that were assigned to the consumer on the last
-     *                   rebalance
+     * and after the SinkTask stops fetching data. After being closed, Connect will not write
+     * any records to the task until a new set of partitions has been opened. Note that any errors raised
+     * from this method will cause the task to stop.
+     * @param partitions The list of partitions that should be closed
      */
+    public void close(Collection<TopicPartition> partitions) {
+        this.onPartitionsRevoked(partitions);
+    }
+
+    /**
+     * @deprecated Use {@link #close(Collection)} instead for partition cleanup.
+     */
+    @Deprecated
     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
     }
 

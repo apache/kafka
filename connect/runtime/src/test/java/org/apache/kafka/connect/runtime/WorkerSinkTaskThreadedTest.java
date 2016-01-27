@@ -474,7 +474,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private void expectPollInitialAssignment() throws Exception {
         final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
 
-        sinkTask.onPartitionsAssigned(partitions);
+        sinkTask.open(partitions);
         EasyMock.expectLastCall();
 
         EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(new IAnswer<ConsumerRecords<byte[], byte[]>>() {
