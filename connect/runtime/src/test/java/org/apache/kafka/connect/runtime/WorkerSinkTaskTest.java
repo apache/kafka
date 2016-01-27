@@ -278,6 +278,9 @@ public class WorkerSinkTaskTest {
         });
         EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
         EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(FIRST_OFFSET);
+
+        sinkTask.put(Collections.<SinkRecord>emptyList());
+        EasyMock.expectLastCall();
     }
 
     private void expectConsumerPoll(final int numMessages) {

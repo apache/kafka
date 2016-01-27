@@ -325,9 +325,6 @@ class WorkerSinkTask extends AbstractWorkerTask {
     }
 
     private void deliverMessages() {
-        if (messageBatch.isEmpty())
-            return;
-
         // Finally, deliver this batch to the sink
         try {
             // Since we reuse the messageBatch buffer, ensure we give the task its own copy
