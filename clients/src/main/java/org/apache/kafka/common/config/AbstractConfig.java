@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 import org.apache.kafka.common.Configurable;
@@ -47,11 +48,15 @@ public class AbstractConfig {
 
     @SuppressWarnings("unchecked")
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, Boolean doLog) {
-        /* check that all the keys are really strings */
-        for (Object key : originals.keySet())
-            if (!(key instanceof String))
-                throw new ConfigException(key.toString(), originals.get(key), "Key must be a string.");
-        this.originals = (Map<String, ?>) originals;
+        if (originals instanceof Properties) {
+            this.originals = flattenProperties((Properties) originals);
+        } else {
+            /* check that all the keys are really strings */
+            for (Object key : originals.keySet())
+                if (!(key instanceof String))
+                    throw new ConfigException(key.toString(), originals.get(key), "Key must be a string.");
+            this.originals = (Map<String, ?>) originals;
+        }
         this.values = definition.parse(this.originals);
         this.used = Collections.synchronizedSet(new HashSet<String>());
         if (doLog)
@@ -216,6 +221,15 @@ public class AbstractConfig {
             objects.add(t.cast(o));
         }
         return objects;
+    }
+
+    public Map<String, String> flattenProperties(Properties properties) {
+        // flatten Properties "map" so that defaults can be used by client applications
+        Map<String, String> propMap = new HashMap<>();
+        for (String property : properties.stringPropertyNames()) {
+            propMap.put(property, properties.getProperty(property));
+        }
+        return propMap;
     }
 
     @Override

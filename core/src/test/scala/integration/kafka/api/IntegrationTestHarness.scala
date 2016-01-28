@@ -37,8 +37,6 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
   val producerCount: Int
   val consumerCount: Int
   val serverCount: Int
-  lazy val producerConfig = new Properties
-  lazy val consumerConfig = new Properties
   lazy val serverConfig = new Properties
 
   val consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
@@ -51,17 +49,16 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
     cfgs.map(KafkaConfig.fromProps)
   }
 
+  lazy val producerConfig = new Properties(TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile))
+  lazy val consumerConfig = new Properties(TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile))
+
   @Before
   override def setUp() {
-    val producerSecurityProps = TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile)
-    val consumerSecurityProps = TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile)
     super.setUp()
-    producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
-    producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
-    producerConfig.putAll(producerSecurityProps)
-    consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
-    consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
-    consumerConfig.putAll(consumerSecurityProps)
+    producerConfig.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    producerConfig.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    consumerConfig.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    consumerConfig.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     for (i <- 0 until producerCount)
       producers += TestUtils.createNewProducer(brokerList,
                                                securityProtocol = this.securityProtocol,

@@ -323,8 +323,7 @@ public class ConsumerConfig extends AbstractConfig {
     public static Properties addDeserializerToConfig(Properties properties,
                                                      Deserializer<?> keyDeserializer,
                                                      Deserializer<?> valueDeserializer) {
-        Properties newProperties = new Properties();
-        newProperties.putAll(properties);
+        Properties newProperties = new Properties(properties);
         if (keyDeserializer != null)
             newProperties.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
         if (valueDeserializer != null)
