@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.WindowStoreUtils;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -33,33 +34,40 @@ public class StoreChangeLogger<K, V> {
     }
 
     // TODO: these values should be configurable
-    private static final int DEFAULT_WRITE_BATCH_SIZE = 100;
+    protected static final int DEFAULT_WRITE_BATCH_SIZE = 100;
 
     protected final Serdes<K, V> serialization;
 
-    private final Set<K> dirty;
-    private final Set<K> removed;
+    private final String topic;
+    private final int partition;
+    private final ProcessorContext context;
     private final int maxDirty;
     private final int maxRemoved;
 
-    private final String topic;
-    private int partition;
-    private ProcessorContext context;
+    protected Set<K> dirty;
+    protected Set<K> removed;
 
     public StoreChangeLogger(String topic, ProcessorContext context, Serdes<K, V> serialization) {
         this(topic, context, serialization, DEFAULT_WRITE_BATCH_SIZE, DEFAULT_WRITE_BATCH_SIZE);
     }
 
     public StoreChangeLogger(String topic, ProcessorContext context, Serdes<K, V> serialization, int maxDirty, int maxRemoved) {
-        this.topic = topic;
-        this.serialization = serialization;
-        this.context = context;
-        this.partition = context.id().partition;
+        this(topic, context, context.id().partition, serialization, maxDirty, maxRemoved);
+        init();
+    }
 
-        this.dirty = new HashSet<>();
-        this.removed = new HashSet<>();
+    protected StoreChangeLogger(String topic, ProcessorContext context, int partition, Serdes<K, V> serialization, int maxDirty, int maxRemoved) {
+        this.topic = topic;
+        this.context = context;
+        this.partition = partition;
+        this.serialization = serialization;
         this.maxDirty = maxDirty;
         this.maxRemoved = maxRemoved;
+    }
+
+    public void init() {
+        this.dirty = new HashSet<>();
+        this.removed = new HashSet<>();
     }
 
     public void add(K key) {
@@ -75,6 +83,11 @@ public class StoreChangeLogger<K, V> {
     public void maybeLogChange(ValueGetter<K, V> getter) {
         if (this.dirty.size() > this.maxDirty || this.removed.size() > this.maxRemoved)
             logChange(getter);
+    }
+
+    public void maybeLogRawChange(ValueGetter<byte[], byte[]> getter) {
+        if (this.dirty.size() > this.maxDirty || this.removed.size() > this.maxRemoved)
+            logRawChange(getter);
     }
 
     public void logChange(ValueGetter<K, V> getter) {
@@ -95,16 +108,29 @@ public class StoreChangeLogger<K, V> {
         }
     }
 
+    public void logRawChange(ValueGetter<byte[], byte[]> getter) {
+        RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
+        if (collector != null) {
+            String topic = serialization.topic();
+            Serializer<K> keySerializer = serialization.keySerializer();
+            Serializer<V> valueSerializer = serialization.valueSerializer();
+
+            for (K k : this.removed) {
+                byte[] rawK = keySerializer.serialize(topic, k);
+                collector.send(new ProducerRecord<>(this.topic, this.partition, rawK, (byte[]) null), WindowStoreUtils.INNER_SERDES.keySerializer(), WindowStoreUtils.INNER_SERDES.valueSerializer());
+            }
+            for (K k : this.dirty) {
+                byte[] rawK = keySerializer.serialize(topic, k);
+                byte[] rawV = getter.get(rawK);
+                collector.send(new ProducerRecord<>(this.topic, this.partition, rawK, rawV), WindowStoreUtils.INNER_SERDES.keySerializer(), WindowStoreUtils.INNER_SERDES.valueSerializer());
+            }
+            this.removed.clear();
+            this.dirty.clear();
+        }
+    }
+
     public void clear() {
         this.removed.clear();
         this.dirty.clear();
-    }
-
-    public boolean isDirty(K key) {
-        return this.dirty.contains(key);
-    }
-
-    public Set<K> removedKeys() {
-        return this.removed;
     }
 }

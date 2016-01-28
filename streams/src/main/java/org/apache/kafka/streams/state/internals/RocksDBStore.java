@@ -140,9 +140,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         this.dbDir = new File(new File(this.context.stateDir(), DB_FILE_DIR), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
 
-        this.changeLogger = this.loggingEnabled ?
-                new StoreChangeLogger<>(name, context, Serdes.withBuiltinTypes("", byte[].class, byte[].class)) :
-                null;
+        this.changeLogger = this.loggingEnabled ? new RawStoreChangeLogger(name, context) : null;
 
         if (this.cacheSize > 0) {
             this.cache = new MemoryLRUCache<K, RocksDBCacheEntry>(name, cacheSize)
@@ -265,7 +263,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         if (loggingEnabled) {
             changeLogger.add(rawKey);
-            changeLogger.maybeLogChange(this.getter);
+            changeLogger.maybeLogRawChange(this.getter);
         }
     }
 
@@ -366,7 +364,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         flushInternal();
 
         if (loggingEnabled)
-            changeLogger.logChange(getter);
+            changeLogger.logRawChange(getter);
     }
 
     public void flushInternal() {
