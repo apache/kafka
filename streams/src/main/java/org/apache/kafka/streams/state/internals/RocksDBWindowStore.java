@@ -156,6 +156,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void init(ProcessorContext context) {
+        serdes.init(context);
         this.context = context;
 
         this.changeLogger = this.loggingEnabled ?

@@ -20,6 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -65,6 +66,9 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         private final String name;
         private final NavigableMap<K, V> map;
 
+        private boolean loggingEnabled = false;
+        private Serdes<K, V> serdes = null;
+
         public MemoryStore(String name) {
             super();
             this.name = name;
@@ -72,6 +76,9 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         public KeyValueStore<K, V> enableLogging(Serdes<K, V> serdes) {
+            this.loggingEnabled = true;
+            this.serdes = serdes;
+
             return new InMemoryKeyValueLoggedStore<>(this.name, this, serdes);
         }
 
@@ -82,7 +89,16 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
         @Override
         public void init(ProcessorContext context) {
-            // do-nothing since it is in-memory
+            if (loggingEnabled) {
+                context.register(this, true, new StateRestoreCallback() {
+
+                    @Override
+                    public void restore(byte[] key, byte[] value) {
+                        put(serdes.keyFrom(key), serdes.valueFrom(value));
+                    }
+                });
+
+            }
         }
 
         @Override
