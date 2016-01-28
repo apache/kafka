@@ -99,7 +99,7 @@ abstract class WorkerTask implements Runnable {
     @Override
     public void run() {
         if (!this.running.compareAndSet(false, true))
-            return;
+            throw new IllegalStateException("The task cannot be started while still running");
 
         try {
             execute();

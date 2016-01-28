@@ -361,7 +361,7 @@ class WorkerSinkTask extends WorkerTask {
             // Let this exit normally, the batch will be reprocessed on the next loop.
         } catch (Throwable t) {
             log.error("Task {} threw an uncaught and unrecoverable exception", id, t);
-            log.error("Task is being killed and will not recover until manually restarted:");
+            log.error("Task is being killed and will not recover until manually restarted");
             throw new ConnectException("Exiting WorkerSinkTask due to unrecoverable exception.");
         }
     }
