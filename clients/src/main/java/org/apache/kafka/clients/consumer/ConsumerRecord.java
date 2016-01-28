@@ -12,7 +12,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.TimestampType;
 
 /**
  * A key/value pair to be received from Kafka. This consists of a topic name and a partition number, from which the
@@ -23,7 +23,7 @@ public final class ConsumerRecord<K, V> {
     private final int partition;
     private final long offset;
     private final long timestamp;
-    private final Record.TimestampType timestampType;
+    private final TimestampType timestampType;
     private final K key;
     private final V value;
 
@@ -41,7 +41,7 @@ public final class ConsumerRecord<K, V> {
                           int partition,
                           long offset,
                           long timestamp,
-                          Record.TimestampType timestampType,
+                          TimestampType timestampType,
                           K key,
                           V value) {
         if (topic == null)
@@ -94,7 +94,7 @@ public final class ConsumerRecord<K, V> {
         return timestamp;
     }
 
-    public Record.TimestampType timestampType() {
+    public TimestampType timestampType() {
         return timestampType;
     }
 

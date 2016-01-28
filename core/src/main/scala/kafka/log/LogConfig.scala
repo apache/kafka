@@ -19,13 +19,11 @@ package kafka.log
 
 import java.util.Properties
 import kafka.api.ApiVersion
-import kafka.message.Message.TimestampType
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.utils.Utils
 import scala.collection._
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
-import kafka.message.BrokerCompressionCodec
-import kafka.message.Message
+import kafka.message.{TimestampType, BrokerCompressionCodec, Message}
 
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes

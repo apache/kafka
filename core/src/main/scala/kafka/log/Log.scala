@@ -17,7 +17,6 @@
 
 package kafka.log
 
-import kafka.message.Message.TimestampType
 import kafka.utils._
 import kafka.message._
 import kafka.common._

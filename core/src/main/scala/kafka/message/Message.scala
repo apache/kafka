@@ -18,7 +18,7 @@
 package kafka.message
 
 import java.nio._
-import kafka.message.Message.TimestampType.TimestampType
+import kafka.message.TimestampType.TimestampType
 
 import scala.math._
 import kafka.utils._
@@ -28,27 +28,6 @@ import org.apache.kafka.common.utils.Utils
  * Constants related to messages
  */
 object Message {
-
-  case object TimestampType extends Enumeration {
-    type TimestampType = Value
-    val CreateTime = Value(0, "CreateTime")
-    val LogAppendTime = Value(1, "LogAppendTime")
-
-    def getTimestampType(attribute: Byte) = {
-      (attribute & TimestampTypeMask) >> TimestampTypeAttributeBitOffset match {
-        case 0 => CreateTime
-        case 1 => LogAppendTime
-      }
-    }
-
-    def setTimestampType(attribute: Byte, timestampType: TimestampType): Byte = {
-      if (timestampType == CreateTime)
-        (attribute & ~TimestampTypeMask).toByte
-      else
-        (attribute | TimestampTypeMask).toByte
-    }
-
-  }
 
   /**
    * The current offset and size for all the fixed-length fields

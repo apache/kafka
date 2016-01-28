@@ -18,8 +18,7 @@
 package kafka.message
 
 import kafka.api.{KAFKA_0_10_0_DV0, ApiVersion}
-import kafka.message.Message.TimestampType
-import kafka.message.Message.TimestampType.TimestampType
+import kafka.message.TimestampType.TimestampType
 import kafka.utils.{IteratorTemplate, Logging}
 import kafka.common.KafkaException
 

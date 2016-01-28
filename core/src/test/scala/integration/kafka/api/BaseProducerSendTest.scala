@@ -28,7 +28,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.errors.SerializationException
-import org.apache.kafka.common.record.Record.TimestampType
+import org.apache.kafka.common.record.TimestampType
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import scala.collection.mutable.Buffer

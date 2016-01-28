@@ -15,8 +15,8 @@ package kafka.api
 import java.util
 
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.{Producer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.record.Record.TimestampType
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 

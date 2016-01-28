@@ -40,7 +40,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ListOffsetRequest;
@@ -616,7 +616,7 @@ public class Fetcher<K, V> {
                 logEntry.record().ensureValid();
             long offset = logEntry.offset();
             long timestamp = logEntry.record().timestamp();
-            Record.TimestampType timestampType = logEntry.record().timestampType();
+            TimestampType timestampType = logEntry.record().timestampType();
             ByteBuffer keyBytes = logEntry.record().key();
             K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), Utils.toArray(keyBytes));
             ByteBuffer valueBytes = logEntry.record().value();

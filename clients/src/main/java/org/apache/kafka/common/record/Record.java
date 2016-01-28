@@ -27,27 +27,6 @@ import org.apache.kafka.common.utils.Utils;
  */
 public final class Record {
 
-    public enum TimestampType {
-        CreateTime(0, "CreateTime"), LogAppendTime(1, "LogAppendTime");
-
-        public int value;
-        public String name;
-        TimestampType(int value, String name) {
-            this.value = value;
-            this.name = name;
-        }
-
-        public static TimestampType getTimestampType(byte attributes) {
-            int timestampType = (attributes & TIMESTAMP_TYPE_MASK) >> TIMESTAMP_TYPE_ATTRIBUTE_OFFSET;
-            return timestampType == 0 ? CreateTime : LogAppendTime;
-        }
-
-        public static byte setTimestampType(byte attributes, TimestampType timestampType) {
-            return timestampType == CreateTime ?
-                (byte) (attributes & ~TIMESTAMP_TYPE_MASK) : (byte) (attributes | TIMESTAMP_TYPE_MASK);
-        }
-    }
-
     /**
      * The current offset and size for all the fixed-length fields
      */

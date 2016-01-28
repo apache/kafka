@@ -20,7 +20,6 @@ package kafka.message
 import java.nio._
 import java.util.concurrent.atomic.AtomicLong
 import kafka.api.ApiVersion
-import kafka.message.Message.TimestampType
 import org.junit.Assert._
 import org.junit.Test
 import kafka.utils.TestUtils

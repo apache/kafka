@@ -20,7 +20,6 @@ package kafka.message
 import java.io.{InputStream, ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.ByteBuffer
 import java.util.Random
-import kafka.message.Message.TimestampType
 import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.junit.JUnitSuite
