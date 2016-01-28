@@ -156,11 +156,11 @@ public final class RecordAccumulator {
         // abortIncompleteBatches().
         appendsInProgress.incrementAndGet();
         try {
-            if (closed)
-                throw new IllegalStateException("Cannot send after the producer is closed.");
             // check if we have an in-progress batch
             Deque<RecordBatch> dq = dequeFor(tp);
             synchronized (dq) {
+                if (closed)
+                    throw new IllegalStateException("Cannot send after the producer is closed.");
                 RecordBatch last = dq.peekLast();
                 if (last != null) {
                     FutureRecordMetadata future = last.tryAppend(key, value, callback, time.milliseconds());
@@ -452,6 +452,7 @@ public final class RecordAccumulator {
             // Close the batch before aborting
             synchronized (dq) {
                 batch.records.close();
+                dq.remove(batch);
             }
             batch.done(-1L, new IllegalStateException("Producer is closed forcefully."));
             deallocate(batch);
