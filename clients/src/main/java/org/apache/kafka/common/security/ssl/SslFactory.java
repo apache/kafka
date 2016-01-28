@@ -33,6 +33,9 @@ import java.util.Map;
 
 public class SslFactory implements Configurable {
 
+    private final Mode mode;
+    private final String clientAuthConfigOverride;
+
     private String protocol;
     private String provider;
     private String kmfAlgorithm;
@@ -46,10 +49,14 @@ public class SslFactory implements Configurable {
     private SSLContext sslContext;
     private boolean needClientAuth;
     private boolean wantClientAuth;
-    private final Mode mode;
 
     public SslFactory(Mode mode) {
+        this(mode, null);
+    }
+
+    public SslFactory(Mode mode, String clientAuthConfigOverride) {
         this.mode = mode;
+        this.clientAuthConfigOverride = clientAuthConfigOverride;
     }
 
     @Override
@@ -70,7 +77,9 @@ public class SslFactory implements Configurable {
         if (endpointIdentification != null)
             this.endpointIdentification = endpointIdentification;
 
-        String clientAuthConfig = (String) configs.get(SslConfigs.SSL_CLIENT_AUTH_CONFIG);
+        String clientAuthConfig = clientAuthConfigOverride;
+        if (clientAuthConfig == null)
+            clientAuthConfig = (String) configs.get(SslConfigs.SSL_CLIENT_AUTH_CONFIG);
         if (clientAuthConfig != null) {
             if (clientAuthConfig.equals("required"))
                 this.needClientAuth = true;
