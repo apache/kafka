@@ -202,7 +202,7 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
                                 2000, 0)
         metadata.topicsMetadata.nonEmpty &&
           metadata.topicsMetadata.head.partitionsMetadata.nonEmpty &&
-          expectedIsr == metadata.topicsMetadata.head.partitionsMetadata.head.isr
+          expectedIsr.sortBy(_.id) == metadata.topicsMetadata.head.partitionsMetadata.head.isr.sortBy(_.id)
       },
         "Topic metadata is not correctly updated for broker " + x + ".\n" +
         "Expected ISR: " + expectedIsr + "\n" +
