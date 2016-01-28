@@ -21,7 +21,7 @@ import static org.junit.Assert.assertEquals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -60,17 +60,17 @@ public class PartitionGroupTest {
 
         // add three 3 records with timestamp 1, 3, 5 to partition-1
         List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
-            new ConsumerRecord<>("topic", 1, 1, 0L, Record.TimestampType.CreateTime, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 3, 0L, Record.TimestampType.CreateTime, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 5, 0L, Record.TimestampType.CreateTime, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CreateTime, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 3, 0L, TimestampType.CreateTime, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 5, 0L, TimestampType.CreateTime, recordKey, recordValue));
 
         group.addRawRecords(partition1, list1);
 
         // add three 3 records with timestamp 2, 4, 6 to partition-2
         List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
-            new ConsumerRecord<>("topic", 1, 2, 0L, Record.TimestampType.CreateTime, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 4, 0L, Record.TimestampType.CreateTime, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 6, 0L, Record.TimestampType.CreateTime, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CreateTime, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CreateTime, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 6, 0L, TimestampType.CreateTime, recordKey, recordValue));
 
         group.addRawRecords(partition2, list2);
 
