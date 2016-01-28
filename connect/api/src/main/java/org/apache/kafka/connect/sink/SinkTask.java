@@ -27,11 +27,10 @@ import java.util.Map;
 /**
  * SinkTask is a Task that takes records loaded from Kafka and sends them to another system. Each task
  * instance is assigned a set of partitions by the Connect framework and will handle all records received
- * from those partitions. As records are fetched, they will be written to the downstream system using
- * {@link #put(Collection)}. At a minimum, you must implement this interface along with {@link #flush(Map)},
- * which is used to commit the offsets of records forwarded. Generally, after records have been flushed,
- * they will not be processed again except in the case of a failure. To avoid message loss, you must ensure
- * that flushed records have been successfully written to the downstream system.
+ * from those partitions. As records are fetched from Kafka, they will be passed to the sink task using the
+ * {@link #put(Collection)} API, which should either write them to the downstream system or batch them for
+ * later writing. Periodically, Connect will call {@link #flush(Map)} to ensure that batched records are
+ * actually pushed to the downstream system..
  *
  * Below we describe the lifecycle of a SinkTask.
  *
@@ -44,8 +43,7 @@ import java.util.Map;
  *     have been closed with {@link #close(Collection)}.</li>
  *     <li><b>Record Processing:</b> Once partitions have been opened for writing, Connect will begin forwarding
  *     records from Kafka using the {@link #put(Collection)} API. Periodically, Connect will ask the task
- *     to flush records using {@link #flush(Map)}. All records with offsets , are considered "committed"
- *     after flushing</li>
+ *     to flush records using {@link #flush(Map)} as described above.</li>
  *     <li><b>Partition Rebalancing:</b> Occasionally, Connect will need to change the assignment of this task.
  *     When this happens, the currently assigned partitions will be closed with {@link #close(Collection)} and
  *     the new assignment will be opened using {@link #open(Collection)}.</li>
