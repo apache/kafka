@@ -23,6 +23,7 @@ import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -45,9 +46,9 @@ public class SelectorTest {
     private Metrics metrics;
 
     @Before
-    public void setup() throws Exception {
+    public void setUp() throws Exception {
         Map<String, Object> configs = new HashMap<>();
-        this.server = new EchoServer(configs);
+        this.server = new EchoServer(SecurityProtocol.PLAINTEXT, configs);
         this.server.start();
         this.time = new MockTime();
         this.channelBuilder = new PlaintextChannelBuilder();
@@ -57,7 +58,7 @@ public class SelectorTest {
     }
 
     @After
-    public void teardown() throws Exception {
+    public void tearDown() throws Exception {
         this.selector.close();
         this.server.close();
         this.metrics.close();
