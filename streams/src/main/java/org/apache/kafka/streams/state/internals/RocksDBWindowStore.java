@@ -197,18 +197,22 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void put(K key, V value) {
-        putAndReturnInternalKey(key, value, USE_CURRENT_TIMESTAMP);
+        byte[] rawKey = putAndReturnInternalKey(key, value, USE_CURRENT_TIMESTAMP);
 
-        if (loggingEnabled)
-            changeLogger.logChange(this.getter);
+        if (loggingEnabled) {
+            changeLogger.add(rawKey);
+            changeLogger.maybeLogChange(this.getter);
+        }
     }
 
     @Override
     public void put(K key, V value, long timestamp) {
-        putAndReturnInternalKey(key, value, timestamp);
+        byte[] rawKey = putAndReturnInternalKey(key, value, timestamp);
 
-        if (loggingEnabled)
-            changeLogger.logChange(this.getter);
+        if (loggingEnabled) {
+            changeLogger.add(rawKey);
+            changeLogger.maybeLogChange(this.getter);
+        }
     }
 
     private byte[] putAndReturnInternalKey(K key, V value, long t) {
