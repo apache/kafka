@@ -55,16 +55,6 @@ for %%i in (%BASE_DIR%\examples\build\libs\kafka-examples-*.jar) do (
 	call :concat %%i
 )
 
-rem Classpath addition for contrib/hadoop-consumer
-for %%i in (%BASE_DIR%\contrib\hadoop-consumer\build\libs\kafka-hadoop-consumer-*.jar) do (
-	call :concat %%i
-)
-
-rem Classpath addition for contrib/hadoop-producer
-for %%i in (%BASE_DIR%\contrib\hadoop-producer\build\libs\kafka-hadoop-producer-*.jar) do (
-	call :concat %%i
-)
-
 rem Classpath addition for release
 for %%i in (%BASE_DIR%\libs\*.jar) do (
 	call :concat %%i

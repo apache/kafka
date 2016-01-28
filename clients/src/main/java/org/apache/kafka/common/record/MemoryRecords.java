@@ -145,7 +145,7 @@ public class MemoryRecords implements Records {
         if (writable) {
             return compressor.buffer().position();
         } else {
-            return compressor.buffer().limit();
+            return buffer.limit();
         }
     }
 

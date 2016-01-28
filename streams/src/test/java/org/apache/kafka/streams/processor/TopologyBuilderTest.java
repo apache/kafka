@@ -17,7 +17,9 @@
 
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.TopologyBuilder.TopicsInfo;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -39,7 +41,7 @@ import static org.junit.Assert.assertTrue;
 
 public class TopologyBuilderTest {
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testAddSourceWithSameName() {
         final TopologyBuilder builder = new TopologyBuilder();
 
@@ -47,7 +49,7 @@ public class TopologyBuilderTest {
         builder.addSource("source", "topic-2");
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testAddSourceWithSameTopic() {
         final TopologyBuilder builder = new TopologyBuilder();
 
@@ -55,7 +57,7 @@ public class TopologyBuilderTest {
         builder.addSource("source-2", "topic-1");
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testAddProcessorWithSameName() {
         final TopologyBuilder builder = new TopologyBuilder();
 
@@ -64,21 +66,21 @@ public class TopologyBuilderTest {
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testAddProcessorWithWrongParent() {
         final TopologyBuilder builder = new TopologyBuilder();
 
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testAddProcessorWithSelfParent() {
         final TopologyBuilder builder = new TopologyBuilder();
 
         builder.addProcessor("processor", new MockProcessorSupplier(), "processor");
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testAddSinkWithSameName() {
         final TopologyBuilder builder = new TopologyBuilder();
 
@@ -87,14 +89,14 @@ public class TopologyBuilderTest {
         builder.addSink("sink", "topic-3", "source");
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testAddSinkWithWrongParent() {
         final TopologyBuilder builder = new TopologyBuilder();
 
         builder.addSink("sink", "topic-2", "source");
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testAddSinkWithSelfParent() {
         final TopologyBuilder builder = new TopologyBuilder();
 
@@ -144,14 +146,14 @@ public class TopologyBuilderTest {
         assertEquals(3, builder.sourceTopics().size());
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testAddStateStoreWithNonExistingProcessor() {
         final TopologyBuilder builder = new TopologyBuilder();
 
         builder.addStateStore(new MockStateStoreSupplier("store", false), "no-such-processsor");
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testAddStateStoreWithSource() {
         final TopologyBuilder builder = new TopologyBuilder();
 
@@ -159,7 +161,7 @@ public class TopologyBuilderTest {
         builder.addStateStore(new MockStateStoreSupplier("store", false), "source-1");
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testAddStateStoreWithSink() {
         final TopologyBuilder builder = new TopologyBuilder();
 
@@ -167,7 +169,7 @@ public class TopologyBuilderTest {
         builder.addStateStore(new MockStateStoreSupplier("store", false), "sink-1");
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testAddStateStoreWithDuplicates() {
         final TopologyBuilder builder = new TopologyBuilder();
 
@@ -213,9 +215,9 @@ public class TopologyBuilderTest {
         Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
 
         Map<Integer, TopicsInfo> expectedTopicGroups = new HashMap<>();
-        expectedTopicGroups.put(0, new TopicsInfo(mkSet("topic-1", "topic-1x", "topic-2"), Collections.<String>emptySet()));
-        expectedTopicGroups.put(1, new TopicsInfo(mkSet("topic-3", "topic-4"), Collections.<String>emptySet()));
-        expectedTopicGroups.put(2, new TopicsInfo(mkSet("topic-5"), Collections.<String>emptySet()));
+        expectedTopicGroups.put(0, new TopicsInfo(mkSet("topic-1", "topic-1x", "topic-2"), Collections.<String>emptySet(), Collections.<String>emptySet()));
+        expectedTopicGroups.put(1, new TopicsInfo(mkSet("topic-3", "topic-4"), Collections.<String>emptySet(), Collections.<String>emptySet()));
+        expectedTopicGroups.put(2, new TopicsInfo(mkSet("topic-5"), Collections.<String>emptySet(), Collections.<String>emptySet()));
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
@@ -251,9 +253,9 @@ public class TopologyBuilderTest {
         Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
 
         Map<Integer, TopicsInfo> expectedTopicGroups = new HashMap<>();
-        expectedTopicGroups.put(0, new TopicsInfo(mkSet("topic-1", "topic-1x", "topic-2"), mkSet("store-1")));
-        expectedTopicGroups.put(1, new TopicsInfo(mkSet("topic-3", "topic-4"), mkSet("store-2")));
-        expectedTopicGroups.put(2, new TopicsInfo(mkSet("topic-5"), mkSet("store-3")));
+        expectedTopicGroups.put(0, new TopicsInfo(mkSet("topic-1", "topic-1x", "topic-2"), Collections.<String>emptySet(), mkSet("store-1" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX)));
+        expectedTopicGroups.put(1, new TopicsInfo(mkSet("topic-3", "topic-4"), Collections.<String>emptySet(), mkSet("store-2" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX)));
+        expectedTopicGroups.put(2, new TopicsInfo(mkSet("topic-5"), Collections.<String>emptySet(), mkSet("store-3" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX)));
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);

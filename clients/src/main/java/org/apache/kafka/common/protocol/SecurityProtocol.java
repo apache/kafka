@@ -83,6 +83,11 @@ public enum SecurityProtocol {
         return CODE_TO_SECURITY_PROTOCOL.get(id);
     }
 
+    /** Case insensitive lookup by protocol name */
+    public static SecurityProtocol forName(String name) {
+        return SecurityProtocol.valueOf(name.toUpperCase());
+    }
+
     /**
      * Returns the set of non-testing SecurityProtocol instances, that is, SecurityProtocol instances that are suitable
      * for production usage.

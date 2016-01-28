@@ -19,10 +19,12 @@
 
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.KeyValue;
+
 import java.io.Closeable;
 import java.util.Iterator;
 
-public interface KeyValueIterator<K, V> extends Iterator<Entry<K, V>>, Closeable {
+public interface KeyValueIterator<K, V> extends Iterator<KeyValue<K, V>>, Closeable {
 
     @Override
     public void close();

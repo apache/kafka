@@ -17,6 +17,7 @@
 package kafka.admin
 
 import junit.framework.Assert._
+import kafka.common.TopicExistsException
 import org.junit.Test
 import kafka.utils.Logging
 import kafka.utils.TestUtils
@@ -96,5 +97,64 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging {
         TopicCommand.deleteTopic(zkUtils, deleteOffsetTopicOpts)
     }
     assertFalse("Delete path for topic shouldn't exist after deletion.", zkUtils.zkClient.exists(deleteOffsetTopicPath))
+  }
+
+  @Test
+  def testDeleteIfExists() {
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkUtils, brokers)
+
+    // delete a topic that does not exist without --if-exists
+    val deleteOpts = new TopicCommandOptions(Array("--topic", "test"))
+    intercept[IllegalArgumentException] {
+      TopicCommand.deleteTopic(zkUtils, deleteOpts)
+    }
+
+    // delete a topic that does not exist with --if-exists
+    val deleteExistsOpts = new TopicCommandOptions(Array("--topic", "test", "--if-exists"))
+    TopicCommand.deleteTopic(zkUtils, deleteExistsOpts)
+  }
+
+  @Test
+  def testAlterIfExists() {
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkUtils, brokers)
+
+    // alter a topic that does not exist without --if-exists
+    val alterOpts = new TopicCommandOptions(Array("--topic", "test", "--partitions", "1"))
+    intercept[IllegalArgumentException] {
+      TopicCommand.alterTopic(zkUtils, alterOpts)
+    }
+
+    // alter a topic that does not exist with --if-exists
+    val alterExistsOpts = new TopicCommandOptions(Array("--topic", "test", "--partitions", "1", "--if-exists"))
+    TopicCommand.alterTopic(zkUtils, alterExistsOpts)
+  }
+
+  @Test
+  def testCreateIfNotExists() {
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkUtils, brokers)
+
+    val topic = "test"
+    val numPartitions = 1
+
+    // create the topic
+    val createOpts = new TopicCommandOptions(
+      Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", topic))
+    TopicCommand.createTopic(zkUtils, createOpts)
+
+    // try to re-create the topic without --if-not-exists
+    intercept[TopicExistsException] {
+      TopicCommand.createTopic(zkUtils, createOpts)
+    }
+
+    // try to re-create the topic with --if-not-exists
+    val createNotExistsOpts = new TopicCommandOptions(
+      Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", topic, "--if-not-exists"))
+    TopicCommand.createTopic(zkUtils, createNotExistsOpts)
   }
 }

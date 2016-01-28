@@ -28,8 +28,12 @@ import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupLoadInProgressException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
+import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
+import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
+import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidRequiredAcksException;
+import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
@@ -105,17 +109,17 @@ public enum Errors {
     ILLEGAL_GENERATION(22,
             new IllegalGenerationException("Specified group generation id is not valid.")),
     INCONSISTENT_GROUP_PROTOCOL(23,
-            new ApiException("The group member's supported protocols are incompatible with those of existing members.")),
+            new InconsistentGroupProtocolException("The group member's supported protocols are incompatible with those of existing members.")),
     INVALID_GROUP_ID(24,
-            new ApiException("The configured groupId is invalid")),
+            new InvalidGroupIdException("The configured groupId is invalid")),
     UNKNOWN_MEMBER_ID(25,
             new UnknownMemberIdException("The coordinator is not aware of this member.")),
     INVALID_SESSION_TIMEOUT(26,
-            new ApiException("The session timeout is not within an acceptable range.")),
+            new InvalidSessionTimeoutException("The session timeout is not within an acceptable range.")),
     REBALANCE_IN_PROGRESS(27,
             new RebalanceInProgressException("The group is rebalancing, so a rejoin is needed.")),
     INVALID_COMMIT_OFFSET_SIZE(28,
-            new ApiException("The committing offset data size is not valid")),
+            new InvalidCommitOffsetSizeException("The committing offset data size is not valid")),
     TOPIC_AUTHORIZATION_FAILED(29,
             new TopicAuthorizationException("Topic authorization failed.")),
     GROUP_AUTHORIZATION_FAILED(30,
@@ -149,6 +153,13 @@ public enum Errors {
      */
     public ApiException exception() {
         return this.exception;
+    }
+
+    /**
+     * Returns the class name of the exception
+     */
+    public String exceptionName() {
+        return exception.getClass().getName();
     }
 
     /**

@@ -21,7 +21,7 @@ public interface Aggregator<K, V, T> {
     /**
      * Set the initial aggregate value
      */
-    T initialValue();
+    T initialValue(K aggKey);
 
     /**
      * When a new record with the aggregate key is added,
@@ -34,9 +34,4 @@ public interface Aggregator<K, V, T> {
      * updating the aggregate value for this key
      */
     T remove(K aggKey, V value, T aggregate);
-
-    /**
-     * Merge two aggregate values
-     */
-    T merge(T aggr1, T aggr2);
 }
