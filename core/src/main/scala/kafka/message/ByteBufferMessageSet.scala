@@ -527,12 +527,21 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       validateMessageKey(message, compactedTopic)
       if (message.magic > Message.MagicValue_V0) {
         validateTimestamp(message, now, timestampType, timestampDiffMaxMs)
-        if (timestampType == TimestampType.LogAppendTime) {
-          message.buffer.putLong(Message.TimestampOffset, now)
-          message.buffer.put(Message.AttributesOffset, TimestampType.setTimestampType(message.attributes, TimestampType.LogAppendTime))
-          // We have to update crc after updating the timestamp.
-          Utils.writeUnsignedInt(message.buffer, Message.CrcOffset, message.computeChecksum())
+        val crcUpdateNeeded = {
+          if (timestampType == TimestampType.LogAppendTime) {
+            message.buffer.putLong(Message.TimestampOffset, now)
+            message.buffer.put(Message.AttributesOffset, TimestampType.setTimestampType(message.attributes, TimestampType.LogAppendTime))
+            true
+          } else if (timestampType == TimestampType.CreateTime &&
+              TimestampType.getTimestampType(message.attributes) != TimestampType.CreateTime) {
+            message.buffer.put(Message.AttributesOffset, TimestampType.setTimestampType(message.attributes, TimestampType.CreateTime))
+            true
+          } else
+            false
         }
+        // We have to update crc after updating the timestamp or timestamp type.
+        if (crcUpdateNeeded)
+          Utils.writeUnsignedInt(message.buffer, Message.CrcOffset, message.computeChecksum())
       }
       messagePosition += MessageSet.LogOverhead + messageSize
     }
@@ -547,9 +556,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
   /**
    * This method validates the timestamps of a message.
-   * 1. If the message is using create time, this method checks if it is with acceptable range.
-   * 2. If the message is using log append time and is an uncompressed message, this method will overwrite the
-   *    timestamp of the message.
+   * If the message is using create time, this method checks if it is with acceptable range.
    */
   private def validateTimestamp(message: Message,
                                 now: Long,
