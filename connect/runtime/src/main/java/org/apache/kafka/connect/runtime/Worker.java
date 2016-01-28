@@ -328,7 +328,7 @@ public class Worker {
         log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
         // Decide which type of worker task we need based on the type of task.
-        final AbstractWorkerTask workerTask;
+        final WorkerTask workerTask;
         if (task instanceof SourceTask) {
             SourceTask sourceTask = (SourceTask) task;
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),

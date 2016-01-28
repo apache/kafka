@@ -52,7 +52,7 @@ import java.util.Set;
 /**
  * WorkerTask that uses a SinkTask to export data from Kafka.
  */
-class WorkerSinkTask extends AbstractWorkerTask {
+class WorkerSinkTask extends WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSinkTask.class);
 
     private final WorkerConfig workerConfig;
