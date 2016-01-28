@@ -73,9 +73,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private boolean loggingEnabled = false;
     private int cacheSize = DEFAULT_UNENCODED_CACHE_SIZE;
 
-    // we must store the raw bytes as key in the cache since we cannot
-    // rely on users to implement their equals function to be consistent with
-    // the serializer behaviors
     private Set<K> cacheDirtyKeys;
     private MemoryLRUCache<K, RocksDBCacheEntry> cache;
     private StoreChangeLogger<byte[], byte[]> changeLogger;
