@@ -39,17 +39,17 @@ import org.rocksdb.WriteOptions;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
-import java.util.NavigableSet;
 import java.util.NoSuchElementException;
-import java.util.TreeSet;
+import java.util.Set;
 
 public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private static final int TTL_NOT_USED = -1;
 
     // TODO: these values should be configurable
-    private static final int DEFAULT_CACHE_SIZE = 1000;
+    private static final int DEFAULT_UNENCODED_CACHE_SIZE = 1000;
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
     private static final long WRITE_BUFFER_SIZE = 32 * 1024 * 1024L;
@@ -70,19 +70,19 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     protected File dbDir;
     private RocksDB db;
 
-    private boolean loggingEnabled = true;
-    private int cacheSize = DEFAULT_CACHE_SIZE;
+    private boolean loggingEnabled = false;
+    private int cacheSize = DEFAULT_UNENCODED_CACHE_SIZE;
 
     // we must store the raw bytes as key in the cache since we cannot
     // rely on users to implement their equals function to be consistent with
     // the serializer behaviors
-    private NavigableSet<K> cacheDirtyKeys;
+    private Set<K> cacheDirtyKeys;
     private MemoryLRUCache<K, RocksDBCacheEntry> cache;
     private StoreChangeLogger<byte[], byte[]> changeLogger;
     private StoreChangeLogger.ValueGetter<byte[], byte[]> getter;
 
-    public RocksDBStore<K, V> disableLogging() {
-        loggingEnabled = false;
+    public KeyValueStore<K, V> enableLogging() {
+        loggingEnabled = true;
 
         return this;
     }
@@ -145,8 +145,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 null;
 
         if (this.cacheSize > 0) {
-            this.cache = new MemoryLRUCache<K, RocksDBCacheEntry>(name, this.cacheSize)
-                    .disableLogging() // do need to log changes in cache
+            this.cache = new MemoryLRUCache<K, RocksDBCacheEntry>(name, cacheSize)
                     .whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<K, RocksDBCacheEntry>() {
                         @Override
                         public void apply(K key, RocksDBCacheEntry entry) {
@@ -157,7 +156,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                         }
                     });
 
-            this.cacheDirtyKeys = new TreeSet<>();
+
+            this.cacheDirtyKeys = new HashSet<>();
         } else {
             this.cache = null;
             this.cacheDirtyKeys = null;
@@ -327,7 +327,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             for (K key : cacheDirtyKeys) {
                 RocksDBCacheEntry entry = cache.get(key);
 
-                assert (entry.isDirty);
+                assert entry.isDirty;
 
                 byte[] rawKey = serdes.rawKey(key);
 

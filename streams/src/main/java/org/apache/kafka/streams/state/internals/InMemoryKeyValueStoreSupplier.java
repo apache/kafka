@@ -43,13 +43,13 @@ import java.util.TreeMap;
 public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
-    private final Serdes serdes;
     private final Time time;
+    private Serdes<K, V> serdes;
 
     public InMemoryKeyValueStoreSupplier(String name, Serdes<K, V> serdes, Time time) {
         this.name = name;
-        this.serdes = serdes;
         this.time = time;
+        this.serdes = serdes;
     }
 
     public String name() {
@@ -57,7 +57,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        return new MeteredKeyValueStore<K, V>(new MemoryStore<K, V>(name), "in-memory-state", time);
+        return new MeteredKeyValueStore<>(new MemoryStore<K, V>(name).enableLogging(serdes), "in-memory-state", time);
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
@@ -69,6 +69,10 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
             super();
             this.name = name;
             this.map = new TreeMap<>();
+        }
+
+        public KeyValueStore<K, V> enableLogging(Serdes<K, V> serdes) {
+            return new InMemoryKeyValueLoggedStore<>(this.name, this, serdes);
         }
 
         @Override

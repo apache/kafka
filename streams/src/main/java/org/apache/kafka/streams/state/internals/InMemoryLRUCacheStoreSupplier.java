@@ -17,20 +17,9 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Serdes;
-
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableSet;
-import java.util.TreeSet;
 
 /**
  * An in-memory key-value store that is limited in size and retains a maximum number of most recently used entries.
@@ -57,13 +46,15 @@ public class InMemoryLRUCacheStoreSupplier<K, V> implements StateStoreSupplier {
         return name;
     }
 
+    @SuppressWarnings("unchecked")
     public StateStore get() {
-        MemoryLRUCache<K, V> cache = new MemoryLRUCache<K, V>(name, serdes, capacity);
-        final MeteredKeyValueStore<K, V> store = new MeteredKeyValueStore<>(cache, "in-memory-lru-state", time);
-        cache.whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<K, V>() {
+        final MemoryNavigableLRUCache<K, V> cache = new MemoryNavigableLRUCache<K, V>(name, capacity);
+        final InMemoryKeyValueLoggedStore<K, V> loggedCache = (InMemoryKeyValueLoggedStore) cache.enableLogging(serdes);
+        final MeteredKeyValueStore<K, V> store = new MeteredKeyValueStore<>(loggedCache, "in-memory-lru-state", time);
+        cache.whenEldestRemoved(new MemoryNavigableLRUCache.EldestEntryRemovalListener<K, V>() {
             @Override
             public void apply(K key, V value) {
-                store.removed(key);
+                loggedCache.removed(key);
             }
         });
         return store;

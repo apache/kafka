@@ -115,8 +115,6 @@ public class StreamsConfig extends AbstractConfig {
 
     private static final String WALLCLOCK_TIMESTAMP_EXTRACTOR = "org.apache.kafka.streams.processor.internals.WallclockTimestampExtractor";
 
-    private static final String WALLCLOCK_TIMESTAMP_EXTRACTOR = "org.apache.kafka.streams.processor.internals.WallclockTimestampExtractor";
-
     static {
         CONFIG = new ConfigDef().define(JOB_ID_CONFIG,      // required with no default value
                                         Type.STRING,
@@ -159,6 +157,7 @@ public class StreamsConfig extends AbstractConfig {
                                         ConsumerConfig.VALUE_DESERIALIZER_CLASS_DOC)
                                 .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                                         Type.CLASS,
+                                        WALLCLOCK_TIMESTAMP_EXTRACTOR,
                                         Importance.MEDIUM,
                                         TIMESTAMP_EXTRACTOR_CLASS_DOC)
                                 .define(PARTITION_GROUPER_CLASS_CONFIG,

@@ -17,17 +17,14 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Serdes;
 
 import java.util.List;
 
@@ -131,19 +128,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             return value;
         } finally {
             this.metrics.recordLatency(this.deleteTime, startNs, time.nanoseconds());
-        }
-    }
-
-    /**
-     * Called when the underlying {@link #inner} {@link KeyValueStore} removes an entry in response to a call from this
-     * store.
-     *
-     * @param key the key for the entry that the inner store removed
-     */
-    protected void removed(K key) {
-        if (loggingEnabled) {
-            changeLogger.delete(key);
-            changeLogger.maybeLogChange(this.getter);
         }
     }
 

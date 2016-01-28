@@ -118,7 +118,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private int seqnum = 0;
     private long currentSegmentId = -1L;
 
-    private boolean loggingEnabled = true;
+    private boolean loggingEnabled = false;
     private StoreChangeLogger<byte[], byte[]> changeLogger = null;
 
     public RocksDBWindowStore(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serdes<K, V> serdes) {
@@ -143,8 +143,8 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         this.formatter.setTimeZone(new SimpleTimeZone(0, "GMT"));
     }
 
-    public RocksDBWindowStore<K, V> disableLogging() {
-        loggingEnabled = false;
+    public RocksDBWindowStore<K, V> enableLogging() {
+        loggingEnabled = true;
 
         return this;
     }

@@ -33,7 +33,7 @@ import org.apache.kafka.streams.state.Serdes;
 public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
-    private final Serdes serdes;
+    private final Serdes<K, V> serdes;
     private final Time time;
 
     public RocksDBKeyValueStoreSupplier(String name, Serdes<K, V> serdes, Time time) {
@@ -47,6 +47,6 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        return new MeteredKeyValueStore<>(new RocksDBStore<K, V>(name, serdes), "rocksdb-state", time);
+        return new MeteredKeyValueStore<>(new RocksDBStore<>(name, serdes).enableLogging(), "rocksdb-state", time);
     }
 }
