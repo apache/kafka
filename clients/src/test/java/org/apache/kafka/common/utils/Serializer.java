@@ -13,17 +13,18 @@
 
 package org.apache.kafka.common.utils;
 
-import java.io.IOException;
-import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.ObjectOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.ObjectInputStream;
 
 public class Serializer {
 
-    public byte[] serialize(Object toSerialize) throws IOException {
+    public static byte[] serialize(Object toSerialize) throws IOException {
         byte[] byteArray = null;
         ByteArrayOutputStream arrayOutputStream = new ByteArrayOutputStream();
         ObjectOutputStream ooStream = new ObjectOutputStream(arrayOutputStream);
@@ -36,30 +37,24 @@ public class Serializer {
         return byteArray;
     }
 
-    public Object deserialize(byte[] byteArray) throws IOException, ClassNotFoundException {
-        ByteArrayInputStream arrayInputStream = new ByteArrayInputStream(byteArray);
-        ObjectInputStream inputStream = new ObjectInputStream(arrayInputStream);
-
-        Object deserializedObject = inputStream.readObject();
-
+    public static Object deserialize(InputStream inputStream) throws IOException, ClassNotFoundException {
+        ObjectInputStream objectInputStream = new ObjectInputStream(inputStream);
+        Object deserializedObject = objectInputStream.readObject();
+        objectInputStream.close();
         inputStream.close();
-        arrayInputStream.close();
-
         return deserializedObject;
     }
 
-    public Object deserialize(String fileName) throws IOException, ClassNotFoundException {
-        ClassLoader classLoader = getClass().getClassLoader();
+    public static Object deserialize(byte[] byteArray) throws IOException, ClassNotFoundException {
+        ByteArrayInputStream arrayInputStream = new ByteArrayInputStream(byteArray);
+        return deserialize(arrayInputStream);
+    }
+
+    public static Object deserialize(String fileName) throws IOException, ClassNotFoundException {
+        ClassLoader classLoader = Serializer.class.getClassLoader();
         File file = new File(classLoader.getResource(fileName).getFile());
         FileInputStream fis = new FileInputStream(file);
 
-        ObjectInputStream inputStream = new ObjectInputStream(fis);
-
-        Object deserializedObject = inputStream.readObject();
-
-        fis.close();
-        inputStream.close();
-
-        return deserializedObject;
+        return deserialize(fis);
     }
 }
