@@ -25,9 +25,11 @@ public interface WindowStore<K, V> extends StateStore {
 
     void put(K key, V value);
 
-    byte[] putAndReturnInternalKey(K key, V value);
+    void put(K key, V value, long timestamp);
 
-    WindowStoreIterator<V> fetch(K key, long timestamp);
+    byte[] putAndReturnInternalKey(K key, V value, long timestamp);
+
+    WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
 
     void putInternal(byte[] binaryKey, byte[] binaryValue);
 

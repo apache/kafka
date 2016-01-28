@@ -14,4 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-PROJECT_NAMES="clients core" exec $(dirname $0)/kafka-run-class.sh kafka.admin.ConfigCommand $@
+PROJECT_NAMES="clients core" exec $(dirname $0)/kafka-run-class.sh kafka.admin.ConfigCommand "$@"

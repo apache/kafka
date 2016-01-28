@@ -49,10 +49,18 @@ class KafkaLog4jAppender(BackgroundThreadService):
 
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
-        if self.security_protocol == SecurityConfig.SSL:
-            cmd += " --security-protocol SSL"
+        if self.security_protocol != SecurityConfig.PLAINTEXT:
+            cmd += " --security-protocol %s" % str(self.security_protocol)
+        if self.security_protocol == SecurityConfig.SSL or self.security_protocol == SecurityConfig.SASL_SSL:
             cmd += " --ssl-truststore-location %s" % str(SecurityConfig.TRUSTSTORE_PATH)
             cmd += " --ssl-truststore-password %s" % str(SecurityConfig.ssl_stores['ssl.truststore.password'])
+        if self.security_protocol == SecurityConfig.SASL_PLAINTEXT or \
+                self.security_protocol == SecurityConfig.SASL_SSL or \
+                self.security_protocol == SecurityConfig.SASL_MECHANISM_GSSAPI or \
+                self.security_protocol == SecurityConfig.SASL_MECHANISM_PLAIN:
+            cmd += " --sasl-kerberos-service-name %s" % str('kafka')
+            cmd += " --client-jaas-conf-path %s" % str(SecurityConfig.JAAS_CONF_PATH)
+            cmd += " --kerb5-conf-path %s" % str(SecurityConfig.KRB5CONF_PATH)
 
         cmd += " 2>> /mnt/kafka_log4j_appender.log | tee -a /mnt/kafka_log4j_appender.log &"
         return cmd

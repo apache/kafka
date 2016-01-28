@@ -41,4 +41,4 @@ case $COMMAND in
     ;;
 esac
 
-PROJECT_NAMES="clients core" exec $base_dir/kafka-run-class.sh $EXTRA_ARGS kafka.Kafka $@
+PROJECT_NAMES="clients core" exec $base_dir/kafka-run-class.sh $EXTRA_ARGS kafka.Kafka "$@"

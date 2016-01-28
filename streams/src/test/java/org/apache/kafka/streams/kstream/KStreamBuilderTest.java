@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
-import org.apache.kafka.streams.processor.TopologyException;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
@@ -28,7 +28,7 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamBuilderTest {
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testFrom() {
         final KStreamBuilder builder = new KStreamBuilder();
 

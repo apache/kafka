@@ -60,9 +60,6 @@ for project in ${PROJECT_NAMES[@]};
   done
 JARPATH=($JARPATH)
 
-# run ./gradlew copyDependantLibs to get all dependant jars in a local dir
-
-
 shopt -s nullglob
 for file in ${JARPATH[@]};
   do

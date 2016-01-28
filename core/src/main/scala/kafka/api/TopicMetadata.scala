@@ -75,12 +75,12 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
                 partitionMetadata.partitionId, partitionMetadata.toString()))
             case error: Errors =>
               topicMetadataInfo.append("\nMetadata for partition [%s,%d] is not available due to %s".format(topic,
-                partitionMetadata.partitionId, error.exception.getClass.getName))
+                partitionMetadata.partitionId, error.exceptionName))
           }
         }
       case error: Errors =>
         topicMetadataInfo.append("\nNo partition metadata for topic %s due to %s".format(topic,
-          error.exception.getClass.getName))
+          error.exceptionName))
     }
     topicMetadataInfo.append("}")
     topicMetadataInfo.toString()

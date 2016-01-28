@@ -51,6 +51,8 @@ public class Struct {
             return value;
         else if (field.defaultValue != Field.NO_DEFAULT)
             return field.defaultValue;
+        else if (field.type.isNullable())
+            return null;
         else
             throw new SchemaException("Missing value for field '" + field.name + "' which has no default value.");
     }

@@ -17,4 +17,5 @@
 if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
     export KAFKA_HEAP_OPTS="-Xmx512M"
 fi
-PROJECT_NAMES="clients core" exec $(dirname $0)/kafka-run-class.sh kafka.tools.ConsumerPerformance $@
+
+PROJECT_NAMES="clients core" exec $(dirname $0)/kafka-run-class.sh kafka.tools.ConsumerPerformance "$@"

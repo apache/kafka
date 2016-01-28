@@ -27,10 +27,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.OffsetCheckpoint;
+import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.junit.Before;
 import org.junit.Test;
@@ -85,17 +85,18 @@ public class StandbyTaskTest {
             )
     );
 
-    private StreamingConfig createConfig(final File baseDir) throws Exception {
-        return new StreamingConfig(new Properties() {
+    private StreamsConfig createConfig(final File baseDir) throws Exception {
+        return new StreamsConfig(new Properties() {
             {
-                setProperty(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-                setProperty(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-                setProperty(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-                setProperty(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-                setProperty(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "org.apache.kafka.test.MockTimestampExtractor");
-                setProperty(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
-                setProperty(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
-                setProperty(StreamingConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath());
+                setProperty(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+                setProperty(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+                setProperty(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+                setProperty(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+                setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "org.apache.kafka.test.MockTimestampExtractor");
+                setProperty(StreamsConfig.JOB_ID_CONFIG, jobId);
+                setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
+                setProperty(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
+                setProperty(StreamsConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath());
             }
         });
     }
@@ -130,7 +131,7 @@ public class StandbyTaskTest {
     public void testStorePartitions() throws Exception {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
-            StreamingConfig config = createConfig(baseDir);
+            StreamsConfig config = createConfig(baseDir);
             StandbyTask task = new StandbyTask(taskId, jobId, topicPartitions, topology, consumer, restoreStateConsumer, config, null);
 
             assertEquals(Utils.mkSet(partition2), new HashSet<>(task.changeLogPartitions()));
@@ -145,7 +146,7 @@ public class StandbyTaskTest {
     public void testUpdateNonPersistentStore() throws Exception {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
-            StreamingConfig config = createConfig(baseDir);
+            StreamsConfig config = createConfig(baseDir);
             StandbyTask task = new StandbyTask(taskId, jobId, topicPartitions, topology, consumer, restoreStateConsumer, config, null);
 
             restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
@@ -164,7 +165,7 @@ public class StandbyTaskTest {
     public void testUpdate() throws Exception {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
-            StreamingConfig config = createConfig(baseDir);
+            StreamsConfig config = createConfig(baseDir);
             StandbyTask task = new StandbyTask(taskId, jobId, topicPartitions, topology, consumer, restoreStateConsumer, config, null);
 
             restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
@@ -199,7 +200,7 @@ public class StandbyTaskTest {
 
             task.close();
 
-            File taskDir = new File(baseDir, taskId.toString());
+            File taskDir = new File(StreamThread.makeStateDir(jobId, baseDir.getCanonicalPath()), taskId.toString());
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
             Map<TopicPartition, Long> offsets = checkpoint.read();
 
@@ -227,7 +228,7 @@ public class StandbyTaskTest {
                     new PartitionInfo("ktable1", 2, Node.noNode(), new Node[0], new Node[0])
             ));
 
-            StreamingConfig config = createConfig(baseDir);
+            StreamsConfig config = createConfig(baseDir);
             StandbyTask task = new StandbyTask(taskId, jobId, ktablePartitions, ktableTopology, consumer, restoreStateConsumer, config, null);
 
             restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
@@ -297,7 +298,7 @@ public class StandbyTaskTest {
 
             task.close();
 
-            File taskDir = new File(baseDir, taskId.toString());
+            File taskDir = new File(StreamThread.makeStateDir(jobId, baseDir.getCanonicalPath()), taskId.toString());
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
             Map<TopicPartition, Long> offsets = checkpoint.read();
 

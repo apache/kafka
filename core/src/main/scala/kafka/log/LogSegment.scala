@@ -23,7 +23,7 @@ import kafka.server.{LogOffsetMetadata, FetchDataInfo}
 import org.apache.kafka.common.errors.CorruptRecordException
 
 import scala.math._
-import java.io.File
+import java.io.{IOException, File}
 
 
  /**
@@ -256,12 +256,18 @@ class LogSegment(val log: FileMessageSet,
    * Change the suffix for the index and log file for this log segment
    */
   def changeFileSuffixes(oldSuffix: String, newSuffix: String) {
-    val logRenamed = log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
-    if(!logRenamed)
-      throw new KafkaStorageException("Failed to change the log file suffix from %s to %s for log segment %d".format(oldSuffix, newSuffix, baseOffset))
-    val indexRenamed = index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, oldSuffix, newSuffix)))
-    if(!indexRenamed)
-      throw new KafkaStorageException("Failed to change the index file suffix from %s to %s for log segment %d".format(oldSuffix, newSuffix, baseOffset))
+
+    def kafkaStorageException(fileType: String, e: IOException) =
+      new KafkaStorageException(s"Failed to change the $fileType file suffix from $oldSuffix to $newSuffix for log segment $baseOffset", e)
+
+    try log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
+    catch {
+      case e: IOException => throw kafkaStorageException("log", e)
+    }
+    try index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, oldSuffix, newSuffix)))
+    catch {
+      case e: IOException => throw kafkaStorageException("index", e)
+    }
   }
 
   /**

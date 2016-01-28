@@ -17,9 +17,9 @@
 
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.ByteBufferInputStream;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,12 +87,12 @@ public class AssignmentInfo {
                 return ByteBuffer.wrap(baos.toByteArray());
 
             } else {
-                TaskAssignmentException ex = new TaskAssignmentException("unable to encode assignment data: version=" + version);
+                TaskAssignmentException ex = new TaskAssignmentException("Unable to encode assignment data: version=" + version);
                 log.error(ex.getMessage(), ex);
                 throw ex;
             }
         } catch (IOException ex) {
-            throw new KafkaException("failed to encode AssignmentInfo", ex);
+            throw new TaskAssignmentException("Failed to encode AssignmentInfo", ex);
         }
     }
 
@@ -128,12 +128,12 @@ public class AssignmentInfo {
                 return new AssignmentInfo(activeTasks, standbyTasks);
 
             } else {
-                TaskAssignmentException ex = new TaskAssignmentException("unknown assignment data version: " + version);
+                TaskAssignmentException ex = new TaskAssignmentException("Unknown assignment data version: " + version);
                 log.error(ex.getMessage(), ex);
                 throw ex;
             }
         } catch (IOException ex) {
-            throw new KafkaException("failed to decode AssignmentInfo", ex);
+            throw new TaskAssignmentException("Failed to decode AssignmentInfo", ex);
         }
     }
 

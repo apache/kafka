@@ -71,7 +71,6 @@ public class SslTransportLayerTest {
         clientCertStores = new CertStores(false, "localhost");
         sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
-
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
@@ -113,8 +112,8 @@ public class SslTransportLayerTest {
         clientCertStores = new CertStores(false, "localhost");
         sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
-        createEchoServer(sslServerConfigs);
         sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createEchoServer(sslServerConfigs);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);

@@ -14,4 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-PROJECT_NAMES="core clients" exec $(dirname $0)/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker $@
+PROJECT_NAMES="core clients" exec $(dirname $0)/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker "$@"
