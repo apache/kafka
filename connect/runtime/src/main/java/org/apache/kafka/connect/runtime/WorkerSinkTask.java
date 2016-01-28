@@ -140,10 +140,7 @@ class WorkerSinkTask extends AbstractWorkerTask {
 
         // Maybe commit
         if (!committing && now >= nextCommit) {
-            committing = true;
-            commitSeqno += 1;
-            commitStarted = now;
-            flushAndCommitOffsets(false, commitSeqno);
+            commitOffsets(now, false);
             nextCommit += workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
         }
 
@@ -222,11 +219,11 @@ class WorkerSinkTask extends AbstractWorkerTask {
 
     /**
      * Starts an offset commit by flushing outstanding messages from the task and then starting
-     * the write commit. This should only be invoked by the WorkerSinkTaskThread.
+     * the write commit.
      **/
-    private void commitOffsets(Map<TopicPartition, OffsetAndMetadata> offsets, boolean sync, final int seqno) {
+    private void doCommit(Map<TopicPartition, OffsetAndMetadata> offsets, boolean closing, final int seqno) {
         log.info("{} Committing offsets", this);
-        if (sync) {
+        if (closing) {
             try {
                 consumer.commitSync(offsets);
                 lastCommittedOffsets = offsets;
@@ -246,7 +243,14 @@ class WorkerSinkTask extends AbstractWorkerTask {
         }
     }
 
-    private void flushAndCommitOffsets(boolean sync, int seqno) {
+    private void commitOffsets(long now, boolean closing) {
+        if (currentOffsets.isEmpty())
+            return;
+
+        committing = true;
+        commitSeqno += 1;
+        commitStarted = now;
+
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(currentOffsets);
         try {
             task.flush(offsets);
@@ -258,12 +262,18 @@ class WorkerSinkTask extends AbstractWorkerTask {
                 consumer.seek(entry.getKey(), entry.getValue().offset());
             }
             currentOffsets = new HashMap<>(lastCommittedOffsets);
-            onCommitCompleted(t, seqno);
+            onCommitCompleted(t, commitSeqno);
             return;
+        } finally {
+            // Close the task if needed before committing the offsets. This is basically the last chance for
+            // the connector to actually flush data that has been written to it.
+            if (closing)
+                task.close(currentOffsets.keySet());
         }
 
-        commitOffsets(offsets, sync, seqno);
+        doCommit(offsets, closing, commitSeqno);
     }
+
 
     @Override
     public String toString() {
@@ -381,19 +391,7 @@ class WorkerSinkTask extends AbstractWorkerTask {
     }
 
     private void closePartitions() {
-        if (currentOffsets.isEmpty())
-            return;
-
-        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(currentOffsets);
-        try {
-            task.flush(offsets);
-        } finally {
-            // Some sink implementations may not actually flush the data until close is called,
-            // so the commit should follow it.
-            task.close(currentOffsets.keySet());
-        }
-
-        commitOffsets(offsets, true, -1);
+        commitOffsets(time.milliseconds(), true);
     }
 
     private class HandleRebalance implements ConsumerRebalanceListener {
