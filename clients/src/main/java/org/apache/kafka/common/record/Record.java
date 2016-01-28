@@ -91,14 +91,14 @@ public final class Record {
      * Specifies the mask for the compression code. 4 bits to hold the compression codec. 0 is reserved to indicate no
      * compression
      */
-    public static final int COMPRESSION_CODEC_MASK = 0x0F;
+    public static final int COMPRESSION_CODEC_MASK = 0x07;
 
     /**
      * Specify the mask of timestamp type.
      * 0 for CreateTime, 1 for LogAppendTime.
      */
-    public static final byte TIMESTAMP_TYPE_MASK = 0x10;
-    public static final int TIMESTAMP_TYPE_ATTRIBUTE_OFFSET = 4;
+    public static final byte TIMESTAMP_TYPE_MASK = 0x08;
+    public static final int TIMESTAMP_TYPE_ATTRIBUTE_OFFSET = 3;
 
     /**
      * Compression code for uncompressed records

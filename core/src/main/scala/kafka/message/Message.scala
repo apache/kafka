@@ -105,13 +105,13 @@ object Message {
    * Specifies the mask for the compression code. 4 bits to hold the compression codec.
    * 0 is reserved to indicate no compression
    */
-  val CompressionCodeMask: Int = 0x0F
+  val CompressionCodeMask: Int = 0x07
   /**
-   * Specifies the mask for timestmap type. 1 bit at the 5th least significant bit.
+   * Specifies the mask for timestamp type. 1 bit at the 5th least significant bit.
    * 0 for CreateTime, 1 for LogAppendTime
    */
-  val TimestampTypeMask: Byte = 0x10
-  val TimestampTypeAttributeBitOffset: Int = 4
+  val TimestampTypeMask: Byte = 0x08
+  val TimestampTypeAttributeBitOffset: Int = 3
 
   /**
    * Compression code for uncompressed messages
