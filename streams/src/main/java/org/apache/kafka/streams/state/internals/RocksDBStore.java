@@ -260,7 +260,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         if (loggingEnabled) {
             changeLogger.add(rawKey);
-            changeLogger.maybeLogRawChange(this.getter);
+            changeLogger.maybeLogChange(this.getter);
         }
     }
 
@@ -361,7 +361,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         flushInternal();
 
         if (loggingEnabled)
-            changeLogger.logRawChange(getter);
+            changeLogger.logChange(getter);
     }
 
     public void flushInternal() {

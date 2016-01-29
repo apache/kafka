@@ -270,7 +270,7 @@ public class KeyValueStoreTestDriver<K, V> {
                 send(record, keySerializer, valueSerializer);
             }
         };
-        this.stateDir = StateUtils.tempDir();
+        this.stateDir = StateTestUtils.tempDir();
         this.stateDir.mkdirs();
 
         Properties props = new Properties();
@@ -452,6 +452,13 @@ public class KeyValueStoreTestDriver<K, V> {
      */
     public boolean flushedEntryRemoved(K key) {
         return flushedRemovals.contains(key);
+    }
+
+    /**
+     * Return number of removed entry
+     */
+    public int numFlushedEntryRemoved() {
+        return flushedRemovals.size();
     }
 
     /**

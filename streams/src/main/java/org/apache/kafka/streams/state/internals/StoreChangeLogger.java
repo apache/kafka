@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.Serdes;
-import org.apache.kafka.streams.state.WindowStoreUtils;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -85,11 +84,6 @@ public class StoreChangeLogger<K, V> {
             logChange(getter);
     }
 
-    public void maybeLogRawChange(ValueGetter<byte[], byte[]> getter) {
-        if (this.dirty.size() > this.maxDirty || this.removed.size() > this.maxRemoved)
-            logRawChange(getter);
-    }
-
     public void logChange(ValueGetter<K, V> getter) {
         RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
         if (collector != null) {
@@ -108,29 +102,18 @@ public class StoreChangeLogger<K, V> {
         }
     }
 
-    public void logRawChange(ValueGetter<byte[], byte[]> getter) {
-        RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
-        if (collector != null) {
-            String topic = serialization.topic();
-            Serializer<K> keySerializer = serialization.keySerializer();
-            Serializer<V> valueSerializer = serialization.valueSerializer();
-
-            for (K k : this.removed) {
-                byte[] rawK = keySerializer.serialize(topic, k);
-                collector.send(new ProducerRecord<>(this.topic, this.partition, rawK, (byte[]) null), WindowStoreUtils.INNER_SERDES.keySerializer(), WindowStoreUtils.INNER_SERDES.valueSerializer());
-            }
-            for (K k : this.dirty) {
-                byte[] rawK = keySerializer.serialize(topic, k);
-                byte[] rawV = getter.get(rawK);
-                collector.send(new ProducerRecord<>(this.topic, this.partition, rawK, rawV), WindowStoreUtils.INNER_SERDES.keySerializer(), WindowStoreUtils.INNER_SERDES.valueSerializer());
-            }
-            this.removed.clear();
-            this.dirty.clear();
-        }
-    }
-
     public void clear() {
         this.removed.clear();
         this.dirty.clear();
+    }
+
+    // this is for test only
+    public int numDirty() {
+        return this.dirty.size();
+    }
+
+    // this is for test only
+    public int numRemoved() {
+        return this.removed.size();
     }
 }

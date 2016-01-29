@@ -34,8 +34,6 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     private StoreChangeLogger<K, V> changeLogger;
     private StoreChangeLogger.ValueGetter<K, V> getter;
 
-    private boolean loggingEnabled = true;
-
     public InMemoryKeyValueLoggedStore(final String topic, final KeyValueStore<K, V> inner, final Serdes<K, V> serdes) {
         this.topic = topic;
         this.inner = inner;
@@ -49,10 +47,11 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void init(ProcessorContext context) {
+        this.changeLogger = new StoreChangeLogger<>(topic, context, serdes);
+
         serdes.init(context);
         inner.init(context);
 
-        this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(topic, context, serdes) : null;
         this.getter = new StoreChangeLogger.ValueGetter<K, V>() {
             @Override
             public V get(K key) {
@@ -75,23 +74,19 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     public void put(K key, V value) {
         this.inner.put(key, value);
 
-        if (loggingEnabled) {
-            changeLogger.add(key);
-            changeLogger.maybeLogChange(this.getter);
-        }
+        changeLogger.add(key);
+        changeLogger.maybeLogChange(this.getter);
     }
 
     @Override
     public void putAll(List<KeyValue<K, V>> entries) {
         this.inner.putAll(entries);
 
-        if (loggingEnabled) {
-            for (KeyValue<K, V> entry : entries) {
-                K key = entry.key;
-                changeLogger.add(key);
-            }
-            changeLogger.maybeLogChange(this.getter);
+        for (KeyValue<K, V> entry : entries) {
+            K key = entry.key;
+            changeLogger.add(key);
         }
+        changeLogger.maybeLogChange(this.getter);
     }
 
     @Override
@@ -110,10 +105,8 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
      * @param key the key for the entry that the inner store removed
      */
     protected void removed(K key) {
-        if (loggingEnabled) {
-            changeLogger.delete(key);
-            changeLogger.maybeLogChange(this.getter);
-        }
+        changeLogger.delete(key);
+        changeLogger.maybeLogChange(this.getter);
     }
 
     @Override
@@ -135,7 +128,6 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     public void flush() {
         this.inner.flush();
 
-        if (loggingEnabled)
-            changeLogger.logChange(getter);
+        changeLogger.logChange(getter);
     }
 }

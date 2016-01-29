@@ -185,7 +185,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
 
         if (loggingEnabled)
-            changeLogger.logRawChange(this.getter);
+            changeLogger.logChange(this.getter);
     }
 
     @Override
@@ -202,7 +202,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
         if (loggingEnabled) {
             changeLogger.add(rawKey);
-            changeLogger.maybeLogRawChange(this.getter);
+            changeLogger.maybeLogChange(this.getter);
         }
     }
 
@@ -212,7 +212,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
         if (loggingEnabled) {
             changeLogger.add(rawKey);
-            changeLogger.maybeLogRawChange(this.getter);
+            changeLogger.maybeLogChange(this.getter);
         }
     }
 
