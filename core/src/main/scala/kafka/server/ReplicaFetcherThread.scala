@@ -173,24 +173,24 @@ class ReplicaFetcherThread(name: String,
       leaderEndOffset
     } else {
       /**
-       * If the leader's log end offset is greater than follower's log end offset, there are two possibilities:
+       * If the leader's log end offset is greater than the follower's log end offset, there are two possibilities:
        * 1. The follower could have been down for a long time and when it starts up, its end offset could be smaller than the leader's
        * start offset because the leader has deleted old logs (log.logEndOffset < leaderStartOffset).
        * 2. When unclean leader election occurs, it is possible that the old leader's high watermark is greater than
        * the new leader's log end offset. So when the old leader truncates its offset to its high watermark and starts
-       * to fetch from new leader, an OffsetOutOfRangeException will be thrown. After that some more messages are
-       * produced to the new leader. When the old leader was trying to handle the OffsetOutOfRangeException and query
-       * the log end offset of new leader, new leader's log end offset become higher than follower's log end offset.
+       * to fetch from the new leader, an OffsetOutOfRangeException will be thrown. After that some more messages are
+       * produced to the new leader. While the old leader is trying to handle the OffsetOutOfRangeException and query
+       * the log end offset of the new leader, the new leader's log end offset becomes higher than the follower's log end offset.
        *
-       * In the first case, the follower's current log end offset is smaller than leader's log start offset. So the
-       * follower should truncate all its log, roll out a new segment and start to fetch from current leader's log
+       * In the first case, the follower's current log end offset is smaller than the leader's log start offset. So the
+       * follower should truncate all its logs, roll out a new segment and start to fetch from the current leader's log
        * start offset.
-       * In the second case, the follower should just keep the current log segments and retry fetch. In the second
-       * case, their will be some inconsistency of data between old leader and new leader. Weare not solving it here.
-       * If user want to have strong consistency guarantee, appropriate configurations needs to be set for both
+       * In the second case, the follower should just keep the current log segments and retry the fetch. In the second
+       * case, there will be some inconsistency of data between old and new leader. We are not solving it here.
+       * If users want to have strong consistency guarantees, appropriate configurations needs to be set for both
        * brokers and producers.
        *
-       * Putting the two case together, the follower should fetch from the higher one of its replica log end offset
+       * Putting the two cases together, the follower should fetch from the higher one of its replica log end offset
        * and the current leader's log start offset.
        *
        */
