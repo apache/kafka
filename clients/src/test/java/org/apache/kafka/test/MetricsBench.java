@@ -29,7 +29,6 @@ public class MetricsBench {
     public static void main(String[] args) {
         long iters = Long.parseLong(args[0]);
         Metrics metrics = new Metrics();
-
         try {
             Sensor parent = metrics.sensor("parent");
             Sensor child = metrics.sensor("child", parent);
