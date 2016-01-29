@@ -66,8 +66,9 @@ public class SaslChannelBuilder implements ChannelBuilder {
                 kerberosShortNamer = KerberosShortNamer.fromUnparsedRules(defaultRealm, principalToLocalRules);
 
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
-                this.sslFactory = new SslFactory(mode);
-                this.sslFactory.configure(this.configs);
+                // Disable SSL client authentication as we are using SASL authentication
+                this.sslFactory = new SslFactory(mode, "none");
+                this.sslFactory.configure(configs);
             }
         } catch (Exception e) {
             throw new KafkaException(e);
