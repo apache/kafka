@@ -17,7 +17,6 @@
 package kafka.api
 
 import kafka.admin.AdminClient
-import kafka.api.IntegrationTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{TestUtils, Logging}
 import org.apache.kafka.clients.consumer.ConsumerConfig
