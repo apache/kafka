@@ -246,7 +246,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1, V1, T> KTable<K1, T> aggregate(Aggregator<K1, V1, T> aggregator,
+    public <K1, V1, T> KTable<K1, T> aggregate(T initValue,
+                                               Aggregator<K1, V1, T> add,
+                                               Aggregator<K1, V1, T> remove,
                                                KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
                                                Serializer<K1> keySerializer,
                                                Serializer<V1> valueSerializer,
@@ -268,7 +270,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
 
-        ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableAggregate<>(name, aggregator);
+        ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableAggregate<>(name, initValue, add, remove);
 
         StateStoreSupplier aggregateStore = Stores.create(name)
                 .withKeys(keySerializer, keyDeserializer)
@@ -293,6 +295,29 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(topology, aggregateName, aggregateSupplier, Collections.singleton(sourceName));
+    }
+
+    @Override
+    public <K1, V1> KTable<K1, Long> count(KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
+                                           Serializer<K1> keySerializer,
+                                           Serializer<V1> valueSerializer,
+                                           Serializer<Long> aggValueSerializer,
+                                           Deserializer<K1> keyDeserializer,
+                                           Deserializer<V1> valueDeserializer,
+                                           Deserializer<Long> aggValueDeserializer,
+                                           String name) {
+        return this.aggregate(0L,
+                new Aggregator<K1, V1, Long>() {
+                    @Override
+                    public Long apply(K1 aggKey, V1 value, Long aggregate) {
+                        return aggregate + 1L;
+                    }
+                }, new Aggregator<K1, V1, Long>() {
+                    @Override
+                    public Long apply(K1 aggKey, V1 value, Long aggregate) {
+                        return aggregate - 1L;
+                    }
+                }, selector, keySerializer, valueSerializer, aggValueSerializer, keyDeserializer, valueDeserializer, aggValueDeserializer, name);
     }
 
     @Override

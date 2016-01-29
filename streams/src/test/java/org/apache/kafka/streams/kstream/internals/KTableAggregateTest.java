@@ -40,23 +40,22 @@ public class KTableAggregateTest {
     private final Serializer<String> strSerializer = new StringSerializer();
     private final Deserializer<String> strDeserializer = new StringDeserializer();
 
-    private class StringCanonizer implements Aggregator<String, String, String> {
+    private class StringAdd implements Aggregator<String, String, String> {
 
         @Override
-        public String initialValue(String aggKey) {
-            return "0";
-        }
-
-        @Override
-        public String add(String aggKey, String value, String aggregate) {
+        public String apply(String aggKey, String value, String aggregate) {
             return aggregate + "+" + value;
         }
+    }
+
+    private class StringRemove implements Aggregator<String, String, String> {
 
         @Override
-        public String remove(String aggKey, String value, String aggregate) {
+        public String apply(String aggKey, String value, String aggregate) {
             return aggregate + "-" + value;
         }
     }
+
 
     @Test
     public void testAggBasic() throws Exception {
@@ -67,7 +66,7 @@ public class KTableAggregateTest {
             String topic1 = "topic1";
 
             KTable<String, String> table1 = builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
-            KTable<String, String> table2 = table1.<String, String, String>aggregate(new StringCanonizer(),
+            KTable<String, String> table2 = table1.<String, String, String>aggregate("0", new StringAdd(), new StringRemove(),
                     new NoOpKeyValueMapper<String, String>(),
                     strSerializer,
                     strSerializer,

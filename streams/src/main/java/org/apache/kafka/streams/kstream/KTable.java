@@ -162,14 +162,18 @@ public interface KTable<K, V> {
     /**
      * Aggregate values of this table by the selected key.
      *
-     * @param aggregator the class of Aggregator
+     * @param initValue initial aggregate value
+     * @param add the class of Aggregator
+     * @param remove the class of Aggregator
      * @param selector the KeyValue mapper that select the aggregate key
      * @param name the name of the resulted table
      * @param <K1>   the key type of the aggregated table
      * @param <V1>   the value type of the aggregated table
      * @return the instance of KTable
      */
-    <K1, V1, T> KTable<K1, T> aggregate(Aggregator<K1, V1, T> aggregator,
+    <K1, V1, T> KTable<K1, T> aggregate(T initValue,
+                                        Aggregator<K1, V1, T> add,
+                                        Aggregator<K1, V1, T> remove,
                                         KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
                                         Serializer<K1> keySerializer,
                                         Serializer<V1> valueSerializer,
@@ -178,4 +182,22 @@ public interface KTable<K, V> {
                                         Deserializer<V1> valueDeserializer,
                                         Deserializer<T> aggValueDeserializer,
                                         String name);
+
+    /**
+     * Count number of records of this table by the selected key.
+     *
+     * @param selector the KeyValue mapper that select the aggregate key
+     * @param name the name of the resulted table
+     * @param <K1>   the key type of the aggregated table
+     * @param <V1>   the value type of the aggregated table
+     * @return the instance of KTable
+     */
+    <K1, V1> KTable<K1, Long> count(KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
+                                    Serializer<K1> keySerializer,
+                                    Serializer<V1> valueSerializer,
+                                    Serializer<Long> aggValueSerializer,
+                                    Deserializer<K1> keyDeserializer,
+                                    Deserializer<V1> valueDeserializer,
+                                    Deserializer<Long> aggValueDeserializer,
+                                    String name);
 }

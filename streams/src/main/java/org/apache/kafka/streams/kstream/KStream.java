@@ -274,11 +274,11 @@ public interface KStream<K, V> {
      * @param windows the specification of the aggregation window
      */
     <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
-                                                             Windows<W> windows,
-                                                             Serializer<K> keySerializer,
-                                                             Serializer<V> aggValueSerializer,
-                                                             Deserializer<K> keyDeserializer,
-                                                             Deserializer<V> aggValueDeserializer);
+                                                          Windows<W> windows,
+                                                          Serializer<K> keySerializer,
+                                                          Serializer<V> aggValueSerializer,
+                                                          Deserializer<K> keyDeserializer,
+                                                          Deserializer<V> aggValueDeserializer);
 
     /**
      * Aggregate values of this stream by key on a window basis.
@@ -287,11 +287,22 @@ public interface KStream<K, V> {
      * @param windows the specification of the aggregation window
      * @param <T>   the value type of the aggregated table
      */
-    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Aggregator<K, V, T> aggregator,
+    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(T initValue,
+                                                                Aggregator<K, V, T> aggregator,
                                                                 Windows<W> windows,
                                                                 Serializer<K> keySerializer,
                                                                 Serializer<T> aggValueSerializer,
                                                                 Deserializer<K> keyDeserializer,
                                                                 Deserializer<T> aggValueDeserializer);
 
+    /**
+     * Count number of messages of this stream by key on a window basis.
+     *
+     * @param windows the specification of the aggregation window
+     */
+    <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
+                                                            Serializer<K> keySerializer,
+                                                            Serializer<Long> aggValueSerializer,
+                                                            Deserializer<K> keyDeserializer,
+                                                            Deserializer<Long> aggValueDeserializer);
 }
