@@ -23,11 +23,10 @@ import java.io.ObjectInputStream;
 public class Serializer {
 
     public static byte[] serialize(Object toSerialize) throws IOException {
-        try (ByteArrayOutputStream arrayOutputStream = new ByteArrayOutputStream()) {
-            try (ObjectOutputStream ooStream = new ObjectOutputStream(arrayOutputStream)) {
-                ooStream.writeObject(toSerialize);
-                return arrayOutputStream.toByteArray();
-            }
+        ByteArrayOutputStream arrayOutputStream = new ByteArrayOutputStream();
+        try (ObjectOutputStream ooStream = new ObjectOutputStream(arrayOutputStream)) {
+            ooStream.writeObject(toSerialize);
+            return arrayOutputStream.toByteArray();
         }
     }
 
@@ -38,15 +37,13 @@ public class Serializer {
     }
 
     public static Object deserialize(byte[] byteArray) throws IOException, ClassNotFoundException {
-        try (ByteArrayInputStream arrayInputStream = new ByteArrayInputStream(byteArray)) {
-            return deserialize(arrayInputStream);
-        }
+        ByteArrayInputStream arrayInputStream = new ByteArrayInputStream(byteArray);
+        return deserialize(arrayInputStream);
     }
 
     public static Object deserialize(String fileName) throws IOException, ClassNotFoundException {
         ClassLoader classLoader = Serializer.class.getClassLoader();
-        try (InputStream fileStream = classLoader.getResourceAsStream(fileName)) {
-            return deserialize(fileStream);
-        }
+        InputStream fileStream = classLoader.getResourceAsStream(fileName);
+        return deserialize(fileStream);
     }
 }
