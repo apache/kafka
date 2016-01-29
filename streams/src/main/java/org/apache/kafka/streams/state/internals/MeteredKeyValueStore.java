@@ -88,7 +88,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush");
         this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore");
 
-        serialization.init(context);
         this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(name, context, serialization) : null;
 
         // register and possibly restore the state from the logs
