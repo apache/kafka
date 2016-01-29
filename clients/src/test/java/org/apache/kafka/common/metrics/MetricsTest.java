@@ -422,9 +422,9 @@ public class MetricsTest {
     public void testStdDevStats() throws Exception {
         ConstantMeasurable measurable = new ConstantMeasurable();
 
-        metrics.addMetric(new MetricName("direct.measurable", "grp1", "The fraction of time an appender waits for space allocation."), measurable);
+        metrics.addMetric(metrics.metricName("direct.measurable", "grp1", "The fraction of time an appender waits for space allocation."), measurable);
         Sensor s = metrics.sensor("test.sensor");
-        s.add(new MetricName("test.stddev", "grp1"), new StdDev());
+        s.add(metrics.metricName("test.stddev", "grp1"), new StdDev());
 
 
         for (int i = 0; i < 10; i++)
@@ -432,7 +432,7 @@ public class MetricsTest {
 
         // pretend 2 seconds passed...
         time.sleep(2000);
-        assertEquals("StdDev(0...9) = 2.8722813232690143", 2.8722813232690143, metrics.metrics().get(new MetricName("test.stddev", "grp1")).value(), EPS);
+        assertEquals("StdDev(0...9) = 2.8722813232690143", 2.8722813232690143, metrics.metrics().get(metrics.metricName("test.stddev", "grp1")).value(), EPS);
     }
 
     public static class ConstantMeasurable implements Measurable {
