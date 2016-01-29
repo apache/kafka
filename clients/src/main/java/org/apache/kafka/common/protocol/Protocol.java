@@ -421,7 +421,7 @@ public class Protocol {
                                                               new Field("responses",
                                                                       new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
     // Fetch response V2 is the same as fetch response V1. The version number is bumped up to indicate that the Message
-    // format in the response is in message format V1, i.e. the messages use relative offsets and has timestamps.
+    // format in the response could be up to message format V1, i.e. the messages use relative offsets and has timestamps.
     public static final Schema FETCH_RESPONSE_V2 = FETCH_RESPONSE_V1;
 
     public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2};

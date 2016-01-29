@@ -67,7 +67,7 @@ public final class Record {
     public static final byte CURRENT_MAGIC_VALUE = 1;
 
     /**
-     * Specifies the mask for the compression code. 4 bits to hold the compression codec. 0 is reserved to indicate no
+     * Specifies the mask for the compression code. 3 bits to hold the compression codec. 0 is reserved to indicate no
      * compression
      */
     public static final int COMPRESSION_CODEC_MASK = 0x07;
@@ -87,7 +87,7 @@ public final class Record {
     /**
      * Timestamp value for records without a timestamp
      */
-    public static final long NO_TIMESTAMP = -1;
+    public static final long NO_TIMESTAMP = -1L;
 
     private final ByteBuffer buffer;
     private final Long wrapperRecordTimestamp;
@@ -380,11 +380,12 @@ public final class Record {
     }
 
     public String toString() {
-        return String.format("Record(magic = %d, attributes = %d, compression = %s, crc = %d, timestamp = %d, key = %d bytes, value = %d bytes)",
+        return String.format("Record(magic = %d, attributes = %d, compression = %s, crc = %d, %s = %d, key = %d bytes, value = %d bytes)",
                              magic(),
                              attributes(),
                              compressionType(),
                              checksum(),
+                             timestampType(),
                              timestamp(),
                              key() == null ? 0 : key().limit(),
                              value() == null ? 0 : value().limit());

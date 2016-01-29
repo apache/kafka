@@ -217,7 +217,7 @@ public class MemoryRecords implements Records {
 
         // The variables for inner iterator
         private final LinkedList<LogEntry> logEntries;
-        private final long lastInnerOffset;
+        private final long lastInnerRelativeOffset;
         private final long wrapperRecordOffset;
 
         public RecordsIterator(ByteBuffer buffer, CompressionType type, boolean shallow) {
@@ -226,14 +226,14 @@ public class MemoryRecords implements Records {
             this.shallow = shallow;
             this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type);
             this.logEntries = null;
-            this.lastInnerOffset = -1L;
+            this.lastInnerRelativeOffset = -1L;
             this.wrapperRecordOffset = -1L;
         }
 
-        private RecordsIterator(LogEntry entry, CompressionType type, boolean shallow) {
+        private RecordsIterator(LogEntry entry, CompressionType type) {
             this.type = type;
             this.buffer = entry.record().value();
-            this.shallow = shallow;
+            this.shallow = true;
             this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type);
             this.wrapperRecordOffset = entry.offset();
             // If relative offset is used, we need to decompress the entire message first to compute
@@ -254,10 +254,10 @@ public class MemoryRecords implements Records {
                         throw new KafkaException(e);
                     }
                 }
-                this.lastInnerOffset = logEntries.getLast().offset();
+                this.lastInnerRelativeOffset = logEntries.getLast().offset();
             } else {
                 this.logEntries = null;
-                this.lastInnerOffset = -1L;
+                this.lastInnerRelativeOffset = -1L;
             }
 
         }
@@ -279,8 +279,8 @@ public class MemoryRecords implements Records {
                         return allDone();
 
                     // Convert offset to absolute offset if needed.
-                    if (entry.record().magic() > Record.MAGIC_VALUE_V0 && lastInnerOffset >= 0) {
-                        long absoluteOffset = entry.offset() - lastInnerOffset + wrapperRecordOffset;
+                    if (lastInnerRelativeOffset >= 0) {
+                        long absoluteOffset = entry.offset() - lastInnerRelativeOffset + wrapperRecordOffset;
                         entry = new LogEntry(absoluteOffset, entry.record());
                     }
 
@@ -293,7 +293,7 @@ public class MemoryRecords implements Records {
                         // which will de-compress the payload to a set of messages;
                         // since we assume nested compression is not allowed, the deep iterator
                         // would not try to further decompress underlying messages
-                        innerIter = new RecordsIterator(entry, compression, true);
+                        innerIter = new RecordsIterator(entry, compression);
                         return innerIter.next();
                     }
                 } catch (EOFException e) {

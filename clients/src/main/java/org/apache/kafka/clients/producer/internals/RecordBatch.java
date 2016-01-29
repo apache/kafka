@@ -83,6 +83,7 @@ public final class RecordBatch {
      * Complete the request
      * 
      * @param baseOffset The base offset of the messages assigned by the server
+     * @param timestamp The timestamp returned by the broker.
      * @param exception The exception that occurred (or null if the request was successful)
      */
     public void done(long baseOffset, long timestamp, RuntimeException exception) {

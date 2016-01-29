@@ -39,4 +39,9 @@ public enum TimestampType {
         return timestampType == CreateTime ?
                 (byte) (attributes & ~Record.TIMESTAMP_TYPE_MASK) : (byte) (attributes | Record.TIMESTAMP_TYPE_MASK);
     }
+
+    @Override
+    public String toString() {
+        return name;
+    }
 }

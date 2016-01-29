@@ -101,6 +101,6 @@ public final class ConsumerRecord<K, V> {
     @Override
     public String toString() {
         return "ConsumerRecord(topic = " + topic() + ", partition = " + partition() + ", offset = " + offset()
-                + ", timestamp = " + timestamp + ", key = " + key + ", value = " + value + ")";
+                + ", " + timestampType + " = " + timestamp + ", key = " + key + ", value = " + value + ")";
     }
 }

@@ -12,8 +12,6 @@
  */
 package org.apache.kafka.clients.producer;
 
-import org.apache.kafka.common.record.Record;
-
 /**
  * A key/value pair to be sent to Kafka. This consists of a topic name to which the record is being sent, an optional
  * partition number, and an optional key and value.
@@ -25,10 +23,10 @@ import org.apache.kafka.common.record.Record;
  * The record also has an associated timestamp. If user did not provide a timestamp, the producer will stamp the record
  * with a timestamp depending on what is the timestamp type used by the topic.
  * <li>
- * If the topic is configured to use {@link org.apache.kafka.common.record.Record.TimestampType#CreateTime CreateTime}
- * the timestamp will be the producer current time.
+ * If the topic is configured to use {@link org.apache.kafka.common.record.TimestampType#CreateTime CreateTime}
+ * the timestamp will be user specified timestamp or the producer's current time.
  * <li>
- * If the topic is configured to use {@link org.apache.kafka.common.record.Record.TimestampType#LogAppendTime LogAppendTime}
+ * If the topic is configured to use {@link org.apache.kafka.common.record.TimestampType#LogAppendTime LogAppendTime}
  * the timestamp will be the time when Kafka broker accepts the record.
  */
 public final class ProducerRecord<K, V> {
@@ -40,7 +38,7 @@ public final class ProducerRecord<K, V> {
     private final Long timestamp;
 
     /**
-     * Creates a record to be sent to a specified topic, partition and timestamp
+     * Creates a record to be sent to a specified topic and partition
      * 
      * @param topic The topic the record will be appended to
      * @param partition The partition to which the record should be sent
@@ -51,7 +49,7 @@ public final class ProducerRecord<K, V> {
     public ProducerRecord(String topic, Integer partition, Long timestamp, K key, V value) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null");
-        if (timestamp != null && timestamp < Record.NO_TIMESTAMP)
+        if (timestamp != null && timestamp < 0)
             throw new IllegalArgumentException("Invalid timestamp " + timestamp);
         this.topic = topic;
         this.partition = partition;

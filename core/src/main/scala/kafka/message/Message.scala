@@ -81,7 +81,7 @@ object Message {
   val CurrentMagicValue: Byte = 1
 
   /**
-   * Specifies the mask for the compression code. 4 bits to hold the compression codec.
+   * Specifies the mask for the compression code. 3 bits to hold the compression codec.
    * 0 is reserved to indicate no compression
    */
   val CompressionCodeMask: Int = 0x07
@@ -288,7 +288,7 @@ def timestamp: Long = {
      * 1. TimestampType = LogAppendTime and
      *    a) WrapperMessageTimestamp is not defined - Uncompressed message using LogAppendTime
      *    b) WrapperMessageTimestamp is defined - Compressed message using LogAppendTime
-     * 2. TimestampType = CreateTime and
+     * 2. TimestampType = CreateTime Or is not defined and
      *    a) WrapperMessageTimestamp is not defined - Uncompressed message using CreateTime
      *    b) WrapperMessageTimestamp is defined - Compressed message using CreateTime
      */

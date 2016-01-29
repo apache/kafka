@@ -364,8 +364,8 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
    * 3. When magic value = 1, validate and maybe overwrite timestamps of messages.
    *
    * This method will convert the messages based on the following scenarios:
-   * A. Magic value of a message = 0 and messageFormatVersion is above or equals to 0.10.0-DV1
-   * B. Magic value of a message = 1 and messageFormatVersion is lower than 0.10.0-DV1
+   * A. Magic value of a message = 0 and messageFormatVersion is above or equals to 0.10.0-DV0
+   * B. Magic value of a message = 1 and messageFormatVersion is lower than 0.10.0-DV0
    *
    * If no format conversion or value overwriting is required for messages, this method will perform in-place
    * operations and avoids re-compression.
