@@ -45,7 +45,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
     private final Time time;
-    private Serdes<K, V> serdes;
+    private final Serdes<K, V> serdes;
 
     public InMemoryKeyValueStoreSupplier(String name, Serdes<K, V> serdes, Time time) {
         this.name = name;
