@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.common;
 
+import java.io.Serializable;
+
 /**
  * A topic name and partition number
  */
-public final class TopicPartition {
+public final class TopicPartition implements Serializable {
 
     private int hash = 0;
     private final int partition;
