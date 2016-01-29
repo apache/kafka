@@ -49,7 +49,6 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     public void init(ProcessorContext context) {
         this.changeLogger = new StoreChangeLogger<>(topic, context, serdes);
 
-        serdes.init(context);
         inner.init(context);
 
         this.getter = new StoreChangeLogger.ValueGetter<K, V>() {

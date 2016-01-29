@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package unit.kafka.tools
+package kafka.tools
 
 import java.io.FileOutputStream
 

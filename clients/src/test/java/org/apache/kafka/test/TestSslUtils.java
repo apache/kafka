@@ -199,18 +199,18 @@ public class TestSslUtils {
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore, Mode mode, File trustStoreFile, String certAlias, String host)
         throws IOException, GeneralSecurityException {
         Map<String, X509Certificate> certs = new HashMap<>();
-        File keyStoreFile;
+        File keyStoreFile = null;
         Password password = mode == Mode.SERVER ? new Password("ServerPassword") : new Password("ClientPassword");
 
         Password trustStorePassword = new Password("TrustStorePassword");
 
-        if (useClientCert) {
+        if (mode == Mode.CLIENT && useClientCert) {
             keyStoreFile = File.createTempFile("clientKS", ".jks");
             KeyPair cKP = generateKeyPair("RSA");
             X509Certificate cCert = generateCertificate("CN=" + host + ", O=A client", cKP, 30, "SHA1withRSA");
             createKeyStore(keyStoreFile.getPath(), password, "client", cKP.getPrivate(), cCert);
             certs.put(certAlias, cCert);
-        } else {
+        } else if (mode == Mode.SERVER) {
             keyStoreFile = File.createTempFile("serverKS", ".jks");
             KeyPair sKP = generateKeyPair("RSA");
             X509Certificate sCert = generateCertificate("CN=" + host + ", O=A server", sKP, 30,

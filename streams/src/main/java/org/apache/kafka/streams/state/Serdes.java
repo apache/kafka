@@ -26,7 +26,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.processor.ProcessorContext;
 
 public final class Serdes<K, V> {
 
@@ -63,8 +62,7 @@ public final class Serdes<K, V> {
     private Deserializer<V> valueDeserializer;
 
     /**
-     * Create a context for serialization using the specified serializers and deserializers, or if any of them are null the
-     * corresponding {@link ProcessorContext}'s serializer or deserializer, which
+     * Create a context for serialization using the specified serializers and deserializers which
      * <em>must</em> match the key and value types used as parameters for this object.
      *
      * @param topic the name of the topic
@@ -78,29 +76,20 @@ public final class Serdes<K, V> {
             Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
             Serializer<V> valueSerializer, Deserializer<V> valueDeserializer) {
         this.topic = topic;
+
+        if (keySerializer == null)
+            throw new NullPointerException();
+        if (keyDeserializer == null)
+            throw new NullPointerException();
+        if (valueSerializer == null)
+            throw new NullPointerException();
+        if (valueDeserializer == null)
+            throw new NullPointerException();
+
         this.keySerializer = keySerializer;
         this.keyDeserializer = keyDeserializer;
         this.valueSerializer = valueSerializer;
         this.valueDeserializer = valueDeserializer;
-    }
-
-    /**
-     * Create a context for serialization using the {@link ProcessorContext}'s serializers and deserializers, which
-     * <em>must</em> match the key and value types used as parameters for this object.
-     *
-     * @param topic the name of the topic
-     */
-    @SuppressWarnings("unchecked")
-    public Serdes(String topic) {
-        this(topic, null, null, null, null);
-    }
-
-    @SuppressWarnings("unchecked")
-    public void init(ProcessorContext context) {
-        keySerializer = keySerializer != null ? keySerializer : (Serializer<K>) context.keySerializer();
-        keyDeserializer = keyDeserializer != null ? keyDeserializer : (Deserializer<K>) context.keyDeserializer();
-        valueSerializer = valueSerializer != null ? valueSerializer : (Serializer<V>) context.valueSerializer();
-        valueDeserializer = valueDeserializer != null ? valueDeserializer : (Deserializer<V>) context.valueDeserializer();
     }
 
     public Deserializer<K> keyDeserializer() {
