@@ -34,8 +34,7 @@ public class SerializeCompatibilityOffsetAndMetadataTest {
 
     private void checkValues(OffsetAndMetadata deSerOAM) {
         //assert deserialized values are same as original
-        //not using assertEquals for offset to ensure the type casting will catch any change in datatype
-        assertTrue("Offset should be " + offset + " but got " + deSerOAM.offset(), offset == deSerOAM.offset());
+        assertEquals("Offset should be " + offset + " but got " + deSerOAM.offset(), offset, deSerOAM.offset());
         assertEquals("metadata should be " + metadata + " but got " + deSerOAM.metadata(), metadata, deSerOAM.metadata());
     }
 

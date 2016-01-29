@@ -34,8 +34,7 @@ public class SerializeCompatibilityTopicPartitionTest {
 
     private void checkValues(TopicPartition deSerTP) {
         //assert deserialized values are same as original
-        //not using assertEquals for partition number to ensure the type casting will catch any change in datatype
-        assertTrue("partition number should be " + partNum + " but got " + deSerTP.partition(), partNum == deSerTP.partition());
+        assertEquals("partition number should be " + partNum + " but got " + deSerTP.partition(), partNum, deSerTP.partition());
         assertEquals("topic should be " + topicName + " but got " + deSerTP.topic(), topicName, deSerTP.topic());
     }
 
