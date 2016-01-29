@@ -17,7 +17,6 @@
 package kafka.security.auth
 
 import kafka.common.KafkaException
-import kafka.security.auth.{ResourceType, Topic}
 import org.junit.{Test, Assert}
 import org.scalatest.junit.JUnitSuite
 

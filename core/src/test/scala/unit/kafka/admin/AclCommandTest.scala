@@ -19,7 +19,6 @@ package kafka.admin
 import java.io.StringReader
 import java.util.Properties
 
-import kafka.admin.AclCommand
 import kafka.security.auth._
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
