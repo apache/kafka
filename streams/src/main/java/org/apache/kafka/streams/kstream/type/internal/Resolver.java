@@ -124,23 +124,6 @@ public class Resolver {
     }
 
     /**
-     * Resolves the return type of the function represented by the functionalInterface
-     * @param functionalInterface the Class object of the functional interface
-     * @param function the instance of the functional interface
-     * @return Type
-     * @throws TypeException
-     */
-    public static Type resolveReturnType(Class functionalInterface, Object function) throws TypeException {
-        Method[] methods = functionalInterface.getDeclaredMethods();
-        if (methods.length != 1)
-            throw new TypeException("internal error: failed to determine the function method");
-
-        Map<TypeVariable, Type> env = resolveTypeArguments(functionalInterface, function.getClass());
-
-        return resolve(methods[0].getGenericReturnType(), env);
-    }
-
-    /**
      * Resolves the return type of the method implemented by implementationType
      * @param method the method
      * @param implementationType the type that implements the method
@@ -152,6 +135,32 @@ public class Resolver {
 
         return resolve(method.getGenericReturnType(), env);
     }
+
+    /**
+     * Resolves the return type of the method implemented by implementationType.
+     * If the method name is not unique, the first method with the specified name is used.
+     *
+     * @param interfaceClass
+     * @param methodName
+     * @param implementationType
+     * @return
+     */
+    public static Type resolveReturnType(Class interfaceClass, String methodName, Type implementationType) throws TypeException {
+        Method[] methods = interfaceClass.getDeclaredMethods();
+
+        Method method = null;
+        for (Method m : methods) {
+            if (methodName.equals(m.getName())) {
+                method = m;
+                break;
+            }
+        }
+        if (method == null)
+            throw new TypeException("failed to determine the return type of " + methodName + ": method name is not unique");
+
+        return Resolver.resolveReturnType(method, implementationType);
+    }
+
 
     // resolve type arguments of the interfaceClass from the implementationType
     private static Map<TypeVariable, Type> resolveTypeArguments(Class interfaceClass, Type implementationType) throws TypeException {
@@ -168,7 +177,7 @@ public class Resolver {
             objClass = (Class) implementationType;
 
             if (objClass.equals((Class) Object.class))
-                return null;
+                return typeArgs;
 
             if (objClass.equals(interfaceClass))
                 return typeArgs;
@@ -214,7 +223,7 @@ public class Resolver {
         }
 
         if (objClass == null)
-            return null;
+            return typeArgs;
 
         // go up the class hierarchy
 
@@ -233,7 +242,7 @@ public class Resolver {
                 return resolvedTypeArgs;
         }
 
-        return null;
+        return typeArgs;
     }
 
     /**

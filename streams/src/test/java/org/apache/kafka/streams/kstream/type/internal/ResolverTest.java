@@ -21,69 +21,20 @@ package org.apache.kafka.streams.kstream.type.internal;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.type.TypeException;
 import org.apache.kafka.streams.kstream.type.Types;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.lang.reflect.Type;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
 public class ResolverTest {
-
-    @Test
-    public void testResolveReturnType() {
-        Type returnType;
-
-        KeyValueMapper kvMapper = new KeyValueMapper<Integer, Long, String>() {
-            @Override
-            public String apply(Integer key, Long value) {
-                return "a";
-            }
-        };
-
-        try {
-            returnType = Resolver.resolveReturnType(KeyValueMapper.class, kvMapper);
-        } catch (TypeException ex) {
-            returnType = null;
-        }
-
-        assertEquals((Type) String.class, returnType);
-
-        ValueMapper vMapper = new ValueMapper<Long, String>() {
-            @Override
-            public String apply(Long value) {
-                return "a";
-            }
-        };
-
-        try {
-            returnType = Resolver.resolveReturnType(ValueMapper.class, vMapper);
-        } catch (TypeException ex) {
-            returnType = null;
-        }
-
-        assertEquals((Type) String.class, returnType);
-
-
-        ValueJoiner vJoiner = new ValueJoiner<Integer, Integer, Long>() {
-            @Override
-            public Long apply(Integer val1, Integer val2) {
-                return 0L;
-            }
-        };
-
-        try {
-            returnType = Resolver.resolveReturnType(ValueJoiner.class, vJoiner);
-        } catch (TypeException ex) {
-            returnType = null;
-        }
-
-        assertEquals((Type) Long.class, returnType);
-    }
 
     @Test
     public void testKeyValueTypeFromKeyValueMapper() throws Exception {
@@ -97,7 +48,7 @@ public class ResolverTest {
         };
 
         try {
-            returnType = Resolver.resolveReturnType(KeyValueMapper.class, kvMapper);
+            returnType = Resolver.resolveReturnType(KeyValueMapper.class, "apply", kvMapper.getClass());
         } catch (TypeException ex) {
             returnType = null;
         }
@@ -113,4 +64,28 @@ public class ResolverTest {
         assertEquals((Type) Short.class, valueType);
     }
 
+    @Test
+    public void testRawKeyTypeFromWindowedType() throws Exception {
+        Type rawKeyType;
+
+        Type windowedType = Types.type(Windowed.class, Integer.class);
+        rawKeyType = Resolver.getRawKeyTypeFromWindowedType(windowedType);
+
+        assertEquals((Type) Integer.class, rawKeyType);
+    }
+
+    @Test
+    public void testResolveElementTypeFromIterableType() throws Exception {
+        ValueMapper<String, List<String>> mapper = new ValueMapper<String, List<String>>() {
+            @Override
+            public List<String> apply(String value) {
+                return Arrays.asList(value.split(" "));
+            }
+        };
+
+        Type iterableType = Resolver.resolveReturnType(ValueMapper.class, "apply", mapper.getClass());
+        Type elementType = Resolver.resolveElementTypeFromIterableType(iterableType);
+
+        assertEquals((Type) String.class, elementType);
+    }
 }

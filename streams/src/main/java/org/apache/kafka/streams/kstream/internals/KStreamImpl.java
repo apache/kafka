@@ -489,7 +489,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final Deserializer<K> aggKeyDeserializer = getDeserializer(keyType);
 
         // return the KTable representation with the intermediate topic as the sources
-        return new LazyKTableWrapper<Windowed<K>, T>(topology, windowedKeyType, null) {
+        KTable<Windowed<K>, T> lazyKtable = new LazyKTableWrapper<Windowed<K>, T>(topology, windowedKeyType, null) {
             @Override
             protected KTable<Windowed<K>, T> create(Type keyType, Type valueType) {
                 Serializer<T> aggValueSerializer = getSerializer(valueType);
@@ -509,5 +509,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 return aggTable;
             }
         };
+
+        Type aggregateType = resolveReturnType(aggregator);
+        if (aggregateType != null) {
+            return lazyKtable.returnsValue(aggregateType);
+        } else {
+            return lazyKtable;
+        }
     }
 }

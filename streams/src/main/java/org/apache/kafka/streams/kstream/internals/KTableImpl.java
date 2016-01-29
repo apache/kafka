@@ -255,7 +255,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         Type mappedType = resolveReturnType(selector);
         Type selectKeyType = getKeyTypeFromKeyValueType(mappedType);
         Type selectValueType = getValueTypeFromKeyValueType(mappedType);
-        Type aggValueType = resolveReturnType(Aggregator.class, "initialValue", aggregator);
+        Type aggValueType = resolveReturnType(aggregator);
 
         Serializer<K1> keySerializer = getSerializer(selectKeyType);
         Serializer<V1> valueSerializer = getSerializer(selectValueType);
@@ -311,7 +311,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         Type addType = resolveReturnType(addReducer);
         Type removeType = resolveReturnType(removeReducer);
-        Type mappedType = resolveReturnType(KeyValueMapper.class);
+        Type mappedType = resolveReturnType(selector);
         Type selectKeyType = getKeyTypeFromKeyValueType(mappedType);
         Type selectValueType = getValueTypeFromKeyValueType(mappedType);
 

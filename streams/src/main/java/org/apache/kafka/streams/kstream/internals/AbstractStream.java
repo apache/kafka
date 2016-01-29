@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -124,42 +125,29 @@ public abstract class AbstractStream<K> {
         return (type != null) ? Resolver.getValueTypeFromKeyValueType(type) : null;
     }
 
-    public static Type resolveReturnType(Object function) {
-        try {
-            Class funcInterface;
-
-            if (function instanceof KeyValueMapper) {
-                funcInterface = KeyValueMapper.class;
-            } else if (function instanceof ValueMapper) {
-                funcInterface = ValueMapper.class;
-            } else if (function instanceof ValueJoiner) {
-                funcInterface = ValueJoiner.class;
-            } else {
-                return null;
-            }
-
-            return Resolver.resolveReturnType(funcInterface, function);
-
-        } catch (TypeException ex) {
-            return null;
-        }
+    public static Type resolveReturnType(KeyValueMapper function) {
+        return resolveReturnType(KeyValueMapper.class, "apply", function);
     }
 
-    public static Type resolveReturnType(Class interfaceClass, String methodName, Object implementation) {
+    public static Type resolveReturnType(ValueMapper function) {
+        return resolveReturnType(ValueMapper.class, "apply", function);
+    }
+
+    public static Type resolveReturnType(ValueJoiner function) {
+        return resolveReturnType(ValueJoiner.class, "apply", function);
+    }
+
+    public static Type resolveReturnType(Reducer function) {
+        return resolveReturnType(Reducer.class, "apply", function);
+    }
+
+    public static Type resolveReturnType(Aggregator function) {
+        return resolveReturnType(Aggregator.class, "initialValue", function);
+    }
+
+    private static <T> Type resolveReturnType(Class<T> interfaceClass, String methodName, T implementation) {
         try {
-            Method[] methods = interfaceClass.getDeclaredMethods();
-
-            Method method = null;
-            for (Method m : methods) {
-                if (methodName.equals(m.getName())) {
-                    method = m;
-                    break;
-                }
-            }
-            if (method == null)
-                return null;
-
-            return Resolver.resolveReturnType(method, implementation.getClass());
+            return Resolver.resolveReturnType(interfaceClass, methodName, implementation.getClass());
 
         } catch (TypeException ex) {
             return null;
@@ -180,7 +168,7 @@ public abstract class AbstractStream<K> {
                 return null;
             }
 
-            Type implementationType = Resolver.resolveReturnType(supplierInterface, supplier);
+            Type implementationType = Resolver.resolveReturnType(supplierInterface, "get", supplier.getClass());
 
             Method[] methods = interfaceClass.getDeclaredMethods();
 
