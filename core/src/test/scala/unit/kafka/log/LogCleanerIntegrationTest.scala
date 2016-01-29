@@ -56,9 +56,13 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     val startSize = log.size
     cleaner.startup()
 
-    val lastCleaned = log.activeSegment.baseOffset
-    // wait until we clean up to base_offset of active segment - minDirtyMessages
-    cleaner.awaitCleaned("log", 0, lastCleaned)
+    val firstDirty = log.activeSegment.baseOffset
+    // wait until cleaning up to base_offset, note that cleaning happens only when "log dirty ratio" is higher than LogConfig.MinCleanableDirtyRatioProp
+    cleaner.awaitCleaned("log", 0, firstDirty)
+    val compactedSize = log.logSegments.map(_.size).sum
+    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition("log", 0)).get
+    assertTrue(s"log cleaner should have processed up to offset $firstDirty, but lastCleaned=$lastCleaned", lastCleaned >= firstDirty)
+    assertTrue(s"log should have been compacted:  startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
     
     val read = readFromLog(log)
     assertEquals("Contents of the map shouldn't change.", appends.toMap, read.toMap)
@@ -66,8 +70,12 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
     // write some more stuff and validate again
     val appends2 = appends ++ writeDups(numKeys = 100, numDups = 3, log, CompressionCodec.getCompressionCodec(compressionCodec))
-    val lastCleaned2 = log.activeSegment.baseOffset
-    cleaner.awaitCleaned("log", 0, lastCleaned2)
+    val firstDirty2 = log.activeSegment.baseOffset
+    cleaner.awaitCleaned("log", 0, firstDirty2)
+
+    val lastCleaned2 = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition("log", 0)).get
+    assertTrue(s"log cleaner should have processed up to offset $firstDirty2", lastCleaned2 >= firstDirty2);
+
     val read2 = readFromLog(log)
     assertEquals("Contents of the map shouldn't change.", appends2.toMap, read2.toMap)
 
@@ -82,7 +90,6 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
     // we expect partition 0 to be gone
     assert(!checkpoints.contains(topics(0)))
-    
     cleaner.shutdown()
   }
 
@@ -111,12 +118,13 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     
   @After
   def teardown() {
+    time.scheduler.shutdown()
     CoreUtils.rm(logDir)
   }
   
   /* create a cleaner instance and logs with the given parameters */
   def makeCleaner(parts: Int, 
-                  minDirtyMessages: Int = 0, 
+                  minCleanableDirtyRatio: Float = 0.0F,
                   numThreads: Int = 1,
                   defaultPolicy: String = "compact",
                   policyOverrides: Map[String, String] = Map()): LogCleaner = {
@@ -131,6 +139,8 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
       logProps.put(LogConfig.SegmentIndexBytesProp, 100*1024: java.lang.Integer)
       logProps.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
       logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+      logProps.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
+
       val log = new Log(dir = dir,
                         LogConfig(logProps),
                         recoveryPoint = 0L,

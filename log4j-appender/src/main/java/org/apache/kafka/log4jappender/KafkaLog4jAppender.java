@@ -17,11 +17,15 @@
 
 package org.apache.kafka.log4jappender;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.log4j.AppenderSkeleton;
 import org.apache.log4j.helpers.LogLog;
 import org.apache.log4j.spi.LoggingEvent;
@@ -36,16 +40,32 @@ import java.util.concurrent.Future;
  */
 public class KafkaLog4jAppender extends AppenderSkeleton {
 
-    private static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
-    private static final String COMPRESSION_TYPE_CONFIG = "compression.type";
-    private static final String ACKS_CONFIG = "acks";
-    private static final String RETRIES_CONFIG = "retries";
-    private static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
-    private static final String VALUE_SERIALIZER_CLASS_CONFIG = "value.serializer";
+    private static final String BOOTSTRAP_SERVERS_CONFIG = ProducerConfig.BOOTSTRAP_SERVERS_CONFIG;
+    private static final String COMPRESSION_TYPE_CONFIG = ProducerConfig.COMPRESSION_TYPE_CONFIG;
+    private static final String ACKS_CONFIG = ProducerConfig.ACKS_CONFIG;
+    private static final String RETRIES_CONFIG = ProducerConfig.RETRIES_CONFIG;
+    private static final String KEY_SERIALIZER_CLASS_CONFIG = ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
+    private static final String VALUE_SERIALIZER_CLASS_CONFIG = ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+    private static final String SECURITY_PROTOCOL = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
+    private static final String SSL_TRUSTSTORE_LOCATION = SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
+    private static final String SSL_TRUSTSTORE_PASSWORD = SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
+    private static final String SSL_KEYSTORE_TYPE = SslConfigs.SSL_KEYSTORE_TYPE_CONFIG;
+    private static final String SSL_KEYSTORE_LOCATION = SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
+    private static final String SSL_KEYSTORE_PASSWORD = SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG;
+    private static final String SASL_KERBEROS_SERVICE_NAME = SaslConfigs.SASL_KERBEROS_SERVICE_NAME;
 
     private String brokerList = null;
     private String topic = null;
     private String compressionType = null;
+    private String securityProtocol = null;
+    private String sslTruststoreLocation = null;
+    private String sslTruststorePassword = null;
+    private String sslKeystoreType = null;
+    private String sslKeystoreLocation = null;
+    private String sslKeystorePassword = null;
+    private String saslKerberosServiceName = null;
+    private String clientJaasConfPath = null;
+    private String kerb5ConfPath = null;
 
     private int retries = 0;
     private int requiredNumAcks = Integer.MAX_VALUE;
@@ -104,6 +124,78 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         this.syncSend = syncSend;
     }
 
+    public String getSslTruststorePassword() {
+        return sslTruststorePassword;
+    }
+
+    public String getSslTruststoreLocation() {
+        return sslTruststoreLocation;
+    }
+
+    public String getSecurityProtocol() {
+        return securityProtocol;
+    }
+
+    public void setSecurityProtocol(String securityProtocol) {
+        this.securityProtocol = securityProtocol;
+    }
+
+    public void setSslTruststoreLocation(String sslTruststoreLocation) {
+        this.sslTruststoreLocation = sslTruststoreLocation;
+    }
+
+    public void setSslTruststorePassword(String sslTruststorePassword) {
+        this.sslTruststorePassword = sslTruststorePassword;
+    }
+
+    public void setSslKeystorePassword(String sslKeystorePassword) {
+        this.sslKeystorePassword = sslKeystorePassword;
+    }
+
+    public void setSslKeystoreType(String sslKeystoreType) {
+        this.sslKeystoreType = sslKeystoreType;
+    }
+
+    public void setSslKeystoreLocation(String sslKeystoreLocation) {
+        this.sslKeystoreLocation = sslKeystoreLocation;
+    }
+
+    public void setSaslKerberosServiceName(String saslKerberosServiceName) {
+        this.saslKerberosServiceName = saslKerberosServiceName;
+    }
+
+    public void setClientJaasConfPath(String clientJaasConfPath) {
+        this.clientJaasConfPath = clientJaasConfPath;
+    }
+
+    public void setKerb5ConfPath(String kerb5ConfPath) {
+        this.kerb5ConfPath = kerb5ConfPath;
+    }
+
+    public String getSslKeystoreLocation() {
+        return sslKeystoreLocation;
+    }
+
+    public String getSslKeystoreType() {
+        return sslKeystoreType;
+    }
+
+    public String getSslKeystorePassword() {
+        return sslKeystorePassword;
+    }
+
+    public String getSaslKerberosServiceName() {
+        return saslKerberosServiceName;
+    }
+
+    public String getClientJaasConfPath() {
+        return clientJaasConfPath;
+    }
+
+    public String getKerb5ConfPath() {
+        return kerb5ConfPath;
+    }
+
     @Override
     public void activateOptions() {
         // check for config parameter validity
@@ -117,9 +209,31 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         if (compressionType != null)
             props.put(COMPRESSION_TYPE_CONFIG, compressionType);
         if (requiredNumAcks != Integer.MAX_VALUE)
-            props.put(ACKS_CONFIG, requiredNumAcks);
+            props.put(ACKS_CONFIG, Integer.toString(requiredNumAcks));
         if (retries > 0)
             props.put(RETRIES_CONFIG, retries);
+        if (securityProtocol != null) {
+            props.put(SECURITY_PROTOCOL, securityProtocol);
+        }
+        if (securityProtocol != null && securityProtocol.contains("SSL") && sslTruststoreLocation != null &&
+            sslTruststorePassword != null) {
+            props.put(SSL_TRUSTSTORE_LOCATION, sslTruststoreLocation);
+            props.put(SSL_TRUSTSTORE_PASSWORD, sslTruststorePassword);
+
+            if (sslKeystoreType != null && sslKeystoreLocation != null &&
+                sslKeystorePassword != null) {
+                props.put(SSL_KEYSTORE_TYPE, sslKeystoreType);
+                props.put(SSL_KEYSTORE_LOCATION, sslKeystoreLocation);
+                props.put(SSL_KEYSTORE_PASSWORD, sslKeystorePassword);
+            }
+        }
+        if (securityProtocol != null && securityProtocol.contains("SASL") && saslKerberosServiceName != null && clientJaasConfPath != null) {
+            props.put(SASL_KERBEROS_SERVICE_NAME, saslKerberosServiceName);
+            System.setProperty("java.security.auth.login.config", clientJaasConfPath);
+            if (kerb5ConfPath != null) {
+                System.setProperty("java.security.krb5.conf", kerb5ConfPath);
+            }
+        }
 
         props.put(KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");

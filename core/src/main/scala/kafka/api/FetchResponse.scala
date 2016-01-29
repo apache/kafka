@@ -20,13 +20,12 @@ package kafka.api
 import java.nio.ByteBuffer
 import java.nio.channels.GatheringByteChannel
 
-import kafka.common.{TopicAndPartition, ErrorMapping}
+import kafka.common.TopicAndPartition
 import kafka.message.{MessageSet, ByteBufferMessageSet}
 import kafka.api.ApiUtils._
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.network.TransportLayer
-import org.apache.kafka.common.network.Send
-import org.apache.kafka.common.network.MultiSend
+import org.apache.kafka.common.network.{Send, MultiSend}
+import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
 
@@ -47,7 +46,7 @@ object FetchResponsePartitionData {
     4 /* messageSetSize */
 }
 
-case class FetchResponsePartitionData(error: Short = ErrorMapping.NoError, hw: Long = -1L, messages: MessageSet) {
+case class FetchResponsePartitionData(error: Short = Errors.NONE.code, hw: Long = -1L, messages: MessageSet) {
   val sizeInBytes = FetchResponsePartitionData.headerSize + messages.sizeInBytes
 }
 
@@ -55,6 +54,7 @@ case class FetchResponsePartitionData(error: Short = ErrorMapping.NoError, hw: L
 
 class PartitionDataSend(val partitionId: Int,
                         val partitionData: FetchResponsePartitionData) extends Send {
+  private val emptyBuffer = ByteBuffer.allocate(0)
   private val messageSize = partitionData.messages.sizeInBytes
   private var messagesSentSize = 0
   private var pending = false
@@ -71,15 +71,20 @@ class PartitionDataSend(val partitionId: Int,
 
   override def writeTo(channel: GatheringByteChannel): Long = {
     var written = 0L
-    if(buffer.hasRemaining)
+    if (buffer.hasRemaining)
       written += channel.write(buffer)
-    if(!buffer.hasRemaining && messagesSentSize < messageSize) {
-      val bytesSent = partitionData.messages.writeTo(channel, messagesSentSize, messageSize - messagesSentSize)
-      messagesSentSize += bytesSent
-      written += bytesSent
+    if (!buffer.hasRemaining) {
+      if (messagesSentSize < messageSize) {
+        val bytesSent = partitionData.messages.writeTo(channel, messagesSentSize, messageSize - messagesSentSize)
+        messagesSentSize += bytesSent
+        written += bytesSent
+      }
+      if (messagesSentSize >= messageSize && hasPendingWrites(channel))
+        channel.write(emptyBuffer)
     }
-    if (channel.isInstanceOf[TransportLayer])
-      pending = channel.asInstanceOf[TransportLayer].hasPendingWrites
+
+    pending = hasPendingWrites(channel)
+
     written
   }
 
@@ -112,6 +117,8 @@ case class TopicData(topic: String, partitionData: Map[Int, FetchResponsePartiti
 
 class TopicDataSend(val dest: String, val topicData: TopicData) extends Send {
 
+  private val emptyBuffer = ByteBuffer.allocate(0)
+
   private var sent = 0L
 
   private var pending = false
@@ -135,14 +142,16 @@ class TopicDataSend(val dest: String, val topicData: TopicData) extends Send {
       throw new KafkaException("This operation cannot be completed on a complete request.")
 
     var written = 0L
-    if(buffer.hasRemaining)
+    if (buffer.hasRemaining)
       written += channel.write(buffer)
-    if(!buffer.hasRemaining && !sends.completed) {
-      written += sends.writeTo(channel)
+    if (!buffer.hasRemaining) {
+      if (!sends.completed)
+        written += sends.writeTo(channel)
+      if (sends.completed && hasPendingWrites(channel))
+        written += channel.write(emptyBuffer)
     }
 
-    if (channel.isInstanceOf[TransportLayer])
-      pending = channel.asInstanceOf[TransportLayer].hasPendingWrites
+    pending = hasPendingWrites(channel)
 
     sent += written
     written
@@ -152,12 +161,10 @@ class TopicDataSend(val dest: String, val topicData: TopicData) extends Send {
 
 object FetchResponse {
 
-  val headerSize =
-    4 + /* correlationId */
-    4 /* topic count */
-
-  def readFrom(buffer: ByteBuffer): FetchResponse = {
+  // The request version is used to determine which fields we can expect in the response
+  def readFrom(buffer: ByteBuffer, requestVersion: Int): FetchResponse = {
     val correlationId = buffer.getInt
+    val throttleTime = if (requestVersion > 0) buffer.getInt else 0
     val topicCount = buffer.getInt
     val pairs = (1 to topicCount).flatMap(_ => {
       val topicData = TopicData.readFrom(buffer)
@@ -166,27 +173,55 @@ object FetchResponse {
           (TopicAndPartition(topicData.topic, partitionId), partitionData)
       }
     })
-    FetchResponse(correlationId, Map(pairs:_*))
+    FetchResponse(correlationId, Map(pairs:_*), requestVersion, throttleTime)
+  }
+
+  // Returns the size of the response header
+  def headerSize(requestVersion: Int): Int = {
+    val throttleTimeSize = if (requestVersion > 0) 4 else 0
+    4 + /* correlationId */
+    4 + /* topic count */
+    throttleTimeSize
+  }
+
+  // Returns the size of entire fetch response in bytes (including the header size)
+  def responseSize(dataGroupedByTopic: Map[String, Map[TopicAndPartition, FetchResponsePartitionData]],
+                   requestVersion: Int): Int = {
+    headerSize(requestVersion) +
+    dataGroupedByTopic.foldLeft(0) { case (folded, (topic, partitionDataMap)) =>
+      val topicData = TopicData(topic, partitionDataMap.map {
+        case (topicAndPartition, partitionData) => (topicAndPartition.partition, partitionData)
+      })
+      folded + topicData.sizeInBytes
+    }
   }
 }
 
-case class FetchResponse(correlationId: Int, data: Map[TopicAndPartition, FetchResponsePartitionData])
+case class FetchResponse(correlationId: Int,
+                         data: Map[TopicAndPartition, FetchResponsePartitionData],
+                         requestVersion: Int = 0,
+                         throttleTimeMs: Int = 0)
   extends RequestOrResponse() {
 
   /**
    * Partitions the data into a map of maps (one for each topic).
    */
-  lazy val dataGroupedByTopic = data.groupBy(_._1.topic)
+  lazy val dataGroupedByTopic = data.groupBy{ case (topicAndPartition, fetchData) => topicAndPartition.topic }
+  val headerSizeInBytes = FetchResponse.headerSize(requestVersion)
+  lazy val sizeInBytes = FetchResponse.responseSize(dataGroupedByTopic, requestVersion)
 
-  val sizeInBytes =
-    FetchResponse.headerSize +
-    dataGroupedByTopic.foldLeft(0) ((folded, curr) => {
-      val topicData = TopicData(curr._1, curr._2.map {
-        case (topicAndPartition, partitionData) => (topicAndPartition.partition, partitionData)
-      })
-      folded + topicData.sizeInBytes
-    })
+  /*
+   * Writes the header of the FetchResponse to the input buffer
+   */
+  def writeHeaderTo(buffer: ByteBuffer) = {
+    buffer.putInt(sizeInBytes)
+    buffer.putInt(correlationId)
+    // Include the throttleTime only if the client can read it
+    if (requestVersion > 0)
+      buffer.putInt(throttleTimeMs)
 
+    buffer.putInt(dataGroupedByTopic.size) // topic count
+  }
   /*
    * FetchResponse uses [sendfile](http://man7.org/linux/man-pages/man2/sendfile.2.html)
    * api for data transfer through the FetchResponseSend, so `writeTo` aren't actually being used.
@@ -212,13 +247,16 @@ case class FetchResponse(correlationId: Int, data: Map[TopicAndPartition, FetchR
 
   def highWatermark(topic: String, partition: Int) = partitionDataFor(topic, partition).hw
 
-  def hasError = data.values.exists(_.error != ErrorMapping.NoError)
+  def hasError = data.values.exists(_.error != Errors.NONE.code)
 
   def errorCode(topic: String, partition: Int) = partitionDataFor(topic, partition).error
 }
 
 
 class FetchResponseSend(val dest: String, val fetchResponse: FetchResponse) extends Send {
+
+  private val emptyBuffer = ByteBuffer.allocate(0)
+
   private val payloadSize = fetchResponse.sizeInBytes
 
   private var sent = 0L
@@ -231,10 +269,9 @@ class FetchResponseSend(val dest: String, val fetchResponse: FetchResponse) exte
 
   override def destination = dest
 
-  private val buffer = ByteBuffer.allocate(4 /* for size */ + FetchResponse.headerSize)
-  buffer.putInt(payloadSize)
-  buffer.putInt(fetchResponse.correlationId)
-  buffer.putInt(fetchResponse.dataGroupedByTopic.size) // topic count
+  // The throttleTimeSize will be 0 if the request was made from a client sending a V0 style request
+  private val buffer = ByteBuffer.allocate(4 /* for size */ + fetchResponse.headerSizeInBytes)
+  fetchResponse.writeHeaderTo(buffer)
   buffer.rewind()
 
   private val sends = new MultiSend(dest, JavaConversions.seqAsJavaList(fetchResponse.dataGroupedByTopic.toList.map {
@@ -247,15 +284,18 @@ class FetchResponseSend(val dest: String, val fetchResponse: FetchResponse) exte
       throw new KafkaException("This operation cannot be completed on a complete request.")
 
     var written = 0L
-    if(buffer.hasRemaining)
-      written += channel.write(buffer)
-    if(!buffer.hasRemaining && !sends.completed) {
-      written += sends.writeTo(channel)
-    }
-    sent += written
 
-    if (channel.isInstanceOf[TransportLayer])
-      pending = channel.asInstanceOf[TransportLayer].hasPendingWrites
+    if (buffer.hasRemaining)
+      written += channel.write(buffer)
+    if (!buffer.hasRemaining) {
+      if (!sends.completed)
+        written += sends.writeTo(channel)
+      if (sends.completed && hasPendingWrites(channel))
+        written += channel.write(emptyBuffer)
+    }
+
+    sent += written
+    pending = hasPendingWrites(channel)
 
     written
   }

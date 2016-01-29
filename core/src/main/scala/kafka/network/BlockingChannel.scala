@@ -117,10 +117,16 @@ class BlockingChannel( val host: String,
     if(!connected)
       throw new ClosedChannelException()
 
-    val response = new NetworkReceive()
-    response.readCompletely(readChannel)
+    val response = readCompletely(readChannel)
     response.payload().rewind()
 
+    response
+  }
+
+  private def readCompletely(channel: ReadableByteChannel): NetworkReceive = {
+    val response = new NetworkReceive
+    while (!response.complete())
+      response.readFromReadableChannel(channel)
     response
   }
 

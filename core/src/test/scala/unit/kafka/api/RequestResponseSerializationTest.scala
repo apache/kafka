@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,9 +17,8 @@
 
 package kafka.api
 
-
 import kafka.cluster.{BrokerEndPoint, EndPoint, Broker}
-import kafka.common.{OffsetAndMetadata, ErrorMapping, OffsetMetadataAndError}
+import kafka.common.{OffsetAndMetadata, OffsetMetadataAndError}
 import kafka.common._
 import kafka.message.{Message, ByteBufferMessageSet}
 import kafka.utils.SystemTime
@@ -29,7 +28,7 @@ import kafka.common.TopicAndPartition
 
 import java.nio.ByteBuffer
 
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
@@ -117,31 +116,6 @@ object SerializationTestUtils {
     TopicAndPartition(topic1,3) -> partitionStateInfo3
   )
 
-  def createTestLeaderAndIsrRequest() : LeaderAndIsrRequest = {
-    val leaderAndIsr1 = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader1, 1, isr1, 1), 1)
-    val leaderAndIsr2 = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader2, 1, isr2, 2), 1)
-    val map = Map(((topic1, 0), PartitionStateInfo(leaderAndIsr1, isr1.toSet)),
-                  ((topic2, 0), PartitionStateInfo(leaderAndIsr2, isr2.toSet)))
-    new LeaderAndIsrRequest(map.toMap, collection.immutable.Set[BrokerEndPoint](), 0, 1, 0, "")
-  }
-
-  def createTestLeaderAndIsrResponse() : LeaderAndIsrResponse = {
-    val responseMap = Map(((topic1, 0), ErrorMapping.NoError),
-                          ((topic2, 0), ErrorMapping.NoError))
-    new LeaderAndIsrResponse(1, responseMap)
-  }
-
-  def createTestStopReplicaRequest() : StopReplicaRequest = {
-    new StopReplicaRequest(controllerId = 0, controllerEpoch = 1, correlationId = 0, deletePartitions = true,
-                           partitions = collection.immutable.Set(TopicAndPartition(topic1, 0),TopicAndPartition(topic2, 0)))
-  }
-
-  def createTestStopReplicaResponse() : StopReplicaResponse = {
-    val responseMap = Map((TopicAndPartition(topic1, 0), ErrorMapping.NoError),
-                          (TopicAndPartition(topic2, 0), ErrorMapping.NoError))
-    new StopReplicaResponse(0, responseMap.toMap)
-  }
-
   def createTestProducerRequest: ProducerRequest = {
     new ProducerRequest(1, "client 1", 0, 1000, topicDataProducerRequest)
   }
@@ -150,7 +124,7 @@ object SerializationTestUtils {
     ProducerResponse(1, Map(
       TopicAndPartition(topic1, 0) -> ProducerResponseStatus(0.toShort, 10001),
       TopicAndPartition(topic2, 0) -> ProducerResponseStatus(0.toShort, 20001)
-    ))
+    ), ProducerRequest.CurrentVersion, 100)
 
   def createTestFetchRequest: FetchRequest = {
     new FetchRequest(requestInfo = requestInfos)
@@ -167,7 +141,7 @@ object SerializationTestUtils {
 
   def createTestOffsetResponse: OffsetResponse = {
     new OffsetResponse(0, collection.immutable.Map(
-      TopicAndPartition(topic1, 1) -> PartitionOffsetsResponse(ErrorMapping.NoError, Seq(1000l, 2000l, 3000l, 4000l)))
+      TopicAndPartition(topic1, 1) -> PartitionOffsetsResponse(Errors.NONE.code, Seq(1000l, 2000l, 3000l, 4000l)))
     )
   }
 
@@ -210,8 +184,8 @@ object SerializationTestUtils {
   }
 
   def createTestOffsetCommitResponse: OffsetCommitResponse = {
-    new OffsetCommitResponse(collection.immutable.Map(TopicAndPartition(topic1, 0) -> ErrorMapping.NoError,
-                                 TopicAndPartition(topic1, 1) -> ErrorMapping.NoError))
+    new OffsetCommitResponse(collection.immutable.Map(TopicAndPartition(topic1, 0) -> Errors.NONE.code,
+                                 TopicAndPartition(topic1, 1) -> Errors.NONE.code))
   }
 
   def createTestOffsetFetchRequest: OffsetFetchRequest = {
@@ -223,17 +197,17 @@ object SerializationTestUtils {
 
   def createTestOffsetFetchResponse: OffsetFetchResponse = {
     new OffsetFetchResponse(collection.immutable.Map(
-      TopicAndPartition(topic1, 0) -> OffsetMetadataAndError(42L, "some metadata", ErrorMapping.NoError),
-      TopicAndPartition(topic1, 1) -> OffsetMetadataAndError(100L, OffsetMetadata.NoMetadata, ErrorMapping.UnknownTopicOrPartitionCode)
+      TopicAndPartition(topic1, 0) -> OffsetMetadataAndError(42L, "some metadata", Errors.NONE.code),
+      TopicAndPartition(topic1, 1) -> OffsetMetadataAndError(100L, OffsetMetadata.NoMetadata, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
     ))
   }
 
-  def createConsumerMetadataRequest: ConsumerMetadataRequest = {
-    ConsumerMetadataRequest("group 1", clientId = "client 1")
+  def createConsumerMetadataRequest: GroupCoordinatorRequest = {
+    GroupCoordinatorRequest("group 1", clientId = "client 1")
   }
 
-  def createConsumerMetadataResponse: ConsumerMetadataResponse = {
-    ConsumerMetadataResponse(Some(brokers.head.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)), ErrorMapping.NoError, 0)
+  def createConsumerMetadataResponse: GroupCoordinatorResponse = {
+    GroupCoordinatorResponse(Some(brokers.head.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)), Errors.NONE.code, 0)
   }
 
   def createUpdateMetadataRequest(versionId: Short): UpdateMetadataRequest = {
@@ -254,10 +228,6 @@ object SerializationTestUtils {
 }
 
 class RequestResponseSerializationTest extends JUnitSuite {
-  private val leaderAndIsrRequest = SerializationTestUtils.createTestLeaderAndIsrRequest
-  private val leaderAndIsrResponse = SerializationTestUtils.createTestLeaderAndIsrResponse
-  private val stopReplicaRequest = SerializationTestUtils.createTestStopReplicaRequest
-  private val stopReplicaResponse = SerializationTestUtils.createTestStopReplicaResponse
   private val producerRequest = SerializationTestUtils.createTestProducerRequest
   private val producerResponse = SerializationTestUtils.createTestProducerResponse
   private val fetchRequest = SerializationTestUtils.createTestFetchRequest
@@ -273,7 +243,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
   private val offsetFetchResponse = SerializationTestUtils.createTestOffsetFetchResponse
   private val consumerMetadataRequest = SerializationTestUtils.createConsumerMetadataRequest
   private val consumerMetadataResponse = SerializationTestUtils.createConsumerMetadataResponse
-  private val consumerMetadataResponseNoCoordinator = ConsumerMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, 0)
+  private val consumerMetadataResponseNoCoordinator = GroupCoordinatorResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, 0)
   private val updateMetadataRequestV0 = SerializationTestUtils.createUpdateMetadataRequest(0)
   private val updateMetadataRequestV1 = SerializationTestUtils.createUpdateMetadataRequest(1)
   private val updateMetdataResponse = SerializationTestUtils.createUpdateMetadataResponse
@@ -283,8 +253,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
   def testSerializationAndDeserialization() {
 
     val requestsAndResponses =
-      collection.immutable.Seq(leaderAndIsrRequest, leaderAndIsrResponse, stopReplicaRequest,
-                               stopReplicaResponse, producerRequest, producerResponse,
+      collection.immutable.Seq(producerRequest, producerResponse,
                                fetchRequest, offsetRequest, offsetResponse, topicMetadataRequest,
                                topicMetadataResponse,
                                offsetCommitRequestV0, offsetCommitRequestV1, offsetCommitRequestV2,
@@ -303,5 +272,40 @@ class RequestResponseSerializationTest extends JUnitSuite {
                   buffer.hasRemaining)
       assertEquals("The original and deserialized for " + original.getClass.getSimpleName + " should be the same.", original, deserialized)
     }
+  }
+
+  @Test
+  def testProduceResponseVersion() {
+    val oldClientResponse = ProducerResponse(1, Map(
+      TopicAndPartition("t1", 0) -> ProducerResponseStatus(0.toShort, 10001),
+      TopicAndPartition("t2", 0) -> ProducerResponseStatus(0.toShort, 20001)
+    ))
+
+    val newClientResponse = ProducerResponse(1, Map(
+      TopicAndPartition("t1", 0) -> ProducerResponseStatus(0.toShort, 10001),
+      TopicAndPartition("t2", 0) -> ProducerResponseStatus(0.toShort, 20001)
+    ), 1, 100)
+
+    // new response should have 4 bytes more than the old response since delayTime is an INT32
+    assertEquals(oldClientResponse.sizeInBytes + 4, newClientResponse.sizeInBytes)
+
+    val buffer = ByteBuffer.allocate(newClientResponse.sizeInBytes)
+    newClientResponse.writeTo(buffer)
+    buffer.rewind()
+    assertEquals(ProducerResponse.readFrom(buffer).throttleTime, 100)
+  }
+
+  @Test
+  def testFetchResponseVersion() {
+    val oldClientResponse = FetchResponse(1, Map(
+      TopicAndPartition("t1", 0) -> new FetchResponsePartitionData(messages = new ByteBufferMessageSet(new Message("first message".getBytes)))
+    ), 0)
+
+    val newClientResponse = FetchResponse(1, Map(
+      TopicAndPartition("t1", 0) -> new FetchResponsePartitionData(messages = new ByteBufferMessageSet(new Message("first message".getBytes)))
+    ), 1, 100)
+
+    // new response should have 4 bytes more than the old response since delayTime is an INT32
+    assertEquals(oldClientResponse.sizeInBytes + 4, newClientResponse.sizeInBytes)
   }
 }

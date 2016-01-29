@@ -29,11 +29,11 @@ public final class Quota {
         this.upper = upper;
     }
 
-    public static Quota lessThan(double upperBound) {
+    public static Quota upperBound(double upperBound) {
         return new Quota(upperBound, true);
     }
 
-    public static Quota moreThan(double lowerBound) {
+    public static Quota lowerBound(double lowerBound) {
         return new Quota(lowerBound, false);
     }
 
@@ -65,6 +65,6 @@ public final class Quota {
         if (!(obj instanceof Quota))
             return false;
         Quota that = (Quota) obj;
-        return (that.bound == this.bound) && (this.upper == this.upper);
+        return (that.bound == this.bound) && (that.upper == this.upper);
     }
 }

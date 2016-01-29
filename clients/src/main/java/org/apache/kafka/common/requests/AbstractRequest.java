@@ -49,12 +49,28 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return OffsetCommitRequest.parse(buffer, versionId);
             case OFFSET_FETCH:
                 return OffsetFetchRequest.parse(buffer, versionId);
-            case CONSUMER_METADATA:
-                return ConsumerMetadataRequest.parse(buffer, versionId);
+            case GROUP_COORDINATOR:
+                return GroupCoordinatorRequest.parse(buffer, versionId);
             case JOIN_GROUP:
                 return JoinGroupRequest.parse(buffer, versionId);
             case HEARTBEAT:
                 return HeartbeatRequest.parse(buffer, versionId);
+            case LEAVE_GROUP:
+                return LeaveGroupRequest.parse(buffer, versionId);
+            case SYNC_GROUP:
+                return SyncGroupRequest.parse(buffer, versionId);
+            case STOP_REPLICA:
+                return StopReplicaRequest.parse(buffer, versionId);
+            case CONTROLLED_SHUTDOWN_KEY:
+                return ControlledShutdownRequest.parse(buffer, versionId);
+            case UPDATE_METADATA_KEY:
+                return UpdateMetadataRequest.parse(buffer, versionId);
+            case LEADER_AND_ISR:
+                return LeaderAndIsrRequest.parse(buffer, versionId);
+            case DESCRIBE_GROUPS:
+                return DescribeGroupsRequest.parse(buffer, versionId);
+            case LIST_GROUPS:
+                return ListGroupsRequest.parse(buffer, versionId);
             default:
                 return null;
         }

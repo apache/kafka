@@ -45,16 +45,22 @@ public class MockSelector implements Selectable {
     }
 
     @Override
-    public void disconnect(String id) {
-        this.disconnected.add(id);
-    }
-
-    @Override
     public void wakeup() {
     }
 
     @Override
     public void close() {
+    }
+
+    @Override
+    public void close(String id) {
+        this.disconnected.add(id);
+        for (int i = 0; i < this.connected.size(); i++) {
+            if (this.connected.get(i).equals(id)) {
+                this.connected.remove(i);
+                break;
+            }
+        }
     }
 
     public void clear() {

@@ -19,6 +19,7 @@ package kafka.consumer
 
 
 import java.nio.channels.{AsynchronousCloseException, ClosedByInterruptException}
+import java.util.concurrent.TimeUnit
 
 import kafka.api._
 import kafka.network._
@@ -90,7 +91,7 @@ class SimpleConsumer(val host: String,
         case e: AsynchronousCloseException =>
           throw e
         case e : Throwable =>
-          info("Reconnect due to socket error: %s".format(e.toString))
+          info("Reconnect due to error:", e)
           // retry once
           try {
             reconnect()
@@ -111,9 +112,9 @@ class SimpleConsumer(val host: String,
     TopicMetadataResponse.readFrom(response.payload())
   }
 
-  def send(request: ConsumerMetadataRequest): ConsumerMetadataResponse = {
+  def send(request: GroupCoordinatorRequest): GroupCoordinatorResponse = {
     val response = sendRequest(request)
-    ConsumerMetadataResponse.readFrom(response.payload())
+    GroupCoordinatorResponse.readFrom(response.payload())
   }
 
   /**
@@ -131,10 +132,12 @@ class SimpleConsumer(val host: String,
         response = sendRequest(request)
       }
     }
-    val fetchResponse = FetchResponse.readFrom(response.payload())
+    val fetchResponse = FetchResponse.readFrom(response.payload(), request.versionId)
     val fetchedSize = fetchResponse.sizeInBytes
     fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).requestSizeHist.update(fetchedSize)
     fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.requestSizeHist.update(fetchedSize)
+    fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).throttleTimeStats.update(fetchResponse.throttleTimeMs, TimeUnit.MILLISECONDS)
+    fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.throttleTimeStats.update(fetchResponse.throttleTimeMs, TimeUnit.MILLISECONDS)
     fetchResponse
   }
 

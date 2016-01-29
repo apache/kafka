@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -37,7 +37,7 @@ import net.jpountz.xxhash.XXHashFactory;
 
 /**
  * A partial implementation of the v1.4.1 LZ4 Frame format.
- * 
+ *
  * @see <a href="https://docs.google.com/document/d/1Tdxmn5_2e5p1y4PtXkatLndWVb0R8QARJFe6JI4Keuo/edit">LZ4 Framing
  *      Format Spec</a>
  */
@@ -61,7 +61,7 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
 
     /**
      * Create a new {@link InputStream} that will decompress data using the LZ4 algorithm.
-     * 
+     *
      * @param in The stream to decompress
      * @throws IOException
      */
@@ -80,7 +80,7 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
 
     /**
      * Reads the magic number and frame descriptor from the underlying {@link InputStream}.
-     * 
+     *
      * @throws IOException
      */
     private void readHeader() throws IOException {
@@ -111,7 +111,7 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
     /**
      * Decompresses (if necessary) buffered data, optionally computes and validates a XXHash32 checksum, and writes the
      * result to a buffer.
-     * 
+     *
      * @throws IOException
      */
     private void readBlock() throws IOException {
@@ -174,7 +174,7 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
 
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
-        net.jpountz.util.Utils.checkRange(b, off, len);
+        net.jpountz.util.SafeUtils.checkRange(b, off, len);
         if (finished) {
             return -1;
         }

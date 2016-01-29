@@ -14,7 +14,6 @@ package org.apache.kafka.test;
 
 import java.util.Arrays;
 
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -29,23 +28,27 @@ public class MetricsBench {
     public static void main(String[] args) {
         long iters = Long.parseLong(args[0]);
         Metrics metrics = new Metrics();
-        Sensor parent = metrics.sensor("parent");
-        Sensor child = metrics.sensor("child", parent);
-        for (Sensor sensor : Arrays.asList(parent, child)) {
-            sensor.add(new MetricName(sensor.name() + ".avg", "grp1"), new Avg());
-            sensor.add(new MetricName(sensor.name() + ".count", "grp1"), new Count());
-            sensor.add(new MetricName(sensor.name() + ".max", "grp1"), new Max());
-            sensor.add(new Percentiles(1024,
-                                       0.0,
-                                       iters,
-                                       BucketSizing.CONSTANT,
-                                       new Percentile(new MetricName(sensor.name() + ".median", "grp1"), 50.0),
-                                       new Percentile(new MetricName(sensor.name() +  ".p_99", "grp1"), 99.0)));
+        try {
+            Sensor parent = metrics.sensor("parent");
+            Sensor child = metrics.sensor("child", parent);
+            for (Sensor sensor : Arrays.asList(parent, child)) {
+                sensor.add(metrics.metricName(sensor.name() + ".avg", "grp1"), new Avg());
+                sensor.add(metrics.metricName(sensor.name() + ".count", "grp1"), new Count());
+                sensor.add(metrics.metricName(sensor.name() + ".max", "grp1"), new Max());
+                sensor.add(new Percentiles(1024,
+                        0.0,
+                        iters,
+                        BucketSizing.CONSTANT,
+                        new Percentile(metrics.metricName(sensor.name() + ".median", "grp1"), 50.0),
+                        new Percentile(metrics.metricName(sensor.name() +  ".p_99", "grp1"), 99.0)));
+            }
+            long start = System.nanoTime();
+            for (int i = 0; i < iters; i++)
+                parent.record(i);
+            double ellapsed = (System.nanoTime() - start) / (double) iters;
+            System.out.println(String.format("%.2f ns per metric recording.", ellapsed));
+        } finally {
+            metrics.close();
         }
-        long start = System.nanoTime();
-        for (int i = 0; i < iters; i++)
-            parent.record(i);
-        double ellapsed = (System.nanoTime() - start) / (double) iters;
-        System.out.println(String.format("%.2f ns per metric recording.", ellapsed));
     }
 }

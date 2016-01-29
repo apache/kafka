@@ -17,9 +17,17 @@
 
 package kafka.server
 
-import kafka.common.AppInfo
-import kafka.utils.Logging
+import java.util.Properties
 
+import kafka.metrics.KafkaMetricsReporter
+import kafka.utils.{VerifiableProperties, Logging}
+
+object KafkaServerStartable {
+  def fromProps(serverProps: Properties) = {
+    KafkaMetricsReporter.startReporters(new VerifiableProperties(serverProps))
+    new KafkaServerStartable(KafkaConfig.fromProps(serverProps))
+  }
+}
 
 class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
   private val server = new KafkaServer(serverConfig)
@@ -43,7 +51,8 @@ class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
     catch {
       case e: Throwable =>
         fatal("Fatal error during KafkaServerStable shutdown. Prepare to halt", e)
-        System.exit(1)
+        // Calling exit() can lead to deadlock as exit() can be called multiple times. Force exit.
+        Runtime.getRuntime.halt(1)
     }
   }
 

@@ -50,10 +50,10 @@ object CommandLineUtils extends Logging {
   /**
    * Print usage and exit
    */
-  def printUsageAndDie(parser: OptionParser, message: String) {
+  def printUsageAndDie(parser: OptionParser, message: String): Nothing = {
     System.err.println(message)
     parser.printHelpOn(System.err)
-    System.exit(1)
+    sys.exit(1)
   }
 
   /**

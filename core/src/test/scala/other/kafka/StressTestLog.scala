@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -23,16 +23,17 @@ import kafka.common._
 import kafka.message._
 import kafka.log._
 import kafka.utils._
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
 
 /**
- * A stress test that instantiates a log and then runs continual appends against it from one thread and continual reads against it 
+ * A stress test that instantiates a log and then runs continual appends against it from one thread and continual reads against it
  * from another thread and checks a few basic assertions until the user kills the process.
  */
 object StressTestLog {
   val running = new AtomicBoolean(true)
-  
+
   def main(args: Array[String]) {
-    val dir = TestUtils.tempDir()
+    val dir = TestUtils.randomPartitionLogDir(TestUtils.tempDir())
     val time = new MockTime
     val logProprties = new Properties()
     logProprties.put(LogConfig.SegmentBytesProp, 64*1024*1024: java.lang.Integer)
@@ -48,7 +49,7 @@ object StressTestLog {
     writer.start()
     val reader = new ReaderThread(log)
     reader.start()
-    
+
     Runtime.getRuntime().addShutdownHook(new Thread() {
       override def run() = {
         running.set(false)
@@ -57,13 +58,13 @@ object StressTestLog {
         CoreUtils.rm(dir)
       }
     })
-    
+
     while(running.get) {
       println("Reader offset = %d, writer offset = %d".format(reader.offset, writer.offset))
       Thread.sleep(1000)
     }
   }
-  
+
   abstract class WorkerThread extends Thread {
     override def run() {
       try {
@@ -71,7 +72,7 @@ object StressTestLog {
         while(running.get)
           work()
       } catch {
-        case e: Exception => 
+        case e: Exception =>
           e.printStackTrace()
           running.set(false)
       }
@@ -79,7 +80,7 @@ object StressTestLog {
     }
     def work()
   }
-  
+
   class WriterThread(val log: Log) extends WorkerThread {
     @volatile var offset = 0
     override def work() {
@@ -90,7 +91,7 @@ object StressTestLog {
         Thread.sleep(500)
     }
   }
-  
+
   class ReaderThread(val log: Log) extends WorkerThread {
     @volatile var offset = 0
     override def work() {

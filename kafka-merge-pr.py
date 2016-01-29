@@ -54,6 +54,11 @@ PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache")
 JIRA_USERNAME = os.environ.get("JIRA_USERNAME", "")
 # ASF JIRA password
 JIRA_PASSWORD = os.environ.get("JIRA_PASSWORD", "")
+# OAuth key used for issuing requests against the GitHub API. If this is not defined, then requests
+# will be unauthenticated. You should only need to configure this if you find yourself regularly
+# exceeding your IP's unauthenticated request rate limit. You can create an OAuth key at
+# https://github.com/settings/tokens. This script only requires the "public_repo" scope.
+GITHUB_OAUTH_KEY = os.environ.get("GITHUB_OAUTH_KEY")
 
 GITHUB_USER = os.environ.get("GITHUB_USER", "apache")
 GITHUB_BASE = "https://github.com/%s/%s/pull" % (GITHUB_USER, PROJECT_NAME)
@@ -65,13 +70,23 @@ TEMP_BRANCH_PREFIX = "PR_TOOL"
 # TODO Introduce a convention as this is too brittle
 RELEASE_BRANCH_PREFIX = "0."
 
-DEV_BRANCH_NAME="trunk"
+DEV_BRANCH_NAME = "trunk"
+
+DEFAULT_FIX_VERSION = os.environ.get("DEFAULT_FIX_VERSION", "0.9.1.0")
 
 def get_json(url):
     try:
-        return json.load(urllib2.urlopen(url))
+        request = urllib2.Request(url)
+        if GITHUB_OAUTH_KEY:
+            request.add_header('Authorization', 'token %s' % GITHUB_OAUTH_KEY)
+        return json.load(urllib2.urlopen(request))
     except urllib2.HTTPError as e:
-        print "Unable to fetch URL, exiting: %s" % url
+        if "X-RateLimit-Remaining" in e.headers and e.headers["X-RateLimit-Remaining"] == '0':
+            print "Exceeded the GitHub API rate limit; see the instructions in " + \
+                  "kafka-merge-pr.py to configure an OAuth token for making authenticated " + \
+                  "GitHub requests."
+        else:
+            print "Unable to fetch URL, exiting: %s" % url
         sys.exit(-1)
 
 
@@ -238,9 +253,17 @@ def cherry_pick(pr_num, merge_hash, default_branch):
 def fix_version_from_branch(branch, versions):
     # Note: Assumes this is a sorted (newest->oldest) list of un-released versions
     if branch == DEV_BRANCH_NAME:
-        return versions[0]
+        versions = filter(lambda x: x == DEFAULT_FIX_VERSION, versions)
+        if len(versions) > 0:
+            return versions[0]
+        else:
+            return None
     else:
-        return filter(lambda x: x.name.startswith(branch), versions)[-1]
+        versions = filter(lambda x: x.startswith(branch), versions)
+        if len(versions) > 0:
+            return versions[-1]
+        else:
+            return None
 
 
 def resolve_jira_issue(merge_branches, comment, default_jira_id=""):
@@ -273,20 +296,10 @@ def resolve_jira_issue(merge_branches, comment, default_jira_id=""):
     versions = asf_jira.project_versions(CAPITALIZED_PROJECT_NAME)
     versions = sorted(versions, key=lambda x: x.name, reverse=True)
     versions = filter(lambda x: x.raw['released'] is False, versions)
-    # Consider only x.y.z versions
-    versions = filter(lambda x: re.match('\d+\.\d+\.\d+', x.name), versions)
 
-    default_fix_versions = map(lambda x: fix_version_from_branch(x, versions).name, merge_branches)
-    for v in default_fix_versions:
-        # Handles the case where we have forked a release branch but not yet made the release.
-        # In this case, if the PR is committed to the master branch and the release branch, we
-        # only consider the release branch to be the fix version. E.g. it is not valid to have
-        # both 1.1.0 and 1.0.0 as fix versions.
-        (major, minor, patch) = v.split(".")
-        if patch == "0":
-            previous = "%s.%s.%s" % (major, int(minor) - 1, 0)
-            if previous in default_fix_versions:
-                default_fix_versions = filter(lambda x: x != v, default_fix_versions)
+    version_names = map(lambda x: x.name, versions)
+    default_fix_versions = map(lambda x: fix_version_from_branch(x, version_names), merge_branches)
+    default_fix_versions = filter(lambda x: x != None, default_fix_versions)
     default_fix_versions = ",".join(default_fix_versions)
 
     fix_versions = raw_input("Enter comma-separated fix version(s) [%s]: " % default_fix_versions)

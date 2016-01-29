@@ -17,12 +17,8 @@
 
 package kafka.api
 
-import kafka.common.{TopicAndPartition, ErrorMapping}
 import java.nio.ByteBuffer
-import kafka.api.ApiUtils._
-import collection.mutable.HashMap
-import collection.Map
-
+import org.apache.kafka.common.protocol.Errors
 
 object UpdateMetadataResponse {
   def readFrom(buffer: ByteBuffer): UpdateMetadataResponse = {
@@ -33,7 +29,7 @@ object UpdateMetadataResponse {
 }
 
 case class UpdateMetadataResponse(correlationId: Int,
-                                  errorCode: Short = ErrorMapping.NoError)
+                                  errorCode: Short = Errors.NONE.code)
   extends RequestOrResponse() {
   def sizeInBytes(): Int = 4 /* correlation id */ + 2 /* error code */
 

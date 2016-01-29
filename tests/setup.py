@@ -14,14 +14,21 @@
 # limitations under the License.
 # see kafka.server.KafkaConfig for additional details and defaults
 
+import re
 from setuptools import find_packages, setup
 
+version = ''
+with open('kafkatest/__init__.py', 'r') as fd:
+    version = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]',
+                        fd.read(), re.MULTILINE).group(1)
+
 setup(name="kafkatest",
-      version="0.8.3-SNAPSHOT",
+      version=version,
       description="Apache Kafka System Tests",
       author="Apache Kafka",
       platforms=["any"], 
       license="apache2.0",
       packages=find_packages(),
-      requires=["ducktape(>=0.2.0)"]
+      include_package_data=True,
+      install_requires=["ducktape==0.3.8", "requests>=2.5.0"]
       )

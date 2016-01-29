@@ -41,6 +41,7 @@ ec2_az = nil # Uses set by AWS
 ec2_ami = "ami-9eaa1cf6"
 ec2_instance_type = "m3.medium"
 ec2_user = "ubuntu"
+ec2_instance_name_prefix = "kafka-vagrant"
 ec2_security_groups = nil
 ec2_subnet_id = nil
 # Only override this by setting it to false if you're running in a VPC and you
@@ -62,12 +63,12 @@ end
 # stopped, skipping the update in that case since it's impossible to update
 # nodes in that state.
 Object.const_get("VagrantPlugins").const_get("HostManager").const_get("HostsFile").class_eval do
-  alias_method :old_update_guest, :update_guest
   def update_guest(machine)
     state_id = machine.state.id
     return if state_id == :not_created || state_id == :stopped
     old_update_guest(machine)
   end
+  alias_method :old_update_guest, :update_guest
 end
 
 # TODO(ksweeney): RAM requirements are not empirical and can probably be significantly lowered.
@@ -148,13 +149,13 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
 
     # Exclude some directories that can grow very large from syncing
-    override.vm.synced_folder ".", "/vagrant", type: "rsync", :rsync_excludes => ['.git', 'core/data/', 'logs/', 'system_test/', 'tests/results/', 'results/']
+    override.vm.synced_folder ".", "/vagrant", type: "rsync", :rsync_excludes => ['.git', 'core/data/', 'logs/', 'tests/results/', 'results/']
   end
 
-  def name_node(node, name)
+  def name_node(node, name, ec2_instance_name_prefix)
     node.vm.hostname = name
     node.vm.provider :aws do |aws|
-      aws.tags = { 'Name' => "kafka-vagrant-" + Socket.gethostname + "-" + name }
+      aws.tags = { 'Name' => ec2_instance_name_prefix + "-" + Socket.gethostname + "-" + name }
     end
   end
 
@@ -170,7 +171,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     name = "zk" + i.to_s
     zookeepers.push(name)
     config.vm.define name do |zookeeper|
-      name_node(zookeeper, name)
+      name_node(zookeeper, name, ec2_instance_name_prefix)
       ip_address = "192.168.50." + (10 + i).to_s
       assign_local_ip(zookeeper, ip_address)
       zookeeper.vm.provision "shell", path: "vagrant/base.sh"
@@ -182,7 +183,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   (1..num_brokers).each { |i|
     name = "broker" + i.to_s
     config.vm.define name do |broker|
-      name_node(broker, name)
+      name_node(broker, name, ec2_instance_name_prefix)
       ip_address = "192.168.50." + (50 + i).to_s
       assign_local_ip(broker, ip_address)
       # We need to be careful about what we list as the publicly routable
@@ -199,7 +200,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   (1..num_workers).each { |i|
     name = "worker" + i.to_s
     config.vm.define name do |worker|
-      name_node(worker, name)
+      name_node(worker, name, ec2_instance_name_prefix)
       ip_address = "192.168.50." + (100 + i).to_s
       assign_local_ip(worker, ip_address)
       worker.vm.provision "shell", path: "vagrant/base.sh"

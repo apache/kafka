@@ -20,23 +20,19 @@ package org.apache.kafka.common.network;
 
 import java.io.IOException;
 
+import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
 
 import java.security.Principal;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-
 public class KafkaChannel {
-    private static final Logger log = LoggerFactory.getLogger(KafkaChannel.class);
     private final String id;
-    private TransportLayer transportLayer;
-    private Authenticator authenticator;
+    private final TransportLayer transportLayer;
+    private final Authenticator authenticator;
+    private final int maxReceiveSize;
     private NetworkReceive receive;
     private Send send;
-    private int maxReceiveSize;
 
     public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize) throws IOException {
         this.id = id;
@@ -51,20 +47,16 @@ public class KafkaChannel {
     }
 
     /**
-     * returns user principal for the session
-     * In case of PLAINTEXT and No Authentication returns ANONYMOUS as the userPrincipal
-     * If SSL used without any SASL Authentication returns SSLSession.peerPrincipal
+     * Returns the principal returned by `authenticator.principal()`.
      */
     public Principal principal() throws IOException {
         return authenticator.principal();
     }
 
     /**
-     * Does handshake of transportLayer and Authentication using configured authenticator
+     * Does handshake of transportLayer and authentication using configured authenticator
      */
     public void prepare() throws IOException {
-        if (transportLayer.ready() && authenticator.complete())
-            return;
         if (!transportLayer.ready())
             transportLayer.handshake();
         if (transportLayer.ready() && !authenticator.complete())
@@ -108,14 +100,21 @@ public class KafkaChannel {
         return send != null;
     }
 
+    /**
+     * Returns the address to which this channel's socket is connected or `null` if the socket has never been connected.
+     *
+     * If the socket was connected prior to being closed, then this method will continue to return the
+     * connected address after the socket is closed.
+     */
+    public InetAddress socketAddress() {
+        return transportLayer.socketChannel().socket().getInetAddress();
+    }
+
     public String socketDescription() {
         Socket socket = transportLayer.socketChannel().socket();
-        if (socket == null)
-            return "[unconnected socket]";
-        else if (socket.getInetAddress() != null)
-            return socket.getInetAddress().toString();
-        else
+        if (socket.getInetAddress() == null)
             return socket.getLocalAddress().toString();
+        return socket.getInetAddress().toString();
     }
 
     public void setSend(Send send) {
@@ -132,7 +131,7 @@ public class KafkaChannel {
             receive = new NetworkReceive(maxReceiveSize, id);
         }
 
-        long x = receive(receive);
+        receive(receive);
         if (receive.complete()) {
             receive.payload().rewind();
             result = receive;
@@ -151,8 +150,7 @@ public class KafkaChannel {
     }
 
     private long receive(NetworkReceive receive) throws IOException {
-        long result = receive.readFrom(transportLayer);
-        return result;
+        return receive.readFrom(transportLayer);
     }
 
     private boolean send(Send send) throws IOException {

@@ -30,9 +30,13 @@ public enum ApiKeys {
     CONTROLLED_SHUTDOWN_KEY(7, "ControlledShutdown"),
     OFFSET_COMMIT(8, "OffsetCommit"),
     OFFSET_FETCH(9, "OffsetFetch"),
-    CONSUMER_METADATA(10, "ConsumerMetadata"),
+    GROUP_COORDINATOR(10, "GroupCoordinator"),
     JOIN_GROUP(11, "JoinGroup"),
-    HEARTBEAT(12, "Heartbeat");
+    HEARTBEAT(12, "Heartbeat"),
+    LEAVE_GROUP(13, "LeaveGroup"),
+    SYNC_GROUP(14, "SyncGroup"),
+    DESCRIBE_GROUPS(15, "DescribeGroups"),
+    LIST_GROUPS(16, "ListGroups");
 
     private static ApiKeys[] codeToType;
     public static final int MAX_API_KEY;
@@ -49,7 +53,7 @@ public enum ApiKeys {
         MAX_API_KEY = maxKey;
     }
 
-    /** the perminant and immutable id of an API--this can't change ever */
+    /** the permanent and immutable id of an API--this can't change ever */
     public final short id;
 
     /** an english description of the api--this is for debugging and can change */

@@ -43,16 +43,10 @@ class BrokerMetadataCheckpoint(val file: File) extends Logging {
         fileOutputStream.flush()
         fileOutputStream.getFD().sync()
         fileOutputStream.close()
-        // swap new BrokerMetadata file with previous one
-        if(!temp.renameTo(file)) {
-          // renameTo() fails on windows if destination file exists.
-          file.delete()
-          if(!temp.renameTo(file))
-            throw new IOException("File rename from %s to %s failed.".format(temp.getAbsolutePath(), file.getAbsolutePath()))
-        }
+        Utils.atomicMoveWithFallback(temp.toPath, file.toPath)
       } catch {
         case ie: IOException =>
-          error("Failed to write meta.properties due to ",ie)
+          error("Failed to write meta.properties due to", ie)
           throw ie
       }
     }

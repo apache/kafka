@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io.File
 import java.nio._
+import java.nio.file.Paths
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicLong
 
@@ -37,7 +38,8 @@ import scala.collection._
  */
 class CleanerTest extends JUnitSuite {
   
-  val dir = TestUtils.tempDir()
+  val tmpdir = TestUtils.tempDir()
+  val dir = TestUtils.randomPartitionLogDir(tmpdir)
   val logProps = new Properties()
   logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.SegmentIndexBytesProp, 1024: java.lang.Integer)
@@ -48,7 +50,7 @@ class CleanerTest extends JUnitSuite {
   
   @After
   def teardown() {
-    CoreUtils.rm(dir)
+    CoreUtils.rm(tmpdir)
   }
   
   /**
@@ -107,6 +109,24 @@ class CleanerTest extends JUnitSuite {
   }
 
   @Test
+  def testLogToClean: Unit = {
+    // create a log with small segment size
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 100: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    // create 6 segments with only one message in each segment
+    val messageSet = TestUtils.singleMessageSet(payload = Array.fill[Byte](50)(0), key = 1.toString.getBytes)
+    for (i <- 0 until 6)
+      log.append(messageSet, assignOffsets = true)
+
+    val logToClean = LogToClean(TopicAndPartition("test", 0), log, log.activeSegment.baseOffset)
+
+    assertEquals("Total bytes of LogToClean should equal size of all segments excluding the active segment",
+      logToClean.totalBytes, log.size - log.activeSegment.size)
+  }
+
+  @Test
   def testCleaningWithUnkeyedMessages {
     val cleaner = makeCleaner(Int.MaxValue)
 
@@ -129,11 +149,6 @@ class CleanerTest extends JUnitSuite {
       log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
 
     val expectedSizeAfterCleaning = log.size - sizeWithUnkeyedMessages
-
-    // turn on compaction and compact the log
-    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
-
-    val compactedLog = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 0))
 
     assertEquals("Log should only contain keyed messages after cleaning.", 0, unkeyedMessageCountInLog(log))
@@ -362,7 +377,7 @@ class CleanerTest extends JUnitSuite {
     //    On recovery, clean operation is aborted. All messages should be present in the log
     log.logSegments.head.changeFileSuffixes("", Log.CleanedFileSuffix)
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
-      file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
     }
     log = recoverAndCheck(config, allKeys)
     
@@ -374,7 +389,7 @@ class CleanerTest extends JUnitSuite {
     //    renamed to .deleted. Clean operation is resumed during recovery. 
     log.logSegments.head.changeFileSuffixes("", Log.SwapFileSuffix)
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
-      file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
     }   
     log = recoverAndCheck(config, cleanedKeys)
     

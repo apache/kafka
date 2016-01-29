@@ -17,10 +17,7 @@
 
 package org.apache.kafka.common.security.auth;
 
-/*
- * PrincipalBuilder for Authenticator
- */
-
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.KafkaException;
@@ -29,23 +26,25 @@ import org.apache.kafka.common.Configurable;
 import java.util.Map;
 import java.security.Principal;
 
+/*
+ * PrincipalBuilder for Authenticator
+ */
+@InterfaceStability.Unstable
 public interface PrincipalBuilder extends Configurable {
 
     /**
-     * configure this class with give key-value pair
+     * Configures this class with given key-value pairs.
      */
-    public void configure(Map<String, ?> configs);
+    void configure(Map<String, ?> configs);
 
     /**
-     * Returns Principal
-     * @param TransportLayer
-     * @param Authenticator
+     * Returns Principal.
      */
     Principal buildPrincipal(TransportLayer transportLayer, Authenticator authenticator) throws KafkaException;
 
     /**
-     * Close this PrincipalBuilder
+     * Closes this instance.
      */
-    public void close() throws KafkaException;
+    void close() throws KafkaException;
 
 }

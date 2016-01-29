@@ -31,7 +31,13 @@ import java.util.List;
 import java.util.Map;
 
 public class ListOffsetRequest extends AbstractRequest {
-    
+
+    public static final long EARLIEST_TIMESTAMP = -2L;
+    public static final long LATEST_TIMESTAMP = -1L;
+
+    public static final int CONSUMER_REPLICA_ID = -1;
+    public static final int DEBUGGING_REPLICA_ID = -2;
+
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.LIST_OFFSETS.id);
     private static final String REPLICA_ID_KEY_NAME = "replica_id";
     private static final String TOPICS_KEY_NAME = "topics";
@@ -57,9 +63,9 @@ public class ListOffsetRequest extends AbstractRequest {
             this.maxNumOffsets = maxNumOffsets;
         }
     }
-    
+
     public ListOffsetRequest(Map<TopicPartition, PartitionData> offsetData) {
-        this(-1, offsetData);
+        this(CONSUMER_REPLICA_ID, offsetData);
     }
 
     public ListOffsetRequest(int replicaId, Map<TopicPartition, PartitionData> offsetData) {
@@ -137,6 +143,6 @@ public class ListOffsetRequest extends AbstractRequest {
     }
 
     public static ListOffsetRequest parse(ByteBuffer buffer) {
-        return new ListOffsetRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new ListOffsetRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

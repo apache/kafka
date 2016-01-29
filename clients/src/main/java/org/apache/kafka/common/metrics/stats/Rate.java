@@ -59,10 +59,34 @@ public class Rate implements MeasurableStat {
     @Override
     public double measure(MetricConfig config, long now) {
         double value = stat.measure(config, now);
-        // the elapsed time is always N-1 complete windows plus whatever fraction of the final window is complete
-        long elapsedCurrentWindowMs = now - stat.current(now).lastWindowMs;
-        long elapsedPriorWindowsMs = config.timeWindowMs() * (config.samples() - 1);
-        return value / convert(elapsedCurrentWindowMs + elapsedPriorWindowsMs);
+        return value / convert(windowSize(config, now));
+    }
+
+    public long windowSize(MetricConfig config, long now) {
+        // purge old samples before we compute the window size
+        stat.purgeObsoleteSamples(config, now);
+
+        /*
+         * Here we check the total amount of time elapsed since the oldest non-obsolete window.
+         * This give the total windowSize of the batch which is the time used for Rate computation.
+         * However, there is an issue if we do not have sufficient data for e.g. if only 1 second has elapsed in a 30 second
+         * window, the measured rate will be very high.
+         * Hence we assume that the elapsed time is always N-1 complete windows plus whatever fraction of the final window is complete.
+         *
+         * Note that we could simply count the amount of time elapsed in the current window and add n-1 windows to get the total time,
+         * but this approach does not account for sleeps. SampledStat only creates samples whenever record is called,
+         * if no record is called for a period of time that time is not accounted for in windowSize and produces incorrect results.
+         */
+        long totalElapsedTimeMs = now - stat.oldest(now).lastWindowMs;
+        // Check how many full windows of data we have currently retained
+        int numFullWindows = (int) (totalElapsedTimeMs / config.timeWindowMs());
+        int minFullWindows = config.samples() - 1;
+
+        // If the available windows are less than the minimum required, add the difference to the totalElapsedTime
+        if (numFullWindows < minFullWindows)
+            totalElapsedTimeMs += (minFullWindows - numFullWindows) * config.timeWindowMs();
+
+        return totalElapsedTimeMs;
     }
 
     private double convert(long timeMs) {

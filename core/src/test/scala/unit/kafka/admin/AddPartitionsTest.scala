@@ -49,10 +49,10 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     brokers = servers.map(s => new Broker(s.config.brokerId, s.config.hostName, s.boundPort()))
 
     // create topics first
-    createTopic(zkClient, topic1, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
-    createTopic(zkClient, topic2, partitionReplicaAssignment = Map(0->Seq(1,2)), servers = servers)
-    createTopic(zkClient, topic3, partitionReplicaAssignment = Map(0->Seq(2,3,0,1)), servers = servers)
-    createTopic(zkClient, topic4, partitionReplicaAssignment = Map(0->Seq(0,3)), servers = servers)
+    createTopic(zkUtils, topic1, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
+    createTopic(zkUtils, topic2, partitionReplicaAssignment = Map(0->Seq(1,2)), servers = servers)
+    createTopic(zkUtils, topic3, partitionReplicaAssignment = Map(0->Seq(2,3,0,1)), servers = servers)
+    createTopic(zkUtils, topic4, partitionReplicaAssignment = Map(0->Seq(0,3)), servers = servers)
   }
 
   @After
@@ -65,7 +65,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   @Test
   def testTopicDoesNotExist {
     try {
-      AdminUtils.addPartitions(zkClient, "Blah", 1)
+      AdminUtils.addPartitions(zkUtils, "Blah", 1)
       fail("Topic should not exist")
     } catch {
       case e: AdminOperationException => //this is good
@@ -76,7 +76,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   @Test
   def testWrongReplicaCount {
     try {
-      AdminUtils.addPartitions(zkClient, topic1, 2, "0:1,0:1:2")
+      AdminUtils.addPartitions(zkUtils, topic1, 2, "0:1,0:1:2")
       fail("Add partitions should fail")
     } catch {
       case e: AdminOperationException => //this is good
@@ -86,12 +86,12 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
 
   @Test
   def testIncrementPartitions {
-    AdminUtils.addPartitions(zkClient, topic1, 3)
+    AdminUtils.addPartitions(zkUtils, topic1, 3)
     // wait until leader is elected
-    var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 1)
-    var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 2)
-    val leader1FromZk = ZkUtils.getLeaderForPartition(zkClient, topic1, 1).get
-    val leader2FromZk = ZkUtils.getLeaderForPartition(zkClient, topic1, 2).get
+    var leader1 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, 1)
+    var leader2 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, 2)
+    val leader1FromZk = zkUtils.getLeaderForPartition(topic1, 1).get
+    val leader2FromZk = zkUtils.getLeaderForPartition(topic1, 2).get
     assertEquals(leader1.get, leader1FromZk)
     assertEquals(leader2.get, leader2FromZk)
 
@@ -112,12 +112,12 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
 
   @Test
   def testManualAssignmentOfReplicas {
-    AdminUtils.addPartitions(zkClient, topic2, 3, "1:2,0:1,2:3")
+    AdminUtils.addPartitions(zkUtils, topic2, 3, "1:2,0:1,2:3")
     // wait until leader is elected
-    var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 1)
-    var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 2)
-    val leader1FromZk = ZkUtils.getLeaderForPartition(zkClient, topic2, 1).get
-    val leader2FromZk = ZkUtils.getLeaderForPartition(zkClient, topic2, 2).get
+    var leader1 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic2, 1)
+    var leader2 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic2, 2)
+    val leader1FromZk = zkUtils.getLeaderForPartition(topic2, 1).get
+    val leader2FromZk = zkUtils.getLeaderForPartition(topic2, 2).get
     assertEquals(leader1.get, leader1FromZk)
     assertEquals(leader2.get, leader2FromZk)
 
@@ -139,7 +139,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
 
   @Test
   def testReplicaPlacement {
-    AdminUtils.addPartitions(zkClient, topic3, 7)
+    AdminUtils.addPartitions(zkUtils, topic3, 7)
 
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 1)

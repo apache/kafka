@@ -23,6 +23,11 @@ import java.util.List;
 public interface Selectable {
 
     /**
+     * See {@link #connect(String, InetSocketAddress, int, int) connect()}
+     */
+    public static final int USE_DEFAULT_BUFFER_SIZE = -1;
+
+    /**
      * Begin establishing a socket connection to the given address identified by the given address
      * @param id The id for this connection
      * @param address The address to connect to
@@ -31,11 +36,6 @@ public interface Selectable {
      * @throws IOException If we cannot begin connecting
      */
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException;
-
-    /**
-     * Begin disconnecting the connection identified by the given id
-     */
-    public void disconnect(String id);
 
     /**
      * Wakeup this selector if it is blocked on I/O
@@ -48,7 +48,12 @@ public interface Selectable {
     public void close();
 
     /**
-     * Queue the given request for sending in the subsequent {@poll(long)} calls
+     * Close the connection identified by the given id
+     */
+    public void close(String id);
+
+    /**
+     * Queue the given request for sending in the subsequent {@link #poll(long) poll()} calls
      * @param send The request to send
      */
     public void send(Send send);
@@ -61,23 +66,23 @@ public interface Selectable {
     public void poll(long timeout) throws IOException;
 
     /**
-     * The list of sends that completed on the last {@link #poll(long, List) poll()} call.
+     * The list of sends that completed on the last {@link #poll(long) poll()} call.
      */
     public List<Send> completedSends();
 
     /**
-     * The list of receives that completed on the last {@link #poll(long, List) poll()} call.
+     * The list of receives that completed on the last {@link #poll(long) poll()} call.
      */
     public List<NetworkReceive> completedReceives();
 
     /**
-     * The list of connections that finished disconnecting on the last {@link #poll(long, List) poll()}
+     * The list of connections that finished disconnecting on the last {@link #poll(long) poll()}
      * call.
      */
     public List<String> disconnected();
 
     /**
-     * The list of connections that completed their connection on the last {@link #poll(long, List) poll()}
+     * The list of connections that completed their connection on the last {@link #poll(long) poll()}
      * call.
      */
     public List<String> connected();

@@ -39,15 +39,18 @@ public class OffsetCommitResponse extends AbstractRequestResponse {
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     /**
-     * Possible error code:
+     * Possible error codes:
      *
      * OFFSET_METADATA_TOO_LARGE (12)
-     * CONSUMER_COORDINATOR_NOT_AVAILABLE (15)
-     * NOT_COORDINATOR_FOR_CONSUMER (16)
+     * GROUP_LOAD_IN_PROGRESS (14)
+     * GROUP_COORDINATOR_NOT_AVAILABLE (15)
+     * NOT_COORDINATOR_FOR_GROUP (16)
      * ILLEGAL_GENERATION (22)
-     * UNKNOWN_CONSUMER_ID (25)
-     * COMMITTING_PARTITIONS_NOT_ASSIGNED (27)
+     * UNKNOWN_MEMBER_ID (25)
+     * REBALANCE_IN_PROGRESS (27)
      * INVALID_COMMIT_OFFSET_SIZE (28)
+     * TOPIC_AUTHORIZATION_FAILED (29)
+     * GROUP_AUTHORIZATION_FAILED (30)
      */
 
     private final Map<TopicPartition, Short> responseData;
@@ -95,6 +98,6 @@ public class OffsetCommitResponse extends AbstractRequestResponse {
     }
 
     public static OffsetCommitResponse parse(ByteBuffer buffer) {
-        return new OffsetCommitResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new OffsetCommitResponse(CURRENT_SCHEMA.read(buffer));
     }
 }

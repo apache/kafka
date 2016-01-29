@@ -25,13 +25,13 @@ import org.apache.kafka.common.utils.Time
 /**
  * Represents a request whose response has been delayed.
  * @param time @Time instance to use
- * @param delayTimeMs delay associated with this request
+ * @param throttleTimeMs delay associated with this request
  * @param callback Callback to trigger after delayTimeMs milliseconds
  */
-private[server] class ThrottledResponse(val time: Time, val delayTimeMs: Long, callback: => Unit) extends Delayed {
-  val endTime = time.milliseconds + delayTimeMs
+private[server] class ThrottledResponse(val time: Time, val throttleTimeMs: Int, callback: Int => Unit) extends Delayed {
+  val endTime = time.milliseconds + throttleTimeMs
 
-  def execute() = callback
+  def execute() = callback(throttleTimeMs)
 
   override def getDelay(unit: TimeUnit): Long = {
     unit.convert(endTime - time.milliseconds, TimeUnit.MILLISECONDS)

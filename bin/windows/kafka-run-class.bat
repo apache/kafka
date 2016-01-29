@@ -28,7 +28,7 @@ popd
 set CLASSPATH=
 
 IF ["%SCALA_VERSION%"] EQU [""] (
-  set SCALA_VERSION=2.10.5
+  set SCALA_VERSION=2.10.6
 )
 
 IF ["%SCALA_BINARY_VERSION%"] EQU [""] (
@@ -52,16 +52,6 @@ for %%i in (%BASE_DIR%\clients\build\libs\kafka-clients-*.jar) do (
 
 rem Classpath addition for kafka-examples
 for %%i in (%BASE_DIR%\examples\build\libs\kafka-examples-*.jar) do (
-	call :concat %%i
-)
-
-rem Classpath addition for contrib/hadoop-consumer
-for %%i in (%BASE_DIR%\contrib\hadoop-consumer\build\libs\kafka-hadoop-consumer-*.jar) do (
-	call :concat %%i
-)
-
-rem Classpath addition for contrib/hadoop-producer
-for %%i in (%BASE_DIR%\contrib\hadoop-producer\build\libs\kafka-hadoop-producer-*.jar) do (
 	call :concat %%i
 )
 
@@ -109,7 +99,7 @@ IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
 
 rem JVM performance options
 IF ["%KAFKA_JVM_PERFORMANCE_OPTS%"] EQU [""] (
-	set KAFKA_JVM_PERFORMANCE_OPTS=-server -XX:+UseCompressedOops -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true
+	set KAFKA_JVM_PERFORMANCE_OPTS=-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+DisableExplicitGC -Djava.awt.headless=true
 )
 
 IF ["%CLASSPATH%"] EQU [""] (

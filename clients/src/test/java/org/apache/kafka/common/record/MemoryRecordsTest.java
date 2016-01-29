@@ -22,7 +22,11 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -50,9 +54,7 @@ public class MemoryRecordsTest {
             recs2.append(i, toArray(r.key()), toArray(r.value()));
         }
         recs1.close();
-        recs1.flip();
         recs2.close();
-        recs2.flip();
 
         for (int iteration = 0; iteration < 2; iteration++) {
             for (MemoryRecords recs : Arrays.asList(recs1, recs2)) {

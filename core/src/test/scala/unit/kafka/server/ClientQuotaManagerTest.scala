@@ -21,16 +21,16 @@ import java.util.Collections
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
 import org.apache.kafka.common.utils.MockTime
-import org.junit.{Assert, Before, Test}
+import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.{Before, Test}
 
 class ClientQuotaManagerTest {
   private val time = new MockTime
 
-  private val config = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500,
-                                                quotaBytesPerSecondOverrides = "p1=2000,p2=4000")
+  private val config = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500)
 
   var numCallbacks: Int = 0
-  def callback {
+  def callback(delayTimeMs: Int) {
     numCallbacks += 1
   }
 
@@ -42,13 +42,34 @@ class ClientQuotaManagerTest {
   @Test
   def testQuotaParsing() {
     val clientMetrics = new ClientQuotaManager(config, newMetrics, "producer", time)
+
+    // Case 1: Update the quota. Assert that the new quota value is returned
+    clientMetrics.updateQuota("p1", new Quota(2000, true));
+    clientMetrics.updateQuota("p2", new Quota(4000, true));
+
     try {
-      Assert.assertEquals("Default producer quota should be 500",
-                          new Quota(500, true), clientMetrics.quota("random-client-id"))
-      Assert.assertEquals("Should return the overridden value (2000)",
-                          new Quota(2000, true), clientMetrics.quota("p1"))
-      Assert.assertEquals("Should return the overridden value (4000)",
-                          new Quota(4000, true), clientMetrics.quota("p2"))
+      assertEquals("Default producer quota should be 500", new Quota(500, true), clientMetrics.quota("random-client-id"))
+      assertEquals("Should return the overridden value (2000)", new Quota(2000, true), clientMetrics.quota("p1"))
+      assertEquals("Should return the overridden value (4000)", new Quota(4000, true), clientMetrics.quota("p2"))
+
+      // p1 should be throttled using the overridden quota
+      var throttleTimeMs = clientMetrics.recordAndMaybeThrottle("p1", 2500 * config.numQuotaSamples, this.callback)
+      assertTrue(s"throttleTimeMs should be > 0. was $throttleTimeMs", throttleTimeMs > 0)
+
+      // Case 2: Change quota again. The quota should be updated within KafkaMetrics as well since the sensor was created.
+      // p1 should not longer be throttled after the quota change
+      clientMetrics.updateQuota("p1", new Quota(3000, true));
+      assertEquals("Should return the newly overridden value (3000)", new Quota(3000, true), clientMetrics.quota("p1"))
+
+      throttleTimeMs = clientMetrics.recordAndMaybeThrottle("p1", 0, this.callback)
+      assertEquals(s"throttleTimeMs should be 0. was $throttleTimeMs", 0, throttleTimeMs)
+
+      // Case 3: Change quota back to default. Should be throttled again
+      clientMetrics.updateQuota("p1", new Quota(500, true));
+      assertEquals("Should return the default value (500)", new Quota(500, true), clientMetrics.quota("p1"))
+
+      throttleTimeMs = clientMetrics.recordAndMaybeThrottle("p1", 0, this.callback)
+      assertTrue(s"throttleTimeMs should be > 0. was $throttleTimeMs", throttleTimeMs > 0)
     } finally {
       clientMetrics.shutdown()
     }
@@ -58,7 +79,7 @@ class ClientQuotaManagerTest {
   def testQuotaViolation() {
     val metrics = newMetrics
     val clientMetrics = new ClientQuotaManager(config, metrics, "producer", time)
-    val queueSizeMetric = metrics.metrics().get(new MetricName("queue-size", "producer", ""))
+    val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "producer", ""))
     try {
       /* We have 10 second windows. Make sure that there is no quota violation
        * if we produce under the quota
@@ -67,24 +88,27 @@ class ClientQuotaManagerTest {
         clientMetrics.recordAndMaybeThrottle("unknown", 400, callback)
         time.sleep(1000)
       }
-      Assert.assertEquals(10, numCallbacks)
-      Assert.assertEquals(0, queueSizeMetric.value().toInt)
+      assertEquals(10, numCallbacks)
+      assertEquals(0, queueSizeMetric.value().toInt)
 
       // Create a spike.
-      // 400*10 + 2000 = 6000/10 = 600 bytes per second.
-      // (600 - quota)/quota*window-size = (600-500)/500*11 seconds = 2200
-      val sleepTime = clientMetrics.recordAndMaybeThrottle("unknown", 2000, callback)
-      Assert.assertEquals("Should be throttled", 2200, sleepTime)
-      Assert.assertEquals(1, queueSizeMetric.value().toInt)
+      // 400*10 + 2000 + 300 = 6300/10.5 = 600 bytes per second.
+      // (600 - quota)/quota*window-size = (600-500)/500*10.5 seconds = 2100
+      // 10.5 seconds because the last window is half complete
+      time.sleep(500)
+      val sleepTime = clientMetrics.recordAndMaybeThrottle("unknown", 2300, callback)
+
+      assertEquals("Should be throttled", 2100, sleepTime)
+      assertEquals(1, queueSizeMetric.value().toInt)
       // After a request is delayed, the callback cannot be triggered immediately
       clientMetrics.throttledRequestReaper.doWork()
-      Assert.assertEquals(10, numCallbacks)
+      assertEquals(10, numCallbacks)
       time.sleep(sleepTime)
 
       // Callback can only be triggered after the the delay time passes
       clientMetrics.throttledRequestReaper.doWork()
-      Assert.assertEquals(0, queueSizeMetric.value().toInt)
-      Assert.assertEquals(11, numCallbacks)
+      assertEquals(0, queueSizeMetric.value().toInt)
+      assertEquals(11, numCallbacks)
 
       // Could continue to see delays until the bursty sample disappears
       for (i <- 0 until 10) {
@@ -92,63 +116,11 @@ class ClientQuotaManagerTest {
         time.sleep(1000)
       }
 
-      Assert.assertEquals("Should be unthrottled since bursty sample has rolled over",
-                          0, clientMetrics.recordAndMaybeThrottle("unknown", 0, callback))
+      assertEquals("Should be unthrottled since bursty sample has rolled over",
+                   0, clientMetrics.recordAndMaybeThrottle("unknown", 0, callback))
     } finally {
       clientMetrics.shutdown()
     }
-  }
-
-  @Test
-  def testOverrideParse() {
-    var testConfig = ClientQuotaManagerConfig()
-    var clientMetrics = new ClientQuotaManager(testConfig, newMetrics, "consumer", time)
-
-    try {
-      // Case 1 - Default config
-      Assert.assertEquals(new Quota(ClientQuotaManagerConfig.QuotaBytesPerSecondDefault, true),
-                          clientMetrics.quota("p1"))
-    } finally {
-      clientMetrics.shutdown()
-    }
-
-
-    // Case 2 - Empty override
-    testConfig = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500,
-                                          quotaBytesPerSecondOverrides = "p1=2000,p2=4000,,")
-
-    clientMetrics = new ClientQuotaManager(testConfig, newMetrics, "consumer", time)
-    try {
-      Assert.assertEquals(new Quota(2000, true), clientMetrics.quota("p1"))
-      Assert.assertEquals(new Quota(4000, true), clientMetrics.quota("p2"))
-    } finally {
-      clientMetrics.shutdown()
-    }
-
-    // Case 3 - NumberFormatException for override
-    testConfig = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500,
-                                          quotaBytesPerSecondOverrides = "p1=2000,p2=4000,p3=p4")
-    try {
-      clientMetrics = new ClientQuotaManager(testConfig, newMetrics, "consumer", time)
-      Assert.fail("Should fail to parse invalid config " + testConfig.quotaBytesPerSecondOverrides)
-    }
-    catch {
-      // Swallow.
-      case nfe: NumberFormatException =>
-    }
-
-    // Case 4 - IllegalArgumentException for override
-    testConfig = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500,
-                                          quotaBytesPerSecondOverrides = "p1=2000=3000")
-    try {
-      clientMetrics = new ClientQuotaManager(testConfig, newMetrics, "producer", time)
-      Assert.fail("Should fail to parse invalid config " + testConfig.quotaBytesPerSecondOverrides)
-    }
-    catch {
-      // Swallow.
-      case nfe: IllegalArgumentException =>
-    }
-
   }
 
   def newMetrics: Metrics = {

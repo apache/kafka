@@ -17,8 +17,10 @@
 
 package kafka.common
 
-import kafka.message.InvalidMessageException
 import java.nio.ByteBuffer
+
+import kafka.message.InvalidMessageException
+
 import scala.Predef._
 
 /**
@@ -51,6 +53,15 @@ object ErrorMapping {
   val NotEnoughReplicasAfterAppendCode: Short = 20
   // 21: InvalidRequiredAcks
   // 22: IllegalConsumerGeneration
+  // 23: INCONSISTENT_PARTITION_ASSIGNMENT_STRATEGY
+  // 24: UNKNOWN_PARTITION_ASSIGNMENT_STRATEGY
+  // 25: UNKNOWN_CONSUMER_ID
+  // 26: INVALID_SESSION_TIMEOUT
+  // 27: REBALANCE_IN_PROGRESS
+  // 28: INVALID_COMMIT_OFFSET_SIZE
+  val TopicAuthorizationCode: Short = 29
+  val GroupAuthorizationCode: Short = 30
+  val ClusterAuthorizationCode: Short = 31
 
   private val exceptionToCode =
     Map[Class[Throwable], Short](
@@ -58,8 +69,8 @@ object ErrorMapping {
       classOf[InvalidMessageException].asInstanceOf[Class[Throwable]] -> InvalidMessageCode,
       classOf[UnknownTopicOrPartitionException].asInstanceOf[Class[Throwable]] -> UnknownTopicOrPartitionCode,
       classOf[InvalidMessageSizeException].asInstanceOf[Class[Throwable]] -> InvalidFetchSizeCode,
-      classOf[NotLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NotLeaderForPartitionCode,
       classOf[LeaderNotAvailableException].asInstanceOf[Class[Throwable]] -> LeaderNotAvailableCode,
+      classOf[NotLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NotLeaderForPartitionCode,
       classOf[RequestTimedOutException].asInstanceOf[Class[Throwable]] -> RequestTimedOutCode,
       classOf[BrokerNotAvailableException].asInstanceOf[Class[Throwable]] -> BrokerNotAvailableCode,
       classOf[ReplicaNotAvailableException].asInstanceOf[Class[Throwable]] -> ReplicaNotAvailableCode,
@@ -72,7 +83,10 @@ object ErrorMapping {
       classOf[InvalidTopicException].asInstanceOf[Class[Throwable]] -> InvalidTopicCode,
       classOf[MessageSetSizeTooLargeException].asInstanceOf[Class[Throwable]] -> MessageSetSizeTooLargeCode,
       classOf[NotEnoughReplicasException].asInstanceOf[Class[Throwable]] -> NotEnoughReplicasCode,
-      classOf[NotEnoughReplicasAfterAppendException].asInstanceOf[Class[Throwable]] -> NotEnoughReplicasAfterAppendCode
+      classOf[NotEnoughReplicasAfterAppendException].asInstanceOf[Class[Throwable]] -> NotEnoughReplicasAfterAppendCode,
+      classOf[TopicAuthorizationException].asInstanceOf[Class[Throwable]] -> TopicAuthorizationCode,
+      classOf[GroupAuthorizationException].asInstanceOf[Class[Throwable]] -> GroupAuthorizationCode,
+      classOf[ClusterAuthorizationException].asInstanceOf[Class[Throwable]] -> ClusterAuthorizationCode
     ).withDefaultValue(UnknownCode)
 
   /* invert the mapping */

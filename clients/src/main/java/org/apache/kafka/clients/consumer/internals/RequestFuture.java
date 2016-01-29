@@ -100,6 +100,8 @@ public class RequestFuture<T> {
      * @param value corresponding value (or null if there is none)
      */
     public void complete(T value) {
+        if (isDone)
+            throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
         this.value = value;
         this.isDone = true;
         fireSuccess();
@@ -111,6 +113,8 @@ public class RequestFuture<T> {
      * @param e corresponding exception to be passed to caller
      */
     public void raise(RuntimeException e) {
+        if (isDone)
+            throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
         this.exception = e;
         this.isDone = true;
         fireFailure();
@@ -171,6 +175,20 @@ public class RequestFuture<T> {
         return adapted;
     }
 
+    public void chain(final RequestFuture<T> future) {
+        addListener(new RequestFutureListener<T>() {
+            @Override
+            public void onSuccess(T value) {
+                future.complete(value);
+            }
+
+            @Override
+            public void onFailure(RuntimeException e) {
+                future.raise(e);
+            }
+        });
+    }
+
     public static <T> RequestFuture<T> failure(RuntimeException e) {
         RequestFuture<T> future = new RequestFuture<T>();
         future.raise(e);
@@ -184,7 +202,7 @@ public class RequestFuture<T> {
     }
 
     public static <T> RequestFuture<T> coordinatorNotAvailable() {
-        return failure(Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.exception());
+        return failure(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.exception());
     }
 
     public static <T> RequestFuture<T> leaderNotAvailable() {

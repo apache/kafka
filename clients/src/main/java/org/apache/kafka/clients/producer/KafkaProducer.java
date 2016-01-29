@@ -13,7 +13,11 @@
 package org.apache.kafka.clients.producer;
 
 import java.net.InetSocketAddress;
-import java.util.*;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -36,6 +40,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.MetricName;
@@ -75,7 +80,7 @@ import org.slf4j.LoggerFactory;
  * props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
  * props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
  *
- * Producer<String, String> producer = new KafkaProducer(props);
+ * Producer<String, String> producer = new KafkaProducer<>(props);
  * for(int i = 0; i < 100; i++)
  *     producer.send(new ProducerRecord<String, String>("my-topic", Integer.toString(i), Integer.toString(i)));
  *
@@ -128,7 +133,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private String clientId;
     private final Partitioner partitioner;
     private final int maxRequestSize;
-    private final long metadataFetchTimeoutMs;
     private final long totalMemorySize;
     private final Metadata metadata;
     private final RecordAccumulator accumulator;
@@ -141,10 +145,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
     private final ProducerConfig producerConfig;
+    private final long maxBlockTimeMs;
+    private final int requestTimeoutMs;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
-     * are documented <a href="http://kafka.apache.org/documentation.html#newproducerconfigs">here</a>. Values can be
+     * are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>. Values can be
      * either strings or Objects of the appropriate type (for example a numeric configuration would accept either the
      * string "42" or the integer 42).
      * @param configs   The producer configs
@@ -156,7 +162,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration, a key and a value {@link Serializer}.
-     * Valid configuration strings are documented <a href="http://kafka.apache.org/documentation.html#newproducerconfigs">here</a>.
+     * Valid configuration strings are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>.
      * Values can be either strings or Objects of the appropriate type (for example a numeric configuration would accept
      * either the string "42" or the integer 42).
      * @param configs   The producer configs
@@ -172,7 +178,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
-     * are documented <a href="http://kafka.apache.org/documentation.html#newproducerconfigs">here</a>.
+     * are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>.
      * @param properties   The producer configs
      */
     public KafkaProducer(Properties properties) {
@@ -181,7 +187,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration, a key and a value {@link Serializer}.
-     * Valid configuration strings are documented <a href="http://kafka.apache.org/documentation.html#newproducerconfigs">here</a>.
+     * Valid configuration strings are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>.
      * @param properties   The producer configs
      * @param keySerializer  The serializer for key that implements {@link Serializer}. The configure() method won't be
      *                       called in the producer when the serializer is passed in directly.
@@ -197,57 +203,94 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private KafkaProducer(ProducerConfig config, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         try {
             log.trace("Starting the Kafka producer");
+            Map<String, Object> userProvidedConfigs = config.originals();
             this.producerConfig = config;
             this.time = new SystemTime();
-            MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
-                    .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
-                            TimeUnit.MILLISECONDS);
+
             clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0)
                 clientId = "producer-" + PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement();
+            Map<String, String> metricTags = new LinkedHashMap<String, String>();
+            metricTags.put("client-id", clientId);
+            MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
+                    .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
+                    .tags(metricTags);
             List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class);
             reporters.add(new JmxReporter(JMX_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time);
             this.partitioner = config.getConfiguredInstance(ProducerConfig.PARTITIONER_CLASS_CONFIG, Partitioner.class);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
-            this.metadataFetchTimeoutMs = config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
             this.metadata = new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG));
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
-            Map<String, String> metricTags = new LinkedHashMap<String, String>();
-            metricTags.put("client-id", clientId);
+            /* check for user defined settings.
+             * If the BLOCK_ON_BUFFER_FULL is set to true,we do not honor METADATA_FETCH_TIMEOUT_CONFIG.
+             * This should be removed with release 0.9 when the deprecated configs are removed.
+             */
+            if (userProvidedConfigs.containsKey(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG)) {
+                log.warn(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG + " config is deprecated and will be removed soon. " +
+                        "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
+                boolean blockOnBufferFull = config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG);
+                if (blockOnBufferFull) {
+                    this.maxBlockTimeMs = Long.MAX_VALUE;
+                } else if (userProvidedConfigs.containsKey(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG)) {
+                    log.warn(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG + " config is deprecated and will be removed soon. " +
+                            "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
+                    this.maxBlockTimeMs = config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
+                } else {
+                    this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
+                }
+            } else if (userProvidedConfigs.containsKey(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG)) {
+                log.warn(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG + " config is deprecated and will be removed soon. " +
+                        "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
+                this.maxBlockTimeMs = config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
+            } else {
+                this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
+            }
+
+            /* check for user defined settings.
+             * If the TIME_OUT config is set use that for request timeout.
+             * This should be removed with release 0.9
+             */
+            if (userProvidedConfigs.containsKey(ProducerConfig.TIMEOUT_CONFIG)) {
+                log.warn(ProducerConfig.TIMEOUT_CONFIG + " config is deprecated and will be removed soon. Please use " +
+                        ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+                this.requestTimeoutMs = config.getInt(ProducerConfig.TIMEOUT_CONFIG);
+            } else {
+                this.requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+            }
+
             this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                     this.totalMemorySize,
                     this.compressionType,
                     config.getLong(ProducerConfig.LINGER_MS_CONFIG),
                     retryBackoffMs,
-                    config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG),
                     metrics,
-                    time,
-                    metricTags);
+                    time);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
             NetworkClient client = new NetworkClient(
-                    new Selector(config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), this.metrics, time, "producer", metricTags, channelBuilder),
+                    new Selector(config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), this.metrics, time, "producer", channelBuilder),
                     this.metadata,
                     clientId,
                     config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
                     config.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                     config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
-                    config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG));
+                    config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
+                    this.requestTimeoutMs, time);
             this.sender = new Sender(client,
                     this.metadata,
                     this.accumulator,
                     config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
                     (short) parseAcks(config.getString(ProducerConfig.ACKS_CONFIG)),
                     config.getInt(ProducerConfig.RETRIES_CONFIG),
-                    config.getInt(ProducerConfig.TIMEOUT_CONFIG),
                     this.metrics,
                     new SystemTime(),
-                    clientId);
+                    clientId,
+                    this.requestTimeoutMs);
             String ioThreadName = "kafka-producer-network-thread" + (clientId.length() > 0 ? " | " + clientId : "");
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
             this.ioThread.start();
@@ -259,6 +302,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         Serializer.class);
                 this.keySerializer.configure(config.originals(), true);
             } else {
+                config.ignore(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
                 this.keySerializer = keySerializer;
             }
             if (valueSerializer == null) {
@@ -266,6 +310,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         Serializer.class);
                 this.valueSerializer.configure(config.originals(), false);
             } else {
+                config.ignore(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
                 this.valueSerializer = valueSerializer;
             }
             config.logUnused();
@@ -367,7 +412,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         try {
             // first make sure the metadata for the topic is available
-            waitOnMetadata(record.topic(), this.metadataFetchTimeoutMs);
+            long waitedOnMetadataMs = waitOnMetadata(record.topic(), this.maxBlockTimeMs);
+            long remainingWaitMs = Math.max(0, this.maxBlockTimeMs - waitedOnMetadataMs);
             byte[] serializedKey;
             try {
                 serializedKey = keySerializer.serialize(record.topic(), record.key());
@@ -389,7 +435,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             ensureValidRecordSize(serializedSize);
             TopicPartition tp = new TopicPartition(record.topic(), partition);
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
-            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, serializedKey, serializedValue, callback);
+            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, serializedKey, serializedValue, callback, remainingWaitMs);
             if (result.batchIsFull || result.newBatchCreated) {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
@@ -421,28 +467,31 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Wait for cluster metadata including partitions for the given topic to be available.
      * @param topic The topic we want metadata for
      * @param maxWaitMs The maximum time in ms for waiting on the metadata
+     * @return The amount of time we waited in ms
      */
-    private void waitOnMetadata(String topic, long maxWaitMs) throws InterruptedException {
+    private long waitOnMetadata(String topic, long maxWaitMs) throws InterruptedException {
         // add topic to metadata topic list if it is not there already.
         if (!this.metadata.containsTopic(topic))
             this.metadata.add(topic);
 
-        if (metadata.fetch().partitionsForTopic(topic) != null) {
-            return;
-        } else {
-            long begin = time.milliseconds();
-            long remainingWaitMs = maxWaitMs;
-            while (metadata.fetch().partitionsForTopic(topic) == null) {
-                log.trace("Requesting metadata update for topic {}.", topic);
-                int version = metadata.requestUpdate();
-                sender.wakeup();
-                metadata.awaitUpdate(version, remainingWaitMs);
-                long elapsed = time.milliseconds() - begin;
-                if (elapsed >= maxWaitMs)
-                    throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
-                remainingWaitMs = maxWaitMs - elapsed;
-            }
+        if (metadata.fetch().partitionsForTopic(topic) != null)
+            return 0;
+
+        long begin = time.milliseconds();
+        long remainingWaitMs = maxWaitMs;
+        while (metadata.fetch().partitionsForTopic(topic) == null) {
+            log.trace("Requesting metadata update for topic {}.", topic);
+            int version = metadata.requestUpdate();
+            sender.wakeup();
+            metadata.awaitUpdate(version, remainingWaitMs);
+            long elapsed = time.milliseconds() - begin;
+            if (elapsed >= maxWaitMs)
+                throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
+            if (metadata.fetch().unauthorizedTopics().contains(topic))
+                throw new TopicAuthorizationException(topic);
+            remainingWaitMs = maxWaitMs - elapsed;
         }
+        return time.milliseconds() - begin;
     }
 
     /**
@@ -508,7 +557,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
         try {
-            waitOnMetadata(topic, this.metadataFetchTimeoutMs);
+            waitOnMetadata(topic, this.maxBlockTimeMs);
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
@@ -628,7 +677,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                                                    + "].");
             return partition;
         }
-        return this.partitioner.partition(record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
+        return this.partitioner.partition(record.topic(), record.key(), serializedKey, record.value(), serializedValue,
+            cluster);
     }
 
     private static class FutureFailure implements Future<RecordMetadata> {

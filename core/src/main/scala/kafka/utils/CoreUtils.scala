@@ -63,7 +63,7 @@ object CoreUtils extends Logging {
   /**
    * Create a daemon thread
    * @param name The name of the thread
-   * @param fun The runction to execute in the thread
+   * @param fun The function to execute in the thread
    * @return The unstarted thread
    */
   def daemonThread(name: String, fun: => Unit): Thread =
@@ -162,7 +162,7 @@ object CoreUtils extends Logging {
   def crc32(bytes: Array[Byte]): Long = crc32(bytes, 0, bytes.length)
 
   /**
-   * Compute the CRC32 of the segment of the byte array given by the specificed size and offset
+   * Compute the CRC32 of the segment of the byte array given by the specified size and offset
    * @param bytes The bytes to checksum
    * @param offset the offset at which to begin checksumming
    * @param size the number of bytes to checksum
@@ -218,7 +218,7 @@ object CoreUtils extends Logging {
    * Create an instance of the class with the given class name
    */
   def createObject[T<:AnyRef](className: String, args: AnyRef*): T = {
-    val klass = Class.forName(className).asInstanceOf[Class[T]]
+    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader()).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
     constructor.newInstance(args: _*)
   }
@@ -228,11 +228,8 @@ object CoreUtils extends Logging {
    * @param coll An iterable over the underlying collection.
    * @return A circular iterator over the collection.
    */
-  def circularIterator[T](coll: Iterable[T]) = {
-    val stream: Stream[T] =
-      for (forever <- Stream.continually(1); t <- coll) yield t
-    stream.iterator
-  }
+  def circularIterator[T](coll: Iterable[T]) =
+    for (_ <- Iterator.continually(1); t <- coll) yield t
 
   /**
    * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.

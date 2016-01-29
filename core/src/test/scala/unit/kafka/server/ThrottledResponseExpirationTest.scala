@@ -32,7 +32,7 @@ class ThrottledResponseExpirationTest {
                                                                     Collections.emptyList(),
                                                                     time)
 
-  def callback {
+  def callback(delayTimeMs: Int) {
     numCallbacks += 1
   }
 
@@ -75,9 +75,9 @@ class ThrottledResponseExpirationTest {
     val t1: ThrottledResponse = new ThrottledResponse(time, 10, callback)
     val t2: ThrottledResponse = new ThrottledResponse(time, 20, callback)
     val t3: ThrottledResponse = new ThrottledResponse(time, 20, callback)
-    Assert.assertEquals(10, t1.delayTimeMs)
-    Assert.assertEquals(20, t2.delayTimeMs)
-    Assert.assertEquals(20, t3.delayTimeMs)
+    Assert.assertEquals(10, t1.throttleTimeMs)
+    Assert.assertEquals(20, t2.throttleTimeMs)
+    Assert.assertEquals(20, t3.throttleTimeMs)
 
     for(itr <- 0 to 2) {
       Assert.assertEquals(10 - 10*itr, t1.getDelay(TimeUnit.MILLISECONDS))

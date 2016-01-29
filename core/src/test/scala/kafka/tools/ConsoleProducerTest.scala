@@ -18,9 +18,8 @@
 package kafka.tools
 
 import kafka.producer
-import kafka.tools.ConsoleProducer.{LineMessageReader, MessageReader,ProducerConfig}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
-import joptsimple.UnrecognizedOptionException
+import kafka.tools.ConsoleProducer.LineMessageReader
+import org.apache.kafka.clients.producer.KafkaProducer
 import org.junit.Assert
 import org.junit.Test
 

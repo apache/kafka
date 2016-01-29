@@ -14,9 +14,12 @@ package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -42,9 +45,12 @@ public class MetadataResponse extends AbstractRequestResponse {
     private static final String TOPIC_ERROR_CODE_KEY_NAME = "topic_error_code";
 
     /**
-     * Possible error code:
+     * Possible error codes:
      *
-     * TODO
+     * UnknownTopic (3)
+     * LeaderNotAvailable (5)
+     * InvalidTopic (17)
+     * TopicAuthorizationFailed (29)
      */
 
     private static final String TOPIC_KEY_NAME = "topic";
@@ -54,9 +60,10 @@ public class MetadataResponse extends AbstractRequestResponse {
     private static final String PARTITION_ERROR_CODE_KEY_NAME = "partition_error_code";
 
     /**
-     * Possible error code:
+     * Possible error codes:
      *
-     * TODO
+     * LeaderNotAvailable (5)
+     * ReplicaNotAvailable (9)
      */
 
     private static final String PARTITION_KEY_NAME = "partition_id";
@@ -84,14 +91,20 @@ public class MetadataResponse extends AbstractRequestResponse {
         }
         struct.set(BROKERS_KEY_NAME, brokerArray.toArray());
 
-        List<Struct> topicArray = new ArrayList<Struct>();
-        for (String topic : cluster.topics()) {
-            Struct topicData = struct.instance(TOPIC_METATDATA_KEY_NAME);
 
-            topicData.set(TOPIC_KEY_NAME, topic);
-            if (errors.containsKey(topic)) {
-                topicData.set(TOPIC_ERROR_CODE_KEY_NAME, errors.get(topic).code());
-            } else {
+        List<Struct> topicArray = new ArrayList<Struct>();
+        for (Map.Entry<String, Errors> errorEntry : errors.entrySet()) {
+            Struct topicData = struct.instance(TOPIC_METATDATA_KEY_NAME);
+            topicData.set(TOPIC_KEY_NAME, errorEntry.getKey());
+            topicData.set(TOPIC_ERROR_CODE_KEY_NAME, errorEntry.getValue().code());
+            topicData.set(PARTITION_METADATA_KEY_NAME, new Struct[0]);
+            topicArray.add(topicData);
+        }
+
+        for (String topic : cluster.topics()) {
+            if (!errors.containsKey(topic)) {
+                Struct topicData = struct.instance(TOPIC_METATDATA_KEY_NAME);
+                topicData.set(TOPIC_KEY_NAME, topic);
                 topicData.set(TOPIC_ERROR_CODE_KEY_NAME, Errors.NONE.code());
                 List<Struct> partitionArray = new ArrayList<Struct>();
                 for (PartitionInfo fetchPartitionData : cluster.partitionsForTopic(topic)) {
@@ -110,14 +123,13 @@ public class MetadataResponse extends AbstractRequestResponse {
                     partitionArray.add(partitionData);
                 }
                 topicData.set(PARTITION_METADATA_KEY_NAME, partitionArray.toArray());
+                topicArray.add(topicData);
             }
-
-            topicArray.add(topicData);
         }
         struct.set(TOPIC_METATDATA_KEY_NAME, topicArray.toArray());
 
         this.cluster = cluster;
-        this.errors = new HashMap<String, Errors>();
+        this.errors = errors;
     }
 
     public MetadataResponse(Struct struct) {
@@ -159,12 +171,29 @@ public class MetadataResponse extends AbstractRequestResponse {
                 errors.put(topic, Errors.forCode(topicError));
             }
         }
+
         this.errors = errors;
-        this.cluster = new Cluster(brokers.values(), partitions);
+        this.cluster = new Cluster(brokers.values(), partitions, unauthorizedTopics(errors));
+    }
+
+    private Set<String> unauthorizedTopics(Map<String, Errors> topicErrors) {
+        if (topicErrors.isEmpty())
+            return Collections.emptySet();
+
+        Set<String> unauthorizedTopics = new HashSet<>();
+        for (Map.Entry<String, Errors> topicErrorEntry : topicErrors.entrySet()) {
+            if (topicErrorEntry.getValue() == Errors.TOPIC_AUTHORIZATION_FAILED)
+                unauthorizedTopics.add(topicErrorEntry.getKey());
+        }
+        return unauthorizedTopics;
     }
 
     public Map<String, Errors> errors() {
         return this.errors;
+    }
+
+    public boolean hasError(String topic) {
+        return this.errors.containsKey(topic);
     }
 
     public Cluster cluster() {
@@ -172,6 +201,6 @@ public class MetadataResponse extends AbstractRequestResponse {
     }
 
     public static MetadataResponse parse(ByteBuffer buffer) {
-        return new MetadataResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new MetadataResponse(CURRENT_SCHEMA.read(buffer));
     }
 }

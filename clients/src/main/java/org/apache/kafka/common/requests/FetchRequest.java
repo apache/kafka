@@ -132,7 +132,7 @@ public class FetchRequest extends AbstractRequest {
 
         switch (versionId) {
             case 0:
-                return new FetchResponse(responseData);
+                return new FetchResponse(responseData, 0);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.FETCH.id)));
@@ -160,6 +160,6 @@ public class FetchRequest extends AbstractRequest {
     }
 
     public static FetchRequest parse(ByteBuffer buffer) {
-        return new FetchRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new FetchRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

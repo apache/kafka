@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -27,6 +27,9 @@ import kafka.message._
 import kafka.common.KafkaException
 import java.util.concurrent.TimeUnit
 import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
+import org.apache.kafka.common.errors.CorruptRecordException
+import org.apache.kafka.common.network.TransportLayer
+import org.apache.kafka.common.utils.Utils
 
 /**
  * An on-disk message set. An optional start and end position can be applied to the message set
@@ -43,9 +46,9 @@ class FileMessageSet private[kafka](@volatile var file: File,
                                     private[log] val start: Int,
                                     private[log] val end: Int,
                                     isSlice: Boolean) extends MessageSet with Logging {
-  
+
   /* the size of the message set in bytes */
-  private val _size = 
+  private val _size =
     if(isSlice)
       new AtomicInteger(end - start) // don't check the file size if this is just a slice view
     else
@@ -59,13 +62,13 @@ class FileMessageSet private[kafka](@volatile var file: File,
   /**
    * Create a file message set with no slicing.
    */
-  def this(file: File, channel: FileChannel) = 
+  def this(file: File, channel: FileChannel) =
     this(file, channel, start = 0, end = Int.MaxValue, isSlice = false)
-  
+
   /**
    * Create a file message set with no slicing
    */
-  def this(file: File) = 
+  def this(file: File) =
     this(file, FileMessageSet.openChannel(file, mutable = true))
 
   /**
@@ -85,23 +88,23 @@ class FileMessageSet private[kafka](@volatile var file: File,
    * Create a file message set with mutable option
    */
   def this(file: File, mutable: Boolean) = this(file, FileMessageSet.openChannel(file, mutable))
-  
+
   /**
    * Create a slice view of the file message set that begins and ends at the given byte offsets
    */
-  def this(file: File, channel: FileChannel, start: Int, end: Int) = 
+  def this(file: File, channel: FileChannel, start: Int, end: Int) =
     this(file, channel, start, end, isSlice = true)
-  
+
   /**
    * Return a message set which is a view into this set starting from the given position and with the given size limit.
-   * 
+   *
    * If the size is beyond the end of the file, the end will be based on the size of the file at the time of the read.
-   * 
+   *
    * If this message set is already sliced, the position will be taken relative to that slicing.
-   * 
+   *
    * @param position The start position to begin the read from
    * @param size The number of bytes after the start position to include
-   * 
+   *
    * @return A sliced wrapper on this message set limited based on the given position and size
    */
   def read(position: Int, size: Int): FileMessageSet = {
@@ -114,7 +117,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
                        start = this.start + position,
                        end = math.min(this.start + position + size, sizeInBytes()))
   }
-  
+
   /**
    * Search forward for the file position of the last offset that is greater than or equal to the target offset
    * and return its physical position. If no such offsets are found, return null.
@@ -142,7 +145,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
     }
     null
   }
-  
+
   /**
    * Write some of this set to the given channel.
    * @param destChannel The channel to write to.
@@ -157,20 +160,25 @@ class FileMessageSet private[kafka](@volatile var file: File,
       throw new KafkaException("Size of FileMessageSet %s has been truncated during write: old size %d, new size %d"
         .format(file.getAbsolutePath, _size.get(), newSize))
     }
-    val bytesTransferred = channel.transferTo(start + writePosition, math.min(size, sizeInBytes), destChannel).toInt
+    val position = start + writePosition
+    val count = math.min(size, sizeInBytes)
+    val bytesTransferred = (destChannel match {
+      case tl: TransportLayer => tl.transferFrom(channel, position, count)
+      case dc => channel.transferTo(position, count, dc)
+    }).toInt
     trace("FileMessageSet " + file.getAbsolutePath + " : bytes transferred : " + bytesTransferred
       + " bytes requested for transfer : " + math.min(size, sizeInBytes))
     bytesTransferred
   }
-  
+
   /**
    * Get a shallow iterator over the messages in the set.
    */
   override def iterator() = iterator(Int.MaxValue)
-    
+
   /**
    * Get an iterator over the messages in the set. We only do shallow iteration here.
-   * @param maxMessageSize A limit on allowable message size to avoid allocating unbounded memory. 
+   * @param maxMessageSize A limit on allowable message size to avoid allocating unbounded memory.
    * If we encounter a message larger than this we throw an InvalidMessageException.
    * @return The iterator.
    */
@@ -178,44 +186,44 @@ class FileMessageSet private[kafka](@volatile var file: File,
     new IteratorTemplate[MessageAndOffset] {
       var location = start
       val sizeOffsetBuffer = ByteBuffer.allocate(12)
-      
+
       override def makeNext(): MessageAndOffset = {
         if(location >= end)
           return allDone()
-          
+
         // read the size of the item
         sizeOffsetBuffer.rewind()
         channel.read(sizeOffsetBuffer, location)
         if(sizeOffsetBuffer.hasRemaining)
           return allDone()
-        
+
         sizeOffsetBuffer.rewind()
         val offset = sizeOffsetBuffer.getLong()
         val size = sizeOffsetBuffer.getInt()
         if(size < Message.MinHeaderSize)
           return allDone()
         if(size > maxMessageSize)
-          throw new InvalidMessageException("Message size exceeds the largest allowable message size (%d).".format(maxMessageSize))
-        
+          throw new CorruptRecordException("Message size exceeds the largest allowable message size (%d).".format(maxMessageSize))
+
         // read the item itself
         val buffer = ByteBuffer.allocate(size)
         channel.read(buffer, location + 12)
         if(buffer.hasRemaining)
           return allDone()
         buffer.rewind()
-        
+
         // increment the location and return the item
         location += size + 12
         new MessageAndOffset(new Message(buffer), offset)
       }
     }
   }
-  
+
   /**
    * The number of bytes taken up by this file set
    */
   def sizeInBytes(): Int = _size.get()
-  
+
   /**
    * Append these messages to the message set
    */
@@ -223,14 +231,14 @@ class FileMessageSet private[kafka](@volatile var file: File,
     val written = messages.writeTo(channel, 0, messages.sizeInBytes)
     _size.getAndAdd(written)
   }
- 
+
   /**
    * Commit all written data to the physical disk
    */
   def flush() = {
     channel.force(true)
   }
-  
+
   /**
    * Close this message set
    */
@@ -239,14 +247,14 @@ class FileMessageSet private[kafka](@volatile var file: File,
     trim()
     channel.close()
   }
-  
+
   /**
    * Trim file when close or roll to next file
    */
-  def trim() {    
+  def trim() {
     truncateTo(sizeInBytes())
   }
-  
+
   /**
    * Delete this message set from the filesystem
    * @return True iff this message set was deleted.
@@ -257,7 +265,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
   }
 
   /**
-   * Truncate this file message set to the given size in bytes. Note that this API does no checking that the 
+   * Truncate this file message set to the given size in bytes. Note that this API does no checking that the
    * given size falls on a valid message boundary.
    * @param targetSize The size to truncate to.
    * @return The number of bytes truncated off
@@ -272,7 +280,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
     _size.set(targetSize)
     originalSize - targetSize
   }
-  
+
   /**
    * Read from the underlying file into the buffer starting at the given position
    */
@@ -281,19 +289,18 @@ class FileMessageSet private[kafka](@volatile var file: File,
     buffer.flip()
     buffer
   }
-  
+
   /**
    * Rename the file that backs this message set
-   * @return true iff the rename was successful
+   * @throws IOException if rename fails.
    */
-  def renameTo(f: File): Boolean = {
-    val success = this.file.renameTo(f)
-    this.file = f
-    success
+  def renameTo(f: File) {
+    try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+    finally this.file = f
   }
-  
+
 }
-  
+
 object FileMessageSet
 {
   /**

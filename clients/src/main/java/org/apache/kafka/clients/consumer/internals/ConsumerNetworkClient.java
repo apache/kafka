@@ -17,13 +17,16 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
-import org.apache.kafka.clients.consumer.ConsumerWakeupException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -45,13 +48,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * How we do this may depend on KAFKA-2120, so for now, we retain the simplistic behavior.
  */
 public class ConsumerNetworkClient implements Closeable {
+    private static final Logger log = LoggerFactory.getLogger(ConsumerNetworkClient.class);
+
     private final KafkaClient client;
     private final AtomicBoolean wakeup = new AtomicBoolean(false);
     private final DelayedTaskQueue delayedTasks = new DelayedTaskQueue();
-    private final Map<Node, List<ClientRequest>> unsent = new HashMap<Node, List<ClientRequest>>();
+    private final Map<Node, List<ClientRequest>> unsent = new HashMap<>();
     private final Metadata metadata;
     private final Time time;
     private final long retryBackoffMs;
+    // wakeup enabled flag need to be volatile since it is allowed to be accessed concurrently
+    volatile private boolean wakeupsEnabled = true;
 
     public ConsumerNetworkClient(KafkaClient client,
                                  Metadata metadata,
@@ -86,7 +93,9 @@ public class ConsumerNetworkClient implements Closeable {
      * Send a new request. Note that the request is not actually transmitted on the
      * network until one of the {@link #poll(long)} variants is invoked. At this
      * point the request will either be transmitted successfully or will fail.
-     * Use the returned future to obtain the result of the send.
+     * Use the returned future to obtain the result of the send. Note that there is no
+     * need to check for disconnects explicitly on the {@link ClientResponse} object;
+     * instead, the future will be failed with a {@link DisconnectException}.
      * @param node The destination of the request
      * @param api The Kafka API call
      * @param request The request payload
@@ -106,7 +115,7 @@ public class ConsumerNetworkClient implements Closeable {
     private void put(Node node, ClientRequest request) {
         List<ClientRequest> nodeUnsent = unsent.get(node);
         if (nodeUnsent == null) {
-            nodeUnsent = new ArrayList<ClientRequest>();
+            nodeUnsent = new ArrayList<>();
             unsent.put(node, nodeUnsent);
         }
         nodeUnsent.add(request);
@@ -127,6 +136,15 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
+     * Ensure our metadata is fresh (if an update is expected, this will block
+     * until it has completed).
+     */
+    public void ensureFreshMetadata() {
+        if (this.metadata.timeToNextUpdate(time.milliseconds()) == 0)
+            awaitMetadataUpdate();
+    }
+
+    /**
      * Wakeup an active poll. This will cause the polling thread to throw an exception either
      * on the current poll if one is active, or the next poll.
      */
@@ -138,7 +156,7 @@ public class ConsumerNetworkClient implements Closeable {
     /**
      * Block indefinitely until the given request future has finished.
      * @param future The request future to await.
-     * @throws ConsumerWakeupException if {@link #wakeup()} is called from another thread
+     * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
     public void poll(RequestFuture<?> future) {
         while (!future.isDone())
@@ -150,15 +168,18 @@ public class ConsumerNetworkClient implements Closeable {
      * @param future The request future to wait for
      * @param timeout The maximum duration (in ms) to wait for the request
      * @return true if the future is done, false otherwise
-     * @throws ConsumerWakeupException if {@link #wakeup()} is called from another thread
+     * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
     public boolean poll(RequestFuture<?> future, long timeout) {
-        long now = time.milliseconds();
-        long deadline = now + timeout;
-        while (!future.isDone() && now < deadline) {
-            poll(deadline - now, now);
+        long begin = time.milliseconds();
+        long remaining = timeout;
+        long now = begin;
+        do {
+            poll(remaining, now, true);
             now = time.milliseconds();
-        }
+            long elapsed = now - begin;
+            remaining = timeout - elapsed;
+        } while (!future.isDone() && remaining > 0);
         return future.isDone();
     }
 
@@ -166,32 +187,47 @@ public class ConsumerNetworkClient implements Closeable {
      * Poll for any network IO. All send requests will either be transmitted on the network
      * or failed when this call completes.
      * @param timeout The maximum time to wait for an IO event.
-     * @throws ConsumerWakeupException if {@link #wakeup()} is called from another thread
+     * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
     public void poll(long timeout) {
-        poll(timeout, time.milliseconds());
+        poll(timeout, time.milliseconds(), true);
     }
 
-    private void poll(long timeout, long now) {
+    /**
+     * Poll for network IO and return immediately. This will not trigger wakeups,
+     * nor will it execute any delayed tasks.
+     */
+    public void quickPoll() {
+        disableWakeups();
+        poll(0, time.milliseconds(), false);
+        enableWakeups();
+    }
+
+    private void poll(long timeout, long now, boolean executeDelayedTasks) {
         // send all the requests we can send now
-        pollUnsentRequests(now);
+        trySend(now);
 
         // ensure we don't poll any longer than the deadline for
         // the next scheduled task
         timeout = Math.min(timeout, delayedTasks.nextTimeout(now));
         clientPoll(timeout, now);
+        now = time.milliseconds();
+
+        // handle any disconnects by failing the active requests. note that disconnects must
+        // be checked immediately following poll since any subsequent call to client.ready()
+        // will reset the disconnect status
+        checkDisconnects(now);
 
         // execute scheduled tasks
-        now = time.milliseconds();
-        delayedTasks.poll(now);
+        if (executeDelayedTasks)
+            delayedTasks.poll(now);
 
         // try again to send requests since buffer space may have been
         // cleared or a connect finished in the poll
-        pollUnsentRequests(now);
+        trySend(now);
 
         // fail all requests that couldn't be sent
-        clearUnsentRequests(now);
-
+        failUnsentRequests();
     }
 
     /**
@@ -227,12 +263,27 @@ public class ConsumerNetworkClient implements Closeable {
         return total + client.inFlightRequestCount();
     }
 
-    private void pollUnsentRequests(long now) {
-        while (trySend(now))
-            clientPoll(0, now);
+    private void checkDisconnects(long now) {
+        // any disconnects affecting requests that have already been transmitted will be handled
+        // by NetworkClient, so we just need to check whether connections for any of the unsent
+        // requests have been disconnected; if they have, then we complete the corresponding future
+        // and set the disconnect flag in the ClientResponse
+        Iterator<Map.Entry<Node, List<ClientRequest>>> iterator = unsent.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<Node, List<ClientRequest>> requestEntry = iterator.next();
+            Node node = requestEntry.getKey();
+            if (client.connectionFailed(node)) {
+                for (ClientRequest request : requestEntry.getValue()) {
+                    RequestFutureCompletionHandler handler =
+                            (RequestFutureCompletionHandler) request.callback();
+                    handler.onComplete(new ClientResponse(request, now, true, null));
+                }
+                iterator.remove();
+            }
+        }
     }
 
-    private void clearUnsentRequests(long now) {
+    private void failUnsentRequests() {
         // clear all unsent requests and fail their corresponding futures
         for (Map.Entry<Node, List<ClientRequest>> requestEntry: unsent.entrySet()) {
             Iterator<ClientRequest> iterator = requestEntry.getValue().iterator();
@@ -256,14 +307,9 @@ public class ConsumerNetworkClient implements Closeable {
             while (iterator.hasNext()) {
                 ClientRequest request = iterator.next();
                 if (client.ready(node, now)) {
-                    client.send(request);
+                    client.send(request, now);
                     iterator.remove();
                     requestsSent = true;
-                } else if (client.connectionFailed(node)) {
-                    RequestFutureCompletionHandler handler =
-                            (RequestFutureCompletionHandler) request.callback();
-                    handler.onComplete(new ClientResponse(request, now, true, null));
-                    iterator.remove();
                 }
             }
         }
@@ -272,16 +318,48 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void clientPoll(long timeout, long now) {
         client.poll(timeout, now);
-        if (wakeup.get()) {
-            clearUnsentRequests(now);
+        if (wakeupsEnabled && wakeup.get()) {
+            failUnsentRequests();
             wakeup.set(false);
-            throw new ConsumerWakeupException();
+            throw new WakeupException();
         }
+    }
+
+    public void disableWakeups() {
+        this.wakeupsEnabled = false;
+    }
+
+    public void enableWakeups() {
+        this.wakeupsEnabled = true;
+
+        // re-wakeup the client if the flag was set since previous wake-up call
+        // could be cleared by poll(0) while wakeups were disabled
+        if (wakeup.get())
+            this.client.wakeup();
     }
 
     @Override
     public void close() throws IOException {
         client.close();
+    }
+
+    /**
+     * Find whether a previous connection has failed. Note that the failure state will persist until either
+     * {@link #tryConnect(Node)} or {@link #send(Node, ApiKeys, AbstractRequest)} has been called.
+     * @param node Node to connect to if possible
+     */
+    public boolean connectionFailed(Node node) {
+        return client.connectionFailed(node);
+    }
+
+    /**
+     * Initiate a connection if currently possible. This is only really useful for resetting the failed
+     * status of a socket. If there is an actual request to send, then {@link #send(Node, ApiKeys, AbstractRequest)}
+     * should be used.
+     * @param node The node to connect to
+     */
+    public void tryConnect(Node node) {
+        client.ready(node, time.milliseconds());
     }
 
     public static class RequestFutureCompletionHandler
@@ -290,7 +368,17 @@ public class ConsumerNetworkClient implements Closeable {
 
         @Override
         public void onComplete(ClientResponse response) {
-            complete(response);
+            if (response.wasDisconnected()) {
+                ClientRequest request = response.request();
+                RequestSend send = request.request();
+                ApiKeys api = ApiKeys.forId(send.header().apiKey());
+                int correlation = send.header().correlationId();
+                log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
+                        api, request, correlation, send.destination());
+                raise(DisconnectException.INSTANCE);
+            } else {
+                complete(response);
+            }
         }
     }
 }

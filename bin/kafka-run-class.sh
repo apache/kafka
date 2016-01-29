@@ -23,7 +23,7 @@ fi
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-	SCALA_VERSION=2.10.5
+	SCALA_VERSION=2.10.6
 fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
@@ -31,22 +31,13 @@ if [ -z "$SCALA_BINARY_VERSION" ]; then
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
-for file in $base_dir/core/build/dependant-libs-${SCALA_VERSION}*/*.jar;
+shopt -s nullglob
+for dir in $base_dir/core/build/dependant-libs-${SCALA_VERSION}*;
 do
-  CLASSPATH=$CLASSPATH:$file
+  CLASSPATH=$CLASSPATH:$dir/*
 done
 
 for file in $base_dir/examples/build/libs//kafka-examples*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/contrib/hadoop-consumer/build/libs//kafka-hadoop-consumer*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/contrib/hadoop-producer/build/libs//kafka-hadoop-producer*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
@@ -56,34 +47,40 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
+for file in $base_dir/streams/build/libs/kafka-streams*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
 for file in $base_dir/tools/build/libs/kafka-tools*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar;
+for dir in $base_dir/tools/build/dependant-libs-${SCALA_VERSION}*;
 do
-  CLASSPATH=$CLASSPATH:$file
+  CLASSPATH=$CLASSPATH:$dir/*
 done
 
-for cc_pkg in "data" "api" "runtime" "file" "json"
+for cc_pkg in "api" "runtime" "file" "json" "tools"
 do
-  for file in $base_dir/copycat/${cc_pkg}/build/libs/copycat-${cc_pkg}*.jar $base_dir/copycat/${cc_pkg}/build/dependant-libs/*.jar;
+  for file in $base_dir/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
   do
     CLASSPATH=$CLASSPATH:$file
   done
+  if [ -d "$base_dir/connect/${cc_pkg}/build/dependant-libs" ] ; then
+    CLASSPATH=$CLASSPATH:$base_dir/connect/${cc_pkg}/build/dependant-libs/*
+  fi
 done
 
 # classpath addition for release
-for file in $base_dir/libs/*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
+CLASSPATH=$CLASSPATH:$base_dir/libs/*
 
 for file in $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
+shopt -u nullglob
 
 # JMX settings
 if [ -z "$KAFKA_JMX_OPTS" ]; then
@@ -132,7 +129,7 @@ fi
 
 # JVM performance options
 if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
-  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true"
+  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+DisableExplicitGC -Djava.awt.headless=true"
 fi
 
 

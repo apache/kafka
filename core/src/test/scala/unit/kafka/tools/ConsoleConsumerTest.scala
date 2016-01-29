@@ -15,10 +15,13 @@
  * limitations under the License.
  */
 
-package unit.kafka.tools
+package kafka.tools
+
+import java.io.FileOutputStream
 
 import kafka.consumer.{BaseConsumer, BaseConsumerRecord}
 import kafka.tools.{ConsoleConsumer, MessageFormatter}
+import kafka.utils.TestUtils
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
@@ -44,7 +47,7 @@ class ConsoleConsumerTest extends JUnitSuite {
     EasyMock.replay(formatter)
 
     //Test
-    ConsoleConsumer.process(messageLimit, formatter, consumer)
+    ConsoleConsumer.process(messageLimit, formatter, consumer, true)
   }
 
   @Test
@@ -84,4 +87,21 @@ class ConsoleConsumerTest extends JUnitSuite {
     assertEquals(true, config.fromBeginning)
   }
 
+
+  @Test
+  def shouldParseConfigsFromFile() {
+    val propsFile = TestUtils.tempFile()
+    val propsStream = new FileOutputStream(propsFile)
+    propsStream.write("consumer.timeout.ms=1000".getBytes())
+    propsStream.close()
+    val args: Array[String] = Array(
+      "--zookeeper", "localhost:2181",
+      "--topic", "test",
+      "--consumer.config", propsFile.getAbsolutePath
+    )
+
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+
+    assertEquals("1000", config.consumerProps.getProperty("consumer.timeout.ms"))
+  }
 }

@@ -19,18 +19,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.kafka.common.network.ChannelBuilders;
+import org.apache.kafka.common.network.LoginType;
+import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.network.ChannelBuilder;
-import org.apache.kafka.common.network.SSLChannelBuilder;
-import org.apache.kafka.common.network.PlaintextChannelBuilder;
-import org.apache.kafka.common.security.ssl.SSLFactory;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
-
 
 public class ClientUtils {
     private static final Logger log = LoggerFactory.getLogger(ClientUtils.class);
@@ -71,25 +70,13 @@ public class ClientUtils {
 
     /**
      * @param configs client/server configs
-     * returns ChannelBuilder configured channelBuilder based on the configs.
+     * @return configured ChannelBuilder based on the configs.
      */
     public static ChannelBuilder createChannelBuilder(Map<String, ?> configs) {
-        SecurityProtocol securityProtocol = SecurityProtocol.valueOf((String) configs.get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
-        ChannelBuilder channelBuilder = null;
-
-        switch (securityProtocol) {
-            case SSL:
-                channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT);
-                break;
-            case PLAINTEXT:
-                channelBuilder = new PlaintextChannelBuilder();
-                break;
-            default:
-                throw new ConfigException("Invalid SecurityProtocol " + CommonClientConfigs.SECURITY_PROTOCOL_CONFIG);
-        }
-
-        channelBuilder.configure(configs);
-        return channelBuilder;
+        SecurityProtocol securityProtocol = SecurityProtocol.forName((String) configs.get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+        if (!SecurityProtocol.nonTestingValues().contains(securityProtocol))
+            throw new ConfigException("Invalid SecurityProtocol " + securityProtocol);
+        return ChannelBuilders.create(securityProtocol, Mode.CLIENT, LoginType.CLIENT, configs);
     }
 
 }

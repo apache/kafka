@@ -68,34 +68,27 @@ public interface KafkaClient extends Closeable {
      * Queue up the given request for sending. Requests can only be sent on ready connections.
      * 
      * @param request The request
+     * @param now The current timestamp
      */
-    public void send(ClientRequest request);
+    public void send(ClientRequest request, long now);
 
     /**
      * Do actual reads and writes from sockets.
      * 
-     * @param timeout The maximum amount of time to wait for responses in ms
+     * @param timeout The maximum amount of time to wait for responses in ms, must be non-negative. The implementation
+     *                is free to use a lower value if appropriate (common reasons for this are a lower request or
+     *                metadata update timeout)
      * @param now The current time in ms
      * @throws IllegalStateException If a request is sent to an unready node
      */
     public List<ClientResponse> poll(long timeout, long now);
 
     /**
-     * Complete all in-flight requests for a given connection
-     * 
-     * @param id The connection to complete requests for
-     * @param now The current time in ms
-     * @return All requests that complete during this time period.
+     * Closes the connection to a particular node (if there is one).
+     *
+     * @param nodeId The id of the node
      */
-    public List<ClientResponse> completeAll(String id, long now);
-
-    /**
-     * Complete all in-flight requests
-     * 
-     * @param now The current time in ms
-     * @return All requests that complete during this time period.
-     */
-    public List<ClientResponse> completeAll(long now);
+    public void close(String nodeId);
 
     /**
      * Choose the node with the fewest outstanding requests. This method will prefer a node with an existing connection,
@@ -125,6 +118,15 @@ public interface KafkaClient extends Closeable {
      * @param key The API key of the request
      */
     public RequestHeader nextRequestHeader(ApiKeys key);
+
+    /**
+     * Generate a request header for the given API key
+     *
+     * @param key The api key
+     * @param version The api version
+     * @return A request header with the appropriate client id and correlation id
+     */
+    public RequestHeader nextRequestHeader(ApiKeys key, short version);
 
     /**
      * Wake up the client if it is currently blocked waiting for I/O

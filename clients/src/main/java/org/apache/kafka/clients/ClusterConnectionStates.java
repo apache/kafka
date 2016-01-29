@@ -115,10 +115,23 @@ final class ClusterConnectionStates {
     /**
      * Enter the disconnected state for the given node
      * @param id The connection we have disconnected
+     * @param now The current time
      */
-    public void disconnected(String id) {
+    public void disconnected(String id, long now) {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.state = ConnectionState.DISCONNECTED;
+        nodeState.lastConnectAttemptMs = now;
+    }
+
+    /**
+     * Remove the given node from the tracked connection states. The main difference between this and `disconnected`
+     * is the impact on `connectionDelay`: it will be 0 after this call whereas `reconnectBackoffMs` will be taken
+     * into account after `disconnected` is called.
+     *
+     * @param id The connection to remove
+     */
+    public void remove(String id) {
+        nodeState.remove(id);
     }
     
     /**

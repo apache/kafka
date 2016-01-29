@@ -25,27 +25,27 @@ public class HeartbeatRequest extends AbstractRequest {
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.HEARTBEAT.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String GROUP_GENERATION_ID_KEY_NAME = "group_generation_id";
-    private static final String CONSUMER_ID_KEY_NAME = "consumer_id";
+    private static final String MEMBER_ID_KEY_NAME = "member_id";
 
     private final String groupId;
     private final int groupGenerationId;
-    private final String consumerId;
+    private final String memberId;
 
-    public HeartbeatRequest(String groupId, int groupGenerationId, String consumerId) {
+    public HeartbeatRequest(String groupId, int groupGenerationId, String memberId) {
         super(new Struct(CURRENT_SCHEMA));
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(GROUP_GENERATION_ID_KEY_NAME, groupGenerationId);
-        struct.set(CONSUMER_ID_KEY_NAME, consumerId);
+        struct.set(MEMBER_ID_KEY_NAME, memberId);
         this.groupId = groupId;
         this.groupGenerationId = groupGenerationId;
-        this.consumerId = consumerId;
+        this.memberId = memberId;
     }
 
     public HeartbeatRequest(Struct struct) {
         super(struct);
         groupId = struct.getString(GROUP_ID_KEY_NAME);
         groupGenerationId = struct.getInt(GROUP_GENERATION_ID_KEY_NAME);
-        consumerId = struct.getString(CONSUMER_ID_KEY_NAME);
+        memberId = struct.getString(MEMBER_ID_KEY_NAME);
     }
 
     @Override
@@ -67,8 +67,8 @@ public class HeartbeatRequest extends AbstractRequest {
         return groupGenerationId;
     }
 
-    public String consumerId() {
-        return consumerId;
+    public String memberId() {
+        return memberId;
     }
 
     public static HeartbeatRequest parse(ByteBuffer buffer, int versionId) {
@@ -76,6 +76,6 @@ public class HeartbeatRequest extends AbstractRequest {
     }
 
     public static HeartbeatRequest parse(ByteBuffer buffer) {
-        return new HeartbeatRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new HeartbeatRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

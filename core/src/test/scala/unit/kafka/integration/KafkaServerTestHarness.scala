@@ -17,12 +17,15 @@
 
 package kafka.integration
 
+import java.io.File
 import java.util.Arrays
 
 import kafka.common.KafkaException
 import kafka.server._
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{After, Before}
 
 import scala.collection.mutable.Buffer
@@ -35,6 +38,8 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
   var servers: Buffer[KafkaServer] = null
   var brokerList: String = null
   var alive: Array[Boolean] = null
+  val kafkaPrincipalType = KafkaPrincipal.USER_TYPE
+  val setClusterAcl: Option[() => Unit] = None
 
   /**
    * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
@@ -50,17 +55,33 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
 
   def serverForId(id: Int) = servers.find(s => s.config.brokerId == id)
 
-  def bootstrapUrl = servers.map(s => s.config.hostName + ":" + s.boundPort()).mkString(",")
+  protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
+  protected def trustStoreFile: Option[File] = None
 
   @Before
   override def setUp() {
     super.setUp
-    if(configs.size <= 0)
+    if (configs.size <= 0)
       throw new KafkaException("Must supply at least one server config.")
     servers = configs.map(TestUtils.createServer(_)).toBuffer
-    brokerList = TestUtils.getBrokerListStrFromServers(servers)
+    brokerList = TestUtils.getBrokerListStrFromServers(servers, securityProtocol)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)
+    // We need to set a cluster ACL in some cases here
+    // because of the topic creation in the setup of
+    // IntegrationTestHarness. If we don't, then tests
+    // fail with a cluster action authorization exception
+    // when processing an update metadata request
+    // (controller -> broker).
+    //
+    // The following method does nothing by default, but
+    // if the test case requires setting up a cluster ACL,
+    // then it needs to be implemented.
+    setClusterAcl match {
+      case Some(f) =>
+        f()
+      case None => // Nothing to do
+    }
   }
 
   @After

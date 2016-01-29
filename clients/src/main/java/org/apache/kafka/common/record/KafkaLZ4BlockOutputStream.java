@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -30,7 +30,7 @@ import net.jpountz.xxhash.XXHashFactory;
 
 /**
  * A partial implementation of the v1.4.1 LZ4 Frame format.
- * 
+ *
  * @see <a href="https://docs.google.com/document/d/1Tdxmn5_2e5p1y4PtXkatLndWVb0R8QARJFe6JI4Keuo/edit">LZ4 Framing
  *      Format Spec</a>
  */
@@ -59,7 +59,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
 
     /**
      * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm.
-     * 
+     *
      * @param out The output stream to compress
      * @param blockSize Default: 4. The block size used during compression. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other
      *            values will generate an exception
@@ -83,7 +83,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
 
     /**
      * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm.
-     * 
+     *
      * @param out The stream to compress
      * @param blockSize Default: 4. The block size used during compression. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other
      *            values will generate an exception
@@ -95,7 +95,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
 
     /**
      * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm.
-     * 
+     *
      * @param out The output stream to compress
      * @throws IOException
      */
@@ -105,7 +105,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
 
     /**
      * Writes the magic number and frame descriptor to the underlying {@link OutputStream}.
-     * 
+     *
      * @throws IOException
      */
     private void writeHeader() throws IOException {
@@ -126,7 +126,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
     /**
      * Compresses buffered data, optionally computes an XXHash32 checksum, and writes the result to the underlying
      * {@link OutputStream}.
-     * 
+     *
      * @throws IOException
      */
     private void writeBlock() throws IOException {
@@ -160,7 +160,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
     /**
      * Similar to the {@link #writeBlock()} method. Writes a 0-length block (without block checksum) to signal the end
      * of the block stream.
-     * 
+     *
      * @throws IOException
      */
     private void writeEndMark() throws IOException {
@@ -180,7 +180,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
 
     @Override
     public void write(byte[] b, int off, int len) throws IOException {
-        net.jpountz.util.Utils.checkRange(b, off, len);
+        net.jpountz.util.SafeUtils.checkRange(b, off, len);
         ensureNotFinished();
 
         int bufferRemainingLength = maxBlockSize - bufferOffset;

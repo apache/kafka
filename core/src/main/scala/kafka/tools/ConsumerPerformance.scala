@@ -17,12 +17,17 @@
 
 package kafka.tools
 
+import java.util
+
+import org.apache.kafka.common.TopicPartition
+
 import scala.collection.JavaConversions._
 import java.util.concurrent.atomic.AtomicLong
 import java.nio.channels.ClosedByInterruptException
 import org.apache.log4j.Logger
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.common.utils.Utils
 import kafka.utils.CommandLineUtils
 import java.util.{ Random, Properties }
 import kafka.consumer.Consumer
@@ -56,9 +61,9 @@ object ConsumerPerformance {
     var startMs, endMs = 0L
     if(config.useNewConsumer) {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
-      consumer.subscribe(config.topic)
+      consumer.subscribe(List(config.topic))
       startMs = System.currentTimeMillis
-      consume(consumer, config.numMessages, 1000, config, totalMessagesRead, totalBytesRead)
+      consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead)
       endMs = System.currentTimeMillis
       consumer.close()
     } else {
@@ -93,18 +98,40 @@ object ConsumerPerformance {
     }
   }
   
-  def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], count: Long, timeout: Long, config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong) {
+  def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], topics: List[String], count: Long, timeout: Long, config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong) {
     var bytesRead = 0L
     var messagesRead = 0L
-    val startMs = System.currentTimeMillis
-    var lastReportTime: Long = startMs
     var lastBytesRead = 0L
     var lastMessagesRead = 0L
-    var lastConsumed = System.currentTimeMillis
-    while(messagesRead < count && lastConsumed >= System.currentTimeMillis - timeout) {
+
+    // Wait for group join, metadata fetch, etc
+    val joinTimeout = 10000
+    val isAssigned = new AtomicBoolean(false)
+    consumer.subscribe(topics, new ConsumerRebalanceListener {
+      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
+        isAssigned.set(true)
+      }
+      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
+        isAssigned.set(false)
+      }})
+    val joinStart = System.currentTimeMillis()
+    while (!isAssigned.get()) {
+      if (System.currentTimeMillis() - joinStart >= joinTimeout) {
+        throw new Exception("Timed out waiting for initial group join.")
+      }
+      consumer.poll(100)
+    }
+    consumer.seekToBeginning()
+
+    // Now start the benchmark
+    val startMs = System.currentTimeMillis
+    var lastReportTime: Long = startMs
+    var lastConsumedTime = System.currentTimeMillis
+    
+    while(messagesRead < count && System.currentTimeMillis() - lastConsumedTime <= timeout) {
       val records = consumer.poll(100)
       if(records.count() > 0)
-        lastConsumed = System.currentTimeMillis
+        lastConsumedTime = System.currentTimeMillis
       for(record <- records) {
         messagesRead += 1
         if(record.key != null)
@@ -121,6 +148,7 @@ object ConsumerPerformance {
         }
       }
     }
+    
     totalMessagesRead.set(messagesRead)
     totalBytesRead.set(bytesRead)
   }
@@ -176,6 +204,10 @@ object ConsumerPerformance {
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1)
     val useNewConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation.")
+    val consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file.")
+      .withRequiredArg
+      .describedAs("config file")
+      .ofType(classOf[String])
 
     val options = parser.parse(args: _*)
 
@@ -183,7 +215,10 @@ object ConsumerPerformance {
    
     val useNewConsumer = options.has(useNewConsumerOpt)
     
-    val props = new Properties
+    val props = if (options.has(consumerConfigOpt))
+      Utils.loadProps(options.valueOf(consumerConfigOpt))
+    else
+      new Properties
     if(useNewConsumer) {
       import org.apache.kafka.clients.consumer.ConsumerConfig
       props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))
@@ -255,5 +290,4 @@ object ConsumerPerformance {
     }
 
   }
-
 }

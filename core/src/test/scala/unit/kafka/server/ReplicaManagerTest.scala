@@ -17,19 +17,26 @@
 
 package kafka.server
 
-import kafka.api.{ProducerResponseStatus, SerializationTestUtils, ProducerRequest}
-import kafka.common.TopicAndPartition
-import kafka.utils.{MockScheduler, MockTime, TestUtils}
+
+import kafka.api.SerializationTestUtils
+import kafka.message.{Message, ByteBufferMessageSet}
+import kafka.utils.{ZkUtils, MockScheduler, MockTime, TestUtils}
+import org.apache.kafka.common.requests.ProduceRequest
 
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
 
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
 import org.junit.Test
 
 import scala.collection.Map
+import scala.collection.JavaConverters._
 
 class ReplicaManagerTest {
 
@@ -40,15 +47,22 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val zkUtils = ZkUtils(zkClient, false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
-    val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
-    val partition = rm.getOrCreatePartition(topic, 1)
-    partition.getOrCreateReplica(1)
-    rm.checkpointHighWatermarks()
-
-    // shutdown the replica manager upon test completion
-    rm.shutdown(false)
+    val jTime = new JMockTime
+    val metrics = new Metrics
+    val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
+      new AtomicBoolean(false))
+    try {
+      val partition = rm.getOrCreatePartition(topic, 1)
+      partition.getOrCreateReplica(1)
+      rm.checkpointHighWatermarks()
+    } finally {
+      // shutdown the replica manager upon test completion
+      rm.shutdown(false)
+      metrics.close()
+    }
   }
 
   @Test
@@ -57,15 +71,22 @@ class ReplicaManagerTest {
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val zkUtils = ZkUtils(zkClient, false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
-    val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
-    val partition = rm.getOrCreatePartition(topic, 1)
-    partition.getOrCreateReplica(1)
-    rm.checkpointHighWatermarks()
-
-    // shutdown the replica manager upon test completion
-    rm.shutdown(false)
+    val jTime = new JMockTime
+    val metrics = new Metrics
+    val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
+      new AtomicBoolean(false))
+    try {
+      val partition = rm.getOrCreatePartition(topic, 1)
+      partition.getOrCreateReplica(1)
+      rm.checkpointHighWatermarks()
+    } finally {
+      // shutdown the replica manager upon test completion
+      rm.shutdown(false)
+      metrics.close()
+    }
   }
 
   @Test
@@ -73,19 +94,28 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val zkUtils = ZkUtils(zkClient, false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
-    val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
-    val produceRequest = new ProducerRequest(1, "client 1", 3, 1000, SerializationTestUtils.topicDataProducerRequest)
-    def callback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) = {
-      assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS.code)
+    val jTime = new JMockTime
+    val metrics = new Metrics
+    val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
+      new AtomicBoolean(false), Option(this.getClass.getName))
+    try {
+      def callback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
+        assert(responseStatus.values.head.errorCode == Errors.INVALID_REQUIRED_ACKS.code)
+      }
+      rm.appendMessages(
+        timeout = 0,
+        requiredAcks = 3,
+        internalTopicsAllowed = false,
+        messagesPerPartition = Map(new TopicPartition("test1", 0) -> new ByteBufferMessageSet(new Message("first message".getBytes))),
+        responseCallback = callback)
+    } finally {
+      rm.shutdown(false)
+      metrics.close()
     }
 
-    rm.appendMessages(timeout = 0, requiredAcks = 3, internalTopicsAllowed = false, messagesPerPartition = produceRequest.data, responseCallback = callback)
-
-    rm.shutdown(false)
-
-    TestUtils.verifyNonDaemonThreadsStatus
-
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 }

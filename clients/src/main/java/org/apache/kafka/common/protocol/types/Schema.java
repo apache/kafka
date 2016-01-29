@@ -44,6 +44,7 @@ public class Schema extends Type {
     /**
      * Write a struct to the buffer
      */
+    @Override
     public void write(ByteBuffer buffer, Object o) {
         Struct r = (Struct) o;
         for (int i = 0; i < fields.length; i++) {
@@ -62,7 +63,8 @@ public class Schema extends Type {
     /**
      * Read a struct from the buffer
      */
-    public Object read(ByteBuffer buffer) {
+    @Override
+    public Struct read(ByteBuffer buffer) {
         Object[] objects = new Object[fields.length];
         for (int i = 0; i < fields.length; i++) {
             try {
@@ -79,6 +81,7 @@ public class Schema extends Type {
     /**
      * The size of the given record
      */
+    @Override
     public int sizeOf(Object o) {
         int size = 0;
         Struct r = (Struct) o;
@@ -124,6 +127,7 @@ public class Schema extends Type {
     /**
      * Display a string representation of the schema
      */
+    @Override
     public String toString() {
         StringBuilder b = new StringBuilder();
         b.append('{');

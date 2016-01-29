@@ -24,7 +24,7 @@ import org.junit._
 import org.junit.Assert._
 
 class MessageCompressionTest extends JUnitSuite {
-  
+
   @Test
   def testSimpleCompressDecompress() {
     val codecs = mutable.ArrayBuffer[CompressionCodec](GZIPCompressionCodec)
@@ -35,19 +35,40 @@ class MessageCompressionTest extends JUnitSuite {
     for(codec <- codecs)
       testSimpleCompressDecompress(codec)
   }
-  
+
+  //  A quick test to ensure any growth or increase in compression size is known when upgrading libraries
+  @Test
+  def testCompressSize() {
+    val bytes1k: Array[Byte] = (0 until 1000).map(_.toByte).toArray
+    val bytes2k: Array[Byte] = (1000 until 2000).map(_.toByte).toArray
+    val bytes3k: Array[Byte] = (3000 until 4000).map(_.toByte).toArray
+    val messages: List[Message] = List(new Message(bytes1k), new Message(bytes2k), new Message(bytes3k))
+
+    testCompressSize(GZIPCompressionCodec, messages, 388)
+
+    if(isSnappyAvailable)
+      testCompressSize(SnappyCompressionCodec, messages, 491)
+
+    if(isLZ4Available)
+      testCompressSize(LZ4CompressionCodec, messages, 380)
+  }
+
   def testSimpleCompressDecompress(compressionCodec: CompressionCodec) {
     val messages = List[Message](new Message("hi there".getBytes), new Message("I am fine".getBytes), new Message("I am not so well today".getBytes))
     val messageSet = new ByteBufferMessageSet(compressionCodec = compressionCodec, messages = messages:_*)
-    assertEquals(compressionCodec, messageSet.shallowIterator.next.message.compressionCodec)
+    assertEquals(compressionCodec, messageSet.shallowIterator.next().message.compressionCodec)
     val decompressed = messageSet.iterator.map(_.message).toList
     assertEquals(messages, decompressed)
   }
 
-  
-  def isSnappyAvailable(): Boolean = {
+  def testCompressSize(compressionCodec: CompressionCodec, messages: List[Message], expectedSize: Int) {
+    val messageSet = new ByteBufferMessageSet(compressionCodec = compressionCodec, messages = messages:_*)
+    assertEquals(s"$compressionCodec size has changed.", expectedSize, messageSet.sizeInBytes)
+  }
+
+  def isSnappyAvailable: Boolean = {
     try {
-      val snappy = new org.xerial.snappy.SnappyOutputStream(new ByteArrayOutputStream())
+      new org.xerial.snappy.SnappyOutputStream(new ByteArrayOutputStream())
       true
     } catch {
       case e: UnsatisfiedLinkError => false
@@ -55,9 +76,9 @@ class MessageCompressionTest extends JUnitSuite {
     }
   }
 
-  def isLZ4Available(): Boolean = {
+  def isLZ4Available: Boolean = {
     try {
-      val lz4 = new net.jpountz.lz4.LZ4BlockOutputStream(new ByteArrayOutputStream())
+      new net.jpountz.lz4.LZ4BlockOutputStream(new ByteArrayOutputStream())
       true
     } catch {
       case e: UnsatisfiedLinkError => false

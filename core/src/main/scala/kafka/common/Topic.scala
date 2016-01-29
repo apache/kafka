@@ -18,29 +18,28 @@
 package kafka.common
 
 import util.matching.Regex
-import kafka.coordinator.ConsumerCoordinator
-
+import kafka.coordinator.GroupCoordinator
 
 object Topic {
   val legalChars = "[a-zA-Z0-9\\._\\-]"
   private val maxNameLength = 255
   private val rgx = new Regex(legalChars + "+")
 
-  val InternalTopics = Set(ConsumerCoordinator.OffsetsTopicName)
+  val InternalTopics = Set(GroupCoordinator.GroupMetadataTopicName)
 
   def validate(topic: String) {
     if (topic.length <= 0)
-      throw new InvalidTopicException("topic name is illegal, can't be empty")
+      throw new org.apache.kafka.common.errors.InvalidTopicException("topic name is illegal, can't be empty")
     else if (topic.equals(".") || topic.equals(".."))
-      throw new InvalidTopicException("topic name cannot be \".\" or \"..\"")
+      throw new org.apache.kafka.common.errors.InvalidTopicException("topic name cannot be \".\" or \"..\"")
     else if (topic.length > maxNameLength)
-      throw new InvalidTopicException("topic name is illegal, can't be longer than " + maxNameLength + " characters")
+      throw new org.apache.kafka.common.errors.InvalidTopicException("topic name is illegal, can't be longer than " + maxNameLength + " characters")
 
     rgx.findFirstIn(topic) match {
       case Some(t) =>
         if (!t.equals(topic))
-          throw new InvalidTopicException("topic name " + topic + " is illegal, contains a character other than ASCII alphanumerics, '.', '_' and '-'")
-      case None => throw new InvalidTopicException("topic name " + topic + " is illegal,  contains a character other than ASCII alphanumerics, '.', '_' and '-'")
+          throw new org.apache.kafka.common.errors.InvalidTopicException("topic name " + topic + " is illegal, contains a character other than ASCII alphanumerics, '.', '_' and '-'")
+      case None => throw new org.apache.kafka.common.errors.InvalidTopicException("topic name " + topic + " is illegal,  contains a character other than ASCII alphanumerics, '.', '_' and '-'")
     }
   }
 

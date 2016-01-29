@@ -12,13 +12,23 @@
  */
 package org.apache.kafka.common.network;
 
-import java.io.EOFException;
 import java.io.IOException;
-import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.nio.channels.*;
-import java.util.*;
+import java.nio.channels.CancelledKeyException;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.SocketChannel;
+import java.nio.channels.UnresolvedAddressException;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.KafkaException;
@@ -120,8 +130,8 @@ public class Selector implements Selectable {
         this.metricsPerConnection = metricsPerConnection;
     }
 
-    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, Map<String, String> metricTags, ChannelBuilder channelBuilder) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, metricTags, true, channelBuilder);
+    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder) {
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, new HashMap<String, String>(), true, channelBuilder);
     }
 
     /**
@@ -146,8 +156,10 @@ public class Selector implements Selectable {
         socketChannel.configureBlocking(false);
         Socket socket = socketChannel.socket();
         socket.setKeepAlive(true);
-        socket.setSendBufferSize(sendBufferSize);
-        socket.setReceiveBufferSize(receiveBufferSize);
+        if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
+            socket.setSendBufferSize(sendBufferSize);
+        if (receiveBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
+            socket.setReceiveBufferSize(receiveBufferSize);
         socket.setTcpNoDelay(true);
         try {
             socketChannel.connect(address);
@@ -177,17 +189,6 @@ public class Selector implements Selectable {
     }
 
     /**
-     * Disconnect any connections for the given id (if there are any). The disconnection is asynchronous and will not be
-     * processed until the next {@link #poll(long) poll()} call.
-     */
-    @Override
-    public void disconnect(String id) {
-        KafkaChannel channel = channelForId(id);
-        if (channel != null)
-            channel.disconnect();
-    }
-
-    /**
      * Interrupt the nioSelector if it is blocked waiting to do I/O.
      */
     @Override
@@ -200,8 +201,8 @@ public class Selector implements Selectable {
      */
     @Override
     public void close() {
-        List<String> connections = new LinkedList<String>(channels.keySet());
-        for (String id: connections)
+        List<String> connections = new ArrayList<>(channels.keySet());
+        for (String id : connections)
             close(id);
         try {
             this.nioSelector.close();
@@ -210,6 +211,8 @@ public class Selector implements Selectable {
         } catch (SecurityException se) {
             log.error("Exception closing nioSelector:", se);
         }
+        sensors.close();
+        channelBuilder.close();
     }
 
     /**
@@ -217,10 +220,7 @@ public class Selector implements Selectable {
      * @param send The request to send
      */
     public void send(Send send) {
-        KafkaChannel channel = channelForId(send.destination());
-        if (channel == null)
-            throw new IllegalStateException("channel is not connected");
-
+        KafkaChannel channel = channelOrFail(send.destination());
         try {
             channel.setSend(send);
         } catch (CancelledKeyException e) {
@@ -240,7 +240,7 @@ public class Selector implements Selectable {
      *
      * In the "Plaintext" setting, we are using socketChannel to read & write to the network. But for the "SSL" setting,
      * we encrypt the data before we use socketChannel to write data to the network, and decrypt before we return the responses.
-     * This requires additional buffers to be maintained as we are reading from network, since the data on the wire is encrpyted
+     * This requires additional buffers to be maintained as we are reading from network, since the data on the wire is encrypted
      * we won't be able to read exact no.of bytes as kafka protocol requires. We read as many bytes as we can, up to SSLEngine's
      * application buffer size. This means we might be reading additional bytes than the requested size.
      * If there is no further data to read from socketChannel selector won't invoke that channel and we've have additional bytes
@@ -249,12 +249,15 @@ public class Selector implements Selectable {
      * the poll to add the completedReceives. If there are any active channels in the "stagedReceives" we set "timeout" to 0
      * and pop response and add to the completedReceives.
      *
-     * @param timeout The amount of time to wait, in milliseconds. If negative, wait indefinitely.
+     * @param timeout The amount of time to wait, in milliseconds, which must be non-negative
+     * @throws IllegalArgumentException If `timeout` is negative
      * @throws IllegalStateException If a send is given for which we have no existing connection or for which there is
      *         already an in-progress send
      */
     @Override
     public void poll(long timeout) throws IOException {
+        if (timeout < 0)
+            throw new IllegalArgumentException("timeout should be >= 0");
         clear();
         if (hasStagedReceives())
             timeout = 0;
@@ -292,16 +295,8 @@ public class Selector implements Selectable {
                     /* if channel is ready read from any connections that have readable data */
                     if (channel.ready() && key.isReadable() && !hasStagedReceive(channel)) {
                         NetworkReceive networkReceive;
-                        try {
-                            while ((networkReceive = channel.read()) != null) {
-                                addToStagedReceives(channel, networkReceive);
-                            }
-                        } catch (InvalidReceiveException e) {
-                            log.error("Invalid data received from " + channel.id() + " closing connection", e);
-                            close(channel);
-                            this.disconnected.add(channel.id());
-                            throw e;
-                        }
+                        while ((networkReceive = channel.read()) != null)
+                            addToStagedReceives(channel, networkReceive);
                     }
 
                     /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
@@ -318,12 +313,12 @@ public class Selector implements Selectable {
                         close(channel);
                         this.disconnected.add(channel.id());
                     }
-                } catch (IOException e) {
+                } catch (Exception e) {
                     String desc = channel.socketDescription();
-                    if (e instanceof EOFException || e instanceof ConnectException)
-                        log.debug("Connection {} disconnected", desc);
+                    if (e instanceof IOException)
+                        log.debug("Connection with {} disconnected", desc, e);
                     else
-                        log.warn("Error in I/O with connection to {}", desc, e);
+                        log.warn("Unexpected error from {}; closing connection", desc, e);
                     close(channel);
                     this.disconnected.add(channel.id());
                 }
@@ -361,7 +356,7 @@ public class Selector implements Selectable {
 
     @Override
     public void mute(String id) {
-        KafkaChannel channel = channelForId(id);
+        KafkaChannel channel = channelOrFail(id);
         mute(channel);
     }
 
@@ -371,7 +366,7 @@ public class Selector implements Selectable {
 
     @Override
     public void unmute(String id) {
-        KafkaChannel channel = channelForId(id);
+        KafkaChannel channel = channelOrFail(id);
         unmute(channel);
     }
 
@@ -427,22 +422,23 @@ public class Selector implements Selectable {
     /**
      * Check for data, waiting up to the given timeout.
      *
-     * @param ms Length of time to wait, in milliseconds. If negative, wait indefinitely.
+     * @param ms Length of time to wait, in milliseconds, which must be non-negative
      * @return The number of keys ready
+     * @throws IllegalArgumentException
      * @throws IOException
      */
     private int select(long ms) throws IOException {
+        if (ms < 0L)
+            throw new IllegalArgumentException("timeout should be >= 0");
+
         if (ms == 0L)
             return this.nioSelector.selectNow();
-        else if (ms < 0L)
-            return this.nioSelector.select();
         else
             return this.nioSelector.select(ms);
     }
 
     /**
-     * Begin closing this connection
-     * @param id channel id
+     * Close the connection identified by the given id
      */
     public void close(String id) {
         KafkaChannel channel = this.channels.get(id);
@@ -465,23 +461,38 @@ public class Selector implements Selectable {
         this.sensors.connectionClosed.record();
     }
 
+
     /**
      * check if channel is ready
      */
     @Override
     public boolean isChannelReady(String id) {
-        KafkaChannel channel = channelForId(id);
+        KafkaChannel channel = this.channels.get(id);
+        if (channel == null)
+            return false;
         return channel.ready();
     }
 
-    /**
-     * Get the channel associated with this numeric id
-     */
-    private KafkaChannel channelForId(String id) {
+    private KafkaChannel channelOrFail(String id) {
         KafkaChannel channel = this.channels.get(id);
         if (channel == null)
-            throw new IllegalStateException("Attempt to write to socket for which there is no open connection. Connection id " + id + " existing connections " + channels.keySet().toString());
+            throw new IllegalStateException("Attempt to retrieve channel for which there is no open connection. Connection id " + id + " existing connections " + channels.keySet().toString());
         return channel;
+    }
+
+    /**
+     * Return the selector channels.
+     */
+    public List<KafkaChannel> channels() {
+        return new ArrayList<>(channels.values());
+    }
+
+    /**
+     * Return the channel associated with this connection or `null` if there is no channel associated with the
+     * connection.
+     */
+    public KafkaChannel channel(String id) {
+        return this.channels.get(id);
     }
 
     /**
@@ -511,7 +522,7 @@ public class Selector implements Selectable {
 
 
     /**
-     * adds a receive to staged receieves
+     * adds a receive to staged receives
      */
     private void addToStagedReceives(KafkaChannel channel, NetworkReceive receive) {
         if (!stagedReceives.containsKey(channel))
@@ -553,6 +564,10 @@ public class Selector implements Selectable {
         public final Sensor selectTime;
         public final Sensor ioTime;
 
+        /* Names of metrics that are not registered through sensors */
+        private final List<MetricName> topLevelMetricNames = new ArrayList<>();
+        private final List<Sensor> sensors = new ArrayList<>();
+
         public SelectorMetrics(Metrics metrics) {
             this.metrics = metrics;
             String metricGrpName = metricGrpPrefix + "-metrics";
@@ -564,54 +579,61 @@ public class Selector implements Selectable {
                 tagsSuffix.append(tag.getValue());
             }
 
-            this.connectionClosed = this.metrics.sensor("connections-closed:" + tagsSuffix.toString());
-            MetricName metricName = new MetricName("connection-close-rate", metricGrpName, "Connections closed per second in the window.", metricTags);
+            this.connectionClosed = sensor("connections-closed:" + tagsSuffix.toString());
+            MetricName metricName = metrics.metricName("connection-close-rate", metricGrpName, "Connections closed per second in the window.", metricTags);
             this.connectionClosed.add(metricName, new Rate());
 
-            this.connectionCreated = this.metrics.sensor("connections-created:" + tagsSuffix.toString());
-            metricName = new MetricName("connection-creation-rate", metricGrpName, "New connections established per second in the window.", metricTags);
+            this.connectionCreated = sensor("connections-created:" + tagsSuffix.toString());
+            metricName = metrics.metricName("connection-creation-rate", metricGrpName, "New connections established per second in the window.", metricTags);
             this.connectionCreated.add(metricName, new Rate());
 
-            this.bytesTransferred = this.metrics.sensor("bytes-sent-received:" + tagsSuffix.toString());
-            metricName = new MetricName("network-io-rate", metricGrpName, "The average number of network operations (reads or writes) on all connections per second.", metricTags);
+            this.bytesTransferred = sensor("bytes-sent-received:" + tagsSuffix.toString());
+            metricName = metrics.metricName("network-io-rate", metricGrpName, "The average number of network operations (reads or writes) on all connections per second.", metricTags);
             bytesTransferred.add(metricName, new Rate(new Count()));
 
-            this.bytesSent = this.metrics.sensor("bytes-sent:" + tagsSuffix.toString(), bytesTransferred);
-            metricName = new MetricName("outgoing-byte-rate", metricGrpName, "The average number of outgoing bytes sent per second to all servers.", metricTags);
+            this.bytesSent = sensor("bytes-sent:" + tagsSuffix.toString(), bytesTransferred);
+            metricName = metrics.metricName("outgoing-byte-rate", metricGrpName, "The average number of outgoing bytes sent per second to all servers.", metricTags);
             this.bytesSent.add(metricName, new Rate());
-            metricName = new MetricName("request-rate", metricGrpName, "The average number of requests sent per second.", metricTags);
+            metricName = metrics.metricName("request-rate", metricGrpName, "The average number of requests sent per second.", metricTags);
             this.bytesSent.add(metricName, new Rate(new Count()));
-            metricName = new MetricName("request-size-avg", metricGrpName, "The average size of all requests in the window..", metricTags);
+            metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of all requests in the window..", metricTags);
             this.bytesSent.add(metricName, new Avg());
-            metricName = new MetricName("request-size-max", metricGrpName, "The maximum size of any request sent in the window.", metricTags);
+            metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent in the window.", metricTags);
             this.bytesSent.add(metricName, new Max());
 
-            this.bytesReceived = this.metrics.sensor("bytes-received:" + tagsSuffix.toString(), bytesTransferred);
-            metricName = new MetricName("incoming-byte-rate", metricGrpName, "Bytes/second read off all sockets", metricTags);
+            this.bytesReceived = sensor("bytes-received:" + tagsSuffix.toString(), bytesTransferred);
+            metricName = metrics.metricName("incoming-byte-rate", metricGrpName, "Bytes/second read off all sockets", metricTags);
             this.bytesReceived.add(metricName, new Rate());
-            metricName = new MetricName("response-rate", metricGrpName, "Responses received sent per second.", metricTags);
+            metricName = metrics.metricName("response-rate", metricGrpName, "Responses received sent per second.", metricTags);
             this.bytesReceived.add(metricName, new Rate(new Count()));
 
-            this.selectTime = this.metrics.sensor("select-time:" + tagsSuffix.toString());
-            metricName = new MetricName("select-rate", metricGrpName, "Number of times the I/O layer checked for new I/O to perform per second", metricTags);
+            this.selectTime = sensor("select-time:" + tagsSuffix.toString());
+            metricName = metrics.metricName("select-rate", metricGrpName, "Number of times the I/O layer checked for new I/O to perform per second", metricTags);
             this.selectTime.add(metricName, new Rate(new Count()));
-            metricName = new MetricName("io-wait-time-ns-avg", metricGrpName, "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.", metricTags);
+            metricName = metrics.metricName("io-wait-time-ns-avg", metricGrpName, "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.", metricTags);
             this.selectTime.add(metricName, new Avg());
-            metricName = new MetricName("io-wait-ratio", metricGrpName, "The fraction of time the I/O thread spent waiting.", metricTags);
+            metricName = metrics.metricName("io-wait-ratio", metricGrpName, "The fraction of time the I/O thread spent waiting.", metricTags);
             this.selectTime.add(metricName, new Rate(TimeUnit.NANOSECONDS));
 
-            this.ioTime = this.metrics.sensor("io-time:" + tagsSuffix.toString());
-            metricName = new MetricName("io-time-ns-avg", metricGrpName, "The average length of time for I/O per select call in nanoseconds.", metricTags);
+            this.ioTime = sensor("io-time:" + tagsSuffix.toString());
+            metricName = metrics.metricName("io-time-ns-avg", metricGrpName, "The average length of time for I/O per select call in nanoseconds.", metricTags);
             this.ioTime.add(metricName, new Avg());
-            metricName = new MetricName("io-ratio", metricGrpName, "The fraction of time the I/O thread spent doing I/O", metricTags);
+            metricName = metrics.metricName("io-ratio", metricGrpName, "The fraction of time the I/O thread spent doing I/O", metricTags);
             this.ioTime.add(metricName, new Rate(TimeUnit.NANOSECONDS));
 
-            metricName = new MetricName("connection-count", metricGrpName, "The current number of active connections.", metricTags);
+            metricName = metrics.metricName("connection-count", metricGrpName, "The current number of active connections.", metricTags);
+            topLevelMetricNames.add(metricName);
             this.metrics.addMetric(metricName, new Measurable() {
                 public double measure(MetricConfig config, long now) {
                     return channels.size();
                 }
             });
+        }
+
+        private Sensor sensor(String name, Sensor... parents) {
+            Sensor sensor = metrics.sensor(name, parents);
+            sensors.add(sensor);
+            return sensor;
         }
 
         public void maybeRegisterConnectionMetrics(String connectionId) {
@@ -626,28 +648,28 @@ public class Selector implements Selectable {
                     Map<String, String> tags = new LinkedHashMap<String, String>(metricTags);
                     tags.put("node-id", "node-" + connectionId);
 
-                    nodeRequest = this.metrics.sensor(nodeRequestName);
-                    MetricName metricName = new MetricName("outgoing-byte-rate", metricGrpName, tags);
+                    nodeRequest = sensor(nodeRequestName);
+                    MetricName metricName = metrics.metricName("outgoing-byte-rate", metricGrpName, tags);
                     nodeRequest.add(metricName, new Rate());
-                    metricName = new MetricName("request-rate", metricGrpName, "The average number of requests sent per second.", tags);
+                    metricName = metrics.metricName("request-rate", metricGrpName, "The average number of requests sent per second.", tags);
                     nodeRequest.add(metricName, new Rate(new Count()));
-                    metricName = new MetricName("request-size-avg", metricGrpName, "The average size of all requests in the window..", tags);
+                    metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of all requests in the window..", tags);
                     nodeRequest.add(metricName, new Avg());
-                    metricName = new MetricName("request-size-max", metricGrpName, "The maximum size of any request sent in the window.", tags);
+                    metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent in the window.", tags);
                     nodeRequest.add(metricName, new Max());
 
                     String nodeResponseName = "node-" + connectionId + ".bytes-received";
-                    Sensor nodeResponse = this.metrics.sensor(nodeResponseName);
-                    metricName = new MetricName("incoming-byte-rate", metricGrpName, tags);
+                    Sensor nodeResponse = sensor(nodeResponseName);
+                    metricName = metrics.metricName("incoming-byte-rate", metricGrpName, tags);
                     nodeResponse.add(metricName, new Rate());
-                    metricName = new MetricName("response-rate", metricGrpName, "The average number of responses received per second.", tags);
+                    metricName = metrics.metricName("response-rate", metricGrpName, "The average number of responses received per second.", tags);
                     nodeResponse.add(metricName, new Rate(new Count()));
 
                     String nodeTimeName = "node-" + connectionId + ".latency";
-                    Sensor nodeRequestTime = this.metrics.sensor(nodeTimeName);
-                    metricName = new MetricName("request-latency-avg", metricGrpName, tags);
+                    Sensor nodeRequestTime = sensor(nodeTimeName);
+                    metricName = metrics.metricName("request-latency-avg", metricGrpName, tags);
                     nodeRequestTime.add(metricName, new Avg());
-                    metricName = new MetricName("request-latency-max", metricGrpName, tags);
+                    metricName = metrics.metricName("request-latency-max", metricGrpName, tags);
                     nodeRequestTime.add(metricName, new Max());
                 }
             }
@@ -673,6 +695,13 @@ public class Selector implements Selectable {
                 if (nodeRequest != null)
                     nodeRequest.record(bytes, now);
             }
+        }
+
+        public void close() {
+            for (MetricName metricName : topLevelMetricNames)
+                metrics.removeMetric(metricName);
+            for (Sensor sensor : sensors)
+                metrics.removeSensor(sensor.name());
         }
     }
 

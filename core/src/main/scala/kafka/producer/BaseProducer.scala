@@ -27,7 +27,7 @@ trait BaseProducer {
 }
 
 class NewShinyProducer(producerProps: Properties) extends BaseProducer {
-  import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+  import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
   import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 
   // decide whether to send synchronously based on producer properties
@@ -51,7 +51,6 @@ class NewShinyProducer(producerProps: Properties) extends BaseProducer {
 }
 
 class OldProducer(producerProps: Properties) extends BaseProducer {
-  import kafka.producer.{KeyedMessage, ProducerConfig}
 
   // default to byte array partitioner
   if (producerProps.getProperty("partitioner.class") == null)

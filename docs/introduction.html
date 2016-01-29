@@ -1,0 +1,99 @@
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<h3><a id="introduction" href="#introduction">1.1 Introduction</a></h3>
+Kafka is a distributed, partitioned, replicated commit log service. It provides the functionality of a messaging system, but with a unique design.
+<p>
+What does all that mean?
+<p>
+First let's review some basic messaging terminology:
+<ul>
+    <li>Kafka maintains feeds of messages in categories called <i>topics</i>.
+    <li>We'll call processes that publish messages to a Kafka topic <i>producers</i>.
+    <li>We'll call processes that subscribe to topics and process the feed of published messages <i>consumers</i>.
+    <li>Kafka is run as a cluster comprised of one or more servers each of which is called a <i>broker</i>.
+</ul>
+
+So, at a high level, producers send messages over the network to the Kafka cluster which in turn serves them up to consumers like this:
+<div style="text-align: center; width: 100%">
+  <img src="images/producer_consumer.png">
+</div>
+
+Communication between the clients and the servers is done with a simple, high-performance, language agnostic <a href="https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol">TCP protocol</a>. We provide a Java client for Kafka, but clients are available in <a href="https://cwiki.apache.org/confluence/display/KAFKA/Clients">many languages</a>.
+
+<h4><a id="intro_topics" href="#intro_topics">Topics and Logs</a></h4>
+Let's first dive into the high-level abstraction Kafka provides&mdash;the topic.
+<p>
+A topic is a category or feed name to which messages are published. For each topic, the Kafka cluster maintains a partitioned log that looks like this:
+<div style="text-align: center; width: 100%">
+  <img src="images/log_anatomy.png">
+</div>
+Each partition is an ordered, immutable sequence of messages that is continually appended to&mdash;a commit log. The messages in the partitions are each assigned a sequential id number called the <i>offset</i> that uniquely identifies each message within the partition.
+<p>
+The Kafka cluster retains all published messages&mdash;whether or not they have been consumed&mdash;for a configurable period of time. For example if the log retention is set to two days, then for the two days after a message is published it is available for consumption, after which it will be discarded to free up space. Kafka's performance is effectively constant with respect to data size so retaining lots of data is not a problem.
+<p>
+In fact the only metadata retained on a per-consumer basis is the position of the consumer in the log, called the "offset". This offset is controlled by the consumer: normally a consumer will advance its offset linearly as it reads messages, but in fact the position is controlled by the consumer and it can consume messages in any order it likes. For example a consumer can reset to an older offset to reprocess.
+<p>
+This combination of features means that Kafka consumers are very cheap&mdash;they can come and go without much impact on the cluster or on other consumers. For example, you can use our command line tools to "tail" the contents of any topic without changing what is consumed by any existing consumers.
+<p>
+The partitions in the log serve several purposes. First, they allow the log to scale beyond a size that will fit on a single server. Each individual partition must fit on the servers that host it, but a topic may have many partitions so it can handle an arbitrary amount of data. Second they act as the unit of parallelism&mdash;more on that in a bit.
+
+<h4><a id="intro_distribution" href="#intro_distribution">Distribution</a></h4>
+
+The partitions of the log are distributed over the servers in the Kafka cluster with each server handling data and requests for a share of the partitions. Each partition is replicated across a configurable number of servers for fault tolerance.
+<p>
+Each partition has one server which acts as the "leader" and zero or more servers which act as "followers". The leader handles all read and write requests for the partition while the followers passively replicate the leader. If the leader fails, one of the followers will automatically become the new leader. Each server acts as a leader for some of its partitions and a follower for others so load is well balanced within the cluster.
+
+<h4><a id="intro_producers" href="#intro_producers">Producers</a></h4>
+
+Producers publish data to the topics of their choice. The producer is responsible for choosing which message to assign to which partition within the topic. This can be done in a round-robin fashion simply to balance load or it can be done according to some semantic partition function (say based on some key in the message). More on the use of partitioning in a second.
+
+<h4><a id="intro_consumers" href="#intro_consumers">Consumers</a></h4>
+
+Messaging traditionally has two models: <a href="http://en.wikipedia.org/wiki/Message_queue">queuing</a> and <a href="http://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern">publish-subscribe</a>. In a queue, a pool of consumers may read from a server and each message goes to one of them; in publish-subscribe the message is broadcast to all consumers. Kafka offers a single consumer abstraction that generalizes both of these&mdash;the <i>consumer group</i>.
+<p>
+Consumers label themselves with a consumer group name, and each message published to a topic is delivered to one consumer instance within each subscribing consumer group. Consumer instances can be in separate processes or on separate machines.
+<p>
+If all the consumer instances have the same consumer group, then this works just like a traditional queue balancing load over the consumers.
+<p>
+If all the consumer instances have different consumer groups, then this works like publish-subscribe and all messages are broadcast to all consumers.
+<p>
+More commonly, however, we have found that topics have a small number of consumer groups, one for each "logical subscriber". Each group is composed of many consumer instances for scalability and fault tolerance. This is nothing more than publish-subscribe semantics where the subscriber is a cluster of consumers instead of a single process.
+<p>
+
+<div style="float: right; margin: 20px; width: 500px" class="caption">
+  <img src="images/consumer-groups.png"><br>
+  A two server Kafka cluster hosting four partitions (P0-P3) with two consumer groups. Consumer group A has two consumer instances and group B has four.
+</div>
+<p>
+Kafka has stronger ordering guarantees than a traditional messaging system, too.
+<p>
+A traditional queue retains messages in-order on the server, and if multiple consumers consume from the queue then the server hands out messages in the order they are stored. However, although the server hands out messages in order, the messages are delivered asynchronously to consumers, so they may arrive out of order on different consumers. This effectively means the ordering of the messages is lost in the presence of parallel consumption. Messaging systems often work around this by having a notion of "exclusive consumer" that allows only one process to consume from a queue, but of course this means that there is no parallelism in processing.
+<p>
+Kafka does it better. By having a notion of parallelism&mdash;the partition&mdash;within the topics, Kafka is able to provide both ordering guarantees and load balancing over a pool of consumer processes. This is achieved by assigning the partitions in the topic to the consumers in the consumer group so that each partition is consumed by exactly one consumer in the group. By doing this we ensure that the consumer is the only reader of that partition and consumes the data in order. Since there are many partitions this still balances the load over many consumer instances. Note however that there cannot be more consumer instances in a consumer group than partitions.
+<p>
+Kafka only provides a total order over messages <i>within</i> a partition, not between different partitions in a topic. Per-partition ordering combined with the ability to partition data by key is sufficient for most applications. However, if you require a total order over messages this can be achieved with a topic that has only one partition, though this will mean only one consumer process per consumer group.
+
+<h4><a id="intro_guarantees" href="#intro_guarantees">Guarantees</a></h4>
+
+At a high-level Kafka gives the following guarantees:
+<ul>
+  <li>Messages sent by a producer to a particular topic partition will be appended in the order they are sent. That is, if a message M1 is sent by the same producer as a message M2, and M1 is sent first, then M1 will have a lower offset than M2 and appear earlier in the log.
+  <li>A consumer instance sees messages in the order they are stored in the log.
+  <li>For a topic with replication factor N, we will tolerate up to N-1 server failures without losing any messages committed to the log.
+</ul>
+More details on these guarantees are given in the design section of the documentation.

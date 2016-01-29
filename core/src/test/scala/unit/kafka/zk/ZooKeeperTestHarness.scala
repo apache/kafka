@@ -17,31 +17,74 @@
 
 package kafka.zk
 
-import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{ZkUtils, CoreUtils}
+import java.io._
+import java.net._
+import javax.security.auth.login.Configuration
+import org.I0Itec.zkclient.{ZkClient, ZkConnection}
+import kafka.utils.{ZkUtils, Logging, CoreUtils}
 import org.junit.{After, Before}
 import org.scalatest.junit.JUnitSuite
+import org.apache.kafka.common.security.JaasUtils
 
-trait ZooKeeperTestHarness extends JUnitSuite {
-  var zkPort: Int = -1
+object FourLetterWords {
+  def sendStat(host: String, port: Int, timeout: Int) {
+    val hostAddress = if (host != null)
+      new InetSocketAddress(host, port)
+    else
+      new InetSocketAddress(InetAddress.getByName(null), port)
+    val sock = new Socket()
+    var reader: BufferedReader = null
+    sock.connect(hostAddress, timeout)
+    try {
+      val outstream = sock.getOutputStream
+      outstream.write("stat".getBytes)
+      outstream.flush
+    } catch {
+      case e: SocketTimeoutException => {
+        throw new IOException("Exception while sending 4lw")
+      }
+    } finally {
+      sock.close
+      if (reader != null)
+        reader.close
+    }
+  }
+}
+
+trait ZooKeeperTestHarness extends JUnitSuite with Logging {
   var zookeeper: EmbeddedZookeeper = null
-  var zkClient: ZkClient = null
+  var zkPort: Int = -1
+  var zkUtils: ZkUtils = null
   val zkConnectionTimeout = 6000
   val zkSessionTimeout = 6000
-
   def zkConnect: String = "127.0.0.1:" + zkPort
-
+  def confFile: String = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "")
+  
   @Before
   def setUp() {
     zookeeper = new EmbeddedZookeeper()
     zkPort = zookeeper.port
-    zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeout, zkConnectionTimeout)
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, JaasUtils.isZkSecurityEnabled())
   }
 
   @After
   def tearDown() {
-    CoreUtils.swallow(zkClient.close())
-    CoreUtils.swallow(zookeeper.shutdown())
+    if (zkUtils != null)
+     CoreUtils.swallow(zkUtils.close())
+    if (zookeeper != null)
+      CoreUtils.swallow(zookeeper.shutdown())
+      
+    var isDown = false  
+    while(!isDown) {
+      try {
+        FourLetterWords.sendStat("127.0.0.1", zkPort, 3000)
+      } catch {
+        case _: Throwable => {
+          info("Server is down")
+          isDown = true
+        }
+      }
+    }
+    Configuration.setConfiguration(null)
   }
-
 }

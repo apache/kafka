@@ -54,9 +54,12 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @Test
   def testMetricsLeak() {
     // create topic topic1 with 1 partition on broker 0
-    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = servers)
+    createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = servers)
     // force creation not client's specific metrics.
     createAndShutdownStep("group0", "consumer0", "producer0")
+
+    //this assertion is only used for creating the metrics for DelayedFetchMetrics, it should never fail, but should not be removed
+    assertNotNull(DelayedFetchMetrics)
 
     val countOfStaticMetrics = Metrics.defaultRegistry().allMetrics().keySet().size
 
@@ -69,9 +72,9 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @Test
   def testMetricsReporterAfterDeletingTopic() {
     val topic = "test-topic-metric"
-    AdminUtils.createTopic(zkClient, topic, 1, 1)
-    AdminUtils.deleteTopic(zkClient, topic)
-    TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
+    AdminUtils.createTopic(zkUtils, topic, 1, 1)
+    AdminUtils.deleteTopic(zkUtils, topic)
+    TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
     assertFalse("Topic metrics exists after deleteTopic", checkTopicMetricsExists(topic))
   }
 

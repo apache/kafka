@@ -27,7 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ProduceRequest  extends AbstractRequest {
+public class ProduceRequest extends AbstractRequest {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.PRODUCE.id);
     private static final String ACKS_KEY_NAME = "acks";
@@ -104,6 +104,8 @@ public class ProduceRequest  extends AbstractRequest {
         switch (versionId) {
             case 0:
                 return new ProduceResponse(responseMap);
+            case 1:
+                return new ProduceResponse(responseMap, ProduceResponse.DEFAULT_THROTTLE_TIME);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.PRODUCE.id)));
@@ -122,11 +124,15 @@ public class ProduceRequest  extends AbstractRequest {
         return partitionRecords;
     }
 
+    public void clearPartitionRecords() {
+        partitionRecords.clear();
+    }
+
     public static ProduceRequest parse(ByteBuffer buffer, int versionId) {
         return new ProduceRequest(ProtoUtils.parseRequest(ApiKeys.PRODUCE.id, versionId, buffer));
     }
 
     public static ProduceRequest parse(ByteBuffer buffer) {
-        return new ProduceRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new ProduceRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

@@ -56,10 +56,10 @@ class RollingBounceTest extends ZooKeeperTestHarness {
     val topic4 = "new-topic4"
 
     // create topics with 1 partition, 2 replicas, one on each broker
-    createTopic(zkClient, topic1, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
-    createTopic(zkClient, topic2, partitionReplicaAssignment = Map(0->Seq(1,2)), servers = servers)
-    createTopic(zkClient, topic3, partitionReplicaAssignment = Map(0->Seq(2,3)), servers = servers)
-    createTopic(zkClient, topic4, partitionReplicaAssignment = Map(0->Seq(0,3)), servers = servers)
+    createTopic(zkUtils, topic1, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
+    createTopic(zkUtils, topic2, partitionReplicaAssignment = Map(0->Seq(1,2)), servers = servers)
+    createTopic(zkUtils, topic3, partitionReplicaAssignment = Map(0->Seq(2,3)), servers = servers)
+    createTopic(zkUtils, topic4, partitionReplicaAssignment = Map(0->Seq(0,3)), servers = servers)
 
     // Do a rolling bounce and check if leader transitions happen correctly
 
@@ -86,7 +86,7 @@ class RollingBounceTest extends ZooKeeperTestHarness {
       servers((startIndex + 1) % 4).shutdown()
       prevLeader = (startIndex + 1) % 4
     }
-    var newleader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
+    var newleader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
     // Ensure the new leader is different from the old
     assertTrue("Leader transition did not happen for " + topic, newleader.getOrElse(-1) != -1 && (newleader.getOrElse(-1) != prevLeader))
     // Start the server back up again

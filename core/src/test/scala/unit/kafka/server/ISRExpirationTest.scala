@@ -18,6 +18,7 @@ package kafka.server
 
 import java.util.Properties
 
+import org.apache.kafka.common.metrics.Metrics
 import org.junit.{Test, Before, After}
 import collection.mutable.HashMap
 import collection.mutable.Map
@@ -28,6 +29,7 @@ import org.junit.Assert._
 import kafka.utils._
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.message.MessageSet
+import org.apache.kafka.common.utils.{MockTime => JMockTime}
 
 
 class IsrExpirationTest {
@@ -43,17 +45,20 @@ class IsrExpirationTest {
   val topic = "foo"
 
   val time = new MockTime
+  val jTime = new JMockTime
+  val metrics = new Metrics
 
   var replicaManager: ReplicaManager = null
 
   @Before
   def setUp() {
-    replicaManager = new ReplicaManager(configs.head, time, null, null, null, new AtomicBoolean(false))
+    replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, null, null, null, new AtomicBoolean(false))
   }
 
   @After
   def tearDown() {
     replicaManager.shutdown(false)
+    metrics.close()
   }
 
   /*

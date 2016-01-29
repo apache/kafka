@@ -25,6 +25,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * This wrapper supports both v0 and v1 of ProduceResponse.
+ */
 public class ProduceResponse extends AbstractRequestResponse {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.PRODUCE.id);
@@ -33,12 +36,14 @@ public class ProduceResponse extends AbstractRequestResponse {
     // topic level field names
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITION_RESPONSES_KEY_NAME = "partition_responses";
+    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
 
     // partition level field names
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     public static final long INVALID_OFFSET = -1L;
+    public static final int DEFAULT_THROTTLE_TIME = 0;
 
     /**
      * Possible error code:
@@ -49,28 +54,30 @@ public class ProduceResponse extends AbstractRequestResponse {
     private static final String BASE_OFFSET_KEY_NAME = "base_offset";
 
     private final Map<TopicPartition, PartitionResponse> responses;
+    private final int throttleTime;
 
+    /**
+     * Constructor for Version 0
+     * @param responses Produced data grouped by topic-partition
+     */
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses) {
-        super(new Struct(CURRENT_SCHEMA));
-        Map<String, Map<Integer, PartitionResponse>> responseByTopic = CollectionUtils.groupDataByTopic(responses);
-        List<Struct> topicDatas = new ArrayList<Struct>(responseByTopic.size());
-        for (Map.Entry<String, Map<Integer, PartitionResponse>> entry : responseByTopic.entrySet()) {
-            Struct topicData = struct.instance(RESPONSES_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, entry.getKey());
-            List<Struct> partitionArray = new ArrayList<Struct>();
-            for (Map.Entry<Integer, PartitionResponse> partitionEntry : entry.getValue().entrySet()) {
-                PartitionResponse part = partitionEntry.getValue();
-                Struct partStruct = topicData.instance(PARTITION_RESPONSES_KEY_NAME)
-                                       .set(PARTITION_KEY_NAME, partitionEntry.getKey())
-                                       .set(ERROR_CODE_KEY_NAME, part.errorCode)
-                                       .set(BASE_OFFSET_KEY_NAME, part.baseOffset);
-                partitionArray.add(partStruct);
-            }
-            topicData.set(PARTITION_RESPONSES_KEY_NAME, partitionArray.toArray());
-            topicDatas.add(topicData);
-        }
-        struct.set(RESPONSES_KEY_NAME, topicDatas.toArray());
+        super(new Struct(ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 0)));
+        initCommonFields(responses);
         this.responses = responses;
+        this.throttleTime = DEFAULT_THROTTLE_TIME;
+    }
+
+    /**
+     * Constructor for Version 1
+     * @param responses Produced data grouped by topic-partition
+     * @param throttleTime Time in milliseconds the response was throttled
+     */
+    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTime) {
+        super(new Struct(CURRENT_SCHEMA));
+        initCommonFields(responses);
+        struct.set(THROTTLE_TIME_KEY_NAME, throttleTime);
+        this.responses = responses;
+        this.throttleTime = throttleTime;
     }
 
     public ProduceResponse(Struct struct) {
@@ -88,10 +95,35 @@ public class ProduceResponse extends AbstractRequestResponse {
                 responses.put(tp, new PartitionResponse(errorCode, offset));
             }
         }
+        this.throttleTime = struct.getInt(THROTTLE_TIME_KEY_NAME);
+    }
+
+    private void initCommonFields(Map<TopicPartition, PartitionResponse> responses) {
+        Map<String, Map<Integer, PartitionResponse>> responseByTopic = CollectionUtils.groupDataByTopic(responses);
+        List<Struct> topicDatas = new ArrayList<Struct>(responseByTopic.size());
+        for (Map.Entry<String, Map<Integer, PartitionResponse>> entry : responseByTopic.entrySet()) {
+            Struct topicData = struct.instance(RESPONSES_KEY_NAME);
+            topicData.set(TOPIC_KEY_NAME, entry.getKey());
+            List<Struct> partitionArray = new ArrayList<Struct>();
+            for (Map.Entry<Integer, PartitionResponse> partitionEntry : entry.getValue().entrySet()) {
+                PartitionResponse part = partitionEntry.getValue();
+                Struct partStruct = topicData.instance(PARTITION_RESPONSES_KEY_NAME).set(PARTITION_KEY_NAME,
+                                                                                         partitionEntry.getKey()).set(
+                    ERROR_CODE_KEY_NAME, part.errorCode).set(BASE_OFFSET_KEY_NAME, part.baseOffset);
+                partitionArray.add(partStruct);
+            }
+            topicData.set(PARTITION_RESPONSES_KEY_NAME, partitionArray.toArray());
+            topicDatas.add(topicData);
+        }
+        struct.set(RESPONSES_KEY_NAME, topicDatas.toArray());
     }
 
     public Map<TopicPartition, PartitionResponse> responses() {
         return this.responses;
+    }
+
+    public int getThrottleTime() {
+        return this.throttleTime;
     }
 
     public static final class PartitionResponse {
@@ -117,6 +149,6 @@ public class ProduceResponse extends AbstractRequestResponse {
     }
 
     public static ProduceResponse parse(ByteBuffer buffer) {
-        return new ProduceResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new ProduceResponse(CURRENT_SCHEMA.read(buffer));
     }
 }

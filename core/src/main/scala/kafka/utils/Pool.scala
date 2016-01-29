@@ -22,12 +22,10 @@ import java.util.concurrent._
 import collection.mutable
 import collection.JavaConversions
 import kafka.common.KafkaException
-import java.lang.Object
-
 
 class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] {
 
-  private val pool = new ConcurrentHashMap[K, V]
+  private val pool: ConcurrentMap[K, V] = new ConcurrentHashMap[K, V]
   private val createLock = new Object
 
   def this(m: collection.Map[K, V]) {
@@ -71,7 +69,9 @@ class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] 
   def get(key: K): V = pool.get(key)
   
   def remove(key: K): V = pool.remove(key)
-  
+
+  def remove(key: K, value: V): Boolean = pool.remove(key, value)
+
   def keys: mutable.Set[K] = {
     import JavaConversions._
     pool.keySet()

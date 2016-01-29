@@ -22,6 +22,7 @@ import java.io.FileReader
 import joptsimple._
 import kafka.utils.{Logging, ZkUtils, CommandLineUtils}
 import org.I0Itec.zkclient.ZkClient
+import org.apache.kafka.common.security.JaasUtils
 
 
 /**
@@ -68,10 +69,10 @@ object ImportZkOffsets extends Logging {
     val zkConnect           = options.valueOf(zkConnectOpt)
     val partitionOffsetFile = options.valueOf(inFileOpt)
 
-    val zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
+    val zkUtils = ZkUtils(zkConnect, 30000, 30000, JaasUtils.isZkSecurityEnabled())
     val partitionOffsets: Map[String,String] = getPartitionOffsetsFromFile(partitionOffsetFile)
 
-    updateZkOffsets(zkClient, partitionOffsets)
+    updateZkOffsets(zkUtils, partitionOffsets)
   }
 
   private def getPartitionOffsetsFromFile(filename: String):Map[String,String] = {
@@ -92,12 +93,12 @@ object ImportZkOffsets extends Logging {
     partOffsetsMap
   }
   
-  private def updateZkOffsets(zkClient: ZkClient, partitionOffsets: Map[String,String]): Unit = {
+  private def updateZkOffsets(zkUtils: ZkUtils, partitionOffsets: Map[String,String]): Unit = {
     for ((partition, offset) <- partitionOffsets) {
       debug("updating [" + partition + "] with offset [" + offset + "]")
       
       try {
-        ZkUtils.updatePersistentPath(zkClient, partition, offset.toString)
+        zkUtils.updatePersistentPath(partition, offset.toString)
       } catch {
         case e: Throwable => e.printStackTrace()
       }

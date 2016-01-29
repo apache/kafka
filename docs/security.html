@@ -1,0 +1,527 @@
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<h3><a id="security_overview" href="#security_overview">7.1 Security Overview</a></h3>
+In release 0.9.0.0, the Kafka community added a number of features that, used either separately or together, increases security in a Kafka cluster. These features are considered to be of beta quality. The following security measures are currently supported:
+<ol>
+    <li>Authentication of connections to brokers from clients (producers and consumers), other brokers and tools, using either SSL or SASL (Kerberos)</li>
+    <li>Authentication of connections from brokers to ZooKeeper</li>
+    <li>Encryption of data transferred between brokers and clients, between brokers, or between brokers and tools using SSL (Note that there is a performance degradation when SSL is enabled, the magnitude of which depends on the CPU type and the JVM implementation.)</li>
+    <li>Authorization of read / write operations by clients</li>
+    <li>Authorization is pluggable and integration with external authorization services is supported</li>
+</ol>
+
+It's worth noting that security is optional - non-secured clusters are supported, as well as a mix of authenticated, unauthenticated, encrypted and non-encrypted clients.
+
+The guides below explain how to configure and use the security features in both clients and brokers.
+
+<h3><a id="security_ssl" href="#security_ssl">7.2 Encryption and Authentication using SSL</a></h3>
+Apache Kafka allows clients to connect over SSL. By default SSL is disabled but can be turned on as needed.
+
+<ol>
+    <li><h4><a id="security_ssl_key" href="#security_ssl_key">Generate SSL key and certificate for each Kafka broker</a></h4>
+        The first step of deploying HTTPS is to generate the key and the certificate for each machine in the cluster. You can use Java’s keytool utility to accomplish this task.
+        We will generate the key into a temporary keystore initially so that we can export and sign it later with CA.
+        <pre>
+        keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey</pre>
+
+        You need to specify two parameters in the above command:
+        <ol>
+            <li>keystore: the keystore file that stores the certificate. The keystore file contains the private key of the certificate; therefore, it needs to be kept safely.</li>
+            <li>validity: the valid time of the certificate in days.</li>
+        </ol>
+        Ensure that common name (CN) matches exactly with the fully qualified domain name (FQDN) of the server. The client compares the CN with the DNS domain name to ensure that it is indeed connecting to the desired server, not the malicious one.</li>
+
+    <li><h4><a id="security_ssl_ca" href="#security_ssl_ca">Creating your own CA</a></h4>
+        After the first step, each machine in the cluster has a public-private key pair, and a certificate to identify the machine. The certificate, however, is unsigned, which means that an attacker can create such a certificate to pretend to be any machine.<p>
+        Therefore, it is important to prevent forged certificates by signing them for each machine in the cluster. A certificate authority (CA) is responsible for signing certificates. CA works likes a government that issues passports—the government stamps (signs) each passport so that the passport becomes difficult to forge. Other governments verify the stamps to ensure the passport is authentic. Similarly, the CA signs the certificates, and the cryptography guarantees that a signed certificate is computationally difficult to forge. Thus, as long as the CA is a genuine and trusted authority, the clients have high assurance that they are connecting to the authentic machines.
+        <pre>
+        openssl req <b>-new</b> -x509 -keyout ca-key -out ca-cert -days 365</pre>
+
+        The generated CA is simply a public-private key pair and certificate, and it is intended to sign other certificates.<br>
+
+        The next step is to add the generated CA to the **clients’ truststore** so that the clients can trust this CA:
+        <pre>
+        keytool -keystore server.truststore.jks -alias CARoot <b>-import</b> -file ca-cert</pre>
+
+        <b>Note:</b> If you configure the Kafka brokers to require client authentication by setting ssl.client.auth to be "requested" or "required" on the <a href="#config_broker">Kafka brokers config</a> then you must provide a truststore for the Kafka brokers as well and it should have all the CA certificates that clients keys were signed by.
+        <pre>
+        keytool -keystore client.truststore.jks -alias CARoot -import -file ca-cert</pre>
+
+        In contrast to the keystore in step 1 that stores each machine’s own identity, the truststore of a client stores all the certificates that the client should trust. Importing a certificate into one’s truststore also means trusting all certificates that are signed by that certificate. As the analogy above, trusting the government (CA) also means trusting all passports (certificates) that it has issued. This attribute is called the chain of trust, and it is particularly useful when deploying SSL on a large Kafka cluster. You can sign all certificates in the cluster with a single CA, and have all machines share the same truststore that trusts the CA. That way all machines can authenticate all other machines.</li>
+
+    <li><h4><a id="security_ssl_signing" href="#security_ssl_signing">Signing the certificate</a></h4>
+        The next step is to sign all certificates generated by step 1 with the CA generated in step 2. First, you need to export the certificate from the keystore:
+        <pre>
+        keytool -keystore server.keystore.jks -alias localhost -certreq -file cert-file</pre>
+
+        Then sign it with the CA:
+        <pre>
+        openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-signed -days {validity} -CAcreateserial -passin pass:{ca-password}</pre>
+
+        Finally, you need to import both the certificate of the CA and the signed certificate into the keystore:
+        <pre>
+        keytool -keystore server.keystore.jks -alias CARoot -import -file ca-cert
+        keytool -keystore server.keystore.jks -alias localhost -import -file cert-signed</pre>
+
+        The definitions of the parameters are the following:
+        <ol>
+            <li>keystore: the location of the keystore</li>
+            <li>ca-cert: the certificate of the CA</li>
+            <li>ca-key: the private key of the CA</li>
+            <li>ca-password: the passphrase of the CA</li>
+            <li>cert-file: the exported, unsigned certificate of the server</li>
+            <li>cert-signed: the signed certificate of the server</li>
+        </ol>
+
+        Here is an example of a bash script with all above steps. Note that one of the commands assumes a password of `test1234`, so either use that password or edit the command before running it.
+            <pre>
+        #!/bin/bash
+        #Step 1
+        keytool -keystore server.keystore.jks -alias localhost -validity 365 -genkey
+        #Step 2
+        openssl req -new -x509 -keyout ca-key -out ca-cert -days 365
+        keytool -keystore server.truststore.jks -alias CARoot -import -file ca-cert
+        keytool -keystore client.truststore.jks -alias CARoot -import -file ca-cert
+        #Step 3
+        keytool -keystore server.keystore.jks -alias localhost -certreq -file cert-file
+        openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-signed -days 365 -CAcreateserial -passin pass:test1234
+        keytool -keystore server.keystore.jks -alias CARoot -import -file ca-cert
+        keytool -keystore server.keystore.jks -alias localhost -import -file cert-signed</pre></li>
+    <li><h4><a id="security_configbroker" href="#security_configbroker">Configuring Kafka Brokers</a></h4>
+        Kafka Brokers support listening for connections on multiple ports.
+        We need to configure the following property in server.properties, which must have one or more comma-separated values:
+        <pre>listeners</pre>
+
+        If SSL is not enabled for inter-broker communication (see below for how to enable it), both PLAINTEXT and SSL ports will be necessary.
+        <pre>
+        listeners=PLAINTEXT://host.name:port,SSL://host.name:port</pre>
+
+        Following SSL configs are needed on the broker side
+        <pre>
+        ssl.keystore.location=/var/private/ssl/kafka.server.keystore.jks
+        ssl.keystore.password=test1234
+        ssl.key.password=test1234
+        ssl.truststore.location=/var/private/ssl/kafka.server.truststore.jks
+        ssl.truststore.password=test1234</pre>
+
+        Optional settings that are worth considering:
+        <ol>
+            <li>ssl.client.auth=none ("required" => client authentication is required, "requested" => client authentication is requested and client without certs can still connect. The usage of "requested" is discouraged as it provides a false sense of security and misconfigured clients will still connect successfully.)</li>
+            <li>ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol. (Default is an empty list)</li>
+            <li>ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1 (list out the SSL protocols that you are going to accept from clients. Do note that SSL is deprecated in favor of TLS and using SSL in production is not recommended)</li>
+            <li>ssl.keystore.type=JKS</li>
+            <li>ssl.truststore.type=JKS</li>
+        </ol>
+        If you want to enable SSL for inter-broker communication, add the following to the broker properties file (it defaults to PLAINTEXT)
+        <pre>
+        security.inter.broker.protocol=SSL</pre>
+
+        <p>
+        Due to import regulations in some countries, the Oracle implementation limits the strength of cryptographic algorithms available by default. If stronger algorithms are needed (for example, AES with 256-bit keys), the <a href="http://www.oracle.com/technetwork/java/javase/downloads/index.html">JCE Unlimited Strength Jurisdiction Policy Files</a> must be obtained and installed in the JDK/JRE. See the
+        <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/SunProviders.html">JCA Providers Documentation</a> for more information.
+        </p>
+
+        Once you start the broker you should be able to see in the server.log
+        <pre>
+        with addresses: PLAINTEXT -> EndPoint(192.168.64.1,9092,PLAINTEXT),SSL -> EndPoint(192.168.64.1,9093,SSL)</pre>
+
+        To check quickly if  the server keystore and truststore are setup properly you can run the following command
+        <pre>openssl s_client -debug -connect localhost:9093 -tls1</pre> (Note: TLSv1 should be listed under ssl.enabled.protocols)<br>
+        In the output of this command you should see server's certificate:
+        <pre>
+        -----BEGIN CERTIFICATE-----
+        {variable sized random bytes}
+        -----END CERTIFICATE-----
+        subject=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=Sriharsha Chintalapani
+        issuer=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=kafka/emailAddress=test@test.com</pre>
+        If the certificate does not show up or if there are any other error messages then your keystore is not setup properly.</li>
+
+    <li><h4><a id="security_configclients" href="#security_configclients">Configuring Kafka Clients</a></h4>
+        SSL is supported only for the new Kafka Producer and Consumer, the older API is not supported. The configs for SSL will be the same for both producer and consumer.<br>
+        If client authentication is not required in the broker, then the following is a minimal configuration example:
+        <pre>
+        security.protocol=SSL
+        ssl.truststore.location=/var/private/ssl/kafka.client.truststore.jks
+        ssl.truststore.password=test1234</pre>
+
+        If client authentication is required, then a keystore must be created like in step 1 and the following must also be configured:
+        <pre>
+        ssl.keystore.location=/var/private/ssl/kafka.client.keystore.jks
+        ssl.keystore.password=test1234
+        ssl.key.password=test1234</pre>
+        Other configuration settings that may also be needed depending on our requirements and the broker configuration:
+            <ol>
+                <li>ssl.provider (Optional). The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.</li>
+                <li>ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol.</li>
+                <li>ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1. It should list at least one of the protocols configured on the broker side</li>
+                <li>ssl.truststore.type=JKS</li>
+                <li>ssl.keystore.type=JKS</li>
+            </ol>
+<br>
+        Examples using console-producer and console-consumer:
+        <pre>
+        kafka-console-producer.sh --broker-list localhost:9093 --topic test --producer.config client-ssl.properties
+        kafka-console-consumer.sh --bootstrap-server localhost:9093 --topic test --new-consumer --consumer.config client-ssl.properties</pre>
+    </li>
+</ol>
+<h3><a id="security_sasl" href="#security_sasl">7.3 Authentication using SASL</a></h3>
+
+<ol>
+    <li><h4><a id="security_sasl_prereq" href="#security_sasl_prereq">Prerequisites</a></h4>
+    <ol>
+        <li><b>Kerberos</b><br>
+        If your organization is already using a Kerberos server (for example, by using Active Directory), there is no need to install a new server just for Kafka. Otherwise you will need to install one, your Linux vendor likely has packages for Kerberos and a short guide on how to install and configure it (<a href="https://help.ubuntu.com/community/Kerberos">Ubuntu</a>, <a href="https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Managing_Smart_Cards/installing-kerberos.html">Redhat</a>). Note that if you are using Oracle Java, you will need to download JCE policy files for your Java version and copy them to $JAVA_HOME/jre/lib/security.</li>
+        <li><b>Create Kerberos Principals</b><br>
+        If you are using the organization's Kerberos or Active Directory server, ask your Kerberos administrator for a principal for each Kafka broker in your cluster and for every operating system user that will access Kafka with Kerberos authentication (via clients and tools).</br>
+        If you have installed your own Kerberos, you will need to create these principals yourself using the following commands:
+            <pre>
+    sudo /usr/sbin/kadmin.local -q 'addprinc -randkey kafka/{hostname}@{REALM}'
+    sudo /usr/sbin/kadmin.local -q "ktadd -k /etc/security/keytabs/{keytabname}.keytab kafka/{hostname}@{REALM}"</pre></li>
+        <li><b>Make sure all hosts can be reachable using hostnames</b> - it is a Kerberos requirement that all your hosts can be resolved with their FQDNs.</li>
+    </ol>
+    <li><h4><a id="security_sasl_brokerconfig" href="#security_sasl_brokerconfig">Configuring Kafka Brokers</a></h4>
+    <ol>
+        <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example (note that each broker should have its own keytab):
+        <pre>
+    KafkaServer {
+        com.sun.security.auth.module.Krb5LoginModule required
+        useKeyTab=true
+        storeKey=true
+        keyTab="/etc/security/keytabs/kafka_server.keytab"
+        principal="kafka/kafka1.hostname.com@EXAMPLE.COM";
+    };
+
+    // Zookeeper client authentication
+    Client {
+       com.sun.security.auth.module.Krb5LoginModule required
+       useKeyTab=true
+       storeKey=true
+       keyTab="/etc/security/keytabs/kafka_server.keytab"
+       principal="kafka/kafka1.hostname.com@EXAMPLE.COM";
+    };</pre>
+
+        </li>
+        <li>Pass the JAAS and optionally the krb5 file locations as JVM parameters to each Kafka broker (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
+            <pre>
+    -Djava.security.krb5.conf=/etc/kafka/krb5.conf
+    -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</pre>
+        </li>
+        <li>Make sure the keytabs configured in the JAAS file are readable by the operating system user who is starting kafka broker.</li>
+        <li>Configure a SASL port in server.properties, by adding at least one of SASL_PLAINTEXT or SASL_SSL to the <i>listeners</i> parameter, which contains one or more comma-separated values:
+        <pre>
+    listeners=SASL_PLAINTEXT://host.name:port</pre>
+        If SASL_SSL is used, then <a href="#security_ssl">SSL must also be configured</a>.
+        If you are only configuring a SASL port (or if you want the Kafka brokers to authenticate each other using SASL) then make sure you set the same SASL protocol for inter-broker communication:
+        <pre>
+    security.inter.broker.protocol=SASL_PLAINTEXT (or SASL_SSL)</pre></li>
+
+        We must also configure the service name in server.properties, which should match the principal name of the kafka brokers. In the above example, principal is "kafka/kafka1.hostname.com@EXAMPLE.com", so:
+        <pre>
+    sasl.kerberos.service.name=kafka</pre>
+
+        <u>Important notes:</u>
+        <ol>
+            <li>KafkaServer is a section name in JAAS file used by each KafkaServer/Broker. This section tells the broker which principal to use and the location of the keytab where this principal is stored. It allows the broker to login using the keytab specified in this section.</li>
+            <li>Client section is used to authenticate a SASL connection with zookeeper. It also allows the brokers to set SASL ACL on zookeeper nodes which locks these nodes down so that only the brokers can modify it. It is necessary to have the same principal name across all brokers. If you want to use a section name other than Client, set the system property <tt>zookeeper.sasl.client</tt> to the appropriate name (<i>e.g.</i>, <tt>-Dzookeeper.sasl.client=ZkClient</tt>).</li>
+            <li>ZooKeeper uses "zookeeper" as the service name by default. If you want to change this, set the system property <tt>zookeeper.sasl.client.username</tt> to the appropriate name (<i>e.g.</i>, <tt>-Dzookeeper.sasl.client.username=zk</tt>).</li>
+        </ol>
+
+    </ol>
+    <li><h4><a id="security_sasl_clientconfig" href="#security_sasl_clientconfig">Configuring Kafka Clients</a></h4>
+        SASL authentication is only supported for the new kafka producer and consumer, the older API is not supported. To configure SASL authentication on the clients:
+        <ol>
+            <li>
+                Clients (producers, consumers, connect workers, etc) will authenticate to the cluster with their own principal (usually with the same name as the user running the client), so obtain or create these principals as needed. Then create a JAAS file for each principal.
+                The KafkaClient section describes how the clients like producer and consumer can connect to the Kafka Broker. The following is an example configuration for a client using a keytab (recommended for long-running processes):
+            <pre>
+    KafkaClient {
+        com.sun.security.auth.module.Krb5LoginModule required
+        useKeyTab=true
+        storeKey=true
+        keyTab="/etc/security/keytabs/kafka_client.keytab"
+        principal="kafka-client-1@EXAMPLE.COM";
+    };</pre>
+
+            For command-line utilities like kafka-console-consumer or kafka-console-producer, kinit can be used along with "useTicketCache=true" as in:
+            <pre>
+    KafkaClient {
+        com.sun.security.auth.module.Krb5LoginModule required
+        useTicketCache=true;
+    };</pre>
+            </li>
+            <li>Pass the JAAS and optionally krb5 file locations as JVM parameters to each client JVM (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
+            <pre>
+    -Djava.security.krb5.conf=/etc/kafka/krb5.conf
+    -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
+            <li>Make sure the keytabs configured in the kafka_client_jaas.conf are readable by the operating system user who is starting kafka client.</li>
+            <li>Configure the following properties in producer.properties or consumer.properties:
+                <pre>
+    security.protocol=SASL_PLAINTEXT (or SASL_SSL)
+    sasl.kerberos.service.name=kafka</pre>
+            </li>
+        </ol></li>
+
+    <li><h4><a id="security_rolling_upgrade" href="#security_rolling_upgrade">Incorporating Security Features in a Running Cluster</a></h4>
+        You can secure a running cluster via one or more of the supported protocols discussed previously. This is done in phases:
+        <p></p>
+        <ul>
+            <li>Incrementally bounce the cluster nodes to open additional secured port(s).</li>
+            <li>Restart clients using the secured rather than PLAINTEXT port (assuming you are securing the client-broker connection).</li>
+            <li>Incrementally bounce the cluster again to enable broker-to-broker security (if this is required)</li>
+            <li>A final incremental bounce to close the PLAINTEXT port.</li>
+        </ul>
+        <p></p>
+        The specific steps for configuring SSL and SASL are described in sections <a href="#security_ssl">7.2</a> and <a href="#security_sasl">7.3</a>.
+        Follow these steps to enable security for your desired protocol(s).
+        <p></p>
+        The security implementation lets you configure different protocols for both broker-client and broker-broker communication.
+        These must be enabled in separate bounces. A PLAINTEXT port must be left open throughout so brokers and/or clients can continue to communicate.
+        <p></p>
+
+        When performing an incremental bounce stop the brokers cleanly via a SIGTERM. It's also good practice to wait for restarted replicas to return to the ISR list before moving onto the next node.
+        <p></p>
+        As an example, say we wish to encrypt both broker-client and broker-broker communication with SSL. In the first incremental bounce, a SSL port is opened on each node:
+        <pre>
+         listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092</pre>
+
+        We then restart the clients, changing their config to point at the newly opened, secured port:
+
+        <pre>
+        bootstrap.servers = [broker1:9092,...]
+        security.protocol = SSL
+        ...etc</pre>
+
+        In the second incremental server bounce we instruct Kafka to use SSL as the broker-broker protocol (which will use the same SSL port):
+
+        <pre>
+        listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092
+        security.inter.broker.protocol=SSL</pre>
+
+        In the final bounce we secure the cluster by closing the PLAINTEXT port:
+
+        <pre>
+        listeners=SSL://broker1:9092
+        security.inter.broker.protocol=SSL</pre>
+
+        Alternatively we might choose to open multiple ports so that different protocols can be used for broker-broker and broker-client communication. Say we wished to use SSL encryption throughout (i.e. for broker-broker and broker-client communication) but we'd like to add SASL authentication to the broker-client connection also. We would achieve this by opening two additional ports during the first bounce:
+
+        <pre>
+        listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092,SASL_SSL://broker1:9093</pre>
+
+        We would then restart the clients, changing their config to point at the newly opened, SASL & SSL secured port:
+
+        <pre>
+        bootstrap.servers = [broker1:9093,...]
+        security.protocol = SASL_SSL
+        ...etc</pre>
+
+        The second server bounce would switch the cluster to use encrypted broker-broker communication via the SSL port we previously opened on port 9092:
+
+        <pre>
+        listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092,SASL_SSL://broker1:9093
+        security.inter.broker.protocol=SSL</pre>
+
+        The final bounce secures the cluster by closing the PLAINTEXT port.
+
+        <pre>
+       listeners=SSL://broker1:9092,SASL_SSL://broker1:9093
+       security.inter.broker.protocol=SSL</pre>
+
+        ZooKeeper can be secured independently of the Kafka cluster. The steps for doing this are covered in section <a href="#zk_authz_migration">7.5.2</a>.
+    </li>
+</ol>
+
+<h3><a id="security_authz" href="#security_authz">7.4 Authorization and ACLs</a></h3>
+Kafka ships with a pluggable Authorizer and an out-of-box authorizer implementation that uses zookeeper to store all the acls. Kafka acls are defined in the general format of "Principal P is [Allowed/Denied] Operation O From Host H On Resource R". You can read more about the acl structure on KIP-11. In order to add, remove or list acls you can use the Kafka authorizer CLI. By default, if a Resource R has no associated acls, no one other than super users is allowed to access R. If you want to change that behavior, you can include the following in broker.properties.
+<pre>allow.everyone.if.no.acl.found=true</pre>
+One can also add super users in broker.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma).
+<pre>super.users=User:Bob;User:Alice</pre>
+By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting a customized PrincipalBuilder in broker.properties like the following.
+<pre>principal.builder.class=CustomizedPrincipalBuilderClass</pre>
+By default, the SASL user name will be the primary part of the Kerberos principal. One can change that by setting <code>sasl.kerberos.principal.to.local.rules</code> to a customized rule in broker.properties.
+The format of <code>sasl.kerberos.principal.to.local.rules</code> is a list where each rule works in the same way as the auth_to_local in <a href="http://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html">Kerberos configuration file (krb5.conf)</a>. Each rules starts with RULE: and contains an expression in the format [n:string](regexp)s/pattern/replacement/g. See the kerberos documentation for more details. An example of adding a rule to properly translate user@MYDOMAIN.COM to user while also keeping the default rule in place is:
+<pre>sasl.kerberos.principal.to.local.rules=RULE:[1:$1@$0](.*@MYDOMAIN.COM)s/@.*//,DEFAULT</pre>
+
+<h4><a id="security_authz_cli" href="#security_authz_cli">Command Line Interface</a></h4>
+Kafka Authorization management CLI can be found under bin directory with all the other CLIs. The CLI script is called <b>kafka-acls.sh</b>. Following lists all the options that the script supports:
+<p></p>
+<table class="data-table">
+    <tr>
+        <th>Option</th>
+        <th>Description</th>
+        <th>Default</th>
+        <th>Option type</th>
+    </tr>
+    <tr>
+        <td>--add</td>
+        <td>Indicates to the script that user is trying to add an acl.</td>
+        <td></td>
+        <td>Action</td>
+    </tr>
+    <tr>
+        <td>--remove</td>
+        <td>Indicates to the script that user is trying to remove an acl.</td>
+        <td></td>
+        <td>Action</td>
+    </tr>
+    <tr>
+        <td>--list</td>
+        <td>Indicates to the script that user is trying to list acls.</td>
+        <td></td>
+        <td>Action</td>
+    </tr>
+    <tr>
+        <td>--authorizer</td>
+        <td>Fully qualified class name of the authorizer.</td>
+        <td>kafka.security.auth.SimpleAclAuthorizer</td>
+        <td>Configuration</td>
+    </tr>
+    <tr>
+        <td>--authorizer-properties</td>
+        <td>key=val pairs that will be passed to authorizer for initialization. For the default authorizer the example values are: zookeeper.connect=localhost:2181</td>
+        <td></td>
+        <td>Configuration</td>
+    </tr>
+    <tr>
+        <td>--cluster</td>
+        <td>Specifies cluster as resource.</td>
+        <td></td>
+        <td>Resource</td>
+    </tr>
+    <tr>
+        <td>--topic [topic-name]</td>
+        <td>Specifies the topic as resource.</td>
+        <td></td>
+        <td>Resource</td>
+    </tr>
+    <tr>
+        <td>--group [group-name]</td>
+        <td>Specifies the consumer-group as resource.</td>
+        <td></td>
+        <td>Resource</td>
+    </tr>
+    <tr>
+        <td>--allow-principal</td>
+        <td>Principal is in PrincipalType:name format that will be added to ACL with Allow permission. <br>You can specify multiple --allow-principal in a single command.</td>
+        <td></td>
+        <td>Principal</td>
+    </tr>
+    <tr>
+        <td>--deny-principal</td>
+        <td>Principal is in PrincipalType:name format that will be added to ACL with Deny permission. <br>You can specify multiple --deny-principal in a single command.</td>
+        <td></td>
+        <td>Principal</td>
+    </tr>
+    <tr>
+        <td>--allow-host</td>
+        <td>IP address from which principals listed in --allow-principal will have access.</td>
+        <td> if --allow-principal is specified defaults to * which translates to "all hosts"</td>
+        <td>Host</td>
+    </tr>
+    <tr>
+        <td>--deny-host</td>
+        <td>IP address from which principals listed in --deny-principal will be denied access.</td>
+        <td>if --deny-principal is specified defaults to * which translates to "all hosts"</td>
+        <td>Host</td>
+    </tr>
+    <tr>
+        <td>--operation</td>
+        <td>Operation that will be allowed or denied.<br>
+            Valid values are : Read, Write, Create, Delete, Alter, Describe, ClusterAction, All</td>
+        <td>All</td>
+        <td>Operation</td>
+    </tr>
+    <tr>
+        <td>--producer</td>
+        <td> Convenience option to add/remove acls for producer role. This will generate acls that allows WRITE,
+            DESCRIBE on topic and CREATE on cluster.</td>
+        <td></td>
+        <td>Convenience</td>
+    </tr>
+    <tr>
+        <td>--consumer</td>
+        <td> Convenience option to add/remove acls for consumer role. This will generate acls that allows READ,
+            DESCRIBE on topic and READ on consumer-group.</td>
+        <td>Convenience</td>
+    </tr>
+</tbody></table>
+
+<h4><a id="security_authz_examples" href="#security_authz_examples">Examples</a></h4>
+<ul>
+    <li><b>Adding Acls</b><br>
+Suppose you want to add an acl "Principals User:Bob and User:Alice are allowed to perform Operation Read and Write on Topic Test-Topic from IP 198.51.100.0 and IP 198.51.100.1". You can do that by executing the CLI with following options:
+        <pre>bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic</pre>
+        By default all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principal and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from IP 198.51.100.3 we can do so using following commands:
+        <pre>bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-host * --deny-principal User:BadBob --deny-host 198.51.100.3 --operation Read --topic Test-topic</pre>
+        Note that ``--allow-host`` and ``deny-host`` only support IP addresses (hostnames are not supported).
+        Above examples add acls to a topic by specifying --topic [topic-name] as the resource option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name].</li>
+
+    <li><b>Removing Acls</b><br>
+            Removing acls is pretty much the same. The only difference is instead of --add option users will have to specify --remove option. To remove the acls added by the first example above we can execute the CLI with following options:
+           <pre> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic </pre></li>
+
+    <li><b>List Acls</b><br>
+            We can list acls for any resource by specifying the --list option with the resource. To list all acls for Test-topic we can execute the CLI with following options:
+            <pre>bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic</pre></li>
+
+    <li><b>Adding or removing a principal as producer or consumer</b><br>
+            The most common use case for acl management are adding/removing a principal as producer or consumer so we added convenience options to handle these cases. In order to add User:Bob as a producer of  Test-topic we can execute the following command:
+           <pre> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --producer --topic Test-topic</pre>
+            Similarly to add Alice as a consumer of Test-topic with consumer group Group-1 we just have to pass --consumer option:
+           <pre> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --consumer --topic test-topic --group Group-1 </pre>
+            Note that for consumer option we must also specify the consumer group.
+            In order to remove a principal from producer or consumer role we just need to pass --remove option. </li>
+    </ul>
+
+<h3><a id="zk_authz" href="#zk_authz">7.5 ZooKeeper Authentication</a></h3>
+<h4><a id="zk_authz_new" href="#zk_authz_new">7.5.1 New clusters</a></h4>
+To enable ZooKeeper authentication on brokers, there are two necessary steps:
+<ol>
+	<li> Create a JAAS login file and set the appropriate system property to point to it as described above</li>
+	<li> Set the configuration property <tt>zookeeper.set.acl</tt> in each broker to true</li>
+</ol>
+
+The metadata stored in ZooKeeper is such that only brokers will be able to modify the corresponding znodes, but znodes are world readable. The rationale behind this decision is that the data stored in ZooKeeper is not sensitive, but inappropriate manipulation of znodes can cause cluster disruption. We also recommend limiting the access to ZooKeeper via network segmentation (only brokers and some admin tools need access to ZooKeeper if the new consumer and new producer are used).
+
+<h4><a id="zk_authz_migration" href="#zk_authz_migration">7.5.2 Migrating clusters</a></h4>
+If you are running a version of Kafka that does not support security or simply with security disabled, and you want to make the cluster secure, then you need to execute the following steps to enable ZooKeeper authentication with minimal disruption to your operations:
+<ol>
+	<li>Perform a rolling restart setting the JAAS login file, which enables brokers to authenticate. At the end of the rolling restart, brokers are able to manipulate znodes with strict ACLs, but they will not create znodes with those ACLs</li>
+	<li>Perform a second rolling restart of brokers, this time setting the configuration parameter <tt>zookeeper.set.acl</tt> to true, which enables the use of secure ACLs when creating znodes</li>
+	<li>Execute the ZkSecurityMigrator tool. To execute the tool, there is this script: <tt>./bin/zookeeper-security-migration.sh</tt> with <tt>zookeeper.acl</tt> set to secure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes</li>
+</ol>
+<p>It is also possible to turn off authentication in a secure cluster. To do it, follow these steps:</p>
+<ol>
+	<li>Perform a rolling restart of brokers setting the JAAS login file, which enables brokers to authenticate, but setting <tt>zookeeper.set.acl</tt> to false. At the end of the rolling restart, brokers stop creating znodes with secure ACLs, but are still able to authenticate and manipulate all znodes</li>
+	<li>Execute the ZkSecurityMigrator tool. To execute the tool, run this script <tt>./bin/zookeeper-security-migration.sh</tt> with <tt>zookeeper.acl</tt> set to unsecure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes</li>
+	<li>Perform a second rolling restart of brokers, this time omitting the system property that sets the JAAS login file</li>
+</ol>
+Here is an example of how to run the migration tool:
+<pre>
+./bin/zookeeper-security-migration --zookeeper.acl=secure --zookeeper.connection=localhost:2181
+</pre>
+<p>Run this to see the full list of parameters:</p>
+<pre>
+./bin/zookeeper-security-migration --help
+</pre>
+<h4><a id="zk_authz_ensemble" href="#zk_authz_ensemble">7.5.3 Migrating the ZooKeeper ensemble</a></h4>
+It is also necessary to enable authentication on the ZooKeeper ensemble. To do it, we need to perform a rolling restart of the server and set a few properties. Please refer to the ZooKeeper documentation for more detail:
+<ol>
+	<li><a href="http://zookeeper.apache.org/doc/r3.4.6/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache ZooKeeper documentation</a></li>
+	<li><a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Zookeeper+and+SASL">Apache ZooKeeper wiki</a></li>
+</ol>
