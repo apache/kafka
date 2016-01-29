@@ -22,17 +22,20 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Percentile;
 import org.apache.kafka.common.metrics.stats.Percentiles;
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing;
+import org.apache.kafka.common.metrics.stats.StdDev;
 
 public class MetricsBench {
 
     public static void main(String[] args) {
         long iters = Long.parseLong(args[0]);
         Metrics metrics = new Metrics();
+
         try {
             Sensor parent = metrics.sensor("parent");
             Sensor child = metrics.sensor("child", parent);
             for (Sensor sensor : Arrays.asList(parent, child)) {
                 sensor.add(metrics.metricName(sensor.name() + ".avg", "grp1"), new Avg());
+                sensor.add(metrics.metricName(sensor.name() + ".stddev", "grp1"), new StdDev());
                 sensor.add(metrics.metricName(sensor.name() + ".count", "grp1"), new Count());
                 sensor.add(metrics.metricName(sensor.name() + ".max", "grp1"), new Max());
                 sensor.add(new Percentiles(1024,

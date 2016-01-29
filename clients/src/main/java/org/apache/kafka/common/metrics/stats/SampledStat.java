@@ -108,6 +108,7 @@ public abstract class SampledStat implements MeasurableStat {
         public long eventCount;
         public long lastWindowMs;
         public double value;
+        public double secondValue;
 
         public Sample(double initialValue, long now) {
             this.initialValue = initialValue;

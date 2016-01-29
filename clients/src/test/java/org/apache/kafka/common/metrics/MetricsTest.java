@@ -34,6 +34,7 @@ import org.apache.kafka.common.metrics.stats.Percentile;
 import org.apache.kafka.common.metrics.stats.Percentiles;
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.StdDev;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.After;
@@ -415,6 +416,23 @@ public class MetricsTest {
         assertEquals("Rate(0...2) = 2.666", sum / elapsedSecs, km.value(), EPS);
         assertEquals("Elapsed Time = 75 seconds", elapsedSecs,
                 ((Rate) km.measurable()).windowSize(cfg, time.milliseconds()) / 1000, EPS);
+    }
+
+    @Test
+    public void testStdDevStats() throws Exception {
+        ConstantMeasurable measurable = new ConstantMeasurable();
+
+        metrics.addMetric(new MetricName("direct.measurable", "grp1", "The fraction of time an appender waits for space allocation."), measurable);
+        Sensor s = metrics.sensor("test.sensor");
+        s.add(new MetricName("test.stddev", "grp1"), new StdDev());
+
+
+        for (int i = 0; i < 10; i++)
+            s.record(i);
+
+        // pretend 2 seconds passed...
+        time.sleep(2000);
+        assertEquals("StdDev(0...9) = 2.8722813232690143", 2.8722813232690143, metrics.metrics().get(new MetricName("test.stddev", "grp1")).value(), EPS);
     }
 
     public static class ConstantMeasurable implements Measurable {
