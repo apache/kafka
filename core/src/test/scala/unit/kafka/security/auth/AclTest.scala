@@ -16,7 +16,6 @@
  */
 package kafka.security.auth
 
-import kafka.security.auth._
 import kafka.utils.Json
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{Test, Assert}
