@@ -45,7 +45,7 @@ public abstract class LazyKTableWrapper<K, V> extends AbstractStream<K> implemen
         Type newValueType = (valueType == null) ? this.valueType : valueType;
 
         if (newKeyType != null && newValueType != null) {
-            return create(keyType == null ? this.keyType : keyType, valueType == null ? this.valueType : valueType);
+            return create(newKeyType, newValueType);
         } else {
             final LazyKTableWrapper<K, V> parent = this;
             return new LazyKTableWrapper<K, V>(topology, newKeyType, newValueType) {

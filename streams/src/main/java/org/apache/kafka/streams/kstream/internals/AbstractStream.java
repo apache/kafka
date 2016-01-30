@@ -32,6 +32,8 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.type.Types;
 import org.apache.kafka.streams.kstream.type.internal.Resolver;
 import org.apache.kafka.streams.kstream.type.TypeException;
 
@@ -97,24 +99,40 @@ public abstract class AbstractStream<K> {
         if (type == null)
             throw new InsufficientTypeInfoException();
 
-        Serializer<T> serializer = topology.getSerializer(type);
-
-        if (serializer == null) {
-            // If this is a windowed key, we construct a special serializer.
-            Type windowedRawKeyType = Resolver.getRawKeyTypeFromWindowedType(type);
-            if (windowedRawKeyType != null)
-                serializer = new WindowedSerializer(topology.getSerializer(windowedRawKeyType));
+        // If this is a windowed key, we construct a special serializer.
+        Type windowedRawKeyType = Resolver.getRawKeyTypeFromWindowedType(type);
+        if (windowedRawKeyType != null) {
+            return new WindowedSerializer(topology.getSerializer(windowedRawKeyType));
+        } else {
+            return topology.getSerializer(type);
         }
-
-        return serializer;
     }
 
+    @SuppressWarnings("unchecked")
     protected <T> Deserializer<T> getDeserializer(Type type) {
 
         if (type == null)
             throw new InsufficientTypeInfoException();
 
-        return topology.getDeserializer(type);
+        // If this is a windowed key, we construct a special serializer.
+        Type windowedRawKeyType = Resolver.getRawKeyTypeFromWindowedType(type);
+        if (windowedRawKeyType != null) {
+            return new WindowedDeserializer(topology.getDeserializer(windowedRawKeyType));
+        } else {
+            return topology.getDeserializer(type);
+        }
+    }
+
+    protected Type getWindowedKeyType() {
+        try {
+            if (keyType == null)
+                throw new InsufficientTypeInfoException("key type");
+
+            return Types.type(Windowed.class, keyType);
+
+        } catch (TypeException ex) {
+            throw new TopologyBuilderException("failed to define a windowed key type", ex);
+        }
     }
 
     public static Type getKeyTypeFromKeyValueType(Type type) {
@@ -197,7 +215,7 @@ public abstract class AbstractStream<K> {
         }
     }
 
-    public static void ensureConsistentTypes(Type... types) {
+    public static Type ensureConsistentTypes(Type... types) {
         Type type = null;
 
         for (Type t : types) {
@@ -208,6 +226,7 @@ public abstract class AbstractStream<K> {
                     throw new InconsistentTypeInfoException(types);
             }
         }
+        return type;
     }
 
 }

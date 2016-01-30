@@ -40,7 +40,6 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.type.TypeException;
-import org.apache.kafka.streams.kstream.type.Types;
 import org.apache.kafka.streams.kstream.type.internal.Resolver;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -427,73 +426,75 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer, Windows<W> windows) {
-        Serializer<K> keySerializer = getSerializer(keyType);
-        Serializer<V> valueSerializer = getSerializer(valueType);
-        Deserializer<K> keyDeserializer = getDeserializer(keyType);
-        Deserializer<V> valueDeserializer = getDeserializer(valueType);
+    public <W extends Window> KTable<Windowed<K>, V> reduceByKey(final Reducer<V> reducer, final Windows<W> windows) {
 
-        // TODO: this agg window operator is only used for casting K to Windowed<K> for
-        // KTableProcessorSupplier, which is a bit awkward and better be removed in the future
-        String reduceName = topology.newName(REDUCE_NAME);
-        String selectName = topology.newName(SELECT_NAME);
+        final KStreamImpl<K, V> self = this;
 
-        ProcessorSupplier<K, V> aggWindowSupplier = new KStreamAggWindow<>();
-        ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamReduce<>(windows, windows.name(), reducer);
+        KTable<Windowed<K>, V> lazyKTable = new LazyKTableWrapper<Windowed<K>, V>(topology, getWindowedKeyType(), null) {
+            @Override
+            protected KTable<Windowed<K>, V> create(Type winKeyType, Type aggValueType) {
+                Serializer<K> keySerializer = getSerializer(self.keyType);
+                Serializer<V> valueSerializer = getSerializer(aggValueType);
+                Deserializer<K> keyDeserializer = getDeserializer(self.keyType);
+                Deserializer<V> valueDeserializer = getDeserializer(aggValueType);
 
-        RocksDBWindowStoreSupplier<K, V> aggregateStore =
-                new RocksDBWindowStoreSupplier<>(
-                        windows.name(),
-                        windows.maintainMs(),
-                        windows.segments,
-                        false,
-                        new Serdes<>("", keySerializer, keyDeserializer, valueSerializer, valueDeserializer),
-                        null);
+                // TODO: this agg window operator is only used for casting K to Windowed<K> for
+                // KTableProcessorSupplier, which is a bit awkward and better be removed in the future
+                final String reduceName = topology.newName(REDUCE_NAME);
+                final String selectName = topology.newName(SELECT_NAME);
 
-        // aggregate the values with the aggregator and local store
-        topology.addProcessor(selectName, aggWindowSupplier, this.name);
-        topology.addProcessor(reduceName, aggregateSupplier, selectName);
-        topology.addStateStore(aggregateStore, reduceName);
+                final ProcessorSupplier<K, V> aggWindowSupplier = new KStreamAggWindow<>();
+                final ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamReduce<>(windows, windows.name(), reducer);
 
-        // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(topology, reduceName, aggregateSupplier, sourceNodes, keyType, valueType);
+                RocksDBWindowStoreSupplier<K, V> aggregateStore =
+                        new RocksDBWindowStoreSupplier<>(
+                                windows.name(),
+                                windows.maintainMs(),
+                                windows.segments,
+                                false,
+                                new Serdes<>("", keySerializer, keyDeserializer, valueSerializer, valueDeserializer),
+                                null);
+
+                // aggregate the values with the aggregator and local store
+                topology.addProcessor(selectName, aggWindowSupplier, self.name);
+                topology.addProcessor(reduceName, aggregateSupplier, selectName);
+                topology.addStateStore(aggregateStore, reduceName);
+
+                // return the KTable representation with the intermediate topic as the sources
+                return new KTableImpl<>(topology, reduceName, aggregateSupplier, self.sourceNodes, winKeyType, aggValueType);
+            }
+        };
+
+        Type aggregateType = (valueType != null) ? valueType : resolveReturnType(reducer);
+        if (aggregateType != null) {
+            return lazyKTable.returnsValue(aggregateType);
+        } else {
+            return lazyKTable;
+        }
     }
 
     @Override
     public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(final Aggregator<K, V, T> aggregator,
                                                                        final Windows<W> windows) {
-        // TODO: this agg window operator is only used for casting K to Windowed<K> for
-        // KTableProcessorSupplier, which is a bit awkward and better be removed in the future
-        final String aggregateName = topology.newName(AGGREGATE_NAME);
-        String selectName = topology.newName(SELECT_NAME);
+        final KStreamImpl<K, V> self = this;
 
-        ProcessorSupplier<K, V> aggWindowSupplier = new KStreamAggWindow<>();
-        ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamAggregate<>(windows, windows.name(), aggregator);
-
-        // aggregate the values with the aggregator and local store
-        topology.addProcessor(selectName, aggWindowSupplier, this.name);
-        topology.addProcessor(aggregateName, aggregateSupplier, selectName);
-
-        Type windowedKeyType;
-        try {
-            if (keyType == null)
-                throw new InsufficientTypeInfoException("key type");
-
-            windowedKeyType = Types.type(Windowed.class, keyType);
-        } catch (TypeException ex) {
-            throw new TopologyBuilderException("failed to define a windowed key type", ex);
-        }
-
-        final KTable<Windowed<K>, T> aggTable = new KTableImpl<>(topology, aggregateName, aggregateSupplier, sourceNodes, windowedKeyType, null);
-        final Serializer<K> aggKeySerializer = getSerializer(keyType);
-        final Deserializer<K> aggKeyDeserializer = getDeserializer(keyType);
-
-        // return the KTable representation with the intermediate topic as the sources
-        KTable<Windowed<K>, T> lazyKtable = new LazyKTableWrapper<Windowed<K>, T>(topology, windowedKeyType, null) {
+        KTable<Windowed<K>, T> lazyKTable = new LazyKTableWrapper<Windowed<K>, T>(topology, getWindowedKeyType(), null) {
             @Override
-            protected KTable<Windowed<K>, T> create(Type keyType, Type valueType) {
-                Serializer<T> aggValueSerializer = getSerializer(valueType);
-                Deserializer<T> aggValueDeserializer = getDeserializer(valueType);
+            protected KTable<Windowed<K>, T> create(Type winKeyType, Type aggValueType) {
+
+                // TODO: this agg window operator is only used for casting K to Windowed<K> for
+                // KTableProcessorSupplier, which is a bit awkward and better be removed in the future
+                final String aggregateName = topology.newName(AGGREGATE_NAME);
+                String selectName = topology.newName(SELECT_NAME);
+
+                final ProcessorSupplier<K, V> aggWindowSupplier = new KStreamAggWindow<>();
+                final ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamAggregate<>(windows, windows.name(), aggregator);
+
+                final Serializer<K> aggKeySerializer = getSerializer(self.keyType);
+                final Deserializer<K> aggKeyDeserializer = getDeserializer(self.keyType);
+
+                Serializer<T> aggValueSerializer = getSerializer(aggValueType);
+                Deserializer<T> aggValueDeserializer = getDeserializer(aggValueType);
 
                 RocksDBWindowStoreSupplier<K, T> aggregateStore =
                         new RocksDBWindowStoreSupplier<>(
@@ -504,17 +505,21 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                 new Serdes<>("", aggKeySerializer, aggKeyDeserializer, aggValueSerializer, aggValueDeserializer),
                                 null);
 
+                // aggregate the values with the aggregator and local store
+                topology.addProcessor(selectName, aggWindowSupplier, self.name);
+                topology.addProcessor(aggregateName, aggregateSupplier, selectName);
                 topology.addStateStore(aggregateStore, aggregateName);
 
-                return aggTable;
+                // return the KTable representation with the intermediate topic as the sources
+                return new KTableImpl<>(topology, aggregateName, aggregateSupplier, self.sourceNodes, winKeyType, aggValueType);
             }
         };
 
         Type aggregateType = resolveReturnType(aggregator);
         if (aggregateType != null) {
-            return lazyKtable.returnsValue(aggregateType);
+            return lazyKTable.returnsValue(aggregateType);
         } else {
-            return lazyKtable;
+            return lazyKTable;
         }
     }
 }
