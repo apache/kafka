@@ -26,6 +26,11 @@ public class ByteBufferSerializer implements Serializer<ByteBuffer> {
             return null;
 
         data.rewind();
+
+        if(data.hasArray()) {
+            return data.array();
+        }
+
         byte[] ret = new byte[data.remaining()];
         data.get(ret, 0, ret.length);
         data.rewind();
