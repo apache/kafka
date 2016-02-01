@@ -634,7 +634,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
     if(brokerIdSet.size > 1)
       throw new InconsistentBrokerIdException(
-        s"Failed to match broker.id across log.dirs. This could happen if 2 brokers shared a log directory (log.dirs) " +
+        s"Failed to match broker.id across log.dirs. This could happen if multiple brokers shared a log directory (log.dirs) " +
         s"or partial data was manually copied from another broker. Found $brokerIdSet")
     else if(brokerId >= 0 && brokerIdSet.size == 1 && brokerIdSet.last != brokerId)
       throw new InconsistentBrokerIdException(
