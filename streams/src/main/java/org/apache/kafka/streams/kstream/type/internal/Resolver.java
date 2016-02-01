@@ -61,19 +61,27 @@ public class Resolver {
                 try {
                     Type[] resolvedTypeArgs = resolve(typeArgs, env);
 
-                    return new ParametricType(rawType, resolvedTypeArgs);
+                    return new ParametricType(rawType, resolvedTypeArgs, null);
 
                 } catch (TypeException ex) {
                     throw new TypeException("failed to resolve type: " + type, ex);
                 }
             }
+        }  else if (type instanceof ParametricType) {
+            // This is already resolved.
+            return type;
+
+        } else if (type instanceof ArrayType) {
+            // This is already resolved.
+            return type;
+
         } else if (type instanceof ParameterizedType) {
             try {
                 ParameterizedType parameterizedType = (ParameterizedType) type;
                 Class<?> rawType = (Class) parameterizedType.getRawType();
                 Type[] resolvedTypeArgs = resolve(parameterizedType.getActualTypeArguments(), env);
 
-                return new ParametricType(rawType, resolvedTypeArgs);
+                return new ParametricType(rawType, resolvedTypeArgs, parameterizedType.getOwnerType());
 
             } catch (TypeException ex) {
                 throw new TypeException("failed to resolve type: " + type, ex);
@@ -99,14 +107,6 @@ public class Resolver {
         } else if (type instanceof WildcardType) {
             // Wildcard cannot be resolved
             throw new TypeException("failed to resolve type: " + type);
-
-        } else if (type instanceof ParametricType) {
-            // This is already resolved.
-            return type;
-
-        } else if (type instanceof ArrayType) {
-            // This is already resolved.
-            return type;
 
         } else {
             throw new TypeException("failed to resolve type: " + type);
@@ -182,6 +182,23 @@ public class Resolver {
             if (objClass.equals(interfaceClass))
                 return typeArgs;
 
+        } else if (implementationType instanceof ParametricType) {
+            ParametricType parametericType = (ParametricType) implementationType;
+            objClass = parametericType.rawType;
+
+            if (objClass.equals((Class) Object.class))
+                return null;
+
+            TypeVariable[] tVars = objClass.getTypeParameters();
+            Type[] tArgs = parametericType.typeArgs;
+
+            for (int i = 0; i < tVars.length; i++) {
+                typeArgs.put(tVars[i], tArgs[i]);
+            }
+
+            if (objClass.equals(interfaceClass))
+                return typeArgs;
+
         } else if (implementationType instanceof ParameterizedType) {
             ParameterizedType parameterizedType = (ParameterizedType) implementationType;
             objClass = (Class) parameterizedType.getRawType();
@@ -204,22 +221,6 @@ public class Resolver {
             if (objClass.equals(interfaceClass))
                 return typeArgs;
 
-        } else if (implementationType instanceof ParametricType) {
-            ParametricType parametericType = (ParametricType) implementationType;
-            objClass = parametericType.rawType;
-
-            if (objClass.equals((Class) Object.class))
-                return null;
-
-            TypeVariable[] tVars = objClass.getTypeParameters();
-            Type[] tArgs = parametericType.typeArgs;
-
-            for (int i = 0; i < tVars.length; i++) {
-                typeArgs.put(tVars[i], tArgs[i]);
-            }
-
-            if (objClass.equals(interfaceClass))
-                return typeArgs;
         }
 
         if (objClass == null)

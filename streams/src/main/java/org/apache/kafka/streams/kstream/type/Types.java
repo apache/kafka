@@ -45,7 +45,7 @@ public class Types {
      */
     public static Type type(Class<?> type, Type... typeArgs) throws TypeException {
         if (typeArgs != null && typeArgs.length > 0) {
-            return new ParametricType(type, typeArgs);
+            return new ParametricType(type, typeArgs, null);
         } else {
             return type;
         }

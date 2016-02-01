@@ -19,22 +19,39 @@ package org.apache.kafka.streams.kstream.type.internal;
 
 import org.apache.kafka.streams.kstream.type.TypeException;
 
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.util.Arrays;
 
-public class ParametricType implements Type {
+public class ParametricType implements ParameterizedType {
 
     final Class<?> rawType;
     final Type[] typeArgs;
+    final Type ownerType;
 
-    public ParametricType(Class<?> type, Type[] typeArgs) throws TypeException {
+    public ParametricType(Class<?> type, Type[] typeArgs, Type ownerType) throws TypeException {
         verify(type, typeArgs);
 
         this.rawType = type;
         this.typeArgs = typeArgs;
+        this.ownerType = (ownerType == null) ? rawType.getDeclaringClass() : ownerType;
     }
 
+    @Override
+    public Type[] getActualTypeArguments() {
+        return typeArgs.clone();
+    }
+
+    @Override
+    public Type getRawType() {
+        return rawType;
+    }
+
+    @Override
+    public Type getOwnerType() {
+        return null;
+    }
 
     @Override
     public int hashCode() {
