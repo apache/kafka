@@ -19,7 +19,10 @@
 
 <h4><a id="upgrade_9" href="#upgrade_9">Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.9.0.0</a></h4>
 
-0.9.0.0 has <a href="#upgrade_9_breaking">potential breaking changes</a> (please review before upgrading) and an inter-broker protocol change from previous versions. For a rolling upgrade:
+0.9.0.0 has <a href="#upgrade_9_breaking">potential breaking changes</a> (please review before upgrading) and an inter-broker protocol change from previous versions. This means that upgraded brokers and clients may not be compatible with older versions. It is important that you upgrade your Kafka cluster before upgrading your clients. If you are using MirrorMaker downstream clusters should be upgraded first as well.
+
+<p><b>For a rolling upgrade:</b></p>
+
 <ol>
 	<li> Update server.properties file on all brokers and add the following property: inter.broker.protocol.version=0.8.2.X </li>
 	<li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
@@ -54,6 +57,7 @@
 <ul>
     <li> The new broker id generation feature can be disable by setting broker.id.generation.enable to false. </li>
     <li> Configuration parameter log.cleaner.enable is now true by default. This means topics with a cleanup.policy=compact will now be compacted by default, and 128 MB of heap will be allocated to the cleaner process via log.cleaner.dedupe.buffer.size. You may want to review log.cleaner.dedupe.buffer.size and the other log.cleaner configuration values based on your usage of compacted topics. </li>
+    <li> MirrorMakerMessageHandler no longer exposes <em>handle(record: MessageAndMetadata[Array[Byte], Array[Byte]])</em> method as it was never called. </li>
 </ul>
 
 <h5>Deprecations in 0.9.0.0</h5>

@@ -12,12 +12,14 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.io.Serializable;
+
 /**
  * The Kafka offset commit API allows users to provide additional metadata (in the form of a string)
  * when an offset is committed. This can be useful (for example) to store information about which
  * node made the commit, what time the commit was made, etc.
  */
-public class OffsetAndMetadata {
+public class OffsetAndMetadata implements Serializable {
     private final long offset;
     private final String metadata;
 

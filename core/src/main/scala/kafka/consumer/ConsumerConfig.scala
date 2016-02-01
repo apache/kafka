@@ -118,7 +118,7 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   /** the socket receive buffer for network requests */
   val socketReceiveBufferBytes = props.getInt("socket.receive.buffer.bytes", SocketBufferSize)
   
-  /** the number of byes of messages to attempt to fetch */
+  /** the number of bytes of messages to attempt to fetch */
   val fetchMessageMaxBytes = props.getInt("fetch.message.max.bytes", FetchSize)
 
   /** the number threads used to fetch data */
