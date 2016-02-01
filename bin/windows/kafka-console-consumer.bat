@@ -16,6 +16,6 @@ rem limitations under the License.
 
 SetLocal
 set KAFKA_HEAP_OPTS=-Xmx512M
-set PROJECT_NAME="core"
+set PROJECT_NAME=core
 %~dp0kafka-run-class.bat kafka.tools.ConsoleConsumer %*
 EndLocal
