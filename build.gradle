@@ -15,9 +15,12 @@
 
 import org.ajoberstar.grgit.Grgit
 
+import java.nio.file.Files
+import java.nio.file.Paths
+
 buildscript {
   repositories {
-    mavenCentral()
+    maven {url 'http://repo1.maven.org/maven2'}
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
 
@@ -31,7 +34,7 @@ allprojects {
   apply plugin: 'idea'
   apply plugin: 'eclipse'
   repositories {
-    mavenCentral()
+    maven {url 'http://repo1.maven.org/maven2'}
   }
 }
 
@@ -50,6 +53,7 @@ ext {
 
   userShowStandardStreams = project.hasProperty("showStandardStreams") ? showStandardStreams : null
 
+  baseBuildDir = "$buildDir"
 }
 
 apply from: "$rootDir/gradle/dependencies.gradle"
@@ -277,6 +281,12 @@ tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10', 'releaseT
 
 tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10', 'uploadCoreArchives_2_11'] + pkgs.collect { it + ":uploadArchives" }) { }
 
+
+def createFileLink(String src, String link) {
+  Files.deleteIfExists(Paths.get(link))
+  Files.createSymbolicLink(Paths.get(link), Paths.get(src))
+}
+
 project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
@@ -291,7 +301,7 @@ project(':core') {
     compile libs.slf4jlog4j
     compile libs.zkclient
     compile libs.zookeeper
-    // These modules were broken out of core scala in 2.10. We can remove special handling when 2.10 support is dropped.
+//     These modules were broken out of core scala in 2.10. We can remove special handling when 2.10 support is dropped.
     if (versions.baseScala != '2.10') {
       compile libs.scalaParserCombinators
     }
@@ -318,16 +328,54 @@ project(':core') {
     testCompile.exclude module: 'api-ldap-schema-data'
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j-log4j12*')
-    }
+  tasks.create(name: "copyDependantLibsJava", type: Copy) {
     from (configurations.runtime) {
-      exclude('kafka-clients*')
+      include('*.jar')
+      exclude('*scala*')
     }
-    into "$buildDir/dependant-libs-${versions.scala}"
+    into "$baseBuildDir/dependant-libs-java"
   }
 
+  tasks.create(name: "copyDependantLibsScala", type: Copy) {
+    from (configurations.runtime) {
+      include('*scala*.jar')
+    }
+    into "$baseBuildDir/dependant-libs-scala-${versions.scala}"
+  }
+
+  tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
+    from (configurations.testRuntime - configurations.runtime ) {
+      include('*.jar')
+      exclude('*scala*')
+    }
+    into "$baseBuildDir/test-dependant-libs-java"
+  }
+  tasks.create(name: "copyTestDependantLibsScala", type: Copy) {
+    from (configurations.testRuntime - configurations.runtime) {
+      include('*scala*.jar')
+    }
+    into "$baseBuildDir/test-dependant-libs-scala-${versions.scala}"
+  }
+
+  task linkJars(dependsOn: ['copyDependantLibsJava', 'copyDependantLibsScala', 'copyTestDependantLibsJava', 'copyTestDependantLibsScala']) {
+    Files.createDirectories(Paths.get("$buildDir/dependant-libs-java"))
+    Files.createDirectories(Paths.get("$buildDir/dependant-libs-scala-${versions.scala}"))
+    Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-java"))
+    Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-scala-${versions.scala}"))
+
+    copyDependantLibsJava.eachFile {
+      createFileLink("$baseBuildDir/dependant-libs-java/${it.getName()}", "$buildDir/dependant-libs-java/${it.getName()}")
+    }
+    copyDependantLibsScala.eachFile {
+      createFileLink("$baseBuildDir/dependant-libs-scala-${versions.scala}/${it.getName()}", "$buildDir/dependant-libs-scala-${versions.scala}/${it.getName()}")
+    }
+    copyTestDependantLibsJava.eachFile {
+      createFileLink("$baseBuildDir/test-dependant-libs-java/${it.getName()}", "$buildDir/test-dependant-libs-java/${it.getName()}")
+    }
+    copyTestDependantLibsScala.eachFile {
+      createFileLink("$baseBuildDir/test-dependant-libs-scala-${versions.scala}/${it.getName()}", "$buildDir/test-dependant-libs-scala-${versions.scala}/${it.getName()}")
+    }
+  }
   tasks.create(name: "genProducerConfigDocs", dependsOn:jar, type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.clients.producer.ProducerConfig'
@@ -376,7 +424,7 @@ project(':core') {
   }
 
   jar {
-    dependsOn('copyDependantLibs', 'copyDependantTestLibs')
+    dependsOn('linkJars')
   }
 
   jar.manifest {
@@ -385,12 +433,6 @@ project(':core') {
     )
   }
 
-  tasks.create(name: "copyDependantTestLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('*.jar')
-    }
-    into "$buildDir/dependant-testlibs"
-  }
 
   checkstyle {
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
@@ -494,18 +536,33 @@ project(':tools') {
         include "**/org/apache/kafka/tools/*"
     }
 
-    tasks.create(name: "copyDependantLibs", type: Copy) {
-        from (configurations.testRuntime) {
-            include('slf4j-log4j12*')
-        }
+    tasks.create(name: "copyDependantLibsJava", type: Copy) {
         from (configurations.runtime) {
-            exclude('kafka-clients*')
+            include('*.jar')
         }
-        into "$buildDir/dependant-libs-${versions.scala}"
+        into "$baseBuildDir/dependant-libs-java"
     }
 
+    tasks.create(name: "copyTestDependantLibsJava", type:Copy) {
+      from (configurations.testRuntime - configurations.runtime) {
+        include ('*.jar')
+      }
+      into "$baseBuildDir/test-dependant-libs-java"
+    }
+
+    task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {
+      Files.createDirectories(Paths.get("$buildDir/dependant-libs-java"))
+      Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-java"))
+
+      copyDependantLibsJava.eachFile {
+        createFileLink("$baseBuildDir/dependant-libs-java/${it.getName()}", "$buildDir/dependant-libs-java/${it.getName()}")
+      }
+      copyTestDependantLibsJava.eachFile {
+        createFileLink("$baseBuildDir/test-dependant-libs-java/${it.getName()}", "$buildDir/test-dependant-libs-java/${it.getName()}")
+      }
+    }
     jar {
-        dependsOn 'copyDependantLibs'
+        dependsOn 'linkJars'
     }
 }
 
@@ -528,18 +585,34 @@ project(':streams') {
         include "**/org/apache/kafka/streams/*"
     }
 
-    tasks.create(name: "copyDependantLibs", type: Copy) {
-        from (configurations.testRuntime) {
-            include('slf4j-log4j12*')
-        }
-        from (configurations.runtime) {
-            exclude('kafka-clients*')
-        }
-        into "$buildDir/dependant-libs-${versions.scala}"
+    tasks.create(name: "copyDependantLibsJava", type: Copy) {
+      from(configurations.runtime) {
+        include('*.jar')
+      }
+      into "$baseBuildDir/dependant-libs-java"
+    }
+
+    tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
+      from(configurations.testRuntime - configurations.runtime) {
+        include('*.jar')
+      }
+      into "$baseBuildDir/test-dependant-libs-java"
+    }
+
+    task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {
+      Files.createDirectories(Paths.get("$buildDir/dependant-libs-java"))
+      Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-java"))
+
+      copyDependantLibsJava.eachFile {
+        createFileLink("$baseBuildDir/dependant-libs-java/${it.getName()}", "$buildDir/dependant-libs-java/${it.getName()}")
+      }
+      copyTestDependantLibsJava.eachFile {
+        createFileLink("$baseBuildDir/test-dependant-libs-java/${it.getName()}", "$buildDir/test-dependant-libs-java/${it.getName()}")
+      }
     }
 
     jar {
-        dependsOn 'copyDependantLibs'
+        dependsOn 'linkJars'
     }
 }
 
@@ -555,16 +628,36 @@ project(':streams:examples') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.runtime) {
-      exclude('kafka-streams*')
+  tasks.create(name: "copyDependantLibsJava", type: Copy) {
+    from(configurations.runtime) {
+      include('*.jar')
     }
-    into "$buildDir/dependant-libs-${versions.scala}"
+    into "$baseBuildDir/dependant-libs-java"
+  }
+
+  tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
+    from(configurations.testRuntime - configurations.runtime) {
+      include('*.jar')
+    }
+    into "$baseBuildDir/test-dependant-libs-java"
+  }
+
+  task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {
+    Files.createDirectories(Paths.get("$buildDir/dependant-libs-java"))
+    Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-java"))
+
+    copyDependantLibsJava.eachFile {
+      createFileLink("$baseBuildDir/dependant-libs-java/${it.getName()}", "$buildDir/dependant-libs-java/${it.getName()}")
+    }
+    copyTestDependantLibsJava.eachFile {
+      createFileLink("$baseBuildDir/test-dependant-libs-java/${it.getName()}", "$buildDir/test-dependant-libs-java/${it.getName()}")
+    }
   }
 
   jar {
-    dependsOn 'copyDependantLibs'
+    dependsOn 'linkJars'
   }
+
 }
 
 project(':log4j-appender') {
@@ -599,25 +692,34 @@ project(':connect:api') {
     options.links "http://docs.oracle.com/javase/7/docs/api/"
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.runtime) {
-      exclude('kafka-clients*')
-      exclude('connect-*')
-      exclude('slf4j*')
+  tasks.create(name: "copyDependantLibsJava", type: Copy) {
+    from(configurations.runtime) {
+      include('*.jar')
     }
-    into "$buildDir/dependant-libs"
+    into "$baseBuildDir/dependant-libs-java"
   }
 
-  tasks.create(name: "copySlf4jLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j*')
+  tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
+    from(configurations.testRuntime - configurations.runtime) {
+      include('*.jar')
     }
-    into "$projectDir/../build/dependant-libs"
+    into "$baseBuildDir/test-dependant-libs-java"
+  }
+
+  task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {
+    Files.createDirectories(Paths.get("$buildDir/dependant-libs-java"))
+    Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-java"))
+
+    copyDependantLibsJava.eachFile {
+      createFileLink("$baseBuildDir/dependant-libs-java/${it.getName()}", "$buildDir/dependant-libs-java/${it.getName()}")
+    }
+    copyTestDependantLibsJava.eachFile {
+      createFileLink("$baseBuildDir/test-dependant-libs-java/${it.getName()}", "$buildDir/test-dependant-libs-java/${it.getName()}")
+    }
   }
 
   jar {
-    dependsOn copyDependantLibs
-    dependsOn copySlf4jLibs
+    dependsOn 'linkJars'
   }
 }
 
@@ -641,25 +743,34 @@ project(':connect:json') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.runtime) {
-      exclude('kafka-clients*')
-      exclude('connect-*')
-      exclude('slf4j*')
+  tasks.create(name: "copyDependantLibsJava", type: Copy) {
+    from(configurations.runtime) {
+      include('*.jar')
     }
-    into "$buildDir/dependant-libs"
+    into "$baseBuildDir/dependant-libs-java"
   }
 
-  tasks.create(name: "copySlf4jLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j*')
+  tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
+    from(configurations.testRuntime - configurations.runtime) {
+      include('*.jar')
     }
-    into "$projectDir/../build/dependant-libs"
+    into "$baseBuildDir/test-dependant-libs-java"
+  }
+
+  task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {
+    Files.createDirectories(Paths.get("$buildDir/dependant-libs-java"))
+    Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-java"))
+
+    copyDependantLibsJava.eachFile {
+      createFileLink("$baseBuildDir/dependant-libs-java/${it.getName()}", "$buildDir/dependant-libs-java/${it.getName()}")
+    }
+    copyTestDependantLibsJava.eachFile {
+      createFileLink("$baseBuildDir/test-dependant-libs-java/${it.getName()}", "$buildDir/test-dependant-libs-java/${it.getName()}")
+    }
   }
 
   jar {
-    dependsOn copyDependantLibs
-    dependsOn copySlf4jLibs
+    dependsOn 'linkJars'
   }
 }
 
@@ -678,13 +789,15 @@ project(':connect:runtime') {
     compile libs.jettyServlet
     compile libs.reflections
 
+    runtime project(":connect:json")
+    runtime project(":connect:file")
+
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.easymock
     testCompile libs.junit
     testCompile libs.powermock
     testCompile libs.powermockEasymock
 
-    testRuntime project(":connect:json")
     testRuntime libs.slf4jlog4j
   }
 
@@ -692,24 +805,34 @@ project(':connect:runtime') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.runtime) {
-      exclude('kafka-clients*')
-      exclude('connect-*')
-      exclude('slf4j*')
+  tasks.create(name: "copyDependantLibsJava", type: Copy) {
+    from(configurations.runtime) {
+      include('*.jar')
     }
-    into "$buildDir/dependant-libs"
+    into "$baseBuildDir/dependant-libs-java"
   }
-  tasks.create(name: "copySlf4jLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j*')
+
+  tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
+    from(configurations.testRuntime - configurations.runtime) {
+      include('*.jar')
     }
-    into "$projectDir/../build/dependant-libs"
+    into "$baseBuildDir/test-dependant-libs-java"
+  }
+
+  task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {
+    Files.createDirectories(Paths.get("$buildDir/dependant-libs-java"))
+    Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-java"))
+
+    copyDependantLibsJava.eachFile {
+      createFileLink("$baseBuildDir/dependant-libs-java/${it.getName()}", "$buildDir/dependant-libs-java/${it.getName()}")
+    }
+    copyTestDependantLibsJava.eachFile {
+      createFileLink("$baseBuildDir/test-dependant-libs-java/${it.getName()}", "$buildDir/test-dependant-libs-java/${it.getName()}")
+    }
   }
 
   jar {
-    dependsOn copyDependantLibs
-    dependsOn copySlf4jLibs
+    dependsOn 'linkJars'
   }
 
   tasks.create(name: "genConnectConfigDocs", dependsOn:jar, type: JavaExec) {
@@ -738,23 +861,33 @@ project(':connect:file') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.runtime) {
-      exclude('kafka-clients*')
-      exclude('connect-*')
-      exclude('slf4j*')
+  tasks.create(name: "copyDependantLibsJava", type: Copy) {
+    from(configurations.runtime) {
+      include('*.jar')
     }
-    into "$buildDir/dependant-libs"
+    into "$baseBuildDir/dependant-libs-java"
   }
-  tasks.create(name: "copySlf4jLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j*')
+
+  tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
+    from(configurations.testRuntime - configurations.runtime) {
+      include('*.jar')
     }
-    into "$projectDir/../build/dependant-libs"
+    into "$baseBuildDir/test-dependant-libs-java"
+  }
+
+  task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {
+    Files.createDirectories(Paths.get("$buildDir/dependant-libs-java"))
+    Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-java"))
+
+    copyDependantLibsJava.eachFile {
+      createFileLink("$baseBuildDir/dependant-libs-java/${it.getName()}", "$buildDir/dependant-libs-java/${it.getName()}")
+    }
+    copyTestDependantLibsJava.eachFile {
+      createFileLink("$baseBuildDir/test-dependant-libs-java/${it.getName()}", "$buildDir/test-dependant-libs-java/${it.getName()}")
+    }
   }
 
   jar {
-    dependsOn copyDependantLibs
-    dependsOn copySlf4jLibs
+    dependsOn 'linkJars'
   }
 }

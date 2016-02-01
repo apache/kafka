@@ -31,7 +31,7 @@ if [ -z "$SCALA_BINARY_VERSION" ]; then
 fi
 
 if [ -z "$PROJECT_NAMES" ]; then
-  PROJECT_NAMES="core tools clients connect stream log4j-appender"
+  PROJECT_NAMES="core tools clients connect-json connect-api connect-file connect-runtime stream log4j-appender"
 fi
 PROJECT_NAMES=($PROJECT_NAMES)
 JARPATH=""
@@ -39,22 +39,31 @@ for project in ${PROJECT_NAMES[@]};
   do
     case $project in
       "core")
-      JARPATH=$JARPATH"$base_dir/core/build/dependant-libs-${SCALA_VERSION}/*.jar $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar "
+      JARPATH=$JARPATH" $base_dir/core/build/dependant-libs-java/*.jar $base_dir/core/build/dependant-libs-scala-${SCALA_BINARY_VERSION}.*/*.jar $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar "
       ;;
       "tools")
-      JARPATH=$JARPATH"$base_dir/tools/build/libs/kafka-tools*.jar $base_dir/tools/build/dependant-libs-${SCALA_VERSION}/*.jar "
+      JARPATH=$JARPATH" $base_dir/tools/build/dependant-libs-java/*.jar $base_dir/tools/build/libs/kafka-tools*.jar"
       ;;
       "clients")
-      JARPATH=$JARPATH"$base_dir/clients/build/libs/kafka-clients*.jar "
+      JARPATH=$JARPATH" $base_dir/clients/build/libs/kafka-clients*.jar "
       ;;
-      "connect")
-      JARPATH=$JARPATH"$base_dir/connect/*/build/libs/connect-*.jar $base_dir/connect/*/build/dependant-libs/*.jar $base_dir/connect/build/dependant-libs/*.jar "
+      "connect-json")
+      JARPATH=$JARPATH" $base_dir/connect/json/build/dependant-libs-java/*.jar $base_dir/connect/json/build/libs/connect-*.jar"
       ;;
-      "stream")
-      JARPATH=$JARPATH"$base_dir/stream/build/libs/kafka-streams*.jar "
+      "connect-api")
+      JARPATH=$JARPATH" $base_dir/connect/api/build/dependant-libs-java/*.jar $base_dir/connect/api/build/libs/connect-*.jar"
+      ;;
+      "connect-file")
+      JARPATH=$JARPATH" $base_dir/connect/file/build/dependant-libs-java/*.jar $base_dir/file/json/build/libs/connect-*.jar"
+      ;;
+      "connect-runtime")
+      JARPATH=$JARPATH" $base_dir/connect/runtime/build/dependant-libs-java/*.jar $base_dir/connect/runtime/build/libs/connect-*.jar"
+      ;;
+      "streams")
+      JARPATH=$JARPATH" $base_dir/streams/build/dependant-libs-java/*.jar $base_dir/streams/build/libs/connect-*.jar"
       ;;
       "log4j-appender")
-      JARPATH=$JARPATH"$base_dir/log4j-appender/build/libs/kafka-*.jar "
+      JARPATH=$JARPATH" $base_dir/log4j-appender/build/libs/kafka-*.jar "
       ;;
     esac
   done
