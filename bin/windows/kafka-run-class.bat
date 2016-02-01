@@ -36,7 +36,7 @@ IF ["%SCALA_BINARY_VERSION%"] EQU [""] (
 )
 
 rem Classpath addition for kafka-core dependencies
-if ["%PROJECT_NAME%"] equ [""] or ["%PROJECT_NAME%"] equ ["core"] (
+if ["%PROJECT_NAME%"] equ ["core"] (
   for %%i in (%BASE_DIR%\core\build\dependant-libs-java\*.jar) do (
 	call :concat %%i
   )
@@ -49,7 +49,7 @@ if ["%PROJECT_NAME%"] equ [""] or ["%PROJECT_NAME%"] equ ["core"] (
 )
 
 rem Classpath addition for kafka-tools dependencies
-if ["%PROJECT_NAME%"] equ [""] or ["%PROJECT_NAME%"] equ ["tools"] (
+if ["%PROJECT_NAME%"] equ ["tools"] (
   for %%i in (%BASE_DIR%\tools\build\dependant-libs-java\*.jar) do (
 	call :concat %%i
   )
@@ -59,14 +59,14 @@ if ["%PROJECT_NAME%"] equ [""] or ["%PROJECT_NAME%"] equ ["tools"] (
 )
 
 rem Classpath addition for kafka-clients
-if ["%PROJECT_NAME%"] equ [""] or ["%PROJECT_NAME%"] equ ["clients"] (
+if ["%PROJECT_NAME%"] equ ["clients"] (
   for %%i in (%BASE_DIR%\clients\build\kafka-clients*.jar) do (
 	call :concat %%i
   )
 )
 
 rem Classpath addition for kafka-examples
-if ["%PROJECT_NAME%"] equ [""] or ["%PROJECT_NAME%"] equ ["examples"] (
+if ["%PROJECT_NAME%"] equ ["examples"] (
   for %%i in (%BASE_DIR%\examples\build\kafka-examples*.jar) do (
 	call :concat %%i
   )
