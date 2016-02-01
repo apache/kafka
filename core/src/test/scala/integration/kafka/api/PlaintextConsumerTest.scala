@@ -266,7 +266,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testSeek() {
     val consumer = this.consumers(0)
     val totalRecords = 50L
-    sendRecords(totalRecords.toInt)
+    sendCompressedRecords(totalRecords.toInt, tp)
     consumer.assign(List(tp).asJava)
 
     consumer.seekToEnd(tp)

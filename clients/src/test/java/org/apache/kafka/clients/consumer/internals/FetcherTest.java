@@ -464,8 +464,15 @@ public class FetcherTest {
 
         // normal fetch
         for (int i = 1; i < 4; i++) {
+            // We need to make sure the message offset grows.
+            if (i > 1) {
+                this.records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
+                this.records.append((long) i * 3, "key".getBytes(), "value-1".getBytes());
+                this.records.append((long) i * 3 + 1, "key".getBytes(), "value-2".getBytes());
+                this.records.append((long) i * 3 + 2, "key".getBytes(), "value-3".getBytes());
+                this.records.close();
+            }
             fetcher.initFetches(cluster);
-
             client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 100 * i));
             consumerClient.poll(0);
             records = fetcher.fetchedRecords().get(tp);
