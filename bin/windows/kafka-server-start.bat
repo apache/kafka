@@ -22,5 +22,6 @@ IF [%1] EQU [] (
 SetLocal
 set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%~dp0../../config/log4j.properties
 set KAFKA_HEAP_OPTS=-Xmx1G -Xms1G
+set PROJECT_NAME="core"
 %~dp0kafka-run-class.bat kafka.Kafka %*
 EndLocal
