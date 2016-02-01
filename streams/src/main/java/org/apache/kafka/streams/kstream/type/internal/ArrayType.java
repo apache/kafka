@@ -19,9 +19,10 @@ package org.apache.kafka.streams.kstream.type.internal;
 
 import org.apache.kafka.streams.kstream.type.TypeException;
 
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Type;
 
-public class ArrayType implements Type {
+public class ArrayType implements GenericArrayType {
 
     final Type componentType;
 
@@ -29,6 +30,10 @@ public class ArrayType implements Type {
         this.componentType = Resolver.resolve(componentType);
     }
 
+    @Override
+    public Type getGenericComponentType() {
+        return componentType;
+    }
 
     @Override
     public int hashCode() {
@@ -48,4 +53,5 @@ public class ArrayType implements Type {
     public String toString() {
         return "array<" + componentType.toString() + ">";
     }
+
 }
