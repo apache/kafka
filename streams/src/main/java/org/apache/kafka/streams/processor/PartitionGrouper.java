@@ -28,7 +28,7 @@ public interface PartitionGrouper {
     /**
      * Returns a map of task ids to groups of partitions.
      *
-     * @param topicGroups The subscribed topic groups
+     * @param topicGroups The map from the topic group id to topics
      * @param metadata Metadata of the consuming cluster
      * @return a map of task ids to groups of partitions
      */

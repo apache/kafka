@@ -29,6 +29,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * DefaultPartitionGrouper groups partitions by the partition id. This behavior is assumed by the join processing in KStream.
+ * Join processing requires that topics are copartitoned, i.e., being partitioned by the same key and having the same by
+ * number of partitions, are grouped together. Copartitioning is ensured by having the same number of partitions on
+ * joined topics, and by using the serialization and Producer's default partitioner.
+ */
 public class DefaultPartitionGrouper implements PartitionGrouper {
 
     public Map<TaskId, Set<TopicPartition>> partitionGroups(Map<Integer, Set<String>> topicGroups, Cluster metadata) {
