@@ -75,8 +75,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   // register topic and partition change listeners
   def registerListeners() {
     registerTopicChangeListener()
-    if(controller.config.deleteTopicEnable)
-      registerDeleteTopicListener()
+    registerDeleteTopicListener()
   }
 
   // de-register topic and partition change listeners
@@ -456,7 +455,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
      * @throws Exception On any error.
      */
     @throws(classOf[Exception])
-    def handleChildChange(parentPath : String, children : java.util.List[String]) {
+    def handleChildChange(parentPath: String, children: java.util.List[String]) {
       inLock(controllerContext.controllerLock) {
         var topicsToBeDeleted = {
           import JavaConversions._
@@ -469,19 +468,26 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           nonExistentTopics.foreach(topic => zkUtils.deletePathRecursive(getDeleteTopicPath(topic)))
         }
         topicsToBeDeleted --= nonExistentTopics
-        if(topicsToBeDeleted.nonEmpty) {
-          info("Starting topic deletion for topics " + topicsToBeDeleted.mkString(","))
-          // mark topic ineligible for deletion if other state changes are in progress
-          topicsToBeDeleted.foreach { topic =>
-            val preferredReplicaElectionInProgress =
-              controllerContext.partitionsUndergoingPreferredReplicaElection.map(_.topic).contains(topic)
-            val partitionReassignmentInProgress =
-              controllerContext.partitionsBeingReassigned.keySet.map(_.topic).contains(topic)
-            if(preferredReplicaElectionInProgress || partitionReassignmentInProgress)
-              controller.deleteTopicManager.markTopicIneligibleForDeletion(Set(topic))
+        if(controller.config.deleteTopicEnable) {
+          if(topicsToBeDeleted.nonEmpty) {
+            info("Starting topic deletion for topics " + topicsToBeDeleted.mkString(","))
+            // mark topic ineligible for deletion if other state changes are in progress
+            topicsToBeDeleted.foreach { topic =>
+              val preferredReplicaElectionInProgress =
+                controllerContext.partitionsUndergoingPreferredReplicaElection.map(_.topic).contains(topic)
+              val partitionReassignmentInProgress =
+                controllerContext.partitionsBeingReassigned.keySet.map(_.topic).contains(topic)
+              if(preferredReplicaElectionInProgress || partitionReassignmentInProgress)
+                controller.deleteTopicManager.markTopicIneligibleForDeletion(Set(topic))
+            }
+            // add topic to deletion list
+            controller.deleteTopicManager.enqueueTopicsForDeletion(topicsToBeDeleted)
           }
-          // add topic to deletion list
-          controller.deleteTopicManager.enqueueTopicsForDeletion(topicsToBeDeleted)
+        } else {
+          // If delete topic is disabled remove entries under zookeeper path : /admin/delete_topics
+          for(topic <- topicsToBeDeleted) {
+            controller.deleteTopicManager.cleanZkStateForDeleteTopic(topic)
+          }
         }
       }
     }

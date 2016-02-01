@@ -79,8 +79,6 @@ class TopicDeletionManager(controller: KafkaController,
   val controllerContext = controller.controllerContext
   val partitionStateMachine = controller.partitionStateMachine
   val replicaStateMachine = controller.replicaStateMachine
-  val topicsToBeDeleted: mutable.Set[String] = mutable.Set.empty[String] ++ initialTopicsToBeDeleted
-  val partitionsToBeDeleted: mutable.Set[TopicAndPartition] = topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
   val deleteLock = new ReentrantLock()
   val topicsIneligibleForDeletion: mutable.Set[String] = mutable.Set.empty[String] ++
     (initialTopicsIneligibleForDeletion & initialTopicsToBeDeleted)
@@ -88,6 +86,10 @@ class TopicDeletionManager(controller: KafkaController,
   val deleteTopicStateChanged: AtomicBoolean = new AtomicBoolean(false)
   var deleteTopicsThread: DeleteTopicsThread = null
   val isDeleteTopicEnabled = controller.config.deleteTopicEnable
+  val topicsToBeDeleted: mutable.Set[String] = mutable.Set.empty[String]
+  if (isDeleteTopicEnabled)
+    topicsToBeDeleted ++= initialTopicsToBeDeleted
+  val partitionsToBeDeleted: mutable.Set[TopicAndPartition] = topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
 
   /**
    * Invoked at the end of new controller initiation
@@ -215,6 +217,14 @@ class TopicDeletionManager(controller: KafkaController,
       false
   }
 
+  def cleanZkStateForDeleteTopic(topic : String): Unit = {
+    val zkUtils = controllerContext.zkUtils
+    zkUtils.zkClient.deleteRecursive(getTopicPath(topic))
+    zkUtils.zkClient.deleteRecursive(getEntityConfigPath(ConfigType.Topic, topic))
+    zkUtils.zkClient.delete(getDeleteTopicPath(topic))
+    controllerContext.removeTopic(topic)
+  }
+
   /**
    * Invoked by the delete-topic-thread to wait until events that either trigger, restart or halt topic deletion occur.
    * controllerLock should be acquired before invoking this API
@@ -289,11 +299,7 @@ class TopicDeletionManager(controller: KafkaController,
     partitionStateMachine.handleStateChanges(partitionsForDeletedTopic, NonExistentPartition)
     topicsToBeDeleted -= topic
     partitionsToBeDeleted.retain(_.topic != topic)
-    val zkUtils = controllerContext.zkUtils
-    zkUtils.zkClient.deleteRecursive(getTopicPath(topic))
-    zkUtils.zkClient.deleteRecursive(getEntityConfigPath(ConfigType.Topic, topic))
-    zkUtils.zkClient.delete(getDeleteTopicPath(topic))
-    controllerContext.removeTopic(topic)
+    cleanZkStateForDeleteTopic(topic)
   }
 
   /**
