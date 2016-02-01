@@ -39,7 +39,7 @@ for project in ${PROJECT_NAMES[@]};
   do
     case $project in
       "core")
-      JARPATH=$JARPATH" $base_dir/core/build/dependant-libs-java/*.jar $base_dir/core/build/dependant-libs-scala-${SCALA_BINARY_VERSION}.*/*.jar $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar "
+      JARPATH=$JARPATH" $base_dir/core/build/dependant-libs-java/*.jar $base_dir/core/build/dependant-libs-scala-${SCALA_VERSION}/*.jar $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar "
       ;;
       "tools")
       JARPATH=$JARPATH" $base_dir/tools/build/dependant-libs-java/*.jar $base_dir/tools/build/libs/kafka-tools*.jar"
