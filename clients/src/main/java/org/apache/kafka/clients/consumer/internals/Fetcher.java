@@ -560,10 +560,10 @@ public class Fetcher<K, V> {
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
                 for (LogEntry logEntry : records) {
                     // Skip the messages earlier than current position.
-                    if (logEntry.offset() < position)
-                        continue;
-                    parsed.add(parseRecord(tp, logEntry));
-                    bytes += logEntry.size();
+                    if (logEntry.offset() >= position) {
+                        parsed.add(parseRecord(tp, logEntry));
+                        bytes += logEntry.size();
+                    }
                 }
 
                 if (!parsed.isEmpty()) {

@@ -15,7 +15,7 @@ package kafka.api
 import java.util
 
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{Producer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 
@@ -279,9 +279,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
   }
 
   protected def sendRecords(numRecords: Int, tp: TopicPartition) {
-    (0 until numRecords).map { i =>
-      this.producers(0).send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i".getBytes, s"value $i".getBytes))
-    }
+    sendRecords(this.producers(0), numRecords, tp)
     this.producers(0).flush()
   }
 
@@ -291,10 +289,14 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     producerProps.setProperty(ProducerConfig.LINGER_MS_CONFIG, Long.MaxValue.toString)
     val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
       retries = 0, lingerMs = Long.MaxValue, props = Some(producerProps))
+    sendRecords(producer, numRecords, tp)
+    producer.close()
+  }
+
+  private def sendRecords(producer: Producer[Array[Byte], Array[Byte]], numRecords: Int, tp: TopicPartition) {
     (0 until numRecords).foreach { i =>
       producer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i".getBytes, s"value $i".getBytes))
     }
-    producer.close()
   }
 
   protected def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]], numRecords: Int, startingOffset: Int,
