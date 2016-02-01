@@ -75,8 +75,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   // register topic and partition change listeners
   def registerListeners() {
     registerTopicChangeListener()
-    if(controller.config.deleteTopicEnable)
-      registerDeleteTopicListener()
+    registerDeleteTopicListener()
   }
 
   // de-register topic and partition change listeners
@@ -470,7 +469,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           nonExistentTopics.foreach(topic => zkUtils.deletePathRecursive(getDeleteTopicPath(topic)))
         }
         topicsToBeDeleted --= nonExistentTopics
-        if(topicsToBeDeleted.size > 0) {
+        if(controller.config.deleteTopicEnable && topicsToBeDeleted.size > 0) {
           info("Starting topic deletion for topics " + topicsToBeDeleted.mkString(","))
           // mark topic ineligible for deletion if other state changes are in progress
           topicsToBeDeleted.foreach { topic =>
@@ -483,7 +482,13 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           }
           // add topic to deletion list
           controller.deleteTopicManager.enqueueTopicsForDeletion(topicsToBeDeleted)
+        } else {
+          // If delete topic is disabled remove entries under zookeeper path : /admin/delete_topics
+          for (topic <- topicsToBeDeleted) {
+            controller.deleteTopicManager.cleanZkStateForDeleteTopic(topic)
+          }
         }
+
       }
     }
 
