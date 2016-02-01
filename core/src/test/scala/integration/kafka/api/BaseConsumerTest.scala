@@ -279,18 +279,22 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
   }
 
   protected def sendRecords(numRecords: Int, tp: TopicPartition) {
-    sendRecords(this.producers(0), numRecords, tp)
-    this.producers(0).flush()
+    sendRecords(numRecords, tp, None)
   }
 
-  protected def sendCompressedRecords(numRecords: Int, tp: TopicPartition) {
-    val producerProps = new Properties()
-    producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")
-    producerProps.setProperty(ProducerConfig.LINGER_MS_CONFIG, Long.MaxValue.toString)
-    val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
-      retries = 0, lingerMs = Long.MaxValue, props = Some(producerProps))
-    sendRecords(producer, numRecords, tp)
-    producer.close()
+  protected def sendRecords(numRecords: Int, tp: TopicPartition, codec: Option[String] = None) {
+    if (!codec.isDefined) {
+      sendRecords(this.producers(0), numRecords, tp)
+      this.producers(0).flush()
+    } else {
+      val producerProps = new Properties()
+      producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, codec.get)
+      producerProps.setProperty(ProducerConfig.LINGER_MS_CONFIG, Long.MaxValue.toString)
+      val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
+        retries = 0, lingerMs = Long.MaxValue, props = Some(producerProps))
+      sendRecords(producer, numRecords, tp)
+      producer.close()
+    }
   }
 
   private def sendRecords(producer: Producer[Array[Byte], Array[Byte]], numRecords: Int, tp: TopicPartition) {

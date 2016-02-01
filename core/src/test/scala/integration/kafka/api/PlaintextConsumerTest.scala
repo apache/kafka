@@ -263,10 +263,31 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
-  def testSeek() {
+  def testSeekUnCompressedMessages() {
     val consumer = this.consumers(0)
     val totalRecords = 50L
-    sendCompressedRecords(totalRecords.toInt, tp)
+    sendRecords(totalRecords.toInt, tp)
+    consumer.assign(List(tp).asJava)
+
+    consumer.seekToEnd(tp)
+    assertEquals(totalRecords, consumer.position(tp))
+    assertFalse(consumer.poll(totalRecords).iterator().hasNext)
+
+    consumer.seekToBeginning(tp)
+    assertEquals(0, consumer.position(tp), 0)
+    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0)
+
+    val mid = totalRecords / 2
+    consumer.seek(tp, mid)
+    assertEquals(mid, consumer.position(tp))
+    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt)
+  }
+
+  @Test
+  def testSeekCompressedMessages() {
+    val consumer = this.consumers(0)
+    val totalRecords = 50L
+    sendRecords(totalRecords.toInt, tp, Some("gzip"))
     consumer.assign(List(tp).asJava)
 
     consumer.seekToEnd(tp)
