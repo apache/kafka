@@ -26,9 +26,11 @@ import java.util.Set;
 public interface PartitionGrouper {
 
     /**
-     * Returns a map of task ids to groups of partitions.
+     * Returns a map of task ids to groups of partitions. A partition group forms a task, thus, partitions that are
+     * expected to be processed together must be in the same group. DefaultPartitionGrouper implements this
+     * interface. See {@link DefaultPartitionGrouper} for more information.
      *
-     * @param topicGroups The map from the topic group id to topics
+     * @param topicGroups The map from the {@link TopologyBuilder#topicGroups() topic group} id to topics
      * @param metadata Metadata of the consuming cluster
      * @return a map of task ids to groups of partitions
      */
