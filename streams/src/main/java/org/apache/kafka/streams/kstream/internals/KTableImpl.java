@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -246,7 +247,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1, V1, T> KTable<K1, T> aggregate(T initValue,
+    public <K1, V1, T> KTable<K1, T> aggregate(Initializer<T> initializer,
                                                Aggregator<K1, V1, T> add,
                                                Aggregator<K1, V1, T> remove,
                                                KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
@@ -270,7 +271,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
 
-        ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableAggregate<>(name, initValue, add, remove);
+        ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableAggregate<>(name, initializer, add, remove);
 
         StateStoreSupplier aggregateStore = Stores.create(name)
                 .withKeys(keySerializer, keyDeserializer)
@@ -306,7 +307,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                            Deserializer<V1> valueDeserializer,
                                            Deserializer<Long> aggValueDeserializer,
                                            String name) {
-        return this.aggregate(0L,
+        return this.aggregate(
+                new Initializer<Long>() {
+                    @Override
+                    public Long apply() {
+                        return 0L;
+                    }
+                },
                 new Aggregator<K1, V1, Long>() {
                     @Override
                     public Long apply(K1 aggKey, V1 value, Long aggregate) {

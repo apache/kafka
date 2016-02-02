@@ -162,7 +162,7 @@ public interface KTable<K, V> {
     /**
      * Aggregate values of this table by the selected key.
      *
-     * @param initValue initial aggregate value
+     * @param initializer the class of Initializer
      * @param add the class of Aggregator
      * @param remove the class of Aggregator
      * @param selector the KeyValue mapper that select the aggregate key
@@ -171,7 +171,7 @@ public interface KTable<K, V> {
      * @param <V1>   the value type of the aggregated table
      * @return the instance of KTable
      */
-    <K1, V1, T> KTable<K1, T> aggregate(T initValue,
+    <K1, V1, T> KTable<K1, T> aggregate(Initializer<T> initializer,
                                         Aggregator<K1, V1, T> add,
                                         Aggregator<K1, V1, T> remove,
                                         KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
