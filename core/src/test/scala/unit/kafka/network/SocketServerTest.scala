@@ -235,7 +235,8 @@ class SocketServerTest extends JUnitSuite {
     val trustStoreFile = File.createTempFile("truststore", ".jks")
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, enableSsl = true,
       trustStoreFile = Some(trustStoreFile))
-    overrideProps.put("listeners", "SSL://localhost:0")
+    overrideProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
+    overrideProps.put(KafkaConfig.InterBrokerSecurityProtocolProp, SecurityProtocol.SSL)
 
     val serverMetrics = new Metrics
     val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime)

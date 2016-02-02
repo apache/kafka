@@ -393,6 +393,16 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testInvalidInterBrokerSecurityProtocol() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
+    props.put(KafkaConfig.InterBrokerSecurityProtocolProp, SecurityProtocol.PLAINTEXT)
+    intercept[ConfigException] {
+      KafkaConfig.fromProps(props)
+    }
+  }
+
+  @Test
   def testFromPropsInvalid() {
     def getBaseProperties(): Properties = {
       val validRequiredProperties = new Properties()
