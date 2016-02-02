@@ -297,6 +297,20 @@ public interface KStream<K, V> {
                                                                 Deserializer<T> aggValueDeserializer);
 
     /**
+     * Aggregate values of this stream by key on a window basis.
+     *
+     * @param initializer the class of Initializer
+     * @param aggregator the class of Aggregator
+     * @param <T>   the value type of the aggregated table
+     */
+    <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
+                                    Aggregator<K, V, T> aggregator,
+                                    Serializer<K> keySerializer,
+                                    Serializer<T> aggValueSerializer,
+                                    Deserializer<K> keyDeserializer,
+                                    Deserializer<T> aggValueDeserializer);
+
+    /**
      * Count number of messages of this stream by key on a window basis.
      *
      * @param windows the specification of the aggregation window

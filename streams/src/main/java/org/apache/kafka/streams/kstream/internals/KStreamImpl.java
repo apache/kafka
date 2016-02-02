@@ -455,6 +455,36 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
+    public <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
+                                           Aggregator<K, V, T> aggregator,
+                                           Serializer<K> keySerializer,
+                                           Serializer<T> aggValueSerializer,
+                                           Deserializer<K> keyDeserializer,
+                                           Deserializer<T> aggValueDeserializer) {
+
+        String aggregateName = topology.newName(AGGREGATE_NAME);
+        String selectName = topology.newName(SELECT_NAME);
+
+        ProcessorSupplier<K, V> aggWindowSupplier = new KStreamAggWindow<>();
+        ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamAggregate<>(windows, windows.name(), initializer, aggregator);
+
+        StateStoreSupplier aggregateStore = Stores.create(windows.name())
+                .withKeys(keySerializer, keyDeserializer)
+                .withValues(aggValueSerializer, aggValueDeserializer)
+                .persistent()
+                .windowed(windows.maintainMs(), windows.segments, false)
+                .build();
+
+        // aggregate the values with the aggregator and local store
+        topology.addProcessor(selectName, aggWindowSupplier, this.name);
+        topology.addProcessor(aggregateName, aggregateSupplier, selectName);
+        topology.addStateStore(aggregateStore, aggregateName);
+
+        // return the KTable representation with the intermediate topic as the sources
+        return new KTableImpl<>(topology, aggregateName, aggregateSupplier, sourceNodes);
+    }
+
+    @Override
     public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
                                                                    Serializer<K> keySerializer,
                                                                    Serializer<Long> aggValueSerializer,
