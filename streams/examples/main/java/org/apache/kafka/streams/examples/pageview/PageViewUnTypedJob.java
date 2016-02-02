@@ -31,7 +31,7 @@ import org.apache.kafka.connect.json.JsonDeserializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Count;
+import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.HoppingWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KStream;
@@ -78,7 +78,7 @@ public class PageViewUnTypedJob {
                             .put("region", region);
                 })
                 .map((user, viewRegion) -> new KeyValue<>(viewRegion.get("region").textValue(), viewRegion))
-                .aggregateByKey(new Count<String, JsonNode>(), HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000),
+                .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000),
                         stringSerializer, longSerializer,
                         stringDeserializer, longDeserializer)
                 .toStream()
