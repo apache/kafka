@@ -24,6 +24,7 @@ import kafka.common._
 import kafka.server.OffsetCheckpoint
 import kafka.utils._
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -111,6 +112,48 @@ class LogManagerTest {
     }
     // log should still be appendable
     log.append(TestUtils.singleMessageSet("test".getBytes()))
+  }
+
+  @Test
+  def testTimestampBasedLogSegmentCleanup() {
+    val setSize = TestUtils.singleMessageSet("test".getBytes()).sizeInBytes
+    logManager.shutdown()
+    val initialProps = new Properties()
+    initialProps.put(LogConfig.SegmentBytesProp, 10 * setSize: java.lang.Integer)
+    initialProps.put(LogConfig.DeleteRetentionMsProp, 0L: java.lang.Long)
+
+    logManager = createLogManager()
+    logManager.startup
+
+    // create a log
+    val log = logManager.createLog(TopicAndPartition(name, 0), LogConfig.fromProps(logConfig.originals, initialProps))
+
+    // add a bunch of messages to create a total of 20 segments
+    // each message will have an incrementing timestamp, starting at 0
+    val numMessages = 200
+    val startTime = System.currentTimeMillis()
+    for(i <- 0 until numMessages) {
+      val set = TestUtils.singleMessageSet("test".getBytes(), timestamp = i + startTime)
+      log.append(set)
+    }
+
+    initialProps.put(LogConfig.MessageTimestampTypeProp, TimestampType.LOG_APPEND_TIME.name: java.lang.String)
+    log.config = LogConfig.fromProps(log.config.originals(), initialProps)
+
+    // no segments should be deleted yet
+    val originalNumSegments = log.numberOfSegments
+    logManager.cleanupLogs()
+    assertEquals("Check we have the expected number of segments.", numMessages * setSize / log.config.segmentSize, originalNumSegments)
+
+    // set log.retention.min.timestamp to halfway point in log
+    val minTs = 100L + startTime
+    val propsTwo = new Properties()
+    propsTwo.put(LogConfig.RetentionTimestampProp, minTs: java.lang.Long)
+    log.config = LogConfig.fromProps(initialProps, propsTwo)
+
+    // the first ten segments should be deleted
+    logManager.cleanupLogs()
+    assertEquals("Check that the first half of segments were deleted.", originalNumSegments / 2, log.numberOfSegments)
   }
 
   /**

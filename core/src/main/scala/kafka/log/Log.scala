@@ -673,7 +673,7 @@ class Log(val dir: File,
     */
   def deleteOldSegments(): Int = {
     if (!config.delete) return 0
-    deleteRetenionMsBreachedSegments() + deleteRetentionSizeBreachedSegments()
+    deleteRetenionMsBreachedSegments() + deleteRetentionSizeBreachedSegments() + deleteRetentionTimestampBreachedSegments()
   }
 
   private def deleteRetenionMsBreachedSegments() : Int = {
@@ -694,6 +694,12 @@ class Log(val dir: File,
       }
     }
     deleteOldSegments(shouldDelete)
+  }
+
+  private def deleteRetentionTimestampBreachedSegments() : Int = {
+    if(config.retentionMinTimestamp <= 0)
+      return 0
+    deleteOldSegments(segment => segment.size > 0 && segment.timeIndex.lastEntry.timestamp < config.retentionMinTimestamp)
   }
 
   /**
