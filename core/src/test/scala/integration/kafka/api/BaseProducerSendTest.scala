@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
 import kafka.consumer.SimpleConsumer
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
-import kafka.message.Message
+import kafka.message.{InvalidMessageException, Message}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
@@ -169,6 +169,23 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   def testSendNonCompressedMessageWithLogApendTime() {
     val producer = createProducer(brokerList = brokerList, lingerMs = Long.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.LogAppendTime)
+  }
+
+  @Test(expected = classOf[InvalidMessageException])
+  def testSendNonCompressedMessageWithInvalidCreateTime() {
+    val topicProps = new Properties()
+    topicProps.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000");
+    TestUtils.createTopic(zkUtils, topic, 1, 2, servers, topicProps)
+
+
+    val producer = createProducer(brokerList = brokerList)
+    producer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()
+
+    // Test compressed messages.
+    val producerProps = new Properties()
+    producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")
+    val compressedProducer = createProducer(brokerList = brokerList, lingerMs = Long.MaxValue, props = Some(producerProps))
+    compressedProducer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()
   }
 
   private def sendAndVerifyTimestamp(producer: KafkaProducer[Array[Byte], Array[Byte]], timestampType: TimestampType) {

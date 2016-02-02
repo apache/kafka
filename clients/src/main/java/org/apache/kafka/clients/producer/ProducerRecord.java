@@ -143,7 +143,7 @@ public final class ProducerRecord<K, V> {
         String value = this.value == null ? "null" : this.value.toString();
         String timestamp = this.timestamp == null ? "null" : this.timestamp.toString();
         return "ProducerRecord(topic=" + topic + ", partition=" + partition + ", key=" + key + ", value=" + value +
-            "timestamp=" + timestamp + ")";
+            ", timestamp=" + timestamp + ")";
     }
 
     @Override
