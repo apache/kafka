@@ -335,9 +335,6 @@ public class ProcessorStateManager {
             checkpoint.write(checkpointOffsets);
         }
 
-        // un-assign the change log partition
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
-
         // release the state directory directoryLock
         directoryLock.release();
     }

@@ -129,11 +129,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    public void init(ProcessorContext context) {
+    public void openDB(ProcessorContext context) {
         this.context = context;
         this.dbDir = new File(new File(this.context.stateDir(), DB_FILE_DIR), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
+    }
+
+    @SuppressWarnings("unchecked")
+    public void init(ProcessorContext context) {
+        // first open the DB dir
+        openDB(context);
 
         this.changeLogger = this.loggingEnabled ? new RawStoreChangeLogger(name, context) : null;
 
