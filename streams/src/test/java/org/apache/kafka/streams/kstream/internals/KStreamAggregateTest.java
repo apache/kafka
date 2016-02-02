@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.HoppingWindows;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -51,6 +52,14 @@ public class KStreamAggregateTest {
         }
     }
 
+    private class StringInit implements Initializer<String> {
+
+        @Override
+        public String apply() {
+            return "0";
+        }
+    }
+
     @Test
     public void testAggBasic() throws Exception {
         final File baseDir = Files.createTempDirectory("test").toFile();
@@ -60,7 +69,7 @@ public class KStreamAggregateTest {
             String topic1 = "topic1";
 
             KStream<String, String> stream1 = builder.stream(strDeserializer, strDeserializer, topic1);
-            KTable<Windowed<String>, String> table2 = stream1.aggregateByKey("0", new StringAdd(),
+            KTable<Windowed<String>, String> table2 = stream1.aggregateByKey(new StringInit(), new StringAdd(),
                     HoppingWindows.of("topic1-Canonized").with(10L).every(5L),
                     strSerializer,
                     strSerializer,
@@ -139,7 +148,7 @@ public class KStreamAggregateTest {
             String topic2 = "topic2";
 
             KStream<String, String> stream1 = builder.stream(strDeserializer, strDeserializer, topic1);
-            KTable<Windowed<String>, String> table1 = stream1.aggregateByKey("0", new StringAdd(),
+            KTable<Windowed<String>, String> table1 = stream1.aggregateByKey(new StringInit(), new StringAdd(),
                     HoppingWindows.of("topic1-Canonized").with(10L).every(5L),
                     strSerializer,
                     strSerializer,
@@ -150,7 +159,7 @@ public class KStreamAggregateTest {
             table1.toStream().process(proc1);
 
             KStream<String, String> stream2 = builder.stream(strDeserializer, strDeserializer, topic2);
-            KTable<Windowed<String>, String> table2 = stream2.aggregateByKey("0", new StringAdd(),
+            KTable<Windowed<String>, String> table2 = stream2.aggregateByKey(new StringInit(), new StringAdd(),
                     HoppingWindows.of("topic2-Canonized").with(10L).every(5L),
                     strSerializer,
                     strSerializer,
