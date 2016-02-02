@@ -60,6 +60,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final Subject subject;
     private final String node;
     private final KerberosShortNamer kerberosNamer;
+    private final int maxReceiveSize;
 
     // assigned in `configure`
     private TransportLayer transportLayer;
@@ -68,7 +69,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private NetworkReceive netInBuffer;
     private NetworkSend netOutBuffer;
 
-    public SaslServerAuthenticator(String node, final Subject subject, KerberosShortNamer kerberosNameParser) throws IOException {
+    public SaslServerAuthenticator(String node, final Subject subject, KerberosShortNamer kerberosNameParser, int maxReceiveSize) throws IOException {
         if (subject == null)
             throw new IllegalArgumentException("subject cannot be null");
         if (subject.getPrincipals().isEmpty())
@@ -76,6 +77,7 @@ public class SaslServerAuthenticator implements Authenticator {
         this.node = node;
         this.subject = subject;
         this.kerberosNamer = kerberosNameParser;
+        this.maxReceiveSize = maxReceiveSize;
         saslServer = createSaslServer();
     }
 
@@ -149,7 +151,7 @@ public class SaslServerAuthenticator implements Authenticator {
             return;
         }
 
-        if (netInBuffer == null) netInBuffer = new NetworkReceive(node);
+        if (netInBuffer == null) netInBuffer = new NetworkReceive(maxReceiveSize, node);
 
         netInBuffer.readFrom(transportLayer);
 
