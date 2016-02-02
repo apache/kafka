@@ -536,9 +536,11 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           throw new ConsumerTimeoutException
       }
 
-      val record = recordIter.next
+      val record = recordIter.next()
       val tp = new TopicPartition(record.topic, record.partition)
+
       offsets.put(tp, record.offset + 1)
+      
       BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)
     }
 
