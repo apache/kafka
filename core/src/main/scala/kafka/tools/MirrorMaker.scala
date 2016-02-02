@@ -527,20 +527,18 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       }
     }
 
-    override def hasData : Boolean = {
-      if (recordIter == null || !recordIter.hasNext) {
-        recordIter = consumer.poll(1000).iterator
-      }
-
-      recordIter.hasNext
-    }
+    override def hasData = true
 
     override def receive() : BaseConsumerRecord = {
-      val record = recordIter.next()
+      if (recordIter == null || !recordIter.hasNext) {
+        recordIter = consumer.poll(1000).iterator
+        if (!recordIter.hasNext)
+          throw new ConsumerTimeoutException
+      }
+
+      val record = recordIter.next
       val tp = new TopicPartition(record.topic, record.partition)
-
       offsets.put(tp, record.offset + 1)
-
       BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)
     }
 
