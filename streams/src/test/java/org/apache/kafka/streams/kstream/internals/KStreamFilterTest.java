@@ -33,9 +33,6 @@ public class KStreamFilterTest {
 
     private String topicName = "topic";
 
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
-
     private Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
         @Override
         public boolean test(Integer key, String value) {
@@ -46,13 +43,17 @@ public class KStreamFilterTest {
     @Test
     public void testFilter() {
         KStreamBuilder builder = new KStreamBuilder();
+
+        builder.register(Integer.class, new IntegerDeserializer());
+        builder.register(String.class, new StringDeserializer());
+
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         KStream<Integer, String> stream;
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keyDeserializer, valDeserializer, topicName);
+        stream = builder.stream(Integer.class, String.class, topicName);
         stream.filter(isMultipleOfThree).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);
@@ -66,13 +67,17 @@ public class KStreamFilterTest {
     @Test
     public void testFilterOut() {
         KStreamBuilder builder = new KStreamBuilder();
+
+        builder.register(Integer.class, new IntegerDeserializer());
+        builder.register(String.class, new StringDeserializer());
+
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         KStream<Integer, String> stream;
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keyDeserializer, valDeserializer, topicName);
+        stream = builder.stream(Integer.class, String.class, topicName);
         stream.filterOut(isMultipleOfThree).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);

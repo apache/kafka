@@ -35,6 +35,10 @@ public class JsonPOJOSerializer<T> implements Serializer<T> {
 
     }
 
+    public JsonPOJOSerializer(Class<T> tClass) {
+        this.tClass = tClass;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public void configure(Map<String, ?> props, boolean isKey) {

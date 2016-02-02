@@ -47,11 +47,6 @@ public class KStreamKTableLeftJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    private IntegerSerializer keySerializer = new IntegerSerializer();
-    private StringSerializer valSerializer = new StringSerializer();
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
-
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
         public String apply(String value1, String value2) {
@@ -74,6 +69,9 @@ public class KStreamKTableLeftJoinTest {
 
             KStreamBuilder builder = new KStreamBuilder();
 
+            builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
             KStream<Integer, String> stream;
@@ -81,8 +79,8 @@ public class KStreamKTableLeftJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream = builder.stream(keyDeserializer, valDeserializer, topic1);
-            table = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
+            stream = builder.stream(Integer.class, String.class, topic1);
+            table = builder.table(Integer.class, String.class, topic2);
             stream.leftJoin(table, joiner).process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
@@ -157,13 +155,16 @@ public class KStreamKTableLeftJoinTest {
     public void testNotJoinable() {
         KStreamBuilder builder = new KStreamBuilder();
 
+        builder.register(Integer.class, new IntegerSerializer(), new IntegerDeserializer());
+        builder.register(Integer.class, new StringSerializer(), new StringDeserializer());
+
         KStream<Integer, String> stream;
         KTable<Integer, String> table;
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keyDeserializer, valDeserializer, topic1).map(keyValueMapper);
-        table = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
+        stream = builder.<Integer, String>stream(Integer.class, String.class, topic1).map(keyValueMapper);
+        table = builder.table(Integer.class, String.class, topic2);
 
         stream.leftJoin(table, joiner).process(processor);
     }

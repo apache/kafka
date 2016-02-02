@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
@@ -38,16 +36,15 @@ import static org.junit.Assert.assertTrue;
 
 public class KTableSourceTest {
 
-    private final Serializer<String> strSerializer = new StringSerializer();
-    private final Deserializer<String> strDeserializer = new StringDeserializer();
-
     @Test
     public void testKTable() {
         final KStreamBuilder builder = new KStreamBuilder();
 
+        builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
         String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
+        KTable<String, String> table1 = builder.table(String.class, String.class, topic1);
 
         MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
@@ -70,10 +67,12 @@ public class KTableSourceTest {
         try {
             final KStreamBuilder builder = new KStreamBuilder();
 
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             String topic1 = "topic1";
 
             KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>)
-                    builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
+                    builder.<String, String>table(String.class, String.class, topic1);
 
             KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
 
@@ -121,10 +120,12 @@ public class KTableSourceTest {
         try {
             final KStreamBuilder builder = new KStreamBuilder();
 
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             String topic1 = "topic1";
 
             KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>)
-                    builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
+                    builder.<String, String>table(String.class, String.class, topic1);
 
             MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
 
@@ -163,10 +164,12 @@ public class KTableSourceTest {
         try {
             final KStreamBuilder builder = new KStreamBuilder();
 
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             String topic1 = "topic1";
 
             KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>)
-                    builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
+                    builder.<String, String>table(String.class, String.class, topic1);
 
             table1.enableSendingOldValues();
 

@@ -17,9 +17,9 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
+
+import java.lang.reflect.Type;
 
 /**
  * KTable is an abstraction of a change log stream.
@@ -29,6 +29,23 @@ import org.apache.kafka.streams.KeyValue;
  * @param <V> the type of values
  */
 public interface KTable<K, V> {
+
+    /**
+     * Explicitly specifies the information of the key type and the value type.
+     *
+     * @param keyType an instance of Type that represents the key type
+     * @param valueType an instance of Type that represents the value type
+     * @return the new instance of KTable with explicit type information
+     */
+    KTable<K, V> returns(Type keyType, Type valueType);
+
+    /**
+     * Explicitly specifies the information of the value type.
+     *
+     * @param valueType an instance of Type that represents the value type
+     * @return the new instance of KTable with explicit type information
+     */
+    KTable<K, V> returnsValue(Type valueType);
 
     /**
      * Creates a new instance of KTable consists of all elements of this stream which satisfy a predicate
@@ -57,7 +74,7 @@ public interface KTable<K, V> {
 
     /**
      * Sends key-value to a topic, also creates a new instance of KTable from the topic.
-     * This is equivalent to calling to(topic) and table(topic).
+     * The serializers/deserializers are determined from the key/value type infos of this stream.
      *
      * @param topic           the topic name
      * @return the instance of KTable that consumes the given topic
@@ -65,39 +82,12 @@ public interface KTable<K, V> {
     KTable<K, V> through(String topic);
 
     /**
-     * Sends key-value to a topic, also creates a new instance of KTable from the topic.
-     * This is equivalent to calling to(topic) and table(topic).
-     *
-     * @param topic           the topic name
-     * @param keySerializer   key serializer used to send key-value pairs,
-     *                        if not specified the default key serializer defined in the configuration will be used
-     * @param valSerializer   value serializer used to send key-value pairs,
-     *                        if not specified the default value serializer defined in the configuration will be used
-     * @param keyDeserializer key deserializer used to create the new KStream,
-     *                        if not specified the default key deserializer defined in the configuration will be used
-     * @param valDeserializer value deserializer used to create the new KStream,
-     *                        if not specified the default value deserializer defined in the configuration will be used
-     * @return the new stream that consumes the given topic
-     */
-    KTable<K, V> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer);
-
-    /**
      * Sends key-value to a topic using default serializers specified in the config.
+     * The serializers/deserializers are determined from the key/value type infos of this stream.
      *
      * @param topic         the topic name
      */
     void to(String topic);
-
-    /**
-     * Sends key-value to a topic.
-     *
-     * @param topic         the topic name
-     * @param keySerializer key serializer used to send key-value pairs,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param valSerializer value serializer used to send key-value pairs,
-     *                      if not specified the default serializer defined in the configs will be used
-     */
-    void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer);
 
     /**
      * Creates a new instance of KStream from this KTable
@@ -153,10 +143,6 @@ public interface KTable<K, V> {
     <K1, V1> KTable<K1, V1> reduce(Reducer<V1> addReducer,
                                    Reducer<V1> removeReducer,
                                    KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                   Serializer<K1> keySerializer,
-                                   Serializer<V1> valueSerializer,
-                                   Deserializer<K1> keyDeserializer,
-                                   Deserializer<V1> valueDeserializer,
                                    String name);
 
     /**
@@ -175,12 +161,6 @@ public interface KTable<K, V> {
                                         Aggregator<K1, V1, T> add,
                                         Aggregator<K1, V1, T> remove,
                                         KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                        Serializer<K1> keySerializer,
-                                        Serializer<V1> valueSerializer,
-                                        Serializer<T> aggValueSerializer,
-                                        Deserializer<K1> keyDeserializer,
-                                        Deserializer<V1> valueDeserializer,
-                                        Deserializer<T> aggValueDeserializer,
                                         String name);
 
     /**
@@ -193,11 +173,5 @@ public interface KTable<K, V> {
      * @return the instance of KTable
      */
     <K1, V1> KTable<K1, Long> count(KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                    Serializer<K1> keySerializer,
-                                    Serializer<V1> valueSerializer,
-                                    Serializer<Long> aggValueSerializer,
-                                    Deserializer<K1> keyDeserializer,
-                                    Deserializer<V1> valueDeserializer,
-                                    Deserializer<Long> aggValueDeserializer,
                                     String name);
 }

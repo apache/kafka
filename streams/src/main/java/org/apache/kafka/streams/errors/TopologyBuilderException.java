@@ -24,4 +24,9 @@ public class TopologyBuilderException extends StreamsException {
     public TopologyBuilderException(String message) {
         super("Invalid topology building" + (message == null ? "" : ": " + message));
     }
+
+    public TopologyBuilderException(String message, Throwable ex) {
+        super("Invalid topology building" + (message == null ? "" : ": " + message), ex);
+    }
+
 }

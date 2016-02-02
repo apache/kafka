@@ -32,12 +32,12 @@ public class KStreamMapValuesTest {
 
     private String topicName = "topic";
 
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
-
     @Test
     public void testFlatMapValues() {
         KStreamBuilder builder = new KStreamBuilder();
+
+        builder.register(Integer.class, new IntegerDeserializer());
+        builder.register(String.class, new StringDeserializer());
 
         ValueMapper<String, Integer> mapper =
             new ValueMapper<String, Integer>() {
@@ -51,7 +51,7 @@ public class KStreamMapValuesTest {
 
         KStream<Integer, String> stream;
         MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keyDeserializer, valDeserializer, topicName);
+        stream = builder.stream(Integer.class, String.class, topicName);
         stream.mapValues(mapper).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);

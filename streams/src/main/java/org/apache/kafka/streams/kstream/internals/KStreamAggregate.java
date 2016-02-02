@@ -17,7 +17,9 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Window;
@@ -68,6 +70,9 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
             super.init(context);
 
             windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
+
+            if (windowStore == null)
+                throw new TopologyBuilderException("window store is missing", new InsufficientTypeInfoException());
         }
 
         @Override

@@ -98,15 +98,13 @@ public class WordCountProcessorJob {
         props.put(StreamsConfig.JOB_ID_CONFIG, "streams-wordcount-processor");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
-        props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
         // can specify underlying client configs if necessary
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         TopologyBuilder builder = new TopologyBuilder();
+
+        builder.register(String.class, new StringSerializer()(), new StringDeserializer());
 
         builder.addSource("Source", "streams-file-input");
 

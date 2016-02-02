@@ -66,15 +66,14 @@ public class KStreamAggregateTest {
 
         try {
             final KStreamBuilder builder = new KStreamBuilder();
+
+            builder.register(String.class, new StringSerializer(), new StringDeserializer());
+
             String topic1 = "topic1";
 
-            KStream<String, String> stream1 = builder.stream(strDeserializer, strDeserializer, topic1);
+            KStream<String, String> stream1 = builder.stream(String.class, String.class, topic1);
             KTable<Windowed<String>, String> table2 = stream1.aggregateByKey(new StringInit(), new StringAdd(),
-                    HoppingWindows.of("topic1-Canonized").with(10L).every(5L),
-                    strSerializer,
-                    strSerializer,
-                    strDeserializer,
-                    strDeserializer);
+                    HoppingWindows.of("topic1-Canonized").with(10L).every(5L)).returnsValue(String.class);
 
             MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
             table2.toStream().process(proc2);
@@ -144,27 +143,22 @@ public class KStreamAggregateTest {
 
         try {
             final KStreamBuilder builder = new KStreamBuilder();
+
+            builder.register(String.class, strSerializer, strDeserializer);
+
             String topic1 = "topic1";
             String topic2 = "topic2";
 
-            KStream<String, String> stream1 = builder.stream(strDeserializer, strDeserializer, topic1);
+            KStream<String, String> stream1 = builder.stream(String.class, String.class, topic1);
             KTable<Windowed<String>, String> table1 = stream1.aggregateByKey(new StringInit(), new StringAdd(),
-                    HoppingWindows.of("topic1-Canonized").with(10L).every(5L),
-                    strSerializer,
-                    strSerializer,
-                    strDeserializer,
-                    strDeserializer);
+                    HoppingWindows.of("topic1-Canonized").with(10L).every(5L));
 
             MockProcessorSupplier<Windowed<String>, String> proc1 = new MockProcessorSupplier<>();
             table1.toStream().process(proc1);
 
-            KStream<String, String> stream2 = builder.stream(strDeserializer, strDeserializer, topic2);
+            KStream<String, String> stream2 = builder.stream(String.class, String.class, topic2);
             KTable<Windowed<String>, String> table2 = stream2.aggregateByKey(new StringInit(), new StringAdd(),
-                    HoppingWindows.of("topic2-Canonized").with(10L).every(5L),
-                    strSerializer,
-                    strSerializer,
-                    strDeserializer,
-                    strDeserializer);
+                    HoppingWindows.of("topic2-Canonized").with(10L).every(5L));
 
             MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
             table2.toStream().process(proc2);

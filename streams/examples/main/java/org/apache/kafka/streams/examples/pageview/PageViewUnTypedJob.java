@@ -48,10 +48,6 @@ public class PageViewUnTypedJob {
         props.put(StreamsConfig.JOB_ID_CONFIG, "streams-pageview");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
-        props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
-        props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -60,7 +56,16 @@ public class PageViewUnTypedJob {
         final Serializer<Long> longSerializer = new LongSerializer();
         final Deserializer<Long> longDeserializer = new LongDeserializer();
 
+        //
+        // register serializers/deserializers
+        //
+        builder.register(String.class, new StringSerializer(), new StringDeserializer());
+        buidler.register(Long.class, new LongSerializer(), new LongDeserializer());
+        builder.register(JsonNode.class, new JsonSerializer(), new JsonDeserializer());
 
+        //
+        // define the topology
+        //
         KStream<String, JsonNode> views = builder.stream("streams-pageview-input");
 
         KStream<String, JsonNode> viewsByUser = views.map((dummy, record) -> new KeyValue<>(record.get("user").textValue(), record));
@@ -99,6 +104,9 @@ public class PageViewUnTypedJob {
         // write to the result topic
         regionCount.to("streams-pageviewstats-output");
 
+        //
+        // run the job
+        //
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
     }
