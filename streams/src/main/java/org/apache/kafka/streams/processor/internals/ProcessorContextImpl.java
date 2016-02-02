@@ -119,8 +119,8 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
 
     @Override
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
-        if (initialized)
-            throw new IllegalStateException("Can only create state stores during initialization.");
+        // we do not check fi the initialization phase has passed since
+        // we could create and initialize new segment stores for window store.
 
         stateMgr.register(store, loggingEnabled, stateRestoreCallback);
     }
