@@ -17,20 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-public class SumAsLong<K> implements Aggregator<K, Long, Long> {
+public interface Initializer<T> {
 
-    @Override
-    public Long initialValue(K aggKey) {
-        return 0L;
-    }
-
-    @Override
-    public Long add(K aggKey, Long value, Long aggregate) {
-        return aggregate + value;
-    }
-
-    @Override
-    public Long remove(K aggKey, Long value, Long aggregate) {
-        return aggregate - value;
-    }
+    T apply();
 }

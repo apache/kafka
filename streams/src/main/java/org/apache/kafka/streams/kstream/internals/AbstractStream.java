@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.InconsistentTypeInfoException;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -159,8 +160,12 @@ public abstract class AbstractStream<K> {
         return resolveReturnType(Reducer.class, "apply", function);
     }
 
+    public static Type resolveReturnType(Initializer function) {
+        return resolveReturnType(Initializer.class, "apply", function);
+    }
+
     public static Type resolveReturnType(Aggregator function) {
-        return resolveReturnType(Aggregator.class, "initialValue", function);
+        return resolveReturnType(Aggregator.class, "apply", function);
     }
 
     private static <T> Type resolveReturnType(Class<T> interfaceClass, String methodName, T implementation) {

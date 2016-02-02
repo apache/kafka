@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.HoppingWindows;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -43,21 +44,19 @@ public class KStreamAggregateTest {
     private final Serializer<String> strSerializer = new StringSerializer();
     private final Deserializer<String> strDeserializer = new StringDeserializer();
 
-    private class StringCanonizer implements Aggregator<String, String, String> {
+    private class StringAdd implements Aggregator<String, String, String> {
 
         @Override
-        public String initialValue(String aggKey) {
-            return "0";
-        }
-
-        @Override
-        public String add(String aggKey, String value, String aggregate) {
+        public String apply(String aggKey, String value, String aggregate) {
             return aggregate + "+" + value;
         }
+    }
+
+    private class StringInit implements Initializer<String> {
 
         @Override
-        public String remove(String aggKey, String value, String aggregate) {
-            return aggregate + "-" + value;
+        public String apply() {
+            return "0";
         }
     }
 
@@ -73,7 +72,7 @@ public class KStreamAggregateTest {
             String topic1 = "topic1";
 
             KStream<String, String> stream1 = builder.stream(String.class, String.class, topic1);
-            KTable<Windowed<String>, String> table2 = stream1.aggregateByKey(new StringCanonizer(),
+            KTable<Windowed<String>, String> table2 = stream1.aggregateByKey(new StringInit(), new StringAdd(),
                     HoppingWindows.of("topic1-Canonized").with(10L).every(5L)).returnsValue(String.class);
 
             MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
@@ -151,14 +150,14 @@ public class KStreamAggregateTest {
             String topic2 = "topic2";
 
             KStream<String, String> stream1 = builder.stream(String.class, String.class, topic1);
-            KTable<Windowed<String>, String> table1 = stream1.aggregateByKey(new StringCanonizer(),
+            KTable<Windowed<String>, String> table1 = stream1.aggregateByKey(new StringInit(), new StringAdd(),
                     HoppingWindows.of("topic1-Canonized").with(10L).every(5L));
 
             MockProcessorSupplier<Windowed<String>, String> proc1 = new MockProcessorSupplier<>();
             table1.toStream().process(proc1);
 
             KStream<String, String> stream2 = builder.stream(String.class, String.class, topic2);
-            KTable<Windowed<String>, String> table2 = stream2.aggregateByKey(new StringCanonizer(),
+            KTable<Windowed<String>, String> table2 = stream2.aggregateByKey(new StringInit(), new StringAdd(),
                     HoppingWindows.of("topic2-Canonized").with(10L).every(5L));
 
             MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();

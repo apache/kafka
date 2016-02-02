@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -42,9 +43,9 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.type.TypeException;
 import org.apache.kafka.streams.kstream.type.internal.Resolver;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.Stores;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Type;
@@ -332,23 +333,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         Set<String> allSourceNodes = ensureJoinableWith(otherStream);
 
-        RocksDBWindowStoreSupplier<K, V> thisWindow =
-                new RocksDBWindowStoreSupplier<>(
-                        windows.name() + "-this",
-                        windows.maintainMs(),
-                        windows.segments,
-                        true,
-                        new Serdes<>("", keySerializer, keyDeserializer, thisValueSerializer, thisValueDeserializer),
-                        null);
+        StateStoreSupplier thisWindow = Stores.create(windows.name() + "-this")
+                .withKeys(keySerializer, keyDeserializer)
+                .withValues(otherValueSerializer, otherValueDeserializer)
+                .persistent()
+                .windowed(windows.maintainMs(), windows.segments, true)
+                .build();
 
-        RocksDBWindowStoreSupplier<K, V1> otherWindow =
-                new RocksDBWindowStoreSupplier<>(
-                        windows.name() + "-other",
-                        windows.maintainMs(),
-                        windows.segments,
-                        true,
-                        new Serdes<>("", keySerializer, keyDeserializer, otherValueSerializer, otherValueDeserializer),
-                        null);
+        StateStoreSupplier otherWindow = Stores.create(windows.name() + "-other")
+                .withKeys(keySerializer, keyDeserializer)
+                .withValues(otherValueSerializer, otherValueDeserializer)
+                .persistent()
+                .windowed(windows.maintainMs(), windows.segments, true)
+                .build();
 
         KStreamJoinWindow<K, V> thisWindowedStream = new KStreamJoinWindow<>(thisWindow.name(), windows.before + windows.after + 1, windows.maintainMs());
         KStreamJoinWindow<K, V1> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name(), windows.before + windows.after + 1, windows.maintainMs());
@@ -391,14 +388,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         Set<String> allSourceNodes = ensureJoinableWith(otherStream);
 
-        RocksDBWindowStoreSupplier<K, V1> otherWindow =
-                new RocksDBWindowStoreSupplier<>(
-                        windows.name() + "-this",
-                        windows.maintainMs(),
-                        windows.segments,
-                        true,
-                        new Serdes<>("", keySerializer, keyDeserializer, otherValueSerializer, otherValueDeserializer),
-                        null);
+        StateStoreSupplier otherWindow = Stores.create(windows.name() + "-other")
+                .withKeys(keySerializer, keyDeserializer)
+                .withValues(otherValueSerializer, otherValueDeserializer)
+                .persistent()
+                .windowed(windows.maintainMs(), windows.segments, true)
+                .build();
 
         KStreamJoinWindow<K, V1> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name(), windows.before + windows.after + 1, windows.maintainMs());
         KStreamKStreamJoin<K, R, V, V1> joinThis = new KStreamKStreamJoin<>(otherWindow.name(), windows.before, windows.after, joiner, true);
@@ -446,14 +441,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 final ProcessorSupplier<K, V> aggWindowSupplier = new KStreamAggWindow<>();
                 final ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamReduce<>(windows, windows.name(), reducer);
 
-                RocksDBWindowStoreSupplier<K, V> aggregateStore =
-                        new RocksDBWindowStoreSupplier<>(
-                                windows.name(),
-                                windows.maintainMs(),
-                                windows.segments,
-                                false,
-                                new Serdes<>("", keySerializer, keyDeserializer, valueSerializer, valueDeserializer),
-                                null);
+                StateStoreSupplier aggregateStore = Stores.create(windows.name())
+                        .withKeys(keySerializer, keyDeserializer)
+                        .withValues(valueSerializer, valueDeserializer)
+                        .persistent()
+                        .windowed(windows.maintainMs(), windows.segments, false)
+                        .build();
 
                 // aggregate the values with the aggregator and local store
                 topology.addProcessor(selectName, aggWindowSupplier, self.name);
@@ -474,7 +467,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(final Aggregator<K, V, T> aggregator,
+    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(final Initializer<T> initializer,
+                                                                       final Aggregator<K, V, T> aggregator,
                                                                        final Windows<W> windows) {
         final KStreamImpl<K, V> self = this;
 
@@ -488,7 +482,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 String selectName = topology.newName(SELECT_NAME);
 
                 final ProcessorSupplier<K, V> aggWindowSupplier = new KStreamAggWindow<>();
-                final ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier = new KStreamAggregate<>(windows, windows.name(), aggregator);
+                final ProcessorSupplier<Windowed<K>, Change<V>> aggregateSupplier =
+                        new KStreamAggregate<>(windows, windows.name(), initializer, aggregator);
 
                 final Serializer<K> aggKeySerializer = getSerializer(self.keyType);
                 final Deserializer<K> aggKeyDeserializer = getDeserializer(self.keyType);
@@ -496,14 +491,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 Serializer<T> aggValueSerializer = getSerializer(aggValueType);
                 Deserializer<T> aggValueDeserializer = getDeserializer(aggValueType);
 
-                RocksDBWindowStoreSupplier<K, T> aggregateStore =
-                        new RocksDBWindowStoreSupplier<>(
-                                windows.name(),
-                                windows.maintainMs(),
-                                windows.segments,
-                                false,
-                                new Serdes<>("", aggKeySerializer, aggKeyDeserializer, aggValueSerializer, aggValueDeserializer),
-                                null);
+                StateStoreSupplier aggregateStore = Stores.create(windows.name())
+                        .withKeys(aggKeySerializer, aggKeyDeserializer)
+                        .withValues(aggValueSerializer, aggValueDeserializer)
+                        .persistent()
+                        .windowed(windows.maintainMs(), windows.segments, false)
+                        .build();
 
                 // aggregate the values with the aggregator and local store
                 topology.addProcessor(selectName, aggWindowSupplier, self.name);
@@ -515,11 +508,29 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             }
         };
 
-        Type aggregateType = resolveReturnType(aggregator);
+        Type aggregateType = ensureConsistentTypes(resolveReturnType(initializer), resolveReturnType(aggregator));
         if (aggregateType != null) {
             return lazyKTable.returnsValue(aggregateType);
         } else {
             return lazyKTable;
         }
+    }
+
+    @Override
+    public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows) {
+        return this.aggregateByKey(
+                new Initializer<Long>() {
+                    @Override
+                    public Long apply() {
+                        return 0L;
+                    }
+                },
+                new Aggregator<K, V, Long>() {
+                    @Override
+                    public Long apply(K aggKey, V value, Long aggregate) {
+                        return aggregate + 1L;
+                    }
+                },
+                windows);
     }
 }

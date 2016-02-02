@@ -214,15 +214,26 @@ public interface KStream<K, V> {
      * @param reducer the class of Reducer
      * @param windows the specification of the aggregation window
      */
-    <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer, Windows<W> windows);
+    <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
+                                                          Windows<W> windows);
 
     /**
      * Aggregate values of this stream by key on a window basis.
      *
+     * @param initializer the class of Initializer
      * @param aggregator the class of Aggregator
      * @param windows the specification of the aggregation window
      * @param <T>   the value type of the aggregated table
      */
-    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Aggregator<K, V, T> aggregator, Windows<W> windows);
+    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
+                                                                Aggregator<K, V, T> aggregator,
+                                                                Windows<W> windows);
+
+    /**
+     * Count number of messages of this stream by key on a window basis.
+     *
+     * @param windows the specification of the aggregation window
+     */
+    <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows);
 
 }

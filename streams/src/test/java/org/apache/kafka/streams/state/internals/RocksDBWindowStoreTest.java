@@ -31,7 +31,7 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.Serdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.state.WindowStoreUtil;
+import org.apache.kafka.streams.state.WindowStoreUtils;
 import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Test;
 
@@ -58,8 +58,10 @@ public class RocksDBWindowStoreTest {
     private final long windowSize = 3;
     private final Serdes<Integer, String> serdes = Serdes.withBuiltinTypes("", Integer.class, String.class);
 
+    @SuppressWarnings("unchecked")
     protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context, Serdes<K, V> serdes) {
         StateStoreSupplier supplier = new RocksDBWindowStoreSupplier<>("window", retentionPeriod, numSegments, true, serdes, null);
+
         WindowStore<K, V> store = (WindowStore<K, V>) supplier.get();
         store.init(context);
         return store;
@@ -659,8 +661,8 @@ public class RocksDBWindowStoreTest {
         HashMap<Integer, Set<String>> entriesByKey = new HashMap<>();
 
         for (KeyValue<byte[], byte[]> entry : changeLog) {
-            long timestamp = WindowStoreUtil.timestampFromBinaryKey(entry.key);
-            Integer key = WindowStoreUtil.keyFromBinaryKey(entry.key, serdes);
+            long timestamp = WindowStoreUtils.timestampFromBinaryKey(entry.key);
+            Integer key = WindowStoreUtils.keyFromBinaryKey(entry.key, serdes);
             String value = entry.value == null ? null : serdes.valueFrom(entry.value);
 
             Set<String> entries = entriesByKey.get(key);

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -107,12 +108,24 @@ public abstract class LazyKTableWrapper<K, V> extends AbstractStream<K> implemen
     }
 
     @Override
-    public <K1, V1> KTable<K1, V1> reduce(Reducer<V1> addReducer, Reducer<V1> removeReducer, KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name) {
+    public <K1, V1> KTable<K1, V1> reduce(Reducer<V1> addReducer,
+                                          Reducer<V1> removeReducer,
+                                          KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
+                                          String name) {
         throw new InsufficientTypeInfoException();
     }
 
     @Override
-    public <K1, V1, T> KTable<K1, T> aggregate(Aggregator<K1, V1, T> aggregator, KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name) {
+    public <K1, V1, T> KTable<K1, T> aggregate(Initializer<T> initializer,
+                                               Aggregator<K1, V1, T> add,
+                                               Aggregator<K1, V1, T> remove,
+                                               KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
+                                               String name) {
+        throw new InsufficientTypeInfoException();
+    }
+
+    @Override
+    public <K1, V1> KTable<K1, Long> count(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name) {
         throw new InsufficientTypeInfoException();
     }
 

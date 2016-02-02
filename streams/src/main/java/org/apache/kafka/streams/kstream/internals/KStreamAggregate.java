@@ -21,6 +21,7 @@ import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.InsufficientTypeInfoException;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
@@ -37,13 +38,15 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
 
     private final String storeName;
     private final Windows<W> windows;
+    private final Initializer<T> initializer;
     private final Aggregator<K, V, T> aggregator;
 
     private boolean sendOldValues = false;
 
-    public KStreamAggregate(Windows<W> windows, String storeName, Aggregator<K, V, T> aggregator) {
+    public KStreamAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<K, V, T> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
+        this.initializer = initializer;
         this.aggregator = aggregator;
     }
 
@@ -102,10 +105,10 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
                     T oldAgg = entry.value;
 
                     if (oldAgg == null)
-                        oldAgg = aggregator.initialValue(key);
+                        oldAgg = initializer.apply();
 
                     // try to add the new new value (there will never be old value)
-                    T newAgg = aggregator.add(key, value, oldAgg);
+                    T newAgg = aggregator.apply(key, value, oldAgg);
 
                     // update the store with the new value
                     windowStore.put(key, newAgg, window.start());
@@ -124,8 +127,8 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
 
             // create the new window for the rest of unmatched window that do not exist yet
             for (long windowStartMs : matchedWindows.keySet()) {
-                T oldAgg = aggregator.initialValue(key);
-                T newAgg = aggregator.add(key, value, oldAgg);
+                T oldAgg = initializer.apply();
+                T newAgg = aggregator.apply(key, value, oldAgg);
 
                 windowStore.put(key, newAgg, windowStartMs);
 

@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
@@ -40,21 +41,27 @@ public class KTableAggregateTest {
     private final Serializer<String> strSerializer = new StringSerializer();
     private final Deserializer<String> strDeserializer = new StringDeserializer();
 
-    private class StringCanonizer implements Aggregator<String, String, String> {
+    private class StringAdd implements Aggregator<String, String, String> {
 
         @Override
-        public String initialValue(String aggKey) {
-            return "0";
-        }
-
-        @Override
-        public String add(String aggKey, String value, String aggregate) {
+        public String apply(String aggKey, String value, String aggregate) {
             return aggregate + "+" + value;
         }
+    }
+
+    private class StringRemove implements Aggregator<String, String, String> {
 
         @Override
-        public String remove(String aggKey, String value, String aggregate) {
+        public String apply(String aggKey, String value, String aggregate) {
             return aggregate + "-" + value;
+        }
+    }
+
+    private class StringInit implements Initializer<String> {
+
+        @Override
+        public String apply() {
+            return "0";
         }
     }
 
@@ -70,7 +77,7 @@ public class KTableAggregateTest {
             String topic1 = "topic1";
 
             KTable<String, String> table1 = builder.table(String.class, String.class, topic1);
-            KTable<String, String> table2 = table1.aggregate(new StringCanonizer(),
+            KTable<String, String> table2 = table1.aggregate(new StringInit(), new StringAdd(), new StringRemove(),
                     new NoOpKeyValueMapper<String, String>() { }, // capture types by creating an anonymous subclass
                     "topic1-Canonized");
 

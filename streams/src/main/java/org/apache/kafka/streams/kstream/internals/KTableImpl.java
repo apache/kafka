@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -248,9 +249,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1, V1, T> KTable<K1, T> aggregate(final Aggregator<K1, V1, T> aggregator,
+    public <K1, V1, T> KTable<K1, T> aggregate(final Initializer<T> initializer,
+                                               final Aggregator<K1, V1, T> add,
+                                               final Aggregator<K1, V1, T> remove,
                                                final KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                               final String name) {
+                                               String name) {
 
         Type mappedType = resolveReturnType(selector);
         final Type selectKeyType = getKeyTypeFromKeyValueType(mappedType);
@@ -282,12 +285,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
                 KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(self, selector);
 
-                ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableAggregate<>(storeName, aggregator);
+                ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableAggregate<>(storeName, initializer, add, remove);
 
                 StateStoreSupplier aggregateStore = Stores.create(storeName)
                         .withKeys(keySerializer, keyDeserializer)
                         .withValues(aggValueSerializer, aggValueDeserializer)
-                        .localDatabase()
+                        .persistent()
                         .build();
 
                 // select the aggregate key and values (old and new), it would require parent to send old values
@@ -310,7 +313,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             }
         };
 
-        Type aggValueType = resolveReturnType(aggregator);
+        Type aggValueType = ensureConsistentTypes(selectValueType, resolveReturnType(add), resolveReturnType(remove));
         if (aggValueType != null) {
             return lazyKTable.returnsValue(aggValueType);
         } else {
@@ -358,7 +361,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                 StateStoreSupplier aggregateStore = Stores.create(storeName)
                         .withKeys(keySerializer, keyDeserializer)
                         .withValues(valueSerializer, valueDeserializer)
-                        .localDatabase()
+                        .persistent()
                         .build();
 
                 // select the aggregate key and values (old and new), it would require parent to send old values
@@ -388,6 +391,31 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             return lazyKTable;
         }
     }
+
+    public <K1, V1> KTable<K1, Long> count(KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
+                                           String name) {
+        return this.aggregate(
+                new Initializer<Long>() {
+                    @Override
+                    public Long apply() {
+                        return 0L;
+                    }
+                },
+                new Aggregator<K1, V1, Long>() {
+                    @Override
+                    public Long apply(K1 aggKey, V1 value, Long aggregate) {
+                        return aggregate + 1L;
+                    }
+                }, new Aggregator<K1, V1, Long>() {
+                    @Override
+                    public Long apply(K1 aggKey, V1 value, Long aggregate) {
+                        return aggregate - 1L;
+                    }
+                },
+                selector,
+                name);
+    }
+
 
     @SuppressWarnings("unchecked")
     KTableValueGetterSupplier<K, V> valueGetterSupplier() {

@@ -156,7 +156,7 @@ public class Resolver {
             }
         }
         if (method == null)
-            throw new TypeException("failed to determine the return type of " + methodName + ": method name is not unique");
+            throw new NoSuchMethodError("method not found: " + methodName);
 
         return Resolver.resolveReturnType(method, implementationType);
     }

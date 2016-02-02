@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.state.Serdes;
 
 import java.io.File;
 import java.util.Collections;
@@ -48,6 +49,16 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     private Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
 
     long timestamp = -1L;
+
+    public MockProcessorContext(Serdes<?, ?> serdes, RecordCollector collector) {
+        this(null, null, serdes.keySerializer(), serdes.keyDeserializer(), serdes.valueSerializer(), serdes.valueDeserializer(), collector);
+    }
+
+    public MockProcessorContext(Serializer<?> keySerializer, Deserializer<?> keyDeserializer,
+                                Serializer<?> valueSerializer, Deserializer<?> valueDeserializer,
+                                RecordCollector collector) {
+        this(null, null, keySerializer, keyDeserializer, valueSerializer, valueDeserializer, collector);
+    }
 
     public MockProcessorContext(KStreamTestDriver driver, File stateDir,
                                 Serializer<?> keySerializer, Deserializer<?> keyDeserializer,
