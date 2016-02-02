@@ -20,7 +20,7 @@ package org.apache.kafka.streams.processor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 /**
- * An interface that allows the KStream framework to extract a timestamp from an instance of ConsumerRecord
+ * An interface that allows the Kafka Streams framework to extract a timestamp from an instance of {@link ConsumerRecord}
  */
 public interface TimestampExtractor {
 
