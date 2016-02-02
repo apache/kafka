@@ -32,7 +32,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import java.util.Iterator;
 import java.util.Map;
 
-public class KStreamAggregate<K, V, T, W extends Window> implements KTableProcessorSupplier<Windowed<K>, V, T> {
+public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, T> {
 
     private final String storeName;
     private final Windows<W> windows;
@@ -41,7 +41,7 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
 
     private boolean sendOldValues = false;
 
-    public KStreamAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<K, V, T> aggregator) {
+    public KStreamWindowAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<K, V, T> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;
@@ -49,8 +49,8 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
     }
 
     @Override
-    public Processor<Windowed<K>, Change<V>> get() {
-        return new KStreamAggregateProcessor();
+    public Processor<K, V> get() {
+        return new KStreamWindowAggregateProcessor();
     }
 
     @Override
@@ -58,7 +58,7 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
         sendOldValues = true;
     }
 
-    private class KStreamAggregateProcessor extends AbstractProcessor<Windowed<K>, Change<V>> {
+    private class KStreamWindowAggregateProcessor extends AbstractProcessor<K, V> {
 
         private WindowStore<K, T> windowStore;
 
@@ -71,12 +71,9 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
         }
 
         @Override
-        public void process(Windowed<K> windowedKey, Change<V> change) {
+        public void process(K key, V value) {
             // first get the matching windows
-            long timestamp = windowedKey.window().start();
-            K key = windowedKey.value();
-            V value = change.newValue;
-
+            long timestamp = context().timestamp();
             Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
             long timeFrom = Long.MAX_VALUE;
@@ -142,13 +139,13 @@ public class KStreamAggregate<K, V, T, W extends Window> implements KTableProces
         return new KTableValueGetterSupplier<Windowed<K>, T>() {
 
             public KTableValueGetter<Windowed<K>, T> get() {
-                return new KStreamAggregateValueGetter();
+                return new KStreamWindowAggregateValueGetter();
             }
 
         };
     }
 
-    private class KStreamAggregateValueGetter implements KTableValueGetter<Windowed<K>, T> {
+    private class KStreamWindowAggregateValueGetter implements KTableValueGetter<Windowed<K>, T> {
 
         private WindowStore<K, T> windowStore;
 

@@ -76,7 +76,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
 
 
-    public final ProcessorSupplier<K, ?> processorSupplier;
+    public final ProcessorSupplier<?, ?> processorSupplier;
 
     private final Serializer<K> keySerializer;
     private final Serializer<V> valSerializer;
@@ -87,14 +87,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     public KTableImpl(KStreamBuilder topology,
                       String name,
-                      ProcessorSupplier<K, ?> processorSupplier,
+                      ProcessorSupplier<?, ?> processorSupplier,
                       Set<String> sourceNodes) {
         this(topology, name, processorSupplier, sourceNodes, null, null, null, null);
     }
 
     public KTableImpl(KStreamBuilder topology,
                       String name,
-                      ProcessorSupplier<K, ?> processorSupplier,
+                      ProcessorSupplier<?, ?> processorSupplier,
                       Set<String> sourceNodes,
                       Serializer<K> keySerializer,
                       Serializer<V> valSerializer,
@@ -382,6 +382,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
             materialize(source);
             return new KTableSourceValueGetterSupplier<>(source.topic);
+        } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
+            return ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).view();
         } else {
             return ((KTableProcessorSupplier<K, S, V>) processorSupplier).view();
         }
@@ -394,6 +396,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                 KTableSource<K, ?> source = (KTableSource<K, V>) processorSupplier;
                 materialize(source);
                 source.enableSendingOldValues();
+            } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
+                ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).enableSendingOldValues();
             } else {
                 ((KTableProcessorSupplier<K, S, V>) processorSupplier).enableSendingOldValues();
             }

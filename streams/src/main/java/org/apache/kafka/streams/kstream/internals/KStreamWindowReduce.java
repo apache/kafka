@@ -31,7 +31,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import java.util.Iterator;
 import java.util.Map;
 
-public class KStreamReduce<K, V, W extends Window> implements KTableProcessorSupplier<Windowed<K>, V, V> {
+public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, V> {
 
     private final String storeName;
     private final Windows<W> windows;
@@ -39,15 +39,15 @@ public class KStreamReduce<K, V, W extends Window> implements KTableProcessorSup
 
     private boolean sendOldValues = false;
 
-    public KStreamReduce(Windows<W> windows, String storeName, Reducer<V> reducer) {
+    public KStreamWindowReduce(Windows<W> windows, String storeName, Reducer<V> reducer) {
         this.windows = windows;
         this.storeName = storeName;
         this.reducer = reducer;
     }
 
     @Override
-    public Processor<Windowed<K>, Change<V>> get() {
-        return new KStreamAggregateProcessor();
+    public Processor<K, V> get() {
+        return new KStreamWindowReduceProcessor();
     }
 
     @Override
@@ -55,7 +55,7 @@ public class KStreamReduce<K, V, W extends Window> implements KTableProcessorSup
         sendOldValues = true;
     }
 
-    private class KStreamAggregateProcessor extends AbstractProcessor<Windowed<K>, Change<V>> {
+    private class KStreamWindowReduceProcessor extends AbstractProcessor<K, V> {
 
         private WindowStore<K, V> windowStore;
 
@@ -68,11 +68,9 @@ public class KStreamReduce<K, V, W extends Window> implements KTableProcessorSup
         }
 
         @Override
-        public void process(Windowed<K> windowedKey, Change<V> change) {
+        public void process(K key, V value) {
             // first get the matching windows
-            long timestamp = windowedKey.window().start();
-            K key = windowedKey.value();
-            V value = change.newValue;
+            long timestamp = context().timestamp();
 
             Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
