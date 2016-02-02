@@ -540,7 +540,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       val tp = new TopicPartition(record.topic, record.partition)
 
       offsets.put(tp, record.offset + 1)
-      
+
       BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)
     }
 
