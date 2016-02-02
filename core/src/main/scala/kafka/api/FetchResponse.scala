@@ -49,14 +49,6 @@ object FetchResponsePartitionData {
 
 case class FetchResponsePartitionData(error: Short = Errors.NONE.code, hw: Long = -1L, messages: MessageSet) {
   val sizeInBytes = FetchResponsePartitionData.headerSize + messages.sizeInBytes
-
-  def toMessageFormat(toMagicValue: Byte): FetchResponsePartitionData = {
-    if (messages.hasMagicValue(toMagicValue))
-      this
-    else {
-      new FetchResponsePartitionData(error, hw, messages.toMessageFormat(toMagicValue))
-    }
-  }
 }
 
 // SENDS
@@ -209,20 +201,13 @@ object FetchResponse {
 case class FetchResponse(correlationId: Int,
                          data: Map[TopicAndPartition, FetchResponsePartitionData],
                          requestVersion: Int = 0,
-                         throttleTimeMs: Int = 0,
-                         magicValueToUse: Byte = Message.CurrentMagicValue)
+                         throttleTimeMs: Int = 0)
   extends RequestOrResponse() {
 
-
-  /**
-   * Convert the message format if necessary.
-   */
-  lazy val dataAfterVersionConversion = data.map{case (topicAndPartition, partitionData) =>
-    topicAndPartition -> partitionData.toMessageFormat(magicValueToUse)}
   /**
    * Partitions the data into a map of maps (one for each topic).
    */
-  lazy val dataGroupedByTopic = dataAfterVersionConversion.groupBy{ case (topicAndPartition, fetchData) => topicAndPartition.topic }
+  lazy val dataGroupedByTopic = data.groupBy{ case (topicAndPartition, fetchData) => topicAndPartition.topic }
   val headerSizeInBytes = FetchResponse.headerSize(requestVersion)
   lazy val sizeInBytes = FetchResponse.responseSize(dataGroupedByTopic, requestVersion)
 

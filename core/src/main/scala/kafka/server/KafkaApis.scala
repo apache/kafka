@@ -35,8 +35,7 @@ import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{InvalidTopicException, NotLeaderForPartitionException, UnknownTopicOrPartitionException,
 ClusterAuthorizationException}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{ProtoUtils, ApiKeys, Errors, SecurityProtocol}
-import org.apache.kafka.common.protocol.types.Schema
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse,
 DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse,
 LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse,
@@ -430,15 +429,20 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a fetch response
     def sendResponseCallback(responsePartitionData: Map[TopicAndPartition, FetchResponsePartitionData]) {
 
-      // determine the magic value to use
-      // Only send messages with magic value 1 when client supports it and server has this format on disk.
-      val magicValueToUse =
-        if (fetchRequest.versionId > 1 && config.messageFormatVersion.onOrAfter(KAFKA_0_10_0_DV0))
-          Message.MagicValue_V1
-        else
-          Message.MagicValue_V0
+      val convertedResponseStatus =
+        // Need to down-convert message when consumer only takes magic value 0.
+        if (fetchRequest.versionId <= 1) {
+          responsePartitionData.mapValues({ case data =>
+            if (!data.messages.hasMagicValue(Message.MagicValue_V0)) {
+              trace("Down converting message to V0 for fetch request from " + fetchRequest.clientId);
+              new FetchResponsePartitionData(data.error, data.hw, data.messages.asInstanceOf[FileMessageSet].toMessageFormat(Message.MagicValue_V0))
+            } else
+              data
+          })
+        } else
+          responsePartitionData
 
-      val mergedResponseStatus = responsePartitionData ++ unauthorizedResponseStatus
+      val mergedResponseStatus = convertedResponseStatus ++ unauthorizedResponseStatus
 
       mergedResponseStatus.foreach { case (topicAndPartition, data) =>
         if (data.error != Errors.NONE.code) {
@@ -452,9 +456,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       def fetchResponseCallback(delayTimeMs: Int) {
-          info(s"Sending fetch response to ${fetchRequest.clientId} with ${responsePartitionData.values.map(_.messages.size).sum}" +
-            s" messages using magic value $magicValueToUse")
-        val response = FetchResponse(fetchRequest.correlationId, mergedResponseStatus, fetchRequest.versionId, delayTimeMs, magicValueToUse)
+          trace(s"Sending fetch response to ${fetchRequest.clientId} with ${convertedResponseStatus.values.map(_.messages.size).sum}" +
+            s" messages")
+        val response = FetchResponse(fetchRequest.correlationId, mergedResponseStatus, fetchRequest.versionId, delayTimeMs)
         requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
       }
 

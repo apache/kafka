@@ -17,7 +17,7 @@
 
 package kafka.message
 
-import kafka.api.{KAFKA_0_10_0_DV0, ApiVersion}
+import kafka.api.{KAFKA_0_10_0_IV0, ApiVersion}
 import kafka.message.TimestampType.TimestampType
 import kafka.utils.{IteratorTemplate, Logging}
 import kafka.common.KafkaException
@@ -104,11 +104,11 @@ object ByteBufferMessageSet {
       // However, Note that the message sets sent by producers are compressed in a stream compressing way.
       // And the relative offset of an inner message compared with the last inner message is not known until
       // the last inner message is written.
-      // Unfortunately we are not able to change the previously written messages after the last message is writtern to
+      // Unfortunately we are not able to change the previously written messages after the last message is written to
       // the message set when stream compressing is used.
       //
       // To solve this issue, we use the following solution:
-      // 1. When producer create a message set, it simply write all the messages into a compressed message set with
+      // 1. When producer create a message set, it simply writes all the messages into a compressed message set with
       //    offset 0, 1, ... (inner offset).
       // 2. The broker will set the offset of the wrapper message to the absolute offset of the last message in the
       //    message set.
@@ -169,7 +169,7 @@ object ByteBufferMessageSet {
             if (innerMessageAndOffsets.isEmpty)
               allDone()
             else {
-              val messageAndOffset = messageAndOffsets.get.dequeue()
+              val messageAndOffset = innerMessageAndOffsets.dequeue()
               val message = messageAndOffset.message
               val relativeOffset = messageAndOffset.offset - lastInnerOffset
               val absoluteOffset = wrapperMessageOffset + relativeOffset
@@ -364,8 +364,8 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
    * 3. When magic value = 1, validate and maybe overwrite timestamps of messages.
    *
    * This method will convert the messages based on the following scenarios:
-   * A. Magic value of a message = 0 and messageFormatVersion is above or equals to 0.10.0-DV0
-   * B. Magic value of a message = 1 and messageFormatVersion is lower than 0.10.0-DV0
+   * A. Magic value of a message = 0 and messageFormatVersion is above or equals to 0.10.0-IV0
+   * B. Magic value of a message = 1 and messageFormatVersion is lower than 0.10.0-IV0
    *
    * If no format conversion or value overwriting is required for messages, this method will perform in-place
    * operations and avoids re-compression.
@@ -378,7 +378,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
                                                       messageFormatVersion: ApiVersion = ApiVersion.latestVersion,
                                                       messageTimestampType: TimestampType,
                                                       messageTimestampDiffMaxMs: Long): ByteBufferMessageSet = {
-    val magicValueToUse = if (messageFormatVersion.onOrAfter(KAFKA_0_10_0_DV0)) Message.MagicValue_V1 else Message.MagicValue_V0
+    val magicValueToUse = if (messageFormatVersion.onOrAfter(KAFKA_0_10_0_IV0)) Message.MagicValue_V1 else Message.MagicValue_V0
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       // check the magic value
       if (!hasMagicValue(magicValueToUse)) {
@@ -443,7 +443,8 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       } else {
         // Do not do re-compression but simply update the offset, timestamp and attributes field of the wrapper message.
         buffer.putLong(0, offsetCounter.addAndGet(validatedMessages.size) - 1)
-
+        // validate the messages
+        validatedMessages.foreach(_.ensureValid())
         if (magicValueToUse > Message.MagicValue_V0) {
           var crcUpdateNeeded = true
           val timestampOffset = MessageSet.LogOverhead + Message.TimestampOffset
@@ -524,6 +525,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       val messageBuffer = buffer.slice()
       messageBuffer.limit(messageSize)
       val message = new Message(messageBuffer)
+      message.ensureValid()
       validateMessageKey(message, compactedTopic)
       if (message.magic > Message.MagicValue_V0) {
         validateTimestamp(message, now, timestampType, timestampDiffMaxMs)

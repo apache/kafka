@@ -117,7 +117,7 @@ object Message {
  * 1. 4 byte CRC32 of the message
  * 2. 1 byte "magic" identifier to allow format changes, value is 0 or 1
  * 3. 1 byte "attributes" identifier to allow annotations on the message independent of the version (e.g. compression enabled, type of codec used)
- * 4. (Optional) 8 byte timestamp only if "magic" identifier is 1
+ * 4. (Optional) 8 byte timestamp only if "magic" identifier is greater than 0
  * 5. 4 byte key length, containing length K
  * 6. K byte key
  * 7. 4 byte payload length, containing length V
@@ -127,7 +127,7 @@ object Message {
  */
 class Message(val buffer: ByteBuffer,
               private val wrapperMessageTimestamp: Option[Long] = None,
-              private val timestampTypeToUse: Option[TimestampType] = None) {
+              private val wrapperMessageTimestampType: Option[TimestampType] = None) {
   
   import kafka.message.Message._
 
@@ -278,24 +278,19 @@ class Message(val buffer: ByteBuffer,
 
   /**
    * The timestamp of the message, only available when the "magic" value is greater than 0
+   * When magic > 0, The timestamp of a message is determined in the following way:
+   * 1. TimestampType = None and wrapperMessageTimestamp is None - Uncompressed message, timestamp and timestamp type are in the message.
+   * 2. TimestampType = LogAppendTime and wrapperMessageTimestamp is defined - Compressed message using LogAppendTime
+   * 3. TimestampType = CreateTime and wrapperMessageTimestamp is defined - Compressed message using CreateTime
    */
 def timestamp: Long = {
     if (magic == MagicValue_V0)
       throw new IllegalStateException("The message with magic byte 0 does not have a timestamp")
 
-    /**
-     * The timestamp of a message is determined in the following way:
-     * 1. TimestampType = LogAppendTime and
-     *    a) WrapperMessageTimestamp is not defined - Uncompressed message using LogAppendTime
-     *    b) WrapperMessageTimestamp is defined - Compressed message using LogAppendTime
-     * 2. TimestampType = CreateTime Or is not defined and
-     *    a) WrapperMessageTimestamp is not defined - Uncompressed message using CreateTime
-     *    b) WrapperMessageTimestamp is defined - Compressed message using CreateTime
-     */
-    // Case 1b
-    if (timestampTypeToUse.exists(_ == TimestampType.LogAppendTime) && wrapperMessageTimestamp.isDefined)
+    // Case 2
+    if (wrapperMessageTimestampType.exists(_ == TimestampType.LogAppendTime) && wrapperMessageTimestamp.isDefined)
       wrapperMessageTimestamp.get
-    else // case 1b, 2a, 2b
+    else // case 1, 3
       buffer.getLong(Message.TimestampOffset)
   }
 
@@ -306,7 +301,7 @@ def timestamp: Long = {
     if (magic == MagicValue_V0)
       throw new IllegalStateException("The message with magic byte 0 does not have a timestamp")
 
-    timestampTypeToUse.getOrElse(TimestampType.getTimestampType(attributes))
+    wrapperMessageTimestampType.getOrElse(TimestampType.getTimestampType(attributes))
   }
   
   /**
@@ -342,7 +337,7 @@ def timestamp: Long = {
   def convertToBuffer(toMagicValue: Byte,
                       byteBuffer: ByteBuffer,
                       now: Long = NoTimestamp,
-                      timestampType: TimestampType = timestampTypeToUse.getOrElse(TimestampType.getTimestampType(attributes))) {
+                      timestampType: TimestampType = wrapperMessageTimestampType.getOrElse(TimestampType.getTimestampType(attributes))) {
     if (byteBuffer.remaining() < size + headerSizeDiff(magic, toMagicValue))
       throw new IndexOutOfBoundsException("The byte buffer does not have enough capacity to hold new message format " +
         "version " + toMagicValue)

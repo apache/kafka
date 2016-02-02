@@ -420,8 +420,9 @@ public class Protocol {
                                                                         0),
                                                               new Field("responses",
                                                                       new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
-    // Fetch response V2 is the same as fetch response V1. The version number is bumped up to indicate that the Message
-    // format in the response could be up to message format V1, i.e. the messages use relative offsets and has timestamps.
+    // Even though fetch response v2 has the same protocol as v1, the record set in the response is different. In v1,
+    // record set only includes messages of v0 (magic byte 0). In v2, record set can include messages of v0 and v1
+    // (magic byte 0 and 1). For details, see ByteBufferMessageSet.
     public static final Schema FETCH_RESPONSE_V2 = FETCH_RESPONSE_V1;
 
     public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2};

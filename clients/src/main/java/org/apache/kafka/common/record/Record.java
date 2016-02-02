@@ -91,19 +91,19 @@ public final class Record {
 
     private final ByteBuffer buffer;
     private final Long wrapperRecordTimestamp;
-    private final TimestampType timestampTypeToUse;
+    private final TimestampType wrapperRecordTimestampType;
 
     public Record(ByteBuffer buffer) {
         this.buffer = buffer;
         this.wrapperRecordTimestamp = null;
-        this.timestampTypeToUse = null;
+        this.wrapperRecordTimestampType = null;
     }
 
     // Package private constructor for inner iteration.
-    Record(ByteBuffer buffer, Long wrapperRecordTimestamp, TimestampType timestampTypeToUse) {
+    Record(ByteBuffer buffer, Long wrapperRecordTimestamp, TimestampType wrapperRecordTimestampType) {
         this.buffer = buffer;
         this.wrapperRecordTimestamp = wrapperRecordTimestamp;
-        this.timestampTypeToUse = timestampTypeToUse;
+        this.wrapperRecordTimestampType = wrapperRecordTimestampType;
     }
 
     /**
@@ -321,21 +321,26 @@ public final class Record {
     }
 
     /**
-     * The timestamp of this record
+     * When magic value is greater than 0, the timestamp of a record is determined in the following way:
+     * 1. wrapperRecordTimestampType = null and wrapperRecordTimestamp is null - Uncompressed message, timestamp is in the message.
+     * 2. wrapperRecordTimestampType = LogAppendTime and WrapperRecordTimestamp is not null - Compressed message using LogAppendTime
+     * 3. wrapperRecordTimestampType = CreateTime and wrapperRecordTimestamp is not null - Compressed message using CreateTime
      */
     public long timestamp() {
         if (magic() == MAGIC_VALUE_V0)
             return NO_TIMESTAMP;
         else {
-            if (timestampTypeToUse == TimestampType.LogAppendTime && wrapperRecordTimestamp != null)
+            // case 2
+            if (wrapperRecordTimestampType == TimestampType.LogAppendTime && wrapperRecordTimestamp != null)
                 return wrapperRecordTimestamp;
+            // Case 1, 3
             else
                 return buffer.getLong(TIMESTAMP_OFFSET);
         }
     }
 
     public TimestampType timestampType() {
-        return timestampTypeToUse == null ? TimestampType.getTimestampType(attributes()) : timestampTypeToUse;
+        return wrapperRecordTimestampType == null ? TimestampType.getTimestampType(attributes()) : wrapperRecordTimestampType;
     }
 
     /**

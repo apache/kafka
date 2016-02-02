@@ -107,34 +107,6 @@ abstract class MessageSet extends Iterable[MessageAndOffset] {
   def sizeInBytes: Int
 
   /**
-   * Convert this message set to use specified message format.
-   */
-  def toMessageFormat(toMagicValue: Byte): ByteBufferMessageSet = {
-    val offsets = new ArrayBuffer[Long]
-    val newMessages = new ArrayBuffer[Message]
-    this.iterator.foreach(messageAndOffset => {
-      val message = messageAndOffset.message
-      // File message set only has shallow iterator. We need to do deep iteration here if needed.
-      if (message.compressionCodec == NoCompressionCodec || !this.isInstanceOf[FileMessageSet]) {
-        newMessages += messageAndOffset.message.toFormatVersion(toMagicValue)
-        offsets += messageAndOffset.offset
-      } else {
-        val deepIter = ByteBufferMessageSet.deepIterator(messageAndOffset)
-        for (innerMessageAndOffset <- deepIter) {
-          newMessages += innerMessageAndOffset.message.toFormatVersion(toMagicValue)
-          offsets += innerMessageAndOffset.offset
-        }
-      }
-    })
-
-    // We use the offset seq to assign offsets so the offset of the messages does not change.
-    new ByteBufferMessageSet(
-      compressionCodec = this.headOption.map(_.message.compressionCodec).getOrElse(NoCompressionCodec),
-      offsetSeq = offsets.toSeq,
-      newMessages: _*)
-  }
-
-  /**
    * Print this message set's contents. If the message set has more than 100 messages, just
    * print the first 100.
    */

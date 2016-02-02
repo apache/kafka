@@ -31,6 +31,8 @@ import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.network.TransportLayer
 import org.apache.kafka.common.utils.Utils
 
+import scala.collection.mutable.ArrayBuffer
+
 /**
  * An on-disk message set. An optional start and end position can be applied to the message set
  * which will allow slicing a subset of the file.
@@ -198,6 +200,34 @@ class FileMessageSet private[kafka](@volatile var file: File,
       location += (MessageSet.LogOverhead + messageSize)
     }
     true
+  }
+
+  /**
+   * Convert this message set to use specified message format.
+   */
+  def toMessageFormat(toMagicValue: Byte): ByteBufferMessageSet = {
+    val offsets = new ArrayBuffer[Long]
+    val newMessages = new ArrayBuffer[Message]
+    this.iterator().foreach(messageAndOffset => {
+      val message = messageAndOffset.message
+      if (message.compressionCodec == NoCompressionCodec) {
+        newMessages += messageAndOffset.message.toFormatVersion(toMagicValue)
+        offsets += messageAndOffset.offset
+      } else {
+        // File message set only has shallow iterator. We need to do deep iteration here if needed.
+        val deepIter = ByteBufferMessageSet.deepIterator(messageAndOffset)
+        for (innerMessageAndOffset <- deepIter) {
+          newMessages += innerMessageAndOffset.message.toFormatVersion(toMagicValue)
+          offsets += innerMessageAndOffset.offset
+        }
+      }
+    })
+
+    // We use the offset seq to assign offsets so the offset of the messages does not change.
+    new ByteBufferMessageSet(
+      compressionCodec = this.headOption.map(_.message.compressionCodec).getOrElse(NoCompressionCodec),
+      offsetSeq = offsets.toSeq,
+      newMessages: _*)
   }
 
   /**

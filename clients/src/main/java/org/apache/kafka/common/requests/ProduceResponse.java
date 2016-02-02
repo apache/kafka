@@ -69,7 +69,7 @@ public class ProduceResponse extends AbstractRequestResponse {
     }
 
     /**
-     * Constructor for Version 1
+     * Constructor for latest version
      * @param responses Produced data grouped by topic-partition
      * @param throttleTime Time in milliseconds the response was throttled
      */
@@ -86,12 +86,16 @@ public class ProduceResponse extends AbstractRequestResponse {
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTime, int version) {
         super(new Struct(ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, version)));
         initCommonFields(responses);
-        if (version > 0)
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTime);
         this.responses = responses;
         this.throttleTime = throttleTime;
     }
 
+    /**
+     * Constructor from a {@link Struct}. It is the caller's responsibility to pass in a struct with the latest schema.
+     * @param struct
+     */
     public ProduceResponse(Struct struct) {
         super(struct);
         responses = new HashMap<TopicPartition, PartitionResponse>();
