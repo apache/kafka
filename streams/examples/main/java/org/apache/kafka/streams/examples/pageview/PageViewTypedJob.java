@@ -30,9 +30,12 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.SerializationFactory;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.StreamsConfig;
 
+import java.lang.Override;
+import java.lang.reflect.Type;
 import java.util.Properties;
 
 public class PageViewTypedJob {
@@ -99,12 +102,16 @@ public class PageViewTypedJob {
         public String region;
     }
 
-    private static Serializer<T> serializer(Class<T> clazz) {
-        return new JsonPOJOSerializer(clazz);
-    }
+    private static SerializationFactory serializationFactory = new SerializationFactory() {
+        @Override
+        public Serializer<?> getSerializer(Type type) {
+            return (type instanceof Class) ? new JsonPOJOSerializer((Class) clazz) : null;
+        }
 
-    private static Deserializer<T> deserializer(Class<T> clazz) {
-        return new JsonPOJODeserializer(clazz);
+        @Override
+        public Deserializer<?> getDeserializer(Type type) {
+            return (type instanceof Class) ? new JsonPOJODeserializer((Class) clazz) : null;
+        }
     }
 
     public static void main(String[] args) throws Exception {
@@ -120,12 +127,7 @@ public class PageViewTypedJob {
         //
         builder.register(String.class, new StringSerializer(), new StringDeserializer());
         buidler.register(Long.class, new LongSerializer(), new LongDeserializer());
-        builder.register(PageView.class, serializer(PageView.class), deserializer(PageView.class));
-        builder.register(PageViewByRegion.class, serializer(PageViewByRegion.class), deserializer(PageViewByRegion.class));
-        builder.register(UserProfile.class, serializer(UserProfile.class), deserializer(UserProfile.class));
-        builder.register(RegionCount.class, serializer(RegionCount.class), deserializer(RegionCount.class));
-        builder.register(WindowedPageViewByRegion.class, serializer(WindowedPageViewByRegion.class), deserializer(WindowedPageViewByRegion.class));
-        builder.register(RegionCount.class, serializer(RegionCount.class), deserializer(RegionCount.class));
+        builder.register(serializationFactory);
 
         //
         // define the topology

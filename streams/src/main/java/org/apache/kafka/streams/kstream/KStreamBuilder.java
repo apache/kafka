@@ -42,8 +42,7 @@ public class KStreamBuilder extends TopologyBuilder {
     private final AtomicInteger index = new AtomicInteger(0);
     private final Map<Type, Serializer> registeredSerializers = new HashMap<>();
     private final Map<Type, Deserializer> registeredDeserializers = new HashMap<>();
-    private Serializer defaultSerializer = null;
-    private Deserializer defaultDeserializer = null;
+    private SerializationFactory serializationFactory = null;
 
     public KStreamBuilder() {
         super();
@@ -124,38 +123,16 @@ public class KStreamBuilder extends TopologyBuilder {
     }
 
     /**
-     * Register a default serializer.
+     * Register a serialization factory.
+     * The factory is used to create a serializer/deserializer for a type is not already registered
      *
-     * @param serializer the instance of the default Serializer
+     * @param serializationFactory a factory object
      */
-    public void registerDefault(Serializer<?> serializer) {
-        if (defaultSerializer != null)
-            throw new TopologyBuilderException("the default serializer already registered");
+    public void register(SerializationFactory serializationFactory) {
+        if (this.serializationFactory != null)
+            throw new TopologyBuilderException("the serialization factory already registered");
 
-        defaultSerializer = serializer;
-    }
-
-    /**
-     * Register a default deserializer.
-     *
-     * @param deserializer the instance of the default Deserializer
-     */
-    public void registerDefault(Deserializer<?> deserializer) {
-        if (defaultDeserializer == null)
-            throw new TopologyBuilderException("the default deserializer already registered");
-
-        defaultDeserializer = deserializer;
-    }
-
-    /**
-     * Register a default serializer and a default deserializer for the specified type.
-     *
-     * @param serializer the default Serializer instance for this type
-     * @param deserializer the default Deserializer instance for this type
-     */
-    public void registerDefault(Serializer<?> serializer, Deserializer<?> deserializer) {
-        registerDefault(serializer);
-        registerDefault(deserializer);
+        this.serializationFactory = serializationFactory;
     }
 
     /**
@@ -249,12 +226,13 @@ public class KStreamBuilder extends TopologyBuilder {
 
     @SuppressWarnings("unchecked")
     public <T> Serializer<T> getSerializer(Type type) {
-        Serializer<T> serializer;
+        Serializer<T> serializer = registeredSerializers.get(type);
 
-        if (type != null) {
-            serializer = nvl(registeredSerializers.get(type), defaultSerializer);
-        } else {
-            serializer = defaultSerializer;
+        if (serializer == null) {
+            serializer = (Serializer<T>) serializationFactory.getSerializer(type);
+            if (serializer != null) {
+                registeredSerializers.put(type, serializer);
+            }
         }
 
         if (serializer == null)
@@ -265,12 +243,13 @@ public class KStreamBuilder extends TopologyBuilder {
 
     @SuppressWarnings("unchecked")
     public <T> Deserializer<T> getDeserializer(Type type) {
-        Deserializer<T> deserializer;
+        Deserializer<T> deserializer = registeredDeserializers.get(type);
 
-        if (type != null) {
-            deserializer = nvl(registeredDeserializers.get(type), defaultDeserializer);
-        } else {
-            deserializer = defaultDeserializer;
+        if (deserializer == null) {
+            deserializer = (Deserializer<T>) serializationFactory.getDeserializer(type);
+            if (deserializer != null) {
+                registeredDeserializers.put(type, deserializer);
+            }
         }
 
         if (deserializer == null)
@@ -279,7 +258,4 @@ public class KStreamBuilder extends TopologyBuilder {
         return deserializer;
     }
 
-    private static <T> T nvl(T value, T defaultValue) {
-        return (value == null) ? defaultValue : value;
-    }
 }
