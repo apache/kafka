@@ -49,21 +49,14 @@ public class WordCountJob {
         props.put(StreamsConfig.JOB_ID_CONFIG, "streams-wordcount");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
-        props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
         // can specify underlying client configs if necessary
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        final Serializer<String> stringSerializer = new StringSerializer();
-        final Deserializer<String> stringDeserializer = new StringDeserializer();
-        final Serializer<Long> longSerializer = new LongSerializer();
-        final Deserializer<Long> longDeserializer = new LongDeserializer();
-        final Serializer<JsonNode> JsonSerializer = new JsonSerializer();
+        builder.register(String.class, new StringSerializer()(), new StringDeserializer());
+        builder.register(Long.class, new LongSerializer()(), new LongDeserializer());
 
         KStream<String, String> source = builder.stream("streams-file-input");
 
@@ -79,9 +72,7 @@ public class WordCountJob {
                         return new KeyValue<String, String>(value, value);
                     }
                 })
-                .countByKey(UnlimitedWindows.of("Counts").startOn(0L),
-                        stringSerializer, longSerializer,
-                        stringDeserializer, longDeserializer)
+                .countByKey(UnlimitedWindows.of("Counts").startOn(0L))
                 .toStream()
                 .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<String, JsonNode>>() {
                     @Override
@@ -95,7 +86,7 @@ public class WordCountJob {
                     }
                 });
 
-        counts.to("streams-wordcount-output", stringSerializer, JsonSerializer);
+        counts.to("streams-wordcount-output");
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();

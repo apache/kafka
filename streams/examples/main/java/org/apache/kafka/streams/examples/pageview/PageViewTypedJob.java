@@ -41,22 +41,57 @@ public class PageViewTypedJob {
     static public class PageView {
         public String user;
         public String page;
+
+        public PageView() {
+        }
+
+        public PageView(String user, String page) {
+            this.user = user;
+            this.page = page;
+        }
+
     }
 
     static public class UserProfile {
         public String user;
         public String region;
+
+        public UserProfile() {
+        }
+
+        public UserProfile(String user, String region) {
+            this.user = user;
+            this.region = region;
+        }
     }
 
     static public class PageViewByRegion {
         public String user;
         public String page;
         public String region;
+
+        public PageViewByRegion() {
+        }
+
+        public PageViewByRegion(String user, String page, String region) {
+            this.user = user;
+            this.page = page;
+            this.region = region;
+        }
     }
 
     static public class WindowedPageViewByRegion {
         public long windowStart;
         public String region;
+
+        public WindowedPageViewByRegion() {
+
+        }
+
+        public WindowedPageViewByRegion(long windowStart, String region) {
+            this.windowStart = windowStart;
+            this.region = region;
+        }
     }
 
     static public class RegionCount {
@@ -64,24 +99,37 @@ public class PageViewTypedJob {
         public String region;
     }
 
+    private static Serializer<T> serializer(Class<T> clazz) {
+        return new JsonPOJOSerializer(clazz);
+    }
+
+    private static Deserializer<T> deserializer(Class<T> clazz) {
+        return new JsonPOJODeserializer(clazz);
+    }
+
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
         props.put(StreamsConfig.JOB_ID_CONFIG, "streams-pageview");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
-        props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonPOJOSerializer.class);
-        props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonPOJODeserializer.class);
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        final Serializer<String> stringSerializer = new StringSerializer();
-        final Deserializer<String> stringDeserializer = new StringDeserializer();
-        final Serializer<Long> longSerializer = new LongSerializer();
-        final Deserializer<Long> longDeserializer = new LongDeserializer();
+        //
+        // register serializers/deserializers
+        //
+        builder.register(String.class, new StringSerializer(), new StringDeserializer());
+        buidler.register(Long.class, new LongSerializer(), new LongDeserializer());
+        builder.register(PageView.class, serializer(PageView.class), deserializer(PageView.class));
+        builder.register(PageViewByRegion.class, serializer(PageViewByRegion.class), deserializer(PageViewByRegion.class));
+        builder.register(UserProfile.class, serializer(UserProfile.class), deserializer(UserProfile.class));
+        builder.register(RegionCount.class, serializer(RegionCount.class), deserializer(RegionCount.class));
+        builder.register(WindowedPageViewByRegion.class, serializer(WindowedPageViewByRegion.class), deserializer(WindowedPageViewByRegion.class));
+        builder.register(RegionCount.class, serializer(RegionCount.class), deserializer(RegionCount.class));
 
-
+        //
+        // define the topology
+        //
         KStream<String, PageView> views = builder.stream("streams-pageview-input");
 
         KStream<String, PageView> viewsByUser = views.map((dummy, record) -> new KeyValue<>(record.user, record));
@@ -90,36 +138,27 @@ public class PageViewTypedJob {
 
         KStream<WindowedPageViewByRegion, RegionCount> regionCount = viewsByUser
                 .leftJoin(users, (view, profile) -> {
-                    PageViewByRegion viewByRegion = new PageViewByRegion();
-                    viewByRegion.user = view.user;
-                    viewByRegion.page = view.page;
-                    viewByRegion.region = profile.region;
-
-                    return viewByRegion;
-                })
+                    return new PageViewByRegion(view.user, view.page, profile.region);
+               })
                 .map((user, viewRegion) -> new KeyValue<>(viewRegion.region, viewRegion))
-                .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000),
-                        stringSerializer, longSerializer,
-                        stringDeserializer, longDeserializer)
+                .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000))
                 .toStream()
                 .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<WindowedPageViewByRegion, RegionCount>>() {
                     @Override
                     public KeyValue<WindowedPageViewByRegion, RegionCount> apply(Windowed<String> key, Long value) {
-                        WindowedPageViewByRegion wViewByRegion = new WindowedPageViewByRegion();
-                        wViewByRegion.windowStart = key.window().start();
-                        wViewByRegion.region = key.value();
-
-                        RegionCount rCount = new RegionCount();
-                        rCount.region = key.value();
-                        rCount.count = value;
+                        WindowedPageViewByRegion wViewByRegion = new WindowedPageViewByRegion(key.window().start(), key.value());
+                        RegionCount rCount = new RegionCount(key.value(), value);
 
                         return new KeyValue<>(wViewByRegion, rCount);
                     }
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-output", new JsonPOJOSerializer<>(), new JsonPOJOSerializer<>());
+        regionCount.to("streams-pageviewstats-output");
 
+        //
+        // run the job
+        //
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
     }

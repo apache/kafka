@@ -60,7 +60,16 @@ public class PageViewUnTypedJob {
         final Serializer<Long> longSerializer = new LongSerializer();
         final Deserializer<Long> longDeserializer = new LongDeserializer();
 
+        //
+        // register serializers/deserializers
+        //
+        builder.register(String.class, new StringSerializer(), new StringDeserializer());
+        buidler.register(Long.class, new LongSerializer(), new LongDeserializer());
+        builder.register(JsonNode.class, new JsonSerializer(), new JsonDeserializer());
 
+        //
+        // define the topology
+        //
         KStream<String, JsonNode> views = builder.stream("streams-pageview-input");
 
         KStream<String, JsonNode> viewsByUser = views.map((dummy, record) -> new KeyValue<>(record.get("user").textValue(), record));
@@ -99,6 +108,9 @@ public class PageViewUnTypedJob {
         // write to the result topic
         regionCount.to("streams-pageviewstats-output");
 
+        //
+        // run the job
+        //
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
     }

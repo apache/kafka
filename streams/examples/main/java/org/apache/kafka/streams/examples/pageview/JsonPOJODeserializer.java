@@ -38,6 +38,10 @@ public class JsonPOJODeserializer<T> implements Deserializer<T> {
     public JsonPOJODeserializer() {
     }
 
+    public JsonPOJODeserializer(Class<T> tClass) {
+        this.tClass = tClass;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public void configure(Map<String, ?> props, boolean isKey) {
