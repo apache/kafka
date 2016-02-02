@@ -294,7 +294,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
         if (segments[index] == null) {
             segments[index] = new Segment(name + "-" + directorySuffix(segmentId), segmentId);
-            segments[index].init(context);
+            segments[index].openDB(context);
         }
 
         return segments[index];
