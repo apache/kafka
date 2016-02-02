@@ -30,10 +30,6 @@ if [ -z "$SCALA_BINARY_VERSION" ]; then
 	SCALA_BINARY_VERSION=2.10
 fi
 
-if [ -z "$PROJECT_NAMES" ]; then
-  PROJECT_NAMES="core tools clients connect-json connect-api connect-file connect-runtime stream log4j-appender"
-fi
-
 JARPATH=""
 
 case $PROJECT_NAME in
