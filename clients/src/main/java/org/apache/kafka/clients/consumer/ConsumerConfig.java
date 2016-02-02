@@ -226,7 +226,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.RECEIVE_BUFFER_DOC)
                                 .define(FETCH_MIN_BYTES_CONFIG,
                                         Type.INT,
-                                        1024,
+                                        1,
                                         atLeast(0),
                                         Importance.HIGH,
                                         FETCH_MIN_BYTES_DOC)
