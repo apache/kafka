@@ -297,7 +297,8 @@ public interface KStream<K, V> {
                                                                 Deserializer<T> aggValueDeserializer);
 
     /**
-     * Aggregate values of this stream by key on a window basis.
+     * Aggregate values of this stream by key without a window basis, and hence
+     * return an ever updating table
      *
      * @param initializer the class of Initializer
      * @param aggregator the class of Aggregator
