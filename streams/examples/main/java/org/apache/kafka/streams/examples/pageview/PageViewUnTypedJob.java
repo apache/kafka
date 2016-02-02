@@ -53,8 +53,6 @@ public class PageViewUnTypedJob {
         props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
 
-        StreamsConfig config = new StreamsConfig(props);
-
         KStreamBuilder builder = new KStreamBuilder();
 
         final Serializer<String> stringSerializer = new StringSerializer();
@@ -101,7 +99,7 @@ public class PageViewUnTypedJob {
         // write to the result topic
         regionCount.to("streams-pageviewstats-output");
 
-        KafkaStreams kstream = new KafkaStreams(builder, config);
-        kstream.start();
+        KafkaStreams streams = new KafkaStreams(builder, props);
+        streams.start();
     }
 }

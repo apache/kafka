@@ -100,7 +100,7 @@ public class OffsetCheckpoint {
 
     public Map<TopicPartition, Long> read() throws IOException {
         synchronized (lock) {
-            BufferedReader reader = null;
+            BufferedReader reader;
             try {
                 reader = new BufferedReader(new FileReader(file));
             } catch (FileNotFoundException e) {
@@ -136,8 +136,7 @@ public class OffsetCheckpoint {
                         throw new IllegalArgumentException("Unknown offset checkpoint version: " + version);
                 }
             } finally {
-                if (reader != null)
-                    reader.close();
+                reader.close();
             }
         }
     }
@@ -146,8 +145,7 @@ public class OffsetCheckpoint {
         String line = reader.readLine();
         if (line == null)
             throw new EOFException("File ended prematurely.");
-        int val = Integer.parseInt(line);
-        return val;
+        return Integer.parseInt(line);
     }
 
     public void delete() throws IOException {
