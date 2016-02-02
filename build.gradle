@@ -158,6 +158,22 @@ subprojects {
 
   task systemTestLibs(dependsOn: jar)
 
+  tasks.create(name: "copyDependantLibsJava", type: Copy) {
+    from(configurations.runtime) {
+      include('*.jar')
+      exclude('*scala*')
+    }
+    into "$baseBuildDir/dependant-libs-java"
+  }
+
+  tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
+    from(configurations.testRuntime - configurations.runtime) {
+      include('*.jar')
+      exclude('*scala*')
+    }
+    into "$baseBuildDir/test-dependant-libs-java"
+  }
+
   artifacts {
     archives srcJar
     archives javadocJar
@@ -328,27 +344,11 @@ project(':core') {
     testCompile.exclude module: 'api-ldap-schema-data'
   }
 
-  tasks.create(name: "copyDependantLibsJava", type: Copy) {
-    from (configurations.runtime) {
-      include('*.jar')
-      exclude('*scala*')
-    }
-    into "$baseBuildDir/dependant-libs-java"
-  }
-
   tasks.create(name: "copyDependantLibsScala", type: Copy) {
     from (configurations.runtime) {
       include('*scala*.jar')
     }
     into "$baseBuildDir/dependant-libs-scala-${versions.scala}"
-  }
-
-  tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
-    from (configurations.testRuntime - configurations.runtime ) {
-      include('*.jar')
-      exclude('*scala*')
-    }
-    into "$baseBuildDir/test-dependant-libs-java"
   }
   tasks.create(name: "copyTestDependantLibsScala", type: Copy) {
     from (configurations.testRuntime - configurations.runtime) {
@@ -452,6 +452,7 @@ project(':examples') {
 }
 
 project(':clients') {
+
   archivesBaseName = "kafka-clients"
 
   dependencies {
@@ -536,20 +537,6 @@ project(':tools') {
         include "**/org/apache/kafka/tools/*"
     }
 
-    tasks.create(name: "copyDependantLibsJava", type: Copy) {
-        from (configurations.runtime) {
-            include('*.jar')
-        }
-        into "$baseBuildDir/dependant-libs-java"
-    }
-
-    tasks.create(name: "copyTestDependantLibsJava", type:Copy) {
-      from (configurations.testRuntime - configurations.runtime) {
-        include ('*.jar')
-      }
-      into "$baseBuildDir/test-dependant-libs-java"
-    }
-
     task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {
       Files.createDirectories(Paths.get("$buildDir/dependant-libs-java"))
       Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-java"))
@@ -585,20 +572,6 @@ project(':streams') {
         include "**/org/apache/kafka/streams/*"
     }
 
-    tasks.create(name: "copyDependantLibsJava", type: Copy) {
-      from(configurations.runtime) {
-        include('*.jar')
-      }
-      into "$baseBuildDir/dependant-libs-java"
-    }
-
-    tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
-      from(configurations.testRuntime - configurations.runtime) {
-        include('*.jar')
-      }
-      into "$baseBuildDir/test-dependant-libs-java"
-    }
-
     task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {
       Files.createDirectories(Paths.get("$buildDir/dependant-libs-java"))
       Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-java"))
@@ -626,20 +599,6 @@ project(':streams:examples') {
 
   javadoc {
     enabled = false
-  }
-
-  tasks.create(name: "copyDependantLibsJava", type: Copy) {
-    from(configurations.runtime) {
-      include('*.jar')
-    }
-    into "$baseBuildDir/dependant-libs-java"
-  }
-
-  tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
-    from(configurations.testRuntime - configurations.runtime) {
-      include('*.jar')
-    }
-    into "$baseBuildDir/test-dependant-libs-java"
   }
 
   task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {
@@ -692,20 +651,6 @@ project(':connect:api') {
     options.links "http://docs.oracle.com/javase/7/docs/api/"
   }
 
-  tasks.create(name: "copyDependantLibsJava", type: Copy) {
-    from(configurations.runtime) {
-      include('*.jar')
-    }
-    into "$baseBuildDir/dependant-libs-java"
-  }
-
-  tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
-    from(configurations.testRuntime - configurations.runtime) {
-      include('*.jar')
-    }
-    into "$baseBuildDir/test-dependant-libs-java"
-  }
-
   task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {
     Files.createDirectories(Paths.get("$buildDir/dependant-libs-java"))
     Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-java"))
@@ -741,20 +686,6 @@ project(':connect:json') {
 
   javadoc {
     enabled = false
-  }
-
-  tasks.create(name: "copyDependantLibsJava", type: Copy) {
-    from(configurations.runtime) {
-      include('*.jar')
-    }
-    into "$baseBuildDir/dependant-libs-java"
-  }
-
-  tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
-    from(configurations.testRuntime - configurations.runtime) {
-      include('*.jar')
-    }
-    into "$baseBuildDir/test-dependant-libs-java"
   }
 
   task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {
@@ -805,20 +736,6 @@ project(':connect:runtime') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibsJava", type: Copy) {
-    from(configurations.runtime) {
-      include('*.jar')
-    }
-    into "$baseBuildDir/dependant-libs-java"
-  }
-
-  tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
-    from(configurations.testRuntime - configurations.runtime) {
-      include('*.jar')
-    }
-    into "$baseBuildDir/test-dependant-libs-java"
-  }
-
   task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {
     Files.createDirectories(Paths.get("$buildDir/dependant-libs-java"))
     Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-java"))
@@ -859,20 +776,6 @@ project(':connect:file') {
 
   javadoc {
     enabled = false
-  }
-
-  tasks.create(name: "copyDependantLibsJava", type: Copy) {
-    from(configurations.runtime) {
-      include('*.jar')
-    }
-    into "$baseBuildDir/dependant-libs-java"
-  }
-
-  tasks.create(name: "copyTestDependantLibsJava", type: Copy) {
-    from(configurations.testRuntime - configurations.runtime) {
-      include('*.jar')
-    }
-    into "$baseBuildDir/test-dependant-libs-java"
   }
 
   task linkJars(dependsOn: ['copyDependantLibsJava', 'copyTestDependantLibsJava']) {

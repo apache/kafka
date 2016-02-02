@@ -18,4 +18,4 @@ if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
     export KAFKA_HEAP_OPTS="-Xmx512M"
 fi
 
-PROJECT_NAMES="core" exec $(dirname $0)/kafka-run-class.sh kafka.tools.ConsoleProducer "$@"
+PROJECT_NAME="core" exec $(dirname $0)/kafka-run-class.sh kafka.tools.ConsoleProducer "$@"

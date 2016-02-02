@@ -35,6 +35,13 @@ IF ["%SCALA_BINARY_VERSION%"] EQU [""] (
   set SCALA_BINARY_VERSION=2.10
 )
 
+rem Classpath for central deduplicated dependencies
+if ["%PROJECT_NAME%"] equ [""] (
+  for %%i in (%BASE_DIR%\build\dependant-libs-java\*.jar) do (
+	call :concat %%i
+  )
+)
+
 rem Classpath addition for kafka-core dependencies
 if ["%PROJECT_NAME%"] equ ["core"] (
   for %%i in (%BASE_DIR%\core\build\dependant-libs-java\*.jar) do (

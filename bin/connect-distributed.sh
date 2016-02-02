@@ -20,4 +20,4 @@ if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
     export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/connect-log4j.properties"
 fi
 
-PROJECT_NAMES="connect-runtime" exec $(dirname $0)/kafka-run-class.sh org.apache.kafka.connect.cli.ConnectDistributed "$@"
+PROJECT_NAME="connect-runtime" exec $(dirname $0)/kafka-run-class.sh org.apache.kafka.connect.cli.ConnectDistributed "$@"
