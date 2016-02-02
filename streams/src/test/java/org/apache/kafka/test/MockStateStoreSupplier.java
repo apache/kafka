@@ -49,9 +49,9 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
     @Override
     public StateStore get() {
         if (loggingEnabled) {
-            return new MockStateStore(name, persistent);
+            return new MockStateStore(name, persistent).enableLogging();
         } else {
-            return new MockStateStore(name, persistent).disableLogging();
+            return new MockStateStore(name, persistent);
         }
     }
 
@@ -59,7 +59,7 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
         private final String name;
         private final boolean persistent;
 
-        public boolean loggingEnabled = true;
+        public boolean loggingEnabled = false;
         public boolean initialized = false;
         public boolean flushed = false;
         public boolean closed = false;
@@ -70,8 +70,8 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
             this.persistent = persistent;
         }
 
-        public MockStateStore disableLogging() {
-            loggingEnabled = false;
+        public MockStateStore enableLogging() {
+            loggingEnabled = true;
             return this;
         }
 

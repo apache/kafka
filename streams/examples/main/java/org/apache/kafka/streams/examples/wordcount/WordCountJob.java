@@ -97,7 +97,7 @@ public class WordCountJob {
 
         counts.to("streams-wordcount-output", stringSerializer, JsonSerializer);
 
-        KafkaStreams kstream = new KafkaStreams(builder, props);
-        kstream.start();
+        KafkaStreams streams = new KafkaStreams(builder, props);
+        streams.start();
     }
 }

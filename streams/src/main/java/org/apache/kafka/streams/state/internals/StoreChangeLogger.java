@@ -32,28 +32,41 @@ public class StoreChangeLogger<K, V> {
         V get(K key);
     }
 
+    // TODO: these values should be configurable
+    protected static final int DEFAULT_WRITE_BATCH_SIZE = 100;
+
     protected final Serdes<K, V> serialization;
 
-    private final Set<K> dirty;
-    private final Set<K> removed;
+    private final String topic;
+    private final int partition;
+    private final ProcessorContext context;
     private final int maxDirty;
     private final int maxRemoved;
 
-    private final String topic;
-    private int partition;
-    private ProcessorContext context;
+    protected Set<K> dirty;
+    protected Set<K> removed;
 
-    // always wrap the logged store with the metered store
     public StoreChangeLogger(String topic, ProcessorContext context, Serdes<K, V> serialization) {
-        this.topic = topic;
-        this.serialization = serialization;
-        this.context = context;
-        this.partition = context.id().partition;
+        this(topic, context, serialization, DEFAULT_WRITE_BATCH_SIZE, DEFAULT_WRITE_BATCH_SIZE);
+    }
 
+    public StoreChangeLogger(String topic, ProcessorContext context, Serdes<K, V> serialization, int maxDirty, int maxRemoved) {
+        this(topic, context, context.id().partition, serialization, maxDirty, maxRemoved);
+        init();
+    }
+
+    protected StoreChangeLogger(String topic, ProcessorContext context, int partition, Serdes<K, V> serialization, int maxDirty, int maxRemoved) {
+        this.topic = topic;
+        this.context = context;
+        this.partition = partition;
+        this.serialization = serialization;
+        this.maxDirty = maxDirty;
+        this.maxRemoved = maxRemoved;
+    }
+
+    public void init() {
         this.dirty = new HashSet<>();
         this.removed = new HashSet<>();
-        this.maxDirty = 100; // TODO: this needs to be configurable
-        this.maxRemoved = 100; // TODO: this needs to be configurable
     }
 
     public void add(K key) {
@@ -89,4 +102,18 @@ public class StoreChangeLogger<K, V> {
         }
     }
 
+    public void clear() {
+        this.removed.clear();
+        this.dirty.clear();
+    }
+
+    // this is for test only
+    public int numDirty() {
+        return this.dirty.size();
+    }
+
+    // this is for test only
+    public int numRemoved() {
+        return this.removed.size();
+    }
 }

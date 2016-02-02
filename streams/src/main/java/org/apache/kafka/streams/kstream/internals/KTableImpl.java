@@ -273,7 +273,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         StateStoreSupplier aggregateStore = Stores.create(name)
                 .withKeys(keySerializer, keyDeserializer)
                 .withValues(aggValueSerializer, aggValueDeserializer)
-                .localDatabase()
+                .persistent()
                 .build();
 
         // select the aggregate key and values (old and new), it would require parent to send old values
@@ -322,7 +322,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         StateStoreSupplier aggregateStore = Stores.create(name)
                 .withKeys(keySerializer, keyDeserializer)
                 .withValues(valueSerializer, valueDeserializer)
-                .localDatabase()
+                .persistent()
                 .build();
 
         // select the aggregate key and values (old and new), it would require parent to send old values
