@@ -953,7 +953,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
       " Valid options are " + BrokerCompressionCodec.brokerCompressionOptions.mkString(","))
     require(advertisedListeners.keySet.contains(interBrokerSecurityProtocol),
       s"${KafkaConfig.InterBrokerSecurityProtocolProp} must be a protocol in the configured set of ${KafkaConfig.AdvertisedListenersProp}. " +
-      s"The valid options based on currently configured protocols are ${getAdvertisedListeners().keySet}")
+      s"The valid options based on currently configured protocols are ${advertisedListeners.keySet}")
     require(advertisedListeners.keySet.subsetOf(listeners.keySet),
       s"${KafkaConfig.AdvertisedListenersProp} protocols must be equal to or a subset of ${KafkaConfig.ListenersProp} protocols. " +
       s"Found ${advertisedListeners.keySet}. The valid options based on currently configured protocols are ${listeners.keySet}"
