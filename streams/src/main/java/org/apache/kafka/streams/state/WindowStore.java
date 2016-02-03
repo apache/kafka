@@ -21,11 +21,28 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.streams.processor.StateStore;
 
+/**
+ * A windowed store interface extending {@link StateStore}
+ *
+ * @param <K> Type of keys
+ * @param <V> Type of values
+ */
 public interface WindowStore<K, V> extends StateStore {
 
+    /**
+     * Put a key-value pair with the current wall-clock time as the timestamp
+     * into the corresponding window
+     */
     void put(K key, V value);
 
+    /**
+     * Put a key-value pair with the given timestamp into the corresponding window
+     */
     void put(K key, V value, long timestamp);
 
+    /**
+     * Get all the key-value pairs with the given key and the time range from all
+     * the existing windows.
+     */
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
 }

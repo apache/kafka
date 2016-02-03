@@ -23,6 +23,9 @@ import org.apache.kafka.streams.StreamsMetrics;
 
 import java.io.File;
 
+/**
+ * Processor context interface.
+ */
 public interface ProcessorContext {
 
     /**

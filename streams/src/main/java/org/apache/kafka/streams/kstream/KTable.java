@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 
+// TODO: Javadoc needs to be updated.
 /**
  * KTable is an abstraction of a change log stream.
  *

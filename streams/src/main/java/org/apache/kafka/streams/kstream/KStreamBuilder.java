@@ -29,7 +29,8 @@ import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * KStreamBuilder is the class to create KStream instances.
+ * KStreamBuilder is a superclass of {@link TopologyBuilder} that provides the {@link KStream} DSL
+ * for users to specify computational logic and translates the given logic to a processor topology.
  */
 public class KStreamBuilder extends TopologyBuilder {
 
@@ -39,6 +40,7 @@ public class KStreamBuilder extends TopologyBuilder {
         super();
     }
 
+    // TODO: needs updated
     /**
      * Creates a KStream instance for the specified topic.
      * The default deserializers specified in the config are used.
@@ -115,6 +117,13 @@ public class KStreamBuilder extends TopologyBuilder {
         return KStreamImpl.merge(this, streams);
     }
 
+    /**
+     * Create a unqiue processor name used for translation into the processor topology.
+     * This function should only be used for users to add their own DSL operators and corresponding translation rules.
+     *
+     * @param prefix Processor name prefix.
+     * @return The unique processor name.
+     */
     public String newName(String prefix) {
         return prefix + String.format("%010d", index.getAndIncrement());
     }

@@ -17,6 +17,11 @@
 
 package org.apache.kafka.streams.kstream;
 
+/**
+ * The Reducer interface for combinging two values of the same type into a new value.
+ *
+ * @param <V> Value type.
+ */
 public interface Reducer<V> {
 
     V apply(V value1, V value2);
