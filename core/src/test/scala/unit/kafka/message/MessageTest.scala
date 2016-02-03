@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,6 +19,8 @@ package kafka.message
 
 import java.nio._
 import java.util.HashMap
+import org.apache.kafka.common.protocol.Errors
+
 import scala.collection._
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
@@ -27,15 +29,15 @@ import kafka.utils.TestUtils
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.utils.Utils
 
-case class MessageTestVal(val key: Array[Byte], 
-                          val payload: Array[Byte], 
-                          val codec: CompressionCodec, 
+case class MessageTestVal(val key: Array[Byte],
+                          val payload: Array[Byte],
+                          val codec: CompressionCodec,
                           val message: Message)
 
 class MessageTest extends JUnitSuite {
-  
+
   var messages = new mutable.ArrayBuffer[MessageTestVal]()
-  
+
   @Before
   def setUp(): Unit = {
     val keys = Array(null, "key".getBytes, "".getBytes)
@@ -44,7 +46,7 @@ class MessageTest extends JUnitSuite {
     for(k <- keys; v <- vals; codec <- codecs)
       messages += new MessageTestVal(k, v, codec, new Message(v, k, codec))
   }
-  
+
   @Test
   def testFieldValues {
     for(v <- messages) {
@@ -73,7 +75,7 @@ class MessageTest extends JUnitSuite {
       assertFalse("Message with invalid checksum should be invalid", v.message.isValid)
     }
   }
-  
+
   @Test
   def testEquality() {
     for(v <- messages) {
@@ -84,7 +86,7 @@ class MessageTest extends JUnitSuite {
       assertTrue("Should equal another message with the same content.", v.message.equals(copy))
     }
   }
-  
+
   @Test
   def testIsHashable() {
     // this is silly, but why not
@@ -94,6 +96,14 @@ class MessageTest extends JUnitSuite {
     for(v <- messages)
       assertEquals(v.message, m.get(v.message))
   }
-  
+
+  @Test
+  def testExceptionMapping() {
+    val expected = Errors.CORRUPT_MESSAGE
+    val actual = Errors.forException(new InvalidMessageException())
+
+    assertEquals("InvalidMessageException should map to a corrupt message error", expected, actual)
+  }
+
 }
- 	
+
