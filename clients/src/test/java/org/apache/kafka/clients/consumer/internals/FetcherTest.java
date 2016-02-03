@@ -467,9 +467,9 @@ public class FetcherTest {
             // We need to make sure the message offset grows.
             if (i > 1) {
                 this.records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
-                this.records.append((long) i * 3, "key".getBytes(), "value-0".getBytes());
-                this.records.append((long) i * 3 + 1, "key".getBytes(), "value-1".getBytes());
-                this.records.append((long) i * 3 + 2, "key".getBytes(), "value-2".getBytes());
+                for (int v = 0; v < 3; v++) {
+                    this.records.append((long) i * 3 + v, "key".getBytes(), String.format("value-%d", v).getBytes());
+                }
                 this.records.close();
             }
             fetcher.initFetches(cluster);

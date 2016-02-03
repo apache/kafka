@@ -12,13 +12,15 @@
   */
 package kafka.api
 
+import java.util.Properties
 import java.util.regex.Pattern
 
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.errors.{InvalidTopicException, RecordTooLargeException}
 import org.junit.Assert._
@@ -263,45 +265,40 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
-  def testSeekUnCompressedMessages() {
+  def testSeek() {
     val consumer = this.consumers(0)
     val totalRecords = 50L
     sendRecords(totalRecords.toInt, tp)
+    sendCompressedMessages(totalRecords.toInt, tp, totalRecords.toInt)
     consumer.assign(List(tp).asJava)
 
     consumer.seekToEnd(tp)
-    assertEquals(totalRecords, consumer.position(tp))
+    assertEquals(totalRecords * 2, consumer.position(tp))
     assertFalse(consumer.poll(totalRecords).iterator().hasNext)
 
     consumer.seekToBeginning(tp)
     assertEquals(0, consumer.position(tp), 0)
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0)
 
-    val mid = totalRecords / 2
-    consumer.seek(tp, mid)
-    assertEquals(mid, consumer.position(tp))
-    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt)
+    // Test seek non-compressed message
+    val quarter = totalRecords / 2
+    consumer.seek(tp, quarter)
+    assertEquals(quarter, consumer.position(tp))
+    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = quarter.toInt, startingKeyAndValueIndex = quarter.toInt)
+    // Test seek compressed message
+    val threeQuarters = totalRecords + totalRecords / 2
+    consumer.seek(tp, threeQuarters)
+    assertEquals(threeQuarters, consumer.position(tp))
+    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = threeQuarters.toInt, startingKeyAndValueIndex = threeQuarters.toInt)
   }
 
-  @Test
-  def testSeekCompressedMessages() {
-    val consumer = this.consumers(0)
-    val totalRecords = 50L
-    sendRecords(totalRecords.toInt, tp, Some("gzip"))
-    consumer.assign(List(tp).asJava)
-
-    consumer.seekToEnd(tp)
-    assertEquals(totalRecords, consumer.position(tp))
-    assertFalse(consumer.poll(totalRecords).iterator().hasNext)
-
-    consumer.seekToBeginning(tp)
-    assertEquals(0, consumer.position(tp), 0)
-    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0)
-
-    val mid = totalRecords / 2
-    consumer.seek(tp, mid)
-    assertEquals(mid, consumer.position(tp))
-    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt)
+  private def sendCompressedMessages(numRecords: Int, tp: TopicPartition, startingKeyAndValueIndex: Int) {
+    val producerProps = new Properties()
+    producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, CompressionType.GZIP.name)
+    producerProps.setProperty(ProducerConfig.LINGER_MS_CONFIG, Long.MaxValue.toString)
+    val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
+        retries = 0, lingerMs = Long.MaxValue, props = Some(producerProps))
+    sendRecords(producer, numRecords, tp, startingKeyAndValueIndex)
   }
 
   def testPositionAndCommit() {

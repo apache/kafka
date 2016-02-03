@@ -22,11 +22,8 @@ import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import kafka.utils.{TestUtils, Logging, ShutdownableThread}
 import kafka.server.KafkaConfig
 
-import java.util.{Properties, ArrayList}
+import java.util.ArrayList
 import org.junit.Assert._
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
-import org.junit.runners.Parameterized.{Parameter, Parameters}
 import org.junit.{Test, Before}
 
 import scala.collection.mutable.Buffer
@@ -279,28 +276,17 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
   }
 
   protected def sendRecords(numRecords: Int, tp: TopicPartition) {
-    sendRecords(numRecords, tp, None)
+    sendRecords(this.producers(0), numRecords, tp)
   }
 
-  protected def sendRecords(numRecords: Int, tp: TopicPartition, codec: Option[String] = None) {
-    if (!codec.isDefined) {
-      sendRecords(this.producers(0), numRecords, tp)
-      this.producers(0).flush()
-    } else {
-      val producerProps = new Properties()
-      producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, codec.get)
-      producerProps.setProperty(ProducerConfig.LINGER_MS_CONFIG, Long.MaxValue.toString)
-      val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
-        retries = 0, lingerMs = Long.MaxValue, props = Some(producerProps))
-      sendRecords(producer, numRecords, tp)
-      producer.close()
-    }
-  }
-
-  private def sendRecords(producer: Producer[Array[Byte], Array[Byte]], numRecords: Int, tp: TopicPartition) {
-    (0 until numRecords).foreach { i =>
+  protected def sendRecords(producer: Producer[Array[Byte], Array[Byte]],
+                            numRecords: Int,
+                            tp: TopicPartition,
+                            startingKeyAndValueIndex: Int = 0) {
+    (startingKeyAndValueIndex until numRecords + startingKeyAndValueIndex).foreach { i =>
       producer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i".getBytes, s"value $i".getBytes))
     }
+    producer.flush()
   }
 
   protected def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]], numRecords: Int, startingOffset: Int,
