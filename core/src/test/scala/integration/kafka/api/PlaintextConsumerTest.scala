@@ -13,7 +13,7 @@
 package kafka.api
 
 
-import java.util.{ArrayList, Properties}
+import java.util.Properties
 
 import java.util.regex.Pattern
 
@@ -554,21 +554,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
     val testConsumer = new KafkaConsumer[String, String](this.consumerConfig, new StringDeserializer(), new StringDeserializer())
     testConsumer.assign(List(tp).asJava)
-    assertEquals(1, testConsumer.assignment.size)
     testConsumer.seek(tp, 0)
 
-    // consume and verify intercepted records
-    val records = new ArrayList[ConsumerRecord[String, String]]()
-    val maxIters = numRecords * 300
-    var iters = 0
-    while (records.size < numRecords) {
-      for (record <- testConsumer.poll(50).asScala)
-        records.add(record)
-      if (iters > maxIters)
-        throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
-      iters += 1
-    }
-    // verify that values are modified by the interceptors
+    // consume and verify that values are modified by interceptors
+    val records = consumeRecords(testConsumer, numRecords)
     for (i <- 0 until numRecords) {
       val record = records.get(i)
       assertEquals(s"key $i", new String(record.key()))
@@ -576,21 +565,66 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
 
     // commit sync and verify onCommit is called
+    val commitCountBefore = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue()
     testConsumer.commitSync(Map[TopicPartition,OffsetAndMetadata]((tp, new OffsetAndMetadata(2L))).asJava)
-    assertEquals(1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
     assertEquals(2, testConsumer.committed(tp).offset)
+    assertEquals(commitCountBefore+1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
 
     // commit async and verify onCommit is called
     val commitCallback = new CountConsumerCommitCallback()
     testConsumer.commitAsync(Map[TopicPartition,OffsetAndMetadata]((tp, new OffsetAndMetadata(5L))).asJava, commitCallback)
-    val startCount = commitCallback.count
-    val started = System.currentTimeMillis()
-    while (commitCallback.count == startCount && System.currentTimeMillis() - started < 10000)
-      testConsumer.poll(50)
+    awaitCommitCallback(testConsumer, commitCallback)
     assertEquals(5, testConsumer.committed(tp).offset)
-    assertEquals(2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
+    assertEquals(commitCountBefore+2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
 
     testConsumer.close()
+    testProducer.close()
+  }
+
+  @Test
+  def testAutoCommitIntercept() {
+    val topic2 = "topic2"
+    TestUtils.createTopic(this.zkUtils, topic2, 2, serverCount, this.servers)
+
+    // produce records
+    val numRecords = 100
+    val testProducer = new KafkaProducer[String,String](this.producerConfig, new StringSerializer, new StringSerializer)
+    (0 until numRecords).map { i =>
+      testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i", s"value $i"))
+    }.foreach(_.get)
+
+    // create consumer with interceptor
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
+    this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
+    val testConsumer = new KafkaConsumer[String, String](this.consumerConfig, new StringDeserializer(), new StringDeserializer())
+    val rebalanceListener = new ConsumerRebalanceListener {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
+        // keep partitions paused in this test so that we can verify the commits based on specific seeks
+        partitions.asScala.foreach(testConsumer.pause(_))
+      }
+
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {}
+    }
+    changeConsumerSubscriptionAndValidateAssignment(testConsumer, List(topic), Set(tp, tp2), rebalanceListener)
+    testConsumer.seek(tp, 10)
+    testConsumer.seek(tp2, 20)
+
+    // change subscription to trigger rebalance
+    val commitCountBeforeRebalance = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue()
+    changeConsumerSubscriptionAndValidateAssignment(testConsumer,
+                                                    List(topic, topic2), Set(tp, tp2, new TopicPartition(topic2, 0),
+                                                    new TopicPartition(topic2, 1)),
+                                                    rebalanceListener)
+
+    // after rebalancing, we should have reset to the committed positions
+    assertEquals(10, testConsumer.committed(tp).offset)
+    assertEquals(20, testConsumer.committed(tp2).offset)
+    assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance)
+
+    // verify commits are intercepted on close
+    val commitCountBeforeClose = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue()
+    testConsumer.close()
+    assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeClose)
     testProducer.close()
   }
 
@@ -775,6 +809,17 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     validateGroupAssignment(consumerPollers, subscriptions,
         s"Did not get valid assignment for partitions ${subscriptions.asJava} after we changed subscription")
+  }
+
+  def changeConsumerSubscriptionAndValidateAssignment[K, V](consumer: Consumer[K, V],
+                                                            topicsToSubscribe: List[String],
+                                                            subscriptions: Set[TopicPartition],
+                                                            rebalanceListener: ConsumerRebalanceListener): Unit = {
+    consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
+    TestUtils.waitUntilTrue(() => {
+      val records = consumer.poll(50)
+      consumer.assignment() == subscriptions.asJava
+    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer.assignment()}")
   }
 
 }
