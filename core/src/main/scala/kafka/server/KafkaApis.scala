@@ -432,12 +432,23 @@ class KafkaApis(val requestChannel: RequestChannel,
       val convertedResponseStatus =
         // Need to down-convert message when consumer only takes magic value 0.
         if (fetchRequest.versionId <= 1) {
-          responsePartitionData.mapValues({ case data =>
-            if (!data.messages.hasMagicValue(Message.MagicValue_V0)) {
-              trace("Down converting message to V0 for fetch request from " + fetchRequest.clientId);
-              new FetchResponsePartitionData(data.error, data.hw, data.messages.asInstanceOf[FileMessageSet].toMessageFormat(Message.MagicValue_V0))
-            } else
-              data
+          responsePartitionData.map({ case (tp, data) =>
+            tp -> {
+              // We only do down-conversion when:
+              // 1. The message format version configured for the topic is using magic value > 0, and
+              // 2. The message set contains message whose magic > 0
+              // This is to reduce the message format conversion as much as possible. The conversion will only occur
+              // when new message format is used for the topic and we see an old request.
+              // Please notice that if the message format is changed from a higher version back to lower version this
+              // test might break because some messages in new message format can be delivered to consumer without
+              // format down conversion.
+              if (replicaManager.getMessageFormatVersion(tp).exists(_.onOrAfter(KAFKA_0_10_0_IV0)) &&
+                  !data.messages.magicValueInAllMessages(Message.MagicValue_V0)) {
+                trace("Down converting message to V0 for fetch request from " + fetchRequest.clientId)
+                new FetchResponsePartitionData(data.error, data.hw, data.messages.asInstanceOf[FileMessageSet].toMessageFormat(Message.MagicValue_V0))
+              } else
+                data
+            }
           })
         } else
           responsePartitionData
@@ -471,10 +482,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchResponseCallback(0)
       } else {
         quotaManagers(ApiKeys.FETCH.id).recordAndMaybeThrottle(fetchRequest.clientId,
-                                                                   FetchResponse.responseSize(responsePartitionData
-                                                                                                      .groupBy(_._1.topic),
-                                                                                              fetchRequest.versionId),
-                                                                   fetchResponseCallback)
+                                                               FetchResponse.responseSize(responsePartitionData.groupBy(_._1.topic),
+                                                               fetchRequest.versionId),
+                                                               fetchResponseCallback)
       }
     }
 

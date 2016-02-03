@@ -96,29 +96,7 @@ object ByteBufferMessageSet {
       val inputStream: InputStream = new ByteBufferBackedInputStream(wrapperMessage.payload)
       val compressed: DataInputStream = new DataInputStream(CompressionFactory(wrapperMessage.compressionCodec, inputStream))
       var lastInnerOffset = -1L
-      // When magic value is greater than 0, relative offset will be used.
-      // Ideally the conversion from relative offset(RO) to absolute offset(AO) should be:
-      //
-      // AO = AO_Of_Last_Inner_Message + RO
-      //
-      // However, Note that the message sets sent by producers are compressed in a stream compressing way.
-      // And the relative offset of an inner message compared with the last inner message is not known until
-      // the last inner message is written.
-      // Unfortunately we are not able to change the previously written messages after the last message is written to
-      // the message set when stream compressing is used.
-      //
-      // To solve this issue, we use the following solution:
-      // 1. When producer create a message set, it simply writes all the messages into a compressed message set with
-      //    offset 0, 1, ... (inner offset).
-      // 2. The broker will set the offset of the wrapper message to the absolute offset of the last message in the
-      //    message set.
-      // 3. When a consumer sees the message set, it first decompresses the entire message set to find out the inner
-      //    offset (IO) of the last inner message. Then it computes RO and AO of previous messages:
-      //
-      //    RO = Inner_Offset_of_a_message - Inner_Offset_of_the_last_message
-      //    AO = AO_Of_Last_Inner_Message + RO
-      //
-      // 4. This solution works for compacted message set as well
+
       val messageAndOffsets = if (wrapperMessageAndOffset.message.magic > MagicValue_V0) {
         var innerMessageAndOffsets = new mutable.Queue[MessageAndOffset]()
         try {
@@ -228,6 +206,52 @@ private class OffsetAssigner(offsets: Seq[Long]) {
  *
  * Option 2: Give it a list of messages along with instructions relating to serialization format. Producers will use this method.
  *
+ *
+ * When message format v1 is used, there will be following message format changes.
+ * - For non-compressed messages, with message v1 we are adding timestamp and timestamp type attribute. The offsets of
+ *   the messages remain absolute offsets.
+ * - For Compressed messages, with message v1 we are adding timestamp, timestamp type attribute bit and using relative
+ *   offsets for inner messages of compressed messages.
+ *
+ * The way timestamp set is following:
+ * For non-compressed messages: timestamp and timestamp type attribute in the messages is set and used.
+ * For compressed messages:
+ * 1. Wrapper messages' timestamp type attribute is set to proper value
+ * 2. Wrapper messages' timestamp is set to:
+ *    - the max timestamp of inner messages if CreateTime is used
+ *    - the current server time if wrapper message's timestamp = LogAppendTime.
+ *      In this case the wrapper message timestamp is used and all the timestamps of inner messages are ignored.
+ * 3. Inner messages' timestamp will be:
+ *    - used when wrapper message's timestamp type is CreateTime
+ *    - ignored when wrapper message's timestamp type is LogAppendTime
+ * 4. Inner messages' timestamp type will always be ignored
+ *
+ *
+ * The way relative offset calculated is following:
+ * Ideally the conversion from relative offset(RO) to absolute offset(AO) should be:
+ *
+ * AO = AO_Of_Last_Inner_Message + RO
+ *
+ * However, Note that the message sets sent by producers are compressed in a stream compressing way.
+ * And the relative offset of an inner message compared with the last inner message is not known until
+ * the last inner message is written.
+ * Unfortunately we are not able to change the previously written messages after the last message is written to
+ * the message set when stream compressing is used.
+ *
+ * To solve this issue, we use the following solution:
+ *
+ * 1. When producer create a message set, it simply writes all the messages into a compressed message set with
+ *    offset 0, 1, ... (inner offset).
+ * 2. The broker will set the offset of the wrapper message to the absolute offset of the last message in the
+ *    message set.
+ * 3. When a consumer sees the message set, it first decompresses the entire message set to find out the inner
+ *    offset (IO) of the last inner message. Then it computes RO and AO of previous messages:
+ *
+ *    RO = Inner_Offset_of_a_message - Inner_Offset_of_the_last_message
+ *    AO = AO_Of_Last_Inner_Message + RO
+ *
+ * 4. This solution works for compacted message set as well
+ *
  */
 class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Logging {
   private var shallowValidByteCount = -1
@@ -286,7 +310,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
     written
   }
 
-  override def hasMagicValue(expectedMagicValue: Byte): Boolean = {
+  override def magicValueInAllMessages(expectedMagicValue: Byte): Boolean = {
     for (messageAndOffset <- shallowIterator) {
       if (messageAndOffset.message.magic != expectedMagicValue)
         return false
@@ -381,7 +405,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
     val magicValueToUse = if (messageFormatVersion.onOrAfter(KAFKA_0_10_0_IV0)) Message.MagicValue_V1 else Message.MagicValue_V0
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       // check the magic value
-      if (!hasMagicValue(magicValueToUse)) {
+      if (!magicValueInAllMessages(magicValueToUse)) {
         // Message format conversion
         convertNonCompressedMessages(offsetCounter, compactedTopic, now, messageTimestampType, magicValueToUse)
       } else {
@@ -451,16 +475,10 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
           val attributeOffset = MessageSet.LogOverhead + Message.AttributesOffset
           val timestamp = buffer.getLong(timestampOffset)
           val attributes = buffer.get(attributeOffset)
-          if (messageTimestampType == TimestampType.CreateTime) {
-            if (timestamp == maxTimestamp && TimestampType.getTimestampType(attributes) == TimestampType.CreateTime)
+          if (messageTimestampType == TimestampType.CreateTime && timestamp == maxTimestamp)
               // We don't need to recompute crc if the timestamp is not updated.
               crcUpdateNeeded = false
-            else {
-              // Set timestamp type and timestamp
-              buffer.putLong(timestampOffset, maxTimestamp)
-              buffer.put(attributeOffset, TimestampType.setTimestampType(attributes, TimestampType.CreateTime))
-            }
-          } else if (messageTimestampType == TimestampType.LogAppendTime) {
+          else if (messageTimestampType == TimestampType.LogAppendTime) {
             // Set timestamp type and timestamp
             buffer.putLong(timestampOffset, now)
             buffer.put(attributeOffset, TimestampType.setTimestampType(attributes, TimestampType.LogAppendTime))
@@ -534,10 +552,6 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
             message.buffer.putLong(Message.TimestampOffset, now)
             message.buffer.put(Message.AttributesOffset, TimestampType.setTimestampType(message.attributes, TimestampType.LogAppendTime))
             true
-          } else if (timestampType == TimestampType.CreateTime &&
-              TimestampType.getTimestampType(message.attributes) != TimestampType.CreateTime) {
-            message.buffer.put(Message.AttributesOffset, TimestampType.setTimestampType(message.attributes, TimestampType.CreateTime))
-            true
           } else
             false
         }
@@ -567,6 +581,8 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
     if (timestampType == TimestampType.CreateTime && math.abs(message.timestamp - now) > timestampDiffMaxMs)
       throw new InvalidMessageException(s"Timestamp ${message.timestamp} of message is out of range. " +
         s"The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}")
+    if (message.timestampType == TimestampType.LogAppendTime)
+      throw new InvalidMessageException(s"Invalid message $message. Producer should not set timestamp type to LogAppendTime.")
   }
 
   /**

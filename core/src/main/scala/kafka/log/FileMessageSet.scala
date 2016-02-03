@@ -179,7 +179,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
     * @param expectedMagicValue the magic value expected
     * @return true if all messages has expected magic value, false otherwise
     */
-  override def hasMagicValue(expectedMagicValue: Byte): Boolean = {
+  override def magicValueInAllMessages(expectedMagicValue: Byte): Boolean = {
     var location = start
     val offsetAndSizeBuffer = ByteBuffer.allocate(MessageSet.LogOverhead)
     val crcAndMagicByteBuffer = ByteBuffer.allocate(Message.CrcLength + Message.MagicLength)

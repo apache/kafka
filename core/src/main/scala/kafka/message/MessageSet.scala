@@ -94,7 +94,7 @@ abstract class MessageSet extends Iterable[MessageAndOffset] {
   /**
    * Check if all the messages in the message set have the expected magic value
    */
-  def hasMagicValue(expectedMagicValue: Byte): Boolean
+  def magicValueInAllMessages(expectedMagicValue: Byte): Boolean
 
   /**
    * Provides an iterator over the message/offset pairs in this set

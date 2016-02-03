@@ -273,7 +273,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       case e: InvalidMessageException =>
     }
   }
-  
+
   @Test
   def testAbsoluteOffsetAssignment() {
     val messages = getMessages(magicValue = Message.MagicValue_V0, codec = NoCompressionCodec)

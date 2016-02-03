@@ -424,7 +424,8 @@ object KafkaConfig {
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server"
   val MinInSyncReplicasDoc = "define the minimum number of replicas in ISR needed to satisfy a produce request with acks=all (or -1)"
   val MessageFormatVersionDoc = "Specify the message format version the broker will use to append messages to the logs."
-  val MessageTimestampTypeDoc = "Define the whether the timestamp in the message is message create time or log append time."
+  val MessageTimestampTypeDoc = "Define the whether the timestamp in the message is message create time or log append time. The value should be either" +
+  " \"CreateTime\" or \"LogAppendTime\""
   val MessageTimestampDifferenceMaxMsDoc = "Set maximum allowed time difference between broker local time and message's timestamp. " +
   "This configuration only works when message.timestamp.type=CreateTime. A message will be rejected if its timestamp exceeds this threshold."
   /** ********* Replication configuration ***********/
