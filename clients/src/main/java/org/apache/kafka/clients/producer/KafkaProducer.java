@@ -27,8 +27,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.producer.internals.ProducerCallback;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
+import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -59,6 +61,7 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 
 /**
  * A Kafka client that publishes records to the Kafka cluster.
@@ -147,6 +150,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerConfig producerConfig;
     private final long maxBlockTimeMs;
     private final int requestTimeoutMs;
+    private final ProducerInterceptors<K, V> interceptors;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -313,6 +317,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 config.ignore(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
                 this.valueSerializer = valueSerializer;
             }
+
+            // load interceptors and make sure they get clientId
+            userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
+            List<ProducerInterceptor<K, V>> interceptorList = (List) (new ProducerConfig(userProvidedConfigs)).getConfiguredInstances(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                    ProducerInterceptor.class);
+            this.interceptors = new ProducerInterceptors<>(interceptorList);
+
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
             log.debug("Kafka producer started");
@@ -411,33 +422,38 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         try {
+            // intercept the record, which can be potentially modified
+            ProducerRecord<K, V> interceptedRecord = this.interceptors.onSend(record);
+            // producer callback will make sure to call both 'callback' and interceptor callback
+            ProducerCallback<K, V> producerCallback = new ProducerCallback<>(callback, this.interceptors);
+
             // first make sure the metadata for the topic is available
-            long waitedOnMetadataMs = waitOnMetadata(record.topic(), this.maxBlockTimeMs);
+            long waitedOnMetadataMs = waitOnMetadata(interceptedRecord.topic(), this.maxBlockTimeMs);
             long remainingWaitMs = Math.max(0, this.maxBlockTimeMs - waitedOnMetadataMs);
             byte[] serializedKey;
             try {
-                serializedKey = keySerializer.serialize(record.topic(), record.key());
+                serializedKey = keySerializer.serialize(interceptedRecord.topic(), interceptedRecord.key());
             } catch (ClassCastException cce) {
-                throw new SerializationException("Can't convert key of class " + record.key().getClass().getName() +
+                throw new SerializationException("Can't convert key of class " + interceptedRecord.key().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in key.serializer");
             }
             byte[] serializedValue;
             try {
-                serializedValue = valueSerializer.serialize(record.topic(), record.value());
+                serializedValue = valueSerializer.serialize(interceptedRecord.topic(), interceptedRecord.value());
             } catch (ClassCastException cce) {
-                throw new SerializationException("Can't convert value of class " + record.value().getClass().getName() +
+                throw new SerializationException("Can't convert value of class " + interceptedRecord.value().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in value.serializer");
             }
-            int partition = partition(record, serializedKey, serializedValue, metadata.fetch());
+            int partition = partition(interceptedRecord, serializedKey, serializedValue, metadata.fetch());
             int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(serializedKey, serializedValue);
             ensureValidRecordSize(serializedSize);
-            TopicPartition tp = new TopicPartition(record.topic(), partition);
-            log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
-            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, serializedKey, serializedValue, callback, remainingWaitMs);
+            TopicPartition tp = new TopicPartition(interceptedRecord.topic(), partition);
+            log.trace("Sending record {} with callback {} to topic {} partition {}", interceptedRecord, callback, interceptedRecord.topic(), partition);
+            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, serializedKey, serializedValue, producerCallback, remainingWaitMs);
             if (result.batchIsFull || result.newBatchCreated) {
-                log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
+                log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", interceptedRecord.topic(), partition);
                 this.sender.wakeup();
             }
             return result.future;
@@ -449,16 +465,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (callback != null)
                 callback.onCompletion(null, e);
             this.errors.record();
+            this.interceptors.onAcknowledgement(null, e);
             return new FutureFailure(e);
         } catch (InterruptedException e) {
             this.errors.record();
+            this.interceptors.onAcknowledgement(null, e);
             throw new InterruptException(e);
         } catch (BufferExhaustedException e) {
             this.errors.record();
             this.metrics.sensor("buffer-exhausted-records").record();
+            this.interceptors.onAcknowledgement(null, e);
             throw e;
         } catch (KafkaException e) {
             this.errors.record();
+            this.interceptors.onAcknowledgement(null, e);
+            throw e;
+        } catch (Exception e) {
+            // we notify interceptor about all exceptions, since onSend is called before anything else in this method
+            this.interceptors.onAcknowledgement(null, e);
             throw e;
         }
     }
@@ -650,6 +674,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
         }
 
+        ClientUtils.closeQuietly(interceptors, "producer interceptors", firstException);
         ClientUtils.closeQuietly(metrics, "producer metrics", firstException);
         ClientUtils.closeQuietly(keySerializer, "producer keySerializer", firstException);
         ClientUtils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);

@@ -68,6 +68,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
     private final AutoCommitTask autoCommitTask;
+    private final ConsumerInterceptors interceptors;
 
     /**
      * Initialize the coordination manager.
@@ -85,7 +86,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                long retryBackoffMs,
                                OffsetCommitCallback defaultOffsetCommitCallback,
                                boolean autoCommitEnabled,
-                               long autoCommitIntervalMs) {
+                               long autoCommitIntervalMs,
+                               ConsumerInterceptors interceptors) {
         super(client,
                 groupId,
                 sessionTimeoutMs,
@@ -107,6 +109,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         this.autoCommitTask = autoCommitEnabled ? new AutoCommitTask(autoCommitIntervalMs) : null;
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
+        this.interceptors = interceptors;
     }
 
     @Override
@@ -326,6 +329,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         future.addListener(new RequestFutureListener<Void>() {
             @Override
             public void onSuccess(Void value) {
+                if (interceptors != null)
+                    interceptors.onCommit(offsets);
                 cb.onComplete(offsets, null);
             }
 

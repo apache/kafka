@@ -74,6 +74,9 @@ public class CommonClientConfigs {
                                                          + "elapses the client will resend the request if necessary or fail the request if "
                                                          + "retries are exhausted.";
 
+    public static final String INTERCEPTOR_CLASSES_CONFIG  = "interceptor.classes";
+    public static final String INTERCEPTOR_CLASSES_DOC = "A list of classes to use as interceptors. Implemeting the <code>ProducerInterceptor</code> and <code>ConsumerInterceptor</code> interfaces allows plugging in classes that can listen to events happening to the records. By default, there are no interceptors.";
+
     private static List<String> nonTestingSecurityProtocolNames() {
         List<String> names = new ArrayList<>();
         for (SecurityProtocol protocol : SecurityProtocol.nonTestingValues())

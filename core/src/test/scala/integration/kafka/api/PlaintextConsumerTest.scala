@@ -12,17 +12,20 @@
   */
 package kafka.api
 
-import java.util.Properties
+
+import java.util.{ArrayList, Properties}
+
 import java.util.regex.Pattern
 
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.CompressionType
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer, ByteArrayDeserializer}
 import org.apache.kafka.common.errors.{InvalidTopicException, RecordTooLargeException}
+import org.apache.kafka.test.{MockProducerInterceptor, MockConsumerInterceptor}
 import org.junit.Assert._
 import org.junit.Test
 import scala.collection.mutable.Buffer
@@ -520,6 +523,75 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testMultiConsumerSessionTimeoutOnClose(): Unit = {
     runMultiConsumerSessionTimeoutTest(true)
+  }
+
+  @Test
+  def testInterceptors() {
+    val appendStr = "mock"
+    // create producer with interceptor
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor")
+    producerProps.put("mock.interceptor.append", appendStr)
+    val testProducer = new KafkaProducer[String,String](producerProps, new StringSerializer, new StringSerializer)
+
+    // produce records
+    val numRecords = 10
+    (0 until numRecords).map { i =>
+      testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i", s"value $i"))
+    }.foreach(_.get)
+    assertEquals(numRecords, MockProducerInterceptor.ONSEND_COUNT.intValue())
+    assertEquals(numRecords, MockProducerInterceptor.ON_SUCCESS_COUNT.intValue())
+    // send invalid record
+    try {
+      testProducer.send(null, null)
+      fail("Should not allow sending a null record")
+    } catch {
+      case e: Throwable => assertEquals("Interceptor should be notified about exception", 1, MockProducerInterceptor.ON_ERROR_COUNT.intValue()) // this is ok
+    }
+
+    // create consumer with interceptor
+    this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
+    val testConsumer = new KafkaConsumer[String, String](this.consumerConfig, new StringDeserializer(), new StringDeserializer())
+    testConsumer.assign(List(tp).asJava)
+    assertEquals(1, testConsumer.assignment.size)
+    testConsumer.seek(tp, 0)
+
+    // consume and verify intercepted records
+    val records = new ArrayList[ConsumerRecord[String, String]]()
+    val maxIters = numRecords * 300
+    var iters = 0
+    while (records.size < numRecords) {
+      for (record <- testConsumer.poll(50).asScala)
+        records.add(record)
+      if (iters > maxIters)
+        throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
+      iters += 1
+    }
+    // verify that values are modified by the interceptors
+    for (i <- 0 until numRecords) {
+      val record = records.get(i)
+      assertEquals(s"key $i", new String(record.key()))
+      assertEquals(s"value $i$appendStr".toUpperCase, new String(record.value()))
+    }
+
+    // commit sync and verify onCommit is called
+    testConsumer.commitSync(Map[TopicPartition,OffsetAndMetadata]((tp, new OffsetAndMetadata(2L))).asJava)
+    assertEquals(1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
+    assertEquals(2, testConsumer.committed(tp).offset)
+
+    // commit async and verify onCommit is called
+    val commitCallback = new CountConsumerCommitCallback()
+    testConsumer.commitAsync(Map[TopicPartition,OffsetAndMetadata]((tp, new OffsetAndMetadata(5L))).asJava, commitCallback)
+    val startCount = commitCallback.count
+    val started = System.currentTimeMillis()
+    while (commitCallback.count == startCount && System.currentTimeMillis() - started < 10000)
+      testConsumer.poll(50)
+    assertEquals(5, testConsumer.committed(tp).offset)
+    assertEquals(2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
+
+    testConsumer.close()
+    testProducer.close()
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
