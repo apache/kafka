@@ -18,7 +18,7 @@
 package org.apache.kafka.streams.kstream;
 
 /**
- * The Reducer interface for combinging two values of the same type into a new value.
+ * The Reducer interface for combining two values of the same type into a new value.
  *
  * @param <V> Value type.
  */
