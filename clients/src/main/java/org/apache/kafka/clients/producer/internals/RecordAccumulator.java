@@ -269,6 +269,25 @@ public final class RecordAccumulator {
      * <li>The accumulator has been closed
      * </ol>
      */
+    public ReadyCheckResult ready(Cluster cluster, long nowMs) {
+        return ready(cluster, null, nowMs);
+    }
+
+    /**
+     * Get a list of nodes whose partitions are ready to be sent, and the earliest time at which any non-sendable
+     * partition will be ready; Also return the flag for whether there are any unknown leaders for the accumulated
+     * partition batches.
+     * <p>
+     * A destination node is ready to send data if ANY one of its partition is not backing off the send and has no
+     * in flight batches and ANY of the following are true :
+     * <ol>
+     * <li>The record set is full
+     * <li>The record set has sat in the accumulator for at least lingerMs milliseconds
+     * <li>The accumulator is out of memory and threads are blocking waiting for data (in this case all partitions are
+     * immediately considered ready).
+     * <li>The accumulator has been closed
+     * </ol>
+     */
     public ReadyCheckResult ready(Cluster cluster, Set<TopicPartition> partitionsInFlight, long nowMs) {
         Set<Node> readyNodes = new HashSet<Node>();
         long nextReadyCheckDelayMs = Long.MAX_VALUE;
@@ -326,10 +345,26 @@ public final class RecordAccumulator {
     /**
      * Drain all the data for the given nodes and collate them into a list of batches that will fit within the specified
      * size on a per-node basis. This method attempts to avoid choosing the same topic-node over and over.
+     *
+     * @param cluster The current cluster metadata
+     * @param nodes The list of node to drain
+     * @param maxSize The maximum number of bytes to drain
+     * @param now The current unix time in milliseconds
+     * @return A list of {@link RecordBatch} for each node specified with total size less than the requested maxSize.
+     */
+    public Map<Integer, List<RecordBatch>> drain(Cluster cluster, Set<Node> nodes, int maxSize, long now) {
+        return drain(cluster, nodes, maxSize, null, now);
+    }
+
+    /**
+     * Drain all the data for the given nodes and collate them into a list of batches that will fit within the specified
+     * size on a per-node basis. This method attempts to avoid choosing the same topic-node over and over.
      * 
      * @param cluster The current cluster metadata
      * @param nodes The list of node to drain
      * @param maxSize The maximum number of bytes to drain
+     * @param partitionsInFlight the partitions that has in flight batches. Those partition will be excluded from draining.
+     *                           The record accumulator will update this set when this method returns.
      * @param now The current unix time in milliseconds
      * @return A list of {@link RecordBatch} for each node specified with total size less than the requested maxSize.
      */
