@@ -192,10 +192,17 @@ public enum Errors {
     }
 
     /**
-     * Return the error instance associated with this exception (or UNKNOWN if there is none)
+     * Return the error instance associated with this exception or any of its superclasses (or UNKNOWN if there is none)
      */
     public static Errors forException(Throwable t) {
-        Errors error = classToError.get(t.getClass());
+        Errors error = null;
+        Class clazz = t.getClass();
+        while (clazz != null) {
+            error = classToError.get(clazz);
+            if(error != null)
+                break;
+            clazz = clazz.getSuperclass();
+        }
         return error == null ? UNKNOWN : error;
     }
 }
