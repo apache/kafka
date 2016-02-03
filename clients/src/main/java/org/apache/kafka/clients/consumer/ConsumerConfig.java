@@ -163,7 +163,10 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 
     /** <code>interceptor.classes</code> */
-    public static final String INTERCEPTOR_CLASSES_CONFIG = CommonClientConfigs.INTERCEPTOR_CLASSES_CONFIG;
+    public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
+    public static final String INTERCEPTOR_CLASSES_DOC = "A list of classes to use as interceptors. "
+            + "Implementing the <code>ConsumerInterceptor</code> interfaces allows plugging in classes that can listen to events "
+            + "happening to the records at different points on consumer. By default, there are no interceptors.";
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
@@ -302,10 +305,10 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.LIST,
                                         "",
                                         Importance.LOW,
-                                        CommonClientConfigs.INTERCEPTOR_CLASSES_DOC)
+                                        INTERCEPTOR_CLASSES_DOC)
 
-                                        // security support
-                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+                                 // security support
+                                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
