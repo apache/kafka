@@ -307,7 +307,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
 
-                                 // security support
+                                // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
