@@ -17,6 +17,14 @@
 
 package org.apache.kafka.streams;
 
+/**
+ * A key-value pair defined for a single Kafka Streams record.
+ * If the record comes directly from a Kafka topic then its
+ * key / value are defined as the message key / value.
+ *
+ * @param <K> Key type
+ * @param <V> Value type
+ */
 public class KeyValue<K, V> {
 
     public final K key;

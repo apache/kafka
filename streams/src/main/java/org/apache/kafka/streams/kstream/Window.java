@@ -17,6 +17,9 @@
 
 package org.apache.kafka.streams.kstream;
 
+/**
+ * A single window instance, defined by its start and end timestamp.
+ */
 public abstract class Window {
 
     private long start;

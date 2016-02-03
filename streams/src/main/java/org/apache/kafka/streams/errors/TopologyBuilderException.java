@@ -17,6 +17,9 @@
 
 package org.apache.kafka.streams.errors;
 
+/**
+ * Indicates a pre-run time error incurred while parsing the builder to construct the processor topology
+ */
 public class TopologyBuilderException extends StreamsException {
 
     private static final long serialVersionUID = 1L;

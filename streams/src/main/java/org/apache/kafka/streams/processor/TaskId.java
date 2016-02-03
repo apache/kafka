@@ -24,6 +24,9 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+/**
+ * The task id representation composed as topic group id plus the assigned partition id.
+ */
 public class TaskId implements Comparable<TaskId> {
 
     public final int topicGroupId;
