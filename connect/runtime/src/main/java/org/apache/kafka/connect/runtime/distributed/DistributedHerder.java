@@ -253,10 +253,21 @@ public class DistributedHerder implements Herder, Runnable {
                 boolean remains = configState.connectors().contains(connectorName);
                 log.info("Handling connector-only config update by {} connector {}",
                         remains ? "restarting" : "stopping", connectorName);
-                worker.stopConnector(connectorName);
+                try {
+                    worker.stopConnector(connectorName);
+                } catch (ConnectException e) {
+                    log.error("Failed to stop connector " + connectorName, e);
+                    worker.tryStartConnector(connectorName);
+                }
                 // The update may be a deletion, so verify we actually need to restart the connector
-                if (remains)
-                    startConnector(connectorName);
+                if (remains) {
+                    try {
+                        startConnector(connectorName);
+                    } catch (ConfigException | ConnectException e) {
+                        log.error("Couldn't instantiate or start connector " + connectorName + ". This may because of the invalid " +
+                                "connector configuration. Please try to reconfigure.", e);
+                    }
+                }
             }
         }
 
@@ -280,6 +291,7 @@ public class DistributedHerder implements Herder, Runnable {
                     worker.stopConnector(connName);
                 } catch (Throwable t) {
                     log.error("Failed to shut down connector " + connName, t);
+                    worker.tryStartConnector(connName);
                 }
             }
             for (ConnectorTaskId taskId : new HashSet<>(worker.taskIds())) {
@@ -287,6 +299,7 @@ public class DistributedHerder implements Herder, Runnable {
                     worker.stopTask(taskId);
                 } catch (Throwable t) {
                     log.error("Failed to shut down task " + taskId, t);
+                    worker.tryStartTask(taskId);
                 }
             }
 
@@ -634,23 +647,25 @@ public class DistributedHerder implements Herder, Runnable {
     private void startWork() {
         // Start assigned connectors and tasks
         log.info("Starting connectors and tasks using config offset {}", assignment.offset());
+
         for (String connectorName : assignment.connectors()) {
             try {
                 startConnector(connectorName);
-            } catch (ConfigException e) {
-                log.error("Couldn't instantiate connector " + connectorName + " because it has an invalid connector " +
-                        "configuration. This connector will not execute until reconfigured.", e);
+            } catch (ConfigException | ConnectException e) {
+                log.error("Couldn't instantiate or start connector " + connectorName + ". This may because of invalid " +
+                        "connector configuration. Please try to reconfigure.", e);
             }
         }
+
         for (ConnectorTaskId taskId : assignment.tasks()) {
+            log.info("Starting task {}", taskId);
             try {
-                log.info("Starting task {}", taskId);
                 Map<String, String> configs = configState.taskConfig(taskId);
                 TaskConfig taskConfig = new TaskConfig(configs);
                 worker.addTask(taskId, taskConfig);
-            } catch (ConfigException e) {
-                log.error("Couldn't instantiate task " + taskId + " because it has an invalid task " +
-                        "configuration. This task will not execute until reconfigured.", e);
+            } catch (ConfigException | ConnectException e) {
+                log.error("Couldn't instantiate or start task " + taskId + ". This may because of the invalid " +
+                        "task configuration. Please try to reconfigure.", e);
             }
         }
         log.info("Finished starting connectors and tasks");
@@ -886,14 +901,26 @@ public class DistributedHerder implements Herder, Runnable {
                     // this worker. Instead, we can let them continue to run but buffer any update requests (which should be
                     // rare anyway). This would avoid a steady stream of start/stop, which probably also includes lots of
                     // unnecessary repeated connections to the source/sink system.
-                    for (String connectorName : connectors)
-                        worker.stopConnector(connectorName);
+                    for (String connectorName : connectors) {
+                        try {
+                            worker.stopConnector(connectorName);
+                        } catch (ConnectException e) {
+                            log.error("Failed to stop connector " + connectorName);
+                            worker.tryStartConnector(connectorName);
+                        }
+                    }
                     // TODO: We need to at least commit task offsets, but if we could commit offsets & pause them instead of
                     // stopping them then state could continue to be reused when the task remains on this worker. For example,
                     // this would avoid having to close a connection and then reopen it when the task is assigned back to this
                     // worker again.
-                    for (ConnectorTaskId taskId : tasks)
-                        worker.stopTask(taskId);
+                    for (ConnectorTaskId taskId : tasks) {
+                        try {
+                            worker.stopTask(taskId);
+                        } catch (ConnectException e) {
+                            log.error("Failed to stop task " + taskId);
+                            worker.tryStartTask(taskId);
+                        }
+                    }
 
                     log.info("Finished stopping tasks in preparation for rebalance");
                 } else {

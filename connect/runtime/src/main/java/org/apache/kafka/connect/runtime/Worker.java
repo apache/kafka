@@ -69,8 +69,8 @@ public class Worker {
     private Converter internalKeyConverter;
     private Converter internalValueConverter;
     private OffsetBackingStore offsetBackingStore;
-    private HashMap<String, Connector> connectors = new HashMap<>();
-    private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<>();
+    private HashMap<String, ConnectorProfile> connectors = new HashMap<>();
+    private HashMap<ConnectorTaskId, TaskProfile> tasks = new HashMap<>();
     private KafkaProducer<byte[], byte[]> producer;
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
@@ -127,8 +127,8 @@ public class Worker {
         long started = time.milliseconds();
         long limit = started + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
 
-        for (Map.Entry<String, Connector> entry : connectors.entrySet()) {
-            Connector conn = entry.getValue();
+        for (Map.Entry<String, ConnectorProfile> entry : connectors.entrySet()) {
+            Connector conn = entry.getValue().getConnector();
             log.warn("Shutting down connector {} uncleanly; herder should have shut down connectors before the" +
                     "Worker is stopped.", conn);
             try {
@@ -138,8 +138,8 @@ public class Worker {
             }
         }
 
-        for (Map.Entry<ConnectorTaskId, WorkerTask> entry : tasks.entrySet()) {
-            WorkerTask task = entry.getValue();
+        for (Map.Entry<ConnectorTaskId, TaskProfile> entry : tasks.entrySet()) {
+            WorkerTask task = entry.getValue().getTask();
             log.warn("Shutting down task {} uncleanly; herder should have shut down "
                     + "tasks before the Worker is stopped.", task);
             try {
@@ -149,8 +149,8 @@ public class Worker {
             }
         }
 
-        for (Map.Entry<ConnectorTaskId, WorkerTask> entry : tasks.entrySet()) {
-            WorkerTask task = entry.getValue();
+        for (Map.Entry<ConnectorTaskId, TaskProfile> entry : tasks.entrySet()) {
+            WorkerTask task = entry.getValue().getTask();
             log.debug("Waiting for task {} to finish shutting down", task);
             if (!task.awaitStop(Math.max(limit - time.milliseconds(), 0)))
                 log.error("Graceful shutdown of task {} failed.", task);
@@ -192,7 +192,7 @@ public class Worker {
             throw new ConnectException("Connector threw an exception while starting", e);
         }
 
-        connectors.put(connName, connector);
+        connectors.put(connName, new ConnectorProfile(connector, connConfig, ctx));
 
         log.info("Finished creating connector {}", connName);
     }
@@ -263,7 +263,7 @@ public class Worker {
     public List<Map<String, String>> connectorTaskConfigs(String connName, int maxTasks, List<String> sinkTopics) {
         log.trace("Reconfiguring connector tasks for {}", connName);
 
-        Connector connector = connectors.get(connName);
+        Connector connector = connectors.get(connName).getConnector();
         if (connector == null)
             throw new ConnectException("Connector " + connName + " not found in this worker.");
 
@@ -282,10 +282,13 @@ public class Worker {
     public void stopConnector(String connName) {
         log.info("Stopping connector {}", connName);
 
-        Connector connector = connectors.get(connName);
-        if (connector == null)
+        ConnectorProfile connectorProfile = connectors.get(connName);
+        Connector connector = null;
+        if (connectorProfile == null)
             throw new ConnectException("Connector " + connName + " not found in this worker.");
-
+        else {
+            connector = connectorProfile.getConnector();
+        }
         try {
             connector.stop();
         } catch (ConnectException e) {
@@ -295,6 +298,50 @@ public class Worker {
         connectors.remove(connName);
 
         log.info("Stopped connector {}", connName);
+    }
+
+    /**
+     * This method is only called when stop connector failed, connector is restarted and the starting process should be
+     * idempotent;
+     *
+     * TODO: Support tracking connector status and replace this method;
+     *
+     * @param connName
+     */
+    public void tryStartConnector(String connName) {
+        log.info("Try starting connector {}", connName);
+
+        ConnectorProfile connectorProfile = connectors.get(connName);
+        if (connectorProfile == null) {
+            log.warn("Connector {} is not inside of worker.", connName);
+            return;
+        }
+
+        Connector connector = connectorProfile.getConnector();
+
+        try {
+            connector.initialize(connectorProfile.getCtx());
+            connector.start(connectorProfile.getConfig().originalsStrings());
+        } catch (ConnectException e) {
+            log.error("Restarting connector failed.", e);
+        }
+    }
+
+    public void tryStartTask(ConnectorTaskId taskId) {
+        log.info("Try starting task {}", taskId);
+
+        TaskProfile workerTaskProfile = tasks.get(taskId);
+        if (workerTaskProfile == null) {
+            log.warn("taskId {} is not inside of worker.", taskId);
+            return;
+        }
+        WorkerTask task = workerTaskProfile.getTask();
+
+        task.start(workerTaskProfile.getConfig().originalsStrings());
+        if (task instanceof WorkerSourceTask) {
+            WorkerSourceTask workerSourceTask = (WorkerSourceTask) task;
+            sourceTaskOffsetCommitter.schedule(taskId, workerSourceTask);
+        }
     }
 
     /**
@@ -347,7 +394,7 @@ public class Worker {
             WorkerSourceTask workerSourceTask = (WorkerSourceTask) workerTask;
             sourceTaskOffsetCommitter.schedule(id, workerSourceTask);
         }
-        tasks.put(id, workerTask);
+        tasks.put(id, new TaskProfile(workerTask, taskConfig));
     }
 
     private static Task instantiateTask(Class<? extends Task> taskClass) {
@@ -379,12 +426,13 @@ public class Worker {
     }
 
     private WorkerTask getTask(ConnectorTaskId id) {
-        WorkerTask task = tasks.get(id);
-        if (task == null) {
+        TaskProfile taskProfile = tasks.get(id);
+        if (taskProfile == null) {
             log.error("Task not found: " + id);
             throw new ConnectException("Task not found: " + id);
+        } else {
+            return taskProfile.getTask();
         }
-        return task;
     }
 
     public Converter getInternalKeyConverter() {
@@ -394,4 +442,47 @@ public class Worker {
     public Converter getInternalValueConverter() {
         return internalValueConverter;
     }
+
+    private class ConnectorProfile {
+        private Connector connector;
+        private ConnectorConfig config;
+        private ConnectorContext ctx;
+
+        public ConnectorProfile(Connector connector, ConnectorConfig config, ConnectorContext ctx) {
+            this.connector = connector;
+            this.config = config;
+            this.ctx = ctx;
+        }
+
+        public Connector getConnector() {
+            return connector;
+        }
+
+        public ConnectorConfig getConfig() {
+            return config;
+        }
+
+        public ConnectorContext getCtx() {
+            return ctx;
+        }
+    }
+
+    private class TaskProfile {
+        private WorkerTask task;
+        private TaskConfig config;
+
+        public TaskProfile(WorkerTask task, TaskConfig config) {
+            this.task = task;
+            this.config = config;
+        }
+
+        public WorkerTask getTask() {
+            return task;
+        }
+
+        public TaskConfig getConfig() {
+            return config;
+        }
+    }
 }
+
