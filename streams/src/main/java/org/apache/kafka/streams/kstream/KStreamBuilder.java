@@ -29,7 +29,7 @@ import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * KStreamBuilder is a superclass of {@link TopologyBuilder} that provides the {@link KStream} DSL
+ * KStreamBuilder is a subclass of {@link TopologyBuilder} that provides the {@link KStream} DSL
  * for users to specify computational logic and translates the given logic to a processor topology.
  */
 public class KStreamBuilder extends TopologyBuilder {
@@ -118,8 +118,8 @@ public class KStreamBuilder extends TopologyBuilder {
     }
 
     /**
-     * Create a unqiue processor name used for translation into the processor topology.
-     * This function should only be used for users to add their own DSL operators and corresponding translation rules.
+     * Create a unique processor name used for translation into the processor topology.
+     * This function is only for internal usage.
      *
      * @param prefix Processor name prefix.
      * @return The unique processor name.
