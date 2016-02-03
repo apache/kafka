@@ -122,11 +122,7 @@ object TestUtils extends Logging {
   /**
    * Create a temporary file
    */
-  def tempFile(): File = {
-    val f = File.createTempFile("kafka", ".tmp")
-    f.deleteOnExit()
-    f
-  }
+  def tempFile(): File = org.apache.kafka.test.TestUtils.tempFile()
 
   /**
    * Create a temporary file and return an open file channel for this file
