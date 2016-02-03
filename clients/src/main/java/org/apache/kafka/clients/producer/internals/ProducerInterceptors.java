@@ -93,7 +93,11 @@ public class ProducerInterceptors<K, V> implements Closeable {
     @Override
     public void close() {
         for (ProducerInterceptor<K, V> interceptor: this.interceptors) {
-            interceptor.close();
+            try {
+                interceptor.close();
+            } catch (Throwable t) {
+                log.error("Failed to close producer interceptor ", t);
+            }
         }
     }
 }
