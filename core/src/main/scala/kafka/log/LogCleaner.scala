@@ -428,12 +428,17 @@ private[log] class Cleaner(val id: Int,
           // We use absolute offset to compare decide whether retain the message or not. This is handled by
           // deep iterator.
           val messages = ByteBufferMessageSet.deepIterator(entry)
+          var numberOfInnerMessages = 0
           val retainedMessages = messages.filter(messageAndOffset => {
             messagesRead += 1
+            numberOfInnerMessages += 1
             shouldRetainMessage(source, map, retainDeletes, messageAndOffset)
           }).toSeq
 
-          if (retainedMessages.nonEmpty)
+          // There is no messages compacted out, write the original message set back
+          if (retainedMessages.size == numberOfInnerMessages)
+            ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
+          else if (retainedMessages.nonEmpty)
             compressMessages(writeBuffer, entry.message.compressionCodec, retainedMessages)
         }
       }

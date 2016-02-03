@@ -26,7 +26,7 @@ import kafka.common.TopicAndPartition
 import kafka.api.ApiUtils._
 
 object ProducerResponse {
-  // readFrom assumes that the response is written using V1 format
+  // readFrom assumes that the response is written using V2 format
   def readFrom(buffer: ByteBuffer): ProducerResponse = {
     val correlationId = buffer.getInt
     val topicCount = buffer.getInt

@@ -24,6 +24,9 @@ import org.apache.kafka.common.TopicPartition;
 public final class RecordMetadata {
 
     private final long offset;
+    // The timestamp of the message.
+    // If LogAppendTime is used for the topic, the timestamp will be a timestamp returned by broker.
+    // If CreateTime is used for the topic, the timestamp is the timestamp in the corresponding ProducerRecord.
     private final long timestamp;
     private final TopicPartition topicPartition;
 

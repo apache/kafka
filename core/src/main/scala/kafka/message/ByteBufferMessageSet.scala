@@ -416,14 +416,14 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
     } else {
       // Deal with compressed messages
-      // We only need to do re-compression in one of the followings situation:
+      // We cannot do in place assignment in one of the followings situation:
       // 1. Source and target compression codec are different
       // 2. When magic value to use is 0 because offsets need to be overwritten
       // 3. When magic value to use is above 0, but some fields of inner messages need to be overwritten.
       // 4. Message format conversion is needed.
 
-      // Re-compression situation 1 and 2
-      var requireReCompression = sourceCodec != targetCodec || magicValueToUse == Message.MagicValue_V0
+      // No in place assignment situation 1 and 2
+      var inPlaceAssignment = sourceCodec == targetCodec && magicValueToUse > Message.MagicValue_V0
 
       var maxTimestamp = Message.NoTimestamp
       val expectedRelativeOffset = new AtomicLong(0)
@@ -432,24 +432,24 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         val message = messageAndOffset.message
         validateMessageKey(message, compactedTopic)
         if (message.magic > Message.MagicValue_V0 && magicValueToUse > Message.MagicValue_V0) {
-          // Re-compression situation 3
+          // No in place assignment situation 3
           // Validate the timestamp
           validateTimestamp(message, now, messageTimestampType, messageTimestampDiffMaxMs)
           // Check if we need to overwrite offset
           if (messageAndOffset.offset != expectedRelativeOffset.getAndIncrement)
-            requireReCompression = true
+            inPlaceAssignment = false
           maxTimestamp = math.max(maxTimestamp, message.timestamp)
         }
 
-        // Re-compression situation 4
+        // No in place assignment situation 4
         if (message.magic != magicValueToUse)
-          requireReCompression = true
+          inPlaceAssignment = false
 
         validatedMessages += message.toFormatVersion(magicValueToUse)
       })
 
-      if (requireReCompression) {
-        // Re-compression required.
+      if (!inPlaceAssignment) {
+        // Cannot do in place assignment required.
         val messageSetTimestampAssignor = (messages: Seq[Message]) => {
           if (magicValueToUse == Message.MagicValue_V0)
             Message.NoTimestamp
