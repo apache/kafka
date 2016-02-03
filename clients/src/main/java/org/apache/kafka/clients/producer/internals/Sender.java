@@ -15,10 +15,12 @@ package org.apache.kafka.clients.producer.internals;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -67,6 +69,9 @@ public class Sender implements Runnable {
     /* the metadata for the client */
     private final Metadata metadata;
 
+    /* the map tracks the number of batch in progress for each partition. */
+    private final Set<TopicPartition> partitionsInFlight;
+
     /* the maximum request size to attempt to send to the server */
     private final int maxRequestSize;
 
@@ -97,6 +102,7 @@ public class Sender implements Runnable {
     public Sender(KafkaClient client,
                   Metadata metadata,
                   RecordAccumulator accumulator,
+                  boolean sendInOrder,
                   int maxRequestSize,
                   short acks,
                   int retries,
@@ -107,6 +113,10 @@ public class Sender implements Runnable {
         this.client = client;
         this.accumulator = accumulator;
         this.metadata = metadata;
+        if (sendInOrder)
+            this.partitionsInFlight = new HashSet<>();
+        else
+            this.partitionsInFlight = null;
         this.maxRequestSize = maxRequestSize;
         this.running = true;
         this.acks = acks;
@@ -164,10 +174,10 @@ public class Sender implements Runnable {
      * @param now
      *            The current POSIX time in milliseconds
      */
-    public void run(long now) {
+    protected void run(long now) {
         Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
-        RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
+        RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, partitionsInFlight, now);
 
         // if there are any partitions whose leaders are not known yet, force metadata update
         if (result.unknownLeadersExist)
@@ -188,6 +198,7 @@ public class Sender implements Runnable {
         Map<Integer, List<RecordBatch>> batches = this.accumulator.drain(cluster,
                                                                          result.readyNodes,
                                                                          this.maxRequestSize,
+                                                                         this.partitionsInFlight,
                                                                          now);
 
         List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, cluster, now);
@@ -304,6 +315,8 @@ public class Sender implements Runnable {
         }
         if (error.exception() instanceof InvalidMetadataException)
             metadata.requestUpdate();
+        if (partitionsInFlight != null)
+            partitionsInFlight.remove(batch.topicPartition);
     }
 
     /**

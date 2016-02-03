@@ -269,7 +269,7 @@ public final class RecordAccumulator {
      * <li>The accumulator has been closed
      * </ol>
      */
-    public ReadyCheckResult ready(Cluster cluster, long nowMs) {
+    public ReadyCheckResult ready(Cluster cluster, Set<TopicPartition> partitionsInFlight, long nowMs) {
         Set<Node> readyNodes = new HashSet<Node>();
         long nextReadyCheckDelayMs = Long.MAX_VALUE;
         boolean unknownLeadersExist = false;
@@ -282,7 +282,7 @@ public final class RecordAccumulator {
             Node leader = cluster.leaderFor(part);
             if (leader == null) {
                 unknownLeadersExist = true;
-            } else if (!readyNodes.contains(leader)) {
+            } else if (!readyNodes.contains(leader) && (partitionsInFlight == null || !partitionsInFlight.contains(part))) {
                 synchronized (deque) {
                     RecordBatch batch = deque.peekFirst();
                     if (batch != null) {
@@ -333,7 +333,11 @@ public final class RecordAccumulator {
      * @param now The current unix time in milliseconds
      * @return A list of {@link RecordBatch} for each node specified with total size less than the requested maxSize.
      */
-    public Map<Integer, List<RecordBatch>> drain(Cluster cluster, Set<Node> nodes, int maxSize, long now) {
+    public Map<Integer, List<RecordBatch>> drain(Cluster cluster,
+                                                 Set<Node> nodes,
+                                                 int maxSize,
+                                                 Set<TopicPartition> partitionsInFlight,
+                                                 long now) {
         if (nodes.isEmpty())
             return Collections.emptyMap();
 
@@ -346,25 +350,31 @@ public final class RecordAccumulator {
             int start = drainIndex = drainIndex % parts.size();
             do {
                 PartitionInfo part = parts.get(drainIndex);
-                Deque<RecordBatch> deque = dequeFor(new TopicPartition(part.topic(), part.partition()));
-                if (deque != null) {
-                    synchronized (deque) {
-                        RecordBatch first = deque.peekFirst();
-                        if (first != null) {
-                            boolean backoff = first.attempts > 0 && first.lastAttemptMs + retryBackoffMs > now;
-                            // Only drain the batch if it is not during backoff period.
-                            if (!backoff) {
-                                if (size + first.records.sizeInBytes() > maxSize && !ready.isEmpty()) {
-                                    // there is a rare case that a single batch size is larger than the request size due
-                                    // to compression; in this case we will still eventually send this batch in a single
-                                    // request
-                                    break;
-                                } else {
-                                    RecordBatch batch = deque.pollFirst();
-                                    batch.records.close();
-                                    size += batch.records.sizeInBytes();
-                                    ready.add(batch);
-                                    batch.drainedMs = now;
+                TopicPartition tp = new TopicPartition(part.topic(), part.partition());
+                // Only proceed if the partition has no in-flight batches.
+                if (partitionsInFlight == null || !partitionsInFlight.contains(tp)) {
+                    Deque<RecordBatch> deque = dequeFor(new TopicPartition(part.topic(), part.partition()));
+                    if (deque != null) {
+                        synchronized (deque) {
+                            RecordBatch first = deque.peekFirst();
+                            if (first != null) {
+                                boolean backoff = first.attempts > 0 && first.lastAttemptMs + retryBackoffMs > now;
+                                // Only drain the batch if it is not during backoff period.
+                                if (!backoff) {
+                                    if (size + first.records.sizeInBytes() > maxSize && !ready.isEmpty()) {
+                                        // there is a rare case that a single batch size is larger than the request size due
+                                        // to compression; in this case we will still eventually send this batch in a single
+                                        // request
+                                        break;
+                                    } else {
+                                        RecordBatch batch = deque.pollFirst();
+                                        batch.records.close();
+                                        size += batch.records.sizeInBytes();
+                                        ready.add(batch);
+                                        if (partitionsInFlight != null)
+                                            partitionsInFlight.add(tp);
+                                        batch.drainedMs = now;
+                                    }
                                 }
                             }
                         }
