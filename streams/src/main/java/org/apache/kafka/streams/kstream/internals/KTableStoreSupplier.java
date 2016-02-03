@@ -52,7 +52,7 @@ public class KTableStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        return new MeteredKeyValueStore<>(new RocksDBStore<>(name, serdes), serdes, "rocksdb-state", time).disableLogging();
+        return new MeteredKeyValueStore<>(new RocksDBStore<>(name, serdes), "rocksdb-state", time);
     }
 
 }

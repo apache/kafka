@@ -52,6 +52,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -77,6 +79,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     private static final byte[] SERIALIZED_KEY = "converted-key".getBytes();
     private static final byte[] SERIALIZED_RECORD = "converted-record".getBytes();
 
+    private ExecutorService executor = Executors.newSingleThreadExecutor();
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private WorkerConfig config;
     @Mock private SourceTask sourceTask;
@@ -132,7 +135,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.start(EMPTY_TASK_PROPS);
+        workerTask.initialize(EMPTY_TASK_PROPS);
+        executor.submit(workerTask);
         awaitPolls(pollLatch);
         workerTask.stop();
         assertEquals(true, workerTask.awaitStop(1000));
@@ -160,7 +164,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.start(EMPTY_TASK_PROPS);
+        workerTask.initialize(EMPTY_TASK_PROPS);
+        executor.submit(workerTask);
         awaitPolls(pollLatch);
         assertTrue(workerTask.commitOffsets());
         workerTask.stop();
@@ -189,7 +194,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.start(EMPTY_TASK_PROPS);
+        workerTask.initialize(EMPTY_TASK_PROPS);
+        executor.submit(workerTask);
         awaitPolls(pollLatch);
         assertFalse(workerTask.commitOffsets());
         workerTask.stop();
@@ -271,7 +277,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.start(EMPTY_TASK_PROPS);
+        workerTask.initialize(EMPTY_TASK_PROPS);
+        executor.submit(workerTask);
         // Stopping immediately while the other thread has work to do should result in no polling, no offset commits,
         // exiting the work thread immediately, and the stop() method will be invoked in the background thread since it
         // cannot be invoked immediately in the thread trying to stop the task.

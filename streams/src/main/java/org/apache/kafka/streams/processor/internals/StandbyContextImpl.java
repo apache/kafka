@@ -17,11 +17,10 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.StreamingConfig;
-import org.apache.kafka.streams.StreamingMetrics;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -36,7 +35,7 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     private static final Logger log = LoggerFactory.getLogger(StandbyContextImpl.class);
 
     private final TaskId id;
-    private final StreamingMetrics metrics;
+    private final StreamsMetrics metrics;
     private final ProcessorStateManager stateMgr;
 
     private final Serializer<?> keySerializer;
@@ -47,9 +46,9 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     private boolean initialized;
 
     public StandbyContextImpl(TaskId id,
-                              StreamingConfig config,
+                              StreamsConfig config,
                               ProcessorStateManager stateMgr,
-                              StreamingMetrics metrics) {
+                              StreamsMetrics metrics) {
         this.id = id;
         this.metrics = metrics;
         this.stateMgr = stateMgr;
@@ -105,14 +104,14 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     }
 
     @Override
-    public StreamingMetrics metrics() {
+    public StreamsMetrics metrics() {
         return metrics;
     }
 
     @Override
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (initialized)
-            throw new KafkaException("Can only create state stores during initialization.");
+            throw new IllegalStateException("Can only create state stores during initialization.");
 
         stateMgr.register(store, loggingEnabled, stateRestoreCallback);
     }

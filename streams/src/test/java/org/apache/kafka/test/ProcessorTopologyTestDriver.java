@@ -27,8 +27,8 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.StreamingConfig;
-import org.apache.kafka.streams.StreamingMetrics;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -54,7 +54,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * can use and test code you already have that uses a builder to create topologies. Best of all, the class works without a real
  * Kafka broker, so the tests execute very quickly with very little overhead.
  * <p>
- * Using the ProcessorTopologyTestDriver in tests is easy: simply instantiate the driver with a {@link StreamingConfig} and a
+ * Using the ProcessorTopologyTestDriver in tests is easy: simply instantiate the driver with a {@link StreamsConfig} and a
  * TopologyBuilder, use the driver to supply an input message to the topology, and then use the driver to read and verify any
  * messages output by the topology.
  * <p>
@@ -65,7 +65,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <h2>Driver setup</h2>
  * <p>
- * In order to create a ProcessorTopologyTestDriver instance, you need a TopologyBuilder and a {@link StreamingConfig}. The
+ * In order to create a ProcessorTopologyTestDriver instance, you need a TopologyBuilder and a {@link StreamsConfig}. The
  * configuration needs to be representative of what you'd supply to the real topology, so that means including several key
  * properties. For example, the following code fragment creates a configuration that specifies a local Kafka broker list
  * (which is needed but not used), a timestamp extractor, and default serializers and deserializers for string keys and values:
@@ -74,13 +74,13 @@ import java.util.concurrent.atomic.AtomicLong;
  * StringSerializer strSerializer = new StringSerializer();
  * StringDeserializer strDeserializer = new StringDeserializer();
  * Properties props = new Properties();
- * props.setProperty(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
- * props.setProperty(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
- * props.setProperty(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, strSerializer.getClass().getName());
- * props.setProperty(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, strDeserializer.getClass().getName());
- * props.setProperty(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, strSerializer.getClass().getName());
- * props.setProperty(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, strDeserializer.getClass().getName());
- * StreamingConfig config = new StreamingConfig(props);
+ * props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
+ * props.setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
+ * props.setProperty(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, strSerializer.getClass().getName());
+ * props.setProperty(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, strDeserializer.getClass().getName());
+ * props.setProperty(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, strSerializer.getClass().getName());
+ * props.setProperty(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, strDeserializer.getClass().getName());
+ * StreamsConfig config = new StreamsConfig(props);
  * TopologyBuilder builder = ...
  * ProcessorTopologyTestDriver driver = new ProcessorTopologyTestDriver(config, builder);
  * </pre>
@@ -139,11 +139,11 @@ public class ProcessorTopologyTestDriver {
 
     /**
      * Create a new test driver instance.
-     * @param config the streaming configuration for the topology
+     * @param config the stream configuration for the topology
      * @param builder the topology builder that will be used to create the topology instance
      * @param storeNames the optional names of the state stores that are used by the topology
      */
-    public ProcessorTopologyTestDriver(StreamingConfig config, TopologyBuilder builder, String... storeNames) {
+    public ProcessorTopologyTestDriver(StreamsConfig config, TopologyBuilder builder, String... storeNames) {
         id = new TaskId(0, 0);
         topology = builder.build(null);
 
@@ -173,7 +173,7 @@ public class ProcessorTopologyTestDriver {
             producer,
             restoreStateConsumer,
             config,
-            new StreamingMetrics() {
+            new StreamsMetrics() {
                 @Override
                 public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
                     return null;
@@ -265,7 +265,7 @@ public class ProcessorTopologyTestDriver {
 
     /**
      * Get the {@link StateStore} with the given name. The name should have been supplied via
-     * {@link #ProcessorTopologyTestDriver(StreamingConfig, TopologyBuilder, String...) this object's constructor}, and is
+     * {@link #ProcessorTopologyTestDriver(StreamsConfig, TopologyBuilder, String...) this object's constructor}, and is
      * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
@@ -281,7 +281,7 @@ public class ProcessorTopologyTestDriver {
 
     /**
      * Get the {@link KeyValueStore} with the given name. The name should have been supplied via
-     * {@link #ProcessorTopologyTestDriver(StreamingConfig, TopologyBuilder, String...) this object's constructor}, and is
+     * {@link #ProcessorTopologyTestDriver(StreamsConfig, TopologyBuilder, String...) this object's constructor}, and is
      * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to

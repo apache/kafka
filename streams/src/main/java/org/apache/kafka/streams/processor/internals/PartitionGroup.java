@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
@@ -149,7 +148,7 @@ public class PartitionGroup {
         RecordQueue recordQueue = partitionQueues.get(partition);
 
         if (recordQueue == null)
-            throw new KafkaException("Record's partition does not belong to this partition-group.");
+            throw new IllegalStateException("Record's partition does not belong to this partition-group.");
 
         return recordQueue.size();
     }

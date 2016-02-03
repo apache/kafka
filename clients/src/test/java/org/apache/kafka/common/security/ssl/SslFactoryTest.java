@@ -26,11 +26,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
-
 /**
  * A set of tests for the selector over ssl. These use a test harness that runs a simple socket server that echos back responses.
  */
-
 public class SslFactoryTest {
 
     @Test

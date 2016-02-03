@@ -28,7 +28,7 @@ import scala.collection.mutable
 class BrokerEndPointTest extends Logging {
 
   @Test
-  def testSerDe() = {
+  def testSerDe() {
 
     val endpoint = new EndPoint("myhost", 9092, SecurityProtocol.PLAINTEXT)
     val listEndPoints = Map(SecurityProtocol.PLAINTEXT -> endpoint)
@@ -42,7 +42,7 @@ class BrokerEndPointTest extends Logging {
   }
 
   @Test
-  def testHashAndEquals() =  {
+  def testHashAndEquals() {
     val endpoint1 = new EndPoint("myhost", 9092, SecurityProtocol.PLAINTEXT)
     val endpoint2 = new EndPoint("myhost", 9092, SecurityProtocol.PLAINTEXT)
     val endpoint3 = new EndPoint("myhost", 1111, SecurityProtocol.PLAINTEXT)
@@ -65,7 +65,25 @@ class BrokerEndPointTest extends Logging {
   }
 
   @Test
-  def testFromJSON() = {
+  def testFromJsonFutureVersion() {
+    // `createBroker` should support future compatible versions, we use a hypothetical future version here
+    val brokerInfoStr = """{
+      "foo":"bar",
+      "version":100,
+      "host":"localhost",
+      "port":9092,
+      "jmx_port":9999,
+      "timestamp":"1416974968782",
+      "endpoints":["SSL://localhost:9093"]
+    }"""
+    val broker = Broker.createBroker(1, brokerInfoStr)
+    assert(broker.id == 1)
+    assert(broker.getBrokerEndPoint(SecurityProtocol.SSL).host == "localhost")
+    assert(broker.getBrokerEndPoint(SecurityProtocol.SSL).port == 9093)
+  }
+
+  @Test
+  def testFromJsonV2 {
     val brokerInfoStr = "{\"version\":2," +
                           "\"host\":\"localhost\"," +
                           "\"port\":9092," +
@@ -79,7 +97,7 @@ class BrokerEndPointTest extends Logging {
   }
 
   @Test
-  def testFromOldJSON() = {
+  def testFromJsonV1() = {
     val brokerInfoStr = "{\"jmx_port\":-1,\"timestamp\":\"1420485325400\",\"host\":\"172.16.8.243\",\"version\":1,\"port\":9091}"
     val broker = Broker.createBroker(1, brokerInfoStr)
     assert(broker.id == 1)
@@ -88,7 +106,7 @@ class BrokerEndPointTest extends Logging {
   }
 
   @Test
-  def testBrokerEndpointFromURI() = {
+  def testBrokerEndpointFromUri() {
     var connectionString = "localhost:9092"
     var endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
     assert(endpoint.host == "localhost")
@@ -106,7 +124,7 @@ class BrokerEndPointTest extends Logging {
   }
 
   @Test
-  def testEndpointFromURI() = {
+  def testEndpointFromUri() {
     var connectionString = "PLAINTEXT://localhost:9092"
     var endpoint = EndPoint.createEndPoint(connectionString)
     assert(endpoint.host == "localhost")

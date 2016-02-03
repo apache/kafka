@@ -21,8 +21,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.Entry;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
@@ -37,7 +37,7 @@ public abstract class AbstractKeyValueStoreTest {
     @Test
     public void testPutGetRange() {
         // Create the test driver ...
-        KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create();
+        KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
         KeyValueStore<Integer, String> store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
         try {
 
@@ -73,11 +73,11 @@ public abstract class AbstractKeyValueStoreTest {
             // Check range iteration ...
             try (KeyValueIterator<Integer, String> iter = store.range(2, 4)) {
                 while (iter.hasNext()) {
-                    Entry<Integer, String> entry = iter.next();
-                    if (entry.key().equals(2))
-                        assertEquals("two", entry.value());
-                    else if (entry.key().equals(4))
-                        assertEquals("four", entry.value());
+                    KeyValue<Integer, String> entry = iter.next();
+                    if (entry.key.equals(2))
+                        assertEquals("two", entry.value);
+                    else if (entry.key.equals(4))
+                        assertEquals("four", entry.value);
                     else
                         fail("Unexpected entry: " + entry);
                 }
@@ -86,11 +86,11 @@ public abstract class AbstractKeyValueStoreTest {
             // Check range iteration ...
             try (KeyValueIterator<Integer, String> iter = store.range(2, 6)) {
                 while (iter.hasNext()) {
-                    Entry<Integer, String> entry = iter.next();
-                    if (entry.key().equals(2))
-                        assertEquals("two", entry.value());
-                    else if (entry.key().equals(4))
-                        assertEquals("four", entry.value());
+                    KeyValue<Integer, String> entry = iter.next();
+                    if (entry.key.equals(2))
+                        assertEquals("two", entry.value);
+                    else if (entry.key.equals(4))
+                        assertEquals("four", entry.value);
                     else
                         fail("Unexpected entry: " + entry);
                 }

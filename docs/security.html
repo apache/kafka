@@ -149,10 +149,10 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
         -----END CERTIFICATE-----
         subject=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=Sriharsha Chintalapani
         issuer=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=kafka/emailAddress=test@test.com</pre>
-        If the certificate does not show up or if there are any other error messages than your keystore is not setup properly.</li>
+        If the certificate does not show up or if there are any other error messages then your keystore is not setup properly.</li>
 
     <li><h4><a id="security_configclients" href="#security_configclients">Configuring Kafka Clients</a></h4>
-        SSL is supported only for the new Kafka Producer and Consumer, the older API is not supported. The configs for SSL will be same for both producer and consumer.<br>
+        SSL is supported only for the new Kafka Producer and Consumer, the older API is not supported. The configs for SSL will be the same for both producer and consumer.<br>
         If client authentication is not required in the broker, then the following is a minimal configuration example:
         <pre>
         security.protocol=SSL
@@ -206,7 +206,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
         principal="kafka/kafka1.hostname.com@EXAMPLE.COM";
     };
 
-    # Zookeeper client authentication
+    // Zookeeper client authentication
     Client {
        com.sun.security.auth.module.Krb5LoginModule required
        useKeyTab=true
@@ -216,8 +216,9 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
     };</pre>
 
         </li>
-        <li>Pass the name of the JAAS file as a JVM parameter to each Kafka broker:
+        <li>Pass the JAAS and optionally the krb5 file locations as JVM parameters to each Kafka broker (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
             <pre>
+    -Djava.security.krb5.conf=/etc/kafka/krb5.conf
     -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</pre>
         </li>
         <li>Make sure the keytabs configured in the JAAS file are readable by the operating system user who is starting kafka broker.</li>
@@ -263,8 +264,9 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
         useTicketCache=true;
     };</pre>
             </li>
-            <li>Pass the name of the JAAS file as a JVM parameter to the client JVM:
-        <pre>
+            <li>Pass the JAAS and optionally krb5 file locations as JVM parameters to each client JVM (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
+            <pre>
+    -Djava.security.krb5.conf=/etc/kafka/krb5.conf
     -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
             <li>Make sure the keytabs configured in the kafka_client_jaas.conf are readable by the operating system user who is starting kafka client.</li>
             <li>Configure the following properties in producer.properties or consumer.properties:
@@ -273,6 +275,75 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
     sasl.kerberos.service.name=kafka</pre>
             </li>
         </ol></li>
+
+    <li><h4><a id="security_rolling_upgrade" href="#security_rolling_upgrade">Incorporating Security Features in a Running Cluster</a></h4>
+        You can secure a running cluster via one or more of the supported protocols discussed previously. This is done in phases:
+        <p></p>
+        <ul>
+            <li>Incrementally bounce the cluster nodes to open additional secured port(s).</li>
+            <li>Restart clients using the secured rather than PLAINTEXT port (assuming you are securing the client-broker connection).</li>
+            <li>Incrementally bounce the cluster again to enable broker-to-broker security (if this is required)</li>
+            <li>A final incremental bounce to close the PLAINTEXT port.</li>
+        </ul>
+        <p></p>
+        The specific steps for configuring SSL and SASL are described in sections <a href="#security_ssl">7.2</a> and <a href="#security_sasl">7.3</a>.
+        Follow these steps to enable security for your desired protocol(s).
+        <p></p>
+        The security implementation lets you configure different protocols for both broker-client and broker-broker communication.
+        These must be enabled in separate bounces. A PLAINTEXT port must be left open throughout so brokers and/or clients can continue to communicate.
+        <p></p>
+
+        When performing an incremental bounce stop the brokers cleanly via a SIGTERM. It's also good practice to wait for restarted replicas to return to the ISR list before moving onto the next node.
+        <p></p>
+        As an example, say we wish to encrypt both broker-client and broker-broker communication with SSL. In the first incremental bounce, a SSL port is opened on each node:
+        <pre>
+         listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092</pre>
+
+        We then restart the clients, changing their config to point at the newly opened, secured port:
+
+        <pre>
+        bootstrap.servers = [broker1:9092,...]
+        security.protocol = SSL
+        ...etc</pre>
+
+        In the second incremental server bounce we instruct Kafka to use SSL as the broker-broker protocol (which will use the same SSL port):
+
+        <pre>
+        listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092
+        security.inter.broker.protocol=SSL</pre>
+
+        In the final bounce we secure the cluster by closing the PLAINTEXT port:
+
+        <pre>
+        listeners=SSL://broker1:9092
+        security.inter.broker.protocol=SSL</pre>
+
+        Alternatively we might choose to open multiple ports so that different protocols can be used for broker-broker and broker-client communication. Say we wished to use SSL encryption throughout (i.e. for broker-broker and broker-client communication) but we'd like to add SASL authentication to the broker-client connection also. We would achieve this by opening two additional ports during the first bounce:
+
+        <pre>
+        listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092,SASL_SSL://broker1:9093</pre>
+
+        We would then restart the clients, changing their config to point at the newly opened, SASL & SSL secured port:
+
+        <pre>
+        bootstrap.servers = [broker1:9093,...]
+        security.protocol = SASL_SSL
+        ...etc</pre>
+
+        The second server bounce would switch the cluster to use encrypted broker-broker communication via the SSL port we previously opened on port 9092:
+
+        <pre>
+        listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092,SASL_SSL://broker1:9093
+        security.inter.broker.protocol=SSL</pre>
+
+        The final bounce secures the cluster by closing the PLAINTEXT port.
+
+        <pre>
+       listeners=SSL://broker1:9092,SASL_SSL://broker1:9093
+       security.inter.broker.protocol=SSL</pre>
+
+        ZooKeeper can be secured independently of the Kafka cluster. The steps for doing this are covered in section <a href="#zk_authz_migration">7.5.2</a>.
+    </li>
 </ol>
 
 <h3><a id="security_authz" href="#security_authz">7.4 Authorization and ACLs</a></h3>
