@@ -24,11 +24,11 @@ import org.apache.kafka.clients.producer.RecordMetadata;
  * A callback called when producer request is complete. It in turn calls user-supplied callback (if given) and
  * notifies producer interceptors about the request completion.
  */
-public class ProducerCallback<K, V> implements Callback {
+public class InterceptorCallback<K, V> implements Callback {
     private final Callback userCallback;
     private final ProducerInterceptors<K, V> interceptors;
 
-    public ProducerCallback(Callback userCallback, ProducerInterceptors<K, V> interceptors) {
+    public InterceptorCallback(Callback userCallback, ProducerInterceptors<K, V> interceptors) {
         this.userCallback = userCallback;
         this.interceptors = interceptors;
     }

@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.producer.internals.ProducerCallback;
+import org.apache.kafka.clients.producer.internals.InterceptorCallback;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
@@ -425,7 +425,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // intercept the record, which can be potentially modified
             ProducerRecord<K, V> interceptedRecord = (this.interceptors == null) ? record : this.interceptors.onSend(record);
             // producer callback will make sure to call both 'callback' and interceptor callback
-            Callback interceptCallback = (this.interceptors == null) ? callback : new ProducerCallback<>(callback, this.interceptors);
+            Callback interceptCallback = (this.interceptors == null) ? callback : new InterceptorCallback<>(callback, this.interceptors);
 
             // first make sure the metadata for the topic is available
             long waitedOnMetadataMs = waitOnMetadata(interceptedRecord.topic(), this.maxBlockTimeMs);
