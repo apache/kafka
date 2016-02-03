@@ -25,8 +25,7 @@ import java.util.Map;
  * by KafkaConsumer if not specified in the consumer config. The interceptor implementation needs to be aware that it will be
  * sharing consumer config namespace with other interceptors and serializers, and ensure that there are no conflicts.
  * <p>
- * ConsumerInterceptor callbacks are called from the same thread. Since interceptor callbacks are called for every record,
- * the interceptor implementation should be careful about adding performance overhead to consumer.
+ * ConsumerInterceptor callbacks are called from the same thread.
  */
 public interface ConsumerInterceptor<K, V> extends Configurable {
 
