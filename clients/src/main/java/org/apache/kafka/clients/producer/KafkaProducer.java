@@ -322,7 +322,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
             List<ProducerInterceptor<K, V>> interceptorList = (List) (new ProducerConfig(userProvidedConfigs)).getConfiguredInstances(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ProducerInterceptor.class);
-            this.interceptors = new ProducerInterceptors<>(interceptorList);
+            this.interceptors = (interceptorList.size() == 0) ? null : new ProducerInterceptors<>(interceptorList);
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
@@ -423,9 +423,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         try {
             // intercept the record, which can be potentially modified
-            ProducerRecord<K, V> interceptedRecord = this.interceptors.onSend(record);
+            ProducerRecord<K, V> interceptedRecord = (this.interceptors == null) ? record : this.interceptors.onSend(record);
             // producer callback will make sure to call both 'callback' and interceptor callback
-            ProducerCallback<K, V> producerCallback = new ProducerCallback<>(callback, this.interceptors);
+            Callback interceptCallback = (this.interceptors == null) ? callback : new ProducerCallback<>(callback, this.interceptors);
 
             // first make sure the metadata for the topic is available
             long waitedOnMetadataMs = waitOnMetadata(interceptedRecord.topic(), this.maxBlockTimeMs);
@@ -451,7 +451,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             ensureValidRecordSize(serializedSize);
             TopicPartition tp = new TopicPartition(interceptedRecord.topic(), partition);
             log.trace("Sending record {} with callback {} to topic {} partition {}", interceptedRecord, callback, interceptedRecord.topic(), partition);
-            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, serializedKey, serializedValue, producerCallback, remainingWaitMs);
+            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, serializedKey, serializedValue, interceptCallback, remainingWaitMs);
             if (result.batchIsFull || result.newBatchCreated) {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", interceptedRecord.topic(), partition);
                 this.sender.wakeup();
@@ -465,24 +465,29 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (callback != null)
                 callback.onCompletion(null, e);
             this.errors.record();
-            this.interceptors.onAcknowledgement(null, e);
+            if (this.interceptors != null)
+                this.interceptors.onAcknowledgement(null, e);
             return new FutureFailure(e);
         } catch (InterruptedException e) {
             this.errors.record();
-            this.interceptors.onAcknowledgement(null, e);
+            if (this.interceptors != null)
+                this.interceptors.onAcknowledgement(null, e);
             throw new InterruptException(e);
         } catch (BufferExhaustedException e) {
             this.errors.record();
             this.metrics.sensor("buffer-exhausted-records").record();
-            this.interceptors.onAcknowledgement(null, e);
+            if (this.interceptors != null)
+                this.interceptors.onAcknowledgement(null, e);
             throw e;
         } catch (KafkaException e) {
             this.errors.record();
-            this.interceptors.onAcknowledgement(null, e);
+            if (this.interceptors != null)
+                this.interceptors.onAcknowledgement(null, e);
             throw e;
         } catch (Exception e) {
             // we notify interceptor about all exceptions, since onSend is called before anything else in this method
-            this.interceptors.onAcknowledgement(null, e);
+            if (this.interceptors != null)
+                this.interceptors.onAcknowledgement(null, e);
             throw e;
         }
     }

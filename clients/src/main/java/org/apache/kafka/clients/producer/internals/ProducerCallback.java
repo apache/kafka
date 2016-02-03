@@ -34,7 +34,8 @@ public class ProducerCallback<K, V> implements Callback {
     }
 
     public void onCompletion(RecordMetadata metadata, Exception exception) {
-        this.interceptors.onAcknowledgement(metadata, exception);
+        if (this.interceptors != null)
+            this.interceptors.onAcknowledgement(metadata, exception);
         if (this.userCallback != null)
             this.userCallback.onCompletion(metadata, exception);
     }

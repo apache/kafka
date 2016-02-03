@@ -359,8 +359,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
             client.poll(future);
 
-            if (future.succeeded())
+            if (future.succeeded()) {
+                if (interceptors != null)
+                    interceptors.onCommit(offsets);
                 return;
+            }
 
             if (!future.isRetriable())
                 throw future.exception();
