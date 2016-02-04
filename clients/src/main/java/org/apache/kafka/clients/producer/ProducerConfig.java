@@ -285,7 +285,7 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.MEDIUM, PARTITIONER_CLASS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
-                                        "",
+                                        null,
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
 

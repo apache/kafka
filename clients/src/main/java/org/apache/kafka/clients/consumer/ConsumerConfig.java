@@ -303,7 +303,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
-                                        "",
+                                        null,
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
 
