@@ -17,6 +17,9 @@
 
 package org.apache.kafka.streams.errors;
 
+/**
+ * Indicates a processor state operation (e.g. put, get) has failed.
+ */
 public class ProcessorStateException extends StreamsException {
 
     private static final long serialVersionUID = 1L;

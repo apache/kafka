@@ -17,6 +17,13 @@
 
 package org.apache.kafka.streams.kstream;
 
+/**
+ * The Aggregator interface for aggregating values of the given key.
+ *
+ * @param <K> Key type.
+ * @param <V> Receiving value type.
+ * @param <T> Aggregate value type.
+ */
 public interface Aggregator<K, V, T> {
 
     T apply(K aggKey, V value, T aggregate);

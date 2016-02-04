@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 /**
- * The run time exception class for stream task assignments
+ * Indicates a run time error incurred while trying to assign stream tasks to threads
  */
 public class TaskAssignmentException extends StreamsException {
 

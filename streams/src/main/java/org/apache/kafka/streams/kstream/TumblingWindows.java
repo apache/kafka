@@ -17,12 +17,14 @@
 
 package org.apache.kafka.streams.kstream;
 
-
 import org.apache.kafka.streams.kstream.internals.TumblingWindow;
 
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * The tumbling window specifications used for aggregations.
+ */
 public class TumblingWindows extends Windows<TumblingWindow> {
 
     private static final long DEFAULT_SIZE_MS = 1000L;
