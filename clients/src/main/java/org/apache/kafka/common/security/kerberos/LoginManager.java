@@ -21,6 +21,8 @@ package org.apache.kafka.common.security.kerberos;
 import javax.security.auth.Subject;
 import javax.security.auth.login.LoginException;
 import java.io.IOException;
+import java.security.AccessControlContext;
+import java.security.AccessController;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.Map;
@@ -36,14 +38,26 @@ public class LoginManager {
     private final Login login;
     private final String serviceName;
     private final LoginType loginType;
+    private Subject subject;
     private int refCount;
 
     private LoginManager(LoginType loginType, Map<String, ?> configs) throws IOException, LoginException {
         this.loginType = loginType;
         String loginContext = loginType.contextName();
-        login = new Login(loginContext, configs);
+
+        // Check for an existing Subject
+        AccessControlContext context = AccessController.getContext();
+        subject = context != null ? Subject.getSubject(context) : null;
+
+        // Otherwise try to login
+        if (subject == null || !JaasUtils.hasValidKerberosTicket(subject)) {
+            login = new Login(loginContext, configs);
+            login.startThreadIfNeeded();
+            subject = login.subject();
+        } else {
+            login = null;
+        }
         this.serviceName = getServiceName(loginContext, configs);
-        login.startThreadIfNeeded();
     }
 
     private static String getServiceName(String loginContext, Map<String, ?> configs) throws IOException {
@@ -90,7 +104,7 @@ public class LoginManager {
     }
 
     public Subject subject() {
-        return login.subject();
+        return subject;
     }
 
     public String serviceName() {
@@ -111,7 +125,9 @@ public class LoginManager {
                 throw new IllegalStateException("release called on LoginManager with refCount == 0");
             else if (refCount == 1) {
                 CACHED_INSTANCES.remove(loginType);
-                login.shutdown();
+                if (login != null) {
+                    login.shutdown();
+                }
             }
             --refCount;
         }
@@ -122,7 +138,9 @@ public class LoginManager {
         synchronized (LoginManager.class) {
             for (LoginType loginType : new ArrayList<>(CACHED_INSTANCES.keySet())) {
                 LoginManager loginManager = CACHED_INSTANCES.remove(loginType);
-                loginManager.login.shutdown();
+                if (loginManager.login != null) {
+                    loginManager.login.shutdown();
+                }
             }
         }
     }

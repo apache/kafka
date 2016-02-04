@@ -103,7 +103,7 @@ public class Login {
         this.lastLogin = currentElapsedTime();
         login = login(loginContextName);
         subject = login.getSubject();
-        isKrbTicket = !subject.getPrivateCredentials(KerberosTicket.class).isEmpty();
+        isKrbTicket = getTGT() != null;
 
         AppConfigurationEntry[] entries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
         if (entries.length == 0) {
