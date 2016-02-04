@@ -196,10 +196,9 @@ public enum Errors {
      * If there are multiple matches in the class hierarchy, the first match starting from the bottom is used.
      */
     public static Errors forException(Throwable t) {
-        Errors error = null;
         Class clazz = t.getClass();
         while (clazz != null) {
-            error = classToError.get(clazz);
+            Errors error = classToError.get(clazz);
             if (error != null)
                 return error;
             clazz = clazz.getSuperclass();
