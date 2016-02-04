@@ -40,9 +40,18 @@ public interface ProducerInterceptor<K, V> extends Configurable {
      * Similarly, it is up to interceptor implementation to ensure that correct topic/partition is returned in ProducerRecord.
      * Most often, it should be the same topic/partition from 'record'.
      * <p>
-     * Any exception thrown by this method will be ignored by the caller.
+     * Any exception thrown by this method will be caught by the caller and logged, but not propagated further.
+     * <p>
+     * Since the producer may run multiple interceptors, a particular interceptor's onSend() callback will be called in order specified in
+     * configuration {@link org.apache.kafka.clients.producer.ProducerConfig#INTERCEPTOR_CLASSES_CONFIG}. The first interceptor
+     * in the list gets the record passed from the client. The following interceptor will be passed the record returned by the
+     * previous interceptor, and so on. Since interceptors are allowed to mutate records, interceptors may potentially get
+     * the record already mutated by other interceptors. However, building a pipeline of mutable interceptors that depend on the output
+     * of the previous interceptor is discouraged, because of potential side-effects caused by interceptors potentially failing to mutate the record
+     * and throwing an exception. If one of the interceptors in the list throws an exception from onSend(), the exception is caught, logged, and
+     * the next interceptor is called with the record returned by the last successful interceptor in the list, or otherwise the client.
      *
-     * @param record the record from client
+     * @param record the record from client or the record returned by the previous interceptor in the chain of interceptors.
      * @return producer record to send to topic/partition
      */
     public ProducerRecord<K, V> onSend(ProducerRecord<K, V> record);

@@ -17,6 +17,7 @@ import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +45,7 @@ public class ConsumerInterceptors<K, V> implements Closeable {
      * in the chain of interceptors.
      * <p>
      * This method does not throw exceptions. If any of the interceptors in the chain throws an exception,
-     * it gets caught and ignored, and next interceptor in the chain is called with 'records' returned by the
+     * it gets caught and logged, and next interceptor in the chain is called with 'records' returned by the
      * previous successful interceptor onConsume call.
      *
      * @param records records to be consumed by the client.
@@ -57,7 +58,7 @@ public class ConsumerInterceptors<K, V> implements Closeable {
                 interceptRecords = interceptor.onConsume(interceptRecords);
             } catch (Throwable t) {
                 // do not propagate interceptor exception, ignore and continue calling other interceptors
-                log.debug("Error executing interceptor onConsume callback: {}", t.getMessage());
+                log.warn("Error executing interceptor onConsume callback: {}", Utils.stackTrace(t));
             }
         }
         return interceptRecords;
@@ -68,7 +69,7 @@ public class ConsumerInterceptors<K, V> implements Closeable {
      * <p>
      * This method calls {@link ConsumerInterceptor#onCommit(Map)} method for each interceptor.
      * <p>
-     * This method does not throw exceptions. Exceptions thrown by any of the interceptors in the chain are ignored.
+     * This method does not throw exceptions. Exceptions thrown by any of the interceptors in the chain are logged, but not propagated.
      *
      * @param offsets A map of offsets by partition with associated metadata
      */
@@ -78,7 +79,7 @@ public class ConsumerInterceptors<K, V> implements Closeable {
                 interceptor.onCommit(offsets);
             } catch (Throwable t) {
                 // do not propagate interceptor exception, just ignore
-                log.debug("Error executing interceptor onCommit callback: {}", t.getMessage());
+                log.warn("Error executing interceptor onCommit callback: {}", Utils.stackTrace(t));
             }
         }
     }

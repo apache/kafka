@@ -33,9 +33,18 @@ public interface ConsumerInterceptor<K, V> extends Configurable {
      * This is called when the records are about to be returned to the user.
      * <p>
      * This method is allowed to mutate consumer records, in which case the new records will be returned.
-     * Any exception thrown by this method will be ignored by the caller.
+     * Any exception thrown by this method will be caught by the caller, logged, but not propagated to the client.
+     * <p>
+     * Since the consumer may run multiple interceptors, a particular interceptor's onConsume() callback will be called in order specified in
+     * configuration {@link org.apache.kafka.clients.consumer.ConsumerConfig#INTERCEPTOR_CLASSES_CONFIG}. The first interceptor
+     * in the list gets the consumed records. The following interceptor will be passed the records returned by the
+     * previous interceptor, and so on. Since interceptors are allowed to mutate records, interceptors may potentially get
+     * the records already mutated by other interceptors. However, building a pipeline of mutable interceptors that depend on the output
+     * of the previous interceptor is discouraged, because of potential side-effects caused by interceptors potentially failing to mutate the record
+     * and throwing an exception. If one of the interceptors in the list throws an exception from onConsume(), the exception is caught, logged, and
+     * the next interceptor is called with the records returned by the last successful interceptor in the list, or otherwise the original consumed records.
      *
-     * @param records records to be consumed by the client.
+     * @param records records to be consumed by the client or records returned by the previous interceptors in the list.
      * @return records that are either modified by the interceptor or same as records passed to this method.
      */
     public ConsumerRecords<K, V> onConsume(ConsumerRecords<K, V> records);
