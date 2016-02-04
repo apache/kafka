@@ -74,12 +74,18 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         this.initialized = true;
     }
 
-    public TaskId id() {
+    public ProcessorStateManager getStateMgr() {
+        return stateMgr;
+    }
+
+    @Override
+    public TaskId taskId() {
         return id;
     }
 
-    public ProcessorStateManager getStateMgr() {
-        return stateMgr;
+    @Override
+    public String jobId() {
+        return task.jobId();
     }
 
     @Override

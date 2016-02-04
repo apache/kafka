@@ -101,8 +101,13 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public TaskId id() {
+    public TaskId taskId() {
         return new TaskId(0, 0);
+    }
+
+    @Override
+    public String jobId() {
+        return "mockJob";
     }
 
     @Override
