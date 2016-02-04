@@ -59,10 +59,13 @@ object AclCommand {
   }
 
   def withAuthorizer(opts: AclCommandOptions)(f: Authorizer => Unit) {
-    var authorizerProperties = Map.empty[String, Any]
-    if (opts.options.has(opts.authorizerPropertiesOpt)) {
-      CommandLineUtils.parseKeyValueArgs(opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala).asScala.foreach(x => authorizerProperties += (x._1 -> x._2))
-    }
+    val authorizerProperties =
+      if (opts.options.has(opts.authorizerPropertiesOpt)) {
+        val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
+        CommandLineUtils.parseKeyValueArgs(authorizerProperties).asScala
+      } else {
+        Map.empty[String, Any]
+      }
 
     val authorizerClass = opts.options.valueOf(opts.authorizerOpt)
     val authZ = CoreUtils.createObject[Authorizer](authorizerClass)
