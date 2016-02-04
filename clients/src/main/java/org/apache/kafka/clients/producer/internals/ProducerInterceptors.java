@@ -20,7 +20,6 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.producer.ProducerInterceptor;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +60,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
             } catch (Throwable t) {
                 // do not propagate interceptor exception, ignore and continue calling other interceptors
                 log.warn("Error executing interceptor onSend callback for topic: {}, partition: {}, with error: {}",
-                        record.topic(), record.partition(), Utils.stackTrace(t));
+                        record.topic(), record.partition(), t);
             }
         }
         return interceptRecord;
@@ -83,7 +82,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
                 interceptor.onAcknowledgement(metadata, exception);
             } catch (Throwable t) {
                 // do not propagate interceptor exceptions, just ignore
-                log.warn("Error executing interceptor onAcknowledgement callback: {}", Utils.stackTrace(t));
+                log.warn("Error executing interceptor onAcknowledgement callback: {}", t);
             }
         }
     }

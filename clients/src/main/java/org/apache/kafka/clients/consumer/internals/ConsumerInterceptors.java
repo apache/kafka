@@ -17,7 +17,6 @@ import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +57,7 @@ public class ConsumerInterceptors<K, V> implements Closeable {
                 interceptRecords = interceptor.onConsume(interceptRecords);
             } catch (Throwable t) {
                 // do not propagate interceptor exception, ignore and continue calling other interceptors
-                log.warn("Error executing interceptor onConsume callback: {}", Utils.stackTrace(t));
+                log.warn("Error executing interceptor onConsume callback: {}", t);
             }
         }
         return interceptRecords;
@@ -79,7 +78,7 @@ public class ConsumerInterceptors<K, V> implements Closeable {
                 interceptor.onCommit(offsets);
             } catch (Throwable t) {
                 // do not propagate interceptor exception, just ignore
-                log.warn("Error executing interceptor onCommit callback: {}", Utils.stackTrace(t));
+                log.warn("Error executing interceptor onCommit callback: {}", t);
             }
         }
     }
