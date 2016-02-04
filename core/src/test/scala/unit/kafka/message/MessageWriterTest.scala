@@ -34,7 +34,7 @@ class MessageWriterTest extends JUnitSuite {
 
   private def mkMessageWithWriter(key: Array[Byte] = null, bytes: Array[Byte], codec: CompressionCodec): Message = {
     val writer = new MessageWriter(100)
-    writer.write(key = key, codec = codec, timestamp = Message.NoTimestamp, timestampType = TimestampType.CreateTime, magicValue = Message.MagicValue_V0) { output =>
+    writer.write(key = key, codec = codec, timestamp = Message.NoTimestamp, timestampType = CreateTime, magicValue = Message.MagicValue_V0) { output =>
       val out = if (codec == NoCompressionCodec) output else CompressionFactory(codec, output)
       try {
         val p = rnd.nextInt(bytes.length)

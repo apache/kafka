@@ -124,7 +124,7 @@ object ConsoleConsumer extends Logging {
       }
       messageCount += 1
       try {
-        formatter.writeTo(msg.key, msg.value, System.out)
+        formatter.writeTo(msg.key, msg.value, msg.timestamp, msg.timestampType, System.out)
       } catch {
         case e: Throwable =>
           if (skipMessageOnError) {
@@ -335,7 +335,7 @@ object ConsoleConsumer extends Logging {
 }
 
 trait MessageFormatter{
-  def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream)
+  def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream)
 
   def init(props: Properties) {}
 
@@ -356,12 +356,16 @@ class DefaultMessageFormatter extends MessageFormatter {
       lineSeparator = props.getProperty("line.separator").getBytes
   }
 
-  def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
-    if (printKey) {
-      output.write(if (key == null) "null".getBytes() else key)
+  def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream) {
+    if (timestampType != NoTimestampType) {
+      output.write(s"$timestampType:$timestamp".getBytes)
       output.write(keySeparator)
     }
-    output.write(if (value == null) "null".getBytes() else value)
+    if (printKey) {
+      output.write(if (key == null) "null".getBytes else key)
+      output.write(keySeparator)
+    }
+    output.write(if (value == null) "null".getBytes else value)
     output.write(lineSeparator)
   }
 }
@@ -370,17 +374,19 @@ class LoggingMessageFormatter extends MessageFormatter   {
   private val defaultWriter: DefaultMessageFormatter = new DefaultMessageFormatter
   val logger = Logger.getLogger(getClass().getName)
 
-  def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream): Unit = {
-    defaultWriter.writeTo(key, value, output)
+  def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream): Unit = {
+    defaultWriter.writeTo(key, value, timestamp, timestampType, output)
     if(logger.isInfoEnabled)
-      logger.info(s"key:${if (key == null) "null" else new String(key)}, value:${if (value == null) "null" else new String(value)}")
+      logger.info(s"key:${if (key == null) "null" else new String(key)}, " +
+                  s"value:${if (value == null) "null" else new String(value)}, " +
+                  {if (timestampType != NoTimestampType) s"$timestampType:$timestamp" else ""})
   }
 }
 
 class NoOpMessageFormatter extends MessageFormatter {
   override def init(props: Properties) {}
 
-  def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {}
+  def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream){}
 }
 
 class ChecksumMessageFormatter extends MessageFormatter {
@@ -394,8 +400,12 @@ class ChecksumMessageFormatter extends MessageFormatter {
       topicStr = ""
   }
 
-  def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
-    val chksum = new Message(value, key, Message.NoTimestamp, Message.MagicValue_V0).checksum
+  def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream) {
+    val chksum =
+      if (timestampType != NoTimestampType)
+        new Message(value, key, timestamp, timestampType, NoCompressionCodec, 0, -1, Message.MagicValue_V1).checksum
+      else
+        new Message(value, key, Message.NoTimestamp, Message.MagicValue_V0).checksum
     output.println(topicStr + "checksum:" + chksum)
   }
 }

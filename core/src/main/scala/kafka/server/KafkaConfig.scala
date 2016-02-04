@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util.Properties
 
-import kafka.api.ApiVersion
+import kafka.api.{KAFKA_0_10_0_IV0, ApiVersion}
 import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
 import kafka.coordinator.OffsetConfig
@@ -94,7 +94,7 @@ object Defaults {
   val LogFlushSchedulerIntervalMs = Long.MaxValue
   val LogFlushOffsetCheckpointIntervalMs = 60000
   val LogPreAllocateEnable = false
-  val MessageFormatVersion = ApiVersion.latestVersion.toString()
+  val MessageFormatVersion = "v1"
   val NumRecoveryThreadsPerDataDir = 1
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
@@ -423,7 +423,7 @@ object KafkaConfig {
   val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server"
   val MinInSyncReplicasDoc = "define the minimum number of replicas in ISR needed to satisfy a produce request with acks=all (or -1)"
-  val MessageFormatVersionDoc = "Specify the message format version the broker will use to append messages to the logs."
+  val MessageFormatVersionDoc = "Specify the message format version the broker will use to append messages to the logs. Valid values are \"v0\" and \"v1\" (case sensitive)."
   val MessageTimestampTypeDoc = "Define the whether the timestamp in the message is message create time or log append time. The value should be either" +
   " \"CreateTime\" or \"LogAppendTime\""
   val MessageTimestampDifferenceMaxMsDoc = "Set maximum allowed time difference between broker local time and message's timestamp. " +
@@ -602,7 +602,7 @@ object KafkaConfig {
       .define(NumRecoveryThreadsPerDataDirProp, INT, Defaults.NumRecoveryThreadsPerDataDir, atLeast(1), HIGH, NumRecoveryThreadsPerDataDirDoc)
       .define(AutoCreateTopicsEnableProp, BOOLEAN, Defaults.AutoCreateTopicsEnable, HIGH, AutoCreateTopicsEnableDoc)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), HIGH, MinInSyncReplicasDoc)
-      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, MEDIUM, MessageFormatVersionDoc)
+      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, in("v0", "v1"), MEDIUM, MessageFormatVersionDoc)
       .define(MessageTimestampTypeProp, STRING, Defaults.MessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM, MessageTimestampTypeDoc)
       .define(MessageTimestampDifferenceMaxMsProp, LONG, Defaults.MessageTimestampDifferenceMaxMs, atLeast(0), MEDIUM, MessageTimestampDifferenceMaxMsDoc)
 
@@ -795,7 +795,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val logRetentionTimeMillis = getLogRetentionTimeMillis
   val minInSyncReplicas = getInt(KafkaConfig.MinInSyncReplicasProp)
   val logPreAllocateEnable: java.lang.Boolean = getBoolean(KafkaConfig.LogPreAllocateProp)
-  val messageFormatVersion = ApiVersion(getString(KafkaConfig.MessageFormatVersionProp))
+  val messageFormatVersion = getString(KafkaConfig.MessageFormatVersionProp)
   val messageTimestampType = getString(KafkaConfig.MessageTimestampTypeProp)
   val messageTimestampDifferenceMaxMs = getLong(KafkaConfig.MessageTimestampDifferenceMaxMsProp)
 
@@ -975,6 +975,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
       s"${KafkaConfig.AdvertisedListenersProp} protocols must be equal to or a subset of ${KafkaConfig.ListenersProp} protocols. " +
       s"Found ${advertisedListeners.keySet}. The valid options based on currently configured protocols are ${listeners.keySet}"
     )
+    require(validateMessageFormatVersion(Integer.parseInt(messageFormatVersion.substring(1))), s"message.format.version $messageFormatVersion cannot " +
+      s"be used when inter.broker.protocol.version is set to $interBrokerProtocolVersion")
   }
 
+  def validateMessageFormatVersion(messageFormatVersion: Int): Boolean = {
+    !(messageFormatVersion > 0 && !interBrokerProtocolVersion.onOrAfter(KAFKA_0_10_0_IV0))
+  }
 }

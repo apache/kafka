@@ -24,19 +24,17 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer, ByteArraySerializer}
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.record.CompressionType
-import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.record.TimestampType
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.apache.kafka.common.errors.{InvalidTopicException, RecordTooLargeException}
 import org.apache.kafka.test.{MockProducerInterceptor, MockConsumerInterceptor}
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.{InvalidTopicException, RecordTooLargeException}
+import org.apache.kafka.common.record.{CompressionType, TimestampType}
+import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.Assert._
 import org.junit.Test
+
+import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
-import scala.collection.JavaConverters
-import JavaConverters._
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -294,7 +292,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.seek(tp, mid)
     assertEquals(mid, consumer.position(tp))
 
-    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt)
+    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt,
+      startingTimestamp = mid.toLong)
 
     // Test seek compressed message
     sendCompressedMessages(totalRecords.toInt, tp2)
@@ -311,7 +310,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.seek(tp2, mid)
     assertEquals(mid, consumer.position(tp2))
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt,
-      tp = tp2)
+      startingTimestamp = mid.toLong, tp = tp2)
   }
 
   private def sendCompressedMessages(numRecords: Int, tp: TopicPartition) {
@@ -319,8 +318,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, CompressionType.GZIP.name)
     producerProps.setProperty(ProducerConfig.LINGER_MS_CONFIG, Long.MaxValue.toString)
     val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
-      retries = 0, lingerMs = Long.MaxValue, props = Some(producerProps))
-    sendRecords(producer, numRecords, tp)
+        retries = 0, lingerMs = Long.MaxValue, props = Some(producerProps))
+    (0 until numRecords).foreach { i =>
+      producer.send(new ProducerRecord(tp.topic(), tp.partition(), i.toLong, s"key $i".getBytes, s"value $i".getBytes))
+    }
     producer.close()
   }
 
@@ -677,7 +678,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       startingTimestamp = 0)
 
     // Test compressed messages
-    sendCompressedRecords(numRecords, tp2)
+    sendCompressedMessages(numRecords, tp2)
     this.consumers(0).assign(List(tp2).asJava)
     consumeAndVerifyRecords(consumer = this.consumers(0), numRecords = numRecords, tp = tp2, startingOffset = 0, startingKeyAndValueIndex = 0,
       startingTimestamp = 0)
@@ -702,7 +703,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // Test compressed messages
     val tp2 = new TopicPartition(topicName, 1)
-    sendCompressedRecords(numRecords, tp2)
+    sendCompressedMessages(numRecords, tp2)
     this.consumers(0).assign(List(tp2).asJava)
     consumeAndVerifyRecords(consumer = this.consumers(0), numRecords = numRecords, tp = tp2, startingOffset = 0, startingKeyAndValueIndex = 0,
       startingTimestamp = startTime, timestampType = TimestampType.LogAppendTime)

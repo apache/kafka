@@ -14,6 +14,7 @@ package kafka.api
 
 import java.util
 
+import kafka.coordinator.GroupCoordinator
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
@@ -25,11 +26,10 @@ import kafka.server.KafkaConfig
 
 import java.util.ArrayList
 import org.junit.Assert._
-import org.junit.{Test, Before}
+import org.junit.{Before, Test}
 
-import scala.collection.mutable.Buffer
 import scala.collection.JavaConverters._
-import kafka.coordinator.GroupCoordinator
+import scala.collection.mutable.Buffer
 
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
@@ -277,17 +277,10 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
   }
 
   protected def sendRecords(numRecords: Int, tp: TopicPartition) {
-<<<<<<< HEAD
-    sendRecords(this.producers(0), numRecords, tp)
-  }
-
-  protected def sendRecords(producer: Producer[Array[Byte], Array[Byte]],
-                            numRecords: Int,
-                            tp: TopicPartition) {
     (0 until numRecords).foreach { i =>
-      producer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i".getBytes, s"value $i".getBytes))
+      this.producers(0).send(new ProducerRecord(tp.topic(), tp.partition(), i.toLong, s"key $i".getBytes, s"value $i".getBytes))
     }
-    producer.flush()
+    this.producers(0).flush()
   }
 
   protected def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]], numRecords: Int, startingOffset: Int,

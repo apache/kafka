@@ -18,7 +18,6 @@
 package kafka.message
 
 import java.nio._
-import kafka.message.TimestampType.TimestampType
 
 import scala.math._
 import kafka.utils._
@@ -135,6 +134,8 @@ class Message(val buffer: ByteBuffer,
    * A constructor to create a Message
    * @param bytes The payload of the message
    * @param codec The compression codec used on the contents of the message (if any)
+   * @param timestamp The timestamp of the message.
+   * @param timestampType The timestamp type of the message. Default to CreateTime
    * @param key The key of the message (null, if none)
    * @param payloadOffset The offset into the payload array used to extract payload
    * @param payloadSize The size of the payload to use
@@ -142,6 +143,7 @@ class Message(val buffer: ByteBuffer,
   def this(bytes: Array[Byte], 
            key: Array[Byte],
            timestamp: Long,
+           timestampType: TimestampType = CreateTime,
            codec: CompressionCodec, 
            payloadOffset: Int, 
            payloadSize: Int,
@@ -285,10 +287,9 @@ class Message(val buffer: ByteBuffer,
    */
 def timestamp: Long = {
     if (magic == MagicValue_V0)
-      throw new IllegalStateException("The message with magic byte 0 does not have a timestamp")
-
+      Message.NoTimestamp
     // Case 2
-    if (wrapperMessageTimestampType.exists(_ == TimestampType.LogAppendTime) && wrapperMessageTimestamp.isDefined)
+    else if (wrapperMessageTimestampType.exists(_ == LogAppendTime) && wrapperMessageTimestamp.isDefined)
       wrapperMessageTimestamp.get
     else // case 1, 3
       buffer.getLong(Message.TimestampOffset)
@@ -299,9 +300,9 @@ def timestamp: Long = {
    */
   def timestampType = {
     if (magic == MagicValue_V0)
-      throw new IllegalStateException("The message with magic byte 0 does not have a timestamp")
-
-    wrapperMessageTimestampType.getOrElse(TimestampType.getTimestampType(attributes))
+      NoTimestampType
+    else
+      wrapperMessageTimestampType.getOrElse(TimestampType.getTimestampType(attributes))
   }
   
   /**
@@ -347,7 +348,7 @@ def timestamp: Long = {
       byteBuffer.put(Message.MagicValue_V1)
       byteBuffer.put(TimestampType.setTimestampType(attributes, timestampType))
       // Up-conversion, insert the timestamp field
-      if (timestampType == TimestampType.LogAppendTime)
+      if (timestampType == LogAppendTime)
         byteBuffer.putLong(now)
       else
         byteBuffer.putLong(Message.NoTimestamp)
@@ -356,7 +357,7 @@ def timestamp: Long = {
       // Down-conversion, reserve CRC and update magic byte
       byteBuffer.position(Message.MagicOffset)
       byteBuffer.put(Message.MagicValue_V0)
-      byteBuffer.put(TimestampType.setTimestampType(attributes, TimestampType.CreateTime))
+      byteBuffer.put(TimestampType.setTimestampType(attributes, CreateTime))
       // Down-conversion, skip the timestamp field
       byteBuffer.put(buffer.array(), buffer.arrayOffset() + Message.KeySizeOffset_V1, size - Message.KeySizeOffset_V1)
     }

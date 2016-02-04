@@ -217,8 +217,7 @@ public class MemoryRecords implements Records {
 
         // The variables for inner iterator
         private final LinkedList<LogEntry> logEntries;
-        private final long lastInnerRelativeOffset;
-        private final long wrapperRecordOffset;
+        private final long absoluteBaseOffset;
 
         public RecordsIterator(ByteBuffer buffer, CompressionType type, boolean shallow) {
             this.type = type;
@@ -226,8 +225,7 @@ public class MemoryRecords implements Records {
             this.shallow = shallow;
             this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type);
             this.logEntries = null;
-            this.lastInnerRelativeOffset = -1L;
-            this.wrapperRecordOffset = -1L;
+            this.absoluteBaseOffset = -1;
         }
 
         private RecordsIterator(LogEntry entry, CompressionType type) {
@@ -235,7 +233,7 @@ public class MemoryRecords implements Records {
             this.buffer = entry.record().value();
             this.shallow = true;
             this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type);
-            this.wrapperRecordOffset = entry.offset();
+            long wrapperRecordOffset = entry.offset();
             // If relative offset is used, we need to decompress the entire message first to compute
             // the absolute offset.
             if (entry.record().magic() > Record.MAGIC_VALUE_V0) {
@@ -254,10 +252,10 @@ public class MemoryRecords implements Records {
                         throw new KafkaException(e);
                     }
                 }
-                this.lastInnerRelativeOffset = logEntries.getLast().offset();
+                this.absoluteBaseOffset = wrapperRecordOffset - logEntries.getLast().offset();
             } else {
                 this.logEntries = null;
-                this.lastInnerRelativeOffset = -1L;
+                this.absoluteBaseOffset = -1;
             }
 
         }
@@ -279,8 +277,8 @@ public class MemoryRecords implements Records {
                         return allDone();
 
                     // Convert offset to absolute offset if needed.
-                    if (lastInnerRelativeOffset >= 0) {
-                        long absoluteOffset = entry.offset() - lastInnerRelativeOffset + wrapperRecordOffset;
+                    if (absoluteBaseOffset >= 0) {
+                        long absoluteOffset = absoluteBaseOffset + entry.offset();
                         entry = new LogEntry(absoluteOffset, entry.record());
                     }
 

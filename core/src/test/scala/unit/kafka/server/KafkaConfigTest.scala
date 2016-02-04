@@ -282,11 +282,13 @@ class KafkaConfigTest {
     assertEquals(ApiVersion.latestVersion, conf.interBrokerProtocolVersion)
 
     props.put(KafkaConfig.InterBrokerProtocolVersionProp,"0.8.2.0")
+    props.put(KafkaConfig.MessageFormatVersionProp, "v0")
     val conf2 = KafkaConfig.fromProps(props)
     assertEquals(KAFKA_0_8_2, conf2.interBrokerProtocolVersion)
 
     // check that 0.8.2.0 is the same as 0.8.2.1
     props.put(KafkaConfig.InterBrokerProtocolVersionProp,"0.8.2.1")
+    props.put(KafkaConfig.MessageFormatVersionProp, "v0")
     val conf3 = KafkaConfig.fromProps(props)
     assertEquals(KAFKA_0_8_2, conf3.interBrokerProtocolVersion)
 

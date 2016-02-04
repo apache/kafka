@@ -66,16 +66,11 @@ class MessageTest extends JUnitSuite {
         TestUtils.checkEquals(ByteBuffer.wrap(v.payload), v.message.payload)
       }
       // check timestamp
-      if (v.magicValue > Message.MagicValue_V0) {
+      if (v.magicValue > Message.MagicValue_V0)
         assertEquals("Timestamp should be the same", v.timestamp, v.message.timestamp)
-      } else {
-        try {
-          v.message.timestamp
-          fail("message.timestamp should throw exception.")
-        } catch {
-          case e: IllegalStateException =>
-        }
-      }
+       else
+        assertEquals("Timestamp should be the NoTimestamp", Message.NoTimestamp, v.message.timestamp)
+
       // check magic value
       assertEquals(v.magicValue, v.message.magic)
       // check key
@@ -140,12 +135,7 @@ class MessageTest extends JUnitSuite {
         assertEquals("Size difference is not expected value", messageV0.size - v.message.size,
           Message.headerSizeDiff(Message.MagicValue_V1, Message.MagicValue_V0))
         assertTrue("Message should still be valid", messageV0.isValid)
-        try {
-          messageV0.timestamp
-          fail("message.timestamp should throw exception.")
-        } catch {
-          case e: IllegalStateException =>
-        }
+        assertEquals("Message should have NoTimestamp", Message.NoTimestamp, messageV0.timestamp)
         assertEquals("Magic value should be 1 now", messageV0.magic, Message.MagicValue_V0)
         if (messageV0.hasKey)
           assertEquals("Message key should not change", messageV0.key, ByteBuffer.wrap(v.key))

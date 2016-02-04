@@ -28,7 +28,7 @@ import joptsimple.OptionParser
 import kafka.client.ClientUtils
 import kafka.consumer.{BaseConsumerRecord, ConsumerIterator, BaseConsumer, Blacklist, ConsumerConfig, ConsumerThreadId, ConsumerTimeoutException, TopicFilter, Whitelist, ZookeeperConsumerConnector}
 import kafka.javaapi.consumer.ConsumerRebalanceListener
-import kafka.message.MessageAndMetadata
+import kafka.message.{TimestampType, MessageAndMetadata}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.serializer.DefaultDecoder
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging}
@@ -485,7 +485,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     override def receive() : BaseConsumerRecord = {
       val messageAndMetadata = iter.next()
-      BaseConsumerRecord(messageAndMetadata.topic, messageAndMetadata.partition, messageAndMetadata.offset, messageAndMetadata.key, messageAndMetadata.message)
+      BaseConsumerRecord(messageAndMetadata.topic,
+                         messageAndMetadata.partition,
+                         messageAndMetadata.offset,
+                         messageAndMetadata.timestamp,
+                         messageAndMetadata.timestampType,
+                         messageAndMetadata.key,
+                         messageAndMetadata.message)
     }
 
     override def stop() {
@@ -541,7 +547,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
       offsets.put(tp, record.offset + 1)
 
-      BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)
+      BaseConsumerRecord(record.topic,
+                         record.partition,
+                         record.offset,
+                         record.timestamp(),
+                         TimestampType.forName(record.timestampType().name),
+                         record.key,
+                         record.value)
     }
 
     override def stop() {

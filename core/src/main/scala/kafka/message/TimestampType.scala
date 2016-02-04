@@ -20,10 +20,7 @@ package kafka.message
 /**
  * The timestamp type of the messages.
  */
-case object TimestampType extends Enumeration {
-  type TimestampType = Value
-  val CreateTime = Value(0, "CreateTime")
-  val LogAppendTime = Value(1, "LogAppendTime")
+object TimestampType {
 
   def getTimestampType(attribute: Byte) = {
     (attribute & Message.TimestampTypeMask) >> Message.TimestampTypeAttributeBitOffset match {
@@ -39,4 +36,33 @@ case object TimestampType extends Enumeration {
       (attribute | Message.TimestampTypeMask).toByte
   }
 
+  def forName(name: String): TimestampType = {
+    name match {
+      case CreateTime.name => CreateTime
+      case LogAppendTime.name => LogAppendTime
+      case NoTimestampType.name => NoTimestampType
+    }
+  }
+
+}
+
+sealed trait TimestampType {
+  def value: Int
+  def name: String
+  override def toString = name
+}
+
+case object NoTimestampType extends TimestampType {
+  val value = -1
+  val name = "NoTimestampType"
+}
+
+case object CreateTime extends TimestampType {
+  val value = 0
+  val name = "CreateTime"
+}
+
+case object LogAppendTime extends TimestampType {
+  val value = 1
+  val name = "LogAppendTime"
 }

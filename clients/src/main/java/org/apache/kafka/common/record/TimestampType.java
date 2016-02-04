@@ -21,10 +21,10 @@ package org.apache.kafka.common.record;
  * The timestamp type of the records.
  */
 public enum TimestampType {
-    CreateTime(0, "CreateTime"), LogAppendTime(1, "LogAppendTime");
+    NoTimestampType(-1, "NoTimestampType"), CreateTime(0, "CreateTime"), LogAppendTime(1, "LogAppendTime");
 
-    public int value;
-    public String name;
+    public final int value;
+    public final String name;
     TimestampType(int value, String name) {
         this.value = value;
         this.name = name;

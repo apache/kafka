@@ -38,7 +38,7 @@ class LogManagerTest {
   logProps.put(LogConfig.SegmentIndexBytesProp, 4096: java.lang.Integer)
   logProps.put(LogConfig.RetentionMsProp, maxLogAgeMs: java.lang.Integer)
   // We need to use magic value 1 here because some tests requires no message format conversion.
-  logProps.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString())
+  logProps.put(LogConfig.MessageFormatVersionProp, "v1")
   val logConfig = LogConfig(logProps)
   var logDir: File = null
   var logManager: LogManager = null

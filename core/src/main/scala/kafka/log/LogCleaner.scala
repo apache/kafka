@@ -370,7 +370,7 @@ private[log] class Cleaner(val id: Int,
         val retainDeletes = old.lastModified > deleteHorizonMs
         info("Cleaning segment %s in log %s (last modified %s) into %s, %s deletes."
             .format(old.baseOffset, log.name, new Date(old.lastModified), cleaned.baseOffset, if(retainDeletes) "retaining" else "discarding"))
-        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes)
+        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes, log.config.messageFormatVersion)
       }
 
       // trim excess index
@@ -403,8 +403,12 @@ private[log] class Cleaner(val id: Int,
    * @param retainDeletes Should delete tombstones be retained while cleaning this segment
    *
    */
-  private[log] def cleanInto(topicAndPartition: TopicAndPartition, source: LogSegment,
-                             dest: LogSegment, map: OffsetMap, retainDeletes: Boolean) {
+  private[log] def cleanInto(topicAndPartition: TopicAndPartition,
+                             source: LogSegment,
+                             dest: LogSegment,
+                             map: OffsetMap,
+                             retainDeletes: Boolean,
+                             messageFormatVersion: Int) {
     var position = 0
     while (position < source.log.sizeInBytes) {
       checkDone(topicAndPartition)
@@ -439,7 +443,7 @@ private[log] class Cleaner(val id: Int,
           if (retainedMessages.size == numberOfInnerMessages)
             ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
           else if (retainedMessages.nonEmpty)
-            compressMessages(writeBuffer, entry.message.compressionCodec, retainedMessages)
+            compressMessages(writeBuffer, entry.message.compressionCodec,  messageFormatVersion, retainedMessages)
         }
       }
 
@@ -459,7 +463,10 @@ private[log] class Cleaner(val id: Int,
     restoreBuffers()
   }
 
-  private def compressMessages(buffer: ByteBuffer, compressionCodec: CompressionCodec, messages: Seq[MessageAndOffset]) {
+  private def compressMessages(buffer: ByteBuffer,
+                               compressionCodec: CompressionCodec,
+                               messageFormatVersion: Int,
+                               messages: Seq[MessageAndOffset]) {
     val messagesIterable = messages.toIterable.map(_.message)
     if (messages.isEmpty) {
       MessageSet.Empty.sizeInBytes
@@ -471,7 +478,7 @@ private[log] class Cleaner(val id: Int,
       val messageSetTimestamp = MessageSet.validateMagicValuesAndGetTimestamp(messages.map(_.message))
       val firstAbsoluteOffset = messages.head.offset
       var offset = -1L
-      val magicValue = messages.head.message.magic
+      val magicValue = if (messageFormatVersion == 0) Message.MagicValue_V0 else Message.MagicValue_V1
       val timestampType = messages.head.message.timestampType
       val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messagesIterable) / 2, 1024), 1 << 16))
       messageWriter.write(codec = compressionCodec, timestamp = messageSetTimestamp, timestampType = timestampType, magicValue = magicValue) { outputStream =>

@@ -348,7 +348,7 @@ class Log(val dir: File,
           }
           appendInfo.lastOffset = offset.get - 1
           // If log append time is used, we put the timestamp assigned to the messages in the append info.
-          if (config.messageTimestampType == TimestampType.LogAppendTime)
+          if (config.messageTimestampType == LogAppendTime)
             appendInfo.timestamp = now
         } else {
           // we are taking the offsets we are given

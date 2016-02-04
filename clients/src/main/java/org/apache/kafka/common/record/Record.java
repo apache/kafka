@@ -339,8 +339,14 @@ public final class Record {
         }
     }
 
+    /**
+     * The timestamp of the message.
+     */
     public TimestampType timestampType() {
-        return wrapperRecordTimestampType == null ? TimestampType.getTimestampType(attributes()) : wrapperRecordTimestampType;
+        if (magic() == 0)
+            return TimestampType.NoTimestampType;
+        else
+            return wrapperRecordTimestampType == null ? TimestampType.getTimestampType(attributes()) : wrapperRecordTimestampType;
     }
 
     /**
@@ -385,15 +391,24 @@ public final class Record {
     }
 
     public String toString() {
-        return String.format("Record(magic = %d, attributes = %d, compression = %s, crc = %d, %s = %d, key = %d bytes, value = %d bytes)",
-                             magic(),
-                             attributes(),
-                             compressionType(),
-                             checksum(),
-                             timestampType(),
-                             timestamp(),
-                             key() == null ? 0 : key().limit(),
-                             value() == null ? 0 : value().limit());
+        if (magic() > 0)
+            return String.format("Record(magic = %d, attributes = %d, compression = %s, crc = %d, %s = %d, key = %d bytes, value = %d bytes)",
+                                 magic(),
+                                 attributes(),
+                                 compressionType(),
+                                 checksum(),
+                                 timestampType(),
+                                 timestamp(),
+                                 key() == null ? 0 : key().limit(),
+                                 value() == null ? 0 : value().limit());
+        else
+            return String.format("Record(magic = %d, attributes = %d, compression = %s, crc = %d, key = %d bytes, value = %d bytes)",
+                                 magic(),
+                                 attributes(),
+                                 compressionType(),
+                                 checksum(),
+                                 key() == null ? 0 : key().limit(),
+                                 value() == null ? 0 : value().limit());
     }
 
     public boolean equals(Object other) {

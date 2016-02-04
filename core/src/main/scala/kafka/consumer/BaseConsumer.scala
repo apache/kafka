@@ -21,6 +21,7 @@ import java.util.Properties
 import java.util.regex.Pattern
 
 import kafka.common.StreamEndException
+import kafka.message.{NoTimestampType, TimestampType, Message}
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 
 /**
@@ -35,7 +36,13 @@ trait BaseConsumer {
   def commit()
 }
 
-case class BaseConsumerRecord(topic: String, partition: Int, offset: Long, key: Array[Byte], value: Array[Byte])
+case class BaseConsumerRecord(topic: String,
+                              partition: Int,
+                              offset: Long,
+                              timestamp: Long = Message.NoTimestamp,
+                              timestampType: TimestampType = NoTimestampType,
+                              key: Array[Byte],
+                              value: Array[Byte])
 
 class NewShinyConsumer(topic: Option[String], whitelist: Option[String], consumerProps: Properties, val timeoutMs: Long = Long.MaxValue) extends BaseConsumer {
   import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -60,7 +67,13 @@ class NewShinyConsumer(topic: Option[String], whitelist: Option[String], consume
     }
 
     val record = recordIter.next
-    BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)
+    BaseConsumerRecord(record.topic,
+                       record.partition,
+                       record.offset,
+                       record.timestamp(),
+                       TimestampType.forName(record.timestampType().name),
+                       record.key,
+                       record.value)
   }
 
   override def stop() {
@@ -89,7 +102,13 @@ class OldConsumer(topicFilter: TopicFilter, consumerProps: Properties) extends B
       throw new StreamEndException
 
     val messageAndMetadata = iter.next
-    BaseConsumerRecord(messageAndMetadata.topic, messageAndMetadata.partition, messageAndMetadata.offset, messageAndMetadata.key, messageAndMetadata.message)
+    BaseConsumerRecord(messageAndMetadata.topic,
+                       messageAndMetadata.partition,
+                       messageAndMetadata.offset,
+                       messageAndMetadata.timestamp,
+                       messageAndMetadata.timestampType,
+                       messageAndMetadata.key,
+                       messageAndMetadata.message)
   }
 
   override def stop() {

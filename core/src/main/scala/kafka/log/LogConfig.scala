@@ -18,7 +18,6 @@
 package kafka.log
 
 import java.util.Properties
-import kafka.api.ApiVersion
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.utils.Utils
 import scala.collection._
@@ -72,8 +71,8 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val minInSyncReplicas = getInt(LogConfig.MinInSyncReplicasProp)
   val compressionType = getString(LogConfig.CompressionTypeProp).toLowerCase
   val preallocate = getBoolean(LogConfig.PreAllocateEnableProp)
-  val messageFormatVersion = ApiVersion(getString(LogConfig.MessageFormatVersionProp))
-  val messageTimestampType = TimestampType.withName(getString(LogConfig.MessageTimestampTypeProp))
+  val messageFormatVersion = Integer.parseInt(getString(LogConfig.MessageFormatVersionProp).substring(1))
+  val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp)
 
   def randomSegmentJitter: Long =
@@ -170,7 +169,7 @@ object LogConfig {
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, in(BrokerCompressionCodec.brokerCompressionOptions:_*), MEDIUM, CompressionTypeDoc)
       .define(PreAllocateEnableProp, BOOLEAN, Defaults.PreAllocateEnable,
         MEDIUM, PreAllocateEnableDoc)
-      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, MEDIUM, MessageFormatVersionDoc)
+      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, in("v0", "v1"), MEDIUM, MessageFormatVersionDoc)
       .define(MessageTimestampTypeProp, STRING, Defaults.MessageTimestampType, MEDIUM, MessageTimestampTypeDoc)
       .define(MessageTimestampDifferenceMaxMsProp, LONG, Defaults.MessageTimestampDifferenceMaxMs, atLeast(0), MEDIUM, MessageTimestampDifferenceMaxMsDoc)
   }

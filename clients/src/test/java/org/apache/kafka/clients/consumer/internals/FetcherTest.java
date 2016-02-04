@@ -39,6 +39,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ListOffsetRequest;
 import org.apache.kafka.common.requests.ListOffsetResponse;
@@ -469,7 +470,7 @@ public class FetcherTest {
             if (i > 1) {
                 this.records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
                 for (int v = 0; v < 3; v++) {
-                    this.records.append((long) i * 3 + v, "key".getBytes(), String.format("value-%d", v).getBytes());
+                    this.records.append((long) i * 3 + v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
                 }
                 this.records.close();
             }

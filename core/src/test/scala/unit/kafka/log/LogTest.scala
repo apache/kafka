@@ -134,7 +134,7 @@ class LogTest extends JUnitSuite {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
     // We use need to use magic value 1 here because the test is message size sensitive.
-    logProps.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString())
+    logProps.put(LogConfig.MessageFormatVersionProp, "v1")
     // create a log
     val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
@@ -164,7 +164,7 @@ class LogTest extends JUnitSuite {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 71: java.lang.Integer)
     // We use need to use magic value 1 here because the test is message size sensitive.
-    logProps.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString())
+    logProps.put(LogConfig.MessageFormatVersionProp, "v1")
     val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
     val messages = (0 until 100 by 2).map(id => new Message(id.toString.getBytes)).toArray
 
@@ -350,7 +350,7 @@ class LogTest extends JUnitSuite {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, configSegmentSize: java.lang.Integer)
     // We use need to use magic value 1 here because the test is message size sensitive.
-    logProps.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString())
+    logProps.put(LogConfig.MessageFormatVersionProp, "v1")
     val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
 
     try {

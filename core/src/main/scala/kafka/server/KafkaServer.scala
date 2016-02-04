@@ -75,7 +75,7 @@ object KafkaServer {
     logProps.put(LogConfig.CompressionTypeProp, kafkaConfig.compressionType)
     logProps.put(LogConfig.UncleanLeaderElectionEnableProp, kafkaConfig.uncleanLeaderElectionEnable)
     logProps.put(LogConfig.PreAllocateEnableProp, kafkaConfig.logPreAllocateEnable)
-    logProps.put(LogConfig.MessageFormatVersionProp, kafkaConfig.messageFormatVersion.toString())
+    logProps.put(LogConfig.MessageFormatVersionProp, kafkaConfig.messageFormatVersion)
     logProps.put(LogConfig.MessageTimestampTypeProp, kafkaConfig.messageTimestampType)
     logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, kafkaConfig.messageTimestampDifferenceMaxMs)
     logProps
@@ -219,7 +219,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         Mx4jLoader.maybeLoad()
 
         /* start dynamic config manager */
-        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager),
+        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config),
                                                            ConfigType.Client -> new ClientIdConfigHandler(apis.quotaManagers))
 
         // Apply all existing client configs to the ClientIdConfigHandler to bootstrap the overrides

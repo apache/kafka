@@ -20,7 +20,6 @@ package kafka.message
 import java.io.{InputStream, OutputStream}
 import java.nio.ByteBuffer
 
-import kafka.message.TimestampType.TimestampType
 import org.apache.kafka.common.utils.Crc32
 
 class MessageWriter(segmentSize: Int) extends BufferingOutputStream(segmentSize) {

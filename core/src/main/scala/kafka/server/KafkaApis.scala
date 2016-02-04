@@ -442,7 +442,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               // Please notice that if the message format is changed from a higher version back to lower version this
               // test might break because some messages in new message format can be delivered to consumer without
               // format down conversion.
-              if (replicaManager.getMessageFormatVersion(tp).exists(_.onOrAfter(KAFKA_0_10_0_IV0)) &&
+              if (replicaManager.getMessageFormatVersion(tp).exists(_ > 0) &&
                   !data.messages.magicValueInAllMessages(Message.MagicValue_V0)) {
                 trace("Down converting message to V0 for fetch request from " + fetchRequest.clientId)
                 new FetchResponsePartitionData(data.error, data.hw, data.messages.asInstanceOf[FileMessageSet].toMessageFormat(Message.MagicValue_V0))
