@@ -71,4 +71,10 @@ public class MockConsumerInterceptor implements ConsumerInterceptor<String, Stri
     public void close() {
         CLOSE_COUNT.incrementAndGet();
     }
+
+    public static void resetCounters() {
+        INIT_COUNT.set(0);
+        CLOSE_COUNT.set(0);
+        ON_COMMIT_COUNT.set(0);
+    }
 }

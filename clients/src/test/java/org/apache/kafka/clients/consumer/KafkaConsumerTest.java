@@ -113,5 +113,8 @@ public class KafkaConsumerTest {
         consumer.close();
         Assert.assertEquals(oldInitCount + 1, MockConsumerInterceptor.INIT_COUNT.get());
         Assert.assertEquals(oldCloseCount + 1, MockConsumerInterceptor.CLOSE_COUNT.get());
+
+        // cleanup since we are using mutable static variables in MockConsumerInterceptor
+        MockConsumerInterceptor.resetCounters();
     }
 }

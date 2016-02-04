@@ -92,5 +92,8 @@ public class KafkaProducerTest {
         producer.close();
         Assert.assertEquals(oldInitCount + 1, MockProducerInterceptor.INIT_COUNT.get());
         Assert.assertEquals(oldCloseCount + 1, MockProducerInterceptor.CLOSE_COUNT.get());
+
+        // cleanup since we are using mutable static variables in MockProducerInterceptor
+        MockProducerInterceptor.resetCounters();
     }
 }

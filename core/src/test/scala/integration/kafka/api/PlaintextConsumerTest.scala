@@ -579,6 +579,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     testConsumer.close()
     testProducer.close()
+
+    // cleanup
+    MockConsumerInterceptor.resetCounters()
+    MockProducerInterceptor.resetCounters()
   }
 
   @Test
@@ -626,6 +630,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     testConsumer.close()
     assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeClose)
     testProducer.close()
+
+    // cleanup
+    MockConsumerInterceptor.resetCounters()
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {

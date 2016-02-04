@@ -74,4 +74,12 @@ public class MockProducerInterceptor implements ProducerInterceptor<String, Stri
     public void close() {
         CLOSE_COUNT.incrementAndGet();
     }
+
+    public static void resetCounters() {
+        INIT_COUNT.set(0);
+        CLOSE_COUNT.set(0);
+        ONSEND_COUNT.set(0);
+        ON_SUCCESS_COUNT.set(0);
+        ON_ERROR_COUNT.set(0);
+    }
 }
