@@ -281,16 +281,15 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
   protected def sendRecords(producer: Producer[Array[Byte], Array[Byte]],
                             numRecords: Int,
-                            tp: TopicPartition,
-                            startingKeyAndValueIndex: Int = 0) {
-    (startingKeyAndValueIndex until numRecords + startingKeyAndValueIndex).foreach { i =>
+                            tp: TopicPartition) {
+    (0 until numRecords).foreach { i =>
       producer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i".getBytes, s"value $i".getBytes))
     }
     producer.flush()
   }
 
   protected def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]], numRecords: Int, startingOffset: Int,
-                                      startingKeyAndValueIndex: Int = 0) {
+                                      startingKeyAndValueIndex: Int = 0, tp: TopicPartition = tp) {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
     val maxIters = numRecords * 300
     var iters = 0
@@ -304,8 +303,8 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     for (i <- 0 until numRecords) {
       val record = records.get(i)
       val offset = startingOffset + i
-      assertEquals(topic, record.topic())
-      assertEquals(part, record.partition())
+      assertEquals(tp.topic(), record.topic())
+      assertEquals(tp.partition(), record.partition())
       assertEquals(offset.toLong, record.offset())
       val keyAndValueIndex = startingKeyAndValueIndex + i
       assertEquals(s"key $keyAndValueIndex", new String(record.key()))
