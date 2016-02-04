@@ -59,8 +59,8 @@ public class StandbyTaskTest {
     private final String jobId = "test-job";
     private final String storeName1 = "store1";
     private final String storeName2 = "store2";
-    private final String storeChangelogTopicName1 = jobId + "-" + storeName1 + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
-    private final String storeChangelogTopicName2 = jobId + "-" + storeName2 + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
+    private final String storeChangelogTopicName1 = ProcessorStateManager.storeChangelogTopic(jobId, storeName1);
+    private final String storeChangelogTopicName2 = ProcessorStateManager.storeChangelogTopic(jobId, storeName2);
 
     private final TopicPartition partition1 = new TopicPartition(storeChangelogTopicName1, 1);
     private final TopicPartition partition2 = new TopicPartition(storeChangelogTopicName2, 1);
