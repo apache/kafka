@@ -63,12 +63,18 @@ public class ErrorsTest {
 
     @Test
     public void testForExceptionInheritance() {
-        class ExtendedTimeoutException extends TimeoutException {}
+        class ExtendedTimeoutException extends TimeoutException { }
 
         Errors expectedError = Errors.forException(new TimeoutException());
         Errors actualError = Errors.forException(new ExtendedTimeoutException());
 
         assertEquals("forException should match super classes", expectedError, actualError);
+    }
+
+    @Test
+    public void testForExceptionDefault() {
+        Errors error = Errors.forException(new ApiException());
+        assertEquals("forException should default to unknown", Errors.UNKNOWN, error);
     }
 
 }
