@@ -56,7 +56,7 @@ public class RecordCollector {
                 TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
                 offsets.put(tp, metadata.offset());
             } else {
-                log.error("Error sending record: ", exception);
+                log.error("Error sending record: topic=" + metadata.topic(), exception);
             }
         }
     };
