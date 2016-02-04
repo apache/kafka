@@ -151,7 +151,7 @@ public class Login {
                         nextRefresh = getRefreshTime(tgt);
                         long expiry = tgt.getEndTime().getTime();
                         Date expiryDate = new Date(expiry);
-                        if (isUsingTicketCache && tgt.getRenewTill() != null && tgt.getRenewTill().getTime() >= expiry) {
+                        if (isUsingTicketCache && tgt.getRenewTill() != null && tgt.getRenewTill().getTime() < expiry) {
                             log.error("The TGT cannot be renewed beyond the next expiry date: {}." +
                                     "This process will not be able to authenticate new SASL connections after that " +
                                     "time (for example, it will not be able to authenticate a new connection with a Kafka " +
