@@ -495,6 +495,8 @@ public class TopologyBuilder {
                 // if the node is connected to a state, add to the state topics
                 for (StateStoreFactory stateFactory : stateFactories.values()) {
 
+                    // we store the changelog topic here without the job id prefix
+                    // since it is within a single job and is only used for
                     if (stateFactory.isInternal && stateFactory.users.contains(node)) {
                         stateChangelogTopics.add(stateFactory.supplier.name() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX);
                     }

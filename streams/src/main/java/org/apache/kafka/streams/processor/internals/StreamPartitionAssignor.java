@@ -300,11 +300,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         stateChangelogTopicToTaskIds = new HashMap<>();
         internalSourceTopicToTaskIds = new HashMap<>();
         for (TaskId task : partitionsForTask.keySet()) {
-            for (String stateName : topicGroups.get(task.topicGroupId).stateChangelogTopics) {
-                Set<TaskId> tasks = stateChangelogTopicToTaskIds.get(stateName);
+            for (String topicName : topicGroups.get(task.topicGroupId).stateChangelogTopics) {
+                Set<TaskId> tasks = stateChangelogTopicToTaskIds.get(topicName);
                 if (tasks == null) {
                     tasks = new HashSet<>();
-                    stateChangelogTopicToTaskIds.put(stateName, tasks);
+                    stateChangelogTopicToTaskIds.put(topicName, tasks);
                 }
 
                 tasks.add(task);
