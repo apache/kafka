@@ -35,6 +35,7 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     private static final Logger log = LoggerFactory.getLogger(StandbyContextImpl.class);
 
     private final TaskId id;
+    private final String jobId;
     private final StreamsMetrics metrics;
     private final ProcessorStateManager stateMgr;
 
@@ -46,10 +47,12 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     private boolean initialized;
 
     public StandbyContextImpl(TaskId id,
+                              String jobId,
                               StreamsConfig config,
                               ProcessorStateManager stateMgr,
                               StreamsMetrics metrics) {
         this.id = id;
+        this.jobId = jobId;
         this.metrics = metrics;
         this.stateMgr = stateMgr;
 
@@ -65,12 +68,18 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
         this.initialized = true;
     }
 
-    public TaskId id() {
+    public ProcessorStateManager getStateMgr() {
+        return stateMgr;
+    }
+
+    @Override
+    public TaskId taskId() {
         return id;
     }
 
-    public ProcessorStateManager getStateMgr() {
-        return stateMgr;
+    @Override
+    public String jobId() {
+        return jobId;
     }
 
     @Override
