@@ -403,6 +403,15 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testDefaultInterBrokerSecurityProtocol() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.ListenersProp, "SSL://localhost:9093,PLAINTEXT://localhost:9092")
+    val serverConfig = KafkaConfig.fromProps(props)
+
+    assertEquals(serverConfig.interBrokerSecurityProtocol, SecurityProtocol.SSL)
+  }
+
+  @Test
   def testEqualAdvertisedListenersProtocol() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
