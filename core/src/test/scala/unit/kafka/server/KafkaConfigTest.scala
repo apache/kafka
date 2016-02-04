@@ -235,6 +235,16 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testCaseInsensitiveListenerProtocol() {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.put(KafkaConfig.ListenersProp, "plaintext://localhost:9091,SsL://localhost:9092")
+
+    assert(isValidKafkaConfig(props))
+  }
+
+  @Test
   def testListenerDefaults() {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
@@ -377,6 +387,34 @@ class KafkaConfigTest {
   def testInvalidCompressionType() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.CompressionTypeProp, "abc")
+    intercept[IllegalArgumentException] {
+      KafkaConfig.fromProps(props)
+    }
+  }
+
+  @Test
+  def testInvalidInterBrokerSecurityProtocol() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
+    props.put(KafkaConfig.InterBrokerSecurityProtocolProp, SecurityProtocol.PLAINTEXT.toString)
+    intercept[IllegalArgumentException] {
+      KafkaConfig.fromProps(props)
+    }
+  }
+
+  @Test
+  def testEqualAdvertisedListenersProtocol() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+    KafkaConfig.fromProps(props)
+  }
+
+  @Test
+  def testInvalidAdvertisedListenersProtocol() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.ListenersProp, "TRACE://localhost:9091,SSL://localhost:9093")
+    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092")
     intercept[IllegalArgumentException] {
       KafkaConfig.fromProps(props)
     }

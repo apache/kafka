@@ -514,6 +514,7 @@ project(':streams') {
 
     dependencies {
         compile project(':clients')
+        compile project(':connect:json')  // this dependency should be removed after we unify data API
         compile libs.slf4jlog4j
         compile libs.rocksDBJni
         compile libs.zkclient // this dependency should be removed after KIP-4
@@ -540,6 +541,30 @@ project(':streams') {
     jar {
         dependsOn 'copyDependantLibs'
     }
+}
+
+project(':streams:examples') {
+  archivesBaseName = "kafka-streams-examples"
+
+  dependencies {
+    compile project(':streams')
+    compile project(':connect:json')  // this dependency should be removed after we unify data API
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtime) {
+      exclude('kafka-streams*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+  }
+
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
 }
 
 project(':log4j-appender') {

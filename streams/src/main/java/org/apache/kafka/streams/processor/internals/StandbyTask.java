@@ -21,8 +21,8 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.StreamingConfig;
-import org.apache.kafka.streams.StreamingMetrics;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,8 +50,8 @@ public class StandbyTask extends AbstractTask {
      * @param topology              the instance of {@link ProcessorTopology}
      * @param consumer              the instance of {@link Consumer}
      * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
-     * @param config                the {@link StreamingConfig} specified by the user
-     * @param metrics               the {@link StreamingMetrics} created by the thread
+     * @param config                the {@link StreamsConfig} specified by the user
+     * @param metrics               the {@link StreamsMetrics} created by the thread
      */
     public StandbyTask(TaskId id,
                        String jobId,
@@ -59,12 +59,12 @@ public class StandbyTask extends AbstractTask {
                        ProcessorTopology topology,
                        Consumer<byte[], byte[]> consumer,
                        Consumer<byte[], byte[]> restoreConsumer,
-                       StreamingConfig config,
-                       StreamingMetrics metrics) {
+                       StreamsConfig config,
+                       StreamsMetrics metrics) {
         super(id, jobId, partitions, topology, consumer, restoreConsumer, config, true);
 
         // initialize the topology with its own context
-        this.processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
+        this.processorContext = new StandbyContextImpl(id, jobId, config, stateMgr, metrics);
 
         initializeStateStores();
 

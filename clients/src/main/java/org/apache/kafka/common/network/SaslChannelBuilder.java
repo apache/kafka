@@ -66,8 +66,9 @@ public class SaslChannelBuilder implements ChannelBuilder {
                 kerberosShortNamer = KerberosShortNamer.fromUnparsedRules(defaultRealm, principalToLocalRules);
 
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
-                this.sslFactory = new SslFactory(mode);
-                this.sslFactory.configure(this.configs);
+                // Disable SSL client authentication as we are using SASL authentication
+                this.sslFactory = new SslFactory(mode, "none");
+                this.sslFactory.configure(configs);
             }
         } catch (Exception e) {
             throw new KafkaException(e);
@@ -80,7 +81,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel);
             Authenticator authenticator;
             if (mode == Mode.SERVER)
-                authenticator = new SaslServerAuthenticator(id, loginManager.subject(), kerberosShortNamer);
+                authenticator = new SaslServerAuthenticator(id, loginManager.subject(), kerberosShortNamer, maxReceiveSize);
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
                         socketChannel.socket().getInetAddress().getHostName());

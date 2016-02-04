@@ -17,6 +17,9 @@
 
 package org.apache.kafka.streams.processor;
 
+/**
+ * A state store supplier which can create one or more {@link StateStore} instances.
+ */
 public interface StateStoreSupplier {
 
     String name();

@@ -122,11 +122,7 @@ object TestUtils extends Logging {
   /**
    * Create a temporary file
    */
-  def tempFile(): File = {
-    val f = File.createTempFile("kafka", ".tmp")
-    f.deleteOnExit()
-    f
-  }
+  def tempFile(): File = org.apache.kafka.test.TestUtils.tempFile()
 
   /**
    * Create a temporary file and return an open file channel for this file
@@ -443,7 +439,7 @@ object TestUtils extends Logging {
                               certAlias: String): Properties = {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
-      props.putAll(sslConfigs(mode, true, trustStoreFile, certAlias))
+      props.putAll(sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias))
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }

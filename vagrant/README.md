@@ -6,8 +6,7 @@ Using Vagrant to get up and running.
 2) Install Vagrant >= 1.6.4 [http://www.vagrantup.com/](http://www.vagrantup.com/)
 3) Install Vagrant Plugins:
 
-    # Required (1.5.0 or 1.4 currently required due to implementation changes in the plugin)
-    $ vagrant plugin install vagrant-hostmanager --plugin-version 1.5.0
+    $ vagrant plugin install vagrant-hostmanager
     # Optional
     $ vagrant plugin install vagrant-cachier # Caches & shares package downloads across VMs
 

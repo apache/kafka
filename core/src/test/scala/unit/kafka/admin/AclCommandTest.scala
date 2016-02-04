@@ -14,12 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.admin
+package kafka.admin
 
 import java.io.StringReader
 import java.util.Properties
 
-import kafka.admin.AclCommand
 import kafka.security.auth._
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}

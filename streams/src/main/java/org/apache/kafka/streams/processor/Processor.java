@@ -18,7 +18,7 @@
 package org.apache.kafka.streams.processor;
 
 /**
- * A processor of messages.
+ * A processor of key-value pair records.
  *
  * @param <K> the type of keys
  * @param <V> the type of values

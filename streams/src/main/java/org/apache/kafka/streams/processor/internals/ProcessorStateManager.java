@@ -19,9 +19,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -160,7 +160,7 @@ public class ProcessorStateManager {
         } while (partitionNotFound && System.currentTimeMillis() < startTime + waitTime);
 
         if (partitionNotFound)
-            throw new KafkaException("Store " + store.name() + "'s change log (" + topic + ") does not contain partition " + partition);
+            throw new StreamsException("Store " + store.name() + "'s change log (" + topic + ") does not contain partition " + partition);
 
         this.stores.put(store.name(), store);
 
@@ -168,18 +168,18 @@ public class ProcessorStateManager {
             if (store.persistent())
                 restoreCallbacks.put(topic, stateRestoreCallback);
         } else {
-            restoreActiveState(store, stateRestoreCallback);
+            restoreActiveState(topic, stateRestoreCallback);
         }
     }
 
-    private void restoreActiveState(StateStore store, StateRestoreCallback stateRestoreCallback) {
+    private void restoreActiveState(String topicName, StateRestoreCallback stateRestoreCallback) {
         // ---- try to restore the state from change-log ---- //
 
         // subscribe to the store's partition
         if (!restoreConsumer.subscription().isEmpty()) {
             throw new IllegalStateException("Restore consumer should have not subscribed to any partitions beforehand");
         }
-        TopicPartition storePartition = new TopicPartition(storeChangelogTopic(this.jobId, store.name()), getPartition(store.name()));
+        TopicPartition storePartition = new TopicPartition(topicName, getPartition(topicName));
         restoreConsumer.assign(Collections.singletonList(storePartition));
 
         try {
@@ -334,9 +334,6 @@ public class ProcessorStateManager {
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
             checkpoint.write(checkpointOffsets);
         }
-
-        // un-assign the change log partition
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
 
         // release the state directory directoryLock
         directoryLock.release();

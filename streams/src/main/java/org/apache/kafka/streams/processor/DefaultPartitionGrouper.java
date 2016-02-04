@@ -18,9 +18,9 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.errors.StreamsException;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,8 +29,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * DefaultPartitionGrouper groups partitions by the partition id. This behavior is assumed by the join processing in KStream.
+ *
+ * Join operations requires that topics of the joining entities are copartitoned, i.e., being partitioned by the same key and having the same
+ * number of partitions. Copartitioning is ensured by having the same number of partitions on
+ * joined topics, and by using the serialization and Producer's default partitioner.
+ */
 public class DefaultPartitionGrouper implements PartitionGrouper {
 
+    /**
+     * Generate tasks with the assigned topic partitions
+     *
+     * @param topicGroups {@link TopologyBuilder#topicGroups()} where topics of the same group need to be joined together
+     * @param metadata Metadata of the consuming cluster
+     * @return The map from generated task ids to the assigned partitions.
+     */
     public Map<TaskId, Set<TopicPartition>> partitionGroups(Map<Integer, Set<String>> topicGroups, Cluster metadata) {
         Map<TaskId, Set<TopicPartition>> groups = new HashMap<>();
 
@@ -61,7 +75,7 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
             List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
 
             if (infos == null)
-                throw new KafkaException("topic not found :" + topic);
+                throw new StreamsException("Topic not found during partition assignment: " + topic);
 
             int numPartitions = infos.size();
             if (numPartitions > maxNumPartitions)

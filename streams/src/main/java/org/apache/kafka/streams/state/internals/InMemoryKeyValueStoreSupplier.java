@@ -18,10 +18,11 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.state.Entry;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Serdes;
@@ -43,13 +44,13 @@ import java.util.TreeMap;
 public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
-    private final Serdes serdes;
     private final Time time;
+    private final Serdes<K, V> serdes;
 
     public InMemoryKeyValueStoreSupplier(String name, Serdes<K, V> serdes, Time time) {
         this.name = name;
-        this.serdes = serdes;
         this.time = time;
+        this.serdes = serdes;
     }
 
     public String name() {
@@ -57,7 +58,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        return new MeteredKeyValueStore<K, V>(new MemoryStore<K, V>(name), serdes, "in-memory-state", time);
+        return new MeteredKeyValueStore<>(new MemoryStore<K, V>(name).enableLogging(serdes), "in-memory-state", time);
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
@@ -65,10 +66,20 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         private final String name;
         private final NavigableMap<K, V> map;
 
+        private boolean loggingEnabled = false;
+        private Serdes<K, V> serdes = null;
+
         public MemoryStore(String name) {
             super();
             this.name = name;
             this.map = new TreeMap<>();
+        }
+
+        public KeyValueStore<K, V> enableLogging(Serdes<K, V> serdes) {
+            this.loggingEnabled = true;
+            this.serdes = serdes;
+
+            return new InMemoryKeyValueLoggedStore<>(this.name, this, serdes);
         }
 
         @Override
@@ -78,7 +89,16 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
         @Override
         public void init(ProcessorContext context) {
-            // do-nothing since it is in-memory
+            if (loggingEnabled) {
+                context.register(this, true, new StateRestoreCallback() {
+
+                    @Override
+                    public void restore(byte[] key, byte[] value) {
+                        put(serdes.keyFrom(key), serdes.valueFrom(value));
+                    }
+                });
+
+            }
         }
 
         @Override
@@ -97,9 +117,9 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         @Override
-        public void putAll(List<Entry<K, V>> entries) {
-            for (Entry<K, V> entry : entries)
-                put(entry.key(), entry.value());
+        public void putAll(List<KeyValue<K, V>> entries) {
+            for (KeyValue<K, V> entry : entries)
+                put(entry.key, entry.value);
         }
 
         @Override
@@ -140,9 +160,9 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
             }
 
             @Override
-            public Entry<K, V> next() {
+            public KeyValue<K, V> next() {
                 Map.Entry<K, V> entry = iter.next();
-                return new Entry<>(entry.getKey(), entry.getValue());
+                return new KeyValue<>(entry.getKey(), entry.getValue());
             }
 
             @Override

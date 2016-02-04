@@ -23,8 +23,9 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.StreamingConfig;
-import org.apache.kafka.streams.StreamingMetrics;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -218,13 +219,12 @@ public class KeyValueStoreTestDriver<K, V> {
         return new KeyValueStoreTestDriver<K, V>(serdes);
     }
 
-    private final Serdes<K, V> serdes;
     private final Map<K, V> flushedEntries = new HashMap<>();
     private final Set<K> flushedRemovals = new HashSet<>();
-    private final List<Entry<K, V>> restorableEntries = new LinkedList<>();
+    private final List<KeyValue<K, V>> restorableEntries = new LinkedList<>();
     private final MockProcessorContext context;
     private final Map<String, StateStore> storeMap = new HashMap<>();
-    private final StreamingMetrics metrics = new StreamingMetrics() {
+    private final StreamsMetrics metrics = new StreamsMetrics() {
         @Override
         public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
             return null;
@@ -237,36 +237,54 @@ public class KeyValueStoreTestDriver<K, V> {
     private final RecordCollector recordCollector;
     private File stateDir = null;
 
-    protected KeyValueStoreTestDriver(Serdes<K, V> serdes) {
-        this.serdes = serdes;
+    protected KeyValueStoreTestDriver(final Serdes<K, V> serdes) {
         ByteArraySerializer rawSerializer = new ByteArraySerializer();
-        Producer<byte[], byte[]> producer = new MockProducer<byte[], byte[]>(true, rawSerializer, rawSerializer);
+        Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
+
         this.recordCollector = new RecordCollector(producer) {
+            @SuppressWarnings("unchecked")
             @Override
             public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                recordFlushed(record.key(), record.value());
+                // for byte arrays we need to wrap it for comparison
+
+                K key;
+                if (record.key() instanceof byte[]) {
+                    key = serdes.keyFrom((byte[]) record.key());
+                } else {
+                    key = (K) record.key();
+                }
+
+                V value;
+                if (record.key() instanceof byte[]) {
+                    value = serdes.valueFrom((byte[]) record.value());
+                } else {
+                    value = (V) record.value();
+                }
+
+                recordFlushed(key, value);
             }
             @Override
             public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer,
                                     StreamPartitioner<K1, V1> partitioner) {
-                recordFlushed(record.key(), record.value());
+                // ignore partitioner
+                send(record, keySerializer, valueSerializer);
             }
         };
-        this.stateDir = StateUtils.tempDir();
+        this.stateDir = StateTestUtils.tempDir();
         this.stateDir.mkdirs();
 
         Properties props = new Properties();
-        props.put(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
-        props.put(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, serdes.keySerializer().getClass());
-        props.put(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, serdes.keyDeserializer().getClass());
-        props.put(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, serdes.valueSerializer().getClass());
-        props.put(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, serdes.valueDeserializer().getClass());
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
+        props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, serdes.keySerializer().getClass());
+        props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, serdes.keyDeserializer().getClass());
+        props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, serdes.valueSerializer().getClass());
+        props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, serdes.valueDeserializer().getClass());
 
         this.context = new MockProcessorContext(null, this.stateDir, serdes.keySerializer(), serdes.keyDeserializer(), serdes.valueSerializer(),
                 serdes.valueDeserializer(), recordCollector) {
             @Override
-            public TaskId id() {
+            public TaskId taskId() {
                 return new TaskId(0, 1);
             }
 
@@ -278,7 +296,7 @@ public class KeyValueStoreTestDriver<K, V> {
             @Override
             public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback func) {
                 storeMap.put(store.name(), store);
-                restoreEntries(func);
+                restoreEntries(func, serdes);
             }
 
             @Override
@@ -287,7 +305,7 @@ public class KeyValueStoreTestDriver<K, V> {
             }
 
             @Override
-            public StreamingMetrics metrics() {
+            public StreamsMetrics metrics() {
                 return metrics;
             }
 
@@ -298,25 +316,23 @@ public class KeyValueStoreTestDriver<K, V> {
         };
     }
 
-    @SuppressWarnings("unchecked")
-    protected <K1, V1> void recordFlushed(K1 key, V1 value) {
-        K k = (K) key;
+    protected void recordFlushed(K key, V value) {
         if (value == null) {
             // This is a removal ...
-            flushedRemovals.add(k);
-            flushedEntries.remove(k);
+            flushedRemovals.add(key);
+            flushedEntries.remove(key);
         } else {
             // This is a normal add
-            flushedEntries.put(k, (V) value);
-            flushedRemovals.remove(k);
+            flushedEntries.put(key, value);
+            flushedRemovals.remove(key);
         }
     }
 
-    private void restoreEntries(StateRestoreCallback func) {
-        for (Entry<K, V> entry : restorableEntries) {
+    private void restoreEntries(StateRestoreCallback func, Serdes<K, V> serdes) {
+        for (KeyValue<K, V> entry : restorableEntries) {
             if (entry != null) {
-                byte[] rawKey = serdes.rawKey(entry.key());
-                byte[] rawValue = serdes.rawValue(entry.value());
+                byte[] rawKey = serdes.rawKey(entry.key);
+                byte[] rawValue = serdes.rawValue(entry.value);
                 func.restore(rawKey, rawValue);
             }
         }
@@ -352,7 +368,7 @@ public class KeyValueStoreTestDriver<K, V> {
      * @see #checkForRestoredEntries(KeyValueStore)
      */
     public void addEntryToRestoreLog(K key, V value) {
-        restorableEntries.add(new Entry<K, V>(key, value));
+        restorableEntries.add(new KeyValue<K, V>(key, value));
     }
 
     /**
@@ -376,7 +392,7 @@ public class KeyValueStoreTestDriver<K, V> {
      *
      * @return the restore entries; never null but possibly a null iterator
      */
-    public Iterable<Entry<K, V>> restoredEntries() {
+    public Iterable<KeyValue<K, V>> restoredEntries() {
         return restorableEntries;
     }
 
@@ -390,10 +406,10 @@ public class KeyValueStoreTestDriver<K, V> {
      */
     public int checkForRestoredEntries(KeyValueStore<K, V> store) {
         int missing = 0;
-        for (Entry<K, V> entry : restorableEntries) {
-            if (entry != null) {
-                V value = store.get(entry.key());
-                if (!Objects.equals(value, entry.value())) {
+        for (KeyValue<K, V> kv : restorableEntries) {
+            if (kv != null) {
+                V value = store.get(kv.key);
+                if (!Objects.equals(value, kv.value)) {
                     ++missing;
                 }
             }
@@ -436,6 +452,13 @@ public class KeyValueStoreTestDriver<K, V> {
      */
     public boolean flushedEntryRemoved(K key) {
         return flushedRemovals.contains(key);
+    }
+
+    /**
+     * Return number of removed entry
+     */
+    public int numFlushedEntryRemoved() {
+        return flushedRemovals.size();
     }
 
     /**
