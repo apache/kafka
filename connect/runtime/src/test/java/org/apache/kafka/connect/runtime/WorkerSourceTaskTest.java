@@ -260,14 +260,18 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     @Test
     public void testSlowTaskStart() throws Exception {
+        final CountDownLatch startupLatch = new CountDownLatch(1);
+
         createWorkerTask();
 
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
         EasyMock.expectLastCall();
         sourceTask.start(EMPTY_TASK_PROPS);
+
         EasyMock.expectLastCall().andAnswer(new IAnswer<Object>() {
             @Override
             public Object answer() throws Throwable {
+                startupLatch.countDown();
                 Utils.sleep(100);
                 return null;
             }
@@ -282,6 +286,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // Stopping immediately while the other thread has work to do should result in no polling, no offset commits,
         // exiting the work thread immediately, and the stop() method will be invoked in the background thread since it
         // cannot be invoked immediately in the thread trying to stop the task.
+        startupLatch.await(1000, TimeUnit.MILLISECONDS);
         workerTask.stop();
         assertEquals(true, workerTask.awaitStop(1000));
 
