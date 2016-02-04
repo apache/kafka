@@ -42,4 +42,21 @@ public class KeyValue<K, V> {
     public String toString() {
         return "KeyValue(" + key + ", " + value + ")";
     }
+
+    @Override
+    public boolean equals(Object other) {
+        if (other instanceof KeyValue) {
+            KeyValue otherKV = (KeyValue) other;
+
+            return key.equals(otherKV.key) && value.equals(otherKV.value);
+        } else {
+            return false;
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        long n = ((long) key.hashCode() << 32) | (long) value.hashCode();
+        return (int) (n % 0xFFFFFFFFL);
+    }
 }
