@@ -26,6 +26,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 import static org.apache.kafka.common.protocol.types.Type.INT8;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
+import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 
 public class Protocol {
 
@@ -35,8 +36,9 @@ public class Protocol {
                                                                      INT32,
                                                                      "A user-supplied integer value that will be passed back with the response"),
                                                            new Field("client_id",
-                                                                     STRING,
-                                                                     "A user specified identifier for the client making the request."));
+                                                                     NULLABLE_STRING,
+                                                                     "A user specified identifier for the client making the request.",
+                                                                     ""));
 
     public static final Schema RESPONSE_HEADER = new Schema(new Field("correlation_id",
                                                                       INT32,
