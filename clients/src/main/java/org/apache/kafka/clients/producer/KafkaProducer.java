@@ -322,7 +322,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
             List<ProducerInterceptor<K, V>> interceptorList = (List) (new ProducerConfig(userProvidedConfigs)).getConfiguredInstances(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ProducerInterceptor.class);
-            this.interceptors = (interceptorList.size() == 0) ? null : new ProducerInterceptors<>(interceptorList);
+            this.interceptors = interceptorList.isEmpty() ? null : new ProducerInterceptors<>(interceptorList);
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
@@ -423,9 +423,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         try {
             // intercept the record, which can be potentially modified
-            ProducerRecord<K, V> interceptedRecord = (this.interceptors == null) ? record : this.interceptors.onSend(record);
+            ProducerRecord<K, V> interceptedRecord = this.interceptors == null ? record : this.interceptors.onSend(record);
             // producer callback will make sure to call both 'callback' and interceptor callback
-            Callback interceptCallback = (this.interceptors == null) ? callback : new InterceptorCallback<>(callback, this.interceptors);
+            Callback interceptCallback = this.interceptors == null ? callback : new InterceptorCallback<>(callback, this.interceptors);
 
             // first make sure the metadata for the topic is available
             long waitedOnMetadataMs = waitOnMetadata(interceptedRecord.topic(), this.maxBlockTimeMs);

@@ -596,7 +596,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             userProvidedConfigs.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
             List<ConsumerInterceptor<K, V>> interceptorList = (List) (new ConsumerConfig(userProvidedConfigs)).getConfiguredInstances(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ConsumerInterceptor.class);
-            this.interceptors = (interceptorList.size() == 0) ? null : new ConsumerInterceptors<>(interceptorList);
+            this.interceptors = interceptorList.isEmpty() ? null : new ConsumerInterceptors<>(interceptorList);
             this.coordinator = new ConsumerCoordinator(this.client,
                     config.getString(ConsumerConfig.GROUP_ID_CONFIG),
                     config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
@@ -869,7 +869,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // auto-committing offsets
                     fetcher.initFetches(metadata.fetch());
                     client.quickPoll();
-                    return (this.interceptors == null)
+                    return this.interceptors == null
                         ? new ConsumerRecords<>(records) : this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
 
