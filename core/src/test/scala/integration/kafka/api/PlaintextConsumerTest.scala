@@ -281,15 +281,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0)
 
     // Test seek non-compressed message
-    val quarter = totalRecords / 2
-    consumer.seek(tp, quarter)
-    assertEquals(quarter, consumer.position(tp))
-    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = quarter.toInt, startingKeyAndValueIndex = quarter.toInt)
+    val midOfNonCompressedMessages = totalRecords / 2
+    consumer.seek(tp, midOfNonCompressedMessages)
+    assertEquals(midOfNonCompressedMessages, consumer.position(tp))
+    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = midOfNonCompressedMessages.toInt, startingKeyAndValueIndex = midOfNonCompressedMessages.toInt)
     // Test seek compressed message
-    val threeQuarters = totalRecords + totalRecords / 2
-    consumer.seek(tp, threeQuarters)
-    assertEquals(threeQuarters, consumer.position(tp))
-    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = threeQuarters.toInt, startingKeyAndValueIndex = threeQuarters.toInt)
+    val midOfCompressedMessages = totalRecords + totalRecords / 2
+    consumer.seek(tp, midOfCompressedMessages)
+    assertEquals(midOfCompressedMessages, consumer.position(tp))
+    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = midOfCompressedMessages.toInt, startingKeyAndValueIndex = midOfCompressedMessages.toInt)
   }
 
   private def sendCompressedMessages(numRecords: Int, tp: TopicPartition, startingKeyAndValueIndex: Int) {
@@ -299,6 +299,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
         retries = 0, lingerMs = Long.MaxValue, props = Some(producerProps))
     sendRecords(producer, numRecords, tp, startingKeyAndValueIndex)
+    producer.close()
   }
 
   def testPositionAndCommit() {

@@ -464,7 +464,8 @@ public class FetcherTest {
 
         // normal fetch
         for (int i = 1; i < 4; i++) {
-            // We need to make sure the message offset grows.
+            // We need to make sure the message offset grows. Otherwise they will be considered as already consumed
+            // and filtered out by consumer.
             if (i > 1) {
                 this.records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
                 for (int v = 0; v < 3; v++) {
