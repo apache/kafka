@@ -57,7 +57,7 @@ public class ConsumerInterceptors<K, V> implements Closeable {
                 interceptRecords = interceptor.onConsume(interceptRecords);
             } catch (Throwable t) {
                 // do not propagate interceptor exception, ignore and continue calling other interceptors
-                log.warn("Error executing interceptor onConsume callback: {}", t);
+                log.warn("Error executing interceptor onConsume callback", t);
             }
         }
         return interceptRecords;
@@ -78,7 +78,7 @@ public class ConsumerInterceptors<K, V> implements Closeable {
                 interceptor.onCommit(offsets);
             } catch (Throwable t) {
                 // do not propagate interceptor exception, just ignore
-                log.warn("Error executing interceptor onCommit callback: {}", t);
+                log.warn("Error executing interceptor onCommit callback", t);
             }
         }
     }

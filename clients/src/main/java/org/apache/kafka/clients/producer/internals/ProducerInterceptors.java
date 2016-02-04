@@ -59,8 +59,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
                 interceptRecord = interceptor.onSend(interceptRecord);
             } catch (Throwable t) {
                 // do not propagate interceptor exception, ignore and continue calling other interceptors
-                log.warn("Error executing interceptor onSend callback for topic: {}, partition: {}, with error: {}",
-                        record.topic(), record.partition(), t);
+                log.warn("Error executing interceptor onSend callback for topic: " + record.topic() + ", partition: " + record.partition(), t);
             }
         }
         return interceptRecord;
@@ -82,7 +81,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
                 interceptor.onAcknowledgement(metadata, exception);
             } catch (Throwable t) {
                 // do not propagate interceptor exceptions, just ignore
-                log.warn("Error executing interceptor onAcknowledgement callback: {}", t);
+                log.warn("Error executing interceptor onAcknowledgement callback", t);
             }
         }
     }
