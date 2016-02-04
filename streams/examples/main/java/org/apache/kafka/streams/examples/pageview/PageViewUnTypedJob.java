@@ -81,6 +81,7 @@ public class PageViewUnTypedJob {
                 .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000),
                         stringSerializer, longSerializer,
                         stringDeserializer, longDeserializer)
+                // TODO: we can merge ths toStream().map(...) with a single toStream(...)
                 .toStream()
                 .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<JsonNode, JsonNode>>() {
                     @Override
@@ -92,7 +93,7 @@ public class PageViewUnTypedJob {
                         ObjectNode valueNode = JsonNodeFactory.instance.objectNode();
                         keyNode.put("count", value);
 
-                        return new KeyValue<JsonNode, JsonNode>((JsonNode) keyNode, (JsonNode) valueNode);
+                        return new KeyValue<>((JsonNode) keyNode, (JsonNode) valueNode);
                     }
                 });
 

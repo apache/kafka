@@ -34,6 +34,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -63,11 +64,10 @@ public class WordCountJob {
         final Deserializer<String> stringDeserializer = new StringDeserializer();
         final Serializer<Long> longSerializer = new LongSerializer();
         final Deserializer<Long> longDeserializer = new LongDeserializer();
-        final Serializer<JsonNode> JsonSerializer = new JsonSerializer();
 
         KStream<String, String> source = builder.stream("streams-file-input");
 
-        KStream<String, JsonNode> counts = source
+        KTable<String, Long> counts = source
                 .flatMapValues(new ValueMapper<String, Iterable<String>>() {
                     @Override
                     public Iterable<String> apply(String value) {
@@ -79,23 +79,9 @@ public class WordCountJob {
                         return new KeyValue<String, String>(value, value);
                     }
                 })
-                .countByKey(UnlimitedWindows.of("Counts").startOn(0L),
-                        stringSerializer, longSerializer,
-                        stringDeserializer, longDeserializer)
-                .toStream()
-                .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<String, JsonNode>>() {
-                    @Override
-                    public KeyValue<String, JsonNode> apply(Windowed<String> key, Long value) {
-                        ObjectNode jNode = JsonNodeFactory.instance.objectNode();
+                .countByKey(stringSerializer, longSerializer, stringDeserializer, longDeserializer, "Counts");
 
-                        jNode.put("word", key.value())
-                             .put("count", value);
-
-                        return new KeyValue<String, JsonNode>(null, jNode);
-                    }
-                });
-
-        counts.to("streams-wordcount-output", stringSerializer, JsonSerializer);
+        counts.to("streams-wordcount-output", stringSerializer, longSerializer);
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();

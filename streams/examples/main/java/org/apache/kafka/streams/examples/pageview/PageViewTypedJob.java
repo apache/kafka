@@ -33,6 +33,8 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.StreamsConfig;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 public class PageViewTypedJob {
@@ -81,12 +83,34 @@ public class PageViewTypedJob {
         final Serializer<Long> longSerializer = new LongSerializer();
         final Deserializer<Long> longDeserializer = new LongDeserializer();
 
+        // TODO: the following can be removed with a serialization factory
+        Map<String, Object> serdeProps = new HashMap<>();
 
-        KStream<String, PageView> views = builder.stream("streams-pageview-input");
+        final Deserializer<PageView> pageViewDeserializer = new JsonPOJODeserializer<>();
+        serdeProps.put("JsonPOJOClass", PageView.class);
+        pageViewDeserializer.configure(serdeProps, false);
+
+        final Deserializer<UserProfile> userProfileDeserializer = new JsonPOJODeserializer<>();
+        serdeProps.put("JsonPOJOClass", UserProfile.class);
+        pageViewDeserializer.configure(serdeProps, false);
+
+        final Serializer<UserProfile> userProfileSerializer = new JsonPOJOSerializer<>();
+        serdeProps.put("JsonPOJOClass", UserProfile.class);
+        userProfileSerializer.configure(serdeProps, false);
+
+        final Serializer<WindowedPageViewByRegion> wPageViewByRegionSerializer = new JsonPOJOSerializer<>();
+        serdeProps.put("JsonPOJOClass", WindowedPageViewByRegion.class);
+        userProfileSerializer.configure(serdeProps, false);
+
+        final Serializer<RegionCount> regionCountSerializer = new JsonPOJOSerializer<>();
+        serdeProps.put("JsonPOJOClass", RegionCount.class);
+        userProfileSerializer.configure(serdeProps, false);
+
+        KStream<String, PageView> views = builder.stream(stringDeserializer, pageViewDeserializer, "streams-pageview-input");
 
         KStream<String, PageView> viewsByUser = views.map((dummy, record) -> new KeyValue<>(record.user, record));
 
-        KTable<String, UserProfile> users = builder.table("streams-userprofile-input");
+        KTable<String, UserProfile> users = builder.table(stringSerializer, userProfileSerializer, stringDeserializer, userProfileDeserializer, "streams-userprofile-input");
 
         KStream<WindowedPageViewByRegion, RegionCount> regionCount = viewsByUser
                 .leftJoin(users, (view, profile) -> {
@@ -101,6 +125,7 @@ public class PageViewTypedJob {
                 .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000),
                         stringSerializer, longSerializer,
                         stringDeserializer, longDeserializer)
+                // TODO: we can merge ths toStream().map(...) with a single toStream(...)
                 .toStream()
                 .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<WindowedPageViewByRegion, RegionCount>>() {
                     @Override
@@ -118,7 +143,7 @@ public class PageViewTypedJob {
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-output", new JsonPOJOSerializer<>(), new JsonPOJOSerializer<>());
+        regionCount.to("streams-pageviewstats-output", wPageViewByRegionSerializer, regionCountSerializer);
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
