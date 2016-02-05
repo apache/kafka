@@ -29,25 +29,25 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
 
     private final KeyValueStore<K, V> inner;
     private final Serdes<K, V> serdes;
-    private final String topic;
+    private final String storeName;
 
     private StoreChangeLogger<K, V> changeLogger;
     private StoreChangeLogger.ValueGetter<K, V> getter;
 
-    public InMemoryKeyValueLoggedStore(final String topic, final KeyValueStore<K, V> inner, final Serdes<K, V> serdes) {
-        this.topic = topic;
+    public InMemoryKeyValueLoggedStore(final String storeName, final KeyValueStore<K, V> inner, final Serdes<K, V> serdes) {
+        this.storeName = storeName;
         this.inner = inner;
         this.serdes = serdes;
     }
 
     @Override
     public String name() {
-        return this.topic;
+        return this.storeName;
     }
 
     @Override
     public void init(ProcessorContext context) {
-        this.changeLogger = new StoreChangeLogger<>(topic, context, serdes);
+        this.changeLogger = new StoreChangeLogger<>(storeName, context, serdes);
 
         inner.init(context);
 

@@ -36,6 +36,7 @@ import java.util.Set;
 
 public abstract class AbstractTask {
     protected final TaskId id;
+    protected final String jobId;
     protected final ProcessorTopology topology;
     protected final Consumer consumer;
     protected final ProcessorStateManager stateMgr;
@@ -51,6 +52,7 @@ public abstract class AbstractTask {
                            StreamsConfig config,
                            boolean isStandby) {
         this.id = id;
+        this.jobId = jobId;
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
@@ -75,6 +77,10 @@ public abstract class AbstractTask {
 
     public final TaskId id() {
         return id;
+    }
+
+    public final String jobId() {
+        return jobId;
     }
 
     public final Set<TopicPartition> partitions() {

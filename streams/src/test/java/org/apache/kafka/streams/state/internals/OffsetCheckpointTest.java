@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -32,12 +33,10 @@ public class OffsetCheckpointTest {
 
     private final String topic = "topic";
 
-    private OffsetCheckpoint checkpoint = null;
-
     @Test
     public void testReadWrite() throws IOException {
-        File f = new File("/tmp/kafka-streams/offset_checkpoint.test");
-        checkpoint = new OffsetCheckpoint(f);
+        File f = TestUtils.tempFile();
+        OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
 
         try {
             Map<TopicPartition, Long> offsets = new HashMap<>();

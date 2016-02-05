@@ -284,7 +284,7 @@ public class KeyValueStoreTestDriver<K, V> {
         this.context = new MockProcessorContext(null, this.stateDir, serdes.keySerializer(), serdes.keyDeserializer(), serdes.valueSerializer(),
                 serdes.valueDeserializer(), recordCollector) {
             @Override
-            public TaskId id() {
+            public TaskId taskId() {
                 return new TaskId(0, 1);
             }
 

@@ -50,6 +50,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -61,6 +62,34 @@ import java.util.UUID;
 public class StreamPartitionAssignor implements PartitionAssignor, Configurable {
 
     private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
+
+    private static class AssignedPartition implements Comparable<AssignedPartition> {
+        public final TaskId taskId;
+        public final TopicPartition partition;
+
+        public AssignedPartition(TaskId taskId, TopicPartition partition) {
+            this.taskId = taskId;
+            this.partition = partition;
+        }
+
+        @Override
+        public int compareTo(AssignedPartition that) {
+            return PARTITION_COMPARATOR.compare(this.partition, that.partition);
+        }
+    }
+
+    private static final Comparator<TopicPartition> PARTITION_COMPARATOR = new Comparator<TopicPartition>() {
+        @Override
+        public int compare(TopicPartition p1, TopicPartition p2) {
+            int result = p1.topic().compareTo(p2.topic());
+
+            if (result != 0) {
+                return result;
+            } else {
+                return p1.partition() < p2.partition() ? -1 : (p1.partition() > p2.partition() ? 1 : 0);
+            }
+        }
+    };
 
     private StreamThread streamThread;
 
@@ -300,11 +329,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         stateChangelogTopicToTaskIds = new HashMap<>();
         internalSourceTopicToTaskIds = new HashMap<>();
         for (TaskId task : partitionsForTask.keySet()) {
-            for (String stateName : topicGroups.get(task.topicGroupId).stateChangelogTopics) {
-                Set<TaskId> tasks = stateChangelogTopicToTaskIds.get(stateName);
+            for (String topicName : topicGroups.get(task.topicGroupId).stateChangelogTopics) {
+                Set<TaskId> tasks = stateChangelogTopicToTaskIds.get(topicName);
                 if (tasks == null) {
                     tasks = new HashSet<>();
-                    stateChangelogTopicToTaskIds.put(stateName, tasks);
+                    stateChangelogTopicToTaskIds.put(topicName, tasks);
                 }
 
                 tasks.add(task);
@@ -341,20 +370,18 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
 
             final int numConsumers = consumers.size();
-            List<TaskId> active = new ArrayList<>();
             Map<TaskId, Set<TopicPartition>> standby = new HashMap<>();
 
             int i = 0;
             for (String consumer : consumers) {
-                List<TopicPartition> activePartitions = new ArrayList<>();
+                ArrayList<AssignedPartition> assignedPartitions = new ArrayList<>();
 
                 final int numTaskIds = taskIds.size();
                 for (int j = i; j < numTaskIds; j += numConsumers) {
                     TaskId taskId = taskIds.get(j);
                     if (j < numActiveTasks) {
                         for (TopicPartition partition : partitionsForTask.get(taskId)) {
-                            activePartitions.add(partition);
-                            active.add(taskId);
+                            assignedPartitions.add(new AssignedPartition(taskId, partition));
                         }
                     } else {
                         Set<TopicPartition> standbyPartitions = standby.get(taskId);
@@ -364,6 +391,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         }
                         standbyPartitions.addAll(partitionsForTask.get(taskId));
                     }
+                }
+
+                Collections.sort(assignedPartitions);
+                List<TaskId> active = new ArrayList<>();
+                List<TopicPartition> activePartitions = new ArrayList<>();
+                for (AssignedPartition partition : assignedPartitions) {
+                    active.add(partition.taskId);
+                    activePartitions.add(partition.partition);
                 }
 
                 AssignmentInfo data = new AssignmentInfo(active, standby);
@@ -441,7 +476,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     @Override
     public void onAssignment(Assignment assignment) {
-        List<TopicPartition> partitions = assignment.partitions();
+        List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
+
+        Collections.sort(partitions, PARTITION_COMPARATOR);
 
         AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
         this.standbyTasks = info.standbyTasks;

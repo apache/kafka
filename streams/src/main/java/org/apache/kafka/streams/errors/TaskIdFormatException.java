@@ -17,6 +17,9 @@
 
 package org.apache.kafka.streams.errors;
 
+/**
+ * Indicates a run time error incurred while trying parse the task id from the read string
+ */
 public class TaskIdFormatException extends StreamsException {
 
     private static final long serialVersionUID = 1L;

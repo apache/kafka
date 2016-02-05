@@ -22,6 +22,9 @@ import org.apache.kafka.streams.kstream.internals.HoppingWindow;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * The hopping window specifications used for aggregations.
+ */
 public class HoppingWindows extends Windows<HoppingWindow> {
 
     private static final long DEFAULT_SIZE_MS = 1000L;

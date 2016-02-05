@@ -23,14 +23,24 @@ import org.apache.kafka.streams.StreamsMetrics;
 
 import java.io.File;
 
+/**
+ * Processor context interface.
+ */
 public interface ProcessorContext {
+
+    /**
+     * Returns the job id
+     *
+     * @return the job id
+     */
+    String jobId();
 
     /**
      * Returns the task id
      *
      * @return the task id
      */
-    TaskId id();
+    TaskId taskId();
 
     /**
      * Returns the key serializer
@@ -81,6 +91,12 @@ public interface ProcessorContext {
      */
     void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback);
 
+    /**
+     * Get the state store given the store name.
+     *
+     * @param name The store name
+     * @return The state store instance
+     */
     StateStore getStateStore(String name);
 
     /**

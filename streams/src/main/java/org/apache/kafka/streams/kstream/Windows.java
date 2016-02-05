@@ -21,6 +21,11 @@ package org.apache.kafka.streams.kstream;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * The window specification interface that can be extended for windowing operation in joins and aggregations.
+ *
+ * @param <W> Type of the window instance
+ */
 public abstract class Windows<W extends Window> {
 
     private static final int DEFAULT_NUM_SEGMENTS = 3;
