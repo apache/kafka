@@ -68,4 +68,18 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     server1.shutdown()
     CoreUtils.rm(server1.config.logDirs)
   }
+
+  @Test
+  def testBrokerSelfAware {
+    val brokerId = 0
+    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
+    val server = TestUtils.createServer(KafkaConfig.fromProps(props))
+
+    TestUtils.waitUntilTrue(() => server.metadataCache.getAliveBrokers.nonEmpty, "Wait for cache to update")
+    assertEquals(1, server.metadataCache.getAliveBrokers.size)
+    assertEquals(brokerId, server.metadataCache.getAliveBrokers.head.id)
+
+    server.shutdown()
+    CoreUtils.rm(server.config.logDirs)
+  }
 }
