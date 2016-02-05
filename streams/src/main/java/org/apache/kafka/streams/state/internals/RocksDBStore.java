@@ -201,7 +201,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public boolean persistent() {
-        return false;
+        return true;
     }
 
     @Override
@@ -241,6 +241,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             byte[] rawKey = serdes.rawKey(key);
             byte[] rawValue = serdes.rawValue(value);
             putInternal(rawKey, rawValue);
+
+            if (loggingEnabled) {
+                changeLogger.add(rawKey);
+                changeLogger.maybeLogChange(this.getter);
+            }
         }
     }
 
@@ -259,11 +264,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 throw new ProcessorStateException("Error while executing put key " + serdes.keyFrom(rawKey) +
                         " and value " + serdes.keyFrom(rawValue) + " from store " + this.name, e);
             }
-        }
-
-        if (loggingEnabled) {
-            changeLogger.add(rawKey);
-            changeLogger.maybeLogChange(this.getter);
         }
     }
 
