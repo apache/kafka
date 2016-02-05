@@ -64,7 +64,7 @@ public class StandbyTask extends AbstractTask {
         super(id, jobId, partitions, topology, consumer, restoreConsumer, config, true);
 
         // initialize the topology with its own context
-        this.processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
+        this.processorContext = new StandbyContextImpl(id, jobId, config, stateMgr, metrics);
 
         initializeStateStores();
 

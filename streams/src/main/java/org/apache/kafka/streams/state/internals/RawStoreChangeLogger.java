@@ -39,12 +39,12 @@ public class RawStoreChangeLogger extends StoreChangeLogger<byte[], byte[]> {
         }
     }
 
-    public RawStoreChangeLogger(String topic, ProcessorContext context) {
-        this(topic, context, DEFAULT_WRITE_BATCH_SIZE, DEFAULT_WRITE_BATCH_SIZE);
+    public RawStoreChangeLogger(String storeName, ProcessorContext context) {
+        this(storeName, context, DEFAULT_WRITE_BATCH_SIZE, DEFAULT_WRITE_BATCH_SIZE);
     }
 
-    public RawStoreChangeLogger(String topic, ProcessorContext context, int maxDirty, int maxRemoved) {
-        super(topic, context, context.id().partition, WindowStoreUtils.INNER_SERDES, maxDirty, maxRemoved);
+    public RawStoreChangeLogger(String storeName, ProcessorContext context, int maxDirty, int maxRemoved) {
+        super(storeName, context, context.taskId().partition, WindowStoreUtils.INNER_SERDES, maxDirty, maxRemoved);
         init();
     }
 

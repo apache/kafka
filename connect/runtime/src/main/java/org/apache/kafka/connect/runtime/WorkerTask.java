@@ -102,6 +102,9 @@ abstract class WorkerTask implements Runnable {
             throw new IllegalStateException("The task cannot be started while still running");
 
         try {
+            if (stopping.get())
+                return;
+
             execute();
         } catch (Throwable t) {
             log.error("Unhandled exception in task {}", id, t);
