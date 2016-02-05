@@ -442,14 +442,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             return result.future;
             // handling exceptions and record the errors;
-            // for API exceptions return them in the future,
-            // for other exceptions throw directly
         } catch (ApiException e) {
             log.debug("Exception occurred during message send:", e);
-            if (callback != null)
-                callback.onCompletion(null, e);
             this.errors.record();
-            return new FutureFailure(e);
+            throw e;
         } catch (InterruptedException e) {
             this.errors.record();
             throw new InterruptException(e);

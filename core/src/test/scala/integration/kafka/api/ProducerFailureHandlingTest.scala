@@ -17,8 +17,8 @@
 
 package kafka.api
 
-import java.util.concurrent.{ExecutionException, TimeUnit, TimeoutException}
-import java.util.{Properties, Random}
+import java.util.Properties
+import java.util.concurrent.ExecutionException
 
 import kafka.common.Topic
 import kafka.consumer.SimpleConsumer
@@ -27,8 +27,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.{ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
-import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.errors.{InvalidTopicException, NotEnoughReplicasAfterAppendException, NotEnoughReplicasException}
+import org.apache.kafka.common.errors.{TimeoutException, InvalidTopicException, NotEnoughReplicasAfterAppendException, NotEnoughReplicasException}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -113,7 +112,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   def testNonExistentTopic() {
     // send a record with non-exist topic
     val record = new ProducerRecord[Array[Byte],Array[Byte]](topic2, null, "key".getBytes, "value".getBytes)
-    intercept[ExecutionException] {
+    intercept[TimeoutException] {
       producer1.send(record).get
     }
   }
@@ -138,7 +137,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
     // send a record with incorrect broker list
     val record = new ProducerRecord[Array[Byte],Array[Byte]](topic1, null, "key".getBytes, "value".getBytes)
-    intercept[ExecutionException] {
+    intercept[TimeoutException] {
       producer4.send(record).get
     }
   }
