@@ -81,18 +81,20 @@ class DelayedFetch(delayMs: Long,
               else
                 replica.logEndOffset
 
-            if (endOffset.offsetOnOlderSegment(fetchOffset)) {
-              // Case C, this can happen when the new fetch operation is on a truncated leader
-              debug("Satisfying fetch %s since it is fetching later segments of partition %s.".format(fetchMetadata, topicAndPartition))
-              return forceComplete()
-            } else if (fetchOffset.offsetOnOlderSegment(endOffset)) {
-              // Case C, this can happen when the fetch operation is falling behind the current segment
-              // or the partition has just rolled a new segment
-              debug("Satisfying fetch %s immediately since it is fetching older segments.".format(fetchMetadata))
-              return forceComplete()
-            } else if (fetchOffset.precedes(endOffset)) {
-              // we need take the partition fetch size as upper bound when accumulating the bytes
-              accumulatedSize += math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
+            if (endOffset.messageOffset != fetchOffset.messageOffset) {
+              if (endOffset.offsetOnOlderSegment(fetchOffset)) {
+                // Case C, this can happen when the new fetch operation is on a truncated leader
+                debug("Satisfying fetch %s since it is fetching later segments of partition %s.".format(fetchMetadata, topicAndPartition))
+                return forceComplete()
+              } else if (fetchOffset.offsetOnOlderSegment(endOffset)) {
+                // Case C, this can happen when the fetch operation is falling behind the current segment
+                // or the partition has just rolled a new segment
+                debug("Satisfying fetch %s immediately since it is fetching older segments.".format(fetchMetadata))
+                return forceComplete()
+              } else if (fetchOffset.precedes(endOffset)) {
+                // we need take the partition fetch size as upper bound when accumulating the bytes
+                accumulatedSize += math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
+              }
             }
           }
         } catch {
