@@ -22,7 +22,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -318,7 +317,7 @@ public class RecordAccumulatorTest {
     }
 
     @Test
-    public void testNonEmptyPartitionSendInProgress() throws InterruptedException {
+    public void testMutedPartitions() throws InterruptedException {
         long now = time.milliseconds();
         RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, 10, 100L, metrics, time);
         int appends = 1024 / msgSize;
@@ -327,22 +326,24 @@ public class RecordAccumulatorTest {
             assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).readyNodes.size());
         }
         time.sleep(2000);
-        Set<TopicPartition> partitionsSendInProgress = new HashSet<>();
-        partitionsSendInProgress.add(tp1);
 
-        // Test ready with partition with batch in flight.
-        RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, partitionsSendInProgress, time.milliseconds());
+        // Test ready with muted partition
+        accum.mutePartition(tp1);
+        RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
         assertEquals("No node should be ready", 0, result.readyNodes.size());
 
-        // Test ready without partition with batch in flight
+        // Test ready without muted partition
+        accum.unmutePartition(tp1);
         result = accum.ready(cluster, time.milliseconds());
         assertNotEquals("The batch should be ready", 0, result.readyNodes.size());
 
-        // Test drain for partition with batch in flight.
-        Map<Integer, List<RecordBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, partitionsSendInProgress, time.milliseconds());
+        // Test drain with muted partition
+        accum.mutePartition(tp1);
+        Map<Integer, List<RecordBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertEquals("There should be no batch drained.", 0, drained.get(node1.id()).size());
 
-        // Test drain for partition without batch in flight.
+        // Test drain without muted partition.
+        accum.unmutePartition(tp1);
         drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertNotEquals("There should be no batch drained.", 0, drained.get(node1.id()).size());
     }

@@ -15,12 +15,10 @@ package org.apache.kafka.clients.producer.internals;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -70,7 +68,7 @@ public class Sender implements Runnable {
     private final Metadata metadata;
 
     /* the map tracks the number of batch in progress for each partition. */
-    private final Set<TopicPartition> partitionsInFlight;
+    private final boolean sendInOrder;
 
     /* the maximum request size to attempt to send to the server */
     private final int maxRequestSize;
@@ -113,10 +111,7 @@ public class Sender implements Runnable {
         this.client = client;
         this.accumulator = accumulator;
         this.metadata = metadata;
-        if (sendInOrder)
-            this.partitionsInFlight = new HashSet<>();
-        else
-            this.partitionsInFlight = null;
+        this.sendInOrder = sendInOrder;
         this.maxRequestSize = maxRequestSize;
         this.running = true;
         this.acks = acks;
@@ -174,10 +169,10 @@ public class Sender implements Runnable {
      * @param now
      *            The current POSIX time in milliseconds
      */
-    protected void run(long now) {
+    void run(long now) {
         Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
-        RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, partitionsInFlight, now);
+        RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
         // if there are any partitions whose leaders are not known yet, force metadata update
         if (result.unknownLeadersExist)
@@ -198,8 +193,14 @@ public class Sender implements Runnable {
         Map<Integer, List<RecordBatch>> batches = this.accumulator.drain(cluster,
                                                                          result.readyNodes,
                                                                          this.maxRequestSize,
-                                                                         this.partitionsInFlight,
                                                                          now);
+        if (sendInOrder) {
+            // Mute all the partitions drained
+            for (Map.Entry<Integer, List<RecordBatch>> entry : batches.entrySet()) {
+                for (RecordBatch batch : entry.getValue())
+                    this.accumulator.mutePartition(batch.topicPartition);
+            }
+        }
 
         List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, cluster, now);
         // update sensors
@@ -315,8 +316,9 @@ public class Sender implements Runnable {
         }
         if (error.exception() instanceof InvalidMetadataException)
             metadata.requestUpdate();
-        if (partitionsInFlight != null)
-            partitionsInFlight.remove(batch.topicPartition);
+        // Unmute the completed partition.
+        if (sendInOrder)
+            this.accumulator.unmutePartition(batch.topicPartition);
     }
 
     /**

@@ -203,52 +203,28 @@ public class SenderTest {
 
         // Send the first message.
         TopicPartition tp2 = new TopicPartition("test", 1);
-        Future<RecordMetadata> future0 = accumulator.append(tp2, "key1".getBytes(), "value1".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
+        accumulator.append(tp2, "key1".getBytes(), "value1".getBytes(), null, MAX_BLOCK_TIMEOUT);
         sender.run(time.milliseconds()); // connect
         sender.run(time.milliseconds()); // send produce request
         String id = client.requests().peek().request().destination();
         assertEquals(ApiKeys.PRODUCE.id, client.requests().peek().request().header().apiKey());
         Node node = new Node(Integer.valueOf(id), "localhost", 0);
-        assertEquals("The request should be sent to node 1", 1, node.id());
         assertEquals(1, client.inFlightRequestCount());
         assertTrue("Client ready status should be true", client.isReady(node, 0L));
 
         time.sleep(900);
         // Now send another message to tp2
-        Future<RecordMetadata> future1 = accumulator.append(tp2, "key2".getBytes(), "value2".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
+        accumulator.append(tp2, "key2".getBytes(), "value2".getBytes(), null, MAX_BLOCK_TIMEOUT);
 
         // Update metadata before sender receives response from broker 0. Now partition 2 moves to broker 0
         Cluster cluster2 = TestUtils.singletonCluster("test", 2);
         metadata.update(cluster2, time.milliseconds());
-        // Sender should not send the second message to node 1.
+        // Sender should not send the second message to node 0. Try twice to make sure.
         sender.run(time.milliseconds());
         assertEquals(1, client.inFlightRequestCount());
         sender.run(time.milliseconds());
         assertEquals(1, client.inFlightRequestCount());
-        sender.run(time.milliseconds());
-        assertEquals(1, client.inFlightRequestCount());
-        // Sleep a while so we hit request timeout.
-        time.sleep(900);
-        client.respond(produceResponse(tp2, -1L, Errors.REQUEST_TIMED_OUT.code(), 0));
-        sender.run(time.milliseconds()); // Request timeout and disconnect
 
-        // Now send the first message
-        sender.run(time.milliseconds()); // Send first message
-        assertEquals(1, client.inFlightRequestCount()); // Mock client does not clean up inflight request.
-        assertEquals("Should be sending to node 0", 0, Integer.parseInt(client.requests().peek().request().destination()));
-        client.respond(produceResponse(tp2, 0L, Errors.NONE.code(), 0));
-        sender.run(time.milliseconds()); // receive first response
-        assertTrue(future0.isDone());
-        assertEquals(0L, future0.get().offset());
-        assertFalse(future1.isDone());
-
-        sender.run(time.milliseconds()); // Send second message
-        assertEquals(1, client.inFlightRequestCount());
-        assertEquals("Should be sending to node 0", 0, Integer.parseInt(client.requests().peek().request().destination()));
-        client.respond(produceResponse(tp2, 1L, Errors.NONE.code(), 0));
-        sender.run(time.milliseconds()); // Receive second response
-        assertTrue(future1.isDone());
-        assertEquals(1L, future1.get().offset());
     }
 
     private void completedWithError(Future<RecordMetadata> future, Errors error) throws Exception {
