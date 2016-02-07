@@ -465,6 +465,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
     private final Fetcher<K, V> fetcher;
+    private final ConsumerInterceptors<K, V> interceptors;
 
     private final Time time;
     private final ConsumerNetworkClient client;
@@ -474,7 +475,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long retryBackoffMs;
     private long requestTimeoutMs;
     private boolean closed = false;
-    private final ConsumerInterceptors<K, V> interceptors;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
     // and is used to prevent multi-threaded access

@@ -54,11 +54,11 @@ public class ProducerInterceptors<K, V> implements Closeable {
      */
     public ProducerRecord<K, V> onSend(ProducerRecord<K, V> record) {
         ProducerRecord<K, V> interceptRecord = record;
-        for (ProducerInterceptor<K, V> interceptor: this.interceptors) {
+        for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
             try {
                 interceptRecord = interceptor.onSend(interceptRecord);
             } catch (Throwable t) {
-                // do not propagate interceptor exception, ignore and continue calling other interceptors
+                // do not propagate interceptor exception, log and continue calling other interceptors
                 log.warn("Error executing interceptor onSend callback for topic: " + record.topic() + ", partition: " + record.partition(), t);
             }
         }
@@ -76,11 +76,11 @@ public class ProducerInterceptors<K, V> implements Closeable {
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
      */
     public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
-        for (ProducerInterceptor<K, V> interceptor: this.interceptors) {
+        for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
             try {
                 interceptor.onAcknowledgement(metadata, exception);
             } catch (Throwable t) {
-                // do not propagate interceptor exceptions, just ignore
+                // do not propagate interceptor exceptions, just log
                 log.warn("Error executing interceptor onAcknowledgement callback", t);
             }
         }
@@ -91,7 +91,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
      */
     @Override
     public void close() {
-        for (ProducerInterceptor<K, V> interceptor: this.interceptors) {
+        for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
             try {
                 interceptor.close();
             } catch (Throwable t) {

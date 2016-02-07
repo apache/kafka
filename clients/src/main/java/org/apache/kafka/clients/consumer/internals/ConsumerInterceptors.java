@@ -52,11 +52,11 @@ public class ConsumerInterceptors<K, V> implements Closeable {
      */
     public ConsumerRecords<K, V> onConsume(ConsumerRecords<K, V> records) {
         ConsumerRecords<K, V> interceptRecords = records;
-        for (ConsumerInterceptor<K, V> interceptor: this.interceptors) {
+        for (ConsumerInterceptor<K, V> interceptor : this.interceptors) {
             try {
                 interceptRecords = interceptor.onConsume(interceptRecords);
             } catch (Throwable t) {
-                // do not propagate interceptor exception, ignore and continue calling other interceptors
+                // do not propagate interceptor exception, log and continue calling other interceptors
                 log.warn("Error executing interceptor onConsume callback", t);
             }
         }
@@ -77,7 +77,7 @@ public class ConsumerInterceptors<K, V> implements Closeable {
             try {
                 interceptor.onCommit(offsets);
             } catch (Throwable t) {
-                // do not propagate interceptor exception, just ignore
+                // do not propagate interceptor exception, just log
                 log.warn("Error executing interceptor onCommit callback", t);
             }
         }
@@ -88,7 +88,7 @@ public class ConsumerInterceptors<K, V> implements Closeable {
      */
     @Override
     public void close() {
-        for (ConsumerInterceptor<K, V> interceptor: this.interceptors) {
+        for (ConsumerInterceptor<K, V> interceptor : this.interceptors) {
             try {
                 interceptor.close();
             } catch (Throwable t) {
