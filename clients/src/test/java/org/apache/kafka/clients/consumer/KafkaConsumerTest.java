@@ -97,24 +97,26 @@ public class KafkaConsumerTest {
 
     @Test
     public void testInterceptorConstructorClose() throws Exception {
-        Properties props = new Properties();
-        // test with client ID assigned by KafkaConsumer
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
+        try {
+            Properties props = new Properties();
+            // test with client ID assigned by KafkaConsumer
+            props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
 
-        final int oldInitCount = MockConsumerInterceptor.INIT_COUNT.get();
-        final int oldCloseCount = MockConsumerInterceptor.CLOSE_COUNT.get();
+            final int oldInitCount = MockConsumerInterceptor.INIT_COUNT.get();
+            final int oldCloseCount = MockConsumerInterceptor.CLOSE_COUNT.get();
 
-        KafkaConsumer<String, String> consumer = new KafkaConsumer<String, String>(
-                props, new StringDeserializer(), new StringDeserializer());
-        Assert.assertEquals(oldInitCount + 1, MockConsumerInterceptor.INIT_COUNT.get());
-        Assert.assertEquals(oldCloseCount, MockConsumerInterceptor.CLOSE_COUNT.get());
+            KafkaConsumer<String, String> consumer = new KafkaConsumer<String, String>(
+                    props, new StringDeserializer(), new StringDeserializer());
+            Assert.assertEquals(oldInitCount + 1, MockConsumerInterceptor.INIT_COUNT.get());
+            Assert.assertEquals(oldCloseCount, MockConsumerInterceptor.CLOSE_COUNT.get());
 
-        consumer.close();
-        Assert.assertEquals(oldInitCount + 1, MockConsumerInterceptor.INIT_COUNT.get());
-        Assert.assertEquals(oldCloseCount + 1, MockConsumerInterceptor.CLOSE_COUNT.get());
-
-        // cleanup since we are using mutable static variables in MockConsumerInterceptor
-        MockConsumerInterceptor.resetCounters();
+            consumer.close();
+            Assert.assertEquals(oldInitCount + 1, MockConsumerInterceptor.INIT_COUNT.get());
+            Assert.assertEquals(oldCloseCount + 1, MockConsumerInterceptor.CLOSE_COUNT.get());
+        } finally {
+            // cleanup since we are using mutable static variables in MockConsumerInterceptor
+            MockConsumerInterceptor.resetCounters();
+        }
     }
 }
