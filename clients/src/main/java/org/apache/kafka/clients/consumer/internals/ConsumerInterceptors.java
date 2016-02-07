@@ -64,7 +64,7 @@ public class ConsumerInterceptors<K, V> implements Closeable {
     }
 
     /**
-     * This is called when offsets get committed.
+     * This is called when commit request returns successfully from the broker.
      * <p>
      * This method calls {@link ConsumerInterceptor#onCommit(Map)} method for each interceptor.
      * <p>

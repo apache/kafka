@@ -32,7 +32,7 @@ public class ProducerInterceptorsTest {
     private int onAckCount = 0;
     private int onSendCount = 0;
 
-    public class AppendProducerInterceptor implements ProducerInterceptor<Integer, String> {
+    private class AppendProducerInterceptor implements ProducerInterceptor<Integer, String> {
         private String appendStr = "";
         private boolean throwExceptionOnSend = false;
         private boolean throwExceptionOnAck = false;
@@ -79,7 +79,7 @@ public class ProducerInterceptorsTest {
     }
 
     @Test
-    public void testMutableInterceptorChain() {
+    public void testOnSendChain() {
         List<ProducerInterceptor<Integer, String>> interceptorList = new ArrayList<>();
         // we are testing two different interceptors by configuring the same interceptor differently, which is not
         // how it would be done in KafkaProducer, but ok for testing interceptor callbacks
@@ -113,9 +113,19 @@ public class ProducerInterceptorsTest {
         ProducerRecord<Integer, String> noInterceptRecord = interceptors.onSend(producerRecord);
         assertEquals(producerRecord, noInterceptRecord);
 
-        // reset
-        interceptor1.injectOnSendError(false);
-        interceptor2.injectOnSendError(false);
+        interceptors.close();
+    }
+
+    @Test
+    public void testOnAcknowledgementChain() {
+        List<ProducerInterceptor<Integer, String>> interceptorList = new ArrayList<>();
+        // we are testing two different interceptors by configuring the same interceptor differently, which is not
+        // how it would be done in KafkaProducer, but ok for testing interceptor callbacks
+        AppendProducerInterceptor interceptor1 = new AppendProducerInterceptor("One");
+        AppendProducerInterceptor interceptor2 = new AppendProducerInterceptor("Two");
+        interceptorList.add(interceptor1);
+        interceptorList.add(interceptor2);
+        ProducerInterceptors<Integer, String> interceptors = new ProducerInterceptors<>(interceptorList);
 
         // verify onAck is called on all interceptors
         RecordMetadata meta = new RecordMetadata(tp, 0, 0);
@@ -134,3 +144,4 @@ public class ProducerInterceptorsTest {
         interceptors.close();
     }
 }
+

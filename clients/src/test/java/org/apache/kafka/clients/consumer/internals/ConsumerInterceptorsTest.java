@@ -49,7 +49,7 @@ public class ConsumerInterceptorsTest {
     /**
      * Test consumer interceptor that filters records in onConsume() intercept
      */
-    public class FilterConsumerInterceptor<K, V> implements ConsumerInterceptor<K, V> {
+    private class FilterConsumerInterceptor<K, V> implements ConsumerInterceptor<K, V> {
         private int filterPartition;
         private boolean throwExceptionOnConsume = false;
         private boolean throwExceptionOnCommit = false;
@@ -100,7 +100,7 @@ public class ConsumerInterceptorsTest {
     }
 
     @Test
-    public void testMutableInterceptorChain() {
+    public void testOnConsumeChain() {
         List<ConsumerInterceptor<Integer, Integer>>  interceptorList = new ArrayList<>();
         // we are testing two different interceptors by configuring the same interceptor differently, which is not
         // how it would be done in KafkaConsumer, but ok for testing interceptor callbacks
@@ -110,7 +110,7 @@ public class ConsumerInterceptorsTest {
         interceptorList.add(interceptor2);
         ConsumerInterceptors<Integer, Integer> interceptors = new ConsumerInterceptors<>(interceptorList);
 
-        // verify that onConsumer mutates ConsumerRecords
+        // verify that onConsumer modifies ConsumerRecords
         Map<TopicPartition, List<ConsumerRecord<Integer, Integer>>> records = new HashMap<>();
         List<ConsumerRecord<Integer, Integer>> list1 = new ArrayList<>();
         list1.add(consumerRecord);
@@ -144,9 +144,19 @@ public class ConsumerInterceptorsTest {
         assertEquals(3, noneInterceptedRecs.count());
         assertEquals(6, onConsumeCount);
 
-        // reset
-        interceptor1.injectOnConsumeError(false);
-        interceptor2.injectOnConsumeError(false);
+        interceptors.close();
+    }
+
+    @Test
+    public void testOnCommitChain() {
+        List<ConsumerInterceptor<Integer, Integer>> interceptorList = new ArrayList<>();
+        // we are testing two different interceptors by configuring the same interceptor differently, which is not
+        // how it would be done in KafkaConsumer, but ok for testing interceptor callbacks
+        FilterConsumerInterceptor<Integer, Integer> interceptor1 = new FilterConsumerInterceptor<>(filterPartition1);
+        FilterConsumerInterceptor<Integer, Integer> interceptor2 = new FilterConsumerInterceptor<>(filterPartition2);
+        interceptorList.add(interceptor1);
+        interceptorList.add(interceptor2);
+        ConsumerInterceptors<Integer, Integer> interceptors = new ConsumerInterceptors<>(interceptorList);
 
         // verify that onCommit is called for all interceptors in the chain
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
