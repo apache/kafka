@@ -19,7 +19,8 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.Configurable;
 
 /**
- * A plugin interface to allow things to listen for events happening to the record at different points on the producer.
+ * A plugin interface that allows you to intercept (and possibly mutate) the records received by the producer before
+ * they are published to the Kafka cluster.
  * <p>
  * This class will get producer config properties via <code>configure()</code> method, including clientId assigned
  * by KafkaProducer if not specified in the producer config. The interceptor implementation needs to be aware that it will be
@@ -31,7 +32,7 @@ public interface ProducerInterceptor<K, V> extends Configurable {
     /**
      * This is called when client sends the record to KafkaProducer, before key and value gets serialized.
      * <p>
-     * This method is allowed to mutate the record, in which case, the new record will be returned. The implication of modifying
+     * This method is allowed to modify the record, in which case, the new record will be returned. The implication of modifying
      * key/value is that partition assignment (if not specified in ProducerRecord) will be done based on modified key/value,
      * not key/value from the client. As a result, key and value transformation done in onSend() needs to be consistent:
      * same key and value should mutate to the same (modified) key and value. Otherwise, log compaction would not work
@@ -42,14 +43,15 @@ public interface ProducerInterceptor<K, V> extends Configurable {
      * <p>
      * Any exception thrown by this method will be caught by the caller and logged, but not propagated further.
      * <p>
-     * Since the producer may run multiple interceptors, a particular interceptor's onSend() callback will be called in order specified in
-     * configuration {@link org.apache.kafka.clients.producer.ProducerConfig#INTERCEPTOR_CLASSES_CONFIG}. The first interceptor
-     * in the list gets the record passed from the client. The following interceptor will be passed the record returned by the
-     * previous interceptor, and so on. Since interceptors are allowed to mutate records, interceptors may potentially get
-     * the record already mutated by other interceptors. However, building a pipeline of mutable interceptors that depend on the output
-     * of the previous interceptor is discouraged, because of potential side-effects caused by interceptors potentially failing to mutate the record
-     * and throwing an exception. If one of the interceptors in the list throws an exception from onSend(), the exception is caught, logged, and
-     * the next interceptor is called with the record returned by the last successful interceptor in the list, or otherwise the client.
+     * Since the producer may run multiple interceptors, a particular interceptor's onSend() callback will be called in the order
+     * specified by {@link org.apache.kafka.clients.producer.ProducerConfig#INTERCEPTOR_CLASSES_CONFIG}. The first interceptor
+     * in the list gets the record passed from the client, the following interceptor will be passed the record returned by the
+     * previous interceptor, and so on. Since interceptors are allowed to modify records, interceptors may potentially get
+     * the record already modified by other interceptors. However, building a pipeline of mutable interceptors that depend on the output
+     * of the previous interceptor is discouraged, because of potential side-effects caused by interceptors potentially failing to
+     * modify the record and throwing an exception. If one of the interceptors in the list throws an exception from onSend(), the exception
+     * is caught, logged, and the next interceptor is called with the record returned by the last successful interceptor in the list,
+     * or otherwise the client.
      *
      * @param record the record from client or the record returned by the previous interceptor in the chain of interceptors.
      * @return producer record to send to topic/partition

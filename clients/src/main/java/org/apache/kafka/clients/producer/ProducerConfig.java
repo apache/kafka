@@ -203,8 +203,8 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
     public static final String INTERCEPTOR_CLASSES_DOC = "A list of classes to use as interceptors. "
-                                                        + "Implementing the <code>ProducerInterceptor</code> interface allows plugging in classes that can intercept records "
-                                                        + "at different points on producer, and, in some cases, mutate the records. By default, there are no interceptors.";
+                                                        + "Implementing the <code>ProducerInterceptor</code> interface allows you to intercept (and possibly mutate) the records "
+                                                        + "received by the producer before they are published to the Kafka cluster. By default, there are no interceptors.";
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
