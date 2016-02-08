@@ -82,17 +82,14 @@ public class KafkaProducerTest {
             props.setProperty(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MockProducerInterceptor.class.getName());
             props.setProperty(MockProducerInterceptor.APPEND_STRING_PROP, "something");
 
-            final int oldInitCount = MockProducerInterceptor.INIT_COUNT.get();
-            final int oldCloseCount = MockProducerInterceptor.CLOSE_COUNT.get();
-
             KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
                     props, new StringSerializer(), new StringSerializer());
-            Assert.assertEquals(oldInitCount + 1, MockProducerInterceptor.INIT_COUNT.get());
-            Assert.assertEquals(oldCloseCount, MockProducerInterceptor.CLOSE_COUNT.get());
+            Assert.assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
+            Assert.assertEquals(0, MockProducerInterceptor.CLOSE_COUNT.get());
 
             producer.close();
-            Assert.assertEquals(oldInitCount + 1, MockProducerInterceptor.INIT_COUNT.get());
-            Assert.assertEquals(oldCloseCount + 1, MockProducerInterceptor.CLOSE_COUNT.get());
+            Assert.assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
+            Assert.assertEquals(1, MockProducerInterceptor.CLOSE_COUNT.get());
         } finally {
             // cleanup since we are using mutable static variables in MockProducerInterceptor
             MockProducerInterceptor.resetCounters();
