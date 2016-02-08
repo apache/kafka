@@ -154,6 +154,8 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
 
   @After
   override def tearDown() = {
+    producers.foreach(_.close())
+    consumers.foreach(_.close())
     removeAllAcls
     super.tearDown()
   }
