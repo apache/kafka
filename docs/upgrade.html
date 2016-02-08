@@ -17,6 +17,47 @@
 
 <h3><a id="upgrade" href="#upgrade">1.5 Upgrading From Previous Versions</a></h3>
 
+<h4><a id="upgrade_10" href="#upgrade_10">Upgrading from 0.9.x to 0.10.0.0</a></h4>
+0.10.0.0 has <a href="#upgrade_10_performance_impact">potential performance impact</a> and <a href="#upgrade_10_protocol_changes">protocol changes</a> (please review before upgrading).
+Because new protocols are introduced, it is important to upgrade your Kafka clusters before upgrading your clients.
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+    <li> Update server.properties file on all brokers and add the following properties: inter.broker.protocol.version=0.9.0.0, message.format.version=v0 </li>
+    <li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
+    <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.10.0.0. </li>
+    <li> Restart the brokers one by one for the new protocol version to take effect. </li>
+</ol>
+
+<p><b>Note:</b> If you are willing to accept downtime, you can simply take all the brokers down, update the code and start all of them. They will start with the new protocol by default.
+
+<p><b>Note:</b> Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
+
+<h5><a id="upgrade_10_performance_impact" href="#upgrade_10_performance_impact">potential performance impact in 0.10.0.0</a></h5>
+<p>
+    Message format v1 is added to include a new timestamp field and use relative offsets for compressed messages in 0.10.0.0.
+    The on disk message format can be configured through message.format.version in server.properties file.
+    A 0.10.0.0 broker is able to serve old clients with message format v0. Messages will be converted to v0 if on disk
+    message format version is v1. However, Brokers will lose zero-copy when message format conversion occurs.
+</p>
+<p>
+    0.10.0.0 clients can handle both message format v0 and v1. Hence there is no performance impact for 0.10.0.0 clients
+    if message.format.version is set to v0 on broker. Broker will not convert the messages but just return message v0
+    to new clients.
+</p>
+<p>
+    To avoid performance impact due to message format conversion, only set message.format.version=v1 after upgrading your clients.
+    message.format.version is a topic configuration, so you can also dynamically set it for a specific topic by changing its topic configuration.
+</p>
+
+<h5><a id="upgrade_10_protocol_changes" href="#upgrade_10_protocol_changes">protocol change for 0.10.0.0</a></h5>
+<ul>
+    <li>Message format v1 is added to include a timestamp field in the messages and use relative offsets for compressed messages.</li>
+    <li>ProduceRequest/Response v2 is added to support message format v1</li>
+    <li>FetchRequest/Response v2 is added to support message format v1</li>
+</ul>
+
 <h4><a id="upgrade_9" href="#upgrade_9">Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.9.0.0</a></h4>
 
 0.9.0.0 has <a href="#upgrade_9_breaking">potential breaking changes</a> (please review before upgrading) and an inter-broker protocol change from previous versions. This means that upgraded brokers and clients may not be compatible with older versions. It is important that you upgrade your Kafka cluster before upgrading your clients. If you are using MirrorMaker downstream clusters should be upgraded first as well.
