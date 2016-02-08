@@ -27,6 +27,10 @@ import java.util.Map;
  * by KafkaConsumer if not specified in the consumer config. The interceptor implementation needs to be aware that it will be
  * sharing consumer config namespace with other interceptors and serializers, and ensure that there are no conflicts.
  * <p>
+ * Exceptions thrown by ConsumerInterceptor methods will be caught, logged, but not propagated further. As a result, if
+ * the user configures the interceptor with the wrong key and value type parameters, the consumer will not throw an exception,
+ * just log the errors.
+ * <p>
  * ConsumerInterceptor callbacks are called from the same thread that invokes {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(long)}.
  */
 public interface ConsumerInterceptor<K, V> extends Configurable {

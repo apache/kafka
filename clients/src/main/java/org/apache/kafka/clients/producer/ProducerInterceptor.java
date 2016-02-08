@@ -26,6 +26,10 @@ import org.apache.kafka.common.Configurable;
  * by KafkaProducer if not specified in the producer config. The interceptor implementation needs to be aware that it will be
  * sharing producer config namespace with other interceptors and serializers, and ensure that there are no conflicts.
  * <p>
+ * Exceptions thrown by ProducerInterceptor methods will be caught, logged, but not propagated further. As a result, if
+ * the user configures the interceptor with the wrong key and value type parameters, the producer will not throw an exception,
+ * just log the errors.
+ * <p>
  * ProducerInterceptor callbacks may be called from multiple threads. Interceptor implementation must ensure thread-safety, if needed.
  */
 public interface ProducerInterceptor<K, V> extends Configurable {
