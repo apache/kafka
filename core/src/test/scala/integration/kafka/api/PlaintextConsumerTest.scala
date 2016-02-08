@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.CompressionType
-import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer, ByteArrayDeserializer}
+import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer, ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.errors.{InvalidTopicException, RecordTooLargeException}
 import org.apache.kafka.test.{MockProducerInterceptor, MockConsumerInterceptor}
 import org.junit.Assert._
@@ -634,6 +634,34 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // cleanup
     MockConsumerInterceptor.resetCounters()
+  }
+
+  @Test
+  def testInterceptorsWithWrongKeyValue() {
+    val appendStr = "mock"
+    // create producer with interceptor that has different key and value types from the producer
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor")
+    producerProps.put("mock.interceptor.append", appendStr)
+    val testProducer = new KafkaProducer[Array[Byte],Array[Byte]](producerProps, new ByteArraySerializer(), new ByteArraySerializer())
+
+    // producing records should succeed
+    testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key".getBytes, s"value will not be modified".getBytes))
+
+    // create consumer with interceptor that has different key and value types from the consumer
+    this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
+    val testConsumer = new KafkaConsumer[Array[Byte],Array[Byte]](this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    testConsumer.assign(List(tp).asJava)
+    testConsumer.seek(tp, 0)
+
+    // consume and verify that values are not modified by interceptors -- their exceptions are caught and logged, but not propagated
+    val records = consumeRecords(testConsumer, 1)
+    val record = records.get(0)
+    assertEquals(s"value will not be modified", new String(record.value()))
+
+    testConsumer.close()
+    testProducer.close()
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
