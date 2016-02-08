@@ -57,9 +57,9 @@ public class ProducerInterceptors<K, V> implements Closeable {
         for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
             try {
                 interceptRecord = interceptor.onSend(interceptRecord);
-            } catch (Throwable t) {
+            } catch (Exception e) {
                 // do not propagate interceptor exception, log and continue calling other interceptors
-                log.warn("Error executing interceptor onSend callback for topic: " + record.topic() + ", partition: " + record.partition(), t);
+                log.warn("Error executing interceptor onSend callback for topic: {}, partition: {}", record.topic(), record.partition(), e);
             }
         }
         return interceptRecord;
@@ -79,9 +79,9 @@ public class ProducerInterceptors<K, V> implements Closeable {
         for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
             try {
                 interceptor.onAcknowledgement(metadata, exception);
-            } catch (Throwable t) {
+            } catch (Exception e) {
                 // do not propagate interceptor exceptions, just log
-                log.warn("Error executing interceptor onAcknowledgement callback", t);
+                log.warn("Error executing interceptor onAcknowledgement callback", e);
             }
         }
     }
@@ -94,8 +94,8 @@ public class ProducerInterceptors<K, V> implements Closeable {
         for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
             try {
                 interceptor.close();
-            } catch (Throwable t) {
-                log.error("Failed to close producer interceptor ", t);
+            } catch (Exception e) {
+                log.error("Failed to close producer interceptor ", e);
             }
         }
     }

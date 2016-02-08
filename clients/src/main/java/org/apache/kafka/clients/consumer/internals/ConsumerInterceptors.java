@@ -55,9 +55,9 @@ public class ConsumerInterceptors<K, V> implements Closeable {
         for (ConsumerInterceptor<K, V> interceptor : this.interceptors) {
             try {
                 interceptRecords = interceptor.onConsume(interceptRecords);
-            } catch (Throwable t) {
+            } catch (Exception e) {
                 // do not propagate interceptor exception, log and continue calling other interceptors
-                log.warn("Error executing interceptor onConsume callback", t);
+                log.warn("Error executing interceptor onConsume callback", e);
             }
         }
         return interceptRecords;
@@ -76,9 +76,9 @@ public class ConsumerInterceptors<K, V> implements Closeable {
         for (ConsumerInterceptor<K, V> interceptor : this.interceptors) {
             try {
                 interceptor.onCommit(offsets);
-            } catch (Throwable t) {
+            } catch (Exception e) {
                 // do not propagate interceptor exception, just log
-                log.warn("Error executing interceptor onCommit callback", t);
+                log.warn("Error executing interceptor onCommit callback", e);
             }
         }
     }
@@ -91,8 +91,8 @@ public class ConsumerInterceptors<K, V> implements Closeable {
         for (ConsumerInterceptor<K, V> interceptor : this.interceptors) {
             try {
                 interceptor.close();
-            } catch (Throwable t) {
-                log.error("Failed to close consumer interceptor ", t);
+            } catch (Exception e) {
+                log.error("Failed to close consumer interceptor ", e);
             }
         }
     }

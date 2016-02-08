@@ -40,7 +40,7 @@ public interface ProducerInterceptor<K, V> extends Configurable {
      * <p>
      * This method is allowed to modify the record, in which case, the new record will be returned. The implication of modifying
      * key/value is that partition assignment (if not specified in ProducerRecord) will be done based on modified key/value,
-     * not key/value from the client. As a result, key and value transformation done in onSend() needs to be consistent:
+     * not key/value from the client. Consequently, key and value transformation done in onSend() needs to be consistent:
      * same key and value should mutate to the same (modified) key and value. Otherwise, log compaction would not work
      * as expected.
      * <p>
