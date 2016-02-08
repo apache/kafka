@@ -27,7 +27,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.producer.internals.InterceptorCallback;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
@@ -746,4 +745,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     }
 
+    /**
+     * A callback called when producer request is complete. It in turn calls user-supplied callback (if given) and
+     * notifies producer interceptors about the request completion.
+     */
+    private static class InterceptorCallback<K, V> implements Callback {
+        private final Callback userCallback;
+        private final ProducerInterceptors<K, V> interceptors;
+
+        public InterceptorCallback(Callback userCallback, ProducerInterceptors<K, V> interceptors) {
+            this.userCallback = userCallback;
+            this.interceptors = interceptors;
+        }
+
+        public void onCompletion(RecordMetadata metadata, Exception exception) {
+            if (this.interceptors != null)
+                this.interceptors.onAcknowledgement(metadata, exception);
+            if (this.userCallback != null)
+                this.userCallback.onCompletion(metadata, exception);
+        }
+    }
 }
