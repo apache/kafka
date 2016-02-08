@@ -456,7 +456,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         @Override
         public boolean hasNext() {
-            return super.hasNext() && comparator.compare(super.peekRawKey(), this.rawToKey) < 0;
+            return super.hasNext() && comparator.compare(super.peekRawKey(), this.rawToKey) <= 0;
         }
     }
 
