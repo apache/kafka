@@ -86,6 +86,9 @@ public class StoreChangeLogger<K, V> {
     }
 
     public void logChange(ValueGetter<K, V> getter) {
+        if (this.removed.isEmpty() && this.dirty.isEmpty())
+            return;
+
         RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
         if (collector != null) {
             Serializer<K> keySerializer = serialization.keySerializer();

@@ -174,7 +174,6 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         });
 
         flush();
-        dump();
     }
 
     private void openExistingSegments() {
@@ -213,7 +212,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void close() {
-        dump();
+        flush();
         for (Segment segment : segments) {
             if (segment != null)
                 segment.close();
@@ -297,14 +296,14 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         long segTo = segmentId(Math.max(0L, timeTo));
 
         byte[] binaryFrom = WindowStoreUtils.toBinaryKey(key, timeFrom, 0, serdes);
-        byte[] binaryUntil = WindowStoreUtils.toBinaryKey(key, timeTo + 1L, 0, serdes);
+        byte[] binaryTo = WindowStoreUtils.toBinaryKey(key, timeTo, Integer.MAX_VALUE, serdes);
 
         ArrayList<KeyValueIterator<byte[], byte[]>> iterators = new ArrayList<>();
 
         for (long segmentId = segFrom; segmentId <= segTo; segmentId++) {
             Segment segment = getSegment(segmentId);
             if (segment != null)
-                iterators.add(segment.range(binaryFrom, binaryUntil));
+                iterators.add(segment.range(binaryFrom, binaryTo));
         }
 
         if (iterators.size() > 0) {
@@ -374,22 +373,4 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         return segmentIds;
     }
 
-    public void dump() {
-        for (Segment segment : segments) {
-            if (segment != null) {
-                KeyValueIterator<byte[], byte[]> iter = segment.all();
-                while (iter.hasNext()) {
-                    KeyValue<byte[], byte[]> kv = iter.next();
-
-                    System.out.println(
-                            "taskId=" + context.taskId() + " " +
-                            WindowStoreUtils.keyFromBinaryKey(kv.key, serdes) +
-                                    "@" + WindowStoreUtils.timestampFromBinaryKey(kv.key) +
-                                    "==>" + serdes.valueFrom(kv.value));
-                }
-                iter.close();
-            }
-        }
-
-    }
 }
