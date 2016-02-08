@@ -420,39 +420,46 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
-        try {
-            // intercept the record, which can be potentially modified
-            ProducerRecord<K, V> interceptedRecord = this.interceptors == null ? record : this.interceptors.onSend(record);
-            // producer callback will make sure to call both 'callback' and interceptor callback
-            Callback interceptCallback = this.interceptors == null ? callback : new InterceptorCallback<>(callback, this.interceptors);
+        // intercept the record, which can be potentially modified; this method does not throw exceptions
+        ProducerRecord<K, V> interceptedRecord = this.interceptors == null ? record : this.interceptors.onSend(record);
+        // producer callback will make sure to call both 'callback' and interceptor callback
+        Callback interceptCallback = this.interceptors == null ? callback : new InterceptorCallback<>(callback, this.interceptors);
+        return doSend(interceptedRecord, interceptCallback);
+    }
 
+    /**
+     * Implementation of asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>.
+     * See {@link #send(ProducerRecord, Callback)} for details.
+     */
+    private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
+        try {
             // first make sure the metadata for the topic is available
-            long waitedOnMetadataMs = waitOnMetadata(interceptedRecord.topic(), this.maxBlockTimeMs);
+            long waitedOnMetadataMs = waitOnMetadata(record.topic(), this.maxBlockTimeMs);
             long remainingWaitMs = Math.max(0, this.maxBlockTimeMs - waitedOnMetadataMs);
             byte[] serializedKey;
             try {
-                serializedKey = keySerializer.serialize(interceptedRecord.topic(), interceptedRecord.key());
+                serializedKey = keySerializer.serialize(record.topic(), record.key());
             } catch (ClassCastException cce) {
-                throw new SerializationException("Can't convert key of class " + interceptedRecord.key().getClass().getName() +
+                throw new SerializationException("Can't convert key of class " + record.key().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in key.serializer");
             }
             byte[] serializedValue;
             try {
-                serializedValue = valueSerializer.serialize(interceptedRecord.topic(), interceptedRecord.value());
+                serializedValue = valueSerializer.serialize(record.topic(), record.value());
             } catch (ClassCastException cce) {
-                throw new SerializationException("Can't convert value of class " + interceptedRecord.value().getClass().getName() +
+                throw new SerializationException("Can't convert value of class " + record.value().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in value.serializer");
             }
-            int partition = partition(interceptedRecord, serializedKey, serializedValue, metadata.fetch());
+            int partition = partition(record, serializedKey, serializedValue, metadata.fetch());
             int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(serializedKey, serializedValue);
             ensureValidRecordSize(serializedSize);
-            TopicPartition tp = new TopicPartition(interceptedRecord.topic(), partition);
-            log.trace("Sending record {} with callback {} to topic {} partition {}", interceptedRecord, callback, interceptedRecord.topic(), partition);
-            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, serializedKey, serializedValue, interceptCallback, remainingWaitMs);
+            TopicPartition tp = new TopicPartition(record.topic(), partition);
+            log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
+            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, serializedKey, serializedValue, callback, remainingWaitMs);
             if (result.batchIsFull || result.newBatchCreated) {
-                log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", interceptedRecord.topic(), partition);
+                log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
             }
             return result.future;
@@ -464,8 +471,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (callback != null)
                 callback.onCompletion(null, e);
             this.errors.record();
-            if (this.interceptors != null)
-                this.interceptors.onAcknowledgement(null, e);
             return new FutureFailure(e);
         } catch (InterruptedException e) {
             this.errors.record();
