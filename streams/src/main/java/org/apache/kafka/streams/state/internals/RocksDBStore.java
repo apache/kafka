@@ -60,6 +60,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private static final String DB_FILE_DIR = "rocksdb";
 
     private final String name;
+    private final String parentDir;
 
     private final Options options;
     private final WriteOptions wOptions;
@@ -91,7 +92,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     public RocksDBStore(String name, Serdes<K, V> serdes) {
+        this(name, DB_FILE_DIR, serdes);
+    }
+
+    public RocksDBStore(String name, String parentDir, Serdes<K, V> serdes) {
         this.name = name;
+        this.parentDir = parentDir;
         this.serdes = serdes;
 
         // initialize the rocksdb options
@@ -131,7 +137,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     public void openDB(ProcessorContext context) {
         this.context = context;
-        this.dbDir = new File(new File(this.context.stateDir(), DB_FILE_DIR), this.name);
+        this.dbDir = new File(new File(this.context.stateDir(), parentDir), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
     }
 

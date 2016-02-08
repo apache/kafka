@@ -39,6 +39,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -52,6 +53,7 @@ public class RocksDBWindowStoreTest {
 
     private final ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
     private final ByteArrayDeserializer byteArrayDeserializer = new ByteArrayDeserializer();
+    private final String windowName = "window";
     private final int numSegments = 3;
     private final long segmentSize = RocksDBWindowStore.MIN_SEGMENT_INTERVAL;
     private final long retentionPeriod = segmentSize * (numSegments - 1);
@@ -60,7 +62,7 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context, Serdes<K, V> serdes) {
-        StateStoreSupplier supplier = new RocksDBWindowStoreSupplier<>("window", retentionPeriod, numSegments, true, serdes, null);
+        StateStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName, retentionPeriod, numSegments, true, serdes, null);
 
         WindowStore<K, V> store = (WindowStore<K, V>) supplier.get();
         store.init(context);
@@ -516,7 +518,7 @@ public class RocksDBWindowStoreTest {
                 // check segment directories
                 store.flush();
                 assertEquals(
-                        Utils.mkSet(inner.directorySuffix(4L), inner.directorySuffix(5L), inner.directorySuffix(6L)),
+                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
                         segmentDirs(baseDir)
                 );
             } finally {
@@ -606,7 +608,7 @@ public class RocksDBWindowStoreTest {
                     (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
 
             try {
-                context.restore("window", changeLog);
+                context.restore(windowName, changeLog);
 
                 assertEquals(Utils.mkSet(4L, 5L, 6L), inner.segmentIds());
 
@@ -623,7 +625,7 @@ public class RocksDBWindowStoreTest {
                 // check segment directories
                 store.flush();
                 assertEquals(
-                        Utils.mkSet(inner.directorySuffix(4L), inner.directorySuffix(5L), inner.directorySuffix(6L)),
+                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
                         segmentDirs(baseDir)
                 );
             } finally {
@@ -645,16 +647,9 @@ public class RocksDBWindowStoreTest {
     }
 
     private Set<String> segmentDirs(File baseDir) {
-        File rocksDbDir = new File(baseDir, "rocksdb");
-        String[] subdirs = rocksDbDir.list();
+        File windowDir = new File(baseDir, windowName);
 
-        HashSet<String> set = new HashSet<>();
-
-        for (String subdir : subdirs) {
-            if (subdir.startsWith("window-"))
-            set.add(subdir.substring(7));
-        }
-        return set;
+        return new HashSet<>(Arrays.asList(windowDir.list()));
     }
 
     private Map<Integer, Set<String>> entriesByKey(List<KeyValue<byte[], byte[]>> changeLog, long startTime) {
