@@ -189,6 +189,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void close() {
+        flush();
         for (Segment segment : segments) {
             if (segment != null)
                 segment.close();
@@ -271,7 +272,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         long segTo = segmentId(Math.max(0L, timeTo));
 
         byte[] binaryFrom = WindowStoreUtils.toBinaryKey(key, timeFrom, 0, serdes);
-        byte[] binaryUntil = WindowStoreUtils.toBinaryKey(key, timeTo + 1L, 0, serdes);
+        byte[] binaryTo = WindowStoreUtils.toBinaryKey(key, timeTo, Integer.MAX_VALUE, serdes);
 
         ArrayList<KeyValueIterator<byte[], byte[]>> iterators = new ArrayList<>();
 
@@ -279,7 +280,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
             Segment segment = segments[(int) (segmentId % segments.length)];
 
             if (segment != null && segment.id == segmentId)
-                iterators.add(segment.range(binaryFrom, binaryUntil));
+                iterators.add(segment.range(binaryFrom, binaryTo));
         }
 
         if (iterators.size() > 0) {
