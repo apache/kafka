@@ -104,7 +104,7 @@ public class StreamThread extends Thread {
     private long lastCommit;
     private long recordsProcessed;
 
-    private final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
+    private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
 
     static File makeStateDir(String jobId, String baseDirName) {
@@ -355,18 +355,22 @@ public class StreamThread extends Thread {
         if (!standbyTasks.isEmpty()) {
             if (processStandbyRecords) {
                 if (!standbyRecords.isEmpty()) {
+                    Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> remainingStandbyRecords = new HashMap<>();
+
                     for (TopicPartition partition : standbyRecords.keySet()) {
-                        StandbyTask task = standbyTasksByPartition.get(partition);
-                        List<ConsumerRecord<byte[], byte[]>> remaining = standbyRecords.remove(partition);
+                        List<ConsumerRecord<byte[], byte[]>> remaining = standbyRecords.get(partition);
                         if (remaining != null) {
+                            StandbyTask task = standbyTasksByPartition.get(partition);
                             remaining = task.update(partition, remaining);
                             if (remaining != null) {
-                                standbyRecords.put(partition, remaining);
+                                remainingStandbyRecords.put(partition, remaining);
                             } else {
                                 restoreConsumer.resume(partition);
                             }
                         }
                     }
+
+                    standbyRecords = remainingStandbyRecords;
                 }
                 processStandbyRecords = false;
             }
@@ -376,6 +380,12 @@ public class StreamThread extends Thread {
             if (!records.isEmpty()) {
                 for (TopicPartition partition : records.partitions()) {
                     StandbyTask task = standbyTasksByPartition.get(partition);
+
+                    if (task == null) {
+                        log.error("missing standby task for partition {}", partition);
+                        throw new StreamsException("missing standby task for partition " + partition);
+                    }
+
                     List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
                     if (remaining != null) {
                         restoreConsumer.pause(partition);
@@ -642,6 +652,9 @@ public class StreamThread extends Thread {
                 }
                 // collect checked pointed offsets to position the restore consumer
                 // this include all partitions from which we restore states
+                for (TopicPartition partition : task.checkpointedOffsets().keySet()) {
+                    standbyTasksByPartition.put(partition, task);
+                }
                 checkpointedOffsets.putAll(task.checkpointedOffsets());
             }
         }
