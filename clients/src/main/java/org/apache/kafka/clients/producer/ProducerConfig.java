@@ -281,7 +281,7 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(PARTITIONER_CLASS_CONFIG,
                                         Type.CLASS,
-                                        DefaultPartitioner.class.getName(),
+                                        DefaultPartitioner.class,
                                         Importance.MEDIUM, PARTITIONER_CLASS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
