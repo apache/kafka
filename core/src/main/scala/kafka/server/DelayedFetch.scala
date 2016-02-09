@@ -81,9 +81,9 @@ class DelayedFetch(delayMs: Long,
               else
                 replica.logEndOffset
 
-            // Go directly to Case D checking if the message offsets are the same. This gets around the case where
-            // the current log segment has just rolled and the high watermark is still on the old segment,
-            // which would otherwise be seen incorrectly as an instance of Case C.
+            // Go directly to the check for Case D if the message offsets are the same. If the log segment
+            // has just rolled, then the high watermark offset will remain the same but be on the old segment,
+            // which would incorrectly be seen as an instance of Case C.
             if (endOffset.messageOffset != fetchOffset.messageOffset) {
               if (endOffset.onOlderSegment(fetchOffset)) {
                 // Case C, this can happen when the new fetch operation is on a truncated leader
