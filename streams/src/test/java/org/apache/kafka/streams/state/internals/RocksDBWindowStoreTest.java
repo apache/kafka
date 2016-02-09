@@ -639,10 +639,9 @@ public class RocksDBWindowStoreTest {
     }
 
     @Test
-    public void testSegmentMaintenace() throws IOException {
+    public void testSegmentMaintenance() throws IOException {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
-            final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerializer, byteArraySerializer);
             RecordCollector recordCollector = new RecordCollector(producer) {
                 @Override
@@ -742,6 +741,68 @@ public class RocksDBWindowStoreTest {
         }
     }
 
+    @Test
+    public void testInitialLoading() throws IOException {
+        File baseDir = Files.createTempDirectory("test").toFile();
+        try {
+            Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerializer, byteArraySerializer);
+            RecordCollector recordCollector = new RecordCollector(producer) {
+                @Override
+                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+                    // do nothing
+                }
+            };
+
+            MockProcessorContext context = new MockProcessorContext(
+                    null, baseDir,
+                    byteArraySerializer, byteArrayDeserializer, byteArraySerializer, byteArrayDeserializer,
+                    recordCollector);
+
+            File storeDir = new File(baseDir, windowName);
+
+            WindowStore<Integer, String> store = createWindowStore(context, serdes);
+            RocksDBWindowStore<Integer, String> inner =
+                    (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
+
+            try {
+                new File(storeDir, inner.segmentName(0L)).mkdir();
+                new File(storeDir, inner.segmentName(1L)).mkdir();
+                new File(storeDir, inner.segmentName(2L)).mkdir();
+                new File(storeDir, inner.segmentName(3L)).mkdir();
+                new File(storeDir, inner.segmentName(4L)).mkdir();
+                new File(storeDir, inner.segmentName(5L)).mkdir();
+                new File(storeDir, inner.segmentName(6L)).mkdir();
+            } finally {
+                store.close();
+            }
+
+            store = createWindowStore(context, serdes);
+            inner = (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
+
+            try {
+                assertEquals(
+                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
+                        segmentDirs(baseDir)
+                );
+
+                WindowStoreIterator iter = store.fetch(0, 0L, 1000000L);
+                while (iter.hasNext()) {
+                    iter.next();
+                }
+
+                assertEquals(
+                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
+                        segmentDirs(baseDir)
+                );
+
+            } finally {
+                store.close();
+            }
+
+        } finally {
+            Utils.delete(baseDir);
+        }
+    }
 
     private <E> List<E> toList(WindowStoreIterator<E> iterator) {
         ArrayList<E> list = new ArrayList<>();
