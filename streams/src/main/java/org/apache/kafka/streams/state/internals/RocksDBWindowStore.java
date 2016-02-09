@@ -33,6 +33,7 @@ import org.apache.kafka.streams.state.WindowStoreUtils;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.NoSuchElementException;
@@ -181,10 +182,20 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
             File dir = new File(context.stateDir(), name);
 
             if (dir.exists()) {
-                for (String segmentName : dir.list()) {
-                    long segmentId = segmentIdFromSegmentName(segmentName);
-                    if (segmentId >= 0)
-                        getSegment(segmentId);
+                String[] list = dir.list();
+                if (list != null) {
+                    long[] segmentIds = new long[list.length];
+                    for (int i = 0; i < list.length; i++)
+                        segmentIds[i] = segmentIdFromSegmentName(list[i]);
+
+                    // open segments in the id order
+                    Arrays.sort(segmentIds);
+                    for (long segmentId : segmentIds) {
+                        if (segmentId >= 0) {
+                            currentSegmentId = segmentId;
+                            getSegment(segmentId);
+                        }
+                    }
                 }
             } else {
                 dir.mkdir();
@@ -314,7 +325,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     private Segment getSegment(long segmentId) {
-        if (segmentId > currentSegmentId - segments.length) {
+        if (segmentId <= currentSegmentId && segmentId > currentSegmentId - segments.length) {
             int index = (int) (segmentId % segments.length);
 
             if (segments[index] != null && segments[index].id != segmentId) {
