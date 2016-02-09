@@ -25,7 +25,7 @@ import java.util.concurrent.CountDownLatch
 
 import kafka.cluster._
 import kafka.consumer.{ConsumerThreadId, TopicCount}
-import kafka.server.ConfigType
+import kafka.server.{KafkaConfig, ConfigType}
 import org.I0Itec.zkclient.{ZkClient,ZkConnection}
 import org.I0Itec.zkclient.exception.{ZkException, ZkNodeExistsException, ZkNoNodeException,
   ZkMarshallingError, ZkBadVersionException}
@@ -36,7 +36,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.zookeeper.ZooDefs
 import scala.collection.JavaConverters._
 import scala.collection._
-import kafka.api.LeaderAndIsr
+import kafka.api.{ApiVersion, LeaderAndIsr}
 import org.apache.zookeeper.data.{ACL, Stat}
 import kafka.admin._
 import kafka.common.{KafkaException, NoEpochForPartitionException}
@@ -267,17 +267,28 @@ class ZkUtils(val zkClient: ZkClient,
   /**
    * Register brokers with v2 json format (which includes multiple endpoints).
    * This format also includes default endpoints for compatibility with older clients.
-   * @param zkClient
-   * @param id
+    *
+    * @param id
    * @param advertisedEndpoints
-   * @param timeout
    * @param jmxPort
    */
-  def registerBrokerInZk(id: Int, host: String, port: Int, advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint], jmxPort: Int) {
+  def registerBrokerInZk(id: Int, host: String, port: Int, advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint], jmxPort: Int, rack: Option[String] = Option.empty) {
     val brokerIdPath = BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
 
-    val brokerInfo = Json.encode(Map("version" -> 2, "host" -> host, "port" -> port, "endpoints"->advertisedEndpoints.values.map(_.connectionString).toArray, "jmx_port" -> jmxPort, "timestamp" -> timestamp))
+    var jsonMap = Map("version" -> 2,
+                      "host" -> host,
+                      "port" -> port,
+                      "endpoints"->advertisedEndpoints.values.map(_.connectionString).toArray,
+                      "jmx_port" -> jmxPort,
+                      "timestamp" -> timestamp
+    )
+    rack match {
+      case Some(rack) => jsonMap += ("rack" -> rack)
+      case None =>
+    }
+
+    val brokerInfo = Json.encode(jsonMap)
     registerBrokerInZk(brokerIdPath, brokerInfo)
 
     info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
@@ -754,8 +765,8 @@ class ZkUtils(val zkClient: ZkClient,
   /**
    * This API takes in a broker id, queries zookeeper for the broker metadata and returns the metadata for that broker
    * or throws an exception if the broker dies before the query to zookeeper finishes
-   * @param brokerId The broker id
-   * @param zkClient The zookeeper client connection
+    *
+    * @param brokerId The broker id
    * @return An optional Broker object encapsulating the broker metadata
    */
   def getBrokerInfo(brokerId: Int): Option[Broker] = {

@@ -161,7 +161,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   @Test
   def testCreateAlterTopicWithRackAware() {
     val brokers = 0 to 5
-    TestUtils.createBrokersInZk(zkClient, brokers)
+    TestUtils.createBrokersInZk(zkUtils, brokers)
 
     val createOpts = new TopicCommandOptions(Array(
       "--partitions", "18",
@@ -169,9 +169,9 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
       "--rack-locator-class", "kafka.admin.SimpleRackLocator",
       "--rack-locator-properties", "0=rack1,1=rack2,2=rack2,3=rack1,4=rack3,5=rack3",
       "--topic", "foo"))
-    TopicCommand.createTopic(zkClient, createOpts)
+    TopicCommand.createTopic(zkUtils, createOpts)
 
-    var assignment = ZkUtils.getReplicaAssignmentForTopics(zkClient, Seq("foo"))
+    var assignment = zkUtils.getReplicaAssignmentForTopics(Seq("foo"))
       .map(p => p._1.partition -> p._2)
     val rackInfo: Map[Int, String] = Map(0 -> "rack1", 1 -> "rack2",2 -> "rack2",3 -> "rack1", 4 -> "rack3",5 -> "rack3")
     ensureRackAwareAndEvenDistribution(assignment, rackInfo, 6, 18, 3)
@@ -182,8 +182,8 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
       "--rack-locator-class", "kafka.admin.SimpleRackLocator",
       "--rack-locator-properties", "0=rack1,1=rack2,2=rack2,3=rack1,4=rack3,5=rack3",
       "--topic", "foo"))
-    TopicCommand.alterTopic(zkClient, alterOpts)
-    assignment = ZkUtils.getReplicaAssignmentForTopics(zkClient, Seq("foo"))
+    TopicCommand.alterTopic(zkUtils, alterOpts)
+    assignment = zkUtils.getReplicaAssignmentForTopics(Seq("foo"))
       .map(p => p._1.partition -> p._2)
     ensureRackAwareAndEvenDistribution(assignment, rackInfo, 6, 36, 3)
   }

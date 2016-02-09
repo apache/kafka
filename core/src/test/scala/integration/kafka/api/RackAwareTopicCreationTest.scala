@@ -33,8 +33,6 @@ class RackAwareTopicCreationTest extends KafkaServerTestHarness with RackAwareTe
 
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.NumPartitionsProp, 8.toString)
-  overridingProps.put(KafkaConfig.RackLocatorClassProp, "kafka.admin.SimpleRackLocator")
-  overridingProps.put(KafkaConfig.RackLocatorPropertiesProp, "0=rack1,1=rack1,2=rack2,3=rack2")
   overridingProps.put(KafkaConfig.DefaultReplicationFactorProp, 2.toString)
 
   def generateConfigs() =
@@ -52,8 +50,8 @@ class RackAwareTopicCreationTest extends KafkaServerTestHarness with RackAwareTe
       assertEquals("Should have offset 0", 0L, producer.send(record).get.offset)
 
       // double check that the topic is created with leader elected
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
-      val assignment = ZkUtils.getReplicaAssignmentForTopics(zkClient, Seq(topic))
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
+      val assignment = zkUtils.getReplicaAssignmentForTopics(Seq(topic))
                               .map(p => p._1.partition -> p._2)
       val brokerRackMap = Map(0 -> "rack1", 1 -> "rack1", 2 -> "rack2", 3 -> "rack2");
       ensureRackAwareAndEvenDistribution(assignment, brokerRackMap, 4, 8, 2)

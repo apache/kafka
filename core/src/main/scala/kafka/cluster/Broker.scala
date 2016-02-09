@@ -19,6 +19,7 @@ package kafka.cluster
 
 import java.nio.ByteBuffer
 
+import kafka.api.ApiUtils._
 import kafka.common.{BrokerEndPointNotAvailableException, BrokerNotAvailableException, KafkaException}
 import kafka.utils.Json
 import org.apache.kafka.common.protocol.SecurityProtocol
@@ -74,9 +75,8 @@ object Broker {
                 (ep.protocolType, ep)
               }.toMap
             }
-
-
-          new Broker(id, endpoints)
+          val rack: Option[String] = brokerInfo.get("rack").asInstanceOf[Option[String]]
+          new Broker(id, endpoints, rack)
         case None =>
           throw new BrokerNotAvailableException(s"Broker id $id does not exist")
       }
@@ -103,9 +103,9 @@ object Broker {
   }
 }
 
-case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) {
+case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint], rack: Option[String] = None) {
 
-  override def toString: String = id + " : " + endPoints.values.mkString("(",",",")")
+  override def toString: String = id + " : " + endPoints.values.mkString("(",",",")") + ":" + rack.getOrElse("")
 
   def this(id: Int, host: String, port: Int, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
     this(id, Map(protocol -> EndPoint(host, port, protocol)))
@@ -114,7 +114,6 @@ case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) {
   def this(bep: BrokerEndPoint, protocol: SecurityProtocol) = {
     this(bep.id, bep.host, bep.port, protocol)
   }
-
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(id)

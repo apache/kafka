@@ -19,7 +19,6 @@ package kafka.admin
 import java.util.Properties
 
 import junit.framework.Assert._
-import kafka.cluster.RackLocator
 import kafka.common.TopicAndPartition
 import kafka.utils.{ZkUtils, Logging}
 import kafka.zk.ZooKeeperTestHarness
@@ -90,12 +89,3 @@ trait RackAwareTest {
 }
 
 case class ReplicaDistributions(partitionRacks: Map[Int, Seq[String]], brokerLeaderCount: Map[Int, Int], brokerReplicasCount: Map[Int, Int])
-
-class SimpleRackLocator(zkClient: ZkClient, props: Properties) extends RackLocator(zkClient, props) {
-  override def getRackInfo(): Map[Int, String] = {
-    val brokerRackMap = props.asScala.map {
-      case (key, value) => (key.toInt, value)
-    }
-    brokerRackMap
-  }
-}

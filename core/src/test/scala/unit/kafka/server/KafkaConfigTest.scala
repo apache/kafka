@@ -498,9 +498,7 @@ class KafkaConfigTest {
         case KafkaConfig.MetricNumSamplesProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.MetricSampleWindowMsProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.MetricReporterClassesProp => // ignore string
-        case KafkaConfig.RackLocatorClassProp => // ignore
-        case KafkaConfig.RackLocatorPropertiesProp => // ignore
-
+        case KafkaConfig.RackProp => // ignore string
         //SSL Configs
         case KafkaConfig.PrincipalBuilderClassProp =>
         case KafkaConfig.SslProtocolProp => // ignore string

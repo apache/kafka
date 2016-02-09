@@ -33,7 +33,8 @@ object ApiVersion {
     "0.8.0" -> KAFKA_080,
     "0.8.1" -> KAFKA_081,
     "0.8.2" -> KAFKA_082,
-    "0.9.0" -> KAFKA_090
+    "0.9.0" -> KAFKA_090,
+    "0.9.1" -> KAFKA_091
   )
 
   def apply(version: String): ApiVersion  = versionNameMap(version.split("\\.").slice(0,3).mkString("."))
@@ -75,4 +76,9 @@ case object KAFKA_082 extends ApiVersion {
 case object KAFKA_090 extends ApiVersion {
   val version: String = "0.9.0.X"
   val id: Int = 3
+}
+
+case object KAFKA_091 extends ApiVersion {
+  val version: String = "0.9.1.X"
+  val id: Int = 4
 }
