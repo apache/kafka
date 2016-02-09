@@ -62,6 +62,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   override def tearDown() {
     consumer1.close()
     consumer2.close()
+    // Ensure that all producers are closed since unclosed producers impact other tests when Kafka server ports are reused
     producers.foreach(_.close())
 
     super.tearDown()
