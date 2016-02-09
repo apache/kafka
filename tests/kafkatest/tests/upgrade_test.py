@@ -34,7 +34,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, version=LATEST_0_8_2, topics={self.topic: {
                                                                     "partitions": 3,
                                                                     "replication-factor": 3,
-                                                                    "min.insync.replicas": 2}})
+                                                                    'configs': {"min.insync.replicas": 2}}})
         self.zk.start()
         self.kafka.start()
 
