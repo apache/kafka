@@ -81,6 +81,9 @@ class DelayedFetch(delayMs: Long,
               else
                 replica.logEndOffset
 
+            // Go directly to Case D checking if the message offsets are the same. This gets around the case where
+            // the current log segment has just rolled and the high watermark is still on the old segment,
+            // which would otherwise be seen incorrectly as an instance of Case C.
             if (endOffset.messageOffset != fetchOffset.messageOffset) {
               if (endOffset.onOlderSegment(fetchOffset)) {
                 // Case C, this can happen when the new fetch operation is on a truncated leader
@@ -91,7 +94,7 @@ class DelayedFetch(delayMs: Long,
                 // or the partition has just rolled a new segment
                 debug("Satisfying fetch %s immediately since it is fetching older segments.".format(fetchMetadata))
                 return forceComplete()
-              } else if (fetchOffset.precedes(endOffset)) {
+              } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
                 // we need take the partition fetch size as upper bound when accumulating the bytes
                 accumulatedSize += math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
               }
