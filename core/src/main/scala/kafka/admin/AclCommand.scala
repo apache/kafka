@@ -113,10 +113,9 @@ object AclCommand {
     withAuthorizer(opts) { authorizer =>
       val resources = getResource(opts, dieIfNoResourceFound = false)
 
-      val resourceToAcls = if (resources.isEmpty)
-        authorizer.getAcls()
-      else
-        resources.map(resource => (resource -> authorizer.getAcls(resource)))
+      val resourceToAcls: Iterable[(Resource, Set[Acl])] =
+        if (resources.isEmpty) authorizer.getAcls()
+        else resources.map(resource => (resource -> authorizer.getAcls(resource)))
 
       for ((resource, acls) <- resourceToAcls)
         println(s"Current ACLs for resource `${resource}`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
