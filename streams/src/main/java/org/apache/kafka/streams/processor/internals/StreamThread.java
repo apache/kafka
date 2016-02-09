@@ -682,6 +682,7 @@ public class StreamThread extends Thread {
 
         standbyTasks.clear();
         standbyTasksByPartition.clear();
+        standbyRecords.clear();
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups) {
