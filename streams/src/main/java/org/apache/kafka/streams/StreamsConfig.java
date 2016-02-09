@@ -157,6 +157,7 @@ public class StreamsConfig extends AbstractConfig {
                                         ConsumerConfig.VALUE_DESERIALIZER_CLASS_DOC)
                                 .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                                         Type.CLASS,
+                                        WALLCLOCK_TIMESTAMP_EXTRACTOR,
                                         Importance.MEDIUM,
                                         TIMESTAMP_EXTRACTOR_CLASS_DOC)
                                 .define(PARTITION_GROUPER_CLASS_CONFIG,

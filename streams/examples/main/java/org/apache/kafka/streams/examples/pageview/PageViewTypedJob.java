@@ -25,14 +25,13 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Count;
 import org.apache.kafka.streams.kstream.HoppingWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.StreamsConfig;
 
 import java.util.Properties;
 
@@ -99,7 +98,7 @@ public class PageViewTypedJob {
                     return viewByRegion;
                 })
                 .map((user, viewRegion) -> new KeyValue<>(viewRegion.region, viewRegion))
-                .aggregateByKey(new Count<String, PageViewByRegion>(), HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000),
+                .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000),
                         stringSerializer, longSerializer,
                         stringDeserializer, longDeserializer)
                 .toStream()
@@ -121,7 +120,7 @@ public class PageViewTypedJob {
         // write to the result topic
         regionCount.to("streams-pageviewstats-output", new JsonPOJOSerializer<>(), new JsonPOJOSerializer<>());
 
-        KafkaStreams kstream = new KafkaStreams(builder, props);
-        kstream.start();
+        KafkaStreams streams = new KafkaStreams(builder, props);
+        streams.start();
     }
 }

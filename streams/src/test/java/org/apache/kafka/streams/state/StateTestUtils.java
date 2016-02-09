@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * A utility for tests to create and manage unique and isolated directories on the file system for local state.
  */
-public class StateUtils {
+public class StateTestUtils {
 
     private static final AtomicLong INSTANCE_COUNTER = new AtomicLong();
 

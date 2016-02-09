@@ -58,4 +58,9 @@ public final class RecordMetadata {
     public int partition() {
         return this.topicPartition.partition();
     }
+
+    @Override
+    public String toString() {
+        return topicPartition.toString() + "@" + offset;
+    }
 }

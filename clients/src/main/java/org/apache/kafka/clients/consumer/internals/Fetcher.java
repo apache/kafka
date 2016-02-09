@@ -559,8 +559,11 @@ public class Fetcher<K, V> {
                 MemoryRecords records = MemoryRecords.readableRecords(buffer);
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
                 for (LogEntry logEntry : records) {
-                    parsed.add(parseRecord(tp, logEntry));
-                    bytes += logEntry.size();
+                    // Skip the messages earlier than current position.
+                    if (logEntry.offset() >= position) {
+                        parsed.add(parseRecord(tp, logEntry));
+                        bytes += logEntry.size();
+                    }
                 }
 
                 if (!parsed.isEmpty()) {

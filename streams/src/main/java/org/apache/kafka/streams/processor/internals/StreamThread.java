@@ -104,7 +104,7 @@ public class StreamThread extends Thread {
     private long lastCommit;
     private long recordsProcessed;
 
-    private final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
+    private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
 
     static File makeStateDir(String jobId, String baseDirName) {
@@ -261,20 +261,16 @@ public class StreamThread extends Thread {
     private void shutdown() {
         log.info("Shutting down stream thread [" + this.getName() + "]");
 
-        // We need to first remove the tasks before shutting down the underlying clients
-        // as they may be required in the previous steps; and exceptions should not
-        // prevent this call from going through all shutdown steps.
         try {
             commitAll();
         } catch (Throwable e) {
             // already logged in commitAll()
         }
-        try {
-            removeStreamTasks();
-            removeStandbyTasks();
-        } catch (Throwable e) {
-            // already logged in removeStreamTasks() and removeStandbyTasks()
-        }
+
+        // We need to first close the underlying clients before closing the state
+        // manager, for example we need to make sure producer's message sends
+        // have all been acked before the state manager records
+        // changelog sent offsets
         try {
             producer.close();
         } catch (Throwable e) {
@@ -289,6 +285,14 @@ public class StreamThread extends Thread {
             restoreConsumer.close();
         } catch (Throwable e) {
             log.error("Failed to close restore consumer in thread [" + this.getName() + "]: ", e);
+        }
+
+        // Exceptions should not prevent this call from going through all shutdown steps
+        try {
+            removeStreamTasks();
+            removeStandbyTasks();
+        } catch (Throwable e) {
+            // already logged in removeStreamTasks() and removeStandbyTasks()
         }
 
         log.info("Stream thread shutdown complete [" + this.getName() + "]");
@@ -351,18 +355,22 @@ public class StreamThread extends Thread {
         if (!standbyTasks.isEmpty()) {
             if (processStandbyRecords) {
                 if (!standbyRecords.isEmpty()) {
+                    Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> remainingStandbyRecords = new HashMap<>();
+
                     for (TopicPartition partition : standbyRecords.keySet()) {
-                        StandbyTask task = standbyTasksByPartition.get(partition);
-                        List<ConsumerRecord<byte[], byte[]>> remaining = standbyRecords.remove(partition);
+                        List<ConsumerRecord<byte[], byte[]>> remaining = standbyRecords.get(partition);
                         if (remaining != null) {
+                            StandbyTask task = standbyTasksByPartition.get(partition);
                             remaining = task.update(partition, remaining);
                             if (remaining != null) {
-                                standbyRecords.put(partition, remaining);
+                                remainingStandbyRecords.put(partition, remaining);
                             } else {
                                 restoreConsumer.resume(partition);
                             }
                         }
                     }
+
+                    standbyRecords = remainingStandbyRecords;
                 }
                 processStandbyRecords = false;
             }
@@ -372,6 +380,12 @@ public class StreamThread extends Thread {
             if (!records.isEmpty()) {
                 for (TopicPartition partition : records.partitions()) {
                     StandbyTask task = standbyTasksByPartition.get(partition);
+
+                    if (task == null) {
+                        log.error("missing standby task for partition {}", partition);
+                        throw new StreamsException("missing standby task for partition " + partition);
+                    }
+
                     List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
                     if (remaining != null) {
                         restoreConsumer.pause(partition);
@@ -638,6 +652,9 @@ public class StreamThread extends Thread {
                 }
                 // collect checked pointed offsets to position the restore consumer
                 // this include all partitions from which we restore states
+                for (TopicPartition partition : task.checkpointedOffsets().keySet()) {
+                    standbyTasksByPartition.put(partition, task);
+                }
                 checkpointedOffsets.putAll(task.checkpointedOffsets());
             }
         }

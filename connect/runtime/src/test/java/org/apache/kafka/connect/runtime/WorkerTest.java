@@ -354,14 +354,13 @@ public class WorkerTest extends ThreadedTest {
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
-        workerTask.start(origProps);
+        workerTask.initialize(origProps);
         EasyMock.expectLastCall();
 
         // Remove
         workerTask.stop();
         EasyMock.expectLastCall();
         EasyMock.expect(workerTask.awaitStop(EasyMock.anyLong())).andStubReturn(true);
-        workerTask.close();
         EasyMock.expectLastCall();
 
         offsetBackingStore.stop();
@@ -424,7 +423,7 @@ public class WorkerTest extends ThreadedTest {
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
-        workerTask.start(origProps);
+        workerTask.initialize(origProps);
         EasyMock.expectLastCall();
 
         // Remove on Worker.stop()
@@ -432,7 +431,6 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
         EasyMock.expect(workerTask.awaitStop(EasyMock.anyLong())).andReturn(true);
         // Note that in this case we *do not* commit offsets since it's an unclean shutdown
-        workerTask.close();
         EasyMock.expectLastCall();
 
         offsetBackingStore.stop();

@@ -74,12 +74,18 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         this.initialized = true;
     }
 
-    public TaskId id() {
+    public ProcessorStateManager getStateMgr() {
+        return stateMgr;
+    }
+
+    @Override
+    public TaskId taskId() {
         return id;
     }
 
-    public ProcessorStateManager getStateMgr() {
-        return stateMgr;
+    @Override
+    public String jobId() {
+        return task.jobId();
     }
 
     @Override
@@ -132,8 +138,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         if (node == null)
             throw new TopologyBuilderException("Accessing from an unknown node");
 
-        if (!node.stateStores.contains(name))
-            throw new TopologyBuilderException("Processor " + node.name() + " has no access to StateStore " + name);
+        // TODO: restore this once we fix the ValueGetter initialiation issue
+        //if (!node.stateStores.contains(name))
+        //    throw new TopologyBuilderException("Processor " + node.name() + " has no access to StateStore " + name);
 
         return stateMgr.getStore(name);
     }
