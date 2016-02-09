@@ -638,6 +638,172 @@ public class RocksDBWindowStoreTest {
         }
     }
 
+    @Test
+    public void testSegmentMaintenance() throws IOException {
+        File baseDir = Files.createTempDirectory("test").toFile();
+        try {
+            Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerializer, byteArraySerializer);
+            RecordCollector recordCollector = new RecordCollector(producer) {
+                @Override
+                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+                    // do nothing
+                }
+            };
+
+            MockProcessorContext context = new MockProcessorContext(
+                    null, baseDir,
+                    byteArraySerializer, byteArrayDeserializer, byteArraySerializer, byteArrayDeserializer,
+                    recordCollector);
+
+            WindowStore<Integer, String> store = createWindowStore(context, serdes);
+            RocksDBWindowStore<Integer, String> inner =
+                    (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
+
+            try {
+
+                context.setTime(0L);
+                store.put(0, "v");
+                assertEquals(
+                        Utils.mkSet(inner.segmentName(0L)),
+                        segmentDirs(baseDir)
+                );
+
+                context.setTime(59999L);
+                store.put(0, "v");
+                context.setTime(59999L);
+                store.put(0, "v");
+                assertEquals(
+                        Utils.mkSet(inner.segmentName(0L)),
+                        segmentDirs(baseDir)
+                );
+
+                context.setTime(60000L);
+                store.put(0, "v");
+                assertEquals(
+                        Utils.mkSet(inner.segmentName(0L), inner.segmentName(1L)),
+                        segmentDirs(baseDir)
+                );
+
+                WindowStoreIterator iter;
+                int fetchedCount;
+
+                iter = store.fetch(0, 0L, 240000L);
+                fetchedCount = 0;
+                while (iter.hasNext()) {
+                    iter.next();
+                    fetchedCount++;
+                }
+                assertEquals(4, fetchedCount);
+
+                assertEquals(
+                        Utils.mkSet(inner.segmentName(0L), inner.segmentName(1L)),
+                        segmentDirs(baseDir)
+                );
+
+                context.setTime(180000L);
+                store.put(0, "v");
+
+                iter = store.fetch(0, 0L, 240000L);
+                fetchedCount = 0;
+                while (iter.hasNext()) {
+                    iter.next();
+                    fetchedCount++;
+                }
+                assertEquals(2, fetchedCount);
+
+                assertEquals(
+                        Utils.mkSet(inner.segmentName(1L), inner.segmentName(2L), inner.segmentName(3L)),
+                        segmentDirs(baseDir)
+                );
+
+                context.setTime(300000L);
+                store.put(0, "v");
+
+                iter = store.fetch(0, 240000L, 1000000L);
+                fetchedCount = 0;
+                while (iter.hasNext()) {
+                    iter.next();
+                    fetchedCount++;
+                }
+                assertEquals(1, fetchedCount);
+
+                assertEquals(
+                        Utils.mkSet(inner.segmentName(3L), inner.segmentName(4L), inner.segmentName(5L)),
+                        segmentDirs(baseDir)
+                );
+
+            } finally {
+                store.close();
+            }
+
+        } finally {
+            Utils.delete(baseDir);
+        }
+    }
+
+    @Test
+    public void testInitialLoading() throws IOException {
+        File baseDir = Files.createTempDirectory("test").toFile();
+        try {
+            Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerializer, byteArraySerializer);
+            RecordCollector recordCollector = new RecordCollector(producer) {
+                @Override
+                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+                    // do nothing
+                }
+            };
+
+            MockProcessorContext context = new MockProcessorContext(
+                    null, baseDir,
+                    byteArraySerializer, byteArrayDeserializer, byteArraySerializer, byteArrayDeserializer,
+                    recordCollector);
+
+            File storeDir = new File(baseDir, windowName);
+
+            WindowStore<Integer, String> store = createWindowStore(context, serdes);
+            RocksDBWindowStore<Integer, String> inner =
+                    (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
+
+            try {
+                new File(storeDir, inner.segmentName(0L)).mkdir();
+                new File(storeDir, inner.segmentName(1L)).mkdir();
+                new File(storeDir, inner.segmentName(2L)).mkdir();
+                new File(storeDir, inner.segmentName(3L)).mkdir();
+                new File(storeDir, inner.segmentName(4L)).mkdir();
+                new File(storeDir, inner.segmentName(5L)).mkdir();
+                new File(storeDir, inner.segmentName(6L)).mkdir();
+            } finally {
+                store.close();
+            }
+
+            store = createWindowStore(context, serdes);
+            inner = (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
+
+            try {
+                assertEquals(
+                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
+                        segmentDirs(baseDir)
+                );
+
+                WindowStoreIterator iter = store.fetch(0, 0L, 1000000L);
+                while (iter.hasNext()) {
+                    iter.next();
+                }
+
+                assertEquals(
+                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
+                        segmentDirs(baseDir)
+                );
+
+            } finally {
+                store.close();
+            }
+
+        } finally {
+            Utils.delete(baseDir);
+        }
+    }
+
     private <E> List<E> toList(WindowStoreIterator<E> iterator) {
         ArrayList<E> list = new ArrayList<>();
         while (iterator.hasNext()) {
