@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.WindowStoreUtils;
 
 
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -47,8 +48,8 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private static class Segment extends RocksDBStore<byte[], byte[]> {
         public final long id;
 
-        Segment(String name, long id) {
-            super(name, WindowStoreUtils.INNER_SERDES);
+        Segment(String segmentName, String windowName, long id) {
+            super(segmentName, windowName, WindowStoreUtils.INNER_SERDES);
             this.id = id;
         }
 
@@ -159,6 +160,8 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public void init(ProcessorContext context) {
         this.context = context;
 
+        openExistingSegments();
+
         this.changeLogger = this.loggingEnabled ?
                 new RawStoreChangeLogger(name, context) : null;
 
@@ -169,6 +172,26 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
                 putInternal(key, value);
             }
         });
+
+        flush();
+    }
+
+    private void openExistingSegments() {
+        try {
+            File dir = new File(context.stateDir(), name);
+
+            if (dir.exists()) {
+                for (String segmentName : dir.list()) {
+                    long segmentId = segmentIdFromSegmentName(segmentName);
+                    if (segmentId >= 0)
+                        getSegment(segmentId);
+                }
+            } else {
+                dir.mkdir();
+            }
+        } catch (Exception ex) {
+
+        }
     }
 
     @Override
@@ -228,11 +251,12 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
 
         // If the record is within the retention period, put it in the store.
-        if (segmentId > currentSegmentId - segments.length) {
+        Segment segment = getSegment(segmentId);
+        if (segment != null) {
             if (retainDuplicates)
                 seqnum = (seqnum + 1) & 0x7FFFFFFF;
             byte[] binaryKey = WindowStoreUtils.toBinaryKey(key, timestamp, seqnum, serdes);
-            getSegment(segmentId).put(binaryKey, serdes.rawValue(value));
+            segment.put(binaryKey, serdes.rawValue(value));
             return binaryKey;
         } else {
             return null;
@@ -249,16 +273,16 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
 
         // If the record is within the retention period, put it in the store.
-        if (segmentId > currentSegmentId - segments.length)
-            getSegment(segmentId).put(binaryKey, binaryValue);
+        Segment segment = getSegment(segmentId);
+        if (segment != null)
+            segment.put(binaryKey, binaryValue);
     }
 
     private byte[] getInternal(byte[] binaryKey) {
         long segmentId = segmentId(WindowStoreUtils.timestampFromBinaryKey(binaryKey));
 
-        Segment segment = segments[(int) (segmentId % segments.length)];
-
-        if (segment != null && segment.id == segmentId) {
+        Segment segment = getSegment(segmentId);
+        if (segment != null) {
             return segment.get(binaryKey);
         } else {
             return null;
@@ -277,9 +301,8 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         ArrayList<KeyValueIterator<byte[], byte[]>> iterators = new ArrayList<>();
 
         for (long segmentId = segFrom; segmentId <= segTo; segmentId++) {
-            Segment segment = segments[(int) (segmentId % segments.length)];
-
-            if (segment != null && segment.id == segmentId)
+            Segment segment = getSegment(segmentId);
+            if (segment != null)
                 iterators.add(segment.range(binaryFrom, binaryTo));
         }
 
@@ -291,14 +314,23 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     private Segment getSegment(long segmentId) {
-        int index = (int) (segmentId % segments.length);
+        if (segmentId > currentSegmentId - segments.length) {
+            int index = (int) (segmentId % segments.length);
 
-        if (segments[index] == null) {
-            segments[index] = new Segment(name + "-" + directorySuffix(segmentId), segmentId);
-            segments[index].openDB(context);
+            if (segments[index] != null && segments[index].id != segmentId) {
+                cleanup();
+            }
+
+            if (segments[index] == null) {
+                segments[index] = new Segment(segmentName(segmentId), name, segmentId);
+                segments[index].openDB(context);
+            }
+
+            return segments[index];
+
+        } else {
+            return null;
         }
-
-        return segments[index];
     }
 
     private void cleanup() {
@@ -316,8 +348,17 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     // this method is defined public since it is used for unit tests
-    public String directorySuffix(long segmentId) {
+    public String segmentName(long segmentId) {
         return formatter.format(new Date(segmentId * segmentInterval));
+    }
+
+    public long segmentIdFromSegmentName(String segmentName) {
+        try {
+            Date date = formatter.parse(segmentName);
+            return date.getTime() / segmentInterval;
+        } catch (Exception ex) {
+            return -1L;
+        }
     }
 
     // this method is defined public since it is used for unit tests
