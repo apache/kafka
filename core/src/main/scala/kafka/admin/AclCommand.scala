@@ -290,7 +290,7 @@ object AclCommand {
       .defaultsTo(All.name)
 
     val allowPrincipalsOpt = parser.accepts("allow-principal", "principal is in principalType:name format." +
-      " User:* is the wild card indicating all users.")
+      " <PRINCIPAL_TYPE>:* is the wild card indicating all <PRINCIPAL_TYPE>.")
       .withRequiredArg
       .describedAs("allow-principal")
       .ofType(classOf[String])
@@ -298,8 +298,8 @@ object AclCommand {
     val denyPrincipalsOpt = parser.accepts("deny-principal", "principal is in principalType:name format. " +
       "By default anyone not added through --allow-principal is denied access. " +
       "You only need to use this option as negation to already allowed set. " +
-      "For example if you wanted to allow access to all users in the system but not test-user you can define an ACL that " +
-      "allows access to User:* and specify --deny-principal=User:test@EXAMPLE.COM. " +
+      "For example if you wanted to allow access to all <PRINCIPAL_TYPE> in the system but not <PRINCIPAL_TYPE>:P1 you can define an ACL that " +
+      "allows access to <PRINCIPAL_TYPE>:* and specify --deny-principal=<PRINCIPAL_TYPE>:P1. " +
       "AND PLEASE REMEMBER DENY RULES TAKES PRECEDENCE OVER ALLOW RULES.")
       .withRequiredArg
       .describedAs("deny-principal")
