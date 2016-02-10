@@ -291,6 +291,7 @@ project(':core') {
     compile libs.slf4jlog4j
     compile libs.zkclient
     compile libs.zookeeper
+    compile libs.hadoopCore
     // These modules were broken out of core scala in 2.10. We can remove special handling when 2.10 support is dropped.
     if (versions.baseScala != '2.10') {
       compile libs.scalaParserCombinators
