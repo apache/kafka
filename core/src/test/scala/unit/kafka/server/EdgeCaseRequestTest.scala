@@ -71,7 +71,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
   private def requestAndReceive(request: Array[Byte], id: Option[Short] = None): Array[Byte] = {
     val plainSocket = connect()
     try {
-      sendRequest(plainSocket, request)
+      sendRequest(plainSocket, request, id)
       receiveResponse(plainSocket)
     } finally {
       plainSocket.close()
