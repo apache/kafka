@@ -18,8 +18,10 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Collection;
 import java.util.List;
@@ -61,7 +63,7 @@ public interface Herder {
      * @throws org.apache.kafka.connect.runtime.distributed.NotLeaderException if this node can not resolve the request
      *         (e.g., because it has not joined the cluster or does not have configs in sync with the group) and it is
      *         also not the leader
-     * @throws ConnectException if this node is the leader, but still cannot resolve the
+     * @throws org.apache.kafka.connect.errors.ConnectException if this node is the leader, but still cannot resolve the
      *         request (e.g., it is not in sync with other worker's config state)
      */
     void connectors(Callback<Collection<String>> callback);
@@ -112,6 +114,20 @@ public interface Herder {
      * @param callback callback to invoke upon completion
      */
     void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback);
+
+    /**
+     * Lookup the current status of a connector.
+     * @param connName name of the connector
+     * @param callback callback to invoke upon completion
+     */
+    void connectorStatus(String connName, Callback<ConnectorStateInfo> callback);
+
+    /**
+     * Lookup the status of the a task.
+     * @param id id of the task
+     * @param callback callback to invoke upon completion
+     */
+    void taskStatus(ConnectorTaskId id, Callback<ConnectorStateInfo.TaskState> callback);
 
 
     class Created<T> {

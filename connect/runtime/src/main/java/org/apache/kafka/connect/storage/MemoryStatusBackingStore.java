@@ -1,0 +1,98 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ **/
+package org.apache.kafka.connect.storage;
+
+import org.apache.kafka.connect.runtime.ConnectorStatus;
+import org.apache.kafka.connect.runtime.TaskStatus;
+import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.Table;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+public class MemoryStatusBackingStore implements StatusBackingStore {
+    private final Table<String, Integer, TaskStatus> tasks;
+    private final Map<String, ConnectorStatus> connectors;
+
+    public MemoryStatusBackingStore() {
+        this.tasks = new Table<>();
+        this.connectors = new HashMap<>();
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs) {
+
+    }
+
+    @Override
+    public void start() {
+
+    }
+
+    @Override
+    public void stop() {
+
+    }
+
+    @Override
+    public synchronized void put(String connector, ConnectorStatus status) {
+        connectors.put(connector, status);
+    }
+
+    @Override
+    public synchronized void putSafe(String connector, ConnectorStatus status) {
+        put(connector, status);
+    }
+
+    @Override
+    public synchronized void put(ConnectorTaskId id, TaskStatus status) {
+        tasks.put(id.connector(), id.task(), status);
+    }
+
+    @Override
+    public synchronized void putSafe(ConnectorTaskId id, TaskStatus status) {
+        put(id, status);
+    }
+
+    @Override
+    public synchronized TaskStatus get(ConnectorTaskId id) {
+        return tasks.get(id.connector(), id.task());
+    }
+
+    @Override
+    public synchronized ConnectorStatus get(String connector) {
+        return connectors.get(connector);
+    }
+
+    @Override
+    public synchronized Map<Integer, TaskStatus> getAll(String connector) {
+        return tasks.row(connector);
+    }
+
+    @Override
+    public synchronized Set<String> connectors() {
+        return new HashSet<>(connectors.keySet());
+    }
+
+    @Override
+    public void flush() {
+
+    }
+
+}

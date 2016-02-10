@@ -24,10 +24,10 @@ import org.apache.kafka.connect.connector.ConnectorContext;
  */
 public class HerderConnectorContext implements ConnectorContext {
 
-    private Herder herder;
-    private String connectorName;
+    private final AbstractHerder herder;
+    private final String connectorName;
 
-    public HerderConnectorContext(Herder herder, String connectorName) {
+    public HerderConnectorContext(AbstractHerder herder, String connectorName) {
         this.herder = herder;
         this.connectorName = connectorName;
     }
@@ -37,5 +37,10 @@ public class HerderConnectorContext implements ConnectorContext {
         // Local herder runs in memory in this process
         // Distributed herder will forward the request to the leader if needed
         herder.requestTaskReconfiguration(connectorName);
+    }
+
+    @Override
+    public void raiseError(Exception e) {
+        herder.onFailure(connectorName, e);
     }
 }

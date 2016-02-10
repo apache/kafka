@@ -38,12 +38,14 @@ abstract class WorkerTask implements Runnable {
     private final AtomicBoolean stopping;
     private final AtomicBoolean running;
     private final CountDownLatch shutdownLatch;
+    private final TaskStatus.Listener lifecycleListener;
 
-    public WorkerTask(ConnectorTaskId id) {
+    public WorkerTask(ConnectorTaskId id, TaskStatus.Listener lifecycleListener) {
         this.id = id;
         this.stopping = new AtomicBoolean(false);
         this.running = new AtomicBoolean(false);
         this.shutdownLatch = new CountDownLatch(1);
+        this.lifecycleListener = lifecycleListener;
     }
 
     /**
@@ -85,19 +87,20 @@ abstract class WorkerTask implements Runnable {
         return stopping.get();
     }
 
+    protected boolean isStopped() {
+        return !running.get();
+    }
+
     private void doClose() {
         try {
             close();
-        } catch (Throwable t) {
-            log.error("Unhandled exception in task shutdown {}", id, t);
         } finally {
             running.set(false);
             shutdownLatch.countDown();
         }
     }
 
-    @Override
-    public void run() {
+    private void doRun() {
         if (!this.running.compareAndSet(false, true))
             throw new IllegalStateException("The task cannot be started while still running");
 
@@ -105,12 +108,42 @@ abstract class WorkerTask implements Runnable {
             if (stopping.get())
                 return;
 
+            lifecycleListener.onStartup(id);
             execute();
-        } catch (Throwable t) {
-            log.error("Unhandled exception in task {}", id, t);
         } finally {
             doClose();
         }
     }
+
+    @Override
+    public void run() {
+        try {
+            doRun();
+            lifecycleListener.onShutdown(id);
+        } catch (Throwable t) {
+            log.error("Task {} threw an uncaught and unrecoverable exception", id);
+            log.error("Task is being killed and will not recover until manually restarted:", t);
+            lifecycleListener.onFailure(id, t);
+        }
+    }
+
+    private static class DefaultTaskLifecycleListener implements TaskStatus.Listener {
+
+        @Override
+        public void onStartup(ConnectorTaskId id) {
+            log.info("Task {} completed startup", id);
+        }
+
+        @Override
+        public void onFailure(ConnectorTaskId id, Throwable t) {
+            log.error("Task {} failed", id, t);
+        }
+
+        @Override
+        public void onShutdown(ConnectorTaskId id) {
+            log.info("Task {} completed shutdown", id);
+        }
+    }
+
 
 }

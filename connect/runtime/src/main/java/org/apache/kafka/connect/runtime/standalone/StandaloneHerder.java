@@ -20,13 +20,15 @@ package org.apache.kafka.connect.runtime.standalone;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
-import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
+import org.apache.kafka.connect.storage.MemoryStatusBackingStore;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
@@ -43,18 +45,27 @@ import java.util.Map;
 /**
  * Single process, in-memory "herder". Useful for a standalone Kafka Connect process.
  */
-public class StandaloneHerder implements Herder {
+public class StandaloneHerder extends AbstractHerder {
     private static final Logger log = LoggerFactory.getLogger(StandaloneHerder.class);
 
     private final Worker worker;
     private HashMap<String, ConnectorState> connectors = new HashMap<>();
 
     public StandaloneHerder(Worker worker) {
+        this(worker.workerId(), worker, new MemoryStatusBackingStore());
+    }
+
+    // visible for testing
+    StandaloneHerder(String workerId,
+                     Worker worker,
+                     StatusBackingStore statusBackingStore) {
+        super(statusBackingStore, workerId);
         this.worker = worker;
     }
 
     public synchronized void start() {
         log.info("Herder starting");
+        startServices();
         log.info("Herder started");
     }
 
@@ -75,6 +86,11 @@ public class StandaloneHerder implements Herder {
         connectors.clear();
 
         log.info("Herder stopped");
+    }
+
+    @Override
+    public int generation() {
+        return 0;
     }
 
     @Override
@@ -131,8 +147,10 @@ public class StandaloneHerder implements Herder {
                 if (config == null) // Deletion, kill tasks as well
                     removeConnectorTasks(connName);
                 worker.stopConnector(connName);
-                if (config == null)
+                if (config == null) {
                     connectors.remove(connName);
+                    onDeletion(connName);
+                }
             } else {
                 if (config == null) {
                     // Deletion, must already exist
@@ -194,7 +212,7 @@ public class StandaloneHerder implements Herder {
         ConnectorConfig connConfig = new ConnectorConfig(connectorProps);
         String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
         ConnectorState state = connectors.get(connName);
-        worker.addConnector(connConfig, new HerderConnectorContext(this, connName));
+        worker.startConnector(connConfig, new HerderConnectorContext(this, connName), this);
         if (state == null) {
             connectors.put(connName, new ConnectorState(connectorProps, connConfig));
         } else {
@@ -219,7 +237,7 @@ public class StandaloneHerder implements Herder {
             ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
             TaskConfig config = new TaskConfig(taskConfigMap);
             try {
-                worker.addTask(taskId, config);
+                worker.startTask(taskId, config, this);
             } catch (Throwable e) {
                 log.error("Failed to add task {}: ", taskId, e);
                 // Swallow this so we can continue updating the rest of the tasks
