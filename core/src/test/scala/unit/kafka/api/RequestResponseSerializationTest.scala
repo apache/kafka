@@ -17,7 +17,7 @@
 
 package kafka.api
 
-import kafka.cluster.{BrokerEndPoint, EndPoint, Broker}
+import kafka.cluster.{EndPoint, Broker}
 import kafka.common.{OffsetAndMetadata, OffsetMetadataAndError}
 import kafka.common._
 import kafka.message.{Message, ByteBufferMessageSet}
@@ -209,22 +209,6 @@ object SerializationTestUtils {
   def createConsumerMetadataResponse: GroupCoordinatorResponse = {
     GroupCoordinatorResponse(Some(brokers.head.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)), Errors.NONE.code, 0)
   }
-
-  def createUpdateMetadataRequest(versionId: Short): UpdateMetadataRequest = {
-    UpdateMetadataRequest(
-      versionId,
-      correlationId = 0,
-      clientId = "client1",
-      controllerId = 0,
-      controllerEpoch = 0,
-      partitionStateInfos = updateMetadataRequestPartitionStateInfo,
-      brokers.toSet
-    )
-  }
-
-  def createUpdateMetadataResponse: UpdateMetadataResponse = {
-    UpdateMetadataResponse( correlationId = 0, errorCode = 0)
-  }
 }
 
 class RequestResponseSerializationTest extends JUnitSuite {
@@ -244,10 +228,6 @@ class RequestResponseSerializationTest extends JUnitSuite {
   private val consumerMetadataRequest = SerializationTestUtils.createConsumerMetadataRequest
   private val consumerMetadataResponse = SerializationTestUtils.createConsumerMetadataResponse
   private val consumerMetadataResponseNoCoordinator = GroupCoordinatorResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, 0)
-  private val updateMetadataRequestV0 = SerializationTestUtils.createUpdateMetadataRequest(0)
-  private val updateMetadataRequestV1 = SerializationTestUtils.createUpdateMetadataRequest(1)
-  private val updateMetdataResponse = SerializationTestUtils.createUpdateMetadataResponse
-
 
   @Test
   def testSerializationAndDeserialization() {
@@ -259,7 +239,6 @@ class RequestResponseSerializationTest extends JUnitSuite {
                                offsetCommitRequestV0, offsetCommitRequestV1, offsetCommitRequestV2,
                                offsetCommitResponse, offsetFetchRequest, offsetFetchResponse,
                                consumerMetadataRequest, consumerMetadataResponse,
-                               updateMetadataRequestV0, updateMetadataRequestV1, updateMetdataResponse,
                                consumerMetadataResponseNoCoordinator)
 
     requestsAndResponses.foreach { original =>

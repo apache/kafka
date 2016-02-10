@@ -17,6 +17,7 @@
 
 package kafka.admin
 
+import kafka.api.TopicMetadata
 import org.junit.Assert._
 import org.apache.kafka.common.protocol.SecurityProtocol
 import kafka.zk.ZooKeeperTestHarness
@@ -138,7 +139,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testReplicaPlacement {
+  def testReplicaPlacementAllServers {
     AdminUtils.addPartitions(zkUtils, topic3, 7)
 
     // read metadata from a broker and verify the new topic partitions exist
@@ -149,52 +150,47 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 5)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 6)
 
-    val metadata = ClientUtils.fetchTopicMetadata(Set(topic3), brokers.map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)), "AddPartitionsTest-testReplicaPlacement",
+    val metadata = ClientUtils.fetchTopicMetadata(Set(topic3), brokers.map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)), "AddPartitionsTest-testReplicaPlacementAllServers",
       2000,0).topicsMetadata
 
     val metaDataForTopic3 = metadata.filter(p => p.topic.equals(topic3)).head
-    val partitionsMetadataForTopic3 = metaDataForTopic3.partitionsMetadata.sortBy(_.partitionId)
-    val partition1DataForTopic3 = partitionsMetadataForTopic3(1)
-    val partition2DataForTopic3 = partitionsMetadataForTopic3(2)
-    val partition3DataForTopic3 = partitionsMetadataForTopic3(3)
-    val partition4DataForTopic3 = partitionsMetadataForTopic3(4)
-    val partition5DataForTopic3 = partitionsMetadataForTopic3(5)
-    val partition6DataForTopic3 = partitionsMetadataForTopic3(6)
 
-    assertEquals(partition1DataForTopic3.replicas.size, 4)
-    assertEquals(partition1DataForTopic3.replicas(0).id, 3)
-    assertEquals(partition1DataForTopic3.replicas(1).id, 2)
-    assertEquals(partition1DataForTopic3.replicas(2).id, 0)
-    assertEquals(partition1DataForTopic3.replicas(3).id, 1)
+    validateLeaderAndReplicas(metaDataForTopic3, 0, 2, Set(2,3,0,1))
+    validateLeaderAndReplicas(metaDataForTopic3, 1, 3, Set(3,2,0,1))
+    validateLeaderAndReplicas(metaDataForTopic3, 2, 0, Set(0,3,1,2))
+    validateLeaderAndReplicas(metaDataForTopic3, 3, 1, Set(1,0,2,3))
+    validateLeaderAndReplicas(metaDataForTopic3, 4, 2, Set(2,3,0,1))
+    validateLeaderAndReplicas(metaDataForTopic3, 5, 3, Set(3,0,1,2))
+    validateLeaderAndReplicas(metaDataForTopic3, 5, 3, Set(3,0,1,2))
+    validateLeaderAndReplicas(metaDataForTopic3, 6, 0, Set(0,1,2,3))
+  }
 
-    assertEquals(partition2DataForTopic3.replicas.size, 4)
-    assertEquals(partition2DataForTopic3.replicas(0).id, 0)
-    assertEquals(partition2DataForTopic3.replicas(1).id, 3)
-    assertEquals(partition2DataForTopic3.replicas(2).id, 1)
-    assertEquals(partition2DataForTopic3.replicas(3).id, 2)
+  @Test
+  def testReplicaPlacementPartialServers {
+    AdminUtils.addPartitions(zkUtils, topic2, 3)
 
-    assertEquals(partition3DataForTopic3.replicas.size, 4)
-    assertEquals(partition3DataForTopic3.replicas(0).id, 1)
-    assertEquals(partition3DataForTopic3.replicas(1).id, 0)
-    assertEquals(partition3DataForTopic3.replicas(2).id, 2)
-    assertEquals(partition3DataForTopic3.replicas(3).id, 3)
+    // read metadata from a broker and verify the new topic partitions exist
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2)
 
-    assertEquals(partition4DataForTopic3.replicas.size, 4)
-    assertEquals(partition4DataForTopic3.replicas(0).id, 2)
-    assertEquals(partition4DataForTopic3.replicas(1).id, 3)
-    assertEquals(partition4DataForTopic3.replicas(2).id, 0)
-    assertEquals(partition4DataForTopic3.replicas(3).id, 1)
+    val metadata = ClientUtils.fetchTopicMetadata(Set(topic2), brokers.map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)), "AddPartitionsTest-testReplicaPlacementPartialServers",
+      2000,0).topicsMetadata
 
-    assertEquals(partition5DataForTopic3.replicas.size, 4)
-    assertEquals(partition5DataForTopic3.replicas(0).id, 3)
-    assertEquals(partition5DataForTopic3.replicas(1).id, 0)
-    assertEquals(partition5DataForTopic3.replicas(2).id, 1)
-    assertEquals(partition5DataForTopic3.replicas(3).id, 2)
+    val metaDataForTopic2 = metadata.filter(p => p.topic.equals(topic2)).head
 
-    assertEquals(partition6DataForTopic3.replicas.size, 4)
-    assertEquals(partition6DataForTopic3.replicas(0).id, 0)
-    assertEquals(partition6DataForTopic3.replicas(1).id, 1)
-    assertEquals(partition6DataForTopic3.replicas(2).id, 2)
-    assertEquals(partition6DataForTopic3.replicas(3).id, 3)
+    validateLeaderAndReplicas(metaDataForTopic2, 0, 1, Set(1,2))
+    validateLeaderAndReplicas(metaDataForTopic2, 1, 2, Set(0,2))
+    validateLeaderAndReplicas(metaDataForTopic2, 2, 3, Set(1,3))
+  }
+
+  def validateLeaderAndReplicas(metadata: TopicMetadata, partitionId: Int, expectedLeaderId: Int, expectedReplicas: Set[Int]) = {
+    val partitionOpt = metadata.partitionsMetadata.find(_.partitionId == partitionId)
+    assertTrue(s"Partition $partitionId should exist", partitionOpt.isDefined)
+    val partition = partitionOpt.get
+
+    assertTrue("Partition leader should exist", partition.leader.isDefined)
+    assertEquals("Partition leader id should match", expectedLeaderId, partition.leader.get.id)
+
+    assertEquals("Replica set should match", expectedReplicas, partition.replicas.map(_.id).toSet)
   }
 }
