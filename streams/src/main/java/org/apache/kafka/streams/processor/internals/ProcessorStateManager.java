@@ -85,7 +85,7 @@ public class ProcessorStateManager {
         createStateDirectory(baseDir);
 
         // try to acquire the exclusive lock on the state directory
-        directoryLock = lockStateDirectory(baseDir);
+        directoryLock = lockStateDirectory(baseDir, 5);
         if (directoryLock == null) {
             throw new IOException("Failed to lock the state directory: " + baseDir.getCanonicalPath());
         }
@@ -109,14 +109,35 @@ public class ProcessorStateManager {
     }
 
     public static FileLock lockStateDirectory(File stateDir) throws IOException {
+        return lockStateDirectory(stateDir, 0);
+    }
+
+    private static FileLock lockStateDirectory(File stateDir, int retry) throws IOException {
         File lockFile = new File(stateDir, ProcessorStateManager.LOCK_FILE_NAME);
         FileChannel channel = new RandomAccessFile(lockFile, "rw").getChannel();
+
+        FileLock lock = lockStateDirectory(channel);
+        while (lock == null && retry > 0) {
+            try {
+                Thread.sleep(200);
+            } catch (Exception ex) {
+                // do nothing
+            }
+            retry--;
+            lock = lockStateDirectory(channel);
+        }
+        return lock;
+    }
+
+    private static FileLock lockStateDirectory(FileChannel channel) throws IOException {
         try {
             return channel.tryLock();
         } catch (OverlappingFileLockException e) {
             return null;
         }
     }
+
+
 
     public File baseDir() {
         return this.baseDir;
