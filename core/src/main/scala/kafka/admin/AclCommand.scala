@@ -62,7 +62,7 @@ object AclCommand {
     val authorizerProperties =
       if (opts.options.has(opts.authorizerPropertiesOpt)) {
         val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
-        CommandLineUtils.parseKeyValueArgs(authorizerProperties, false).asScala
+        CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
       } else {
         Map.empty[String, Any]
       }
