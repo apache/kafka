@@ -290,16 +290,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
   protected def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]], numRecords: Int, startingOffset: Int,
                                       startingKeyAndValueIndex: Int = 0, tp: TopicPartition = tp) {
-    val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
-    val maxIters = numRecords * 300
-    var iters = 0
-    while (records.size < numRecords) {
-      for (record <- consumer.poll(50).asScala)
-        records.add(record)
-      if (iters > maxIters)
-        throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
-      iters += 1
-    }
+    val records = consumeRecords(consumer, numRecords)
     for (i <- 0 until numRecords) {
       val record = records.get(i)
       val offset = startingOffset + i
@@ -312,11 +303,25 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     }
   }
 
-  protected def awaitCommitCallback(consumer: Consumer[Array[Byte], Array[Byte]], commitCallback: CountConsumerCommitCallback): Unit = {
+  protected def consumeRecords[K, V](consumer: Consumer[K, V], numRecords: Int): ArrayList[ConsumerRecord[K, V]] = {
+    val records = new ArrayList[ConsumerRecord[K, V]]
+    val maxIters = numRecords * 300
+    var iters = 0
+    while (records.size < numRecords) {
+      for (record <- consumer.poll(50).asScala)
+        records.add(record)
+      if (iters > maxIters)
+        throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
+      iters += 1
+    }
+    records
+  }
+
+  protected def awaitCommitCallback[K, V](consumer: Consumer[K, V], commitCallback: CountConsumerCommitCallback): Unit = {
     val startCount = commitCallback.count
     val started = System.currentTimeMillis()
     while (commitCallback.count == startCount && System.currentTimeMillis() - started < 10000)
-      this.consumers(0).poll(50)
+      consumer.poll(50)
     assertEquals(startCount + 1, commitCallback.count)
   }
 
