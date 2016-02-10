@@ -18,9 +18,11 @@
 package org.apache.kafka.connect.cli;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Connect;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.RestServer;
@@ -33,6 +35,7 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -63,9 +66,15 @@ public class ConnectStandalone {
         Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
                 Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
 
+        Time time = new SystemTime();
         StandaloneConfig config = new StandaloneConfig(workerProps);
-        Worker worker = new Worker(config, new FileOffsetBackingStore());
+
         RestServer rest = new RestServer(config);
+        URI advertisedUrl = rest.advertisedUrl();
+        String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
+
+        Worker worker = new Worker(workerId, time, config, new FileOffsetBackingStore());
+
         Herder herder = new StandaloneHerder(worker);
         final Connect connect = new Connect(worker, herder, rest);
         connect.start();

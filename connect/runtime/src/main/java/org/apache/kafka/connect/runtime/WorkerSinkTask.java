@@ -76,11 +76,12 @@ class WorkerSinkTask extends WorkerTask {
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
+                          TaskStatus.Listener lifecycleListener,
                           WorkerConfig workerConfig,
                           Converter keyConverter,
                           Converter valueConverter,
                           Time time) {
-        super(id);
+        super(id, lifecycleListener);
 
         this.workerConfig = workerConfig;
         this.task = task;

@@ -50,16 +50,18 @@ public class Connect {
     }
 
     public void start() {
-        log.info("Kafka Connect starting");
-        Runtime.getRuntime().addShutdownHook(shutdownHook);
+        try {
+            log.info("Kafka Connect starting");
+            Runtime.getRuntime().addShutdownHook(shutdownHook);
 
-        worker.start();
-        herder.start();
-        rest.start(herder);
+            worker.start();
+            herder.start();
+            rest.start(herder);
 
-        log.info("Kafka Connect started");
-
-        startLatch.countDown();
+            log.info("Kafka Connect started");
+        } finally {
+            startLatch.countDown();
+        }
     }
 
     public void stop() {
