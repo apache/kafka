@@ -17,55 +17,34 @@
 
 package kafka.server
 
-import java.io.{DataInputStream, DataOutputStream, File}
+import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
 import java.nio.ByteBuffer
-import java.util.{HashMap, Properties}
 
-import kafka.api.ApiUtils._
+import kafka.integration.KafkaServerTestHarness
 
 import kafka.network.SocketServer
-import kafka.utils.TestUtils._
 import kafka.utils._
-import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.requests.{RequestHeader, ProduceResponse, ResponseHeader, ProduceRequest}
-import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.Test
 
 import scala.collection.JavaConverters._
 
-class EdgeCaseRequestTest extends ZooKeeperTestHarness {
-  var logDir: File = null
-  var server: KafkaServer = null
-  var socketServer: SocketServer = null
-  private val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
-  private val kafkaApisLogger = Logger.getLogger(classOf[KafkaApis])
+class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
-  @Before
-  override def setUp() {
-    super.setUp()
-    val config: Properties = createBrokerConfig(1, zkConnect)
-    config.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
-    val logDirPath = config.getProperty("log.dir")
-    logDir = new File(logDirPath)
-    server = TestUtils.createServer(KafkaConfig.fromProps(config))
-    socketServer = server.socketServer
-    requestHandlerLogger.setLevel(Level.DEBUG)
-    kafkaApisLogger.setLevel(Level.DEBUG)
+  def generateConfigs() = {
+    val props = TestUtils.createBrokerConfig(1, zkConnect)
+    props.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
+    List(KafkaConfig.fromProps(props))
   }
 
-  @After
-  override def tearDown() {
-    server.shutdown()
-    CoreUtils.rm(logDir)
-    super.tearDown()
-  }
+  private def socketServer = servers.head.socketServer
 
   private def connect(s: SocketServer = socketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Socket = {
-    new Socket("localhost", server.boundPort(protocol))
+    new Socket("localhost", s.boundPort(protocol))
   }
 
   private def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None) {
@@ -82,12 +61,21 @@ class EdgeCaseRequestTest extends ZooKeeperTestHarness {
   }
 
   private def receiveResponse(socket: Socket): Array[Byte] = {
-    socket.isInputShutdown
     val incoming = new DataInputStream(socket.getInputStream)
     val len = incoming.readInt()
     val response = new Array[Byte](len)
     incoming.readFully(response)
     response
+  }
+
+  private def requestAndReceive(request: Array[Byte], id: Option[Short] = None): Array[Byte] = {
+    val plainSocket = connect()
+    try {
+      sendRequest(plainSocket, request)
+      receiveResponse(plainSocket)
+    } finally {
+      plainSocket.close()
+    }
   }
 
   private def requestHeaderBytes(apiKey: Short, apiVersion: Short, clientId: String = "", correlationId: Int = -1): Array[Byte] = {
@@ -97,12 +85,22 @@ class EdgeCaseRequestTest extends ZooKeeperTestHarness {
     buffer.array()
   }
 
+  private def verifyDisconnect(request: Array[Byte]) {
+    val plainSocket = connect()
+    try {
+      sendRequest(plainSocket, requestHeaderBytes(-1, 0))
+      assertEquals("The server should disconnect", -1, plainSocket.getInputStream.read())
+    } finally {
+      plainSocket.close()
+    }
+  }
+
   @Test
   def testProduceRequestWithNullClientId() {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
     val correlationId = -1
-    TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
+    TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = servers)
 
     val serializedBytes = {
       val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, 1, null, correlationId)
@@ -114,10 +112,7 @@ class EdgeCaseRequestTest extends ZooKeeperTestHarness {
       byteBuffer.array()
     }
 
-    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
-    sendRequest(plainSocket, serializedBytes)
-    val response = receiveResponse(plainSocket)
-    plainSocket.close()
+    val response = requestAndReceive(serializedBytes)
 
     val responseBuffer = ByteBuffer.wrap(response)
     val responseHeader = ResponseHeader.parse(responseBuffer)
@@ -134,29 +129,17 @@ class EdgeCaseRequestTest extends ZooKeeperTestHarness {
 
   @Test
   def testHeaderOnlyRequest() {
-    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
-    sendRequest(plainSocket, requestHeaderBytes(ApiKeys.PRODUCE.id, 1))
-
-    assertEquals("The server should disconnect", -1, plainSocket.getInputStream.read())
-    plainSocket.close()
+    verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, 1))
   }
 
   @Test
   def testInvalidApiKeyRequest() {
-    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
-    sendRequest(plainSocket, requestHeaderBytes(-1, 0))
-
-    assertEquals("The server should disconnect", -1, plainSocket.getInputStream.read())
-    plainSocket.close()
+    verifyDisconnect(requestHeaderBytes(-1, 0))
   }
 
   @Test
   def testInvalidApiVersionRequest() {
-    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
-    sendRequest(plainSocket, requestHeaderBytes(ApiKeys.PRODUCE.id, -1))
-
-    assertEquals("The server should disconnect", -1, plainSocket.getInputStream.read())
-    plainSocket.close()
+    verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, -1))
   }
 
   @Test
@@ -172,10 +155,6 @@ class EdgeCaseRequestTest extends ZooKeeperTestHarness {
       buffer.array()
     }
 
-    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
-    sendRequest(plainSocket, serializedBytes)
-
-    assertEquals("The server should disconnect", -1, plainSocket.getInputStream.read())
-    plainSocket.close()
+    verifyDisconnect(serializedBytes)
   }
 }
