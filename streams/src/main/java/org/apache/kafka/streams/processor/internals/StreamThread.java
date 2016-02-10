@@ -330,7 +330,7 @@ public class StreamThread extends Thread {
                 lastPoll = time.milliseconds();
 
                 if (rebalanceException != null)
-                    throw new StreamsException("Fail to rebalance", rebalanceException);
+                    throw new StreamsException("Failed to rebalance", rebalanceException);
 
                 if (!records.isEmpty()) {
                     for (TopicPartition partition : records.partitions()) {
