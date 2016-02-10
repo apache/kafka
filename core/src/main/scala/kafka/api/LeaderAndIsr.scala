@@ -51,12 +51,12 @@ object PartitionStateInfo {
     val replicationFactor = buffer.getInt
     val replicas = for(i <- 0 until replicationFactor) yield buffer.getInt
     PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, leaderEpoch, isr.toList, zkVersion), controllerEpoch),
-                       replicas.toSet)
+                       replicas.toList)
   }
 }
 
 case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
-                              allReplicas: Set[Int]) {
+                              allReplicas: List[Int]) {
   def replicationFactor = allReplicas.size
 
   def writeTo(buffer: ByteBuffer) {
@@ -67,7 +67,7 @@ case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControlle
     leaderIsrAndControllerEpoch.leaderAndIsr.isr.foreach(buffer.putInt(_))
     buffer.putInt(leaderIsrAndControllerEpoch.leaderAndIsr.zkVersion)
     buffer.putInt(replicationFactor)
-    allReplicas.foreach(buffer.putInt(_))
+    allReplicas.distinct.foreach(buffer.putInt(_))
   }
 
   def sizeInBytes(): Int = {

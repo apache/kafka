@@ -335,11 +335,11 @@ public class RequestResponseTest {
         List<Integer> isr = Arrays.asList(1, 2);
         List<Integer> replicas = Arrays.asList(1, 2, 3, 4);
         partitionStates.put(new TopicPartition("topic5", 105),
-                new LeaderAndIsrRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new LeaderAndIsrRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new ArrayList<>(replicas)));
         partitionStates.put(new TopicPartition("topic5", 1),
-                new LeaderAndIsrRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new LeaderAndIsrRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new ArrayList<>(replicas)));
         partitionStates.put(new TopicPartition("topic20", 1),
-                new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new ArrayList<>(replicas)));
 
         Set<LeaderAndIsrRequest.EndPoint> leaders = new HashSet<>(Arrays.asList(
                 new LeaderAndIsrRequest.EndPoint(0, "test0", 1223),
@@ -360,11 +360,11 @@ public class RequestResponseTest {
         List<Integer> isr = Arrays.asList(1, 2);
         List<Integer> replicas = Arrays.asList(1, 2, 3, 4);
         partitionStates.put(new TopicPartition("topic5", 105),
-                new UpdateMetadataRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new UpdateMetadataRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new ArrayList<>(replicas)));
         partitionStates.put(new TopicPartition("topic5", 1),
-                new UpdateMetadataRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new UpdateMetadataRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new ArrayList<>(replicas)));
         partitionStates.put(new TopicPartition("topic20", 1),
-                new UpdateMetadataRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new UpdateMetadataRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new ArrayList<>(replicas)));
 
         if (version == 0) {
             Set<UpdateMetadataRequest.BrokerEndPoint> liveBrokers = new HashSet<>(Arrays.asList(
