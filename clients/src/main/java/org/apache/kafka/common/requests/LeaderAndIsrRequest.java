@@ -28,6 +28,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,15 +41,15 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         public final int leaderEpoch;
         public final List<Integer> isr;
         public final int zkVersion;
-        public final Set<Integer> replicas;
+        public final List<Integer> replicas;
 
-        public PartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, Set<Integer> replicas) {
+        public PartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, List<Integer> replicas) {
             this.controllerEpoch = controllerEpoch;
             this.leader = leader;
             this.leaderEpoch = leaderEpoch;
-            this.isr = isr;
+            this.isr = new ArrayList<>(new LinkedHashSet<>(isr));
             this.zkVersion = zkVersion;
-            this.replicas = replicas;
+            this.replicas = new ArrayList<>(new LinkedHashSet<>(replicas));
         }
 
     }
@@ -150,7 +151,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
             int zkVersion = partitionStateData.getInt(ZK_VERSION_KEY_NAME);
 
             Object[] replicasArray = partitionStateData.getArray(REPLICAS_KEY_NAME);
-            Set<Integer> replicas = new HashSet<>(replicasArray.length);
+            List<Integer> replicas = new ArrayList<>(replicasArray.length);
             for (Object r : replicasArray)
                 replicas.add((Integer) r);
 

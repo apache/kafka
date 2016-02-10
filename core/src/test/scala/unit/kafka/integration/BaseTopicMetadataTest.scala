@@ -253,16 +253,18 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
 
     // Assert that topic metadata at new brokers is updated correctly
     servers.filter(x => x.brokerState.currentState != NotRunning.state).foreach(x =>
-      waitUntilTrue(() =>
-        topicMetadata == ClientUtils.fetchTopicMetadata(
-          Set.empty,
-          Seq(new Broker(x.config.brokerId,
-            x.config.hostName,
-            x.boundPort()).getBrokerEndPoint(SecurityProtocol.PLAINTEXT)),
-          "TopicMetadataTest-testBasicTopicMetadata",
-          2000, 0), "Topic metadata is not correctly updated"))
+      waitUntilTrue(() => {
+          val foundMetadata = ClientUtils.fetchTopicMetadata(
+            Set.empty,
+            Seq(new Broker(x.config.brokerId,
+              x.config.hostName,
+              x.boundPort()).getBrokerEndPoint(SecurityProtocol.PLAINTEXT)),
+            "TopicMetadataTest-testBasicTopicMetadata", 2000, 0)
+          topicMetadata.brokers.sortBy(_.id) == foundMetadata.brokers.sortBy(_.id) &&
+            topicMetadata.topicsMetadata.sortBy(_.topic) == foundMetadata.topicsMetadata.sortBy(_.topic)
+        },
+        s"Topic metadata is not correctly updated"))
   }
-
 
   @Test
   def testAliveBrokerListWithNoTopics {
