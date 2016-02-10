@@ -51,6 +51,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.channels.FileLock;
 import java.util.ArrayList;
@@ -311,6 +312,7 @@ public class StreamThread extends Thread {
 
     private void runLoop() {
         int totalNumBuffered = 0;
+        long lastPoll = 0L;
         boolean requiresPoll = true;
 
         ensureCopartitioning(builder.copartitionGroups());
@@ -325,6 +327,7 @@ public class StreamThread extends Thread {
                 long startPoll = time.milliseconds();
 
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(totalNumBuffered == 0 ? this.pollTimeMs : 0);
+                lastPoll = time.milliseconds();
 
                 if (rebalanceException != null)
                     throw new StreamsException("Fail to rebalance", rebalanceException);
@@ -354,6 +357,12 @@ public class StreamThread extends Thread {
                 }
 
                 maybePunctuate();
+
+                // if pollTimeMs has passed since the last poll, we poll to respond to a possible rebalance
+                // even when we paused all partitions.
+                if (lastPoll + this.pollTimeMs < time.milliseconds())
+                    requiresPoll = true;
+
             } else {
                 // even when no task is assigned, we must poll to get a task.
                 requiresPoll = true;
@@ -503,21 +512,25 @@ public class StreamThread extends Thread {
                         TaskId id = TaskId.parse(dirName.substring(dirName.lastIndexOf("-") + 1));
 
                         // try to acquire the exclusive lock on the state directory
-                        FileLock directoryLock = null;
-                        try {
-                            directoryLock = ProcessorStateManager.lockStateDirectory(dir);
-                            if (directoryLock != null) {
-                                log.info("Deleting obsolete state directory {} for task {} after delayed {} ms.", dir.getAbsolutePath(), id, cleanTimeMs);
-                                Utils.delete(dir);
-                            }
-                        } catch (IOException e) {
-                            log.error("Failed to lock the state directory due to an unexpected exception", e);
-                        } finally {
-                            if (directoryLock != null) {
-                                try {
-                                    directoryLock.release();
-                                } catch (IOException e) {
-                                    log.error("Failed to release the state directory lock");
+                        if (dir.exists()) {
+                            FileLock directoryLock = null;
+                            try {
+                                directoryLock = ProcessorStateManager.lockStateDirectory(dir);
+                                if (directoryLock != null) {
+                                    log.info("Deleting obsolete state directory {} for task {} after delayed {} ms.", dir.getAbsolutePath(), id, cleanTimeMs);
+                                    Utils.delete(dir);
+                                }
+                            } catch (FileNotFoundException e) {
+                                // the state directory may be deleted by another thread
+                            } catch (IOException e) {
+                                log.error("Failed to lock the state directory due to an unexpected exception", e);
+                            } finally {
+                                if (directoryLock != null) {
+                                    try {
+                                        directoryLock.release();
+                                    } catch (IOException e) {
+                                        log.error("Failed to release the state directory lock");
+                                    }
                                 }
                             }
                         }
