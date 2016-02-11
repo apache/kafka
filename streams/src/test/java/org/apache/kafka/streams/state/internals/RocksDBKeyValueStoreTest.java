@@ -45,7 +45,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         }
 
         KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
-        store.init(context);
+        store.init(context, store);
         return store;
 
     }
