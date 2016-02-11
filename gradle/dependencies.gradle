@@ -37,7 +37,7 @@ versions += [
   powermock: "1.6.4",
   reflections: "0.9.10",
   rocksDB: "3.10.1",
-  scalaTest: "2.2.5",
+  scalaTest: "2.2.6",
   scalaParserCombinators: "1.0.4",
   slf4j: "1.7.15",
   snappy: "1.1.2.1",
