@@ -703,15 +703,23 @@ public class Fetcher<K, V> {
             // record bytes fetched
             String name = "topic." + topic + ".bytes-fetched";
             Sensor bytesFetched = this.metrics.getSensor(name);
-            if (bytesFetched == null)
+            if (bytesFetched == null) {
                 bytesFetched = this.metrics.sensor(name);
+                bytesFetched.add(this.metrics.metricName(name,
+                        this.metricGrpName,
+                        "The number of bytes fetched for topic " + topic), new Rate(new Count()));
+            }
             bytesFetched.record(bytes);
 
             // record records fetched
             name = "topic." + topic + ".records-fetched";
             Sensor recordsFetched = this.metrics.getSensor(name);
-            if (recordsFetched == null)
+            if (recordsFetched == null) {
                 recordsFetched = this.metrics.sensor(name);
+                recordsFetched.add(this.metrics.metricName(name,
+                        this.metricGrpName,
+                        "The number of records fetched for topic " + topic), new Rate(new Count()));
+            }
             recordsFetched.record(records);
         }
     }
