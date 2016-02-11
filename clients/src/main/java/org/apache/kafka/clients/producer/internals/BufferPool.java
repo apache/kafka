@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
@@ -45,6 +46,7 @@ public final class BufferPool {
 
     private final long totalMemory;
     private final int poolableSize;
+    private final boolean blockOnExhaustion;
     private final ReentrantLock lock;
     private final Deque<ByteBuffer> free;
     private final Deque<Condition> waiters;
@@ -58,12 +60,16 @@ public final class BufferPool {
      * 
      * @param memory The maximum amount of memory that this buffer pool can allocate
      * @param poolableSize The buffer size to cache in the free list rather than deallocating
+     * @param blockOnExhaustion This controls the behavior when the buffer pool is out of memory. If true the
+     *        {@link #allocate(int, long)} call will block and wait for memory to be returned to the pool. If false
+     *        {@link #allocate(int, long)} will throw an exception if the buffer is out of memory.
      * @param metrics instance of Metrics
      * @param time time instance
      * @param metricGrpName logical group name for metrics
      */
-    public BufferPool(long memory, int poolableSize, Metrics metrics, Time time, String metricGrpName) {
+    public BufferPool(long memory, int poolableSize, boolean blockOnExhaustion, Metrics metrics, Time time , String metricGrpName) {
         this.poolableSize = poolableSize;
+        this.blockOnExhaustion = blockOnExhaustion;
         this.lock = new ReentrantLock();
         this.free = new ArrayDeque<ByteBuffer>();
         this.waiters = new ArrayDeque<Condition>();
@@ -83,11 +89,12 @@ public final class BufferPool {
      * is configured with blocking mode.
      * 
      * @param size The buffer size to allocate in bytes
-     * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
+     * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available if pool is in blocking mode
      * @return The buffer
      * @throws InterruptedException If the thread is interrupted while blocked
      * @throws IllegalArgumentException if size is larger than the total memory controlled by the pool (and hence we would block
      *         forever)
+     * @throws BufferExhaustedException if the pool is in non-blocking mode and size exceeds the free memory in the pool
      */
     public ByteBuffer allocate(int size, long maxTimeToBlock) throws InterruptedException {
         if (size > this.totalMemory)
@@ -112,6 +119,10 @@ public final class BufferPool {
                 this.availableMemory -= size;
                 lock.unlock();
                 return ByteBuffer.allocate(size);
+            } else if (!blockOnExhaustion) {
+                throw new BufferExhaustedException("You have exhausted the " + this.totalMemory
+                                                   + " bytes of memory you configured for the client and the client is configured to error"
+                                                   + " rather than block when memory is exhausted.");
             } else {
                 // we are out of memory and will have to block
                 int accumulated = 0;

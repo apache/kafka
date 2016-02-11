@@ -83,6 +83,8 @@ public final class RecordAccumulator {
      *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
      * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
      *        exhausting all retries in a short period of time.
+     * @param blockOnBufferFull If true block when we are out of memory; if false throw an exception when we are out of
+     *        memory
      * @param metrics The metrics
      * @param time The time instance to use
      */
@@ -91,6 +93,7 @@ public final class RecordAccumulator {
                              CompressionType compression,
                              long lingerMs,
                              long retryBackoffMs,
+                             boolean blockOnBufferFull,
                              Metrics metrics,
                              Time time) {
         this.drainIndex = 0;
@@ -103,7 +106,7 @@ public final class RecordAccumulator {
         this.retryBackoffMs = retryBackoffMs;
         this.batches = new CopyOnWriteMap<TopicPartition, Deque<RecordBatch>>();
         String metricGrpName = "producer-metrics";
-        this.free = new BufferPool(totalSize, batchSize, metrics, time, metricGrpName);
+        this.free = new BufferPool(totalSize, batchSize, blockOnBufferFull, metrics, time , metricGrpName);
         this.incomplete = new IncompleteRecordBatches();
         this.time = time;
         registerMetrics(metrics, metricGrpName);
