@@ -50,31 +50,35 @@ public class Connect {
     }
 
     public void start() {
-        log.info("Kafka Connect starting");
-        Runtime.getRuntime().addShutdownHook(shutdownHook);
+        try {
+            log.info("Kafka Connect starting");
+            Runtime.getRuntime().addShutdownHook(shutdownHook);
 
-        worker.start();
-        herder.start();
-        rest.start(herder);
+            worker.start();
+            herder.start();
+            rest.start(herder);
 
-        log.info("Kafka Connect started");
-
-        startLatch.countDown();
+            log.info("Kafka Connect started");
+        } finally {
+            startLatch.countDown();
+        }
     }
 
     public void stop() {
-        boolean wasShuttingDown = shutdown.getAndSet(true);
-        if (!wasShuttingDown) {
-            log.info("Kafka Connect stopping");
+        try {
+            boolean wasShuttingDown = shutdown.getAndSet(true);
+            if (!wasShuttingDown) {
+                log.info("Kafka Connect stopping");
 
-            rest.stop();
-            herder.stop();
-            worker.stop();
+                rest.stop();
+                herder.stop();
+                worker.stop();
 
-            log.info("Kafka Connect stopped");
+                log.info("Kafka Connect stopped");
+            }
+        } finally {
+            stopLatch.countDown();
         }
-
-        stopLatch.countDown();
     }
 
     public void awaitStop() {
