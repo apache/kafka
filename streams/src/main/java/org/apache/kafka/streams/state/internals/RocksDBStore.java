@@ -21,6 +21,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Serdes;
@@ -142,7 +143,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @SuppressWarnings("unchecked")
-    public void init(ProcessorContext context) {
+    public void init(ProcessorContext context, StateStore root) {
         // first open the DB dir
         openDB(context);
 
@@ -176,7 +177,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             }
         };
 
-        context.register(this, loggingEnabled, new StateRestoreCallback() {
+        context.register(root, loggingEnabled, new StateRestoreCallback() {
 
             @Override
             public void restore(byte[] key, byte[] value) {

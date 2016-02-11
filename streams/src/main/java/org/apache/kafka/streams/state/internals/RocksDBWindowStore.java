@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.Serdes;
 import org.apache.kafka.streams.state.WindowStore;
@@ -158,7 +159,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     @Override
-    public void init(ProcessorContext context) {
+    public void init(ProcessorContext context, StateStore root) {
         this.context = context;
 
         openExistingSegments();
@@ -167,7 +168,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
                 new RawStoreChangeLogger(name, context) : null;
 
         // register and possibly restore the state from the logs
-        context.register(this, loggingEnabled, new StateRestoreCallback() {
+        context.register(root, loggingEnabled, new StateRestoreCallback() {
             @Override
             public void restore(byte[] key, byte[] value) {
                 putInternal(key, value);
