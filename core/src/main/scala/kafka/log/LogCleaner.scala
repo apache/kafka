@@ -401,14 +401,14 @@ private[log] class Cleaner(val id: Int,
    * @param dest The cleaned log segment
    * @param map The key=>offset mapping
    * @param retainDeletes Should delete tombstones be retained while cleaning this segment
-   *
+   * @param messageFormatVersion the message format version to use after compaction
    */
   private[log] def cleanInto(topicAndPartition: TopicAndPartition,
                              source: LogSegment,
                              dest: LogSegment,
                              map: OffsetMap,
                              retainDeletes: Boolean,
-                             messageFormatVersion: Int) {
+                             messageFormatVersion: Byte) {
     var position = 0
     while (position < source.log.sizeInBytes) {
       checkDone(topicAndPartition)
@@ -433,17 +433,24 @@ private[log] class Cleaner(val id: Int,
           // deep iterator.
           val messages = ByteBufferMessageSet.deepIterator(entry)
           var numberOfInnerMessages = 0
+          var formatConversionNeeded = false
           val retainedMessages = messages.filter(messageAndOffset => {
             messagesRead += 1
             numberOfInnerMessages += 1
+            if (messageAndOffset.message.magic != messageFormatVersion)
+              formatConversionNeeded = true
             shouldRetainMessage(source, map, retainDeletes, messageAndOffset)
           }).toSeq
 
-          // There is no messages compacted out, write the original message set back
-          if (retainedMessages.size == numberOfInnerMessages)
+          // There is no messages compacted out and no message format conversion, write the original message set back
+          if (retainedMessages.size == numberOfInnerMessages && !formatConversionNeeded)
             ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
-          else if (retainedMessages.nonEmpty)
-            compressMessages(writeBuffer, entry.message.compressionCodec,  messageFormatVersion, retainedMessages)
+          else if (retainedMessages.nonEmpty) {
+            val convertedRetainedMessages = retainedMessages.map(messageAndOffset => {
+              new MessageAndOffset(messageAndOffset.message.toFormatVersion(messageFormatVersion), messageAndOffset.offset)
+            })
+            compressMessages(writeBuffer, entry.message.compressionCodec, messageFormatVersion, convertedRetainedMessages)
+          }
         }
       }
 
@@ -465,7 +472,7 @@ private[log] class Cleaner(val id: Int,
 
   private def compressMessages(buffer: ByteBuffer,
                                compressionCodec: CompressionCodec,
-                               messageFormatVersion: Int,
+                               messageFormatVersion: Byte,
                                messages: Seq[MessageAndOffset]) {
     val messagesIterable = messages.toIterable.map(_.message)
     if (messages.isEmpty) {
@@ -478,20 +485,19 @@ private[log] class Cleaner(val id: Int,
       val messageSetTimestamp = MessageSet.validateMagicValuesAndGetTimestamp(messages.map(_.message))
       val firstAbsoluteOffset = messages.head.offset
       var offset = -1L
-      val magicValue = if (messageFormatVersion == 0) Message.MagicValue_V0 else Message.MagicValue_V1
       val timestampType = messages.head.message.timestampType
       val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messagesIterable) / 2, 1024), 1 << 16))
-      messageWriter.write(codec = compressionCodec, timestamp = messageSetTimestamp, timestampType = timestampType, magicValue = magicValue) { outputStream =>
+      messageWriter.write(codec = compressionCodec, timestamp = messageSetTimestamp, timestampType = timestampType, magicValue = messageFormatVersion) { outputStream =>
         val output = new DataOutputStream(CompressionFactory(compressionCodec, outputStream))
         try {
           for (messageOffset <- messages) {
             val message = messageOffset.message
             offset = messageOffset.offset
             // Use relative offset when magic value is greater than 0
-            if (magicValue > Message.MagicValue_V0) {
+            if (messageFormatVersion > Message.MagicValue_V0) {
               // The offset of the messages are absolute offset, compute the relative offset.
-              val relativeOffset = messageOffset.offset - firstAbsoluteOffset
-              output.writeLong(relativeOffset)
+              val innerOffset = messageOffset.offset - firstAbsoluteOffset
+              output.writeLong(innerOffset)
             } else
               output.writeLong(offset)
             output.writeInt(message.size)

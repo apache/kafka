@@ -283,9 +283,15 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     this.producers(0).flush()
   }
 
-  protected def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]], numRecords: Int, startingOffset: Int,
-                                      startingKeyAndValueIndex: Int = 0, tp: TopicPartition = tp) {
+  protected def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]],
+                                        numRecords: Int,
+                                        startingOffset: Int,
+                                        startingKeyAndValueIndex: Int = 0,
+                                        startingTimestamp: Long = 0L,
+                                        timestampType: TimestampType = TimestampType.CreateTime,
+                                        tp: TopicPartition = tp) {
     val records = consumeRecords(consumer, numRecords)
+    val now = System.currentTimeMillis()
     for (i <- 0 until numRecords) {
       val record = records.get(i)
       val offset = startingOffset + i

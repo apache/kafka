@@ -18,11 +18,11 @@
 package kafka.log
 
 import java.util.Properties
+
+import kafka.message.{BrokerCompressionCodec, Message, TimestampType}
 import kafka.server.KafkaConfig
-import org.apache.kafka.common.utils.Utils
-import scala.collection._
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
-import kafka.message.{TimestampType, BrokerCompressionCodec, Message}
+import org.apache.kafka.common.utils.Utils
 
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
@@ -71,7 +71,7 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val minInSyncReplicas = getInt(LogConfig.MinInSyncReplicasProp)
   val compressionType = getString(LogConfig.CompressionTypeProp).toLowerCase
   val preallocate = getBoolean(LogConfig.PreAllocateEnableProp)
-  val messageFormatVersion = Integer.parseInt(getString(LogConfig.MessageFormatVersionProp).substring(1))
+  val messageFormatVersion = Integer.parseInt(getString(LogConfig.MessageFormatVersionProp).substring(1)).toByte
   val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp)
 
@@ -138,11 +138,10 @@ object LogConfig {
   val MessageTimestampDifferenceMaxMsDoc = KafkaConfig.MessageTimestampDifferenceMaxMsDoc
 
   private val configDef = {
-    import ConfigDef.Range._
-    import ConfigDef.ValidString._
-    import ConfigDef.Type._
-    import ConfigDef.Importance._
-    import java.util.Arrays.asList
+    import org.apache.kafka.common.config.ConfigDef.Importance._
+    import org.apache.kafka.common.config.ConfigDef.Range._
+    import org.apache.kafka.common.config.ConfigDef.Type._
+    import org.apache.kafka.common.config.ConfigDef.ValidString._
 
     new ConfigDef()
       .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(Message.MinHeaderSize), MEDIUM, SegmentSizeDoc)
@@ -177,7 +176,7 @@ object LogConfig {
   def apply(): LogConfig = LogConfig(new Properties())
 
   def configNames() = {
-    import JavaConversions._
+    import scala.collection.JavaConversions._
     configDef.names().toList.sorted
   }
 
@@ -196,7 +195,7 @@ object LogConfig {
    * Check that property names are valid
    */
   def validateNames(props: Properties) {
-    import JavaConversions._
+    import scala.collection.JavaConversions._
     val names = configDef.names()
     for(name <- props.keys)
       require(names.contains(name), "Unknown configuration \"%s\".".format(name))

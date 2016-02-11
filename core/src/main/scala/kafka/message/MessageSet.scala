@@ -20,10 +20,6 @@ package kafka.message
 import java.nio._
 import java.nio.channels._
 
-import kafka.log.FileMessageSet
-
-import scala.collection.mutable.ArrayBuffer
-
 /**
  * Message set helper functions
  */
@@ -63,12 +59,12 @@ object MessageSet {
    * of the inner messages.
    */
   def validateMagicValuesAndGetTimestamp(messages: Seq[Message]): Long = {
-    val sampleMagicValue = messages.head.magic
+    val firstMagicValue = messages.head.magic
     var largestTimestamp: Long = Message.NoTimestamp
     for (message <- messages) {
-      if (message.magic != sampleMagicValue)
-        throw new IllegalStateException("Messages in the same compressed message set must have same magic value")
-      if (sampleMagicValue > Message.MagicValue_V0)
+      if (message.magic != firstMagicValue)
+        throw new IllegalStateException("Messages in the same message set must have same magic value")
+      if (firstMagicValue > Message.MagicValue_V0)
         largestTimestamp = math.max(largestTimestamp, message.timestamp)
     }
     largestTimestamp
@@ -92,9 +88,9 @@ abstract class MessageSet extends Iterable[MessageAndOffset] {
   def writeTo(channel: GatheringByteChannel, offset: Long, maxSize: Int): Int
 
   /**
-   * Check if all the messages in the message set have the expected magic value
+   * Check if all the wrapper messages in the message set have the expected magic value
    */
-  def magicValueInAllMessages(expectedMagicValue: Byte): Boolean
+  def magicValueInAllWrapperMessages(expectedMagicValue: Byte): Boolean
 
   /**
    * Provides an iterator over the message/offset pairs in this set

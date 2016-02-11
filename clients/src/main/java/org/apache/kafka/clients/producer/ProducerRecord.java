@@ -21,13 +21,19 @@ package org.apache.kafka.clients.producer;
  * present a partition will be assigned in a round-robin fashion.
  * <p>
  * The record also has an associated timestamp. If user did not provide a timestamp, the producer will stamp the record
- * with a timestamp depending on what is the timestamp type used by the topic.
+ * with its current time. The timestamp eventually used by Kafka depends on the timestam
  * <li>
  * If the topic is configured to use {@link org.apache.kafka.common.record.TimestampType#CreateTime CreateTime}
- * the timestamp will be user specified timestamp or the producer's current time.
+ * the timestamp in the producer record will be used by broker.
+ * </li>
  * <li>
  * If the topic is configured to use {@link org.apache.kafka.common.record.TimestampType#LogAppendTime LogAppendTime}
- * the timestamp will be the time when Kafka broker accepts the record.
+ * the timestamp in the producer record will be overwritten by broker with broker local time when broker append the
+ * message to its log.
+ * </li>
+ * <p>
+ * In either of the above case, the timestamp that has actually been used will be returned to user in
+ * {@link RecordMetadata}
  */
 public final class ProducerRecord<K, V> {
 
@@ -79,17 +85,6 @@ public final class ProducerRecord<K, V> {
      */
     public ProducerRecord(String topic, K key, V value) {
         this(topic, null, null, key, value);
-    }
-
-    /**
-     * Create a record with specific timestamp but no key
-     *
-     * @param topic The topic the record will be appended to
-     * @param value The record contents
-     * @param timestamp The timestamp of the record
-     */
-    public ProducerRecord(String topic, Long timestamp, V value) {
-        this(topic, null, timestamp, null, value);
     }
 
     /**

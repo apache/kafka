@@ -18,7 +18,7 @@
 <h3><a id="upgrade" href="#upgrade">1.5 Upgrading From Previous Versions</a></h3>
 
 <h4><a id="upgrade_10" href="#upgrade_10">Upgrading from 0.9.x to 0.10.0.0</a></h4>
-0.10.0.0 has <a href="#upgrade_10_performance_impact">potential performance impact</a> and <a href="#upgrade_10_protocol_changes">protocol changes</a> (please review before upgrading).
+0.10.0.0 has <a href="#upgrade_10_performance_impact">potential performance impact during upgrade</a> and <a href="#upgrade_10_protocol_changes">protocol changes</a> (please review before upgrading).
 Because new protocols are introduced, it is important to upgrade your Kafka clusters before upgrading your clients.
 
 <p><b>For a rolling upgrade:</b></p>
@@ -34,21 +34,26 @@ Because new protocols are introduced, it is important to upgrade your Kafka clus
 
 <p><b>Note:</b> Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
 
-<h5><a id="upgrade_10_performance_impact" href="#upgrade_10_performance_impact">potential performance impact in 0.10.0.0</a></h5>
+<h5><a id="upgrade_10_performance_impact" href="#upgrade_10_performance_impact">potential performance impact in 0.10.0.0 during upgrade</a></h5>
 <p>
     Message format v1 is added to include a new timestamp field and use relative offsets for compressed messages in 0.10.0.0.
     The on disk message format can be configured through message.format.version in server.properties file.
-    A 0.10.0.0 broker is able to serve old clients with message format v0. Messages will be converted to v0 if on disk
-    message format version is v1. However, Brokers will lose zero-copy when message format conversion occurs.
+    The default on-disk message format in 0.10.0 in v1. If a consumer client is on a version before 0.10.0.0, it only understands
+    message format v0. In this case, the broker is able to convert messages of format v1 to v0 before sending a response
+    to the consumer on an older version. However, the broker can't use zero-copy transfer in this case.
+
+    To avoid such message conversion before consumers are upgraded to 0.10.0, one can set the message format to v0 after
+    upgrading the broker to 0.10.0. This way, the broker can still use zero-copy transfer to send the data to the old
+    consumers. Once most consumers are upgraded, one can change the message format to v1 on the broker.
 </p>
 <p>
     0.10.0.0 clients can handle both message format v0 and v1. Hence there is no performance impact for 0.10.0.0 clients
     if message.format.version is set to v0 on broker. Broker will not convert the messages but just return message v0
-    to new clients.
+    to 0.10.0.0 consumer.
 </p>
 <p>
-    To avoid performance impact due to message format conversion, only set message.format.version=v1 after upgrading your clients.
-    message.format.version is a topic configuration, so you can also dynamically set it for a specific topic by changing its topic configuration.
+    <b>Note:</b> By setting the message format version, one certifies all the existing messages is on or below that
+    message format version. Otherwise consumers before 0.10.0.0 might break.
 </p>
 
 <h5><a id="upgrade_10_protocol_changes" href="#upgrade_10_protocol_changes">protocol change for 0.10.0.0</a></h5>

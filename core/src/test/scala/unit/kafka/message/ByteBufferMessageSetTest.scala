@@ -19,10 +19,10 @@ package kafka.message
 
 import java.nio._
 import java.util.concurrent.atomic.AtomicLong
-import kafka.api.ApiVersion
+
+import kafka.utils.TestUtils
 import org.junit.Assert._
 import org.junit.Test
-import kafka.utils.TestUtils
 
 class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
@@ -155,7 +155,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     val startTime = System.currentTimeMillis()
     // The timestamps should be overwritten
     val messages = getMessages(magicValue = Message.MagicValue_V1, timestamp = 0L, codec = NoCompressionCodec)
-    val compressedMessages = getMessages(magicValue = Message.MagicValue_V1, timestamp = 5L, codec = DefaultCompressionCodec)
+    val compressedMessagesWithRecompresion = getMessages(magicValue = Message.MagicValue_V0, codec = DefaultCompressionCodec)
     val compressedMessagesWithoutRecompression =
       getMessages(magicValue = Message.MagicValue_V1, timestamp = -1L, codec = DefaultCompressionCodec)
 
@@ -167,12 +167,12 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                                       messageTimestampDiffMaxMs = 1000L)
 
     val validatedCompressedMessages =
-      compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
-                                                          sourceCodec = DefaultCompressionCodec,
-                                                          targetCodec = DefaultCompressionCodec,
-                                                          messageFormatVersion = 1,
-                                                          messageTimestampType = LogAppendTime,
-                                                          messageTimestampDiffMaxMs = 1000L)
+      compressedMessagesWithRecompresion.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+                                                                          sourceCodec = DefaultCompressionCodec,
+                                                                          targetCodec = DefaultCompressionCodec,
+                                                                          messageFormatVersion = 1,
+                                                                          messageTimestampType = LogAppendTime,
+                                                                          messageTimestampDiffMaxMs = 1000L)
 
     val validatedCompressedMessagesWithoutRecompression =
       compressedMessagesWithoutRecompression.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
@@ -190,7 +190,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       assertEquals(LogAppendTime, messageAndOffset.message.timestampType)
     }
 
-    assertEquals("message set size should not change", compressedMessages.size, validatedCompressedMessages.size)
+    assertEquals("message set size should not change", compressedMessagesWithRecompresion.size, validatedCompressedMessages.size)
     for (messageAndOffset <- validatedCompressedMessages) {
       messageAndOffset.message.ensureValid()
       assertTrue(s"Timestamp of message ${messageAndOffset.message}} should be between $startTime and $now",
@@ -396,9 +396,9 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     if (magicValue == Message.MagicValue_V0) {
       new ByteBufferMessageSet(
         codec,
-        new Message("hello".getBytes),
-        new Message("there".getBytes),
-        new Message("beautiful".getBytes))
+        new Message("hello".getBytes, Message.NoTimestamp, Message.MagicValue_V0),
+        new Message("there".getBytes, Message.NoTimestamp, Message.MagicValue_V0),
+        new Message("beautiful".getBytes, Message.NoTimestamp, Message.MagicValue_V0))
     } else {
       new ByteBufferMessageSet(
         codec,

@@ -21,14 +21,13 @@ import java.nio.ByteBuffer
 import java.nio.channels.GatheringByteChannel
 
 import kafka.common.TopicAndPartition
-import kafka.message.{NoCompressionCodec, Message, MessageSet, ByteBufferMessageSet}
+import kafka.message.{MessageSet, ByteBufferMessageSet}
 import kafka.api.ApiUtils._
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.{Send, MultiSend}
 import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
-import scala.collection.mutable.ArrayBuffer
 
 object FetchResponsePartitionData {
   def readFrom(buffer: ByteBuffer): FetchResponsePartitionData = {

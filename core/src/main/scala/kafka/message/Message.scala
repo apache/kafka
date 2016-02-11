@@ -58,7 +58,7 @@ object Message {
   /**
    * The amount of overhead bytes in a message
    * This value is only used to check if the message size is valid or not. So the minimum possible message bytes is
-   * used here, which come from a message in message format V0 with empty key and value.
+   * used here, which comes from a message in message format V0 with empty key and value.
    */
   val MinMessageOverhead = KeyOffset_V0 + ValueSizeLength
   
@@ -66,7 +66,7 @@ object Message {
    * The minimum valid size for the message header
    * The MinHeaderSize does not include the TimestampLength for backward compatibility.
    * This value is only used to check if the message size is valid or not. So the minimum possible message bytes is
-   * used here, which come from message format V0.
+   * used here, which comes from message format V0.
    */
   val MinHeaderSize = MessageHeaderSizeMap.values.min
   
@@ -85,7 +85,7 @@ object Message {
    */
   val CompressionCodeMask: Int = 0x07
   /**
-   * Specifies the mask for timestamp type. 1 bit at the 5th least significant bit.
+   * Specifies the mask for timestamp type. 1 bit at the 4th least significant bit.
    * 0 for CreateTime, 1 for LogAppendTime
    */
   val TimestampTypeMask: Byte = 0x08
@@ -115,7 +115,16 @@ object Message {
  *
  * 1. 4 byte CRC32 of the message
  * 2. 1 byte "magic" identifier to allow format changes, value is 0 or 1
- * 3. 1 byte "attributes" identifier to allow annotations on the message independent of the version (e.g. compression enabled, type of codec used)
+ * 3. 1 byte "attributes" identifier to allow annotations on the message independent of the version
+ *    bit 0 ~ 2 : Compression codec.
+ *      0 : no compression
+ *      1 : gzip
+ *      2 : snappy
+ *      3 : lz4
+ *    bit 3 : Timestamp type
+ *      0 : create time
+ *      1 : log append time
+ *    bit 4 ~ 7 : reserved
  * 4. (Optional) 8 byte timestamp only if "magic" identifier is greater than 0
  * 5. 4 byte key length, containing length K
  * 6. K byte key
@@ -123,6 +132,11 @@ object Message {
  * 8. V byte payload
  *
  * Default constructor wraps an existing ByteBuffer with the Message object with no change to the contents.
+ * @param buffer the byte buffer of this message.
+ * @param wrapperMessageTimestamp the wrapper message timestamp, only not None when the message is an inner message
+ *                                of a compressed message.
+ * @param wrapperMessageTimestampType the wrapper message timestamp type, only not None when the message is an inner
+ *                                    message of a compressed message.
  */
 class Message(val buffer: ByteBuffer,
               private val wrapperMessageTimestamp: Option[Long] = None,
@@ -164,8 +178,10 @@ class Message(val buffer: ByteBuffer,
     buffer.position(MagicOffset)
     buffer.put(magicValue)
     var attributes: Byte = 0
-    if (codec.codec > 0)
-      attributes =  (attributes | (CompressionCodeMask & codec.codec)).toByte
+    if (codec.codec > 0) {
+      attributes = (attributes | (CompressionCodeMask & codec.codec)).toByte
+      attributes = TimestampType.setTimestampType(attributes, timestampType)
+    }
     buffer.put(attributes)
     // Only put timestamp when "magic" value is greater than 0
     if (magic > MagicValue_V0)
@@ -285,7 +301,7 @@ class Message(val buffer: ByteBuffer,
    * 2. TimestampType = LogAppendTime and wrapperMessageTimestamp is defined - Compressed message using LogAppendTime
    * 3. TimestampType = CreateTime and wrapperMessageTimestamp is defined - Compressed message using CreateTime
    */
-def timestamp: Long = {
+  def timestamp: Long = {
     if (magic == MagicValue_V0)
       Message.NoTimestamp
     // Case 2

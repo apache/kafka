@@ -151,7 +151,11 @@ public class Protocol {
                                                                                                               new Field("base_offset",
                                                                                                                         INT64),
                                                                                                               new Field("timestamp",
-                                                                                                                        INT64))))))),
+                                                                                                                        INT64,
+                                                                                                                        "The timestamp returned by broker after appending the messages. " +
+                                                                                                                            "If CreateTime is used for the topic, the timestamp will be -1. " +
+                                                                                                                            "If LogAppendTime is used for the topic, the timestamp will be " +
+                                                                                                                            "the broker local time when the messages are appended."))))))),
                                                                 new Field("throttle_time_ms",
                                                                           INT32,
                                                                           "Duration in milliseconds for which the request was throttled" +

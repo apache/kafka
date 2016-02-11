@@ -29,7 +29,7 @@ package kafka.api
  * help users who are running on trunk upgrade. For example:
  * 1. Kafka 0.9.0 is released
  * 2. After that some protocol change are made and will be released in 0.10.0. The version will be named 0.10.0-IV0
- *    (DV stands for internal version)
+ *    (IV stands for internal version)
  * 3. When Kafka 0.10.0 is released. The official version 0.10.0 will be the same as the last internal version.
  */
 object ApiVersion {
@@ -90,9 +90,4 @@ case object KAFKA_0_9_0 extends ApiVersion {
 case object KAFKA_0_10_0_IV0 extends ApiVersion {
   val version: String = "0.10.0-IV0"
   val id: Int = 4
-}
-
-case object KAFKA_0_10_0 extends ApiVersion {
-  val version: String = "0.10.0-IV0"
-  val id: Int = 5
 }

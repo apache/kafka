@@ -146,9 +146,9 @@ public final class RecordAccumulator {
      * <p>
      *
      * @param tp The topic/partition to which this record is being sent
+     * @param timestamp The timestamp of the record
      * @param key The key for the record
      * @param value The value for the record
-     * @param timestamp The timestamp of the record
      * @param callback The user-supplied callback to execute when the request is complete
      * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
      */

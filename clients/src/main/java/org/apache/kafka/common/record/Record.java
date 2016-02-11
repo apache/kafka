@@ -110,7 +110,8 @@ public final class Record {
      * A constructor to create a LogRecord. If the record's compression type is not none, then
      * its value payload should be already compressed with the specified type; the constructor
      * would always write the value payload as is and will not do the compression itself.
-     * 
+     *
+     * @param timestamp The timestamp of the record
      * @param key The key of the record (null, if none)
      * @param value The record value
      * @param type The compression type used on the contents of the record (if any)

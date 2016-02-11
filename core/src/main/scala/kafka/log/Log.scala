@@ -42,10 +42,10 @@ object LogAppendInfo {
  * @param firstOffset The first offset in the message set
  * @param lastOffset The last offset in the message set
  * @param timestamp The log append time (if used) of the message set, otherwise Message.NoTimestamp
- * @param shallowCount The number of shallow messages
- * @param validBytes The number of valid bytes
  * @param sourceCodec The source codec used in the message set (send by the producer)
  * @param targetCodec The target codec of the message set(after applying the broker compression configuration if any)
+ * @param shallowCount The number of shallow messages
+ * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
  */
 case class LogAppendInfo(var firstOffset: Long,

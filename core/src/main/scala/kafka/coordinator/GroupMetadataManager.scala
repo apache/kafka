@@ -142,7 +142,7 @@ class GroupMetadataManager(val brokerId: Int,
       // retry removing this group.
       val groupPartition = partitionFor(group.groupId)
       val tombstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(group.groupId),
-        timestamp = System.currentTimeMillis(), magicValue = Message.MagicValue_V1)
+        timestamp = SystemTime.milliseconds, magicValue = Message.MagicValue_V1)
 
       val partitionOpt = replicaManager.getPartition(GroupCoordinator.GroupMetadataTopicName, groupPartition)
       partitionOpt.foreach { partition =>
@@ -170,7 +170,7 @@ class GroupMetadataManager(val brokerId: Int,
     val message = new Message(
       key = GroupMetadataManager.groupMetadataKey(group.groupId),
       bytes = GroupMetadataManager.groupMetadataValue(group, groupAssignment),
-      timestamp = System.currentTimeMillis(),
+      timestamp = SystemTime.milliseconds,
       magicValue = Message.MagicValue_V1
     )
 
@@ -254,7 +254,7 @@ class GroupMetadataManager(val brokerId: Int,
       new Message(
         key = GroupMetadataManager.offsetCommitKey(groupId, topicAndPartition.topic, topicAndPartition.partition),
         bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata),
-        timestamp = System.currentTimeMillis(),
+        timestamp = SystemTime.milliseconds,
         magicValue = Message.MagicValue_V1
       )
     }.toSeq
@@ -555,7 +555,7 @@ class GroupMetadataManager(val brokerId: Int,
         val commitKey = GroupMetadataManager.offsetCommitKey(groupTopicAndPartition.group,
           groupTopicAndPartition.topicPartition.topic, groupTopicAndPartition.topicPartition.partition)
 
-        (offsetsPartition, new Message(bytes = null, key = commitKey, timestamp = System.currentTimeMillis(), magicValue = Message.MagicValue_V1))
+        (offsetsPartition, new Message(bytes = null, key = commitKey, timestamp = SystemTime.milliseconds, magicValue = Message.MagicValue_V1))
       }.groupBy { case (partition, tombstone) => partition }
 
       // Append the tombstone messages to the offset partitions. It is okay if the replicas don't receive these (say,

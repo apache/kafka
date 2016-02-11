@@ -19,6 +19,7 @@ package kafka.server
 
 import java.nio.ByteBuffer
 import java.lang.{Long => JLong, Short => JShort}
+import java.util.concurrent.atomic.{AtomicLong, AtomicInteger}
 
 import kafka.admin.AdminUtils
 import kafka.api._
@@ -64,6 +65,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   // Store all the quota managers for each type of request
   val quotaManagers: Map[Short, ClientQuotaManager] = instantiateQuotaManagers(config)
+  var numFetch = new AtomicInteger(0)
+  var totalTime = new AtomicLong(0L)
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -440,10 +443,10 @@ class KafkaApis(val requestChannel: RequestChannel,
               // This is to reduce the message format conversion as much as possible. The conversion will only occur
               // when new message format is used for the topic and we see an old request.
               // Please notice that if the message format is changed from a higher version back to lower version this
-              // test might break because some messages in new message format can be delivered to consumer without
-              // format down conversion.
+              // test might break because some messages in new message format can be delivered to consumers before 0.10.0.0
+              // without format down conversion.
               if (replicaManager.getMessageFormatVersion(tp).exists(_ > 0) &&
-                  !data.messages.magicValueInAllMessages(Message.MagicValue_V0)) {
+                  !data.messages.magicValueInAllWrapperMessages(Message.MagicValue_V0)) {
                 trace("Down converting message to V0 for fetch request from " + fetchRequest.clientId)
                 new FetchResponsePartitionData(data.error, data.hw, data.messages.asInstanceOf[FileMessageSet].toMessageFormat(Message.MagicValue_V0))
               } else
@@ -467,7 +470,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       def fetchResponseCallback(delayTimeMs: Int) {
-          trace(s"Sending fetch response to ${fetchRequest.clientId} with ${convertedResponseStatus.values.map(_.messages.size).sum}" +
+          trace(s"Sending fetch response to ${fetchRequest.clientId} with ${convertedResponseStatus.values.map(_.messages.sizeInBytes).sum}" +
             s" messages")
         val response = FetchResponse(fetchRequest.correlationId, mergedResponseStatus, fetchRequest.versionId, delayTimeMs)
         requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
@@ -483,8 +486,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         quotaManagers(ApiKeys.FETCH.id).recordAndMaybeThrottle(fetchRequest.clientId,
                                                                FetchResponse.responseSize(responsePartitionData.groupBy(_._1.topic),
-                                                               fetchRequest.versionId),
-                                                               fetchResponseCallback)
+                                                                                          fetchRequest.versionId),
+                                                                                          fetchResponseCallback)
       }
     }
 
