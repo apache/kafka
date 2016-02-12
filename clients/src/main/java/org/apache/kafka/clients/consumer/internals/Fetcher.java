@@ -705,9 +705,15 @@ public class Fetcher<K, V> {
             Sensor bytesFetched = this.metrics.getSensor(name);
             if (bytesFetched == null) {
                 bytesFetched = this.metrics.sensor(name);
-                bytesFetched.add(this.metrics.metricName(name,
+                bytesFetched.add(this.metrics.metricName(topic + ".fetch-size-avg",
                         this.metricGrpName,
-                        "The number of bytes fetched for topic " + topic), new Rate(new Count()));
+                        "The average number of bytes fetched per request for topic " + topic), new Avg());
+                bytesFetched.add(this.metrics.metricName(topic + ".fetch-size-max",
+                        this.metricGrpName,
+                        "The maximum number of bytes fetched per request for topic " + topic), new Max());
+                bytesFetched.add(this.metrics.metricName(topic + ".bytes-consumed-rate",
+                        this.metricGrpName,
+                        "The average number of bytes consumed per second for topic " + topic), new Rate());
             }
             bytesFetched.record(bytes);
 
@@ -716,9 +722,12 @@ public class Fetcher<K, V> {
             Sensor recordsFetched = this.metrics.getSensor(name);
             if (recordsFetched == null) {
                 recordsFetched = this.metrics.sensor(name);
-                recordsFetched.add(this.metrics.metricName(name,
+                recordsFetched.add(this.metrics.metricName(topic + ".records-per-request-avg",
                         this.metricGrpName,
-                        "The number of records fetched for topic " + topic), new Rate(new Count()));
+                        "The average number of records in each request for topic " + topic), new Avg());
+                recordsFetched.add(this.metrics.metricName(topic + ".records-consumed-rate",
+                        this.metricGrpName,
+                        "The average number of records consumed per second for topic " + topic), new Rate());
             }
             recordsFetched.record(records);
         }
