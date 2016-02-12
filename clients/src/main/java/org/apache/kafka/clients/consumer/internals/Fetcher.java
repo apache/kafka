@@ -720,7 +720,7 @@ public class Fetcher<K, V> {
             bytesFetched.record(bytes);
 
             // record records fetched
-            name = "topic." + topic + ".records-fetched";
+            name = topicMetricPrefix + ".records-fetched";
             Sensor recordsFetched = this.metrics.getSensor(name);
             if (recordsFetched == null) {
                 recordsFetched = this.metrics.sensor(name);
