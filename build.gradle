@@ -22,8 +22,8 @@ buildscript {
   apply from: file('gradle/buildscript.gradle'), to: buildscript
 
   dependencies {
-    // For Apache Rat plugin to ignore non-Git files, need ancient version for Java 6 compatibility
-    classpath group: 'org.ajoberstar', name: 'grgit', version: '0.2.3'
+    // For Apache Rat plugin to ignore non-Git files
+    classpath "org.ajoberstar:grgit:1.5.0"
   }
 }
 
