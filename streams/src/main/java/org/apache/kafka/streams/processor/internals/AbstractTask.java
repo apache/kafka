@@ -71,7 +71,7 @@ public abstract class AbstractTask {
     protected void initializeStateStores() {
         for (StateStoreSupplier stateStoreSupplier : this.topology.stateStoreSuppliers()) {
             StateStore store = stateStoreSupplier.get();
-            store.init(this.processorContext);
+            store.init(this.processorContext, store);
         }
     }
 
