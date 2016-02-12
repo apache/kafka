@@ -700,18 +700,20 @@ public class Fetcher<K, V> {
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {
+            String topicMetricPrefix = "topic." + topic;
+
             // record bytes fetched
-            String name = "topic." + topic + ".bytes-fetched";
+            String name = topicMetricPrefix + ".bytes-fetched";
             Sensor bytesFetched = this.metrics.getSensor(name);
             if (bytesFetched == null) {
                 bytesFetched = this.metrics.sensor(name);
-                bytesFetched.add(this.metrics.metricName("topic." + topic + ".fetch-size-avg",
+                bytesFetched.add(this.metrics.metricName(topicMetricPrefix + ".fetch-size-avg",
                         this.metricGrpName,
                         "The average number of bytes fetched per request for topic " + topic), new Avg());
-                bytesFetched.add(this.metrics.metricName("topic." + topic + ".fetch-size-max",
+                bytesFetched.add(this.metrics.metricName(topicMetricPrefix + ".fetch-size-max",
                         this.metricGrpName,
                         "The maximum number of bytes fetched per request for topic " + topic), new Max());
-                bytesFetched.add(this.metrics.metricName("topic." + topic + ".bytes-consumed-rate",
+                bytesFetched.add(this.metrics.metricName(topicMetricPrefix + ".bytes-consumed-rate",
                         this.metricGrpName,
                         "The average number of bytes consumed per second for topic " + topic), new Rate());
             }
@@ -722,10 +724,10 @@ public class Fetcher<K, V> {
             Sensor recordsFetched = this.metrics.getSensor(name);
             if (recordsFetched == null) {
                 recordsFetched = this.metrics.sensor(name);
-                recordsFetched.add(this.metrics.metricName("topic." + topic + ".records-per-request-avg",
+                recordsFetched.add(this.metrics.metricName(topicMetricPrefix + ".records-per-request-avg",
                         this.metricGrpName,
                         "The average number of records in each request for topic " + topic), new Avg());
-                recordsFetched.add(this.metrics.metricName("topic." + topic + ".records-consumed-rate",
+                recordsFetched.add(this.metrics.metricName(topicMetricPrefix + ".records-consumed-rate",
                         this.metricGrpName,
                         "The average number of records consumed per second for topic " + topic), new Rate());
             }
