@@ -21,6 +21,7 @@ import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
 import java.nio.ByteBuffer
 
+import kafka.api.ApiUtils._
 import kafka.integration.KafkaServerTestHarness
 
 import kafka.network.SocketServer
@@ -78,10 +79,20 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     }
   }
 
+  // Custom header serialization so that protocol assumptions are not forced
   private def requestHeaderBytes(apiKey: Short, apiVersion: Short, clientId: String = "", correlationId: Int = -1): Array[Byte] = {
-    val header = new RequestHeader(apiKey, apiVersion, clientId, correlationId)
-    val buffer = ByteBuffer.allocate(header.sizeOf())
-    header.writeTo(buffer)
+    val size = {
+      2 /* apiKey */ +
+        2 /* version id */ +
+        4 /* correlation id */ +
+        (if (clientId != null) 2 + clientId.length else 2) /* client id */
+    }
+    
+    val buffer = ByteBuffer.allocate(size)
+    buffer.putShort(apiKey)
+    buffer.putShort(apiVersion)
+    buffer.putInt(correlationId)
+    writeShortString(buffer, clientId)
     buffer.array()
   }
 
