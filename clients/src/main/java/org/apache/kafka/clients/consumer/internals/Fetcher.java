@@ -705,13 +705,13 @@ public class Fetcher<K, V> {
             Sensor bytesFetched = this.metrics.getSensor(name);
             if (bytesFetched == null) {
                 bytesFetched = this.metrics.sensor(name);
-                bytesFetched.add(this.metrics.metricName(topic + ".fetch-size-avg",
+                bytesFetched.add(this.metrics.metricName("topic." + topic + ".fetch-size-avg",
                         this.metricGrpName,
                         "The average number of bytes fetched per request for topic " + topic), new Avg());
-                bytesFetched.add(this.metrics.metricName(topic + ".fetch-size-max",
+                bytesFetched.add(this.metrics.metricName("topic." + topic + ".fetch-size-max",
                         this.metricGrpName,
                         "The maximum number of bytes fetched per request for topic " + topic), new Max());
-                bytesFetched.add(this.metrics.metricName(topic + ".bytes-consumed-rate",
+                bytesFetched.add(this.metrics.metricName("topic." + topic + ".bytes-consumed-rate",
                         this.metricGrpName,
                         "The average number of bytes consumed per second for topic " + topic), new Rate());
             }
@@ -722,10 +722,10 @@ public class Fetcher<K, V> {
             Sensor recordsFetched = this.metrics.getSensor(name);
             if (recordsFetched == null) {
                 recordsFetched = this.metrics.sensor(name);
-                recordsFetched.add(this.metrics.metricName(topic + ".records-per-request-avg",
+                recordsFetched.add(this.metrics.metricName("topic." + topic + ".records-per-request-avg",
                         this.metricGrpName,
                         "The average number of records in each request for topic " + topic), new Avg());
-                recordsFetched.add(this.metrics.metricName(topic + ".records-consumed-rate",
+                recordsFetched.add(this.metrics.metricName("topic." + topic + ".records-consumed-rate",
                         this.metricGrpName,
                         "The average number of records consumed per second for topic " + topic), new Rate());
             }
