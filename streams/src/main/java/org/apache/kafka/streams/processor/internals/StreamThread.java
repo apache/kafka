@@ -104,6 +104,7 @@ public class StreamThread extends Thread {
     private long lastClean;
     private long lastCommit;
     private long recordsProcessed;
+    private Throwable rebalanceException = null;
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
@@ -123,19 +124,29 @@ public class StreamThread extends Thread {
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
-            addStreamTasks(assignment);
-            addStandbyTasks();
-            lastClean = time.milliseconds(); // start the cleaning cycle
+            try {
+                addStreamTasks(assignment);
+                addStandbyTasks();
+                lastClean = time.milliseconds(); // start the cleaning cycle
+            } catch (Throwable t) {
+                rebalanceException = t;
+                throw t;
+            }
         }
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
-            commitAll();
-            // TODO: right now upon partition revocation, we always remove all the tasks;
-            // this behavior can be optimized to only remove affected tasks in the future
-            removeStreamTasks();
-            removeStandbyTasks();
-            lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
+            try {
+                commitAll();
+                // TODO: right now upon partition revocation, we always remove all the tasks;
+                // this behavior can be optimized to only remove affected tasks in the future
+                removeStreamTasks();
+                removeStandbyTasks();
+                lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
+            } catch (Throwable t) {
+                rebalanceException = t;
+                throw t;
+            }
         }
     };
 
@@ -317,6 +328,9 @@ public class StreamThread extends Thread {
 
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(totalNumBuffered == 0 ? this.pollTimeMs : 0);
                 lastPoll = time.milliseconds();
+
+                if (rebalanceException != null)
+                    throw new StreamsException("Failed to rebalance", rebalanceException);
 
                 if (!records.isEmpty()) {
                     for (TopicPartition partition : records.partitions()) {
