@@ -21,14 +21,14 @@ import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
 import java.nio.ByteBuffer
 
-import kafka.api.ApiUtils._
 import kafka.integration.KafkaServerTestHarness
 
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.types.Type
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
-import org.apache.kafka.common.requests.{RequestHeader, ProduceResponse, ResponseHeader, ProduceRequest}
+import org.apache.kafka.common.requests.{ProduceResponse, ResponseHeader, ProduceRequest}
 import org.junit.Assert._
 import org.junit.Test
 
@@ -85,14 +85,14 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
       2 /* apiKey */ +
         2 /* version id */ +
         4 /* correlation id */ +
-        (if (clientId != null) 2 + clientId.length else 2) /* client id */
+        Type.NULLABLE_STRING.sizeOf(clientId) /* client id */
     }
-    
+
     val buffer = ByteBuffer.allocate(size)
     buffer.putShort(apiKey)
     buffer.putShort(apiVersion)
     buffer.putInt(correlationId)
-    writeShortString(buffer, clientId)
+    Type.NULLABLE_STRING.write(buffer, clientId)
     buffer.array()
   }
 
