@@ -423,7 +423,8 @@ object KafkaConfig {
   val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server"
   val MinInSyncReplicasDoc = "define the minimum number of replicas in ISR needed to satisfy a produce request with acks=all (or -1)"
-  val MessageFormatVersionDoc = "Specify the message format version the broker will use to append messages to the logs. Valid values are \"v0\" and \"v1\" (case sensitive)."
+  val MessageFormatVersionDoc = "Specify the message format version the broker will use to append messages to the logs. Valid values are \"v0\" and \"v1\" (case sensitive). " +
+  "When setting the message format version, user certifies that all the existing messages on disk is at or below that version. Otherwise consumers before 0.10.0.0 will break."
   val MessageTimestampTypeDoc = "Define the whether the timestamp in the message is message create time or log append time. The value should be either" +
   " \"CreateTime\" or \"LogAppendTime\""
   val MessageTimestampDifferenceMaxMsDoc = "Set maximum allowed time difference between broker local time and message's timestamp. " +
