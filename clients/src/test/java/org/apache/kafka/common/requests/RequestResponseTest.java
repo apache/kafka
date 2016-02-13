@@ -159,6 +159,18 @@ public class RequestResponseTest {
         assertEquals(response.partitionsRemaining(), deserialized.partitionsRemaining());
     }
 
+    @Test
+    public void testRequestHeaderWithNullClientId() {
+        RequestHeader header = new RequestHeader((short) 10, (short) 1, null, 10);
+        ByteBuffer buffer = ByteBuffer.allocate(header.sizeOf());
+        header.writeTo(buffer);
+        buffer.rewind();
+        RequestHeader deserialized = RequestHeader.parse(buffer);
+        assertEquals(header.apiKey(), deserialized.apiKey());
+        assertEquals(header.apiVersion(), deserialized.apiVersion());
+        assertEquals(header.correlationId(), deserialized.correlationId());
+        assertEquals("", deserialized.clientId()); // null is defaulted to ""
+    }
 
     private AbstractRequestResponse createRequestHeader() {
         return new RequestHeader((short) 10, (short) 1, "", 10);
