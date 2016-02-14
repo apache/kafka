@@ -159,6 +159,9 @@ abstract class AbstractFetcherThread(name: String,
                       error("Error getting offset for partition [%s,%d] to broker %d".format(topic, partitionId, sourceBroker.id), e)
                       partitionsWithError += topicAndPartition
                   }
+                case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+                  warn("Unknown topic or partition for [%s, %d] to broker %d".format(topic, partitionId, sourceBroker.id))
+                  partitionsWithError += topicAndPartition
                 case _ =>
                   if (isRunning.get) {
                     error("Error for partition [%s,%d] to broker %d:%s".format(topic, partitionId, sourceBroker.id,
