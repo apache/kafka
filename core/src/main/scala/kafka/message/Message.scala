@@ -157,7 +157,7 @@ class Message(val buffer: ByteBuffer,
   def this(bytes: Array[Byte], 
            key: Array[Byte],
            timestamp: Long,
-           timestampType: TimestampType = CreateTime,
+           timestampType: TimestampType,
            codec: CompressionCodec, 
            payloadOffset: Int, 
            payloadSize: Int,
@@ -205,7 +205,7 @@ class Message(val buffer: ByteBuffer,
   }
   
   def this(bytes: Array[Byte], key: Array[Byte], timestamp: Long, codec: CompressionCodec, magicValue: Byte) =
-    this(bytes = bytes, key = key, timestamp = timestamp, codec = codec, payloadOffset = 0, payloadSize = -1, magicValue = magicValue)
+    this(bytes = bytes, key = key, timestamp = timestamp, timestampType = CreateTime, codec = codec, payloadOffset = 0, payloadSize = -1, magicValue = magicValue)
   
   def this(bytes: Array[Byte], timestamp: Long, codec: CompressionCodec, magicValue: Byte) =
     this(bytes = bytes, key = null, timestamp = timestamp, codec = codec, magicValue = magicValue)
