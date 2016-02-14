@@ -79,6 +79,13 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    public void putIfAbsent(K key, V value) {
+        if (get(key) == null) {
+            put(key, value);
+        }
+    }
+
+    @Override
     public void putAll(List<KeyValue<K, V>> entries) {
         this.inner.putAll(entries);
 

@@ -51,6 +51,16 @@ public interface KeyValueStore<K, V> extends StateStore {
     abstract public void put(K key, V value);
 
     /**
+     * Update the value associated with this key, unless a value
+     * already is associated with the key
+     *
+     * @param key They key to associate the value to
+     * @param value The value
+     * @throws NullPointerException If null is used for key or value.
+     */
+    abstract public void putIfAbsent(K key, V value);
+
+    /**
      * Update all the given key/value pairs
      *
      * @param entries A list of entries to put into the store.
