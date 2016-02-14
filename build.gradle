@@ -20,7 +20,7 @@ import java.nio.file.Paths
 
 buildscript {
   repositories {
-    maven {url 'http://repo1.maven.org/maven2'}
+    mavenCentral()
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
 
@@ -34,7 +34,7 @@ allprojects {
   apply plugin: 'idea'
   apply plugin: 'eclipse'
   repositories {
-    maven {url 'http://repo1.maven.org/maven2'}
+    mavenCentral()
   }
 }
 
@@ -376,10 +376,8 @@ project(':core') {
     Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-scala-${versions.baseScala}"))
 
     configurations.runtime.filter {
-      println(it.getAbsoluteFile().getName())
       it.getAbsoluteFile().getName().contains("scala") && it.getAbsoluteFile().getName().contains("${versions.baseScala}")
     }.each {
-      println(it.getAbsoluteFile().getName())
       createFileLink("$baseBuildDir/dependant-libs-scala-${versions.baseScala}/${it.getAbsoluteFile().getName()}", "$buildDir/dependant-libs-scala-${versions.baseScala}/${it.getAbsoluteFile().getName()}")
     }
     (configurations.testRuntime - configurations.runtime).filter {

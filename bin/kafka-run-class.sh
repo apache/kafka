@@ -61,7 +61,7 @@ case $PROJECT_NAME in
   JARPATH=$JARPATH" $base_dir/log4j-appender/build/dependant-libs-java/*.jar $base_dir/log4j-appender/build/libs/kafka-*.jar "
   ;;
   "")
-  JARPATH=$JARPATH" $base_dir/build/dependant-libs-java/*.jar $base_dir/build/dependant-libs-scala-${SCALA_BINARY_VERSION}/*.jar"
+  JARPATH=$JARPATH" $base_dir/build/dependant-libs-java/*.jar $base_dir/build/dependant-libs-scala-${SCALA_BINARY_VERSION}/*.jar $base_dir/libs/*.jar"
 esac
 
 JARPATH=($JARPATH)
