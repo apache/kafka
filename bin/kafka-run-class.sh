@@ -34,13 +34,13 @@ JARPATH=""
 
 case $PROJECT_NAME in
   "core")
-  JARPATH=$JARPATH" $base_dir/core/build/dependant-libs-java/*.jar $base_dir/core/build/dependant-libs-scala-${SCALA_VERSION}/*.jar $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar "
+  JARPATH=$JARPATH" $base_dir/core/build/dependant-libs-java/*.jar $base_dir/core/build/dependant-libs-scala-${SCALA_BINARY_VERSION}/*.jar $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar "
   ;;
   "tools")
   JARPATH=$JARPATH" $base_dir/tools/build/dependant-libs-java/*.jar $base_dir/tools/build/libs/kafka-tools*.jar"
   ;;
   "clients")
-  JARPATH=$JARPATH" $base_dir/clients/build/libs/kafka-clients*.jar "
+  JARPATH=$JARPATH" $base_dir/clients/build/dependant-libs-java/*.jar $base_dir/clients/build/libs/kafka-clients*.jar "
   ;;
   "connect-json")
   JARPATH=$JARPATH" $base_dir/connect/json/build/dependant-libs-java/*.jar $base_dir/connect/json/build/libs/connect-*.jar"
@@ -58,10 +58,10 @@ case $PROJECT_NAME in
   JARPATH=$JARPATH" $base_dir/streams/build/dependant-libs-java/*.jar $base_dir/streams/build/libs/connect-*.jar"
   ;;
   "log4j-appender")
-  JARPATH=$JARPATH" $base_dir/log4j-appender/build/libs/kafka-*.jar "
+  JARPATH=$JARPATH" $base_dir/log4j-appender/build/dependant-libs-java/*.jar $base_dir/log4j-appender/build/libs/kafka-*.jar "
   ;;
   "")
-  JARPATH=$JARPATH" $base_dir/build/dependant-libs-java/*.jar"
+  JARPATH=$JARPATH" $base_dir/build/dependant-libs-java/*.jar $base_dir/build/dependant-libs-scala-${SCALA_BINARY_VERSION}/*.jar"
 esac
 
 JARPATH=($JARPATH)
