@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -67,7 +67,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.exception = null;
         this.wakeup = new AtomicBoolean(false);
     }
-    
+
     @Override
     public Set<TopicPartition> assignment() {
         return this.subscriptions.assignedPartitions();
@@ -86,7 +86,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void subscribe(List<String> topics) {
+    public void subscribe(Collection<String> topics) {
         subscribe(topics, new NoOpConsumerRebalanceListener());
     }
 
@@ -105,13 +105,13 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void subscribe(List<String> topics, final ConsumerRebalanceListener listener) {
+    public void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
         this.subscriptions.subscribe(topics, listener);
     }
 
     @Override
-    public void assign(List<TopicPartition> partitions) {
+    public void assign(Collection<TopicPartition> partitions) {
         ensureNotClosed();
         this.subscriptions.assignFromUser(partitions);
     }
@@ -238,7 +238,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void seekToBeginning(TopicPartition... partitions) {
+    public void seekToBeginning(Collection<TopicPartition> partitions) {
         ensureNotClosed();
         for (TopicPartition tp : partitions)
             subscriptions.needOffsetReset(tp, OffsetResetStrategy.EARLIEST);
@@ -249,7 +249,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void seekToEnd(TopicPartition... partitions) {
+    public void seekToEnd(Collection<TopicPartition> partitions) {
         ensureNotClosed();
         for (TopicPartition tp : partitions)
             subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
@@ -287,7 +287,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void pause(TopicPartition... partitions) {
+    public void pause(Collection<TopicPartition> partitions) {
         for (TopicPartition partition : partitions) {
             subscriptions.pause(partition);
             paused.add(partition);
@@ -295,7 +295,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void resume(TopicPartition... partitions) {
+    public void resume(Collection<TopicPartition> partitions) {
         for (TopicPartition partition : partitions) {
             subscriptions.resume(partition);
             paused.remove(partition);

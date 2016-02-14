@@ -183,7 +183,7 @@ public class StandbyTaskTest {
                 if (offset >= 0) {
                     restoreStateConsumer.seek(partition, offset);
                 } else {
-                    restoreStateConsumer.seekToBeginning(partition);
+                    restoreStateConsumer.seekToBeginning(Arrays.asList(partition));
                 }
             }
 
@@ -248,7 +248,7 @@ public class StandbyTaskTest {
                 if (offset >= 0) {
                     restoreStateConsumer.seek(partition, offset);
                 } else {
-                    restoreStateConsumer.seekToBeginning(partition);
+                    restoreStateConsumer.seekToBeginning(Arrays.asList(partition));
                 }
             }
 

@@ -278,11 +278,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(totalRecords.toInt, tp)
     consumer.assign(List(tp).asJava)
 
-    consumer.seekToEnd(tp)
+    consumer.seekToEnd(List(tp).asJava)
     assertEquals(totalRecords, consumer.position(tp))
     assertFalse(consumer.poll(totalRecords).iterator().hasNext)
 
-    consumer.seekToBeginning(tp)
+    consumer.seekToBeginning(List(tp).asJava)
     assertEquals(0, consumer.position(tp), 0)
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0)
 
@@ -354,10 +354,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(5)
     this.consumers(0).assign(List(tp).asJava)
     consumeAndVerifyRecords(this.consumers(0), 5, 0)
-    this.consumers(0).pause(tp)
+    this.consumers(0).pause(List(tp).asJava)
     sendRecords(5)
     assertTrue(this.consumers(0).poll(0).isEmpty)
-    this.consumers(0).resume(tp)
+    this.consumers(0).resume(List(tp).asJava)
     consumeAndVerifyRecords(this.consumers(0), 5, 5)
   }
 

@@ -375,9 +375,9 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 return null;
             }
         });
-        consumer.pause(UNASSIGNED_TOPIC_PARTITION);
+        consumer.pause(Arrays.asList(UNASSIGNED_TOPIC_PARTITION));
         PowerMock.expectLastCall().andThrow(new IllegalStateException("unassigned topic partition"));
-        consumer.pause(TOPIC_PARTITION, TOPIC_PARTITION2);
+        consumer.pause(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
         PowerMock.expectLastCall();
 
         expectOnePoll().andAnswer(new IAnswer<Object>() {
@@ -394,9 +394,9 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 return null;
             }
         });
-        consumer.resume(UNASSIGNED_TOPIC_PARTITION);
+        consumer.resume(Arrays.asList(UNASSIGNED_TOPIC_PARTITION));
         PowerMock.expectLastCall().andThrow(new IllegalStateException("unassigned topic partition"));
-        consumer.resume(TOPIC_PARTITION, TOPIC_PARTITION2);
+        consumer.resume(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
         PowerMock.expectLastCall();
 
         expectStopTask(0);

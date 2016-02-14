@@ -336,7 +336,7 @@ object ConsumerGroupCommand {
       val consumer = getConsumer()
       val topicPartition = new TopicPartition(topic, partition)
       consumer.assign(List(topicPartition).asJava)
-      consumer.seekToEnd(topicPartition)
+      consumer.seekToEnd(List(topicPartition).asJava)
       val logEndOffset = consumer.position(topicPartition)
       LogEndOffsetResult.LogEndOffset(logEndOffset)
     }

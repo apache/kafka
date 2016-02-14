@@ -45,7 +45,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -341,7 +340,7 @@ import java.util.regex.Pattern;
  * <p>
  * Kafka allows specifying the position using {@link #seek(TopicPartition, long)} to specify the new position. Special
  * methods for seeking to the earliest and latest offset the server maintains are also available (
- * {@link #seekToBeginning(TopicPartition...)} and {@link #seekToEnd(TopicPartition...)} respectively).
+ * {@link #seekToBeginning(Collection)} and {@link #seekToEnd(Collection)} respectively).
  *
  * <h4>Consumption Flow Control</h4>
  *
@@ -358,7 +357,7 @@ import java.util.regex.Pattern;
  * fetching other topics.
  *
  * <p>
- * Kafka supports dynamic controlling of consumption flows by using {@link #pause(TopicPartition...)} and {@link #resume(TopicPartition...)}
+ * Kafka supports dynamic controlling of consumption flows by using {@link #pause(Collection)} and {@link #resume(Collection)}
  * to pause the consumption on the specified assigned partitions and resume the consumption
  * on the specified paused partitions respectively in the future {@link #poll(long)} calls.
  *
@@ -657,7 +656,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Get the set of partitions currently assigned to this consumer. If subscription happened by directly assigning
-     * partitions using {@link #assign(List)} then this will simply return the same partitions that
+     * partitions using {@link #assign(Collection)} then this will simply return the same partitions that
      * were assigned. If topic subscription was used, then this will give the set of topic partitions currently assigned
      * to the consumer (which may be none if the assignment hasn't happened yet, or the partitions are in the
      * process of getting reassigned).
@@ -690,7 +689,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Subscribe to the given list of topics to get dynamically
      * assigned partitions. <b>Topic subscriptions are not incremental. This list will replace the current
      * assignment (if there is one).</b> Note that it is not possible to combine topic subscription with group management
-     * with manual partition assignment through {@link #assign(List)}.
+     * with manual partition assignment through {@link #assign(Collection)}.
      *
      * If the given list of topics is empty, it is treated the same as {@link #unsubscribe()}.
      *
@@ -715,7 +714,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *                 subscribed topics
      */
     @Override
-    public void subscribe(List<String> topics, ConsumerRebalanceListener listener) {
+    public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
         acquire();
         try {
             if (topics.isEmpty()) {
@@ -735,21 +734,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Subscribe to the given list of topics to get dynamically assigned partitions.
      * <b>Topic subscriptions are not incremental. This list will replace the current
      * assignment (if there is one).</b> It is not possible to combine topic subscription with group management
-     * with manual partition assignment through {@link #assign(List)}.
+     * with manual partition assignment through {@link #assign(Collection)}.
      *
      * If the given list of topics is empty, it is treated the same as {@link #unsubscribe()}.
      *
      * <p>
-     * This is a short-hand for {@link #subscribe(List, ConsumerRebalanceListener)}, which
+     * This is a short-hand for {@link #subscribe(Collection, ConsumerRebalanceListener)}, which
      * uses a noop listener. If you need the ability to either seek to particular offsets, you should prefer
-     * {@link #subscribe(List, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
+     * {@link #subscribe(Collection, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
      * to be reset. You should also prefer to provide your own listener if you are doing your own offset
      * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
      *
      * @param topics The list of topics to subscribe to
      */
     @Override
-    public void subscribe(List<String> topics) {
+    public void subscribe(Collection<String> topics) {
         subscribe(topics, new NoOpConsumerRebalanceListener());
     }
 
@@ -809,7 +808,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions The list of partitions to assign this consumer
      */
     @Override
-    public void assign(List<TopicPartition> partitions) {
+    public void assign(Collection<TopicPartition> partitions) {
         acquire();
         try {
             log.debug("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
@@ -1059,11 +1058,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Seek to the first offset for each of the given partitions. This function evaluates lazily, seeking to the
      * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
      */
-    public void seekToBeginning(TopicPartition... partitions) {
+    public void seekToBeginning(Collection<TopicPartition> partitions) {
         acquire();
         try {
-            Collection<TopicPartition> parts = partitions.length == 0 ? this.subscriptions.assignedPartitions()
-                    : Arrays.asList(partitions);
+            Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to beginning of partition {}", tp);
                 subscriptions.needOffsetReset(tp, OffsetResetStrategy.EARLIEST);
@@ -1077,11 +1075,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Seek to the last offset for each of the given partitions. This function evaluates lazily, seeking to the
      * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
      */
-    public void seekToEnd(TopicPartition... partitions) {
+    public void seekToEnd(Collection<TopicPartition> partitions) {
         acquire();
         try {
-            Collection<TopicPartition> parts = partitions.length == 0 ? this.subscriptions.assignedPartitions()
-                    : Arrays.asList(partitions);
+            Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to end of partition {}", tp);
                 subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
@@ -1217,13 +1214,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Suspend fetching from the requested partitions. Future calls to {@link #poll(long)} will not return
-     * any records from these partitions until they have been resumed using {@link #resume(TopicPartition...)}.
+     * any records from these partitions until they have been resumed using {@link #resume(Collection)}.
      * Note that this method does not affect partition subscription. In particular, it does not cause a group
      * rebalance when automatic assignment is used.
      * @param partitions The partitions which should be paused
      */
     @Override
-    public void pause(TopicPartition... partitions) {
+    public void pause(Collection<TopicPartition> partitions) {
         acquire();
         try {
             for (TopicPartition partition: partitions) {
@@ -1236,13 +1233,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Resume specified partitions which have been paused with {@link #pause(TopicPartition...)}. New calls to
+     * Resume specified partitions which have been paused with {@link #pause(Collection)}. New calls to
      * {@link #poll(long)} will return records from these partitions if there are any to be fetched.
      * If the partitions were not previously paused, this method is a no-op.
      * @param partitions The partitions which should be resumed
      */
     @Override
-    public void resume(TopicPartition... partitions) {
+    public void resume(Collection<TopicPartition> partitions) {
         acquire();
         try {
             for (TopicPartition partition: partitions) {

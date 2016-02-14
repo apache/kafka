@@ -28,6 +28,7 @@ import org.apache.log4j.Logger
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.TopicPartition
 import kafka.utils.CommandLineUtils
 import java.util.{ Random, Properties }
 import kafka.consumer.Consumer
@@ -121,7 +122,7 @@ object ConsumerPerformance {
       }
       consumer.poll(100)
     }
-    consumer.seekToBeginning()
+    consumer.seekToBeginning(List[TopicPartition]())
 
     // Now start the benchmark
     val startMs = System.currentTimeMillis

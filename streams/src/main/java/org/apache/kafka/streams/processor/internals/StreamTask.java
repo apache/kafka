@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -136,7 +137,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
         if (queueSize > this.maxBufferedSize) {
-            consumer.pause(partition);
+            consumer.pause(Arrays.asList(partition));
         }
     }
 
@@ -178,7 +179,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 // after processing this record, if its partition queue's buffered size has been
                 // decreased to the threshold, we can then resume the consumption on this partition
                 if (partitionGroup.numBuffered(partition) == this.maxBufferedSize) {
-                    consumer.resume(partition);
+                    consumer.resume(Arrays.asList(partition));
                     requiresPoll = true;
                 }
 

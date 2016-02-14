@@ -16,6 +16,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -85,7 +86,7 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
         try {
             for (TopicPartition partition : partitions)
                 pausedPartitions.add(partition);
-            consumer.pause(partitions);
+            consumer.pause(Arrays.asList(partitions));
         } catch (IllegalStateException e) {
             throw new IllegalWorkerStateException("SinkTasks may not pause partitions that are not currently assigned to them.", e);
         }
@@ -99,7 +100,7 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
         try {
             for (TopicPartition partition : partitions)
                 pausedPartitions.remove(partition);
-            consumer.resume(partitions);
+            consumer.resume(Arrays.asList(partitions));
         } catch (IllegalStateException e) {
             throw new IllegalWorkerStateException("SinkTasks may not resume partitions that are not currently assigned to them.", e);
         }
