@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.util.Properties;
