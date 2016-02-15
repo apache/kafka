@@ -47,7 +47,7 @@ if ["%PROJECT_NAME%"] equ ["core"] (
   for %%i in (%BASE_DIR%\core\build\dependant-libs-java\*.jar) do (
 	call :concat %%i
   )
-  for %%i in (%BASE_DIR%\core\build\dependant-libs-scala-%SCALA_VERSION%\*.jar) do (
+  for %%i in (%BASE_DIR%\core\build\dependant-libs-scala-%SCALA_BINARY_VERSION%\*.jar) do (
 	call :concat %%i
   )
   for %%i in (%BASE_DIR%\core\build\libs\kafka_%SCALA_BINARY_VERSION%*.jar) do (
@@ -67,6 +67,9 @@ if ["%PROJECT_NAME%"] equ ["tools"] (
 
 rem Classpath addition for kafka-clients
 if ["%PROJECT_NAME%"] equ ["clients"] (
+  for %%i in (%BASE_DIR%\clients\build\dependant-libs-java\*.jar) do (
+	call :concat %%i
+  )
   for %%i in (%BASE_DIR%\clients\build\kafka-clients*.jar) do (
 	call :concat %%i
   )
@@ -74,9 +77,17 @@ if ["%PROJECT_NAME%"] equ ["clients"] (
 
 rem Classpath addition for kafka-examples
 if ["%PROJECT_NAME%"] equ ["examples"] (
+  for %%i in (%BASE_DIR%\examples\build\dependant-libs-java\*.jar) do (
+	call :concat %%i
+  )
   for %%i in (%BASE_DIR%\examples\build\kafka-examples*.jar) do (
 	call :concat %%i
   )
+)
+
+rem Classpath addition for release
+for %%i in (%BASE_DIR%\libs\*.jar) do (
+  call :concat %%i
 )
 
 rem JMX settings

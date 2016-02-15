@@ -376,12 +376,12 @@ project(':core') {
     Files.createDirectories(Paths.get("$buildDir/test-dependant-libs-scala-${versions.baseScala}"))
 
     configurations.runtime.filter {
-      it.getAbsoluteFile().getName().contains("scala") && it.getAbsoluteFile().getName().contains("${versions.baseScala}")
+      it.getAbsoluteFile().getName().startsWith("scala") && it.getAbsoluteFile().getName().contains("${versions.baseScala}")
     }.each {
       createFileLink("$baseBuildDir/dependant-libs-scala-${versions.baseScala}/${it.getAbsoluteFile().getName()}", "$buildDir/dependant-libs-scala-${versions.baseScala}/${it.getAbsoluteFile().getName()}")
     }
     (configurations.testRuntime - configurations.runtime).filter {
-      it.getAbsoluteFile().getName().contains("scala") && it.getAbsoluteFile().getName().contains("${versions.baseScala}")
+      it.getAbsoluteFile().getName().startsWith("scala") && it.getAbsoluteFile().getName().contains("${versions.baseScala}")
     }.each {
       createFileLink("$baseBuildDir/dependant-libs-scala-${versions.baseScala}/${it.getAbsoluteFile().getName()}", "$buildDir/test-dependant-libs-scala-${versions.baseScala}/${it.getAbsoluteFile().getName()}")
     }
