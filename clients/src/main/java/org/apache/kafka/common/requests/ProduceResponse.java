@@ -48,7 +48,16 @@ public class ProduceResponse extends AbstractRequestResponse {
     /**
      * Possible error code:
      *
-     * TODO
+     * InvalidMessage (2)
+     * UnknownTopicOrPartition (3)
+     * NotLeaderForPartition (6)
+     * MessageSizeTooLarge (10)
+     * InvalidTopic (17)
+     * RecordListTooLarge (18)
+     * NotEnoughReplicas (19)
+     * NotEnoughReplicasAfterAppend (20)
+     * InvalidRequiredAcks (21)
+     * TopicAuthorizationFailed (29)
      */
 
     private static final String BASE_OFFSET_KEY_NAME = "base_offset";
