@@ -34,22 +34,13 @@ public class AppInfoParser {
     private static String commitId = "unknown";
 
     static {
-        InputStream resourceStream = null;
-        try {
+        try (InputStream resourceStream = AppInfoParser.class.getResourceAsStream("/kafka/kafka-version.properties")) {
             Properties props = new Properties();
-            resourceStream = AppInfoParser.class.getResourceAsStream("/kafka/kafka-version.properties");
             props.load(resourceStream);
             version = props.getProperty("version", version).trim();
             commitId = props.getProperty("commitId", commitId).trim();
         } catch (Exception e) {
             log.warn("Error while loading kafka-version.properties :" + e.getMessage());
-        } finally {
-            if (resourceStream != null) {
-                try {
-                    resourceStream.close();
-                } catch (IOException e) {
-                }
-            }
         }
     }
 
