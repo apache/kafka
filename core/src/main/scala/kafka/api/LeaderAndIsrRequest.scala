@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -88,7 +88,7 @@ case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControlle
       allReplicas.size * 4
     size
   }
-  
+
   override def toString(): String = {
     val partitionStateInfo = new StringBuilder
     partitionStateInfo.append("(LeaderAndIsrInfo:" + leaderIsrAndControllerEpoch.toString)
@@ -107,7 +107,7 @@ object LeaderAndIsrRequest {
   def readFrom(buffer: ByteBuffer): LeaderAndIsrRequest = {
     val versionId = buffer.getShort
     val correlationId = buffer.getInt
-    val clientId = readShortString(buffer)
+    val clientId = Option(readShortString(buffer)).getOrElse("")
     val controllerId = buffer.getInt
     val controllerEpoch = buffer.getInt
     val partitionStateInfosCount = buffer.getInt
@@ -164,7 +164,7 @@ case class LeaderAndIsrRequest (versionId: Short,
   def sizeInBytes(): Int = {
     var size =
       2 /* version id */ +
-      4 /* correlation id */ + 
+      4 /* correlation id */ +
       (2 + clientId.length) /* client id */ +
       4 /* controller id */ +
       4 /* controller epoch */ +

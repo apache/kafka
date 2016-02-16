@@ -39,7 +39,7 @@ object TopicMetadataRequest extends Logging {
   def readFrom(buffer: ByteBuffer): TopicMetadataRequest = {
     val versionId = buffer.getShort
     val correlationId = buffer.getInt
-    val clientId = readShortString(buffer)
+    val clientId = Option(readShortString(buffer)).getOrElse("")
     val numTopics = readIntInRange(buffer, "number of topics", (0, Int.MaxValue))
     val topics = new ListBuffer[String]()
     for(i <- 0 until numTopics)

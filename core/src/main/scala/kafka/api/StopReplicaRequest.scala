@@ -34,7 +34,7 @@ object StopReplicaRequest extends Logging {
   def readFrom(buffer: ByteBuffer): StopReplicaRequest = {
     val versionId = buffer.getShort
     val correlationId = buffer.getInt
-    val clientId = readShortString(buffer)
+    val clientId = Option(readShortString(buffer)).getOrElse("")
     val controllerId = buffer.getInt
     val controllerEpoch = buffer.getInt
     val deletePartitions = buffer.get match {
