@@ -27,7 +27,7 @@ import kafka.message.Message
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
-import org.apache.kafka.common.errors.SerializationException
+import org.apache.kafka.common.errors.{InvalidTimestampException, CorruptRecordException, SerializationException}
 import org.apache.kafka.common.record.TimestampType
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -212,8 +212,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, baseTimestamp + i, "key".getBytes, "value".getBytes)
         producer.send(record, callback)
       }
-      producer.flush()
-      assertEquals("Should have offset " + numRecords, numRecords, callback.offset)
+      producer.close(5000L, TimeUnit.MILLISECONDS)
+      assertEquals(s"Should have offset $numRecords but only successfully sent ${callback.offset}", numRecords, callback.offset)
     } finally {
       producer.close()
     }
@@ -459,9 +459,10 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
     val producer = createProducer(brokerList = brokerList)
     try {
-      intercept[ExecutionException] {
-        producer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()
-      }
+      producer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()
+      fail("Should throw CorruptedRecordException")
+    } catch {
+      case e: ExecutionException => assertTrue(e.getCause.isInstanceOf[InvalidTimestampException])
     } finally {
       producer.close()
     }
@@ -471,9 +472,10 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")
     val compressedProducer = createProducer(brokerList = brokerList, props = Some(producerProps))
     try {
-      intercept[ExecutionException] {
-        compressedProducer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()
-      }
+      compressedProducer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()
+      fail("Should throw CorruptedRecordException")
+    } catch {
+      case e: ExecutionException => assertTrue(e.getCause.isInstanceOf[InvalidTimestampException])
     } finally {
       compressedProducer.close()
     }

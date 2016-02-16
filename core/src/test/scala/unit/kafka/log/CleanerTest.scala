@@ -262,7 +262,7 @@ class CleanerTest extends JUnitSuite {
     
     // forward offset and append message to next segment at offset Int.MaxValue
     val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(Int.MaxValue-1),
-      new Message("hello".getBytes, "hello".getBytes, Message.NoTimestamp, Message.MagicValue_V0))
+      new Message("hello".getBytes, "hello".getBytes, Message.NoTimestamp, Message.MagicValue_V1))
     log.append(messageSet, assignOffsets = false)
     log.append(TestUtils.singleMessageSet(payload = "hello".getBytes, key = "hello".getBytes))
     assertEquals(Int.MaxValue, log.activeSegment.index.lastOffset)
@@ -452,7 +452,7 @@ class CleanerTest extends JUnitSuite {
     new ByteBufferMessageSet(new Message(key = key.toString.getBytes,
                                          bytes = value.toString.getBytes,
                                          timestamp = Message.NoTimestamp,
-                                         magicValue = Message.MagicValue_V0))
+                                         magicValue = Message.MagicValue_V1))
 
   def unkeyedMessage(value: Int) =
     new ByteBufferMessageSet(new Message(bytes=value.toString.getBytes))
@@ -461,7 +461,7 @@ class CleanerTest extends JUnitSuite {
     new ByteBufferMessageSet(new Message(key=key.toString.getBytes,
                                          bytes=null,
                                          timestamp = Message.NoTimestamp,
-                                         magicValue = Message.MagicValue_V0))
+                                         magicValue = Message.MagicValue_V1))
   
 }
 

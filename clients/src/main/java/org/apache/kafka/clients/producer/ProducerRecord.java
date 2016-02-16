@@ -21,7 +21,7 @@ package org.apache.kafka.clients.producer;
  * present a partition will be assigned in a round-robin fashion.
  * <p>
  * The record also has an associated timestamp. If user did not provide a timestamp, the producer will stamp the record
- * with its current time. The timestamp eventually used by Kafka depends on the timestam
+ * with its current time. The timestamp eventually used by Kafka depends on the timestamp type configured for the topic.
  * <li>
  * If the topic is configured to use {@link org.apache.kafka.common.record.TimestampType#CreateTime CreateTime}
  * the timestamp in the producer record will be used by broker.

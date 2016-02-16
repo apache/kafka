@@ -206,7 +206,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     props.put("log.retention.check.interval.ms", (5*1000*60).toString)
     props.put("log.segment.bytes", logSize.toString)
     props.put("zookeeper.connect", zkConnect.toString)
-    props.put("message.format.version", "v1")
+    props.put("message.format.version", "0.10.0")
     props
   }
 

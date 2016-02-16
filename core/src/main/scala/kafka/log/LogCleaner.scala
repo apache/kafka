@@ -424,12 +424,13 @@ private[log] class Cleaner(val id: Int,
         stats.readMessage(size)
         if (entry.message.compressionCodec == NoCompressionCodec) {
           if (shouldRetainMessage(source, map, retainDeletes, entry)) {
-            ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
+            val convertedMessage = entry.message.toFormatVersion(messageFormatVersion)
+            ByteBufferMessageSet.writeMessage(writeBuffer, convertedMessage, entry.offset)
             stats.recopyMessage(size)
           }
           messagesRead += 1
         } else {
-          // We use absolute offset to compare decide whether retain the message or not. This is handled by
+          // We use absolute offset to decide whether retain the message or not. This is handled by
           // deep iterator.
           val messages = ByteBufferMessageSet.deepIterator(entry)
           var numberOfInnerMessages = 0
@@ -482,20 +483,20 @@ private[log] class Cleaner(val id: Int,
         ByteBufferMessageSet.writeMessage(buffer, messageOffset.message, messageOffset.offset)
       MessageSet.messageSetSize(messagesIterable)
     } else {
-      val messageSetTimestamp = MessageSet.validateMagicValuesAndGetTimestamp(messages.map(_.message))
+      val magicAndTimestamp = MessageSet.validateMagicValuesAndGetTimestamp(messages.map(_.message))
       val firstAbsoluteOffset = messages.head.offset
       var offset = -1L
       val timestampType = messages.head.message.timestampType
       val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messagesIterable) / 2, 1024), 1 << 16))
-      messageWriter.write(codec = compressionCodec, timestamp = messageSetTimestamp, timestampType = timestampType, magicValue = messageFormatVersion) { outputStream =>
+      messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = messageFormatVersion) { outputStream =>
         val output = new DataOutputStream(CompressionFactory(compressionCodec, outputStream))
         try {
           for (messageOffset <- messages) {
             val message = messageOffset.message
             offset = messageOffset.offset
-            // Use relative offset when magic value is greater than 0
+            // Use inner offset when magic value is greater than 0
             if (messageFormatVersion > Message.MagicValue_V0) {
-              // The offset of the messages are absolute offset, compute the relative offset.
+              // The offset of the messages are absolute offset, compute the inner offset.
               val innerOffset = messageOffset.offset - firstAbsoluteOffset
               output.writeLong(innerOffset)
             } else

@@ -21,6 +21,7 @@ import java.nio._
 import java.util.concurrent.atomic.AtomicLong
 
 import kafka.utils.TestUtils
+import org.apache.kafka.common.errors.InvalidTimestampException
 import org.junit.Assert._
 import org.junit.Test
 
@@ -184,30 +185,24 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
     val now = System.currentTimeMillis()
     assertEquals("message set size should not change", messages.size, validatedMessages.size)
-    for (messageAndOffset <- validatedMessages) {
-      messageAndOffset.message.ensureValid()
-      assertTrue(messageAndOffset.message.timestamp >= startTime && messageAndOffset.message.timestamp <= now)
-      assertEquals(LogAppendTime, messageAndOffset.message.timestampType)
-    }
+    validatedMessages.foreach({case messageAndOffset => validateLogAppendTime(messageAndOffset.message)})
 
     assertEquals("message set size should not change", compressedMessagesWithRecompresion.size, validatedCompressedMessages.size)
-    for (messageAndOffset <- validatedCompressedMessages) {
-      messageAndOffset.message.ensureValid()
-      assertTrue(s"Timestamp of message ${messageAndOffset.message}} should be between $startTime and $now",
-        messageAndOffset.message.timestamp >= startTime && messageAndOffset.message.timestamp <= now)
-      assertEquals(LogAppendTime, messageAndOffset.message.timestampType)
-    }
+    validatedCompressedMessages.foreach({case messageAndOffset => validateLogAppendTime(messageAndOffset.message)})
     assertTrue("MessageSet should still valid", validatedCompressedMessages.shallowIterator.next().message.isValid)
 
     assertEquals("message set size should not change", compressedMessagesWithoutRecompression.size,
       validatedCompressedMessagesWithoutRecompression.size)
-    for (messageAndOffset <- validatedCompressedMessagesWithoutRecompression) {
-      messageAndOffset.message.ensureValid()
-      assertTrue(s"Timestamp of message ${messageAndOffset.message}} should be between $startTime and $now",
-        messageAndOffset.message.timestamp >= startTime && messageAndOffset.message.timestamp <= now)
-      assertEquals(LogAppendTime, messageAndOffset.message.timestampType)
-    }
+    validatedCompressedMessagesWithoutRecompression.foreach({case messageAndOffset =>
+      validateLogAppendTime(messageAndOffset.message)})
     assertTrue("MessageSet should still valid", validatedCompressedMessagesWithoutRecompression.shallowIterator.next().message.isValid)
+
+    def validateLogAppendTime(message: Message) {
+      message.ensureValid()
+      assertTrue(s"Timestamp of message $message should be between $startTime and $now",
+        message.timestamp >= startTime && message.timestamp <= now)
+      assertEquals(LogAppendTime, message.timestampType)
+    }
   }
 
   @Test
@@ -258,7 +253,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                 messageTimestampDiffMaxMs = 1000L)
       fail("Should throw InvalidMessageException.")
     } catch {
-      case e: InvalidMessageException =>
+      case e: InvalidTimestampException =>
     }
 
     try {
@@ -270,7 +265,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                           messageTimestampDiffMaxMs = 1000L)
       fail("Should throw InvalidMessageException.")
     } catch {
-      case e: InvalidMessageException =>
+      case e: InvalidTimestampException =>
     }
   }
 

@@ -20,13 +20,11 @@ package kafka.api
 import kafka.cluster.{EndPoint, Broker}
 import kafka.common.{OffsetAndMetadata, OffsetMetadataAndError}
 import kafka.common._
-import kafka.log.FileMessageSet
-import kafka.message._
+import kafka.message.{Message, ByteBufferMessageSet}
 import kafka.utils.SystemTime
 
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
-import kafka.utils.TestUtils._
 
 import java.nio.ByteBuffer
 

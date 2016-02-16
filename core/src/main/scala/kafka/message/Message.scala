@@ -297,9 +297,9 @@ class Message(val buffer: ByteBuffer,
   /**
    * The timestamp of the message, only available when the "magic" value is greater than 0
    * When magic > 0, The timestamp of a message is determined in the following way:
-   * 1. TimestampType = None and wrapperMessageTimestamp is None - Uncompressed message, timestamp and timestamp type are in the message.
-   * 2. TimestampType = LogAppendTime and wrapperMessageTimestamp is defined - Compressed message using LogAppendTime
-   * 3. TimestampType = CreateTime and wrapperMessageTimestamp is defined - Compressed message using CreateTime
+   * 1. wrapperMessageTimestampType = None and wrapperMessageTimestamp is None - Uncompressed message, timestamp and timestamp type are in the message.
+   * 2. wrapperMessageTimestampType = LogAppendTime and wrapperMessageTimestamp is defined - Compressed message using LogAppendTime
+   * 3. wrapperMessageTimestampType = CreateTime and wrapperMessageTimestamp is defined - Compressed message using CreateTime
    */
   def timestamp: Long = {
     if (magic == MagicValue_V0)

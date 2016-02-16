@@ -107,47 +107,34 @@ class MessageTest extends JUnitSuite {
 
   @Test
   def testMessageFormatConversion() {
+
+    def convertAndVerify(v: MessageTestVal, fromMessageFormat: Byte, toMessageFormat: Byte) {
+      assertEquals("Message should be the same when convert to the same version.",
+        v.message.toFormatVersion(fromMessageFormat), v.message)
+      val convertedMessage = v.message.toFormatVersion(toMessageFormat)
+      assertEquals("Size difference is not expected value", convertedMessage.size - v.message.size,
+        Message.headerSizeDiff(fromMessageFormat, toMessageFormat))
+      assertTrue("Message should still be valid", convertedMessage.isValid)
+      assertEquals("Timestamp should be NoTimestamp", convertedMessage.timestamp, Message.NoTimestamp)
+      assertEquals(s"Magic value should be $toMessageFormat now", convertedMessage.magic, toMessageFormat)
+      if (convertedMessage.hasKey)
+        assertEquals("Message key should not change", convertedMessage.key, ByteBuffer.wrap(v.key))
+      else
+        assertNull(convertedMessage.key)
+      if(v.payload == null) {
+        assertTrue(convertedMessage.isNull)
+        assertEquals("Payload should be null", null, convertedMessage.payload)
+      } else {
+        assertEquals("Message payload should not change", convertedMessage.payload, ByteBuffer.wrap(v.payload))
+      }
+      assertEquals("Compression codec should not change", convertedMessage.compressionCodec, v.codec)
+    }
+
     for (v <- messages) {
       if (v.magicValue == Message.MagicValue_V0) {
-        assertEquals("Message should be the same when convert to the same version.",
-          v.message.toFormatVersion(Message.MagicValue_V0), v.message)
-        val messageV1 = v.message.toFormatVersion(Message.MagicValue_V1)
-        assertEquals("Size difference is not expected value", messageV1.size - v.message.size,
-          Message.headerSizeDiff(Message.MagicValue_V0, Message.MagicValue_V1))
-        assertTrue("Message should still be valid", messageV1.isValid)
-        assertEquals("Timestamp should be NoTimestamp", messageV1.timestamp, Message.NoTimestamp)
-        assertEquals("Magic value should be 1 now", messageV1.magic, Message.MagicValue_V1)
-        if (messageV1.hasKey)
-          assertEquals("Message key should not change", messageV1.key, ByteBuffer.wrap(v.key))
-        else
-          assertNull(messageV1.key)
-        if(v.payload == null) {
-          assertTrue(messageV1.isNull)
-          assertEquals("Payload should be null", null, messageV1.payload)
-        } else {
-          assertEquals("Message payload should not change", messageV1.payload, ByteBuffer.wrap(v.payload))
-        }
-        assertEquals("Compression codec should not change", messageV1.compressionCodec, v.codec)
+        convertAndVerify(v, Message.MagicValue_V0, Message.MagicValue_V1)
       } else if (v.magicValue == Message.MagicValue_V1) {
-        assertEquals("Message should be the same when convert to the same version.",
-          v.message.toFormatVersion(Message.MagicValue_V1), v.message)
-        val messageV0 = v.message.toFormatVersion(Message.MagicValue_V0)
-        assertEquals("Size difference is not expected value", messageV0.size - v.message.size,
-          Message.headerSizeDiff(Message.MagicValue_V1, Message.MagicValue_V0))
-        assertTrue("Message should still be valid", messageV0.isValid)
-        assertEquals("Message should have NoTimestamp", Message.NoTimestamp, messageV0.timestamp)
-        assertEquals("Magic value should be 1 now", messageV0.magic, Message.MagicValue_V0)
-        if (messageV0.hasKey)
-          assertEquals("Message key should not change", messageV0.key, ByteBuffer.wrap(v.key))
-        else
-          assertNull(messageV0.key)
-        if(v.payload == null) {
-          assertTrue(messageV0.isNull)
-          assertEquals("Payload should be null", null, messageV0.payload)
-        } else {
-          assertEquals("Message payload should not change", messageV0.payload, ByteBuffer.wrap(v.payload))
-        }
-        assertEquals("Compression codec should not change", messageV0.compressionCodec, v.codec)
+        convertAndVerify(v, Message.MagicValue_V1, Message.MagicValue_V0)
       }
     }
   }
@@ -159,7 +146,7 @@ class MessageTest extends JUnitSuite {
 
   @Test(expected = classOf[IllegalArgumentException])
   def testInValidTimestamp() {
-    new Message("hello".getBytes, -3L, Message.MagicValue_V0)
+    new Message("hello".getBytes, -3L, Message.MagicValue_V1)
   }
 
   @Test(expected = classOf[IllegalArgumentException])

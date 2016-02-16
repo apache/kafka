@@ -58,7 +58,7 @@ object MessageSet {
    * Validate the "magic" values of messages are the same in a compressed message set and return the max timestamp
    * of the inner messages.
    */
-  def validateMagicValuesAndGetTimestamp(messages: Seq[Message]): Long = {
+  def validateMagicValuesAndGetTimestamp(messages: Seq[Message]): MagicAndTimestamp = {
     val firstMagicValue = messages.head.magic
     var largestTimestamp: Long = Message.NoTimestamp
     for (message <- messages) {
@@ -67,10 +67,12 @@ object MessageSet {
       if (firstMagicValue > Message.MagicValue_V0)
         largestTimestamp = math.max(largestTimestamp, message.timestamp)
     }
-    largestTimestamp
+    MagicAndTimestamp(firstMagicValue, largestTimestamp)
   }
 
 }
+
+case class MagicAndTimestamp(magic: Byte, timestamp: Long)
 
 /**
  * A set of messages with offsets. A message set has a fixed serialized form, though the container

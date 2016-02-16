@@ -117,7 +117,7 @@ public class Protocol {
     public static final Schema PRODUCE_REQUEST_V1 = PRODUCE_REQUEST_V0;
     /**
      * The body of PRODUCE_REQUEST_V2 is the same as PRODUCE_REQUEST_V1.
-     * The version number is bumped up to indicate the message format V1 is used which has relative offset and
+     * The version number is bumped up to indicate that message format V1 is used which has relative offset and
      * timestamp.
      */
     public static final Schema PRODUCE_REQUEST_V2 = PRODUCE_REQUEST_V1;

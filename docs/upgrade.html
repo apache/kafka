@@ -17,14 +17,15 @@
 
 <h3><a id="upgrade" href="#upgrade">1.5 Upgrading From Previous Versions</a></h3>
 
-<h4><a id="upgrade_10" href="#upgrade_10">Upgrading from 0.9.x to 0.10.0.0</a></h4>
-0.10.0.0 has <a href="#upgrade_10_performance_impact">potential performance impact during upgrade</a> and <a href="#upgrade_10_protocol_changes">protocol changes</a> (please review before upgrading).
-Because new protocols are introduced, it is important to upgrade your Kafka clusters before upgrading your clients.
+<h4><a id="upgrade_10" href="#upgrade_10">Upgrading from 0.8.x and 0.9.x to 0.10.0.0</a></h4>
+0.10.0.0 has <a href="#upgrade_10_performance_impact">potential performance impact during upgrade</a> and
+<a href="#upgrade_10_breaking">potential breaking changes</a> (please review before upgrading). Because new protocols
+are introduced, it is important to upgrade your Kafka clusters before upgrading your clients.
 
 <p><b>For a rolling upgrade:</b></p>
 
 <ol>
-    <li> Update server.properties file on all brokers and add the following properties: inter.broker.protocol.version=0.9.0.0, message.format.version=v0 </li>
+    <li> Update server.properties file on all brokers and add the following properties: inter.broker.protocol.version=CURRENT_KAFKA_VERSION(e.g. 0.8.2, 0.9.0.0), message.format.version=CURRENT_KAFKA_VERSION(e.g. 0.8.2, 0.9.0.0) </li>
     <li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
     <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.10.0.0. </li>
     <li> Restart the brokers one by one for the new protocol version to take effect. </li>
@@ -52,15 +53,17 @@ Because new protocols are introduced, it is important to upgrade your Kafka clus
     to 0.10.0.0 consumer.
 </p>
 <p>
-    <b>Note:</b> By setting the message format version, one certifies all the existing messages is on or below that
-    message format version. Otherwise consumers before 0.10.0.0 might break.
+    <b>Note:</b> By setting the message format version, one certifies all the existing messages are on or below that
+    message format version. Otherwise consumers before 0.10.0.0 might break. In particular, after the message format
+    is set to v1, one should not change it back to v0 since it may break the consumer on versions before 0.10.0.
 </p>
 
-<h5><a id="upgrade_10_protocol_changes" href="#upgrade_10_protocol_changes">protocol change for 0.10.0.0</a></h5>
+<h5><a id="upgrade_10_breaking" href="#upgrade_10_breaking">potential breaking changes in 0.10.0.0</a></h5>
 <ul>
-    <li>Message format v1 is added to include a timestamp field in the messages and use relative offsets for compressed messages.</li>
-    <li>ProduceRequest/Response v2 is added to support message format v1</li>
-    <li>FetchRequest/Response v2 is added to support message format v1</li>
+    <li>Message format v1 is added and used by default to include a timestamp field in the messages and use relative offsets for compressed messages.</li>
+    <li>ProduceRequest/Response v2 is added and used by default to support message format v1</li>
+    <li>FetchRequest/Response v2 is added and used by default to support message format v1</li>
+    <li>MessageFormatter interface change: <code>def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream)</code></li>
 </ul>
 
 <h4><a id="upgrade_9" href="#upgrade_9">Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.9.0.0</a></h4>

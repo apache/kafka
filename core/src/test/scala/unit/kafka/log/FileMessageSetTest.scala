@@ -227,7 +227,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
       offsetSeq = offsets,
       messages = messagesV1:_*)
 
-    // Down converion
+    // Down conversion
     // down conversion for non-compressed messages
     var fileMessageSet = new FileMessageSet(tempFile())
     fileMessageSet.append(messageSetV1)

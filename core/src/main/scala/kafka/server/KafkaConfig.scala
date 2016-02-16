@@ -94,7 +94,7 @@ object Defaults {
   val LogFlushSchedulerIntervalMs = Long.MaxValue
   val LogFlushOffsetCheckpointIntervalMs = 60000
   val LogPreAllocateEnable = false
-  val MessageFormatVersion = "v1"
+  val MessageFormatVersion = ApiVersion.latestVersion.toString()
   val NumRecoveryThreadsPerDataDir = 1
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
@@ -423,9 +423,10 @@ object KafkaConfig {
   val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server"
   val MinInSyncReplicasDoc = "define the minimum number of replicas in ISR needed to satisfy a produce request with acks=all (or -1)"
-  val MessageFormatVersionDoc = "Specify the message format version the broker will use to append messages to the logs. Valid values are \"v0\" and \"v1\" (case sensitive). " +
+  val MessageFormatVersionDoc = "Specify the message format version the broker will use to append messages to the logs. The value should be a valid ApiVersion." +
+  "Some Examples are: 0.8.2, 0.9.0.0, 0.10.0-IV0. Check ApiVersion for detail." +
   "When setting the message format version, user certifies that all the existing messages on disk is at or below that version. Otherwise consumers before 0.10.0.0 will break."
-  val MessageTimestampTypeDoc = "Define the whether the timestamp in the message is message create time or log append time. The value should be either" +
+  val MessageTimestampTypeDoc = "Define whether the timestamp in the message is message create time or log append time. The value should be either" +
   " \"CreateTime\" or \"LogAppendTime\""
   val MessageTimestampDifferenceMaxMsDoc = "Set maximum allowed time difference between broker local time and message's timestamp. " +
   "This configuration only works when message.timestamp.type=CreateTime. A message will be rejected if its timestamp exceeds this threshold."
@@ -603,7 +604,7 @@ object KafkaConfig {
       .define(NumRecoveryThreadsPerDataDirProp, INT, Defaults.NumRecoveryThreadsPerDataDir, atLeast(1), HIGH, NumRecoveryThreadsPerDataDirDoc)
       .define(AutoCreateTopicsEnableProp, BOOLEAN, Defaults.AutoCreateTopicsEnable, HIGH, AutoCreateTopicsEnableDoc)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), HIGH, MinInSyncReplicasDoc)
-      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, in("v0", "v1"), MEDIUM, MessageFormatVersionDoc)
+      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, MEDIUM, MessageFormatVersionDoc)
       .define(MessageTimestampTypeProp, STRING, Defaults.MessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM, MessageTimestampTypeDoc)
       .define(MessageTimestampDifferenceMaxMsProp, LONG, Defaults.MessageTimestampDifferenceMaxMs, atLeast(0), MEDIUM, MessageTimestampDifferenceMaxMsDoc)
 
@@ -976,11 +977,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
       s"${KafkaConfig.AdvertisedListenersProp} protocols must be equal to or a subset of ${KafkaConfig.ListenersProp} protocols. " +
       s"Found ${advertisedListeners.keySet}. The valid options based on currently configured protocols are ${listeners.keySet}"
     )
-    require(validateMessageFormatVersion(Integer.parseInt(messageFormatVersion.substring(1))), s"message.format.version $messageFormatVersion cannot " +
-      s"be used when inter.broker.protocol.version is set to $interBrokerProtocolVersion")
-  }
-
-  def validateMessageFormatVersion(messageFormatVersion: Int): Boolean = {
-    !(messageFormatVersion > 0 && !interBrokerProtocolVersion.onOrAfter(KAFKA_0_10_0_IV0))
+    require(interBrokerProtocolVersion.messageFormatVersion >= ApiVersion(messageFormatVersion).messageFormatVersion,
+      s"message.format.version $messageFormatVersion cannot be used when inter.broker.protocol.version is set to $interBrokerProtocolVersion")
   }
 }

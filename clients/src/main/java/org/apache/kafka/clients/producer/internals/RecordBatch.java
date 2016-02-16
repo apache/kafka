@@ -96,7 +96,7 @@ public final class RecordBatch {
             try {
                 Thunk thunk = this.thunks.get(i);
                 if (exception == null) {
-                    // If the timestamp returned by server is NoTimestamp, that means create times is used. Otherwise LogAppendTime is used.
+                    // If the timestamp returned by server is NoTimestamp, that means CreateTime is used. Otherwise LogAppendTime is used.
                     RecordMetadata metadata = new RecordMetadata(this.topicPartition,  baseOffset, thunk.future.relativeOffset(),
                         timestamp == Record.NO_TIMESTAMP ? thunk.future.timestamp() : timestamp);
                     thunk.callback.onCompletion(metadata, null);

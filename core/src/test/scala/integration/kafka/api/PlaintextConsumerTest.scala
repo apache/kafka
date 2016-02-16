@@ -622,9 +622,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // change subscription to trigger rebalance
     val commitCountBeforeRebalance = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue()
     changeConsumerSubscriptionAndValidateAssignment(testConsumer,
-      List(topic, topic2), Set(tp, tp2, new TopicPartition(topic2, 0),
-        new TopicPartition(topic2, 1)),
-      rebalanceListener)
+                                                    List(topic, topic2),
+                                                    Set(tp, tp2, new TopicPartition(topic2, 0), new TopicPartition(topic2, 1)),
+                                                    rebalanceListener)
 
     // after rebalancing, we should have reset to the committed positions
     assertEquals(10, testConsumer.committed(tp).offset)

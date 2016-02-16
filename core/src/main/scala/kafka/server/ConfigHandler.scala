@@ -19,6 +19,7 @@ package kafka.server
 
 import java.util.Properties
 
+import kafka.api.ApiVersion
 import kafka.common.TopicAndPartition
 import kafka.log.{Log, LogConfig, LogManager}
 import kafka.utils.Logging
@@ -48,8 +49,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     // Validate the compatibility of message format version.
     Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)) match {
       case Some(versionString) =>
-        val version = Integer.parseInt(versionString.substring(1))
-        if (!kafkaConfig.validateMessageFormatVersion(version)) {
+        if (kafkaConfig.interBrokerProtocolVersion.messageFormatVersion < ApiVersion(versionString).messageFormatVersion) {
           topicConfig.remove(LogConfig.MessageFormatVersionProp)
           warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for $topic because $versionString " +
             s"is not compatible with Kafka inter broker protocol version ${kafkaConfig.interBrokerProtocolVersion}")

@@ -17,6 +17,8 @@
 
 package kafka.api
 
+import kafka.message.Message
+
 /**
  * This class contains the different Kafka versions.
  * Right now, we use them for upgrades - users can configure the version of the API brokers will use to communicate between themselves.
@@ -25,12 +27,15 @@ package kafka.api
  * Note that the ID we initialize for each version is important.
  * We consider a version newer than another, if it has a higher ID (to avoid depending on lexicographic order)
  * 
- * If there is a draft protocol version between protocols of two official releases. The suffix "-IV#" will be added to
- * help users who are running on trunk upgrade. For example:
- * 1. Kafka 0.9.0 is released
- * 2. After that some protocol change are made and will be released in 0.10.0. The version will be named 0.10.0-IV0
- *    (IV stands for internal version)
- * 3. When Kafka 0.10.0 is released. The official version 0.10.0 will be the same as the last internal version.
+ * Since the api protocol may change more than once within the same release, to facilitate people deploying code from
+ * trunk, we introduce internal versions since 0.10.0. For example, the first time that we introduce a version change
+ * in 0.10.0, we will add a config value "0.10.0-IV0" and a corresponding case object KAFKA_0_10_0-IV0. We will also
+ * add a config value "0.10.0" that will be mapped to the latest internal version object, which is KAFKA_0_10_0-IV0.
+ * When we change the protocol a second time while developing 0.10.0, we will add a new config value "0.10.0-IV1" and
+ * a corresponding case object KAFKA_0_10_0-IV1. We will change the config value "0.10.0" to map to the latest internal
+ * version object KAFKA_0_10_0-IV1. Config value of "0.10.0-IV0" is still mapped to KAFKA_0_10_0-IV0. This way, if
+ * people are deploying from trunk, they can use "0.10.0-IV0" and "0.10.0-IV1" to upgrade one internal version at a
+ * time. For most people who just want to use released version, they can use "0.10.0" when upgrading to 0.10.0 release.
  */
 object ApiVersion {
   // This implicit is necessary due to: https://issues.scala-lang.org/browse/SI-8541
@@ -52,6 +57,7 @@ object ApiVersion {
 
 sealed trait ApiVersion extends Ordered[ApiVersion] {
   val version: String
+  val messageFormatVersion: Byte
   val id: Int
 
   override def compare(that: ApiVersion): Int = {
@@ -68,26 +74,31 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
 // Keep the IDs in order of versions
 case object KAFKA_0_8_0 extends ApiVersion {
   val version: String = "0.8.0.X"
+  val messageFormatVersion: Byte = Message.MagicValue_V0
   val id: Int = 0
 }
 
 case object KAFKA_0_8_1 extends ApiVersion {
   val version: String = "0.8.1.X"
+  val messageFormatVersion: Byte = Message.MagicValue_V0
   val id: Int = 1
 }
 
 case object KAFKA_0_8_2 extends ApiVersion {
   val version: String = "0.8.2.X"
+  val messageFormatVersion: Byte = Message.MagicValue_V0
   val id: Int = 2
 }
 
 case object KAFKA_0_9_0 extends ApiVersion {
   val version: String = "0.9.0.X"
+  val messageFormatVersion: Byte = Message.MagicValue_V0
   val id: Int = 3
 }
 
 // This is a between-release protocol version
 case object KAFKA_0_10_0_IV0 extends ApiVersion {
   val version: String = "0.10.0-IV0"
+  val messageFormatVersion: Byte = Message.MagicValue_V1
   val id: Int = 4
 }

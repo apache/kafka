@@ -25,6 +25,7 @@ import java.nio.channels._
 import java.io._
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 
+import org.apache.kafka.common.errors.InvalidTimestampException
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
@@ -46,20 +47,21 @@ object ByteBufferMessageSet {
       buffer.rewind()
       buffer
     } else {
-      System.out.println("wrapper message timestamp " + wrapperMessageTimestamp)
-      val messageSetTimestamp = wrapperMessageTimestamp.getOrElse(MessageSet.validateMagicValuesAndGetTimestamp(messages))
+      val magicAndTimestamp = wrapperMessageTimestamp match {
+        case Some(ts) => MagicAndTimestamp(messages.head.magic, ts)
+        case None => MessageSet.validateMagicValuesAndGetTimestamp(messages)
+      }
       var offset = -1L
-      val firstMagicValue = messages.head.magic
       val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
-      messageWriter.write(codec = compressionCodec, timestamp = messageSetTimestamp, timestampType = timestampType, magicValue = firstMagicValue) { outputStream =>
+      messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = magicAndTimestamp.magic) { outputStream =>
         val output = new DataOutputStream(CompressionFactory(compressionCodec, outputStream))
         try {
           for (message <- messages) {
             offset = offsetAssignor.nextAbsoluteOffset
-            if (message.magic != firstMagicValue)
+            if (message.magic != magicAndTimestamp.magic)
               throw new IllegalArgumentException("Messages in the message set must have same magic value")
             // Use relative offset if magic value is greater than 0
-            if (firstMagicValue > Message.MagicValue_V0)
+            if (magicAndTimestamp.magic > Message.MagicValue_V0)
               output.writeLong(offsetAssignor.toInnerOffset(offset))
             else
               output.writeLong(offset)
@@ -91,7 +93,7 @@ object ByteBufferMessageSet {
       val wrapperMessageTimestampTypeOpt: Option[TimestampType] =
         if (wrapperMessage.magic > MagicValue_V0) Some(wrapperMessage.timestampType) else None
       if (wrapperMessage.payload == null)
-        throw new RuntimeException("Message payload is null: " + wrapperMessage)
+        throw new KafkaException("Message payload is null: " + wrapperMessage)
       val inputStream: InputStream = new ByteBufferBackedInputStream(wrapperMessage.payload)
       val compressed: DataInputStream = new DataInputStream(CompressionFactory(wrapperMessage.compressionCodec, inputStream))
       var lastInnerOffset = -1L
@@ -209,9 +211,9 @@ private class OffsetAssigner(offsets: Seq[Long]) {
  * When message format v1 is used, there will be following message format changes.
  * - For non-compressed messages, with message v1 we are adding timestamp and timestamp type attribute. The offsets of
  *   the messages remain absolute offsets.
- * - For Compressed messages, with message v1 we are adding timestamp, timestamp type attribute bit and using relative
- *   offsets for inner messages of compressed messages. Timestamp type attribute is only set in wrapper messages.
- *   Inner messages always have CreateTime as timestamp type in attributes.
+ * - For Compressed messages, with message v1 we are adding timestamp, timestamp type attribute bit and using
+ *   inner offsets (IO) for inner messages of compressed messages (see offset calculation details below). Timestamp type
+ *   attribute is only set in wrapper messages. Inner messages always have CreateTime as timestamp type in attributes.
  *
  * The way timestamp set is following:
  * For non-compressed messages: timestamp and timestamp type attribute in the messages is set and used.
@@ -241,7 +243,7 @@ private class OffsetAssigner(offsets: Seq[Long]) {
  *
  * To solve this issue, we use the following solution:
  *
- * 1. When producer create a message set, it simply writes all the messages into a compressed message set with
+ * 1. When the producer creates a message set, it simply writes all the messages into a compressed message set with
  *    offset 0, 1, ... (inner offset).
  * 2. The broker will set the offset of the wrapper message to the absolute offset of the last message in the
  *    message set.
@@ -408,7 +410,8 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       // check the magic value
       if (!magicValueInAllWrapperMessages(messageFormatVersion)) {
         // Message format conversion
-        convertNonCompressedMessages(offsetCounter, compactedTopic, now, messageTimestampType, messageFormatVersion)
+        convertNonCompressedMessages(offsetCounter, compactedTopic, now, messageTimestampType, messageTimestampDiffMaxMs,
+          messageFormatVersion)
       } else {
         // Do in-place validation, offset assignment and maybe set timestamp
         validateNonCompressedMessagesAndAssignOffsetInPlace(offsetCounter, now, compactedTopic, messageTimestampType,
@@ -417,7 +420,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
     } else {
       // Deal with compressed messages
-      // We cannot do in place assignment in one of the followings situation:
+      // We cannot do in place assignment in one of the following situations:
       // 1. Source and target compression codec are different
       // 2. When magic value to use is 0 because offsets need to be overwritten
       // 3. When magic value to use is above 0, but some fields of inner messages need to be overwritten.
@@ -427,7 +430,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       var inPlaceAssignment = sourceCodec == targetCodec && messageFormatVersion > Message.MagicValue_V0
 
       var maxTimestamp = Message.NoTimestamp
-      val expectedRelativeOffset = new AtomicLong(0)
+      val expectedInnerOffset = new AtomicLong(0)
       val validatedMessages = new ListBuffer[Message]
       this.internalIterator(isShallow = false).foreach(messageAndOffset => {
         val message = messageAndOffset.message
@@ -437,7 +440,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
           // Validate the timestamp
           validateTimestamp(message, now, messageTimestampType, messageTimestampDiffMaxMs)
           // Check if we need to overwrite offset
-          if (messageAndOffset.offset != expectedRelativeOffset.getAndIncrement)
+          if (messageAndOffset.offset != expectedInnerOffset.getAndIncrement)
             inPlaceAssignment = false
           maxTimestamp = math.max(maxTimestamp, message.timestamp)
         }
@@ -503,6 +506,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
                                            compactedTopic: Boolean,
                                            now: Long,
                                            timestampType: TimestampType,
+                                           messageTimestampDiffMaxMs: Long,
                                            toMagicValue: Byte): ByteBufferMessageSet = {
     // Get message count, shallow iterator is in-place
     val sizeInBytesAfterConversion = shallowValidBytes + this.internalIterator(isShallow = true).foldLeft(0)(
@@ -512,6 +516,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
     this.internalIterator(isShallow = true).foreach {messageAndOffset =>
       val message = messageAndOffset.message
       validateMessageKey(message, compactedTopic)
+      validateTimestamp(message, now, timestampType, messageTimestampDiffMaxMs)
       newBuffer.position(newMessagePosition)
       // write offset.
       newBuffer.putLong(offsetCounter.getAndIncrement)
@@ -545,7 +550,6 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       val messageBuffer = buffer.slice()
       messageBuffer.limit(messageSize)
       val message = new Message(messageBuffer)
-      message.ensureValid()
       validateMessageKey(message, compactedTopic)
       if (message.magic > Message.MagicValue_V0) {
         validateTimestamp(message, now, timestampType, timestampDiffMaxMs)
@@ -575,10 +579,11 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
                                 timestampType: TimestampType,
                                 timestampDiffMaxMs: Long) {
     if (timestampType == CreateTime && math.abs(message.timestamp - now) > timestampDiffMaxMs)
-      throw new InvalidMessageException(s"Timestamp ${message.timestamp} of message is out of range. " +
+      throw new InvalidTimestampException(s"Timestamp ${message.timestamp} of message is out of range. " +
         s"The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}")
     if (message.timestampType == LogAppendTime)
-      throw new InvalidMessageException(s"Invalid message $message. Producer should not set timestamp type to LogAppendTime.")
+      throw new InvalidTimestampException(s"Invalid timestamp type in message $message. Producer should not set " +
+        s"timestamp type to LogAppendTime.")
   }
 
   /**

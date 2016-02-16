@@ -228,8 +228,9 @@ public class MemoryRecords implements Records {
             this.absoluteBaseOffset = -1;
         }
 
-        private RecordsIterator(LogEntry entry, CompressionType type) {
-            this.type = type;
+        // Private constructor for inner iterator.
+        private RecordsIterator(LogEntry entry) {
+            this.type = entry.record().compressionType();
             this.buffer = entry.record().value();
             this.shallow = true;
             this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type);
@@ -291,7 +292,7 @@ public class MemoryRecords implements Records {
                         // which will de-compress the payload to a set of messages;
                         // since we assume nested compression is not allowed, the deep iterator
                         // would not try to further decompress underlying messages
-                        innerIter = new RecordsIterator(entry, compression);
+                        innerIter = new RecordsIterator(entry);
                         return innerIter.next();
                     }
                 } catch (EOFException e) {
