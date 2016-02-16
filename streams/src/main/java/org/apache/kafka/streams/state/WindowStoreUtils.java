@@ -21,7 +21,7 @@ package org.apache.kafka.streams.state;
 
 import java.nio.ByteBuffer;
 
-public class WindowStoreUtil<K, V> {
+public class WindowStoreUtils<K, V> {
 
     public static final int TIMESTAMP_SIZE = 8;
     public static final int SEQNUM_SIZE = 4;
@@ -51,5 +51,4 @@ public class WindowStoreUtil<K, V> {
     public static long timestampFromBinaryKey(byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE);
     }
-
 }

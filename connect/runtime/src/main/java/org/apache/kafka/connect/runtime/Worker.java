@@ -17,11 +17,11 @@
 
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
@@ -33,8 +33,8 @@ import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
-import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
+import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.reflections.Reflections;
 import org.reflections.util.ClasspathHelper;
@@ -48,6 +48,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 
 /**
@@ -62,8 +64,10 @@ import java.util.Set;
 public class Worker {
     private static final Logger log = LoggerFactory.getLogger(Worker.class);
 
-    private Time time;
-    private WorkerConfig config;
+    private final ExecutorService executor;
+    private final Time time;
+    private final WorkerConfig config;
+
     private Converter keyConverter;
     private Converter valueConverter;
     private Converter internalKeyConverter;
@@ -80,6 +84,7 @@ public class Worker {
 
     @SuppressWarnings("unchecked")
     public Worker(Time time, WorkerConfig config, OffsetBackingStore offsetBackingStore) {
+        this.executor = Executors.newCachedThreadPool();
         this.time = time;
         this.config = config;
         this.keyConverter = config.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
@@ -154,7 +159,6 @@ public class Worker {
             log.debug("Waiting for task {} to finish shutting down", task);
             if (!task.awaitStop(Math.max(limit - time.milliseconds(), 0)))
                 log.error("Graceful shutdown of task {} failed.", task);
-            task.close();
         }
 
         long timeoutMs = limit - time.milliseconds();
@@ -342,7 +346,9 @@ public class Worker {
 
         // Start the task before adding modifying any state, any exceptions are caught higher up the
         // call chain and there's no cleanup to do here
-        workerTask.start(taskConfig.originalsStrings());
+        workerTask.initialize(taskConfig.originalsStrings());
+        executor.submit(workerTask);
+
         if (task instanceof SourceTask) {
             WorkerSourceTask workerSourceTask = (WorkerSourceTask) workerTask;
             sourceTaskOffsetCommitter.schedule(id, workerSourceTask);
@@ -367,7 +373,6 @@ public class Worker {
         task.stop();
         if (!task.awaitStop(config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG)))
             log.error("Graceful stop of task {} failed.", task);
-        task.close();
         tasks.remove(id);
     }
 
@@ -394,4 +399,5 @@ public class Worker {
     public Converter getInternalValueConverter() {
         return internalValueConverter;
     }
+
 }

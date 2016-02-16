@@ -12,15 +12,21 @@
   */
 package kafka.api
 
+
+import java.util
+import java.util.Properties
+
 import java.util.regex.Pattern
 
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer, ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.errors.{InvalidTopicException, RecordTooLargeException}
+import org.apache.kafka.test.{MockProducerInterceptor, MockConsumerInterceptor}
 import org.junit.Assert._
 import org.junit.Test
 import scala.collection.mutable.Buffer
@@ -266,7 +272,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testSeek() {
     val consumer = this.consumers(0)
     val totalRecords = 50L
-    sendRecords(totalRecords.toInt)
+    val mid = totalRecords / 2
+
+    // Test seek non-compressed message
+    sendRecords(totalRecords.toInt, tp)
     consumer.assign(List(tp).asJava)
 
     consumer.seekToEnd(tp)
@@ -277,10 +286,36 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, consumer.position(tp), 0)
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0)
 
-    val mid = totalRecords / 2
     consumer.seek(tp, mid)
     assertEquals(mid, consumer.position(tp))
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt)
+
+    // Test seek compressed message
+    sendCompressedMessages(totalRecords.toInt, tp2)
+    consumer.assign(List(tp2).asJava)
+
+    consumer.seekToEnd(tp2)
+    assertEquals(totalRecords, consumer.position(tp2))
+    assertFalse(consumer.poll(totalRecords).iterator().hasNext)
+
+    consumer.seekToBeginning(tp2)
+    assertEquals(0, consumer.position(tp2), 0)
+    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0, tp = tp2)
+
+    consumer.seek(tp2, mid)
+    assertEquals(mid, consumer.position(tp2))
+    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt,
+      tp = tp2)
+  }
+
+  private def sendCompressedMessages(numRecords: Int, tp: TopicPartition) {
+    val producerProps = new Properties()
+    producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, CompressionType.GZIP.name)
+    producerProps.setProperty(ProducerConfig.LINGER_MS_CONFIG, Long.MaxValue.toString)
+    val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
+        retries = 0, lingerMs = Long.MaxValue, props = Some(producerProps))
+    sendRecords(producer, numRecords, tp)
+    producer.close()
   }
 
   def testPositionAndCommit() {
@@ -491,6 +526,144 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     runMultiConsumerSessionTimeoutTest(true)
   }
 
+  @Test
+  def testInterceptors() {
+    val appendStr = "mock"
+    // create producer with interceptor
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor")
+    producerProps.put("mock.interceptor.append", appendStr)
+    val testProducer = new KafkaProducer[String,String](producerProps, new StringSerializer, new StringSerializer)
+
+    // produce records
+    val numRecords = 10
+    (0 until numRecords).map { i =>
+      testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i", s"value $i"))
+    }.foreach(_.get)
+    assertEquals(numRecords, MockProducerInterceptor.ONSEND_COUNT.intValue())
+    assertEquals(numRecords, MockProducerInterceptor.ON_SUCCESS_COUNT.intValue())
+    // send invalid record
+    try {
+      testProducer.send(null, null)
+      fail("Should not allow sending a null record")
+    } catch {
+      case e: Throwable => assertEquals("Interceptor should be notified about exception", 1, MockProducerInterceptor.ON_ERROR_COUNT.intValue()) // this is ok
+    }
+
+    // create consumer with interceptor
+    this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
+    val testConsumer = new KafkaConsumer[String, String](this.consumerConfig, new StringDeserializer(), new StringDeserializer())
+    testConsumer.assign(List(tp).asJava)
+    testConsumer.seek(tp, 0)
+
+    // consume and verify that values are modified by interceptors
+    val records = consumeRecords(testConsumer, numRecords)
+    for (i <- 0 until numRecords) {
+      val record = records.get(i)
+      assertEquals(s"key $i", new String(record.key()))
+      assertEquals(s"value $i$appendStr".toUpperCase, new String(record.value()))
+    }
+
+    // commit sync and verify onCommit is called
+    val commitCountBefore = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue()
+    testConsumer.commitSync(Map[TopicPartition,OffsetAndMetadata]((tp, new OffsetAndMetadata(2L))).asJava)
+    assertEquals(2, testConsumer.committed(tp).offset)
+    assertEquals(commitCountBefore+1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
+
+    // commit async and verify onCommit is called
+    val commitCallback = new CountConsumerCommitCallback()
+    testConsumer.commitAsync(Map[TopicPartition,OffsetAndMetadata]((tp, new OffsetAndMetadata(5L))).asJava, commitCallback)
+    awaitCommitCallback(testConsumer, commitCallback)
+    assertEquals(5, testConsumer.committed(tp).offset)
+    assertEquals(commitCountBefore+2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
+
+    testConsumer.close()
+    testProducer.close()
+
+    // cleanup
+    MockConsumerInterceptor.resetCounters()
+    MockProducerInterceptor.resetCounters()
+  }
+
+  @Test
+  def testAutoCommitIntercept() {
+    val topic2 = "topic2"
+    TestUtils.createTopic(this.zkUtils, topic2, 2, serverCount, this.servers)
+
+    // produce records
+    val numRecords = 100
+    val testProducer = new KafkaProducer[String,String](this.producerConfig, new StringSerializer, new StringSerializer)
+    (0 until numRecords).map { i =>
+      testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i", s"value $i"))
+    }.foreach(_.get)
+
+    // create consumer with interceptor
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
+    this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
+    val testConsumer = new KafkaConsumer[String, String](this.consumerConfig, new StringDeserializer(), new StringDeserializer())
+    val rebalanceListener = new ConsumerRebalanceListener {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
+        // keep partitions paused in this test so that we can verify the commits based on specific seeks
+        partitions.asScala.foreach(testConsumer.pause(_))
+      }
+
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {}
+    }
+    changeConsumerSubscriptionAndValidateAssignment(testConsumer, List(topic), Set(tp, tp2), rebalanceListener)
+    testConsumer.seek(tp, 10)
+    testConsumer.seek(tp2, 20)
+
+    // change subscription to trigger rebalance
+    val commitCountBeforeRebalance = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue()
+    changeConsumerSubscriptionAndValidateAssignment(testConsumer,
+                                                    List(topic, topic2), Set(tp, tp2, new TopicPartition(topic2, 0),
+                                                    new TopicPartition(topic2, 1)),
+                                                    rebalanceListener)
+
+    // after rebalancing, we should have reset to the committed positions
+    assertEquals(10, testConsumer.committed(tp).offset)
+    assertEquals(20, testConsumer.committed(tp2).offset)
+    assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance)
+
+    // verify commits are intercepted on close
+    val commitCountBeforeClose = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue()
+    testConsumer.close()
+    assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeClose)
+    testProducer.close()
+
+    // cleanup
+    MockConsumerInterceptor.resetCounters()
+  }
+
+  @Test
+  def testInterceptorsWithWrongKeyValue() {
+    val appendStr = "mock"
+    // create producer with interceptor that has different key and value types from the producer
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor")
+    producerProps.put("mock.interceptor.append", appendStr)
+    val testProducer = new KafkaProducer[Array[Byte],Array[Byte]](producerProps, new ByteArraySerializer(), new ByteArraySerializer())
+
+    // producing records should succeed
+    testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key".getBytes, s"value will not be modified".getBytes))
+
+    // create consumer with interceptor that has different key and value types from the consumer
+    this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
+    val testConsumer = new KafkaConsumer[Array[Byte],Array[Byte]](this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    testConsumer.assign(List(tp).asJava)
+    testConsumer.seek(tp, 0)
+
+    // consume and verify that values are not modified by interceptors -- their exceptions are caught and logged, but not propagated
+    val records = consumeRecords(testConsumer, 1)
+    val record = records.get(0)
+    assertEquals(s"value will not be modified", new String(record.value()))
+
+    testConsumer.close()
+    testProducer.close()
+  }
+
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
     // use consumers defined in this class plus one additional consumer
     // Use topic defined in this class + one additional topic
@@ -672,6 +845,17 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     validateGroupAssignment(consumerPollers, subscriptions,
         s"Did not get valid assignment for partitions ${subscriptions.asJava} after we changed subscription")
+  }
+
+  def changeConsumerSubscriptionAndValidateAssignment[K, V](consumer: Consumer[K, V],
+                                                            topicsToSubscribe: List[String],
+                                                            subscriptions: Set[TopicPartition],
+                                                            rebalanceListener: ConsumerRebalanceListener): Unit = {
+    consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
+    TestUtils.waitUntilTrue(() => {
+      val records = consumer.poll(50)
+      consumer.assignment() == subscriptions.asJava
+    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer.assignment()}")
   }
 
 }

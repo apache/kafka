@@ -31,7 +31,7 @@ import org.apache.kafka.connect.json.JsonSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Count;
+import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -79,7 +79,7 @@ public class WordCountJob {
                         return new KeyValue<String, String>(value, value);
                     }
                 })
-                .aggregateByKey(new Count<>(), UnlimitedWindows.of("Counts").startOn(0L),
+                .countByKey(UnlimitedWindows.of("Counts").startOn(0L),
                         stringSerializer, longSerializer,
                         stringDeserializer, longDeserializer)
                 .toStream()
@@ -97,7 +97,7 @@ public class WordCountJob {
 
         counts.to("streams-wordcount-output", stringSerializer, JsonSerializer);
 
-        KafkaStreams kstream = new KafkaStreams(builder, props);
-        kstream.start();
+        KafkaStreams streams = new KafkaStreams(builder, props);
+        streams.start();
     }
 }

@@ -216,45 +216,45 @@ for ( sv in ['2_10', '2_11'] ) {
   String svInDot = sv.replaceAll( "_", ".")
 
   tasks.create(name: "jar_core_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:jar']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "test_core_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:test']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "srcJar_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:srcJar']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "docsJar_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:docsJar']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "install_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['install']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "releaseTarGz_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['releaseTarGz']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "uploadCoreArchives_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:uploadArchives']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 }
 

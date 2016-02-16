@@ -14,9 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.security.auth
+package kafka.security.auth
 
-import kafka.security.auth._
 import kafka.utils.Json
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{Test, Assert}

@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.junit.Test;
 
 public class ErrorsTest {
@@ -58,6 +59,22 @@ public class ErrorsTest {
     @Test
     public void testNoneException() {
         assertNull("The NONE error should not have an exception", Errors.NONE.exception());
+    }
+
+    @Test
+    public void testForExceptionInheritance() {
+        class ExtendedTimeoutException extends TimeoutException { }
+
+        Errors expectedError = Errors.forException(new TimeoutException());
+        Errors actualError = Errors.forException(new ExtendedTimeoutException());
+
+        assertEquals("forException should match super classes", expectedError, actualError);
+    }
+
+    @Test
+    public void testForExceptionDefault() {
+        Errors error = Errors.forException(new ApiException());
+        assertEquals("forException should default to unknown", Errors.UNKNOWN, error);
     }
 
 }

@@ -30,6 +30,7 @@ import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.errors.SerializationException
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import scala.collection.mutable.Buffer
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
@@ -43,6 +44,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null
+  private val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
   private val topic = "topic"
   private val numRecords = 100
@@ -60,13 +62,18 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   override def tearDown() {
     consumer1.close()
     consumer2.close()
+    // Ensure that all producers are closed since unclosed producers impact other tests when Kafka server ports are reused
+    producers.foreach(_.close())
 
     super.tearDown()
   }
 
-  private def createProducer(brokerList: String, retries: Int = 0, lingerMs: Long = 0, props: Option[Properties] = None): KafkaProducer[Array[Byte],Array[Byte]] =
-    TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
+  private def createProducer(brokerList: String, retries: Int = 0, lingerMs: Long = 0, props: Option[Properties] = None): KafkaProducer[Array[Byte],Array[Byte]] = {
+    val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
       retries = retries, lingerMs = lingerMs, props = props)
+    producers += producer
+    producer
+  }
 
   /**
    * testSendOffset checks the basic send API behavior

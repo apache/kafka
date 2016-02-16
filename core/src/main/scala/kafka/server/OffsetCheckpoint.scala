@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import java.nio.file.Paths
+import java.nio.file.{FileSystems, Paths}
 import java.util.regex.Pattern
 
 import org.apache.kafka.common.utils.Utils
@@ -60,6 +60,13 @@ class OffsetCheckpoint(val file: File) extends Logging {
 
         writer.flush()
         fileOutputStream.getFD().sync()
+      } catch {
+        case e: FileNotFoundException =>
+          if (FileSystems.getDefault.isReadOnly) {
+            fatal("Halting writes to offset checkpoint file because the underlying file system is inaccessible : ", e)
+            Runtime.getRuntime.halt(1)
+          }
+          throw e
       } finally {
         writer.close()
       }

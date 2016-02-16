@@ -46,17 +46,9 @@ if [ "x$bad_vagrant" == "xtrue" -o "x$bad_vb" == "xtrue" ]; then
 fi
 
 echo "Checking for necessary Vagrant plugins..."
-install_hostmanager=false
 hostmanager_version=`vagrant plugin list | grep vagrant-hostmanager | egrep -o "[0-9]+\.[0-9]+\.[0-9]+"`
 if [ -z "$hostmanager_version"  ]; then
-    install_hostmanager=true
-elif [ "$hostmanager_version" != "1.5.0" ]; then
-    echo "You have the wrong version of vagrant plugin vagrant-hostmanager. Uninstalling..."
-    vagrant plugin uninstall vagrant-hostmanager
-    install_hostmanager=true
-fi
-if [ "x$install_hostmanager" == "xtrue" ]; then
-    vagrant plugin install vagrant-hostmanager --plugin-version 1.5.0
+    vagrant plugin install vagrant-hostmanager
 fi
 
 echo "Creating and packaging a reusable base box for Vagrant..."

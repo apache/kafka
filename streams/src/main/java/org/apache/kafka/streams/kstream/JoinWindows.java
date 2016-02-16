@@ -23,7 +23,7 @@ import org.apache.kafka.streams.kstream.internals.TumblingWindow;
 import java.util.Map;
 
 /**
- * This class is used to specify the behaviour of windowed joins.
+ * The window specifications used for joins.
  */
 public class JoinWindows extends Windows<TumblingWindow> {
 
