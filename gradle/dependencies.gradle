@@ -39,7 +39,7 @@ versions += [
   rocksDB: "3.10.1",
   scalaTest: "2.2.5",
   scalaParserCombinators: "1.0.4",
-  slf4j: "1.7.6",
+  slf4j: "1.7.13",
   snappy: "1.1.2",
   zkclient: "0.7",
   zookeeper: "3.4.6",

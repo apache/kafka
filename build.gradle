@@ -386,6 +386,7 @@ project(':core') {
       createFileLink("$baseBuildDir/dependant-libs-scala-${versions.baseScala}/${it.getAbsoluteFile().getName()}", "$buildDir/test-dependant-libs-scala-${versions.baseScala}/${it.getAbsoluteFile().getName()}")
     }
   }
+
   tasks.create(name: "genProducerConfigDocs", dependsOn:jar, type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.clients.producer.ProducerConfig'
