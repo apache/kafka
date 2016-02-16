@@ -137,7 +137,7 @@ public class Protocol {
                                                                               " due to quota violation. (Zero if the request did not violate any quota.)",
                                                                           0));
     /**
-     * PRODUCE_RESPONSE_V2 added the timestamp in per partition response status.
+     * PRODUCE_RESPONSE_V2 added a timestamp field in the per partition response status.
      * The timestamp is log append time if the topic is configured to use log append time. Or it is NoTimestamp when create
      * time is used for the topic.
      */

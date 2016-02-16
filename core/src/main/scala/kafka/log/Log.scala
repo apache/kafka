@@ -333,7 +333,7 @@ class Log(val dir: File,
         if (assignOffsets) {
           // assign offsets to the message set
           val offset = new AtomicLong(nextOffsetMetadata.messageOffset)
-          val now = System.currentTimeMillis()
+          val now = SystemTime.milliseconds
           try {
             validMessages = validMessages.validateMessagesAndAssignOffsets(offset,
                                                                            now,

@@ -91,10 +91,16 @@ public final class ConsumerRecord<K, V> {
         return offset;
     }
 
+    /**
+     * The timestamp of this record
+     */
     public long timestamp() {
         return timestamp;
     }
 
+    /**
+     * The timestamp type of this record
+     */
     public TimestampType timestampType() {
         return timestampType;
     }

@@ -280,10 +280,10 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
   // This constructor is only used internally
   private[kafka] def this(compressionCodec: CompressionCodec,
-           offsetCounter: AtomicLong,
-           wrapperMessageTimestamp: Option[Long],
-           timestampType: TimestampType,
-           messages: Message*) {
+                          offsetCounter: AtomicLong,
+                          wrapperMessageTimestamp: Option[Long],
+                          timestampType: TimestampType,
+                          messages: Message*) {
     this(ByteBufferMessageSet.create(new OffsetAssigner(offsetCounter, messages.size), compressionCodec,
       wrapperMessageTimestamp, timestampType, messages:_*))
   }
@@ -391,9 +391,9 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
    *    starting from 0.
    * 3. When magic value = 1, validate and maybe overwrite timestamps of messages.
    *
-   * This method will convert the messages based on the following scenarios:
-   * A. Magic value of a message = 0 and messageFormatVersion is 0
-   * B. Magic value of a message = 1 and messageFormatVersion is 1
+   * This method will convert the messages in the following scenarios:
+   * A. Magic value of a message = 0 and messageFormatVersion is 1
+   * B. Magic value of a message = 1 and messageFormatVersion is 0
    *
    * If no format conversion or value overwriting is required for messages, this method will perform in-place
    * operations and avoids re-compression.
@@ -500,8 +500,8 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
   }
 
   // We create this method to save memory copy operation. It reads from the original message set and directly
-  // write the converted messages into new message set buffer. Hence we don't need to allocate memory for each message
-  // during message conversion.
+  // writes the converted messages into new message set buffer. Hence we don't need to allocate memory for each
+  // individual message during message format conversion.
   private def convertNonCompressedMessages(offsetCounter: AtomicLong,
                                            compactedTopic: Boolean,
                                            now: Long,
@@ -572,7 +572,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
   /**
    * This method validates the timestamps of a message.
-   * If the message is using create time, this method checks if it is with acceptable range.
+   * If the message is using create time, this method checks if it is within acceptable range.
    */
   private def validateTimestamp(message: Message,
                                 now: Long,

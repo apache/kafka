@@ -20,19 +20,20 @@ package org.apache.kafka.clients.producer;
  * specified but a key is present a partition will be chosen using a hash of the key. If neither key nor partition is
  * present a partition will be assigned in a round-robin fashion.
  * <p>
- * The record also has an associated timestamp. If user did not provide a timestamp, the producer will stamp the record
- * with its current time. The timestamp eventually used by Kafka depends on the timestamp type configured for the topic.
+ * The record also has an associated timestamp. If the user did not provide a timestamp, the producer will stamp the
+ * record with its current time. The timestamp eventually used by Kafka depends on the timestamp type configured for
+ * the topic.
  * <li>
  * If the topic is configured to use {@link org.apache.kafka.common.record.TimestampType#CreateTime CreateTime}
  * the timestamp in the producer record will be used by broker.
  * </li>
  * <li>
  * If the topic is configured to use {@link org.apache.kafka.common.record.TimestampType#LogAppendTime LogAppendTime}
- * the timestamp in the producer record will be overwritten by broker with broker local time when broker append the
+ * the timestamp in the producer record will be overwritten by the broker with the broker local time when it appends the
  * message to its log.
  * </li>
  * <p>
- * In either of the above case, the timestamp that has actually been used will be returned to user in
+ * In either of the cases above, the timestamp that has actually been used will be returned to user in
  * {@link RecordMetadata}
  */
 public final class ProducerRecord<K, V> {
@@ -44,7 +45,7 @@ public final class ProducerRecord<K, V> {
     private final Long timestamp;
 
     /**
-     * Creates a record to be sent to a specified topic and partition
+     * Creates a record to be sent to a specified topic and partition with a specified timestamp
      * 
      * @param topic The topic the record will be appended to
      * @param partition The partition to which the record should be sent
@@ -98,14 +99,14 @@ public final class ProducerRecord<K, V> {
     }
 
     /**
-     * The topic this record is being sent to
+     * @return The topic this record is being sent to
      */
     public String topic() {
         return topic;
     }
 
     /**
-     * The key (or null if no key is specified)
+     * @return The key (or null if no key is specified)
      */
     public K key() {
         return key;
@@ -126,7 +127,7 @@ public final class ProducerRecord<K, V> {
     }
 
     /**
-     * The partition to which the record will be sent (or null if no partition was specified)
+     * @return The partition to which the record will be sent (or null if no partition was specified)
      */
     public Integer partition() {
         return partition;

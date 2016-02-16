@@ -147,12 +147,13 @@ class Message(val buffer: ByteBuffer,
   /**
    * A constructor to create a Message
    * @param bytes The payload of the message
-   * @param codec The compression codec used on the contents of the message (if any)
+   * @param key The key of the message (null, if none)
    * @param timestamp The timestamp of the message.
    * @param timestampType The timestamp type of the message. Default to CreateTime
-   * @param key The key of the message (null, if none)
+   * @param codec The compression codec used on the contents of the message (if any)
    * @param payloadOffset The offset into the payload array used to extract payload
    * @param payloadSize The size of the payload to use
+   * @param magicValue the magic value to use
    */
   def this(bytes: Array[Byte], 
            key: Array[Byte],

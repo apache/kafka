@@ -69,7 +69,7 @@ public class ProduceResponse extends AbstractRequestResponse {
     }
 
     /**
-     * Constructor for latest version
+     * Constructor for the latest version
      * @param responses Produced data grouped by topic-partition
      * @param throttleTime Time in milliseconds the response was throttled
      */
@@ -78,7 +78,7 @@ public class ProduceResponse extends AbstractRequestResponse {
     }
 
     /**
-     * Constructor for specific version
+     * Constructor for a specific version
      * @param responses Produced data grouped by topic-partition
      * @param throttleTime Time in milliseconds the response was throttled
      * @param version the version of schema to use.
