@@ -37,6 +37,7 @@ abstract class WorkerTask implements Runnable {
     protected final ConnectorTaskId id;
     private final AtomicBoolean stopping;
     private final AtomicBoolean running;
+    private final AtomicBoolean cancelled;
     private final CountDownLatch shutdownLatch;
     private final TaskStatus.Listener lifecycleListener;
 
@@ -44,6 +45,7 @@ abstract class WorkerTask implements Runnable {
         this.id = id;
         this.stopping = new AtomicBoolean(false);
         this.running = new AtomicBoolean(false);
+        this.cancelled = new AtomicBoolean(false);
         this.shutdownLatch = new CountDownLatch(1);
         this.lifecycleListener = lifecycleListener;
     }
@@ -63,9 +65,17 @@ abstract class WorkerTask implements Runnable {
     }
 
     /**
+     * Cancel this task. This won't actually stop it, but it will prevent the state from being
+     * updated when it eventually does shutdown.
+     */
+    public void cancel() {
+        this.cancelled.set(true);
+    }
+
+    /**
      * Wait for this task to finish stopping.
      *
-     * @param timeoutMs
+     * @param timeoutMs time in milliseconds to await stop
      * @return true if successful, false if the timeout was reached
      */
     public boolean awaitStop(long timeoutMs) {
@@ -119,11 +129,13 @@ abstract class WorkerTask implements Runnable {
     public void run() {
         try {
             doRun();
-            lifecycleListener.onShutdown(id);
+            if (!cancelled.get())
+                lifecycleListener.onShutdown(id);
         } catch (Throwable t) {
             log.error("Task {} threw an uncaught and unrecoverable exception", id);
             log.error("Task is being killed and will not recover until manually restarted:", t);
-            lifecycleListener.onFailure(id, t);
+            if (!cancelled.get())
+                lifecycleListener.onFailure(id, t);
         }
     }
 

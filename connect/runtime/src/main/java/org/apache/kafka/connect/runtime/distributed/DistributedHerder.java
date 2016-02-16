@@ -910,9 +910,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     rebalanceResolved = false;
                 }
 
-                // Delete statuses of all removed connectors. This has to be done after the rebalance completes
-                // to avoid race conditions with the previous generation, which sets connector and individual
-                // task states to UNASSIGNED before rebalancing.
+                // Delete the statuses of all connectors removed prior to the start of this reblaance. This has to
+                // be done after the rebalance completes to avoid race conditions as the previous generation attempts
+                // to change the state to UNASSIGNED after tasks have been stopped.
                 if (isLeader())
                     updateDeletedConnectorStatus();
 
@@ -946,7 +946,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     for (ConnectorTaskId taskId : tasks)
                         worker.stopTask(taskId);
 
-                    // ensure that all status updates have been pushed to the storage system
+                    // Ensure that all status updates have been pushed to the storage system before rebalancing.
+                    // Otherwise, we may inadvertently overwrite the state with a stale value after the rebalance
+                    // completes.
                     statusBackingStore.flush();
                     log.info("Finished stopping tasks in preparation for rebalance");
                 } else {

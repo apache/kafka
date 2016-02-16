@@ -28,7 +28,25 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Abstract Herder implementation which handles connector/task lifecycle tracking.
+ * Abstract Herder implementation which handles connector/task lifecycle tracking. Extensions
+ * must invoke the lifecycle hooks appropriately.
+ *
+ * This class takes the following approach for sending status updates to the backing store:
+ *
+ * 1) When the connector or task is starting, we overwrite the previous state blindly. This ensures that
+ *    every rebalance will reset the state of tasks to the proper state. The intuition is that there should
+ *    be less chance of write conflicts when the worker has just received its assignment and is starting tasks.
+ *    In particular, this prevents us from depending on the generation absolutely. If the group disappears
+ *    and the generation is reset, then we'll overwrite the status information with the older (and larger)
+ *    generation with the updated one. The danger of this approach is that slow starting tasks may cause the
+ *    status to be overwritten after a rebalance has completed.
+ *
+ * 2) If the connector or task fails or is shutdown, we use {@link StatusBackingStore#putSafe(ConnectorStatus)},
+ *    which provides a little more protection if the worker is no longer in the group (in which case the
+ *    task may have already been started on another worker). Obviously this is still racy. If the task has just
+ *    started on another worker, we may not have the updated status cached yet. In this case, we'll overwrite
+ *    the value which will cause the state to be inconsistent (most likely until the next rebalance). Until
+ *    we have proper producer groups with fenced groups, there is not much else we can do.
  */
 public abstract class AbstractHerder implements Herder, TaskStatus.Listener, ConnectorStatus.Listener {
 
