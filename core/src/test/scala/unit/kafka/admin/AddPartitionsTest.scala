@@ -153,16 +153,15 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     val metadata = ClientUtils.fetchTopicMetadata(Set(topic3), brokers.map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)), "AddPartitionsTest-testReplicaPlacementAllServers",
       2000,0).topicsMetadata
 
-    val metaDataForTopic3 = metadata.filter(p => p.topic.equals(topic3)).head
+    val metaDataForTopic3 = metadata.find(p => p.topic == topic3).get
 
-    validateLeaderAndReplicas(metaDataForTopic3, 0, 2, Set(2,3,0,1))
-    validateLeaderAndReplicas(metaDataForTopic3, 1, 3, Set(3,2,0,1))
-    validateLeaderAndReplicas(metaDataForTopic3, 2, 0, Set(0,3,1,2))
-    validateLeaderAndReplicas(metaDataForTopic3, 3, 1, Set(1,0,2,3))
-    validateLeaderAndReplicas(metaDataForTopic3, 4, 2, Set(2,3,0,1))
-    validateLeaderAndReplicas(metaDataForTopic3, 5, 3, Set(3,0,1,2))
-    validateLeaderAndReplicas(metaDataForTopic3, 5, 3, Set(3,0,1,2))
-    validateLeaderAndReplicas(metaDataForTopic3, 6, 0, Set(0,1,2,3))
+    validateLeaderAndReplicas(metaDataForTopic3, 0, 2, Set(2, 3, 0, 1))
+    validateLeaderAndReplicas(metaDataForTopic3, 1, 3, Set(3, 2, 0, 1))
+    validateLeaderAndReplicas(metaDataForTopic3, 2, 0, Set(0, 3, 1, 2))
+    validateLeaderAndReplicas(metaDataForTopic3, 3, 1, Set(1, 0, 2, 3))
+    validateLeaderAndReplicas(metaDataForTopic3, 4, 2, Set(2, 3, 0, 1))
+    validateLeaderAndReplicas(metaDataForTopic3, 5, 3, Set(3, 0, 1, 2))
+    validateLeaderAndReplicas(metaDataForTopic3, 6, 0, Set(0, 1, 2, 3))
   }
 
   @Test
@@ -176,11 +175,11 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     val metadata = ClientUtils.fetchTopicMetadata(Set(topic2), brokers.map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)), "AddPartitionsTest-testReplicaPlacementPartialServers",
       2000,0).topicsMetadata
 
-    val metaDataForTopic2 = metadata.filter(p => p.topic.equals(topic2)).head
+    val metaDataForTopic2 = metadata.find(p => p.topic == topic2).get
 
-    validateLeaderAndReplicas(metaDataForTopic2, 0, 1, Set(1,2))
-    validateLeaderAndReplicas(metaDataForTopic2, 1, 2, Set(0,2))
-    validateLeaderAndReplicas(metaDataForTopic2, 2, 3, Set(1,3))
+    validateLeaderAndReplicas(metaDataForTopic2, 0, 1, Set(1, 2))
+    validateLeaderAndReplicas(metaDataForTopic2, 1, 2, Set(0, 2))
+    validateLeaderAndReplicas(metaDataForTopic2, 2, 3, Set(1, 3))
   }
 
   def validateLeaderAndReplicas(metadata: TopicMetadata, partitionId: Int, expectedLeaderId: Int, expectedReplicas: Set[Int]) = {

@@ -178,7 +178,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     val correlationId = request.header.correlationId
     val updateMetadataRequest = request.body.asInstanceOf[UpdateMetadataRequest]
 
-    val responseHeader = new ResponseHeader(correlationId)
     val updateMetadataResponse =
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
         replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest, metadataCache)
@@ -187,6 +186,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         new UpdateMetadataResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.code)
       }
 
+    val responseHeader = new ResponseHeader(correlationId)
     requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, responseHeader, updateMetadataResponse)))
   }
 

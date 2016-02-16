@@ -131,12 +131,12 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     inWriteLock(partitionMetadataLock) {
       aliveBrokers = updateMetadataRequest.liveBrokers.asScala.map { broker =>
         val endPoints = broker.endPoints.asScala.map { case (protocol, ep) =>
-          (protocol,EndPoint(ep.host, ep.port, protocol))
+          (protocol, EndPoint(ep.host, ep.port, protocol))
         }.toMap
         (broker.id, Broker(broker.id, endPoints))
       }.toMap
 
-      updateMetadataRequest.partitionStates.asScala.foreach { case(tp, info) =>
+      updateMetadataRequest.partitionStates.asScala.foreach { case (tp, info) =>
         if (info.leader == LeaderAndIsr.LeaderDuringDelete) {
           removePartitionInfo(tp.topic, tp.partition)
           stateChangeLogger.trace(("Broker %d deleted partition %s from metadata cache in response to UpdateMetadata request " +
