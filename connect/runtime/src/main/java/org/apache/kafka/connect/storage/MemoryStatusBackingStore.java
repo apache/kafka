@@ -21,6 +21,8 @@ import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.Table;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -51,23 +53,23 @@ public class MemoryStatusBackingStore implements StatusBackingStore {
     }
 
     @Override
-    public synchronized void put(String connector, ConnectorStatus status) {
-        connectors.put(connector, status);
+    public synchronized void put(ConnectorStatus status) {
+        connectors.put(status.id(), status);
     }
 
     @Override
-    public synchronized void putSafe(String connector, ConnectorStatus status) {
-        put(connector, status);
+    public synchronized void putSafe(ConnectorStatus status) {
+        put(status);
     }
 
     @Override
-    public synchronized void put(ConnectorTaskId id, TaskStatus status) {
-        tasks.put(id.connector(), id.task(), status);
+    public synchronized void put(TaskStatus status) {
+        tasks.put(status.id().connector(), status.id().task(), status);
     }
 
     @Override
-    public synchronized void putSafe(ConnectorTaskId id, TaskStatus status) {
-        put(id, status);
+    public synchronized void putSafe(TaskStatus status) {
+        put(status);
     }
 
     @Override
@@ -81,8 +83,8 @@ public class MemoryStatusBackingStore implements StatusBackingStore {
     }
 
     @Override
-    public synchronized Map<Integer, TaskStatus> getAll(String connector) {
-        return tasks.row(connector);
+    public synchronized Collection<TaskStatus> getAll(String connector) {
+        return new ArrayList<>(tasks.row(connector).values());
     }
 
     @Override

@@ -129,8 +129,8 @@ public class StandaloneHerderTest {
         connector = PowerMock.createMock(BogusSourceConnector.class);
         expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
 
-        EasyMock.expect(statusBackingStore.getAll(CONNECTOR_NAME)).andReturn(Collections.<Integer, TaskStatus>emptyMap());
-        statusBackingStore.put(CONNECTOR_NAME, new ConnectorStatus(AbstractStatus.State.DESTROYED, WORKER_ID, 0));
+        EasyMock.expect(statusBackingStore.getAll(CONNECTOR_NAME)).andReturn(Collections.<TaskStatus>emptyList());
+        statusBackingStore.put(new ConnectorStatus(CONNECTOR_NAME, AbstractStatus.State.DESTROYED, WORKER_ID, 0));
 
         expectDestroy();
 

@@ -16,14 +16,14 @@
  **/
 package org.apache.kafka.connect.runtime;
 
-public class ConnectorStatus extends AbstractStatus {
+public class ConnectorStatus extends AbstractStatus<String> {
 
-    public ConnectorStatus(State state, String msg, String workerUrl, int generation) {
-        super(state, msg, workerUrl, generation);
+    public ConnectorStatus(String connector, State state, String msg, String workerUrl, int generation) {
+        super(connector, state, msg, workerUrl, generation);
     }
 
-    public ConnectorStatus(State state, String workerUrl, int generation) {
-        super(state, null, workerUrl, generation);
+    public ConnectorStatus(String connector, State state, String workerUrl, int generation) {
+        super(connector, state, null, workerUrl, generation);
     }
 
     public interface Listener {
@@ -38,9 +38,9 @@ public class ConnectorStatus extends AbstractStatus {
          * Invoked from the Connector using {@link org.apache.kafka.connect.connector.ConnectorContext#raiseError(Exception)}.
          * Note that no shutdown event will follow after the task has been failed.
          * @param connector The connector name
-         * @param t Error raised from the connector.
+         * @param cause Error raised from the connector.
          */
-        void onFailure(String connector, Throwable t);
+        void onFailure(String connector, Throwable cause);
 
         /**
          * Invoked after successful startup of the connector.
@@ -49,8 +49,8 @@ public class ConnectorStatus extends AbstractStatus {
         void onStartup(String connector);
 
         /**
-         *
-         * @param connector
+         * Invoked when the connector is deleted through the REST API.
+         * @param connector The connector name
          */
         void onDeletion(String connector);
 

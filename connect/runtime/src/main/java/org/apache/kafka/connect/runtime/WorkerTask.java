@@ -135,8 +135,8 @@ abstract class WorkerTask implements Runnable {
         }
 
         @Override
-        public void onFailure(ConnectorTaskId id, Throwable t) {
-            log.error("Task {} failed", id, t);
+        public void onFailure(ConnectorTaskId id, Throwable cause) {
+            log.error("Task {} failed", id, cause);
         }
 
         @Override

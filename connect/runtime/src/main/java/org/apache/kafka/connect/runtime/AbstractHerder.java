@@ -23,9 +23,9 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Abstract Herder implementation which handles connector/task lifecycle tracking.
@@ -52,46 +52,46 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public void onStartup(String connector) {
-        statusBackingStore.put(connector, new ConnectorStatus(ConnectorStatus.State.RUNNING,
+        statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.RUNNING,
                 workerId, generation()));
     }
 
     @Override
     public void onShutdown(String connector) {
-        statusBackingStore.putSafe(connector, new ConnectorStatus(ConnectorStatus.State.UNASSIGNED,
+        statusBackingStore.putSafe(new ConnectorStatus(connector, ConnectorStatus.State.UNASSIGNED,
                 workerId, generation()));
     }
 
     @Override
-    public void onFailure(String connector, Throwable t) {
-        statusBackingStore.putSafe(connector, new ConnectorStatus(ConnectorStatus.State.FAILED,
-                workerId, generation()));
+    public void onFailure(String connector, Throwable cause) {
+        statusBackingStore.putSafe(new ConnectorStatus(connector, ConnectorStatus.State.FAILED,
+                message(cause), workerId, generation()));
     }
 
     @Override
     public void onStartup(ConnectorTaskId id) {
-        statusBackingStore.put(id, new TaskStatus(TaskStatus.State.RUNNING, workerId, generation()));
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.RUNNING, workerId, generation()));
     }
 
     @Override
-    public void onFailure(ConnectorTaskId id, Throwable t) {
-        statusBackingStore.putSafe(id, new TaskStatus(TaskStatus.State.FAILED, workerId, generation()));
+    public void onFailure(ConnectorTaskId id, Throwable cause) {
+        statusBackingStore.putSafe(new TaskStatus(id, TaskStatus.State.FAILED, message(cause), workerId, generation()));
     }
 
     @Override
     public void onShutdown(ConnectorTaskId id) {
-        statusBackingStore.putSafe(id, new TaskStatus(TaskStatus.State.UNASSIGNED, workerId, generation()));
+        statusBackingStore.putSafe(new TaskStatus(id, TaskStatus.State.UNASSIGNED, workerId, generation()));
     }
 
     @Override
     public void onDeletion(String connector) {
-        for (Integer task : statusBackingStore.getAll(connector).keySet()) {
-            TaskStatus status = new TaskStatus(TaskStatus.State.DESTROYED, workerId, generation());
-            statusBackingStore.put(new ConnectorTaskId(connector, task), status);
+        for (TaskStatus status : statusBackingStore.getAll(connector)) {
+            statusBackingStore.put(new TaskStatus(status.id(), TaskStatus.State.DESTROYED,
+                    workerId, generation()));
         }
 
-        ConnectorStatus status = new ConnectorStatus(ConnectorStatus.State.DESTROYED, workerId, generation());
-        statusBackingStore.put(connector, status);
+        ConnectorStatus status = new ConnectorStatus(connector, ConnectorStatus.State.DESTROYED, workerId, generation());
+        statusBackingStore.put(status);
     }
 
     @Override
@@ -118,15 +118,14 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         if (connector == null)
             return null;
 
-        Map<Integer, TaskStatus> tasks = statusBackingStore.getAll(connName);
+        Collection<TaskStatus> tasks = statusBackingStore.getAll(connName);
 
         ConnectorStateInfo.ConnectorState connectorState = new ConnectorStateInfo.ConnectorState(
                 connector.state().toString(), connector.workerId(), connector.msg());
         List<ConnectorStateInfo.TaskState> taskStates = new ArrayList<>();
 
-        for (Map.Entry<Integer, TaskStatus> taskEntry : tasks.entrySet()) {
-            TaskStatus status = taskEntry.getValue();
-            taskStates.add(new ConnectorStateInfo.TaskState(taskEntry.getKey(),
+        for (TaskStatus status : tasks) {
+            taskStates.add(new ConnectorStateInfo.TaskState(status.id().task(),
                     status.state().toString(), status.workerId(), status.msg()));
         }
 
@@ -143,6 +142,14 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         return new ConnectorStateInfo.TaskState(id.task(), status.state().toString(),
                 status.workerId(), status.msg());
+    }
+
+    private String message(Throwable t) {
+        if (t == null)
+            return null;
+        while (t.getCause() != null)
+            t = t.getCause();
+        return t.getMessage();
     }
 
 }

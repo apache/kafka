@@ -16,7 +16,7 @@
  **/
 package org.apache.kafka.connect.runtime;
 
-public abstract class AbstractStatus {
+public abstract class AbstractStatus<T> {
 
     public enum State {
         UNASSIGNED,
@@ -25,19 +25,26 @@ public abstract class AbstractStatus {
         DESTROYED,
     }
 
+    private final T id;
     private final State state;
     private final String msg;
     private final String workerId;
     private final int generation;
 
-    public AbstractStatus(State state,
+    public AbstractStatus(T id,
+                          State state,
                           String msg,
                           String workerId,
                           int generation) {
+        this.id = id;
         this.state = state;
         this.workerId = workerId;
         this.msg = msg;
         this.generation = generation;
+    }
+
+    public T id() {
+        return id;
     }
 
     public State state() {
@@ -59,7 +66,8 @@ public abstract class AbstractStatus {
     @Override
     public String toString() {
         return "Status{" +
-                "state=" + state +
+                "id=" + id +
+                ", state=" + state +
                 ", msg='" + msg + '\'' +
                 ", workerId='" + workerId + '\'' +
                 ", generation=" + generation +
@@ -71,17 +79,20 @@ public abstract class AbstractStatus {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        AbstractStatus that = (AbstractStatus) o;
+        AbstractStatus<?> that = (AbstractStatus<?>) o;
 
         if (generation != that.generation) return false;
+        if (id != null ? !id.equals(that.id) : that.id != null) return false;
         if (state != that.state) return false;
         if (msg != null ? !msg.equals(that.msg) : that.msg != null) return false;
         return workerId != null ? workerId.equals(that.workerId) : that.workerId == null;
+
     }
 
     @Override
     public int hashCode() {
-        int result = state != null ? state.hashCode() : 0;
+        int result = id != null ? id.hashCode() : 0;
+        result = 31 * result + (state != null ? state.hashCode() : 0);
         result = 31 * result + (msg != null ? msg.hashCode() : 0);
         result = 31 * result + (workerId != null ? workerId.hashCode() : 0);
         result = 31 * result + generation;

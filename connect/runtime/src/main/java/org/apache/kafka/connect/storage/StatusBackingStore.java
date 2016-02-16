@@ -21,7 +21,7 @@ import org.apache.kafka.connect.runtime.ConnectorStatus;
 import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
-import java.util.Map;
+import java.util.Collection;
 import java.util.Set;
 
 public interface StatusBackingStore extends Configurable {
@@ -38,37 +38,33 @@ public interface StatusBackingStore extends Configurable {
 
     /**
      * Set the state of the connector to the given value.
-     * @param connector the connector name
      * @param status the status of the connector
      */
-    void put(String connector, ConnectorStatus status);
+    void put(ConnectorStatus status);
 
     /**
      * Safely set the state of the connector to the given value. What is
      * considered "safe" depends on the implementation, but basically it
      * means that the store can provide higher assurance that another worker
      * hasn't concurrently written any conflicting data.
-     * @param connector the connector name
      * @param status the status of the connector
      */
-    void putSafe(String connector, ConnectorStatus status);
+    void putSafe(ConnectorStatus status);
 
     /**
      * Set the state of the connector to the given value.
-     * @param id the id of the task
      * @param status the status of the task
      */
-    void put(ConnectorTaskId id, TaskStatus status);
+    void put(TaskStatus status);
 
     /**
      * Safely set the state of the task to the given value. What is
      * considered "safe" depends on the implementation, but basically it
      * means that the store can provide higher assurance that another worker
      * hasn't concurrently written any conflicting data.
-     * @param id the id of the task
      * @param status the status of the task
      */
-    void putSafe(ConnectorTaskId id, TaskStatus status);
+    void putSafe(TaskStatus status);
 
     /**
      * Get the current state of the task.
@@ -89,7 +85,7 @@ public interface StatusBackingStore extends Configurable {
      * @param connector the connector name
      * @return a map from task ids to their respective status
      */
-    Map<Integer, TaskStatus> getAll(String connector);
+    Collection<TaskStatus> getAll(String connector);
 
     /**
      * Get all cached connectors.

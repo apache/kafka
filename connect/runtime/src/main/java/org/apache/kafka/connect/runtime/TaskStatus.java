@@ -18,14 +18,14 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
-public class TaskStatus extends AbstractStatus {
+public class TaskStatus extends AbstractStatus<ConnectorTaskId> {
 
-    public TaskStatus(State state, String msg, String workerUrl, int generation) {
-        super(state, msg, workerUrl, generation);
+    public TaskStatus(ConnectorTaskId id, State state, String msg, String workerUrl, int generation) {
+        super(id, state, msg, workerUrl, generation);
     }
 
-    public TaskStatus(State state, String workerUrl, int generation) {
-        super(state, null, workerUrl, generation);
+    public TaskStatus(ConnectorTaskId id, State state, String workerUrl, int generation) {
+        super(id, state, null, workerUrl, generation);
     }
 
     public interface Listener {
@@ -39,9 +39,9 @@ public class TaskStatus extends AbstractStatus {
         /**
          * Invoked if the task raises an error. No shutdown event will follow.
          * @param id The id of the task
-         * @param t The error raised by the task.
+         * @param cause The error raised by the task.
          */
-        void onFailure(ConnectorTaskId id, Throwable t);
+        void onFailure(ConnectorTaskId id, Throwable cause);
 
         /**
          * Invoked after successful shutdown of the task.

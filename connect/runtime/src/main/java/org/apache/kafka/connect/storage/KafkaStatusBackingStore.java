@@ -42,9 +42,12 @@ import org.apache.kafka.connect.util.Table;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -80,21 +83,20 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     public static final String STATE_KEY_NAME = "state";
     public static final String MSG_KEY_NAME = "msg";
-    public static final String WORKER_URL_KEY_NAME = "worker_id";
+    public static final String WORKER_ID_KEY_NAME = "worker_id";
     public static final String GENERATION_KEY_NAME = "generation";
 
-    private static final Schema TASK_STATUS_SCHEMA_V0 = SchemaBuilder.struct()
+    private static final Schema STATUS_SCHEMA_V0 = SchemaBuilder.struct()
             .field(STATE_KEY_NAME, Schema.STRING_SCHEMA)
             .field(MSG_KEY_NAME, SchemaBuilder.string().optional().build())
-            .field(WORKER_URL_KEY_NAME, Schema.STRING_SCHEMA)
+            .field(WORKER_ID_KEY_NAME, Schema.STRING_SCHEMA)
             .field(GENERATION_KEY_NAME, Schema.INT32_SCHEMA)
             .build();
-    private static final Schema CONNECTOR_STATUS_SCHEMA_V0 = TASK_STATUS_SCHEMA_V0;
 
     private final Time time;
     private final Converter converter;
-    private final Table<String, Integer, TaskEntry> tasks;
-    private final Map<String, ConnectorEntry> connectors;
+    private final Table<String, Integer, CacheEntry<TaskStatus>> tasks;
+    private final Map<String, CacheEntry<ConnectorStatus>> connectors;
 
     private String topic;
     private KafkaBasedLog<String, byte[]> kafkaLog;
@@ -105,6 +107,13 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         this.converter = converter;
         this.tasks = new Table<>();
         this.connectors = new HashMap<>();
+    }
+
+    // visible for testing
+    KafkaStatusBackingStore(Time time, Converter converter, String topic, KafkaBasedLog<String, byte[]> kafkaLog) {
+        this(time, converter);
+        this.kafkaLog = kafkaLog;
+        this.topic = topic;
     }
 
     @Override
@@ -125,7 +134,13 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
-        this.kafkaLog = new KafkaBasedLog<>(topic, producerProps, consumerProps, new ReadCallback(), time);
+        Callback<ConsumerRecord<String, byte[]>> readCallback = new Callback<ConsumerRecord<String, byte[]>>() {
+            @Override
+            public void onCompletion(Throwable error, ConsumerRecord<String, byte[]> record) {
+                read(record);
+            }
+        };
+        this.kafkaLog = new KafkaBasedLog<>(topic, producerProps, consumerProps, readCallback, time);
     }
 
     @Override
@@ -142,23 +157,23 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
     }
 
     @Override
-    public void put(final String connector, final ConnectorStatus status) {
-        sendConnectorStatus(connector, status, false);
+    public void put(final ConnectorStatus status) {
+        sendConnectorStatus(status, false);
     }
 
     @Override
-    public void putSafe(final String connector, final ConnectorStatus status) {
-        sendConnectorStatus(connector, status, true);
+    public void putSafe(final ConnectorStatus status) {
+        sendConnectorStatus(status, true);
     }
 
     @Override
-    public void put(final ConnectorTaskId task, final TaskStatus status) {
-        sendTaskStatus(task, status, false);
+    public void put(final TaskStatus status) {
+        sendTaskStatus(status, false);
     }
 
     @Override
-    public void putSafe(final ConnectorTaskId task, final TaskStatus status) {
-        sendTaskStatus(task, status, true);
+    public void putSafe(final TaskStatus status) {
+        sendTaskStatus(status, true);
     }
 
     @Override
@@ -166,24 +181,24 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         kafkaLog.flush();
     }
 
-    private void sendConnectorStatus(final String connector,
-                                     final ConnectorStatus status,
-                                     boolean safeWrite) {
-        CacheEntry<String, ConnectorStatus> entry = getOrAdd(connector);
-        send(connector, status, entry, safeWrite);
+    private void sendConnectorStatus(final ConnectorStatus status, boolean safeWrite) {
+        String connector  = status.id();
+        CacheEntry<ConnectorStatus> entry = getOrAdd(connector);
+        String key = CONNECTOR_STATUS_PREFIX + connector;
+        send(key, status, entry, safeWrite);
     }
 
-    private void sendTaskStatus(final ConnectorTaskId task,
-                                final TaskStatus status,
-                                boolean safeWrite) {
-        CacheEntry<ConnectorTaskId, TaskStatus> entry = getOrAdd(task);
-        send(task, status, entry, safeWrite);
+    private void sendTaskStatus(final TaskStatus status, boolean safeWrite) {
+        ConnectorTaskId taskId = status.id();
+        CacheEntry<TaskStatus> entry = getOrAdd(taskId);
+        String key = TASK_STATUS_PREFIX + taskId.connector() + "-" + taskId.task();
+        send(key, status, entry, safeWrite);
     }
 
-    private <K, V extends AbstractStatus> void send(K id,
-                                                    final V status,
-                                                    final CacheEntry<K, V> entry,
-                                                    final boolean safeWrite) {
+    private <V extends AbstractStatus> void send(final String key,
+                                                 final V status,
+                                                 final CacheEntry<V> entry,
+                                                 final boolean safeWrite) {
         final int sequence;
         synchronized (this) {
             this.generation = status.generation();
@@ -192,79 +207,83 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             sequence = entry.increment();
         }
 
-        final String key = entry.serializeKey(id);
-        final byte[] value = status.state() == ConnectorStatus.State.DESTROYED ? null : entry.serializeValue(status);
+        final byte[] value = status.state() == ConnectorStatus.State.DESTROYED ? null : serialize(status);
 
-        kafkaLog.send(key, value, new AbstractWriteCallback() {
+        kafkaLog.send(key, value, new org.apache.kafka.clients.producer.Callback() {
             @Override
-            protected void retry() {
-                synchronized (this) {
-                    if (entry.isDeleted()
-                            || status.generation() != generation
-                            || (safeWrite && !entry.canWrite(status, sequence)))
-                        return;
+            public void onCompletion(RecordMetadata metadata, Exception exception) {
+                if (exception != null) {
+                    if (exception instanceof RetriableException) {
+                        synchronized (this) {
+                            if (entry.isDeleted()
+                                    || status.generation() != generation
+                                    || (safeWrite && !entry.canWrite(status, sequence)))
+                                return;
+                        }
+                        kafkaLog.send(key, value, this);
+                    } else {
+                        log.error("Failed to write status update", exception);
+                    }
                 }
-                kafkaLog.send(key, value, this);
             }
         });
     }
 
-    private synchronized ConnectorEntry getOrAdd(String connector) {
-        ConnectorEntry entry = connectors.get(connector);
+    private synchronized CacheEntry<ConnectorStatus> getOrAdd(String connector) {
+        CacheEntry<ConnectorStatus> entry = connectors.get(connector);
         if (entry == null) {
-            entry = new ConnectorEntry();
+            entry = new CacheEntry<>();
             connectors.put(connector, entry);
         }
         return entry;
     }
 
     private synchronized void remove(String connector) {
-        ConnectorEntry removed = connectors.remove(connector);
+        CacheEntry<ConnectorStatus> removed = connectors.remove(connector);
         if (removed != null)
             removed.delete();
 
-        Map<Integer, TaskEntry> tasks = this.tasks.remove(connector);
+        Map<Integer, CacheEntry<TaskStatus>> tasks = this.tasks.remove(connector);
         if (tasks != null) {
-            for (TaskEntry taskEntry : tasks.values())
+            for (CacheEntry<TaskStatus> taskEntry : tasks.values())
                 taskEntry.delete();
         }
     }
 
-    private synchronized TaskEntry getOrAdd(ConnectorTaskId task) {
-        TaskEntry entry = tasks.get(task.connector(), task.task());
+    private synchronized CacheEntry<TaskStatus> getOrAdd(ConnectorTaskId task) {
+        CacheEntry<TaskStatus> entry = tasks.get(task.connector(), task.task());
         if (entry == null) {
-            entry = new TaskEntry();
+            entry = new CacheEntry<>();
             tasks.put(task.connector(), task.task(), entry);
         }
         return entry;
     }
 
     private synchronized void remove(ConnectorTaskId id) {
-        TaskEntry removed = tasks.remove(id.connector(), id.task());
+        CacheEntry<TaskStatus> removed = tasks.remove(id.connector(), id.task());
         if (removed != null)
             removed.delete();
     }
 
     @Override
     public synchronized TaskStatus get(ConnectorTaskId id) {
-        TaskEntry entry = tasks.get(id.connector(), id.task());
+        CacheEntry<TaskStatus> entry = tasks.get(id.connector(), id.task());
         return entry == null ? null : entry.get();
     }
 
     @Override
     public synchronized ConnectorStatus get(String connector) {
-        ConnectorEntry entry = connectors.get(connector);
+        CacheEntry<ConnectorStatus> entry = connectors.get(connector);
         return entry == null ? null : entry.get();
     }
 
     @Override
-    public synchronized Map<Integer, TaskStatus> getAll(String connector) {
-        Map<Integer, TaskStatus> res = new HashMap<>();
-        for (Map.Entry<Integer, TaskEntry> statusEntry : tasks.row(connector).entrySet()) {
-            int task = statusEntry.getKey();
-            TaskStatus status = statusEntry.getValue().get();
+    public synchronized Collection<TaskStatus> getAll(String connector) {
+        List<TaskStatus> res = new ArrayList<>();
+        for (CacheEntry<TaskStatus> statusEntry : tasks.row(connector).values()) {
+            TaskStatus status = statusEntry.get();
             if (status != null)
-                res.put(task, status);
+                res.add(status);
         }
         return res;
     }
@@ -274,7 +293,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         return new HashSet<>(connectors.keySet());
     }
 
-    private ConnectorStatus parseConnectorStatus(byte[] data) {
+    private ConnectorStatus parseConnectorStatus(String connector, byte[] data) {
         try {
             SchemaAndValue schemaAndValue = converter.toConnectData(topic, data);
             if (!(schemaAndValue.value() instanceof Map)) {
@@ -285,16 +304,16 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             Map<String, Object> statusMap = (Map<String, Object>) schemaAndValue.value();
             TaskStatus.State state = TaskStatus.State.valueOf((String) statusMap.get(STATE_KEY_NAME));
             String msg = (String) statusMap.get(MSG_KEY_NAME);
-            String workerUrl = (String) statusMap.get(WORKER_URL_KEY_NAME);
+            String workerUrl = (String) statusMap.get(WORKER_ID_KEY_NAME);
             int generation = ((Long) statusMap.get(GENERATION_KEY_NAME)).intValue();
-            return new ConnectorStatus(state, msg, workerUrl, generation);
+            return new ConnectorStatus(connector, state, msg, workerUrl, generation);
         } catch (Exception e) {
             log.error("Failed to deserialize connector status", e);
             return null;
         }
     }
 
-    private TaskStatus parseTaskStatus(byte[] data) {
+    private TaskStatus parseTaskStatus(ConnectorTaskId taskId, byte[] data) {
         try {
             SchemaAndValue schemaAndValue = converter.toConnectData(topic, data);
             if (!(schemaAndValue.value() instanceof Map)) {
@@ -304,33 +323,23 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             Map<String, Object> statusMap = (Map<String, Object>) schemaAndValue.value();
             TaskStatus.State state = TaskStatus.State.valueOf((String) statusMap.get(STATE_KEY_NAME));
             String msg = (String) statusMap.get(MSG_KEY_NAME);
-            String workerUrl = (String) statusMap.get(WORKER_URL_KEY_NAME);
+            String workerUrl = (String) statusMap.get(WORKER_ID_KEY_NAME);
             int generation = ((Long) statusMap.get(GENERATION_KEY_NAME)).intValue();
-            return new TaskStatus(state, msg, workerUrl, generation);
+            return new TaskStatus(taskId, state, msg, workerUrl, generation);
         } catch (Exception e) {
-            log.error("Failed to deserialize connector status", e);
+            log.error("Failed to deserialize task status", e);
             return null;
         }
     }
 
-    private byte[] fromConnect(TaskStatus status) {
-        Struct struct = new Struct(TASK_STATUS_SCHEMA_V0);
+    private byte[] serialize(AbstractStatus status) {
+        Struct struct = new Struct(STATUS_SCHEMA_V0);
         struct.put(STATE_KEY_NAME, status.state().name());
         if (status.msg() != null)
             struct.put(MSG_KEY_NAME, status.msg());
-        struct.put(WORKER_URL_KEY_NAME, status.workerId());
+        struct.put(WORKER_ID_KEY_NAME, status.workerId());
         struct.put(GENERATION_KEY_NAME, status.generation());
-        return converter.fromConnectData(topic, TASK_STATUS_SCHEMA_V0, struct);
-    }
-
-    private byte[] fromConnect(ConnectorStatus status) {
-        Struct struct = new Struct(CONNECTOR_STATUS_SCHEMA_V0);
-        struct.put(STATE_KEY_NAME, status.state().name());
-        if (status.msg() != null)
-            struct.put(MSG_KEY_NAME, status.msg());
-        struct.put(WORKER_URL_KEY_NAME, status.workerId());
-        struct.put(GENERATION_KEY_NAME, status.generation());
-        return converter.fromConnectData(topic, CONNECTOR_STATUS_SCHEMA_V0, struct);
+        return converter.fromConnectData(topic, STATUS_SCHEMA_V0, struct);
     }
 
     private String parseConnectorStatusKey(String key) {
@@ -351,103 +360,70 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         }
     }
 
-    private abstract class AbstractWriteCallback implements org.apache.kafka.clients.producer.Callback {
-        @Override
-        public void onCompletion(RecordMetadata metadata, Exception exception) {
-            if (exception != null) {
-                if (exception instanceof RetriableException)
-                    retry();
-                else
-                    log.error("Failed to write status update", exception);
-            }
+    private void readConnectorStatus(String key, byte[] value) {
+        String connector = parseConnectorStatusKey(key);
+        if (connector == null || connector.isEmpty()) {
+            log.warn("Discarding record with invalid connector status key {}", key);
+            return;
         }
-        protected abstract void retry();
-    }
 
-    private class ReadCallback implements Callback<ConsumerRecord<String, byte[]>> {
-        @Override
-        public void onCompletion(Throwable error, ConsumerRecord<String, byte[]> result) {
-            String key = result.key();
-            if (key.startsWith(CONNECTOR_STATUS_PREFIX)) {
-                String connector = parseConnectorStatusKey(key);
-                if (connector == null || connector.isEmpty()) {
-                    log.warn("Discarding record with invalid connector status key {}", key);
-                    return;
-                }
+        if (value == null) {
+            log.trace("Removing status for connector {}", connector);
+            remove(connector);
+            return;
+        }
 
-                if (result.value() == null) {
-                    log.trace("Removing status for connector {}", connector);
-                    remove(connector);
-                    return;
-                }
+        ConnectorStatus status = parseConnectorStatus(connector, value);
+        if (status == null)
+            return;
 
-                ConnectorStatus status = parseConnectorStatus(result.value());
-                if (status == null)
-                    return;
-
-                synchronized (KafkaStatusBackingStore.this) {
-                    log.trace("Received connector {} status update {}", connector, status);
-                    ConnectorEntry entry = getOrAdd(connector);
-                    entry.put(status);
-                }
-            } else if (key.startsWith(TASK_STATUS_PREFIX)) {
-                ConnectorTaskId id = parseConnectorTaskId(key);
-                if (id == null) {
-                    log.warn("Discarding record with invalid task status key {}", key);
-                    return;
-                }
-
-                if (result.value() == null) {
-                    log.trace("Removing task status for {}", id);
-                    remove(id);
-                    return;
-                }
-
-                TaskStatus status = parseTaskStatus(result.value());
-                if (status == null) {
-                    log.warn("Failed to parse task status with key {}", key);
-                    return;
-                }
-
-                synchronized (KafkaStatusBackingStore.this) {
-                    log.trace("Received task {} status update {}", id, status);
-                    TaskEntry entry = getOrAdd(id);
-                    entry.put(status);
-                }
-            } else {
-                log.warn("Discarding record with invalid key {}", key);
-            }
+        synchronized (KafkaStatusBackingStore.this) {
+            log.trace("Received connector {} status update {}", connector, status);
+            CacheEntry<ConnectorStatus> entry = getOrAdd(connector);
+            entry.put(status);
         }
     }
 
-    private class TaskEntry extends CacheEntry<ConnectorTaskId, TaskStatus> {
-
-        @Override
-        protected String serializeKey(ConnectorTaskId taskId) {
-            return TASK_STATUS_PREFIX + taskId.connector() + "-" + taskId.task();
+    private void readTaskStatus(String key, byte[] value) {
+        ConnectorTaskId id = parseConnectorTaskId(key);
+        if (id == null) {
+            log.warn("Discarding record with invalid task status key {}", key);
+            return;
         }
 
-        @Override
-        protected byte[] serializeValue(TaskStatus status) {
-            return fromConnect(status);
+        if (value == null) {
+            log.trace("Removing task status for {}", id);
+            remove(id);
+            return;
+        }
+
+        TaskStatus status = parseTaskStatus(id, value);
+        if (status == null) {
+            log.warn("Failed to parse task status with key {}", key);
+            return;
+        }
+
+        synchronized (KafkaStatusBackingStore.this) {
+            log.trace("Received task {} status update {}", id, status);
+            CacheEntry<TaskStatus> entry = getOrAdd(id);
+            entry.put(status);
         }
     }
 
-    private class ConnectorEntry extends CacheEntry<String, ConnectorStatus> {
-
-        @Override
-        protected String serializeKey(String connector) {
-            return CONNECTOR_STATUS_PREFIX + connector;
-        }
-
-        @Override
-        protected byte[] serializeValue(ConnectorStatus status) {
-            return fromConnect(status);
+    // visible for testing
+    void read(ConsumerRecord<String, byte[]> record) {
+        String key = record.key();
+        if (key.startsWith(CONNECTOR_STATUS_PREFIX)) {
+            readConnectorStatus(key, record.value());
+        } else if (key.startsWith(TASK_STATUS_PREFIX)) {
+            readTaskStatus(key, record.value());
+        } else {
+            log.warn("Discarding record with invalid key {}", key);
         }
     }
 
-    private abstract static class CacheEntry<K, V extends AbstractStatus> {
-        private V value = null;
+    private static class CacheEntry<T extends AbstractStatus> {
+        private T value = null;
         private int sequence = 0;
         private boolean deleted = false;
 
@@ -455,11 +431,11 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             return ++sequence;
         }
 
-        public void put(V value) {
+        public void put(T value) {
             this.value = value;
         }
 
-        public V get() {
+        public T get() {
             return value;
         }
 
@@ -471,19 +447,16 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             return deleted;
         }
 
-        public boolean canWrite(V status) {
+        public boolean canWrite(T status) {
             return value != null &&
                     (value.workerId().equals(status.workerId())
                     || value.generation() <= status.generation());
         }
 
-        public boolean canWrite(V status, int sequence) {
+        public boolean canWrite(T status, int sequence) {
             return canWrite(status) && this.sequence == sequence;
         }
 
-        protected abstract String serializeKey(K key);
-
-        protected abstract byte[] serializeValue(V value);
     }
 
 }
