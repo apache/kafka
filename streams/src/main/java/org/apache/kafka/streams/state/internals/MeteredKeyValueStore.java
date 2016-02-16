@@ -114,10 +114,10 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void putIfAbsent(K key, V value) {
+    public V putIfAbsent(K key, V value) {
         long startNs = time.nanoseconds();
         try {
-            this.inner.putIfAbsent(key, value);
+            return this.inner.putIfAbsent(key, value);
         } finally {
             this.metrics.recordLatency(this.putIfAbsentTime, startNs, time.nanoseconds());
         }

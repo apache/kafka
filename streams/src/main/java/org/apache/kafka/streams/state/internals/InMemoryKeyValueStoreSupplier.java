@@ -117,10 +117,12 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         @Override
-        public void putIfAbsent(K key, V value) {
-            if (get(key) == null) {
+        public V putIfAbsent(K key, V value) {
+            V originalValue = get(key);
+            if (originalValue == null) {
                 put(key, value);
             }
+            return originalValue;
         }
 
         @Override

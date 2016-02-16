@@ -257,10 +257,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void putIfAbsent(K key, V value) {
-        if (get(key) == null) {
+    public V putIfAbsent(K key, V value) {
+        V originalValue = get(key);
+        if (originalValue == null) {
             put(key, value);
         }
+        return originalValue;
     }
 
     private void putInternal(byte[] rawKey, byte[] rawValue) {

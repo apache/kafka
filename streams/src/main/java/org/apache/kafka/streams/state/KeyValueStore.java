@@ -58,7 +58,7 @@ public interface KeyValueStore<K, V> extends StateStore {
      * @param value The value
      * @throws NullPointerException If null is used for key or value.
      */
-    abstract public void putIfAbsent(K key, V value);
+    abstract public V putIfAbsent(K key, V value);
 
     /**
      * Update all the given key/value pairs
