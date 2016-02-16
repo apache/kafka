@@ -16,8 +16,8 @@ import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 import java.util.Iterator;
-import java.util.LinkedList;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.AbstractIterator;
@@ -216,7 +216,7 @@ public class MemoryRecords implements Records {
         private RecordsIterator innerIter;
 
         // The variables for inner iterator
-        private final LinkedList<LogEntry> logEntries;
+        private final ArrayDeque<LogEntry> logEntries;
         private final long absoluteBaseOffset;
 
         public RecordsIterator(ByteBuffer buffer, CompressionType type, boolean shallow) {
@@ -238,7 +238,7 @@ public class MemoryRecords implements Records {
             // If relative offset is used, we need to decompress the entire message first to compute
             // the absolute offset.
             if (entry.record().magic() > Record.MAGIC_VALUE_V0) {
-                this.logEntries = new LinkedList<>();
+                this.logEntries = new ArrayDeque<>();
                 long wrapperRecordTimestamp = entry.record().timestamp();
                 while (true) {
                     try {
@@ -292,6 +292,8 @@ public class MemoryRecords implements Records {
                         // which will de-compress the payload to a set of messages;
                         // since we assume nested compression is not allowed, the deep iterator
                         // would not try to further decompress underlying messages
+                        // There will be at least one element in the inner iterator, so we don't
+                        // need to call hasNext() here.
                         innerIter = new RecordsIterator(entry);
                         return innerIter.next();
                     }

@@ -27,10 +27,11 @@ import kafka.message.Message
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
-import org.apache.kafka.common.errors.{InvalidTimestampException, CorruptRecordException, SerializationException}
+import org.apache.kafka.common.errors.{InvalidTimestampException, SerializationException}
 import org.apache.kafka.common.record.TimestampType
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+
 import scala.collection.mutable.Buffer
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
@@ -149,13 +150,13 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val producerProps = new Properties()
     producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")
     val producer = createProducer(brokerList = brokerList, lingerMs = Long.MaxValue, props = Some(producerProps))
-    sendAndVerifyTimestamp(producer, TimestampType.CreateTime)
+    sendAndVerifyTimestamp(producer, TimestampType.CREATE_TIME)
   }
 
   @Test
   def testSendNonCompressedMessageWithCreateTime() {
     val producer = createProducer(brokerList = brokerList, lingerMs = Long.MaxValue)
-    sendAndVerifyTimestamp(producer, TimestampType.CreateTime)
+    sendAndVerifyTimestamp(producer, TimestampType.CREATE_TIME)
   }
 
   @Test
@@ -163,13 +164,13 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val producerProps = new Properties()
     producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")
     val producer = createProducer(brokerList = brokerList, lingerMs = Long.MaxValue, props = Some(producerProps))
-    sendAndVerifyTimestamp(producer, TimestampType.LogAppendTime)
+    sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME)
   }
 
   @Test
   def testSendNonCompressedMessageWithLogApendTime() {
     val producer = createProducer(brokerList = brokerList, lingerMs = Long.MaxValue)
-    sendAndVerifyTimestamp(producer, TimestampType.LogAppendTime)
+    sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME)
   }
 
   private def sendAndVerifyTimestamp(producer: KafkaProducer[Array[Byte], Array[Byte]], timestampType: TimestampType) {
@@ -186,7 +187,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         if (exception == null) {
           assertEquals(offset, metadata.offset())
           assertEquals(topic, metadata.topic())
-          if (timestampType == TimestampType.CreateTime)
+          if (timestampType == TimestampType.CREATE_TIME)
             assertEquals(baseTimestamp + timestampDiff, metadata.timestamp())
           else
             assertTrue(metadata.timestamp() >= startTime && metadata.timestamp() <= System.currentTimeMillis())
@@ -202,7 +203,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     try {
       // create topic
       val topicProps = new Properties()
-      if (timestampType == TimestampType.LogAppendTime)
+      if (timestampType == TimestampType.LOG_APPEND_TIME)
         topicProps.setProperty(LogConfig.MessageTimestampTypeProp, "LogAppendTime")
       else
         topicProps.setProperty(LogConfig.MessageTimestampTypeProp, "CreateTime")

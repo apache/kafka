@@ -14,7 +14,6 @@ package org.apache.kafka.clients.producer.internals;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -36,7 +35,7 @@ public final class RecordBatch {
 
     public int recordCount = 0;
     public int maxRecordSize = 0;
-    private final AtomicLong offsetCounter = new AtomicLong(0);
+    private Long offsetCounter = 0L;
     public volatile int attempts = 0;
     public final long createdMs;
     public long drainedMs;
@@ -68,7 +67,7 @@ public final class RecordBatch {
         if (!this.records.hasRoomFor(key, value)) {
             return null;
         } else {
-            this.records.append(offsetCounter.getAndIncrement(), timestamp, key, value);
+            this.records.append(offsetCounter++, timestamp, key, value);
             this.maxRecordSize = Math.max(this.maxRecordSize, Record.recordSize(key, value));
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount, timestamp);

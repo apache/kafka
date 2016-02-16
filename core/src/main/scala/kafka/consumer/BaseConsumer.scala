@@ -21,8 +21,9 @@ import java.util.Properties
 import java.util.regex.Pattern
 
 import kafka.common.StreamEndException
-import kafka.message.{NoTimestampType, TimestampType, Message}
+import kafka.message.Message
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
+import org.apache.kafka.common.record.TimestampType
 
 /**
  * A base consumer used to abstract both old and new consumer
@@ -40,7 +41,7 @@ case class BaseConsumerRecord(topic: String,
                               partition: Int,
                               offset: Long,
                               timestamp: Long = Message.NoTimestamp,
-                              timestampType: TimestampType = NoTimestampType,
+                              timestampType: TimestampType = TimestampType.NO_TIMESTAMP_TYPE,
                               key: Array[Byte],
                               value: Array[Byte])
 

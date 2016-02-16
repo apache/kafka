@@ -24,11 +24,11 @@ package org.apache.kafka.clients.producer;
  * record with its current time. The timestamp eventually used by Kafka depends on the timestamp type configured for
  * the topic.
  * <li>
- * If the topic is configured to use {@link org.apache.kafka.common.record.TimestampType#CreateTime CreateTime}
+ * If the topic is configured to use {@link org.apache.kafka.common.record.TimestampType#CREATE_TIME CreateTime}
  * the timestamp in the producer record will be used by broker.
  * </li>
  * <li>
- * If the topic is configured to use {@link org.apache.kafka.common.record.TimestampType#LogAppendTime LogAppendTime}
+ * If the topic is configured to use {@link org.apache.kafka.common.record.TimestampType#LOG_APPEND_TIME LogAppendTime}
  * the timestamp in the producer record will be overwritten by the broker with the broker local time when it appends the
  * message to its log.
  * </li>

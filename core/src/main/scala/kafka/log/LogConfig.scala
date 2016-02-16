@@ -20,9 +20,10 @@ package kafka.log
 import java.util.Properties
 
 import kafka.api.ApiVersion
-import kafka.message.{BrokerCompressionCodec, Message, TimestampType}
+import kafka.message.{BrokerCompressionCodec, Message}
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
 
 object Defaults {

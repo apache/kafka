@@ -106,7 +106,6 @@ public class ProduceRequest extends AbstractRequest {
             case 0:
                 return new ProduceResponse(responseMap);
             case 1:
-                return new ProduceResponse(responseMap, ProduceResponse.DEFAULT_THROTTLE_TIME, versionId);
             case 2:
                 return new ProduceResponse(responseMap, ProduceResponse.DEFAULT_THROTTLE_TIME, versionId);
             default:

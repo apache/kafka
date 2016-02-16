@@ -64,7 +64,7 @@ public final class Record {
     /**
      * The current "magic" value
      */
-    public static final byte CURRENT_MAGIC_VALUE = 1;
+    public static final byte CURRENT_MAGIC_VALUE = MAGIC_VALUE_V1;
 
     /**
      * Specifies the mask for the compression code. 3 bits to hold the compression codec. 0 is reserved to indicate no
@@ -324,15 +324,15 @@ public final class Record {
     /**
      * When magic value is greater than 0, the timestamp of a record is determined in the following way:
      * 1. wrapperRecordTimestampType = null and wrapperRecordTimestamp is null - Uncompressed message, timestamp is in the message.
-     * 2. wrapperRecordTimestampType = LogAppendTime and WrapperRecordTimestamp is not null - Compressed message using LogAppendTime
-     * 3. wrapperRecordTimestampType = CreateTime and wrapperRecordTimestamp is not null - Compressed message using CreateTime
+     * 2. wrapperRecordTimestampType = LOG_APPEND_TIME and WrapperRecordTimestamp is not null - Compressed message using LOG_APPEND_TIME
+     * 3. wrapperRecordTimestampType = CREATE_TIME and wrapperRecordTimestamp is not null - Compressed message using CREATE_TIME
      */
     public long timestamp() {
         if (magic() == MAGIC_VALUE_V0)
             return NO_TIMESTAMP;
         else {
             // case 2
-            if (wrapperRecordTimestampType == TimestampType.LogAppendTime && wrapperRecordTimestamp != null)
+            if (wrapperRecordTimestampType == TimestampType.LOG_APPEND_TIME && wrapperRecordTimestamp != null)
                 return wrapperRecordTimestamp;
             // Case 1, 3
             else
@@ -345,7 +345,7 @@ public final class Record {
      */
     public TimestampType timestampType() {
         if (magic() == 0)
-            return TimestampType.NoTimestampType;
+            return TimestampType.NO_TIMESTAMP_TYPE;
         else
             return wrapperRecordTimestampType == null ? TimestampType.getTimestampType(attributes()) : wrapperRecordTimestampType;
     }

@@ -85,7 +85,7 @@ public class ProcessorStateManagerTest {
         public void bufferRecord(ConsumerRecord<Integer, Integer> record) {
             recordBuffer.add(
                 new ConsumerRecord<>(record.topic(), record.partition(), record.offset(), 0L,
-                    TimestampType.CreateTime,
+                    TimestampType.CREATE_TIME,
                     serializer.serialize(record.topic(), record.key()),
                     serializer.serialize(record.topic(), record.value())));
             endOffset = record.offset();
@@ -269,7 +269,7 @@ public class ProcessorStateManagerTest {
                     int key = i * 10;
                     expectedKeys.add(key);
                     restoreConsumer.bufferRecord(
-                            new ConsumerRecord<>(persistentStoreTopicName, 2, 0L, offset, TimestampType.CreateTime, key, 0)
+                            new ConsumerRecord<>(persistentStoreTopicName, 2, 0L, offset, TimestampType.CREATE_TIME, key, 0)
                     );
                 }
 
@@ -322,7 +322,7 @@ public class ProcessorStateManagerTest {
                     int key = i;
                     expectedKeys.add(i);
                     restoreConsumer.bufferRecord(
-                            new ConsumerRecord<>(nonPersistentStoreTopicName, 2, 0L, offset, TimestampType.CreateTime, key, 0)
+                            new ConsumerRecord<>(nonPersistentStoreTopicName, 2, 0L, offset, TimestampType.CREATE_TIME, key, 0)
                     );
                 }
 

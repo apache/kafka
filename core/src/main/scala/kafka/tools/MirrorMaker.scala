@@ -28,7 +28,7 @@ import joptsimple.OptionParser
 import kafka.client.ClientUtils
 import kafka.consumer.{BaseConsumerRecord, ConsumerIterator, BaseConsumer, Blacklist, ConsumerConfig, ConsumerThreadId, ConsumerTimeoutException, TopicFilter, Whitelist, ZookeeperConsumerConnector}
 import kafka.javaapi.consumer.ConsumerRebalanceListener
-import kafka.message.{TimestampType, MessageAndMetadata}
+import kafka.message.MessageAndMetadata
 import kafka.metrics.KafkaMetricsGroup
 import kafka.serializer.DefaultDecoder
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging}
@@ -551,7 +551,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                          record.partition,
                          record.offset,
                          record.timestamp(),
-                         TimestampType.forName(record.timestampType().name),
+                         record.timestampType(),
                          record.key,
                          record.value)
     }

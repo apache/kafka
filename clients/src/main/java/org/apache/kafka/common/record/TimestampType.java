@@ -17,11 +17,13 @@
 
 package org.apache.kafka.common.record;
 
+import java.util.NoSuchElementException;
+
 /**
  * The timestamp type of the records.
  */
 public enum TimestampType {
-    NoTimestampType(-1, "NoTimestampType"), CreateTime(0, "CreateTime"), LogAppendTime(1, "LogAppendTime");
+    NO_TIMESTAMP_TYPE(-1, "NoTimestampType"), CREATE_TIME(0, "CreateTime"), LOG_APPEND_TIME(1, "LogAppendTime");
 
     public final int value;
     public final String name;
@@ -32,12 +34,25 @@ public enum TimestampType {
 
     public static TimestampType getTimestampType(byte attributes) {
         int timestampType = (attributes & Record.TIMESTAMP_TYPE_MASK) >> Record.TIMESTAMP_TYPE_ATTRIBUTE_OFFSET;
-        return timestampType == 0 ? CreateTime : LogAppendTime;
+        return timestampType == 0 ? CREATE_TIME : LOG_APPEND_TIME;
     }
 
     public static byte setTimestampType(byte attributes, TimestampType timestampType) {
-        return timestampType == CreateTime ?
+        return timestampType == CREATE_TIME ?
                 (byte) (attributes & ~Record.TIMESTAMP_TYPE_MASK) : (byte) (attributes | Record.TIMESTAMP_TYPE_MASK);
+    }
+
+    public static TimestampType forName(String name) {
+        switch (name) {
+            case "NoTimestampType":
+                return NO_TIMESTAMP_TYPE;
+            case "CreateTime":
+                return CREATE_TIME;
+            case "LogAppendTime":
+                return LOG_APPEND_TIME;
+            default:
+                throw new NoSuchElementException("Invalid timestamp type " + name);
+        }
     }
 
     @Override

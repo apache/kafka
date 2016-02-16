@@ -28,6 +28,7 @@ import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.concurrent.atomic._
 import java.text.NumberFormat
 import org.apache.kafka.common.errors.{OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, CorruptRecordException}
+import org.apache.kafka.common.record.TimestampType
 
 import scala.collection.JavaConversions
 
@@ -348,7 +349,7 @@ class Log(val dir: File,
           }
           appendInfo.lastOffset = offset.get - 1
           // If log append time is used, we put the timestamp assigned to the messages in the append info.
-          if (config.messageTimestampType == LogAppendTime)
+          if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
             appendInfo.timestamp = now
         } else {
           // we are taking the offsets we are given

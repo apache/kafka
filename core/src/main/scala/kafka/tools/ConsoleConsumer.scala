@@ -28,6 +28,7 @@ import kafka.metrics.KafkaMetricsReporter
 import kafka.utils._
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.Logger
 
@@ -357,7 +358,7 @@ class DefaultMessageFormatter extends MessageFormatter {
   }
 
   def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream) {
-    if (timestampType != NoTimestampType) {
+    if (timestampType != TimestampType.NO_TIMESTAMP_TYPE) {
       output.write(s"$timestampType:$timestamp".getBytes)
       output.write(keySeparator)
     }
@@ -379,7 +380,7 @@ class LoggingMessageFormatter extends MessageFormatter   {
     if(logger.isInfoEnabled)
       logger.info(s"key:${if (key == null) "null" else new String(key)}, " +
                   s"value:${if (value == null) "null" else new String(value)}, " +
-                  {if (timestampType != NoTimestampType) s"$timestampType:$timestamp" else ""})
+                  {if (timestampType != TimestampType.NO_TIMESTAMP_TYPE) s"$timestampType:$timestamp" else ""})
   }
 }
 
@@ -402,7 +403,7 @@ class ChecksumMessageFormatter extends MessageFormatter {
 
   def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream) {
     val chksum =
-      if (timestampType != NoTimestampType)
+      if (timestampType != TimestampType.NO_TIMESTAMP_TYPE)
         new Message(value, key, timestamp, timestampType, NoCompressionCodec, 0, -1, Message.MagicValue_V1).checksum
       else
         new Message(value, key, Message.NoTimestamp, Message.MagicValue_V0).checksum

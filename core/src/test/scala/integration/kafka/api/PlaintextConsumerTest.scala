@@ -699,14 +699,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(numRecords, tp1)
     this.consumers(0).assign(List(tp1).asJava)
     consumeAndVerifyRecords(consumer = this.consumers(0), numRecords = numRecords, tp = tp1, startingOffset = 0, startingKeyAndValueIndex = 0,
-      startingTimestamp = startTime, timestampType = TimestampType.LogAppendTime)
+      startingTimestamp = startTime, timestampType = TimestampType.LOG_APPEND_TIME)
 
     // Test compressed messages
     val tp2 = new TopicPartition(topicName, 1)
     sendCompressedMessages(numRecords, tp2)
     this.consumers(0).assign(List(tp2).asJava)
     consumeAndVerifyRecords(consumer = this.consumers(0), numRecords = numRecords, tp = tp2, startingOffset = 0, startingKeyAndValueIndex = 0,
-      startingTimestamp = startTime, timestampType = TimestampType.LogAppendTime)
+      startingTimestamp = startTime, timestampType = TimestampType.LOG_APPEND_TIME)
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {

@@ -288,7 +288,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
                                         startingOffset: Int,
                                         startingKeyAndValueIndex: Int = 0,
                                         startingTimestamp: Long = 0L,
-                                        timestampType: TimestampType = TimestampType.CreateTime,
+                                        timestampType: TimestampType = TimestampType.CREATE_TIME,
                                         tp: TopicPartition = tp) {
     val records = consumeRecords(consumer, numRecords)
     val now = System.currentTimeMillis()
@@ -297,7 +297,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
       val offset = startingOffset + i
       assertEquals(tp.topic(), record.topic())
       assertEquals(tp.partition(), record.partition())
-      if (timestampType == TimestampType.CreateTime) {
+      if (timestampType == TimestampType.CREATE_TIME) {
         assertEquals(timestampType, record.timestampType())
         val timestamp = startingTimestamp + i
         assertEquals(timestamp.toLong, record.timestamp())

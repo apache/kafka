@@ -26,6 +26,7 @@ import java.io._
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 
 import org.apache.kafka.common.errors.InvalidTimestampException
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
@@ -261,17 +262,17 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
   def this(compressionCodec: CompressionCodec, messages: Message*) {
     this(ByteBufferMessageSet.create(new OffsetAssigner(new AtomicLong(0), messages.size), compressionCodec,
-      None, CreateTime, messages:_*))
+      None, TimestampType.CREATE_TIME, messages:_*))
   }
 
   def this(compressionCodec: CompressionCodec, offsetCounter: AtomicLong, messages: Message*) {
     this(ByteBufferMessageSet.create(new OffsetAssigner(offsetCounter, messages.size), compressionCodec,
-      None, CreateTime, messages:_*))
+      None, TimestampType.CREATE_TIME, messages:_*))
   }
 
   def this(compressionCodec: CompressionCodec, offsetSeq: Seq[Long], messages: Message*) {
     this(ByteBufferMessageSet.create(new OffsetAssigner(offsetSeq), compressionCodec,
-      None, CreateTime, messages:_*))
+      None, TimestampType.CREATE_TIME, messages:_*))
   }
 
   def this(messages: Message*) {
@@ -456,7 +457,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         val wrapperMessageTimestamp = {
           if (messageFormatVersion == Message.MagicValue_V0)
             Some(Message.NoTimestamp)
-          else if (messageFormatVersion > Message.MagicValue_V0 && messageTimestampType == CreateTime)
+          else if (messageFormatVersion > Message.MagicValue_V0 && messageTimestampType == TimestampType.CREATE_TIME)
             Some(maxTimestamp)
           else // Log append time
             Some(now)
@@ -478,13 +479,13 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         val attributeOffset = MessageSet.LogOverhead + Message.AttributesOffset
         val timestamp = buffer.getLong(timestampOffset)
         val attributes = buffer.get(attributeOffset)
-        if (messageTimestampType == CreateTime && timestamp == maxTimestamp)
+        if (messageTimestampType == TimestampType.CREATE_TIME && timestamp == maxTimestamp)
             // We don't need to recompute crc if the timestamp is not updated.
             crcUpdateNeeded = false
-        else if (messageTimestampType == LogAppendTime) {
+        else if (messageTimestampType == TimestampType.LOG_APPEND_TIME) {
           // Set timestamp type and timestamp
           buffer.putLong(timestampOffset, now)
-          buffer.put(attributeOffset, TimestampType.setTimestampType(attributes, LogAppendTime))
+          buffer.put(attributeOffset, TimestampType.setTimestampType(attributes, TimestampType.LOG_APPEND_TIME))
         }
 
         if (crcUpdateNeeded) {
@@ -553,9 +554,9 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       validateMessageKey(message, compactedTopic)
       if (message.magic > Message.MagicValue_V0) {
         validateTimestamp(message, now, timestampType, timestampDiffMaxMs)
-        if (timestampType == LogAppendTime) {
+        if (timestampType == TimestampType.LOG_APPEND_TIME) {
           message.buffer.putLong(Message.TimestampOffset, now)
-          message.buffer.put(Message.AttributesOffset, TimestampType.setTimestampType(message.attributes, LogAppendTime))
+          message.buffer.put(Message.AttributesOffset, TimestampType.setTimestampType(message.attributes, TimestampType.LOG_APPEND_TIME))
           Utils.writeUnsignedInt(message.buffer, Message.CrcOffset, message.computeChecksum())
         }
       }
@@ -578,10 +579,10 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
                                 now: Long,
                                 timestampType: TimestampType,
                                 timestampDiffMaxMs: Long) {
-    if (timestampType == CreateTime && math.abs(message.timestamp - now) > timestampDiffMaxMs)
+    if (timestampType == TimestampType.CREATE_TIME && math.abs(message.timestamp - now) > timestampDiffMaxMs)
       throw new InvalidTimestampException(s"Timestamp ${message.timestamp} of message is out of range. " +
         s"The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}")
-    if (message.timestampType == LogAppendTime)
+    if (message.timestampType == TimestampType.LOG_APPEND_TIME)
       throw new InvalidTimestampException(s"Invalid timestamp type in message $message. Producer should not set " +
         s"timestamp type to LogAppendTime.")
   }

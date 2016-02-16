@@ -25,12 +25,13 @@ import kafka.admin.AdminUtils
 import kafka.api.FetchRequestBuilder
 import kafka.common.FailedToSendMessageException
 import kafka.consumer.SimpleConsumer
-import kafka.message.{CreateTime, Message}
+import kafka.message.Message
 import kafka.serializer.StringEncoder
 import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
 import kafka.utils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.TimestampType
 import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -187,14 +188,14 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     assertTrue(ByteBuffer.wrap("test1".getBytes).equals(messageSet(0).message.payload))
     assertTrue(ByteBuffer.wrap("test".getBytes).equals(messageSet(0).message.key))
     assertTrue(messageSet(0).message.timestamp >= startTime && messageSet(0).message.timestamp < endTime)
-    assertEquals(CreateTime, messageSet(0).message.timestampType)
+    assertEquals(TimestampType.CREATE_TIME, messageSet(0).message.timestampType)
     assertEquals(Message.MagicValue_V1, messageSet(0).message.magic)
 
     // Message 2
     assertTrue(ByteBuffer.wrap("test2".getBytes).equals(messageSet(1).message.payload))
     assertTrue(ByteBuffer.wrap("test".getBytes).equals(messageSet(1).message.key))
     assertTrue(messageSet(1).message.timestamp >= startTime && messageSet(1).message.timestamp < endTime)
-    assertEquals(CreateTime, messageSet(1).message.timestampType)
+    assertEquals(TimestampType.CREATE_TIME, messageSet(1).message.timestampType)
     assertEquals(Message.MagicValue_V1, messageSet(1).message.magic)
     producer1.close()
 
@@ -277,7 +278,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       assertTrue(ByteBuffer.wrap("test1".getBytes).equals(message.payload))
       assertTrue(ByteBuffer.wrap("test".getBytes).equals(message.key))
       assertTrue(message.timestamp >= startTime && message.timestamp < endTime)
-      assertEquals(CreateTime, message.timestampType)
+      assertEquals(TimestampType.CREATE_TIME, message.timestampType)
       assertEquals(Message.MagicValue_V1, message.magic)
       assertFalse("Message set should have another message", messageSet1.hasNext)
     } catch {
