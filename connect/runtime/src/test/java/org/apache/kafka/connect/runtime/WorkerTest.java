@@ -449,15 +449,6 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    @Test
-    public void blah() {
-        try {
-            throw new Exception();
-        } catch (Exception e) {
-            System.out.println(e.getStackTrace()[0].toString());
-        }
-    }
-
     private void expectStartStorage() {
         offsetBackingStore.configure(EasyMock.anyObject(Map.class));
         EasyMock.expectLastCall();
