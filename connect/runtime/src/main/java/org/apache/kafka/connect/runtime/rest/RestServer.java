@@ -50,6 +50,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +66,6 @@ public class RestServer {
     private static final ObjectMapper JSON_SERDE = new ObjectMapper();
 
     private final WorkerConfig config;
-    private Herder herder;
     private Server jettyServer;
 
     /**
@@ -89,8 +89,6 @@ public class RestServer {
 
     public void start(Herder herder) {
         log.info("Starting REST server");
-
-        this.herder = herder;
 
         ResourceConfig resourceConfig = new ResourceConfig();
         resourceConfig.register(new JacksonJsonProvider());
@@ -151,7 +149,7 @@ public class RestServer {
      * Get the URL to advertise to other workers and clients. This uses the default connector from the embedded Jetty
      * server, unless overrides for advertised hostname and/or port are provided via configs.
      */
-    public String advertisedUrl() {
+    public URI advertisedUrl() {
         UriBuilder builder = UriBuilder.fromUri(jettyServer.getURI());
         String advertisedHostname = config.getString(WorkerConfig.REST_ADVERTISED_HOST_NAME_CONFIG);
         if (advertisedHostname != null && !advertisedHostname.isEmpty())
@@ -161,9 +159,8 @@ public class RestServer {
             builder.port(advertisedPort);
         else
             builder.port(config.getInt(WorkerConfig.REST_PORT_CONFIG));
-        return builder.build().toString();
+        return builder.build();
     }
-
 
     /**
      * @param url               HTTP connection will be established with this url.

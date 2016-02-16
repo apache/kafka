@@ -23,9 +23,11 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -98,8 +100,7 @@ public class ConnectorsResource {
     public ConnectorInfo getConnector(final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<ConnectorInfo> cb = new FutureCallback<>();
         herder.connectorInfo(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector, "GET", null, new TypeReference<ConnectorInfo>() {
-        });
+        return completeOrForwardRequest(cb, "/connectors/" + connector, "GET", null);
     }
 
     @GET
@@ -107,8 +108,15 @@ public class ConnectorsResource {
     public Map<String, String> getConnectorConfig(final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<Map<String, String>> cb = new FutureCallback<>();
         herder.connectorConfig(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", null, new TypeReference<Map<String, String>>() {
-        });
+        return completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", null);
+    }
+
+    @GET
+    @Path("/{connector}/status")
+    public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") String connector) throws Throwable {
+        FutureCallback<ConnectorStateInfo> cb = new FutureCallback<>();
+        herder.connectorStatus(connector, cb);
+        return completeOrForwardRequest(cb, "/connectors/" + connector + "/status", "GET", null);
     }
 
     @PUT
@@ -143,6 +151,15 @@ public class ConnectorsResource {
         FutureCallback<Void> cb = new FutureCallback<>();
         herder.putTaskConfigs(connector, taskConfigs, cb);
         completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "POST", taskConfigs);
+    }
+
+    @GET
+    @Path("/{connector}/tasks/{task}/status")
+    public ConnectorStateInfo.TaskState getTaskStatus(@PathParam("connector") String connector,
+                                                      @PathParam("task") Integer task) throws Throwable {
+        FutureCallback<ConnectorStateInfo.TaskState> cb = new FutureCallback<>();
+        herder.taskStatus(new ConnectorTaskId(connector, task), cb);
+        return completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/status", "GET", null);
     }
 
     @DELETE

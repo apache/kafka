@@ -99,8 +99,11 @@ public class KafkaBasedLog<K, V> {
      * @param consumedCallback callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
      * @param time Time interface
      */
-    public KafkaBasedLog(String topic, Map<String, Object> producerConfigs, Map<String, Object> consumerConfigs,
-                         Callback<ConsumerRecord<K, V>> consumedCallback, Time time) {
+    public KafkaBasedLog(String topic,
+                         Map<String, Object> producerConfigs,
+                         Map<String, Object> consumerConfigs,
+                         Callback<ConsumerRecord<K, V>> consumedCallback,
+                         Time time) {
         this.topic = topic;
         this.producerConfigs = producerConfigs;
         this.consumerConfigs = consumerConfigs;
@@ -195,6 +198,13 @@ public class KafkaBasedLog<K, V> {
             readLogEndOffsetCallbacks.add(callback);
         }
         consumer.wakeup();
+    }
+
+    /**
+     * Flush the underlying producer to ensure that all pending writes have been sent.
+     */
+    public void flush() {
+        producer.flush();
     }
 
     /**
