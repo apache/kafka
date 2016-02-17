@@ -74,7 +74,7 @@ public class ProduceResponse extends AbstractRequestResponse {
      * @param throttleTime Time in milliseconds the response was throttled
      */
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTime) {
-        this(responses, throttleTime, (int) ProtoUtils.latestVersion(ApiKeys.PRODUCE.id));
+        this(responses, throttleTime, ProtoUtils.latestVersion(ApiKeys.PRODUCE.id));
     }
 
     /**

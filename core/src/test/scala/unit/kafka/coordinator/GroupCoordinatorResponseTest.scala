@@ -24,6 +24,7 @@ import kafka.common.{OffsetAndMetadata, TopicAndPartition}
 import kafka.message.{Message, MessageSet}
 import kafka.server.{ReplicaManager, KafkaConfig}
 import kafka.utils._
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{OffsetCommitRequest, JoinGroupRequest}
@@ -88,7 +89,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     EasyMock.expect(zkUtils.getPartitionAssignmentForTopics(Seq(GroupCoordinator.GroupMetadataTopicName))).andReturn(ret)
     EasyMock.replay(zkUtils)
 
-    groupCoordinator = GroupCoordinator.create(KafkaConfig.fromProps(props), zkUtils, replicaManager)
+    groupCoordinator = GroupCoordinator.create(KafkaConfig.fromProps(props), zkUtils, replicaManager, new SystemTime)
     groupCoordinator.startup()
 
     // add the partition into the owned partition list

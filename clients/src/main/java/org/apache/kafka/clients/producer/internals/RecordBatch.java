@@ -35,7 +35,6 @@ public final class RecordBatch {
 
     public int recordCount = 0;
     public int maxRecordSize = 0;
-    private Long offsetCounter = 0L;
     public volatile int attempts = 0;
     public final long createdMs;
     public long drainedMs;
@@ -45,6 +44,7 @@ public final class RecordBatch {
     public final ProduceRequestResult produceFuture;
     public long lastAppendTime;
     private final List<Thunk> thunks;
+    private long offsetCounter = 0L;
     private boolean retry;
 
     public RecordBatch(TopicPartition tp, MemoryRecords records, long now) {

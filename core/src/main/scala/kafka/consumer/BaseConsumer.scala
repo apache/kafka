@@ -71,8 +71,8 @@ class NewShinyConsumer(topic: Option[String], whitelist: Option[String], consume
     BaseConsumerRecord(record.topic,
                        record.partition,
                        record.offset,
-                       record.timestamp(),
-                       TimestampType.forName(record.timestampType().name),
+                       record.timestamp,
+                       record.timestampType,
                        record.key,
                        record.value)
   }

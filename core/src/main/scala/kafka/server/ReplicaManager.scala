@@ -573,7 +573,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def getMessageFormatVersion(topicAndPartition: TopicAndPartition) = {
+  def getMessageFormatVersion(topicAndPartition: TopicAndPartition): Option[Byte] = {
     getReplica(topicAndPartition.topic, topicAndPartition.partition).flatMap(_.log.map(_.config.messageFormatVersion))
   }
 
