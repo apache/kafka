@@ -279,6 +279,12 @@ public class SmokeTestDriver extends SmokeTestUtil {
         System.out.println("recordGenerated=" + recordsGenerated);
         System.out.println("recordProcessed=" + recordsProcessed);
 
+        if (recordsProcessed > recordsGenerated) {
+            System.out.println("PROCESSED-MORE-THAN-GENERATED");
+        } else if (recordsProcessed < recordsGenerated) {
+            System.out.println("PROCESSED-LESS-THAN-GENERATED");
+        }
+
         boolean success;
         success = allData.equals(received);
 

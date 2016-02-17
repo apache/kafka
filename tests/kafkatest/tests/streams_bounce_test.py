@@ -51,8 +51,8 @@ class StreamsBounceTest(KafkaTest):
 
         time.sleep(15);
 
+        # enable this after we add change log partition replicas
         #self.kafka.signal_leader("data")
-        self.processor1.bounce()
 
         time.sleep(15);
 
@@ -64,4 +64,5 @@ class StreamsBounceTest(KafkaTest):
         self.processor1.stop()
 
         node = self.driver.node
+        node.account.ssh("grep PROCESSED-MORE-THAN-GENERATED %s" % self.driver.STDOUT_FILE, allow_fail=False)
         node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.driver.STDOUT_FILE, allow_fail=False)
