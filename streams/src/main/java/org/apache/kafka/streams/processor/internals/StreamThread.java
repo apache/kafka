@@ -138,14 +138,15 @@ public class StreamThread extends Thread {
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             try {
                 commitAll();
-                // TODO: right now upon partition revocation, we always remove all the tasks;
-                // this behavior can be optimized to only remove affected tasks in the future
-                removeStreamTasks();
-                removeStandbyTasks();
                 lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
+            } finally {
+                // TODO: right now upon partition revocation, we always remove all the tasks;
+                // this behavior can be optimized to only remove affected tasks in the future
+                removeStreamTasks();
+                removeStandbyTasks();
             }
         }
     };
@@ -301,16 +302,8 @@ public class StreamThread extends Thread {
             log.error("Failed to close restore consumer in thread [" + this.getName() + "]: ", e);
         }
 
-        try {
-            removeStreamTasks();
-        } catch (Throwable e) {
-            // already logged in removeStreamTasks()
-        }
-        try {
-            removeStandbyTasks();
-        } catch (Throwable e) {
-            // already logged in removeStandbyTasks()
-        }
+        removeStreamTasks();
+        removeStandbyTasks();
 
         log.info("Stream thread shutdown complete [" + this.getName() + "]");
     }
@@ -632,15 +625,19 @@ public class StreamThread extends Thread {
     }
 
     private void removeStreamTasks() {
-        for (StreamTask task : activeTasks.values()) {
-            closeOne(task);
+        try {
+            for (StreamTask task : activeTasks.values()) {
+                closeOne(task);
+            }
+            prevTasks.clear();
+            prevTasks.addAll(activeTasks.keySet());
+
+            activeTasks.clear();
+            activeTasksByPartition.clear();
+
+        } catch (Exception e) {
+            log.error("Failed to remove stream tasks in thread [" + this.getName() + "]: ", e);
         }
-
-        prevTasks.clear();
-        prevTasks.addAll(activeTasks.keySet());
-
-        activeTasks.clear();
-        activeTasksByPartition.clear();
     }
 
     private void closeOne(AbstractTask task) {
@@ -705,15 +702,20 @@ public class StreamThread extends Thread {
 
 
     private void removeStandbyTasks() {
-        for (StandbyTask task : standbyTasks.values()) {
-            closeOne(task);
-        }
-        // un-assign the change log partitions
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        try {
+            for (StandbyTask task : standbyTasks.values()) {
+                closeOne(task);
+            }
+            standbyTasks.clear();
+            standbyTasksByPartition.clear();
+            standbyRecords.clear();
 
-        standbyTasks.clear();
-        standbyTasksByPartition.clear();
-        standbyRecords.clear();
+            // un-assign the change log partitions
+            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+
+        } catch (Exception e) {
+            log.error("Failed to remove standby tasks in thread [" + this.getName() + "]: ", e);
+        }
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups) {
