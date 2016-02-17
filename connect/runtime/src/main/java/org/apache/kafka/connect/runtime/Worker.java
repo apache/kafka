@@ -138,21 +138,11 @@ public class Worker {
             conn.stop();
         }
 
-        for (Map.Entry<ConnectorTaskId, WorkerTask> entry : tasks.entrySet()) {
-            WorkerTask task = entry.getValue();
-            log.warn("Shutting down task {} uncleanly; herder should have shut down "
-                    + "tasks before the Worker is stopped.", task);
-            task.stop();
-        }
-
-        for (Map.Entry<ConnectorTaskId, WorkerTask> entry : tasks.entrySet()) {
-            WorkerTask task = entry.getValue();
-            log.debug("Waiting for task {} to finish shutting down", task);
-            if (!task.awaitStop(Math.max(limit - time.milliseconds(), 0))) {
-                log.error("Graceful shutdown of task {} failed.", task);
-                task.cancel();
-            }
-        }
+        Collection<ConnectorTaskId> taskIds = tasks.keySet();
+        log.warn("Shutting down tasks {} uncleanly; herder should have shut down "
+                + "tasks before the Worker is stopped.", taskIds);
+        stopTasks(taskIds);
+        awaitStopTasks(taskIds);
 
         long timeoutMs = limit - time.milliseconds();
         sourceTaskOffsetCommitter.close(timeoutMs);
@@ -160,10 +150,6 @@ public class Worker {
         offsetBackingStore.stop();
 
         log.info("Worker stopped");
-    }
-
-    public WorkerConfig config() {
-        return config;
     }
 
     /**
@@ -357,18 +343,39 @@ public class Worker {
         }
     }
 
-    public void stopTask(ConnectorTaskId id) {
-        log.info("Stopping task {}", id);
+    public void stopTasks(Collection<ConnectorTaskId> ids) {
+        for (ConnectorTaskId id : ids)
+            stopTask(getTask(id));
+    }
 
-        WorkerTask task = getTask(id);
-        if (task instanceof WorkerSourceTask)
-            sourceTaskOffsetCommitter.remove(id);
-        task.stop();
-        if (!task.awaitStop(config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG))) {
-            log.error("Graceful stop of task {} failed.", task);
+    public void awaitStopTasks(Collection<ConnectorTaskId> ids) {
+        long now = time.milliseconds();
+        long deadline = now + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
+        for (ConnectorTaskId id : ids) {
+            long remaining = Math.max(0, deadline - time.milliseconds());
+            awaitStopTask(getTask(id), remaining);
+        }
+    }
+
+    private void awaitStopTask(WorkerTask task, long timeout) {
+        if (!task.awaitStop(timeout)) {
+            log.error("Graceful stop of task {} failed.", task.id());
             task.cancel();
         }
-        tasks.remove(id);
+        tasks.remove(task.id());
+    }
+
+    private void stopTask(WorkerTask task) {
+        log.info("Stopping task {}", task.id());
+        if (task instanceof WorkerSourceTask)
+            sourceTaskOffsetCommitter.remove(task.id());
+        task.stop();
+    }
+
+    public void stopAndAwaitTask(ConnectorTaskId id) {
+        WorkerTask task = getTask(id);
+        stopTask(task);
+        awaitStopTask(task, config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG));
     }
 
     /**

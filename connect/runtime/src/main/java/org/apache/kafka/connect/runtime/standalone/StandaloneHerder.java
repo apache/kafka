@@ -253,7 +253,7 @@ public class StandaloneHerder extends AbstractHerder {
         for (int i = 0; i < state.taskConfigs.size(); i++) {
             ConnectorTaskId taskId = new ConnectorTaskId(connName, i);
             try {
-                worker.stopTask(taskId);
+                worker.stopAndAwaitTask(taskId);
             } catch (ConnectException e) {
                 log.error("Failed to stop task {}: ", taskId, e);
                 // Swallow this so we can continue stopping the rest of the tasks

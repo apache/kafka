@@ -50,6 +50,10 @@ abstract class WorkerTask implements Runnable {
         this.lifecycleListener = lifecycleListener;
     }
 
+    public ConnectorTaskId id() {
+        return id;
+    }
+
     /**
      * Initialize the task for execution.
      * @param props initial configuration

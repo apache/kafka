@@ -124,6 +124,7 @@ public class DistributedHerderTest {
             Collections.singletonMap(CONN1, CONN1_CONFIG), TASK_CONFIGS_MAP, Collections.<String>emptySet());
     private static final ClusterConfigState SNAPSHOT_UPDATED_CONN1_CONFIG = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG_UPDATED), TASK_CONFIGS_MAP, Collections.<String>emptySet());
+
     private static final String WORKER_ID = "localhost:8083";
 
     @Mock private KafkaConfigStorage configStorage;
@@ -175,12 +176,46 @@ public class DistributedHerderTest {
     }
 
     @Test
+    public void testRebalance() {
+        // Join group and get assignment
+        EasyMock.expect(member.memberId()).andStubReturn("member");
+        expectRebalance(1, Arrays.asList(CONN1), Arrays.asList(TASK1));
+        expectPostRebalanceCatchup(SNAPSHOT);
+        worker.startConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject(),
+                EasyMock.eq(herder));
+        PowerMock.expectLastCall();
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        worker.startTask(EasyMock.eq(TASK1), EasyMock.<TaskConfig>anyObject(), EasyMock.eq(herder));
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        expectRebalance(Arrays.asList(CONN1), Arrays.asList(TASK1), ConnectProtocol.Assignment.NO_ERROR,
+                1, Arrays.asList(CONN1), Arrays.<ConnectorTaskId>asList());
+
+        // and the new assignment started
+        worker.startConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject(),
+                EasyMock.eq(herder));
+        PowerMock.expectLastCall();
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.tick();
+        herder.tick();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testHaltCleansUpWorker() {
         EasyMock.expect(worker.connectorNames()).andReturn(Collections.singleton(CONN1));
         worker.stopConnector(CONN1);
         PowerMock.expectLastCall();
         EasyMock.expect(worker.taskIds()).andReturn(Collections.singleton(TASK1));
-        worker.stopTask(TASK1);
+        worker.stopAndAwaitTask(TASK1);
         PowerMock.expectLastCall();
         member.stop();
         PowerMock.expectLastCall();
@@ -577,6 +612,20 @@ public class DistributedHerderTest {
                 return null;
             }
         });
+
+        if (revokedConnectors != null) {
+            for (String connector : revokedConnectors) {
+                worker.stopConnector(connector);
+                PowerMock.expectLastCall();
+            }
+        }
+
+        if (revokedTasks != null && !revokedTasks.isEmpty()) {
+            worker.stopTasks(revokedTasks);
+            PowerMock.expectLastCall();
+            worker.awaitStopTasks(revokedTasks);
+            PowerMock.expectLastCall();
+        }
 
         if (revokedConnectors != null) {
             statusBackingStore.flush();

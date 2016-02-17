@@ -103,13 +103,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public void onDeletion(String connector) {
-        for (TaskStatus status : statusBackingStore.getAll(connector)) {
-            statusBackingStore.put(new TaskStatus(status.id(), TaskStatus.State.DESTROYED,
-                    workerId, generation()));
-        }
-
-        ConnectorStatus status = new ConnectorStatus(connector, ConnectorStatus.State.DESTROYED, workerId, generation());
-        statusBackingStore.put(status);
+        for (TaskStatus status : statusBackingStore.getAll(connector))
+            statusBackingStore.put(new TaskStatus(status.id(), TaskStatus.State.DESTROYED, workerId, generation()));
+        statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.DESTROYED, workerId, generation()));
     }
 
     @Override

@@ -312,7 +312,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
             for (ConnectorTaskId taskId : new HashSet<>(worker.taskIds())) {
                 try {
-                    worker.stopTask(taskId);
+                    worker.stopAndAwaitTask(taskId);
                 } catch (Throwable t) {
                     log.error("Failed to shut down task " + taskId, t);
                 }
@@ -888,8 +888,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         ClusterConfigState snapshot = configStorage.snapshot();
         Set<String> connectors = snapshot.connectors();
         for (String connector : statusBackingStore.connectors()) {
-            if (!connectors.contains(connector))
+            if (!connectors.contains(connector)) {
+                log.debug("Cleaning status information for connector {}", connector);
                 onDeletion(connector);
+            }
         }
     }
 
@@ -943,8 +945,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     // stopping them then state could continue to be reused when the task remains on this worker. For example,
                     // this would avoid having to close a connection and then reopen it when the task is assigned back to this
                     // worker again.
-                    for (ConnectorTaskId taskId : tasks)
-                        worker.stopTask(taskId);
+                    if (!tasks.isEmpty()) {
+                        worker.stopTasks(tasks); // trigger stop() for all tasks
+                        worker.awaitStopTasks(tasks); // await stopping tasks
+                    }
 
                     // Ensure that all status updates have been pushed to the storage system before rebalancing.
                     // Otherwise, we may inadvertently overwrite the state with a stale value after the rebalance

@@ -339,6 +339,7 @@ public class WorkerTest extends ThreadedTest {
         // Create
         TestSourceTask task = PowerMock.createMock(TestSourceTask.class);
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
+        EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
         PowerMock.mockStaticPartial(Worker.class, "instantiateTask");
         PowerMock.expectPrivate(Worker.class, "instantiateTask", new Object[]{TestSourceTask.class}).andReturn(task);
@@ -378,7 +379,7 @@ public class WorkerTest extends ThreadedTest {
         assertEquals(Collections.emptySet(), worker.taskIds());
         worker.startTask(TASK_ID, new TaskConfig(origProps), taskStatusListener);
         assertEquals(new HashSet<>(Arrays.asList(TASK_ID)), worker.taskIds());
-        worker.stopTask(TASK_ID);
+        worker.stopAndAwaitTask(TASK_ID);
         assertEquals(Collections.emptySet(), worker.taskIds());
         // Nothing should be left, so this should effectively be a nop
         worker.stop();
@@ -395,7 +396,7 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), config, offsetBackingStore);
         worker.start();
 
-        worker.stopTask(TASK_ID);
+        worker.stopAndAwaitTask(TASK_ID);
     }
 
     @Test
@@ -405,6 +406,7 @@ public class WorkerTest extends ThreadedTest {
         // Create
         TestSourceTask task = PowerMock.createMock(TestSourceTask.class);
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
+        EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
         PowerMock.mockStaticPartial(Worker.class, "instantiateTask");
         PowerMock.expectPrivate(Worker.class, "instantiateTask", new Object[]{TestSourceTask.class}).andReturn(task);
