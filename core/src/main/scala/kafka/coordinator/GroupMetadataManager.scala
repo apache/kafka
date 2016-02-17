@@ -626,9 +626,11 @@ class GroupMetadataManager(val brokerId: Int,
       config.offsetsTopicNumPartitions
   }
 
-  private def getMessageFormatVersion(partition: Int) = {
+  private def getMessageFormatVersion(partition: Int): Byte = {
     val groupMetadataTopicAndPartition = new TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, partition)
-    replicaManager.getMessageFormatVersion(groupMetadataTopicAndPartition).get
+    replicaManager.getMessageFormatVersion(groupMetadataTopicAndPartition).getOrElse {
+      throw new IllegalArgumentException(s"Message format version for partition $groupMetadataTopicPartitionCount not found")
+    }
   }
 
   /**

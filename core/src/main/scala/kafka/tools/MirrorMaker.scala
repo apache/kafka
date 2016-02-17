@@ -550,8 +550,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       BaseConsumerRecord(record.topic,
                          record.partition,
                          record.offset,
-                         record.timestamp(),
-                         record.timestampType(),
+                         record.timestamp,
+                         record.timestampType,
                          record.key,
                          record.value)
     }
