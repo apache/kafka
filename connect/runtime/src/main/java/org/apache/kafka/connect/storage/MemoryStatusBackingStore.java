@@ -16,6 +16,7 @@
  **/
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.ConnectorStatus;
 import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -54,7 +55,10 @@ public class MemoryStatusBackingStore implements StatusBackingStore {
 
     @Override
     public synchronized void put(ConnectorStatus status) {
-        connectors.put(status.id(), status);
+        if (status.state() == ConnectorStatus.State.DESTROYED)
+            connectors.remove(status.id());
+        else
+            connectors.put(status.id(), status);
     }
 
     @Override
@@ -64,7 +68,10 @@ public class MemoryStatusBackingStore implements StatusBackingStore {
 
     @Override
     public synchronized void put(TaskStatus status) {
-        tasks.put(status.id().connector(), status.id().task(), status);
+        if (status.state() == TaskStatus.State.DESTROYED)
+            tasks.remove(status.id().connector(), status.id().task());
+        else
+            tasks.put(status.id().connector(), status.id().task(), status);
     }
 
     @Override
@@ -84,7 +91,7 @@ public class MemoryStatusBackingStore implements StatusBackingStore {
 
     @Override
     public synchronized Collection<TaskStatus> getAll(String connector) {
-        return new ArrayList<>(tasks.row(connector).values());
+        return new HashSet<>(tasks.row(connector).values());
     }
 
     @Override

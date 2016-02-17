@@ -184,6 +184,55 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
     }
 
     @Test
+    public void putSafeOverridesValueSetBySameWorker() {
+        final byte[] value = new byte[0];
+
+        KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
+        Converter converter = mock(Converter.class);
+        final KafkaStatusBackingStore store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
+
+        // the persisted came from the same host, but has a newer generation
+        Map<String, Object> firstStatusRead = new HashMap<>();
+        firstStatusRead.put("worker_id", WORKER_ID);
+        firstStatusRead.put("state", "RUNNING");
+        firstStatusRead.put("generation", 1L);
+
+        Map<String, Object> secondStatusRead = new HashMap<>();
+        secondStatusRead.put("worker_id", WORKER_ID);
+        secondStatusRead.put("state", "UNASSIGNED");
+        secondStatusRead.put("generation", 0L);
+
+        expect(converter.toConnectData(STATUS_TOPIC, value))
+                .andReturn(new SchemaAndValue(null, firstStatusRead))
+                .andReturn(new SchemaAndValue(null, secondStatusRead));
+
+        expect(converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class)))
+                .andStubReturn(value);
+
+        final Capture<Callback> callbackCapture = newCapture();
+        kafkaBasedLog.send(eq("status-connector-conn"), eq(value), capture(callbackCapture));
+        expectLastCall()
+                .andAnswer(new IAnswer<Void>() {
+                    @Override
+                    public Void answer() throws Throwable {
+                        callbackCapture.getValue().onCompletion(null, null);
+                        store.read(new ConsumerRecord<>(STATUS_TOPIC, 0, 1, "status-connector-conn", value));
+                        return null;
+                    }
+                });
+
+        replayAll();
+
+        store.read(new ConsumerRecord<>(STATUS_TOPIC, 0, 0, "status-connector-conn", value));
+        store.putSafe(new ConnectorStatus(CONNECTOR, ConnectorStatus.State.UNASSIGNED, WORKER_ID, 0));
+
+        ConnectorStatus status = new ConnectorStatus(CONNECTOR, ConnectorStatus.State.UNASSIGNED, WORKER_ID, 0);
+        assertEquals(status, store.get(CONNECTOR));
+
+        verifyAll();
+    }
+
+    @Test
     public void putConnectorStateShouldOverride() {
         final byte[] value = new byte[0];
         String otherWorkerId = "anotherhost:8083";
