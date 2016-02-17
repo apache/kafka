@@ -27,15 +27,16 @@ import kafka.message.Message
  * Note that the ID we initialize for each version is important.
  * We consider a version newer than another, if it has a higher ID (to avoid depending on lexicographic order)
  * 
- * Since the api protocol may change more than once within the same release, to facilitate people deploying code from
- * trunk, we introduce internal versions since 0.10.0. For example, the first time that we introduce a version change
- * in 0.10.0, we will add a config value "0.10.0-IV0" and a corresponding case object KAFKA_0_10_0-IV0. We will also
- * add a config value "0.10.0" that will be mapped to the latest internal version object, which is KAFKA_0_10_0-IV0.
- * When we change the protocol a second time while developing 0.10.0, we will add a new config value "0.10.0-IV1" and
- * a corresponding case object KAFKA_0_10_0-IV1. We will change the config value "0.10.0" to map to the latest internal
- * version object KAFKA_0_10_0-IV1. Config value of "0.10.0-IV0" is still mapped to KAFKA_0_10_0-IV0. This way, if
- * people are deploying from trunk, they can use "0.10.0-IV0" and "0.10.0-IV1" to upgrade one internal version at a
- * time. For most people who just want to use released version, they can use "0.10.0" when upgrading to 0.10.0 release.
+ * Since the api protocol may change more than once within the same release and to facilitate people deploying code from
+ * trunk, we have the concept of internal versions (first introduced during the 0.10.0 development cycle). For example,
+ * the first time we introduce a version change in a release, say 0.10.0, we will add a config value "0.10.0-IV0" and a
+ * corresponding case object KAFKA_0_10_0-IV0. We will also add a config value "0.10.0" that will be mapped to the
+ * latest internal version object, which is KAFKA_0_10_0-IV0. When we change the protocol a second time while developing
+ * 0.10.0, we will add a new config value "0.10.0-IV1" and a corresponding case object KAFKA_0_10_0-IV1. We will change
+ * the config value "0.10.0" to map to the latest internal version object KAFKA_0_10_0-IV1. The config value of
+ * "0.10.0-IV0" is still mapped to KAFKA_0_10_0-IV0. This way, if people are deploying from trunk, they can use
+ * "0.10.0-IV0" and "0.10.0-IV1" to upgrade one internal version at a time. For most people who just want to use
+ * released version, they can use "0.10.0" when upgrading to the 0.10.0 release.
  */
 object ApiVersion {
   // This implicit is necessary due to: https://issues.scala-lang.org/browse/SI-8541

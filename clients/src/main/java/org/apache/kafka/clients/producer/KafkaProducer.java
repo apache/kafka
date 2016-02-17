@@ -362,9 +362,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to, the offset
      * it was assigned and the timestamp of the record. If
      * {@link org.apache.kafka.common.record.TimestampType#CREATE_TIME CreateTime} is used by the topic, the timestamp
-     * will be the user provided timestamp or the record send time if user did not specify a timestamp for the record.
-     * If {@link org.apache.kafka.common.record.TimestampType#LOG_APPEND_TIME LogAppendTime} is used for the topic, the
-     * timestamp will be the Kafka broker local time when the message is appended.
+     * will be the user provided timestamp or the record send time if the user did not specify a timestamp for the
+     * record. If {@link org.apache.kafka.common.record.TimestampType#LOG_APPEND_TIME LogAppendTime} is used for the
+     * topic, the timestamp will be the Kafka broker local time when the message is appended.
      * <p>
      * Since the send call is asynchronous it returns a {@link java.util.concurrent.Future Future} for the
      * {@link RecordMetadata} that will be assigned to this record. Invoking {@link java.util.concurrent.Future#get()
