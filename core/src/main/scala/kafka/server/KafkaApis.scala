@@ -39,7 +39,7 @@ import org.apache.kafka.common.protocol.{ProtoUtils, ApiKeys, Errors, SecurityPr
 import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse,
 DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse,
 LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse,
-StopReplicaRequest, StopReplicaResponse, ProduceRequest, ProduceResponse}
+StopReplicaRequest, StopReplicaResponse, ProduceRequest, ProduceResponse, UpdateMetadataRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Node}
@@ -175,14 +175,19 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleUpdateMetadataRequest(request: RequestChannel.Request) {
-    val updateMetadataRequest = request.requestObj.asInstanceOf[UpdateMetadataRequest]
+    val correlationId = request.header.correlationId
+    val updateMetadataRequest = request.body.asInstanceOf[UpdateMetadataRequest]
 
-    authorizeClusterAction(request)
+    val updateMetadataResponse =
+      if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+        replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest, metadataCache)
+        new UpdateMetadataResponse(Errors.NONE.code)
+      } else {
+        new UpdateMetadataResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.code)
+      }
 
-    replicaManager.maybeUpdateMetadataCache(updateMetadataRequest, metadataCache)
-
-    val updateMetadataResponse = new UpdateMetadataResponse(updateMetadataRequest.correlationId)
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, updateMetadataResponse)))
+    val responseHeader = new ResponseHeader(correlationId)
+    requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, responseHeader, updateMetadataResponse)))
   }
 
   def handleControlledShutdownRequest(request: RequestChannel.Request) {
