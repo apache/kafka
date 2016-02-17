@@ -178,11 +178,12 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       if (useNewConsumer) {
         if (options.has(blacklistOpt)) {
           println("blacklist can not be used when using new consumer in mirror maker. Use whitelist instead.")
+          System.exit(1)
         }
         if (!options.has(whitelistOpt)) {
           println("whitelist must be specified when using new consumer in mirror maker.")
+          System.exit(1)
         }
-        System.exit(1)
       } else {
         if (List(whitelistOpt, blacklistOpt).count(options.has) != 1) {
           println("Exactly one of whitelist or blacklist is required.")
