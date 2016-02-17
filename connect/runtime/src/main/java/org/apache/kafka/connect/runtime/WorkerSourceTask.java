@@ -290,6 +290,8 @@ class WorkerSourceTask extends WorkerTask {
                 finishSuccessfulFlush();
                 log.debug("Finished {} offset commitOffsets successfully in {} ms",
                         this, time.milliseconds() - started);
+
+                commitSourceTask();
                 return true;
             }
         }
@@ -334,7 +336,20 @@ class WorkerSourceTask extends WorkerTask {
         finishSuccessfulFlush();
         log.info("Finished {} commitOffsets successfully in {} ms",
                 this, time.milliseconds() - started);
+
+        commitSourceTask();
+
         return true;
+    }
+
+    private void commitSourceTask() {
+        try {
+            this.task.commit();
+        } catch (InterruptedException ex) {
+            log.warn("Commit interrupted", ex);
+        } catch (Throwable ex) {
+            log.error("Exception thrown while calling task.commit()", ex);
+        }
     }
 
     private synchronized void finishFailedFlush() {
