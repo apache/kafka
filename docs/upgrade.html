@@ -29,6 +29,8 @@ are introduced, it is important to upgrade your Kafka clusters before upgrading 
     <li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
     <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.10.0.0. </li>
     <li> Restart the brokers one by one for the new protocol version to take effect. </li>
+    <li> Set message.format.version=0.10.0 for topic "__consumer_offsets" using bin/kafka-topic.sh.
+         This configures internal offset topic to use message format v1. This is optional but recommended. </li>
 </ol>
 
 <p><b>Note:</b> If you are willing to accept downtime, you can simply take all the brokers down, update the code and start all of them. They will start with the new protocol by default.
