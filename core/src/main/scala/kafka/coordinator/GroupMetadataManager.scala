@@ -30,6 +30,7 @@ import org.apache.kafka.common.protocol.types.Type.BYTES
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.Time
 
 import kafka.utils._
 import kafka.common._
@@ -48,14 +49,14 @@ import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.core.Gauge
 
-
 case class DelayedStore(messageSet: Map[TopicPartition, MessageSet],
                         callback: Map[TopicPartition, PartitionResponse] => Unit)
 
 class GroupMetadataManager(val brokerId: Int,
                            val config: OffsetConfig,
                            replicaManager: ReplicaManager,
-                           zkUtils: ZkUtils) extends Logging with KafkaMetricsGroup {
+                           zkUtils: ZkUtils,
+                           time: Time) extends Logging with KafkaMetricsGroup {
 
   /* offsets cache */
   private val offsetsCache = new Pool[GroupTopicPartition, OffsetAndMetadata]
@@ -143,7 +144,7 @@ class GroupMetadataManager(val brokerId: Int,
       // retry removing this group.
       val groupPartition = partitionFor(group.groupId)
       val tombstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(group.groupId),
-        timestamp = SystemTime.milliseconds, magicValue = getMessageFormatVersion(groupPartition))
+        timestamp = time.milliseconds(), magicValue = getMessageFormatVersion(groupPartition))
 
       val partitionOpt = replicaManager.getPartition(GroupCoordinator.GroupMetadataTopicName, groupPartition)
       partitionOpt.foreach { partition =>
@@ -171,7 +172,7 @@ class GroupMetadataManager(val brokerId: Int,
     val message = new Message(
       key = GroupMetadataManager.groupMetadataKey(group.groupId),
       bytes = GroupMetadataManager.groupMetadataValue(group, groupAssignment),
-      timestamp = SystemTime.milliseconds,
+      timestamp = time.milliseconds(),
       magicValue = getMessageFormatVersion(partitionFor(group.groupId))
     )
 
@@ -255,7 +256,7 @@ class GroupMetadataManager(val brokerId: Int,
       new Message(
         key = GroupMetadataManager.offsetCommitKey(groupId, topicAndPartition.topic, topicAndPartition.partition),
         bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata),
-        timestamp = SystemTime.milliseconds,
+        timestamp = time.milliseconds(),
         magicValue = getMessageFormatVersion(partitionFor(groupId))
       )
     }.toSeq
@@ -363,7 +364,7 @@ class GroupMetadataManager(val brokerId: Int,
         }
       }
 
-      val startMs = SystemTime.milliseconds
+      val startMs = time.milliseconds()
       try {
         replicaManager.logManager.getLog(topicPartition) match {
           case Some(log) =>
@@ -442,7 +443,7 @@ class GroupMetadataManager(val brokerId: Int,
 
             if (!shuttingDown.get())
               info("Finished loading offsets from %s in %d milliseconds."
-                .format(topicPartition, SystemTime.milliseconds - startMs))
+                .format(topicPartition, time.milliseconds() - startMs))
           case None =>
             warn("No log found for " + topicPartition)
         }
@@ -537,7 +538,7 @@ class GroupMetadataManager(val brokerId: Int,
 
   private def deleteExpiredOffsets() {
     debug("Collecting expired offsets.")
-    val startMs = SystemTime.milliseconds
+    val startMs = time.milliseconds()
 
     val numExpiredOffsetsRemoved = inWriteLock(offsetExpireLock) {
       val expiredOffsets = offsetsCache.filter { case (groupTopicPartition, offsetAndMetadata) =>
@@ -556,7 +557,7 @@ class GroupMetadataManager(val brokerId: Int,
         val commitKey = GroupMetadataManager.offsetCommitKey(groupTopicAndPartition.group,
           groupTopicAndPartition.topicPartition.topic, groupTopicAndPartition.topicPartition.partition)
 
-        (offsetsPartition, new Message(bytes = null, key = commitKey, timestamp = SystemTime.milliseconds,
+        (offsetsPartition, new Message(bytes = null, key = commitKey, timestamp = time.milliseconds(),
           magicValue = getMessageFormatVersion(offsetsPartition)))
       }.groupBy { case (partition, tombstone) => partition }
 
@@ -586,7 +587,7 @@ class GroupMetadataManager(val brokerId: Int,
       }.sum
     }
 
-    info("Removed %d expired offsets in %d milliseconds.".format(numExpiredOffsetsRemoved, SystemTime.milliseconds - startMs))
+    info("Removed %d expired offsets in %d milliseconds.".format(numExpiredOffsetsRemoved, time.milliseconds() - startMs))
   }
 
   private def getHighWatermark(partitionId: Int): Long = {
