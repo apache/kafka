@@ -13,6 +13,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.BrokerEndPoint;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -353,9 +354,9 @@ public class RequestResponseTest {
         partitionStates.put(new TopicPartition("topic20", 1),
                 new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
-        Set<LeaderAndIsrRequest.EndPoint> leaders = new HashSet<>(Arrays.asList(
-                new LeaderAndIsrRequest.EndPoint(0, "test0", 1223),
-                new LeaderAndIsrRequest.EndPoint(1, "test1", 1223)
+        Set<BrokerEndPoint> leaders = new HashSet<>(Arrays.asList(
+                new BrokerEndPoint(0, "test0", 1223),
+                new BrokerEndPoint(1, "test1", 1223)
         ));
 
         return new LeaderAndIsrRequest(1, 10, partitionStates, leaders);
@@ -379,9 +380,9 @@ public class RequestResponseTest {
                 new UpdateMetadataRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
         if (version == 0) {
-            Set<UpdateMetadataRequest.BrokerEndPoint> liveBrokers = new HashSet<>(Arrays.asList(
-                    new UpdateMetadataRequest.BrokerEndPoint(0, "host1", 1223),
-                    new UpdateMetadataRequest.BrokerEndPoint(1, "host2", 1234)
+            Set<BrokerEndPoint> liveBrokers = new HashSet<>(Arrays.asList(
+                    new BrokerEndPoint(0, "host1", 1223),
+                    new BrokerEndPoint(1, "host2", 1234)
             ));
 
             return new UpdateMetadataRequest(1, 10, liveBrokers, partitionStates);
