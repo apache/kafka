@@ -273,6 +273,8 @@ public class StreamThread extends Thread {
     private void shutdown() {
         log.info("Shutting down stream thread [" + this.getName() + "]");
 
+        // Exceptions should not prevent this call from going through all shutdown steps
+
         try {
             commitAll();
         } catch (Throwable e) {
@@ -299,12 +301,15 @@ public class StreamThread extends Thread {
             log.error("Failed to close restore consumer in thread [" + this.getName() + "]: ", e);
         }
 
-        // Exceptions should not prevent this call from going through all shutdown steps
         try {
             removeStreamTasks();
+        } catch (Throwable e) {
+            // already logged in removeStreamTasks()
+        }
+        try {
             removeStandbyTasks();
         } catch (Throwable e) {
-            // already logged in removeStreamTasks() and removeStandbyTasks()
+            // already logged in removeStandbyTasks()
         }
 
         log.info("Stream thread shutdown complete [" + this.getName() + "]");
@@ -644,7 +649,6 @@ public class StreamThread extends Thread {
             task.close();
         } catch (StreamsException e) {
             log.error("Failed to close a " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
-            throw e;
         }
         sensors.taskDestructionSensor.record();
     }
