@@ -168,6 +168,10 @@ public class ConsumerConfig extends AbstractConfig {
                                                         + "Implementing the <code>ConsumerInterceptor</code> interface allows you to intercept (and possibly mutate) records "
                                                         + "received by the consumer. By default, there are no interceptors.";
 
+    /** <code>max.poll.records</code> */
+    public static final String MAX_POLL_RECORDS_CONFIG = "max.poll.records";
+    public static final String MAX_POLL_RECORDS_DOC = "The maximum number of records to return in a single call to poll(). The default (-1) sets no limit.";
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -306,6 +310,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         null,
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
+                                .define(MAX_POLL_RECORDS_CONFIG,
+                                        Type.INT,
+                                        -1,
+                                        Importance.MEDIUM,
+                                        MAX_POLL_RECORDS_DOC)
 
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
