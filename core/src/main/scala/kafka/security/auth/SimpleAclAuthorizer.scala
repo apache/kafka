@@ -107,8 +107,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclChangedZkPath)
     aclChangeListener = new ZkNodeChangeNotificationListener(zkUtils, SimpleAclAuthorizer.AclChangedZkPath, SimpleAclAuthorizer.AclChangedPrefix, AclChangedNotificationHandler)
     aclChangeListener.init()
-
-    zkUtils.zkClient.subscribeStateChanges(ZkStateChangeListener)
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
@@ -278,20 +276,4 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       updateCache(resource, acls)
     }
   }
-
-  object ZkStateChangeListener extends IZkStateListener {
-
-    override def handleNewSession() {
-      aclChangeListener.processAllNotifications
-    }
-
-    override def handleSessionEstablishmentError(error: Throwable) {
-      fatal("Could not establish session with zookeeper", error)
-    }
-
-    override def handleStateChanged(state: KeeperState) {
-      //no op
-    }
-  }
-
 }
