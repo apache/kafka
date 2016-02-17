@@ -99,6 +99,8 @@ public class StreamThread extends Thread {
     private final long totalRecordsToProcess;
     private final StreamsMetricsImpl sensors;
 
+    private Thread.UncaughtExceptionHandler userUncaughtExceptionHandler = null;
+
     private StreamPartitionAssignor partitionAssignor = null;
 
     private long lastClean;
@@ -158,6 +160,22 @@ public class StreamThread extends Thread {
                         Metrics metrics,
                         Time time) {
         this(builder, config, null , null, null, jobId, clientId, processId, metrics, time);
+
+        // try to release all the resources on abrupt termination of the thread
+        this.setUncaughtExceptionHandler(new UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread t, Throwable e) {
+                try {
+                    shutdown();
+                } catch (Throwable ex) {
+                    // ignore
+                }
+                // if a user specified a handler, call it.
+                if (userUncaughtExceptionHandler != null) {
+                    userUncaughtExceptionHandler.uncaughtException(t, e);
+                }
+            }
+        });
     }
 
     StreamThread(TopologyBuilder builder,
@@ -736,6 +754,16 @@ public class StreamThread extends Thread {
             }
         }
     }
+
+    /**
+     * Sets the handler invoked when a stream thread abruptly terminates due to an uncaught exception.
+     *
+     * @param eh the object to use as this thread's uncaught exception handler. If null then this thread has no explicit handler.
+     */
+    public void setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler eh) {
+        this.userUncaughtExceptionHandler = eh;
+    }
+
 
     private class StreamsMetricsImpl implements StreamsMetrics {
         final Metrics metrics;
