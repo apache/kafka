@@ -111,31 +111,31 @@ The following are the topic-level configurations. The server's default configura
     </tr>
     <tr>
       <td>retention.bytes</td>
-      <td>None</td>
+      <td>-1 (None)</td>
       <td>log.retention.bytes</td>
       <td>This configuration controls the maximum size a log can grow to before we will discard old log segments to free up space if we are using the "delete" retention policy. By default there is no size limit only a time limit.</td>
     </tr>
     <tr>
       <td>retention.ms</td>
-      <td>7 days</td>
+      <td>604800000 (7 days)</td>
       <td>log.retention.minutes</td>
       <td>This configuration controls the maximum time we will retain a log before we will discard old log segments to free up space if we are using the "delete" retention policy. This represents an SLA on how soon consumers must read their data.</td>
     </tr>
     <tr>
       <td>segment.bytes</td>
-      <td>1 GB</td>
+      <td>1073741824 (1 GB)</td>
       <td>log.segment.bytes</td>
       <td>This configuration controls the segment file size for the log. Retention and cleaning is always done a file at a time so a larger segment size means fewer files but less granular control over retention.</td>
     </tr>
     <tr>
       <td>segment.index.bytes</td>
-      <td>10 MB</td>
+      <td>10485760 (10 MB)</td>
       <td>log.index.size.max.bytes</td>
       <td>This configuration controls the size of the index that maps offsets to file positions. We preallocate this index file and shrink it only after log rolls. You generally should not need to change this setting.</td>
     </tr>
     <tr>
       <td>segment.ms</td>
-      <td>7 days</td>
+      <td>604800000 (7 days)</td>
       <td>log.roll.hours</td>
       <td>This configuration controls the period of time after which Kafka will force the log to roll even if the segment file isn't full to ensure that retention can delete or compact old data.</td>
     </tr>
