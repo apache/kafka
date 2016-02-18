@@ -71,6 +71,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return DescribeGroupsRequest.parse(buffer, versionId);
             case LIST_GROUPS:
                 return ListGroupsRequest.parse(buffer, versionId);
+            case CREATE_TOPIC:
+                return CreateTopicRequest.parse(buffer, versionId);
             default:
                 return null;
         }

@@ -93,7 +93,10 @@ public class RequestResponseTest {
                 createUpdateMetadataResponse(),
                 createLeaderAndIsrRequest(),
                 createLeaderAndIsrRequest().getErrorResponse(0, new UnknownServerException()),
-                createLeaderAndIsrResponse()
+                createLeaderAndIsrResponse(),
+                createCreateTopicRequest(),
+                createCreateTopicRequest().getErrorResponse(0, new UnknownServerException()),
+                createCreateTopicResponse()
         );
 
         for (AbstractRequestResponse req : requestResponseList)
@@ -116,14 +119,16 @@ public class RequestResponseTest {
             deserialized = (AbstractRequestResponse) deserializer.invoke(null, buffer, version);
         }
         assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should be the same.", req, deserialized);
+
         assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should have the same hashcode.",
                 req.hashCode(), deserialized.hashCode());
     }
 
     @Test
     public void produceResponseVersionTest() {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
+        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000, Record.NO_TIMESTAMP));
+
         ProduceResponse v0Response = new ProduceResponse(responseData);
         ProduceResponse v1Response = new ProduceResponse(responseData, 10, 1);
         ProduceResponse v2Response = new ProduceResponse(responseData, 10, 2);
@@ -140,7 +145,7 @@ public class RequestResponseTest {
 
     @Test
     public void fetchResponseVersionTest() {
-        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<TopicPartition, FetchResponse.PartitionData>();
+        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE.code(), 1000000, ByteBuffer.allocate(10)));
 
         FetchResponse v0Response = new FetchResponse(responseData);
@@ -194,14 +199,14 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createFetchRequest() {
-        Map<TopicPartition, FetchRequest.PartitionData> fetchData = new HashMap<TopicPartition, FetchRequest.PartitionData>();
+        Map<TopicPartition, FetchRequest.PartitionData> fetchData = new HashMap<>();
         fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 1000000));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 1000000));
         return new FetchRequest(-1, 100, 100000, fetchData);
     }
 
     private AbstractRequestResponse createFetchResponse() {
-        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<TopicPartition, FetchResponse.PartitionData>();
+        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE.code(), 1000000, ByteBuffer.allocate(10)));
         return new FetchResponse(responseData, 0);
     }
@@ -261,13 +266,13 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createListOffsetRequest() {
-        Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = new HashMap<TopicPartition, ListOffsetRequest.PartitionData>();
+        Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = new HashMap<>();
         offsetData.put(new TopicPartition("test", 0), new ListOffsetRequest.PartitionData(1000000L, 10));
         return new ListOffsetRequest(-1, offsetData);
     }
 
     private AbstractRequestResponse createListOffsetResponse() {
-        Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<TopicPartition, ListOffsetResponse.PartitionData>();
+        Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE.code(), Arrays.asList(100L)));
         return new ListOffsetResponse(responseData);
     }
@@ -285,19 +290,19 @@ public class RequestResponseTest {
         Cluster cluster = new Cluster(Arrays.asList(node), Arrays.asList(new PartitionInfo("topic1", 1, node, replicas, isr)),
                 Collections.<String>emptySet());
 
-        Map<String, Errors> errors = new HashMap<String, Errors>();
+        Map<String, Errors> errors = new HashMap<>();
         errors.put("topic2", Errors.LEADER_NOT_AVAILABLE);
         return new MetadataResponse(cluster, errors);
     }
 
     private AbstractRequest createOffsetCommitRequest() {
-        Map<TopicPartition, OffsetCommitRequest.PartitionData> commitData = new HashMap<TopicPartition, OffsetCommitRequest.PartitionData>();
+        Map<TopicPartition, OffsetCommitRequest.PartitionData> commitData = new HashMap<>();
         commitData.put(new TopicPartition("test", 0), new OffsetCommitRequest.PartitionData(100, ""));
         return new OffsetCommitRequest("group1", 100, "consumer1", 1000000, commitData);
     }
 
     private AbstractRequestResponse createOffsetCommitResponse() {
-        Map<TopicPartition, Short> responseData = new HashMap<TopicPartition, Short>();
+        Map<TopicPartition, Short> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), Errors.NONE.code());
         return new OffsetCommitResponse(responseData);
     }
@@ -307,19 +312,19 @@ public class RequestResponseTest {
     }
 
     private AbstractRequestResponse createOffsetFetchResponse() {
-        Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<TopicPartition, OffsetFetchResponse.PartitionData>();
+        Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(100L, "", Errors.NONE.code()));
         return new OffsetFetchResponse(responseData);
     }
 
     private AbstractRequest createProduceRequest() {
-        Map<TopicPartition, ByteBuffer> produceData = new HashMap<TopicPartition, ByteBuffer>();
+        Map<TopicPartition, ByteBuffer> produceData = new HashMap<>();
         produceData.put(new TopicPartition("test", 0), ByteBuffer.allocate(10));
         return new ProduceRequest((short) 1, 5000, produceData);
     }
 
     private AbstractRequestResponse createProduceResponse() {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
+        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000, Record.NO_TIMESTAMP));
         return new ProduceResponse(responseData, 0);
     }
@@ -410,5 +415,28 @@ public class RequestResponseTest {
         return new UpdateMetadataResponse(Errors.NONE.code());
     }
 
+    private AbstractRequest createCreateTopicRequest() {
+        CreateTopicRequest.TopicDetails request1 = new CreateTopicRequest.TopicDetails(3, 5);
 
+        Map<Integer, List<Integer>> replicaAssignments = new HashMap<>();
+        replicaAssignments.put(1, Arrays.asList(1, 2, 3));
+        replicaAssignments.put(2, Arrays.asList(2, 3, 4));
+
+        Map<String, String> configs = new HashMap<>();
+        configs.put("config1", "value1");
+
+        CreateTopicRequest.TopicDetails request2 = new CreateTopicRequest.TopicDetails(replicaAssignments, configs);
+
+        Map<String, CreateTopicRequest.TopicDetails> request = new HashMap<>();
+        request.put("my_t1", request1);
+        request.put("my_t2", request2);
+        return new CreateTopicRequest(request);
+    }
+
+    private AbstractRequestResponse createCreateTopicResponse() {
+        Map<String, Errors> errors = new HashMap<>();
+        errors.put("t1", Errors.INVALID_TOPIC_EXCEPTION);
+        errors.put("t2", Errors.LEADER_NOT_AVAILABLE);
+        return new CreateTopicResponse(errors);
+    }
 }

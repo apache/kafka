@@ -585,6 +585,48 @@ public class Protocol {
     public static final Schema[] HEARTBEAT_REQUEST = new Schema[] {HEARTBEAT_REQUEST_V0};
     public static final Schema[] HEARTBEAT_RESPONSE = new Schema[] {HEARTBEAT_RESPONSE_V0};
 
+    /* Admin requests common */
+    public static final Schema CONFIG_ENTRY = new Schema(new Field("config_key", STRING, "Configuration key name"),
+        new Field("config_value", STRING, "Configuration value"));
+
+    public static final Schema PARTITION_REPLICA_ASSIGNMENT_ENTRY = new Schema(
+        new Field("partition_id", INT32),
+        new Field("replicas", new ArrayOf(INT32)));
+
+    public static final Schema TOPIC_ERROR_CODE = new Schema(new Field("topic", STRING), new Field("error_code", INT16));
+
+    /* CreateTopic api */
+    public static final Schema SINGLE_CREATE_TOPIC_REQUEST_V0 = new Schema(
+        new Field("topic",
+            STRING,
+            "Name for newly created topic."),
+        new Field("partitions",
+            INT32,
+            "Number of partitions to be created."),
+        new Field("replication_factor",
+            INT32,
+            "Replication factor for the topic."),
+        new Field("replica_assignment",
+            new ArrayOf(PARTITION_REPLICA_ASSIGNMENT_ENTRY),
+            "Replica assignment among kafka brokers for this topic partitions."),
+        new Field("configs",
+            new ArrayOf(CONFIG_ENTRY),
+            "Topic level configuration for topic to be set."));
+
+    public static final Schema CREATE_TOPIC_REQUEST_V0 = new Schema(
+        new Field("create_topic_requests",
+            new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST_V0),
+            "An array of single topic creation requests."));
+
+    public static final Schema CREATE_TOPIC_RESPONSE_V0 = new Schema(
+        new Field("topic_error_codes",
+            new ArrayOf(TOPIC_ERROR_CODE),
+            "An array of per topic error codes."));
+
+
+    public static final Schema[] CREATE_TOPIC_REQUEST = new Schema[] {CREATE_TOPIC_REQUEST_V0};
+    public static final Schema[] CREATE_TOPIC_RESPONSE = new Schema[] {CREATE_TOPIC_RESPONSE_V0};
+
     /* Leave group api */
     public static final Schema LEAVE_GROUP_REQUEST_V0 = new Schema(new Field("group_id", STRING, "The group id."),
                                                                    new Field("member_id",
@@ -720,6 +762,7 @@ public class Protocol {
         REQUESTS[ApiKeys.SYNC_GROUP.id] = SYNC_GROUP_REQUEST;
         REQUESTS[ApiKeys.DESCRIBE_GROUPS.id] = DESCRIBE_GROUPS_REQUEST;
         REQUESTS[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_REQUEST;
+        REQUESTS[ApiKeys.CREATE_TOPIC.id] = CREATE_TOPIC_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -738,6 +781,7 @@ public class Protocol {
         RESPONSES[ApiKeys.SYNC_GROUP.id] = SYNC_GROUP_RESPONSE;
         RESPONSES[ApiKeys.DESCRIBE_GROUPS.id] = DESCRIBE_GROUPS_RESPONSE;
         RESPONSES[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_RESPONSE;
+        RESPONSES[ApiKeys.CREATE_TOPIC.id] = CREATE_TOPIC_RESPONSE;
 
         /* set the maximum version of each api */
         for (ApiKeys api : ApiKeys.values())

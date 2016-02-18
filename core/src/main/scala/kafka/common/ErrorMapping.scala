@@ -20,6 +20,7 @@ package kafka.common
 import java.nio.ByteBuffer
 
 import kafka.message.InvalidMessageException
+import org.apache.kafka.common.errors.InvalidTopicException
 
 import scala.Predef._
 
@@ -102,5 +103,5 @@ object ErrorMapping {
 
   def exceptionFor(code: Short) : Throwable = codeToException(code).newInstance()
 
-  def exceptionNameFor(code: Short) : String = codeToException(code).getName()
+  def exceptionNameFor(code: Short) : String = codeToException(code).getName
 }
