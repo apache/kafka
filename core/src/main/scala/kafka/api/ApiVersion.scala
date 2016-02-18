@@ -97,7 +97,6 @@ case object KAFKA_0_9_0 extends ApiVersion {
   val id: Int = 3
 }
 
-// This is a between-release protocol version
 case object KAFKA_0_10_0_IV0 extends ApiVersion {
   val version: String = "0.10.0-IV0"
   val messageFormatVersion: Byte = Message.MagicValue_V1

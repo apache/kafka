@@ -65,14 +65,6 @@ object Message {
   val MinMessageOverhead = KeyOffset_V0 + ValueSizeLength
   
   /**
-   * The minimum valid size for the message header
-   * The MinHeaderSize does not include the TimestampLength for backward compatibility.
-   * This value is only used to check if the message size is valid or not. So the minimum possible message bytes is
-   * used here, which comes from message format V0.
-   */
-  val MinHeaderSize = MessageHeaderSizeMap.values.min
-  
-  /**
    * The "magic" value
    * When magic value is 0, the message uses absolute offset and does not have a timestamp field.
    * When magic value is 1, the message uses relative offset and has a timestamp field.

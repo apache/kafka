@@ -378,9 +378,9 @@ class LoggingMessageFormatter extends MessageFormatter   {
   def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream): Unit = {
     defaultWriter.writeTo(key, value, timestamp, timestampType, output)
     if(logger.isInfoEnabled)
-      logger.info(s"key:${if (key == null) "null" else new String(key)}, " +
-                  s"value:${if (value == null) "null" else new String(value)}, " +
-                  {if (timestampType != TimestampType.NO_TIMESTAMP_TYPE) s"$timestampType:$timestamp" else ""})
+      logger.info({if (timestampType != TimestampType.NO_TIMESTAMP_TYPE) s"$timestampType:$timestamp, " else ""} +
+                  s"key:${if (key == null) "null" else new String(key)}, " +
+                  s"value:${if (value == null) "null" else new String(value)}")
   }
 }
 

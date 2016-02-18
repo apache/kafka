@@ -55,10 +55,10 @@ object MessageSet {
   def entrySize(message: Message): Int = LogOverhead + message.size
 
   /**
-   * Validate the "magic" values of messages are the same in a compressed message set and return the max timestamp
-   * of the inner messages.
+   * Validate the "magic" values of messages are the same in a compressed message set and return the magic value of
+   * and the max timestamp of the inner messages.
    */
-  def validateMagicValuesAndGetTimestamp(messages: Seq[Message]): MagicAndTimestamp = {
+  def magicAndLargestTimestamp(messages: Seq[Message]): MagicAndTimestamp = {
     val firstMagicValue = messages.head.magic
     var largestTimestamp: Long = Message.NoTimestamp
     for (message <- messages) {

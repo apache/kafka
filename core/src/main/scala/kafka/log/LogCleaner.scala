@@ -483,7 +483,7 @@ private[log] class Cleaner(val id: Int,
         ByteBufferMessageSet.writeMessage(buffer, messageOffset.message, messageOffset.offset)
       MessageSet.messageSetSize(messagesIterable)
     } else {
-      val magicAndTimestamp = MessageSet.validateMagicValuesAndGetTimestamp(messages.map(_.message))
+      val magicAndTimestamp = MessageSet.magicAndLargestTimestamp(messages.map(_.message))
       val firstAbsoluteOffset = messages.head.offset
       var offset = -1L
       val timestampType = messages.head.message.timestampType

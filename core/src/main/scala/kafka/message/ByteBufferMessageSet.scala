@@ -50,7 +50,7 @@ object ByteBufferMessageSet {
     } else {
       val magicAndTimestamp = wrapperMessageTimestamp match {
         case Some(ts) => MagicAndTimestamp(messages.head.magic, ts)
-        case None => MessageSet.validateMagicValuesAndGetTimestamp(messages)
+        case None => MessageSet.magicAndLargestTimestamp(messages)
       }
       var offset = -1L
       val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
@@ -61,7 +61,7 @@ object ByteBufferMessageSet {
             offset = offsetAssignor.nextAbsoluteOffset
             if (message.magic != magicAndTimestamp.magic)
               throw new IllegalArgumentException("Messages in the message set must have same magic value")
-            // Use relative offset if magic value is greater than 0
+            // Use inner offset if magic value is greater than 0
             if (magicAndTimestamp.magic > Message.MagicValue_V0)
               output.writeLong(offsetAssignor.toInnerOffset(offset))
             else
@@ -122,7 +122,7 @@ object ByteBufferMessageSet {
         // read record size
         val size = compressed.readInt()
 
-        if (size < MinHeaderSize)
+        if (size < MinMessageOverhead)
           throw new InvalidMessageException("Message found with corrupt size (" + size + ") in deep iterator")
 
         // read the record into an intermediate record buffer
@@ -144,7 +144,7 @@ object ByteBufferMessageSet {
 
       override def makeNext(): MessageAndOffset = {
         messageAndOffsets match {
-          // Using relative offset and timestamps
+          // Using inner offset and timestamps
           case Some(innerMessageAndOffsets) =>
             if (innerMessageAndOffsets.isEmpty)
               allDone()
@@ -155,7 +155,7 @@ object ByteBufferMessageSet {
               val absoluteOffset = wrapperMessageOffset + relativeOffset
               new MessageAndOffset(message, absoluteOffset)
             }
-          // Not using relative offset and timestamps
+          // Not using inner offset and timestamps
           case None =>
             try {
               readMessageFromStream()
@@ -217,7 +217,7 @@ private class OffsetAssigner(offsets: Seq[Long]) {
  *   attribute is only set in wrapper messages. Inner messages always have CreateTime as timestamp type in attributes.
  *
  * The way timestamp set is following:
- * For non-compressed messages: timestamp and timestamp type attribute in the messages is set and used.
+ * For non-compressed messages: timestamp and timestamp type attribute in the messages are set and used.
  * For compressed messages:
  * 1. Wrapper messages' timestamp type attribute is set to proper value
  * 2. Wrapper messages' timestamp is set to:
@@ -231,12 +231,12 @@ private class OffsetAssigner(offsets: Seq[Long]) {
  *    type to CreateTime, otherwise the messages will be rejected by broker.
  *
  *
- * The way absolute offset calculated is following:
+ * The way absolute offset calculated is the following:
  * Ideally the conversion from relative offset(RO) to absolute offset(AO) should be:
  *
  * AO = AO_Of_Last_Inner_Message + RO
  *
- * However, Note that the message sets sent by producers are compressed in a stream compressing way.
+ * However, note that the message sets sent by producers are compressed in a streaming way.
  * And the relative offset of an inner message compared with the last inner message is not known until
  * the last inner message is written.
  * Unfortunately we are not able to change the previously written messages after the last message is written to
@@ -343,7 +343,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
           return allDone()
         val offset = topIter.getLong()
         val size = topIter.getInt()
-        if(size < Message.MinHeaderSize)
+        if(size < Message.MinMessageOverhead)
           throw new InvalidMessageException("Message found with corrupt size (" + size + ") in shallow iterator")
 
         // we have an incomplete message
@@ -397,7 +397,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
    * B. Magic value of a message = 1 and messageFormatVersion is 0
    *
    * If no format conversion or value overwriting is required for messages, this method will perform in-place
-   * operations and avoids re-compression.
+   * operations and avoid re-compression.
    */
   private[kafka] def validateMessagesAndAssignOffsets(offsetCounter: AtomicLong,
                                                       now: Long = System.currentTimeMillis(),
@@ -509,7 +509,6 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
                                            timestampType: TimestampType,
                                            messageTimestampDiffMaxMs: Long,
                                            toMagicValue: Byte): ByteBufferMessageSet = {
-    // Get message count, shallow iterator is in-place
     val sizeInBytesAfterConversion = shallowValidBytes + this.internalIterator(isShallow = true).foldLeft(0)(
       (sizeDiff, messageAndOffset) => sizeDiff + Message.headerSizeDiff(messageAndOffset.message.magic, toMagicValue))
     val newBuffer = ByteBuffer.allocate(sizeInBytesAfterConversion)

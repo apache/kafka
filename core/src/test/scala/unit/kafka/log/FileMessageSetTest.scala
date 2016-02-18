@@ -233,32 +233,14 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
     fileMessageSet.append(messageSetV1)
     fileMessageSet.flush()
     var convertedMessageSet = fileMessageSet.toMessageFormat(Message.MagicValue_V0)
-    var i = 0
-    for (messageAndOffset <- convertedMessageSet) {
-      val message = messageAndOffset.message
-      val offset = messageAndOffset.offset
-      assertEquals("magic byte should be 0", Message.MagicValue_V0, message.magic)
-      assertEquals("offset should not change", offsets(i), offset)
-      assertEquals("key should not change", messagesV0(i).key, message.key)
-      assertEquals("payload should not change", messagesV0(i).payload, message.payload)
-      i += 1
-    }
+    verifyConvertedMessageSet(convertedMessageSet, Message.MagicValue_V0)
 
+    // down conversion for compressed messages
     fileMessageSet = new FileMessageSet(tempFile())
     fileMessageSet.append(compressedMessageSetV1)
     fileMessageSet.flush()
-    // down conversion for compressed messages
     convertedMessageSet = fileMessageSet.toMessageFormat(Message.MagicValue_V0)
-    i = 0
-    for (messageAndOffset <- convertedMessageSet) {
-      val message = messageAndOffset.message
-      val offset = messageAndOffset.offset
-      assertEquals("magic byte should be 0", Message.MagicValue_V0, message.magic)
-      assertEquals("offset should not change", offsets(i), offset)
-      assertEquals("key should not change", messagesV0(i).key, message.key)
-      assertEquals("payload should not change", messagesV0(i).payload, message.payload)
-      i += 1
-    }
+    verifyConvertedMessageSet(convertedMessageSet, Message.MagicValue_V0)
 
     // Up conversion. In reality we only do down conversion, but up conversion should work as well.
     // up conversion for non-compressed messages
@@ -266,31 +248,24 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
     fileMessageSet.append(messageSetV0)
     fileMessageSet.flush()
     convertedMessageSet = fileMessageSet.toMessageFormat(Message.MagicValue_V1)
-    i = 0
-    for (messageAndOffset <- convertedMessageSet) {
-      val message = messageAndOffset.message
-      val offset = messageAndOffset.offset
-      assertEquals("magic byte should be 1", Message.MagicValue_V1, message.magic)
-      assertEquals("offset should not change", offsets(i), offset)
-      assertEquals("key should not change", messagesV0(i).key, message.key)
-      assertEquals("payload should not change", messagesV0(i).payload, message.payload)
-      i += 1
-    }
+    verifyConvertedMessageSet(convertedMessageSet, Message.MagicValue_V1)
 
+    // up conversion for compressed messages
     fileMessageSet = new FileMessageSet(tempFile())
     fileMessageSet.append(compressedMessageSetV0)
     fileMessageSet.flush()
-    // up conversion for compressed messages
     convertedMessageSet = fileMessageSet.toMessageFormat(Message.MagicValue_V1)
-    i = 0
-    for (messageAndOffset <- convertedMessageSet) {
-      val message = messageAndOffset.message
-      val offset = messageAndOffset.offset
-      assertEquals("magic byte should be 1", Message.MagicValue_V1, message.magic)
-      assertEquals("offset should not change", offsets(i), offset)
-      assertEquals("key should not change", messagesV0(i).key, message.key)
-      assertEquals("payload should not change", messagesV0(i).payload, message.payload)
-      i += 1
+    verifyConvertedMessageSet(convertedMessageSet, Message.MagicValue_V1)
+
+    def verifyConvertedMessageSet(convertedMessageSet: MessageSet, magicByte: Byte) {
+      var i = 0
+      for (messageAndOffset <- convertedMessageSet) {
+        assertEquals("magic byte should be 1", magicByte, messageAndOffset.message.magic)
+        assertEquals("offset should not change", offsets(i), messageAndOffset.offset)
+        assertEquals("key should not change", messagesV0(i).key, messageAndOffset.message.key)
+        assertEquals("payload should not change", messagesV0(i).payload, messageAndOffset.message.payload)
+        i += 1
+      }
     }
   }
 }
