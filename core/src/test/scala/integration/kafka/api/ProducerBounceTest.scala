@@ -138,7 +138,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
     var sent = 0
     var failed = false
 
-    val producer = TestUtils.createNewProducer(brokerList, bufferSize = producerBufferSize, retries = 10)
+    val producer = TestUtils.createNewProducer(brokerList, bufferSize = producerBufferSize, retries = 10, blockOnBufferFull = true)
 
     override def doWork(): Unit = {
       val responses =
