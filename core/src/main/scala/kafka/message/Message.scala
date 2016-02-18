@@ -42,14 +42,10 @@ object Message {
   // Only message format version 1 has the timestamp field.
   val TimestampOffset = AttributesOffset + AttributesLength
   val TimestampLength = 8
-  // Message format version 0 does not have timestamp field.
   val KeySizeOffset_V0 = AttributesOffset + AttributesLength
-  // Message format version 1 has timestamp field.
   val KeySizeOffset_V1 = TimestampOffset + TimestampLength
   val KeySizeLength = 4
-  // Message format version 0 does not have timestamp field.
   val KeyOffset_V0 = KeySizeOffset_V0 + KeySizeLength
-  // Message format version 1 has timestamp field.
   val KeyOffset_V1 = KeySizeOffset_V1 + KeySizeLength
   val ValueSizeLength = 4
 
