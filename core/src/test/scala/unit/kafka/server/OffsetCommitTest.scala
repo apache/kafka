@@ -17,9 +17,10 @@
 
 package kafka.server
 
+import kafka.admin.AdminUtils
 import kafka.api.{GroupCoordinatorRequest, OffsetCommitRequest, OffsetFetchRequest}
 import kafka.consumer.SimpleConsumer
-import kafka.common.{OffsetMetadata, OffsetMetadataAndError, OffsetAndMetadata, TopicAndPartition}
+import kafka.common._
 import kafka.utils._
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
@@ -49,7 +50,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    val config: Properties = createBrokerConfig(1, zkConnect)
+    val config: Properties = createBrokerConfig(1, zkConnect, enableDeleteTopic = true)
     config.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     config.setProperty(KafkaConfig.OffsetsRetentionCheckIntervalMsProp, retentionCheckInterval.toString)
     val logDirPath = config.getProperty("log.dir")
@@ -306,5 +307,34 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
 
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, commitResponse.commitStatus.get(TopicAndPartition(topic1, 0)).get)
     assertEquals(Errors.NONE.code, commitResponse.commitStatus.get(TopicAndPartition(topic2, 0)).get)
+  }
+
+  @Test
+  def testOffsetsDeleteAfterTopicDeletion() {
+    // set up topic partition
+    val topic = "topic"
+    val topicPartition = TopicAndPartition(topic, 0)
+    createTopic(zkUtils, topic, servers = Seq(server), numPartitions = 1)
+
+    val fetchRequest = OffsetFetchRequest(group, Seq(TopicAndPartition(topic, 0)))
+
+    // v0 version commit request with commit timestamp set to -1
+    // should not expire
+    val commitRequest0 = OffsetCommitRequest(
+      groupId = group,
+      requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(1L, "metadata", -1L)),
+      versionId = 0
+    )
+    assertEquals(Errors.NONE.code(), simpleConsumer.commitOffsets(commitRequest0).commitStatus.get(topicPartition).get)
+
+    // start topic deletion
+    AdminUtils.deleteTopic(zkUtils, topic)
+    TestUtils.verifyTopicDeletion(zkUtils, topic, 1, Seq(server))
+    Thread.sleep(retentionCheckInterval * 2)
+
+    // check if offsets deleted
+    val offsetMetadataAndErrorMap = simpleConsumer.fetchOffsets(fetchRequest)
+    val offsetMetadataAndError = offsetMetadataAndErrorMap.requestInfo(topicPartition)
+    assertEquals(OffsetMetadataAndError.NoOffset, offsetMetadataAndError)
   }
 }
