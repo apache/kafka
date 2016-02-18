@@ -46,11 +46,11 @@ import scala.collection.JavaConverters._
 import org.I0Itec.zkclient.ZkClient
 import kafka.controller.{ControllerStats, KafkaController}
 import kafka.cluster.{EndPoint, Broker}
-import kafka.common.{ErrorMapping, InconsistentBrokerIdException, GenerateBrokerIdException}
+import kafka.common.{InconsistentBrokerIdException, GenerateBrokerIdException}
 import kafka.network.{BlockingChannel, SocketServer}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
-import kafka.coordinator.{GroupConfig, GroupCoordinator}
+import kafka.coordinator.GroupCoordinator
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
@@ -239,6 +239,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils)
         kafkaHealthcheck.startup()
 
+        // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
+        checkpointBrokerId(config.brokerId)
+
         /* register broker metrics */
         registerStats()
 
@@ -269,13 +272,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     }
 
     val secureAclsEnabled = JaasUtils.isZkSecurityEnabled() && config.zkEnableSecureAcls
-    
+
     if(config.zkEnableSecureAcls && !secureAclsEnabled) {
-      throw new java.lang.SecurityException("zkEnableSecureAcls is true, but the verification of the JAAS login file failed.")    
+      throw new java.lang.SecurityException("zkEnableSecureAcls is true, but the verification of the JAAS login file failed.")
     }
     if (chroot.length > 1) {
       val zkConnForChrootCreation = config.zkConnect.substring(0, config.zkConnect.indexOf("/"))
-      val zkClientForChrootCreation = ZkUtils(zkConnForChrootCreation, 
+      val zkClientForChrootCreation = ZkUtils(zkConnForChrootCreation,
                                               config.zkSessionTimeoutMs,
                                               config.zkConnectionTimeoutMs,
                                               secureAclsEnabled)
@@ -465,7 +468,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
               response = channel.receive()
               val shutdownResponse = kafka.api.ControlledShutdownResponse.readFrom(response.payload())
-              if (shutdownResponse.errorCode == ErrorMapping.NoError && shutdownResponse.partitionsRemaining != null &&
+              if (shutdownResponse.errorCode == Errors.NONE.code && shutdownResponse.partitionsRemaining != null &&
                 shutdownResponse.partitionsRemaining.size == 0) {
                 shutdownSucceeded = true
                 info ("Controlled shutdown succeeded")
@@ -609,9 +612,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   }
 
   /**
-    * Generates new brokerId or reads from meta.properties based on following conditions
+    * Generates new brokerId if enabled or reads from meta.properties based on following conditions
     * <ol>
-    * <li> config has no broker.id provided , generates a broker.id based on Zookeeper's sequence
+    * <li> config has no broker.id provided and broker id generation is enabled, generates a broker.id based on Zookeeper's sequence
     * <li> stored broker.id in meta.properties doesn't match in all the log.dirs throws InconsistentBrokerIdException
     * <li> config has broker.id and meta.properties contains broker.id if they don't match throws InconsistentBrokerIdException
     * <li> config has broker.id and there is no meta.properties file, creates new meta.properties and stores broker.id
@@ -620,34 +623,45 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     */
   private def getBrokerId: Int =  {
     var brokerId = config.brokerId
-    var logDirsWithoutMetaProps: List[String] = List()
     val brokerIdSet = mutable.HashSet[Int]()
 
     for (logDir <- config.logDirs) {
       val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
-      brokerMetadataOpt match {
-        case Some(brokerMetadata: BrokerMetadata) =>
-          brokerIdSet.add(brokerMetadata.brokerId)
-        case None =>
-          logDirsWithoutMetaProps ++= List(logDir)
+      brokerMetadataOpt.foreach { brokerMetadata =>
+        brokerIdSet.add(brokerMetadata.brokerId)
       }
     }
 
     if(brokerIdSet.size > 1)
-      throw new InconsistentBrokerIdException("Failed to match brokerId across logDirs")
+      throw new InconsistentBrokerIdException(
+        s"Failed to match broker.id across log.dirs. This could happen if multiple brokers shared a log directory (log.dirs) " +
+        s"or partial data was manually copied from another broker. Found $brokerIdSet")
     else if(brokerId >= 0 && brokerIdSet.size == 1 && brokerIdSet.last != brokerId)
-      throw new InconsistentBrokerIdException("Configured brokerId %s doesn't match stored brokerId %s in meta.properties".format(brokerId, brokerIdSet.last))
-    else if(brokerIdSet.size == 0 && brokerId < 0)  // generate a new brokerId from Zookeeper
+      throw new InconsistentBrokerIdException(
+        s"Configured broker.id $brokerId doesn't match stored broker.id ${brokerIdSet.last} in meta.properties. " +
+        s"If you moved your data, make sure your configured broker.id matches. " +
+        s"If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
+    else if(brokerIdSet.size == 0 && brokerId < 0 && config.brokerIdGenerationEnable)  // generate a new brokerId from Zookeeper
       brokerId = generateBrokerId
     else if(brokerIdSet.size == 1) // pick broker.id from meta.properties
       brokerId = brokerIdSet.last
+
+    brokerId
+  }
+
+  private def checkpointBrokerId(brokerId: Int) {
+    var logDirsWithoutMetaProps: List[String] = List()
+
+    for (logDir <- config.logDirs) {
+      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
+      if(brokerMetadataOpt.isEmpty)
+          logDirsWithoutMetaProps ++= List(logDir)
+    }
 
     for(logDir <- logDirsWithoutMetaProps) {
       val checkpoint = brokerMetadataCheckpoints(logDir)
       checkpoint.write(new BrokerMetadata(brokerId))
     }
-
-    brokerId
   }
 
   private def generateBrokerId: Int = {

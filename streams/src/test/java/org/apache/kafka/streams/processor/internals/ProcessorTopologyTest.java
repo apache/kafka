@@ -27,16 +27,17 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateUtils;
+import org.apache.kafka.streams.state.StateTestUtils;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.ProcessorTopologyTestDriver;
@@ -59,21 +60,22 @@ public class ProcessorTopologyTest {
     private static long timestamp = 1000L;
 
     private ProcessorTopologyTestDriver driver;
-    private StreamingConfig config;
+    private StreamsConfig config;
 
     @Before
     public void setup() {
         // Create a new directory in which we'll put all of the state for this test, enabling running tests in parallel ...
-        File localState = StateUtils.tempDir();
+        File localState = StateTestUtils.tempDir();
         Properties props = new Properties();
-        props.setProperty(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
-        props.setProperty(StreamingConfig.STATE_DIR_CONFIG, localState.getAbsolutePath());
-        props.setProperty(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
-        props.setProperty(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.setProperty(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        props.setProperty(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.setProperty(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        this.config = new StreamingConfig(props);
+        props.setProperty(StreamsConfig.JOB_ID_CONFIG, "processor-topology-test");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, localState.getAbsolutePath());
+        props.setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
+        props.setProperty(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.setProperty(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.setProperty(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.setProperty(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        this.config = new StreamsConfig(props);
     }
 
     @After
@@ -114,22 +116,23 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingSimpleTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology());
+        int partition = 10;
+        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition));
         driver.process(INPUT_TOPIC, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition);
         assertNoOutputRecord(OUTPUT_TOPIC_2);
 
         driver.process(INPUT_TOPIC, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition);
         assertNoOutputRecord(OUTPUT_TOPIC_2);
 
         driver.process(INPUT_TOPIC, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC, "key4", "value4", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC, "key5", "value5", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNoOutputRecord(OUTPUT_TOPIC_2);
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3");
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key4", "value4");
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key5", "value5");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", partition);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key4", "value4", partition);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key5", "value5", partition);
     }
 
     @Test
@@ -172,25 +175,38 @@ public class ProcessorTopologyTest {
     }
 
     protected void assertNextOutputRecord(String topic, String key, String value) {
-        assertProducerRecord(driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER), topic, key, value);
+        ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
+        assertEquals(topic, record.topic());
+        assertEquals(key, record.key());
+        assertEquals(value, record.value());
+        assertNull(record.partition());
+    }
+
+    protected void assertNextOutputRecord(String topic, String key, String value, Integer partition) {
+        ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
+        assertEquals(topic, record.topic());
+        assertEquals(key, record.key());
+        assertEquals(value, record.value());
+        assertEquals(partition, record.partition());
     }
 
     protected void assertNoOutputRecord(String topic) {
         assertNull(driver.readOutput(topic));
     }
 
-    private void assertProducerRecord(ProducerRecord<String, String> record, String topic, String key, String value) {
-        assertEquals(topic, record.topic());
-        assertEquals(key, record.key());
-        assertEquals(value, record.value());
-        // Kafka Streaming doesn't set the partition, so it's always null
-        assertNull(record.partition());
+    protected <K, V> StreamPartitioner<K, V> constantPartitioner(final Integer partition) {
+        return new StreamPartitioner<K, V>() {
+            @Override
+            public Integer partition(K key, V value, int numPartitions) {
+                return partition;
+            }
+        };
     }
 
-    protected TopologyBuilder createSimpleTopology() {
+    protected TopologyBuilder createSimpleTopology(int partition) {
         return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC)
                                     .addProcessor("processor", define(new ForwardingProcessor()), "source")
-                                    .addSink("sink", OUTPUT_TOPIC_1, "processor");
+                                    .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
     protected TopologyBuilder createMultiplexingTopology() {

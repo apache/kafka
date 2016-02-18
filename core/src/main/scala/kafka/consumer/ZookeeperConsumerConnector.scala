@@ -36,7 +36,8 @@ import kafka.utils.CoreUtils.inLock
 import kafka.utils.ZkUtils._
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
+import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
@@ -274,7 +275,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     val consumerRegistrationInfo = Json.encode(Map("version" -> 1, "subscription" -> topicCount.getTopicCountMap, "pattern" -> topicCount.pattern,
                                                   "timestamp" -> timestamp))
     val zkWatchedEphemeral = new ZKCheckedEphemeral(dirs.
-                                                    consumerRegistryDir + "/" + consumerIdString, 
+                                                    consumerRegistryDir + "/" + consumerIdString,
                                                     consumerRegistrationInfo,
                                                     zkUtils.zkConnection.getZookeeper,
                                                     false)
@@ -356,23 +357,23 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
               val (commitFailed, retryableIfFailed, shouldRefreshCoordinator, errorCount) = {
                 offsetCommitResponse.commitStatus.foldLeft(false, false, false, 0) { case (folded, (topicPartition, errorCode)) =>
 
-                  if (errorCode == ErrorMapping.NoError && config.dualCommitEnabled) {
+                  if (errorCode == Errors.NONE.code && config.dualCommitEnabled) {
                     val offset = offsetsToCommit(topicPartition).offset
                     commitOffsetToZooKeeper(topicPartition, offset)
                   }
 
                   (folded._1 || // update commitFailed
-                    errorCode != ErrorMapping.NoError,
+                    errorCode != Errors.NONE.code,
 
                     folded._2 || // update retryableIfFailed - (only metadata too large is not retryable)
-                      (errorCode != ErrorMapping.NoError && errorCode != ErrorMapping.OffsetMetadataTooLargeCode),
+                      (errorCode != Errors.NONE.code && errorCode != Errors.OFFSET_METADATA_TOO_LARGE.code),
 
                     folded._3 || // update shouldRefreshCoordinator
-                      errorCode == ErrorMapping.NotCoordinatorForConsumerCode ||
-                      errorCode == ErrorMapping.ConsumerCoordinatorNotAvailableCode,
+                      errorCode == Errors.NOT_COORDINATOR_FOR_GROUP.code ||
+                      errorCode == Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code,
 
                     // update error count
-                    folded._4 + (if (errorCode != ErrorMapping.NoError) 1 else 0))
+                    folded._4 + (if (errorCode != Errors.NONE.code) 1 else 0))
                 }
               }
               debug(errorCount + " errors in offset commit response.")
@@ -442,8 +443,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
             val (leaderChanged, loadInProgress) =
               offsetFetchResponse.requestInfo.foldLeft(false, false) { case(folded, (topicPartition, offsetMetadataAndError)) =>
-                (folded._1 || (offsetMetadataAndError.error == ErrorMapping.NotCoordinatorForConsumerCode),
-                 folded._2 || (offsetMetadataAndError.error == ErrorMapping.OffsetsLoadInProgressCode))
+                (folded._1 || (offsetMetadataAndError.error == Errors.NOT_COORDINATOR_FOR_GROUP.code),
+                 folded._2 || (offsetMetadataAndError.error == Errors.GROUP_LOAD_IN_PROGRESS.code))
               }
 
             if (leaderChanged) {
@@ -463,7 +464,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                 val mostRecentOffsets = kafkaOffsets.map { case (topicPartition, kafkaOffset) =>
                   val zkOffset = fetchOffsetFromZooKeeper(topicPartition)._2.offset
                   val mostRecentOffset = zkOffset.max(kafkaOffset.offset)
-                  (topicPartition, OffsetMetadataAndError(mostRecentOffset, kafkaOffset.metadata, ErrorMapping.NoError))
+                  (topicPartition, OffsetMetadataAndError(mostRecentOffset, kafkaOffset.metadata, Errors.NONE.code))
                 }
                 Some(OffsetFetchResponse(mostRecentOffsets))
               }

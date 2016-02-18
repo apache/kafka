@@ -19,25 +19,25 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import kafka.cluster.BrokerEndPoint
-import kafka.common.ErrorMapping
+import org.apache.kafka.common.protocol.Errors
 
 object GroupCoordinatorResponse {
   val CurrentVersion = 0
 
   private val NoBrokerEndpointOpt = Some(BrokerEndPoint(id = -1, host = "", port = -1))
-  
+
   def readFrom(buffer: ByteBuffer) = {
     val correlationId = buffer.getInt
     val errorCode = buffer.getShort
     val broker = BrokerEndPoint.readFrom(buffer)
-    val coordinatorOpt = if (errorCode == ErrorMapping.NoError)
+    val coordinatorOpt = if (errorCode == Errors.NONE.code)
       Some(broker)
     else
       None
 
     GroupCoordinatorResponse(coordinatorOpt, errorCode, correlationId)
   }
-  
+
 }
 
 case class GroupCoordinatorResponse (coordinatorOpt: Option[BrokerEndPoint], errorCode: Short, correlationId: Int)

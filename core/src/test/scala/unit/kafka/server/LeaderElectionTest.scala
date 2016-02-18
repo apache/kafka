@@ -17,21 +17,20 @@
 
 package kafka.server
 
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{BrokerEndPoint, TopicPartition}
 import org.apache.kafka.common.requests.LeaderAndIsrRequest.PartitionState
 
 import scala.collection.JavaConverters._
-import kafka.api.{PartitionStateInfo, LeaderAndIsr}
+import kafka.api.LeaderAndIsr
 import org.apache.kafka.common.requests.{LeaderAndIsrResponse, LeaderAndIsrRequest, AbstractRequestResponse}
 import org.junit.Assert._
-import kafka.utils.{TestUtils, ZkUtils, CoreUtils}
+import kafka.utils.{TestUtils, CoreUtils}
 import kafka.cluster.Broker
-import kafka.common.ErrorMapping
-import kafka.controller.{ControllerChannelManager, ControllerContext, LeaderIsrAndControllerEpoch}
+import kafka.controller.{ControllerChannelManager, ControllerContext}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.protocol.{Errors, ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.utils.SystemTime
 import org.junit.{Test, After, Before}
 
@@ -133,7 +132,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", s.boundPort()))
     val brokerEndPoints = brokers.map { b =>
       val brokerEndPoint = b.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)
-      new LeaderAndIsrRequest.EndPoint(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
+      new BrokerEndPoint(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
     }
 
     val controllerContext = new ControllerContext(zkUtils, 6000)
@@ -164,8 +163,8 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
 
   private def staleControllerEpochCallback(response: AbstractRequestResponse): Unit = {
     val leaderAndIsrResponse = response.asInstanceOf[LeaderAndIsrResponse]
-    staleControllerEpochDetected = leaderAndIsrResponse.errorCode match {
-      case ErrorMapping.StaleControllerEpochCode => true
+    staleControllerEpochDetected = Errors.forCode(leaderAndIsrResponse.errorCode) match {
+      case Errors.STALE_CONTROLLER_EPOCH => true
       case _ => false
     }
   }

@@ -50,10 +50,8 @@ import scala.collection.JavaConverters._
   * brokers, but first it initializes a ZooKeeper server and client, which happens
   * in ZooKeeperTestHarness.
   *
-  * To start brokers when the security protocol is SASL_SSL, we need to set a cluster
-  * ACL, which happens optionally in KafkaServerTestHarness. If the security protocol
-  * is SSL or PLAINTEXT, then the ACL isn't set. The remaining ACLs to enable access
-  * to producers and consumers are set here. To set ACLs, we use AclCommand directly.
+  * To start brokers we need to set a cluster ACL, which happens optionally in KafkaServerTestHarness.
+  * The remaining ACLs to enable access to producers and consumers are set here. To set ACLs, we use AclCommand directly.
   *
   * Finally, we rely on SaslSetup to bootstrap and setup Kerberos. We don't use
   * SaslTestHarness here directly because it extends ZooKeeperTestHarness, and we
@@ -63,14 +61,16 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1
   override val consumerCount = 2
   override val serverCount = 3
-  override val setClusterAcl = Some(() =>
-    { AclCommand.main(clusterAclArgs)
-      TestUtils.waitAndVerifyAcls(ClusterActionAcl, servers.head.apis.authorizer.get, clusterResource)
-    } : Unit
-  )
+  override val setClusterAcl = Some { () =>
+    AclCommand.main(clusterAclArgs)
+    servers.foreach(s =>
+      TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, clusterResource)
+    )
+  }
   val numRecords = 1
   val group = "group"
   val topic = "e2etopic"
+  val topicWildcard = "*"
   val part = 0
   val tp = new TopicPartition(topic, part)
   val topicAndPartition = new TopicAndPartition(topic, part)
@@ -93,6 +93,12 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                             s"--cluster",
                                             s"--operation=ClusterAction",
                                             s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
+  def topicBrokerReadAclArgs: Array[String] = Array("--authorizer-properties",
+                                                    s"zookeeper.connect=$zkConnect",
+                                                    s"--add",
+                                                    s"--topic=$topicWildcard",
+                                                    s"--operation=Read",
+                                                    s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
   def produceAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
@@ -106,13 +112,14 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                                s"--group=$group",
                                                s"--consumer",
                                                s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def groupAclArgs: Array[String] = Array("--authorizer-properties", 
+  def groupAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--group=$group",
                                           s"--operation=Read",
                                           s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def ClusterActionAcl:Set[Acl] =  Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
+  def ClusterActionAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
+  def TopicBrokerReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, Read))
   def GroupReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
   def TopicReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
   def TopicWriteAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Write))
@@ -124,7 +131,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   // Some needed configuration for brokers, producers, and consumers
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-  this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "1")
+  this.serverConfig.setProperty(KafkaConfig.MinInSyncReplicasProp, "3")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
 
   /**
@@ -139,8 +146,12 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
         startSasl(Both)
     }
     super.setUp
+    AclCommand.main(topicBrokerReadAclArgs)
+    servers.foreach( s =>
+      TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*"))
+    )
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(zkUtils, topic, 1, 1, this.servers)
+    TestUtils.createTopic(zkUtils, topic, 1, 3, this.servers)
   }
 
   /**
@@ -159,15 +170,17 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   def testProduceConsume {
     AclCommand.main(produceAclArgs)
     AclCommand.main(consumeAclArgs)
-    TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl, servers.head.apis.authorizer.get, topicResource)
-    TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
+    servers.foreach(s => {
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
+    })
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
     //Consume records
     debug("Finished sending and starting to consume records")
     consumers.head.assign(List(tp).asJava)
-    consumeRecords(this.consumers.head)
+    consumeRecords(this.consumers.head, numRecords)
     debug("Finished consuming")
   }
 
@@ -195,15 +208,17 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   def testNoConsumeAcl {
     AclCommand.main(produceAclArgs)
     AclCommand.main(groupAclArgs)
-    TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, servers.head.apis.authorizer.get, topicResource)
-    TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
+    servers.foreach(s => {
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
+    })
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
     //Consume records
     debug("Finished sending and starting to consume records")
     consumers.head.assign(List(tp).asJava)
-    try{
+    try {
       consumeRecords(this.consumers.head)
       fail("Topic authorization exception expected")
     } catch {
@@ -218,14 +233,16 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   @Test
   def testNoGroupAcl {
     AclCommand.main(produceAclArgs)
-    TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, servers.head.apis.authorizer.get, topicResource)
+    servers.foreach(s =>
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
+    )
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
     //Consume records
     debug("Finished sending and starting to consume records")
     consumers.head.assign(List(tp).asJava)
-    try{
+    try {
       consumeRecords(this.consumers.head)
       fail("Topic authorization exception expected")
     } catch {

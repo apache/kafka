@@ -26,8 +26,7 @@ public class SaslConfigs {
         + "This can be defined either in Kafka's JAAS config or in Kafka's config.";
 
     public static final String SASL_KERBEROS_KINIT_CMD = "sasl.kerberos.kinit.cmd";
-    public static final String SASL_KERBEROS_KINIT_CMD_DOC = "Kerberos kinit command path. "
-        + "Default is /usr/bin/kinit";
+    public static final String SASL_KERBEROS_KINIT_CMD_DOC = "Kerberos kinit command path.";
     public static final String DEFAULT_KERBEROS_KINIT_CMD = "/usr/bin/kinit";
 
     public static final String SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR = "sasl.kerberos.ticket.renew.window.factor";
@@ -46,7 +45,8 @@ public class SaslConfigs {
     public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = "sasl.kerberos.principal.to.local.rules";
     public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = "A list of rules for mapping from principal names to short names (typically operating system usernames). " +
             "The rules are evaluated in order and the first rule that matches a principal name is used to map it to a short name. Any later rules in the list are ignored. " +
-            "By default, principal names of the form <username>/<hostname>@<REALM> are mapped to <username>.";
+            "By default, principal names of the form {username}/{hostname}@{REALM} are mapped to {username}. " +
+            "For more details on the format please see <a href=\"#security_authz\"> security authorization and acls</a>.";
     public static final List<String> DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = Collections.singletonList("DEFAULT");
 
     public static void addClientSaslSupport(ConfigDef config) {

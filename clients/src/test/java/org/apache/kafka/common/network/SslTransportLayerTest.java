@@ -67,11 +67,10 @@ public class SslTransportLayerTest {
     @Before
     public void setup() throws Exception {
         // Create certificates for use by client and server. Add server cert to client truststore and vice versa.
-        serverCertStores = new CertStores(true);
-        clientCertStores = new CertStores(false);
+        serverCertStores = new CertStores(true, "localhost");
+        clientCertStores = new CertStores(false, "localhost");
         sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
-
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
@@ -102,19 +101,21 @@ public class SslTransportLayerTest {
     }
     
     /**
-     * Tests that server certificate with invalid IP address is not accepted by
-     * a client that validates server endpoint. Certificate uses "localhost" as
-     * common name, test uses host IP to trigger endpoint validation failure.
+     * Tests that server certificate with invalid host name is not accepted by
+     * a client that validates server endpoint. Server certificate uses
+     * wrong hostname as common name to trigger endpoint validation failure.
      */
     @Test
     public void testInvalidEndpointIdentification() throws Exception {
         String node = "0";
-        String serverHost = InetAddress.getLocalHost().getHostAddress();
-        server = new SslEchoServer(sslServerConfigs, serverHost);
-        server.start();
+        serverCertStores = new CertStores(true, "notahost");
+        clientCertStores = new CertStores(false, "localhost");
+        sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
+        sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createEchoServer(sslServerConfigs);
         createSelector(sslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress(serverHost, server.port);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
         waitForChannelClose(node);
@@ -458,11 +459,11 @@ public class SslTransportLayerTest {
         
         Map<String, Object> sslConfig;
         
-        CertStores(boolean server) throws Exception {
+        CertStores(boolean server, String host) throws Exception {
             String name = server ? "server" : "client";
             Mode mode = server ? Mode.SERVER : Mode.CLIENT;
             File truststoreFile = File.createTempFile(name + "TS", ".jks");
-            sslConfig = TestSslUtils.createSslConfig(!server, true, mode, truststoreFile, name);
+            sslConfig = TestSslUtils.createSslConfig(!server, true, mode, truststoreFile, name, host);
             if (server)
                 sslConfig.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         }

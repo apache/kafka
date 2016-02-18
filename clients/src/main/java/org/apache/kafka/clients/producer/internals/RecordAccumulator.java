@@ -156,11 +156,11 @@ public final class RecordAccumulator {
         // abortIncompleteBatches().
         appendsInProgress.incrementAndGet();
         try {
-            if (closed)
-                throw new IllegalStateException("Cannot send after the producer is closed.");
             // check if we have an in-progress batch
             Deque<RecordBatch> dq = dequeFor(tp);
             synchronized (dq) {
+                if (closed)
+                    throw new IllegalStateException("Cannot send after the producer is closed.");
                 RecordBatch last = dq.peekLast();
                 if (last != null) {
                     FutureRecordMetadata future = last.tryAppend(key, value, callback, time.milliseconds());
@@ -372,15 +372,18 @@ public final class RecordAccumulator {
     }
 
     /**
-     * Get the deque for the given topic-partition, creating it if necessary. Since new topics will only be added rarely
-     * we copy-on-write the hashmap
+     * Get the deque for the given topic-partition, creating it if necessary.
      */
     private Deque<RecordBatch> dequeFor(TopicPartition tp) {
         Deque<RecordBatch> d = this.batches.get(tp);
         if (d != null)
             return d;
-        this.batches.putIfAbsent(tp, new ArrayDeque<RecordBatch>());
-        return this.batches.get(tp);
+        d = new ArrayDeque<>();
+        Deque<RecordBatch> previous = this.batches.putIfAbsent(tp, d);
+        if (previous == null)
+            return d;
+        else
+            return previous;
     }
 
     /**
@@ -449,6 +452,7 @@ public final class RecordAccumulator {
             // Close the batch before aborting
             synchronized (dq) {
                 batch.records.close();
+                dq.remove(batch);
             }
             batch.done(-1L, new IllegalStateException("Producer is closed forcefully."));
             deallocate(batch);

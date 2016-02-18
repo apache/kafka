@@ -16,7 +16,7 @@
 
 if [ $# -lt 1 ];
 then
-	echo "USAGE: $0 zookeeper.properties"
+	echo "USAGE: $0 [-daemon] zookeeper.properties"
 	exit 1
 fi
 base_dir=$(dirname $0)
@@ -41,5 +41,4 @@ case $COMMAND in
      ;;
 esac
 
-exec $base_dir/kafka-run-class.sh $EXTRA_ARGS org.apache.zookeeper.server.quorum.QuorumPeerMain $@
-
+exec $base_dir/kafka-run-class.sh $EXTRA_ARGS org.apache.zookeeper.server.quorum.QuorumPeerMain "$@"

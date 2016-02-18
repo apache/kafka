@@ -38,15 +38,19 @@ public class ProtocolSerializationTest {
                                  new Field("int32", Type.INT32),
                                  new Field("int64", Type.INT64),
                                  new Field("string", Type.STRING),
+                                 new Field("nullable_string", Type.NULLABLE_STRING),
                                  new Field("bytes", Type.BYTES),
+                                 new Field("nullable_bytes", Type.NULLABLE_BYTES),
                                  new Field("array", new ArrayOf(Type.INT32)),
-                                 new Field("struct", new Schema(new Field("field", Type.INT32))));
+                                 new Field("struct", new Schema(new Field("field", new ArrayOf(Type.INT32)))));
         this.struct = new Struct(this.schema).set("int8", (byte) 1)
                                              .set("int16", (short) 1)
                                              .set("int32", 1)
                                              .set("int64", 1L)
                                              .set("string", "1")
-                                             .set("bytes", "1".getBytes())
+                                             .set("nullable_string", null)
+                                             .set("bytes", ByteBuffer.wrap("1".getBytes()))
+                                             .set("nullable_bytes", null)
                                              .set("array", new Object[] {1});
         this.struct.set("struct", this.struct.instance("struct").set("field", new Object[] {1, 2, 3}));
     }
@@ -60,8 +64,14 @@ public class ProtocolSerializationTest {
         check(Type.STRING, "");
         check(Type.STRING, "hello");
         check(Type.STRING, "A\u00ea\u00f1\u00fcC");
+        check(Type.NULLABLE_STRING, null);
+        check(Type.NULLABLE_STRING, "");
+        check(Type.NULLABLE_STRING, "hello");
         check(Type.BYTES, ByteBuffer.allocate(0));
         check(Type.BYTES, ByteBuffer.wrap("abcd".getBytes()));
+        check(Type.NULLABLE_BYTES, null);
+        check(Type.NULLABLE_BYTES, ByteBuffer.allocate(0));
+        check(Type.NULLABLE_BYTES, ByteBuffer.wrap("abcd".getBytes()));
         check(new ArrayOf(Type.INT32), new Object[] {1, 2, 3, 4});
         check(new ArrayOf(Type.STRING), new Object[] {});
         check(new ArrayOf(Type.STRING), new Object[] {"hello", "there", "beautiful"});
@@ -74,9 +84,11 @@ public class ProtocolSerializationTest {
             try {
                 this.struct.set(f, null);
                 this.struct.validate();
-                fail("Should not allow serialization of null value.");
+                if (!f.type.isNullable())
+                    fail("Should not allow serialization of null value.");
             } catch (SchemaException e) {
-                // this is good
+                assertFalse(f.type.isNullable());
+            } finally {
                 this.struct.set(f, o);
             }
         }
@@ -87,6 +99,20 @@ public class ProtocolSerializationTest {
         Schema schema = new Schema(new Field("field", Type.INT32, "doc", 42));
         Struct struct = new Struct(schema);
         assertEquals("Should get the default value", 42, struct.get("field"));
+        struct.validate(); // should be valid even with missing value
+    }
+
+    @Test
+    public void testNullableDefault() {
+        checkNullableDefault(Type.NULLABLE_BYTES, ByteBuffer.allocate(0));
+        checkNullableDefault(Type.NULLABLE_STRING, "default");
+    }
+
+    private void checkNullableDefault(Type type, Object defaultValue) {
+        // Should use default even if the field allows null values
+        Schema schema = new Schema(new Field("field", type, "doc", defaultValue));
+        Struct struct = new Struct(schema);
+        assertEquals("Should get the default value", defaultValue, struct.get("field"));
         struct.validate(); // should be valid even with missing value
     }
 

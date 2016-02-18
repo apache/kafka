@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -20,19 +20,20 @@ import kafka.message._
 import kafka.common._
 import kafka.utils._
 import kafka.server.{LogOffsetMetadata, FetchDataInfo}
+import org.apache.kafka.common.errors.CorruptRecordException
 
 import scala.math._
-import java.io.File
+import java.io.{IOException, File}
 
 
  /**
  * A segment of the log. Each segment has two components: a log and an index. The log is a FileMessageSet containing
- * the actual messages. The index is an OffsetIndex that maps from logical offsets to physical file positions. Each 
+ * the actual messages. The index is an OffsetIndex that maps from logical offsets to physical file positions. Each
  * segment has a base offset which is an offset <= the least offset of any message in this segment and > any offset in
  * any previous segment.
- * 
- * A segment with a base offset of [base_offset] would be stored in two files, a [base_offset].index and a [base_offset].log file. 
- * 
+ *
+ * A segment with a base offset of [base_offset] would be stored in two files, a [base_offset].index and a [base_offset].log file.
+ *
  * @param log The message set containing log entries
  * @param index The offset index
  * @param baseOffset A lower bound on the offsets in this segment
@@ -40,18 +41,18 @@ import java.io.File
  * @param time The time instance
  */
 @nonthreadsafe
-class LogSegment(val log: FileMessageSet, 
-                 val index: OffsetIndex, 
-                 val baseOffset: Long, 
+class LogSegment(val log: FileMessageSet,
+                 val index: OffsetIndex,
+                 val baseOffset: Long,
                  val indexIntervalBytes: Int,
                  val rollJitterMs: Long,
                  time: Time) extends Logging {
-  
+
   var created = time.milliseconds
 
   /* the number of bytes since we last added an entry in the offset index */
   private var bytesSinceLastIndexEntry = 0
-  
+
   def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int, rollJitterMs: Long, time: Time, fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false) =
     this(new FileMessageSet(file = Log.logFilename(dir, startOffset), fileAlreadyExists = fileAlreadyExists, initFileSize = initFileSize, preallocate = preallocate),
          new OffsetIndex(file = Log.indexFilename(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
@@ -59,16 +60,16 @@ class LogSegment(val log: FileMessageSet,
          indexIntervalBytes,
          rollJitterMs,
          time)
-    
+
   /* Return the size in bytes of this log segment */
   def size: Long = log.sizeInBytes()
-  
+
   /**
    * Append the given messages starting with the given offset. Add
    * an entry to the index if needed.
-   * 
+   *
    * It is assumed this method is being called from within a lock.
-   * 
+   *
    * @param offset The first offset in the message set.
    * @param messages The messages to append.
    */
@@ -86,17 +87,17 @@ class LogSegment(val log: FileMessageSet,
       this.bytesSinceLastIndexEntry += messages.sizeInBytes
     }
   }
-  
+
   /**
    * Find the physical file position for the first message with offset >= the requested offset.
-   * 
+   *
    * The lowerBound argument is an optimization that can be used if we already know a valid starting position
    * in the file higher than the greatest-lower-bound from the index.
-   * 
+   *
    * @param offset The offset we want to translate
    * @param startingFilePosition A lower bound on the file position from which to begin the search. This is purely an optimization and
    * when omitted, the search will begin at the position in the offset index.
-   * 
+   *
    * @return The position in the log storing the message with the least offset >= the requested offset or null if no message meets this criteria.
    */
   @threadsafe
@@ -108,12 +109,12 @@ class LogSegment(val log: FileMessageSet,
   /**
    * Read a message set from this segment beginning with the first offset >= startOffset. The message set will include
    * no more than maxSize bytes and will end before maxOffset if a maxOffset is specified.
-   * 
+   *
    * @param startOffset A lower bound on the first offset to include in the message set we read
    * @param maxSize The maximum number of bytes to include in the message set we read
    * @param maxOffset An optional maximum offset for the message set we read
    * @param maxPosition An optional maximum position in the log segment that should be exposed for read.
-   * 
+   *
    * @return The fetched data and the offset metadata of the first message whose offset is >= startOffset,
    *         or null if the startOffset is larger than the largest offset in this log
    */
@@ -136,7 +137,7 @@ class LogSegment(val log: FileMessageSet,
       return FetchDataInfo(offsetMetadata, MessageSet.Empty)
 
     // calculate the length of the message set to read based on whether or not they gave us a maxOffset
-    val length = 
+    val length =
       maxOffset match {
         case None =>
           // no max offset, just read until the max position
@@ -146,7 +147,7 @@ class LogSegment(val log: FileMessageSet,
           if(offset < startOffset)
             throw new IllegalArgumentException("Attempt to read with a maximum offset (%d) less than the start offset (%d).".format(offset, startOffset))
           val mapping = translateOffset(offset, startPosition.position)
-          val endPosition = 
+          val endPosition =
             if(mapping == null)
               logSize // the max offset is off the end of the log, use the end of the file
             else
@@ -156,13 +157,13 @@ class LogSegment(val log: FileMessageSet,
       }
     FetchDataInfo(offsetMetadata, log.read(startPosition.position, length))
   }
-  
+
   /**
    * Run recovery on the given segment. This will rebuild the index from the log file and lop off any invalid bytes from the end of the log and index.
-   * 
+   *
    * @param maxMessageSize A bound the memory allocation in the case of a corrupt message size--we will assume any message larger than this
    * is corrupt.
-   * 
+   *
    * @return The number of bytes truncated from the log
    */
   @nonthreadsafe
@@ -191,7 +192,7 @@ class LogSegment(val log: FileMessageSet,
         validBytes += MessageSet.entrySize(entry.message)
       }
     } catch {
-      case e: InvalidMessageException => 
+      case e: CorruptRecordException =>
         logger.warn("Found invalid messages in log segment %s at byte offset %d: %s.".format(log.file.getAbsolutePath, validBytes, e.getMessage))
     }
     val truncated = log.sizeInBytes - validBytes
@@ -222,7 +223,7 @@ class LogSegment(val log: FileMessageSet,
     bytesSinceLastIndexEntry = 0
     bytesTruncated
   }
-  
+
   /**
    * Calculate the offset that would be used for the next message to be append to this segment.
    * Note that this is expensive.
@@ -239,7 +240,7 @@ class LogSegment(val log: FileMessageSet,
       }
     }
   }
-  
+
   /**
    * Flush this log segment to disk
    */
@@ -250,19 +251,25 @@ class LogSegment(val log: FileMessageSet,
       index.flush()
     }
   }
-  
+
   /**
    * Change the suffix for the index and log file for this log segment
    */
   def changeFileSuffixes(oldSuffix: String, newSuffix: String) {
-    val logRenamed = log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
-    if(!logRenamed)
-      throw new KafkaStorageException("Failed to change the log file suffix from %s to %s for log segment %d".format(oldSuffix, newSuffix, baseOffset))
-    val indexRenamed = index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, oldSuffix, newSuffix)))
-    if(!indexRenamed)
-      throw new KafkaStorageException("Failed to change the index file suffix from %s to %s for log segment %d".format(oldSuffix, newSuffix, baseOffset))
+
+    def kafkaStorageException(fileType: String, e: IOException) =
+      new KafkaStorageException(s"Failed to change the $fileType file suffix from $oldSuffix to $newSuffix for log segment $baseOffset", e)
+
+    try log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
+    catch {
+      case e: IOException => throw kafkaStorageException("log", e)
+    }
+    try index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, oldSuffix, newSuffix)))
+    catch {
+      case e: IOException => throw kafkaStorageException("index", e)
+    }
   }
-  
+
   /**
    * Close this log segment
    */
@@ -270,7 +277,7 @@ class LogSegment(val log: FileMessageSet,
     CoreUtils.swallow(index.close)
     CoreUtils.swallow(log.close)
   }
-  
+
   /**
    * Delete this log segment from the filesystem.
    * @throws KafkaStorageException if the delete fails.
@@ -283,12 +290,12 @@ class LogSegment(val log: FileMessageSet,
     if(!deletedIndex && index.file.exists)
       throw new KafkaStorageException("Delete of index " + index.file.getName + " failed.")
   }
-  
+
   /**
    * The last modified time of this log segment as a unix time stamp
    */
   def lastModified = log.file.lastModified
-  
+
   /**
    * Change the last modified time for this log segment
    */

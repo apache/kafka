@@ -42,16 +42,6 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/contrib/hadoop-consumer/build/libs//kafka-hadoop-consumer*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/contrib/hadoop-producer/build/libs//kafka-hadoop-producer*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
 for file in $base_dir/clients/build/libs/kafka-clients*.jar;
 do
   CLASSPATH=$CLASSPATH:$file

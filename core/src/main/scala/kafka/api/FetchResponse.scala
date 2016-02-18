@@ -20,11 +20,12 @@ package kafka.api
 import java.nio.ByteBuffer
 import java.nio.channels.GatheringByteChannel
 
-import kafka.common.{TopicAndPartition, ErrorMapping}
+import kafka.common.TopicAndPartition
 import kafka.message.{MessageSet, ByteBufferMessageSet}
 import kafka.api.ApiUtils._
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.{Send, MultiSend}
+import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
 
@@ -45,7 +46,7 @@ object FetchResponsePartitionData {
     4 /* messageSetSize */
 }
 
-case class FetchResponsePartitionData(error: Short = ErrorMapping.NoError, hw: Long = -1L, messages: MessageSet) {
+case class FetchResponsePartitionData(error: Short = Errors.NONE.code, hw: Long = -1L, messages: MessageSet) {
   val sizeInBytes = FetchResponsePartitionData.headerSize + messages.sizeInBytes
 }
 
@@ -246,7 +247,7 @@ case class FetchResponse(correlationId: Int,
 
   def highWatermark(topic: String, partition: Int) = partitionDataFor(topic, partition).hw
 
-  def hasError = data.values.exists(_.error != ErrorMapping.NoError)
+  def hasError = data.values.exists(_.error != Errors.NONE.code)
 
   def errorCode(topic: String, partition: Int) = partitionDataFor(topic, partition).error
 }

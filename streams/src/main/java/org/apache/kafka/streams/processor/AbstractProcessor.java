@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor;
 /**
  * An abstract implementation of {@link Processor} that manages the {@link ProcessorContext} instance and provides default no-op
  * implementations of {@link #punctuate(long)} and {@link #close()}.
- * 
+ *
  * @param <K> the type of keys
  * @param <V> the type of values
  */
@@ -41,11 +41,11 @@ public abstract class AbstractProcessor<K, V> implements Processor<K, V> {
      * <p>
      * This method does nothing by default; if desired, subclasses should override it with custom functionality.
      * </p>
-     * 
-     * @param streamTime the stream time when this method is being called
+     *
+     * @param timestamp the wallclock time when this method is being called
      */
     @Override
-    public void punctuate(long streamTime) {
+    public void punctuate(long timestamp) {
         // do nothing
     }
 
@@ -62,7 +62,7 @@ public abstract class AbstractProcessor<K, V> implements Processor<K, V> {
 
     /**
      * Get the processor's context set during {@link #init(ProcessorContext) initialization}.
-     * 
+     *
      * @return the processor context; null only when called prior to {@link #init(ProcessorContext) initialization}.
      */
     protected final ProcessorContext context() {

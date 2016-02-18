@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -53,12 +54,12 @@ public class KStreamTestDriver {
                              Serializer<?> keySerializer, Deserializer<?> keyDeserializer,
                              Serializer<?> valSerializer, Deserializer<?> valDeserializer) {
         this.topology = builder.build(null);
-        this.context = new MockProcessorContext(this, keySerializer, keyDeserializer, valSerializer, valDeserializer, new MockRecordCollector());
         this.stateDir = stateDir;
+        this.context = new MockProcessorContext(this, stateDir, keySerializer, keyDeserializer, valSerializer, valDeserializer, new MockRecordCollector());
 
         for (StateStoreSupplier stateStoreSupplier : topology.stateStoreSuppliers()) {
             StateStore store = stateStoreSupplier.get();
-            store.init(context);
+            store.init(context, store);
         }
 
         for (ProcessorNode node : topology.processors()) {
@@ -126,15 +127,25 @@ public class KStreamTestDriver {
         public MockRecordCollector() {
             super(null);
         }
+        
+        @Override
+        public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer,
+                                StreamPartitioner<K, V> partitioner) {
+            // The serialization is skipped.
+            process(record.topic(), record.key(), record.value());
+        }
 
+        @Override
         public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
             // The serialization is skipped.
             process(record.topic(), record.key(), record.value());
         }
 
+        @Override
         public void flush() {
         }
 
+        @Override
         public void close() {
         }
     }

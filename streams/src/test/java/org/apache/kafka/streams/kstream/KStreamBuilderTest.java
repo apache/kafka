@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
-import org.apache.kafka.streams.processor.TopologyException;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
@@ -28,11 +28,11 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamBuilderTest {
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = TopologyBuilderException.class)
     public void testFrom() {
         final KStreamBuilder builder = new KStreamBuilder();
 
-        builder.from("topic-1", "topic-2");
+        builder.stream("topic-1", "topic-2");
 
         builder.addSource(KStreamImpl.SOURCE_NAME + "0000000000", "topic-3");
     }
@@ -59,8 +59,8 @@ public class KStreamBuilderTest {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> source1 = builder.from(topic1);
-        KStream<String, String> source2 = builder.from(topic2);
+        KStream<String, String> source1 = builder.stream(topic1);
+        KStream<String, String> source2 = builder.stream(topic2);
         KStream<String, String> merged = builder.merge(source1, source2);
 
         MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();

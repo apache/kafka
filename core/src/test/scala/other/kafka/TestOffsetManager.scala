@@ -17,14 +17,13 @@
 
 package other.kafka
 
-import org.I0Itec.zkclient.ZkClient
 import kafka.api._
 import kafka.utils.{ZkUtils, ShutdownableThread}
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.protocol.Errors
 import scala.collection._
 import kafka.client.ClientUtils
 import joptsimple.OptionParser
-import kafka.common.{ErrorMapping, OffsetAndMetadata, TopicAndPartition}
+import kafka.common.{OffsetAndMetadata, TopicAndPartition}
 import kafka.network.BlockingChannel
 import scala.util.Random
 import java.io.IOException
@@ -90,7 +89,7 @@ object TestOffsetManager {
         numCommits.getAndIncrement
         commitTimer.time {
           val response = OffsetCommitResponse.readFrom(offsetsChannel.receive().payload())
-          if (response.commitStatus.exists(_._2 != ErrorMapping.NoError)) numErrors.getAndIncrement
+          if (response.commitStatus.exists(_._2 != Errors.NONE.code)) numErrors.getAndIncrement
         }
         offset += 1
       }
@@ -153,7 +152,7 @@ object TestOffsetManager {
 
           fetchTimer.time {
             val response = OffsetFetchResponse.readFrom(channel.receive().payload())
-            if (response.requestInfo.exists(_._2.error != ErrorMapping.NoError)) {
+            if (response.requestInfo.exists(_._2.error != Errors.NONE.code)) {
               numErrors.getAndIncrement
             }
           }

@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KeyValue;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.KStreamTestDriver;
@@ -81,7 +81,7 @@ public class KStreamKTableLeftJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream = builder.from(keyDeserializer, valDeserializer, topic1);
+            stream = builder.stream(keyDeserializer, valDeserializer, topic1);
             table = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
             stream.leftJoin(table, joiner).process(processor);
 
@@ -162,7 +162,7 @@ public class KStreamKTableLeftJoinTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.from(keyDeserializer, valDeserializer, topic1).map(keyValueMapper);
+        stream = builder.stream(keyDeserializer, valDeserializer, topic1).map(keyValueMapper);
         table = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
 
         stream.leftJoin(table, joiner).process(processor);

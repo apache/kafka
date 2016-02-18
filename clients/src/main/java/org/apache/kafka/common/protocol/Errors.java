@@ -20,14 +20,20 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupLoadInProgressException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
+import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
+import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
+import org.apache.kafka.common.errors.InvalidFetchSizeException;
+import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidRequiredAcksException;
+import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
@@ -36,10 +42,13 @@ import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -49,19 +58,20 @@ import org.slf4j.LoggerFactory;
 /**
  * This class contains all the client-server errors--those errors that must be sent from the server to the client. These
  * are thus part of the protocol. The names can be changed but the error code cannot.
- * 
+ *
  * Do not add exceptions that occur only on the client or only on the server here.
  */
 public enum Errors {
     UNKNOWN(-1, new UnknownServerException("The server experienced an unexpected error when processing the request")),
     NONE(0, null),
     OFFSET_OUT_OF_RANGE(1,
-            new ApiException("The requested offset is not within the range of offsets maintained by the server.")),
+            new OffsetOutOfRangeException("The requested offset is not within the range of offsets maintained by the server.")),
     CORRUPT_MESSAGE(2,
-            new CorruptRecordException("The message contents does not match the message CRC or the message is otherwise corrupt.")),
+            new CorruptRecordException("This message has failed its CRC checksum, exceeds the valid size, or is otherwise corrupt.")),
     UNKNOWN_TOPIC_OR_PARTITION(3,
             new UnknownTopicOrPartitionException("This server does not host this topic-partition.")),
-    // TODO: errorCode 4 for InvalidFetchSize
+    INVALID_FETCH_SIZE(4,
+            new InvalidFetchSizeException("The requested fetch size is invalid.")),
     LEADER_NOT_AVAILABLE(5,
             new LeaderNotAvailableException("There is no leader for this topic-partition as we are in the middle of a leadership election.")),
     NOT_LEADER_FOR_PARTITION(6,
@@ -71,7 +81,7 @@ public enum Errors {
     BROKER_NOT_AVAILABLE(8,
             new BrokerNotAvailableException("The broker is not available.")),
     REPLICA_NOT_AVAILABLE(9,
-            new ApiException("The replica is not available for the requested topic-partition")),
+            new ReplicaNotAvailableException("The replica is not available for the requested topic-partition")),
     MESSAGE_TOO_LARGE(10,
             new RecordTooLargeException("The request included a message larger than the max message size the server will accept.")),
     STALE_CONTROLLER_EPOCH(11,
@@ -99,23 +109,23 @@ public enum Errors {
     ILLEGAL_GENERATION(22,
             new IllegalGenerationException("Specified group generation id is not valid.")),
     INCONSISTENT_GROUP_PROTOCOL(23,
-            new ApiException("The group member's supported protocols are incompatible with those of existing members.")),
+            new InconsistentGroupProtocolException("The group member's supported protocols are incompatible with those of existing members.")),
     INVALID_GROUP_ID(24,
-            new ApiException("The configured groupId is invalid")),
+            new InvalidGroupIdException("The configured groupId is invalid")),
     UNKNOWN_MEMBER_ID(25,
             new UnknownMemberIdException("The coordinator is not aware of this member.")),
     INVALID_SESSION_TIMEOUT(26,
-            new ApiException("The session timeout is not within an acceptable range.")),
+            new InvalidSessionTimeoutException("The session timeout is not within an acceptable range.")),
     REBALANCE_IN_PROGRESS(27,
             new RebalanceInProgressException("The group is rebalancing, so a rejoin is needed.")),
     INVALID_COMMIT_OFFSET_SIZE(28,
-            new ApiException("The committing offset data size is not valid")),
+            new InvalidCommitOffsetSizeException("The committing offset data size is not valid")),
     TOPIC_AUTHORIZATION_FAILED(29,
-            new AuthorizationException("Topic authorization failed.")),
+            new TopicAuthorizationException("Topic authorization failed.")),
     GROUP_AUTHORIZATION_FAILED(30,
-            new AuthorizationException("Group authorization failed.")),
+            new GroupAuthorizationException("Group authorization failed.")),
     CLUSTER_AUTHORIZATION_FAILED(31,
-            new AuthorizationException("Cluster authorization failed."));
+            new ClusterAuthorizationException("Cluster authorization failed."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
@@ -143,6 +153,13 @@ public enum Errors {
      */
     public ApiException exception() {
         return this.exception;
+    }
+
+    /**
+     * Returns the class name of the exception
+     */
+    public String exceptionName() {
+        return exception.getClass().getName();
     }
 
     /**
@@ -175,10 +192,17 @@ public enum Errors {
     }
 
     /**
-     * Return the error instance associated with this exception (or UNKNOWN if there is none)
+     * Return the error instance associated with this exception or any of its superclasses (or UNKNOWN if there is none).
+     * If there are multiple matches in the class hierarchy, the first match starting from the bottom is used.
      */
     public static Errors forException(Throwable t) {
-        Errors error = classToError.get(t.getClass());
-        return error == null ? UNKNOWN : error;
+        Class clazz = t.getClass();
+        while (clazz != null) {
+            Errors error = classToError.get(clazz);
+            if (error != null)
+                return error;
+            clazz = clazz.getSuperclass();
+        }
+        return UNKNOWN;
     }
 }

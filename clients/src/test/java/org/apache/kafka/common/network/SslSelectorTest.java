@@ -26,6 +26,7 @@ import java.net.InetSocketAddress;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestSslUtils;
@@ -42,16 +43,15 @@ public class SslSelectorTest extends SelectorTest {
     private Map<String, Object> sslClientConfigs;
 
     @Before
-    public void setup() throws Exception {
+    public void setUp() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
 
         Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
         sslServerConfigs.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
-        this.server = new EchoServer(sslServerConfigs);
+        this.server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
         this.server.start();
         this.time = new MockTime();
-        sslClientConfigs = TestSslUtils.createSslConfig(false, false, Mode.SERVER, trustStoreFile, "client");
-
+        sslClientConfigs = TestSslUtils.createSslConfig(false, false, Mode.CLIENT, trustStoreFile, "client");
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
@@ -59,7 +59,7 @@ public class SslSelectorTest extends SelectorTest {
     }
 
     @After
-    public void teardown() throws Exception {
+    public void tearDown() throws Exception {
         this.selector.close();
         this.server.close();
         this.metrics.close();
@@ -157,7 +157,7 @@ public class SslSelectorTest extends SelectorTest {
     }
 
     /**
-     * Connects and waits for handshake to complete. This is required since SSLTransportLayer
+     * Connects and waits for handshake to complete. This is required since SslTransportLayer
      * implementation requires the channel to be ready before send is invoked (unlike plaintext
      * where send can be invoked straight after connect)
      */

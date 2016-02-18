@@ -17,32 +17,40 @@
 
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
-import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
+import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.reflections.Reflections;
+import org.reflections.util.ClasspathHelper;
+import org.reflections.util.ConfigurationBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 
 /**
  * <p>
@@ -56,8 +64,10 @@ import java.util.Set;
 public class Worker {
     private static final Logger log = LoggerFactory.getLogger(Worker.class);
 
-    private Time time;
-    private WorkerConfig config;
+    private final ExecutorService executor;
+    private final Time time;
+    private final WorkerConfig config;
+
     private Converter keyConverter;
     private Converter valueConverter;
     private Converter internalKeyConverter;
@@ -74,6 +84,7 @@ public class Worker {
 
     @SuppressWarnings("unchecked")
     public Worker(Time time, WorkerConfig config, OffsetBackingStore offsetBackingStore) {
+        this.executor = Executors.newCachedThreadPool();
         this.time = time;
         this.config = config;
         this.keyConverter = config.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
@@ -148,7 +159,6 @@ public class Worker {
             log.debug("Waiting for task {} to finish shutting down", task);
             if (!task.awaitStop(Math.max(limit - time.milliseconds(), 0)))
                 log.error("Graceful shutdown of task {} failed.", task);
-            task.close();
         }
 
         long timeoutMs = limit - time.milliseconds();
@@ -170,15 +180,9 @@ public class Worker {
      */
     public void addConnector(ConnectorConfig connConfig, ConnectorContext ctx) {
         String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
-        Class<?> maybeConnClass = connConfig.getClass(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-        log.info("Creating connector {} of type {}", connName, maybeConnClass.getName());
+        Class<? extends Connector> connClass = getConnectorClass(connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
 
-        Class<? extends Connector> connClass;
-        try {
-            connClass = maybeConnClass.asSubclass(Connector.class);
-        } catch (ClassCastException e) {
-            throw new ConnectException("Specified class is not a subclass of Connector: " + maybeConnClass.getName());
-        }
+        log.info("Creating connector {} of type {}", connName, connClass.getName());
 
         if (connectors.containsKey(connName))
             throw new ConnectException("Connector with name " + connName + " already exists");
@@ -196,6 +200,59 @@ public class Worker {
 
         log.info("Finished creating connector {}", connName);
     }
+
+    /* Now that the configuration doesn't contain the actual class name, we need to be able to tell the herder whether a connector is a Sink */
+    public boolean isSinkConnector(String connName) {
+        return SinkConnector.class.isAssignableFrom(connectors.get(connName).getClass());
+    }
+
+    private Class<? extends Connector> getConnectorClass(String connectorAlias) {
+        // Avoid the classpath scan if the full class name was provided
+        try {
+            Class<?> clazz = Class.forName(connectorAlias);
+            if (!Connector.class.isAssignableFrom(clazz))
+                throw new ConnectException("Class " + connectorAlias + " does not implement Connector");
+            return (Class<? extends Connector>) clazz;
+        } catch (ClassNotFoundException e) {
+            // Fall through to scan for the alias
+        }
+
+        // Iterate over our entire classpath to find all the connectors and hopefully one of them matches the alias from the connector configration
+        Reflections reflections = new Reflections(new ConfigurationBuilder()
+                .setUrls(ClasspathHelper.forJavaClassPath()));
+
+        Set<Class<? extends Connector>> connectors = reflections.getSubTypesOf(Connector.class);
+
+        List<Class<? extends Connector>> results = new ArrayList<>();
+
+        for (Class<? extends Connector> connector: connectors) {
+            // Configuration included the class name but not package
+            if (connector.getSimpleName().equals(connectorAlias))
+                results.add(connector);
+
+            // Configuration included a short version of the name (i.e. FileStreamSink instead of FileStreamSinkConnector)
+            if (connector.getSimpleName().equals(connectorAlias + "Connector"))
+                results.add(connector);
+        }
+
+        if (results.isEmpty())
+            throw new ConnectException("Failed to find any class that implements Connector and which name matches " + connectorAlias + " available connectors are: " + connectorNames(connectors));
+        if (results.size() > 1) {
+            throw new ConnectException("More than one connector matches alias " +  connectorAlias + ". Please use full package + class name instead. Classes found: " + connectorNames(results));
+        }
+
+        // We just validated that we have exactly one result, so this is safe
+        return results.get(0);
+    }
+
+    private String connectorNames(Collection<Class<? extends Connector>> connectors) {
+        StringBuilder names = new StringBuilder();
+        for (Class<?> c : connectors)
+            names.append(c.getName()).append(", ");
+
+        return names.substring(0, names.toString().length() - 2);
+    }
+
 
     private static Connector instantiateConnector(Class<? extends Connector> connClass) {
         try {
@@ -289,7 +346,9 @@ public class Worker {
 
         // Start the task before adding modifying any state, any exceptions are caught higher up the
         // call chain and there's no cleanup to do here
-        workerTask.start(taskConfig.originalsStrings());
+        workerTask.initialize(taskConfig.originalsStrings());
+        executor.submit(workerTask);
+
         if (task instanceof SourceTask) {
             WorkerSourceTask workerSourceTask = (WorkerSourceTask) workerTask;
             sourceTaskOffsetCommitter.schedule(id, workerSourceTask);
@@ -314,7 +373,6 @@ public class Worker {
         task.stop();
         if (!task.awaitStop(config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG)))
             log.error("Graceful stop of task {} failed.", task);
-        task.close();
         tasks.remove(id);
     }
 
@@ -341,4 +399,5 @@ public class Worker {
     public Converter getInternalValueConverter() {
         return internalValueConverter;
     }
+
 }

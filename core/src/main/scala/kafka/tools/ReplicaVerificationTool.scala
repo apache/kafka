@@ -27,9 +27,10 @@ import java.util.regex.{PatternSyntaxException, Pattern}
 import kafka.api._
 import java.text.SimpleDateFormat
 import java.util.Date
-import kafka.common.{ErrorMapping, TopicAndPartition}
+import kafka.common.TopicAndPartition
 import kafka.utils._
 import kafka.consumer.{ConsumerConfig, Whitelist, SimpleConsumer}
+import org.apache.kafka.common.protocol.Errors
 
 /**
  *  For verifying the consistency among replicas.
@@ -230,7 +231,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
 
   private def offsetResponseStringWithError(offsetResponse: OffsetResponse): String = {
     offsetResponse.partitionErrorAndOffsets.filter {
-      case (topicAndPartition, partitionOffsetsResponse) => partitionOffsetsResponse.error != ErrorMapping.NoError
+      case (topicAndPartition, partitionOffsetsResponse) => partitionOffsetsResponse.error != Errors.NONE.code
     }.mkString
   }
 

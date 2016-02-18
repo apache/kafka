@@ -25,7 +25,6 @@ rem Using pushd popd to set BASE_DIR to the absolute path
 pushd %~dp0..\..
 set BASE_DIR=%CD%
 popd
-set CLASSPATH=
 
 IF ["%SCALA_VERSION%"] EQU [""] (
   set SCALA_VERSION=2.10.6
@@ -55,20 +54,8 @@ for %%i in (%BASE_DIR%\examples\build\libs\kafka-examples-*.jar) do (
 	call :concat %%i
 )
 
-rem Classpath addition for contrib/hadoop-consumer
-for %%i in (%BASE_DIR%\contrib\hadoop-consumer\build\libs\kafka-hadoop-consumer-*.jar) do (
-	call :concat %%i
-)
-
-rem Classpath addition for contrib/hadoop-producer
-for %%i in (%BASE_DIR%\contrib\hadoop-producer\build\libs\kafka-hadoop-producer-*.jar) do (
-	call :concat %%i
-)
-
 rem Classpath addition for release
-for %%i in (%BASE_DIR%\libs\*.jar) do (
-	call :concat %%i
-)
+call :concat %BASE_DIR%\libs\*
 
 rem Classpath addition for core
 for %%i in (%BASE_DIR%\core\build\libs\kafka_%SCALA_BINARY_VERSION%*.jar) do (
@@ -85,10 +72,22 @@ IF ["%JMX_PORT%"] NEQ [""] (
 	set KAFKA_JMX_OPTS=%KAFKA_JMX_OPTS% -Dcom.sun.management.jmxremote.port=%JMX_PORT%
 )
 
+rem Log directory to use
+IF ["%LOG_DIR%"] EQU [""] (
+    set LOG_DIR=%BASE_DIR%/logs
+)
+
 rem Log4j settings
 IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
 	set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%BASE_DIR%/config/tools-log4j.properties
+) ELSE (
+  # create logs directory
+  IF not exist %LOG_DIR% (
+      mkdir %LOG_DIR%
+  )
 )
+
+set KAFKA_LOG4J_OPTS=-Dkafka.logs.dir=%LOG_DIR% %KAFKA_LOG4J_OPTS%
 
 rem Generic jvm settings you want to add
 IF ["%KAFKA_OPTS%"] EQU [""] (

@@ -128,16 +128,33 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
   private val workQueue = new LinkedBlockingQueue[Runnable]
   private val futures = new Queue[Future[String]]
 
-  private def setAclsRecursively(path: String) = {
+  private def setAcl(path: String, setPromise: Promise[String]) = {
     info("Setting ACL for path %s".format(path))
+    zkUtils.zkConnection.getZookeeper.setACL(path, ZkUtils.DefaultAcls(zkUtils.isSecure), -1, SetACLCallback, setPromise)
+  }
+
+  private def getChildren(path: String, childrenPromise: Promise[String]) = {
+    info("Getting children to set ACLs for path %s".format(path))
+    zkUtils.zkConnection.getZookeeper.getChildren(path, false, GetChildrenCallback, childrenPromise)
+  }
+
+  private def setAclIndividually(path: String) = {
+    val setPromise = Promise[String]
+    futures.synchronized {
+      futures += setPromise.future
+    }
+    setAcl(path, setPromise)
+  }
+
+  private def setAclsRecursively(path: String) = {
     val setPromise = Promise[String]
     val childrenPromise = Promise[String]
     futures.synchronized {
       futures += setPromise.future
       futures += childrenPromise.future
     }
-    zkUtils.zkConnection.getZookeeper.setACL(path, ZkUtils.DefaultAcls(zkUtils.isSecure), -1, SetACLCallback, setPromise)
-    zkUtils.zkConnection.getZookeeper.getChildren(path, false, GetChildrenCallback, childrenPromise)
+    setAcl(path, setPromise)
+    getChildren(path, childrenPromise)
   }
 
   private object GetChildrenCallback extends ChildrenCallback {
@@ -205,11 +222,12 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
 
   private def run(): Unit = {
     try {
+      setAclIndividually("/")
       for (path <- zkUtils.securePersistentZkPaths) {
         debug("Going to set ACL for %s".format(path))
         zkUtils.makeSurePersistentPathExists(path)
+        setAclsRecursively(path)
       }
-      setAclsRecursively("/")
       
       @tailrec
       def recurse(): Unit = {

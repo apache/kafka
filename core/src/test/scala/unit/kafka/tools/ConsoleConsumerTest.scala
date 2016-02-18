@@ -15,12 +15,11 @@
  * limitations under the License.
  */
 
-package unit.kafka.tools
+package kafka.tools
 
 import java.io.FileOutputStream
 
 import kafka.consumer.{BaseConsumer, BaseConsumerRecord}
-import kafka.tools.{ConsoleConsumer, MessageFormatter}
 import kafka.utils.TestUtils
 import org.easymock.EasyMock
 import org.junit.Assert._

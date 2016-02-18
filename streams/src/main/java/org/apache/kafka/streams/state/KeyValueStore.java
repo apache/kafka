@@ -19,6 +19,7 @@
 
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStore;
 
 import java.util.List;
@@ -55,7 +56,7 @@ public interface KeyValueStore<K, V> extends StateStore {
      * @param entries A list of entries to put into the store.
      * @throws NullPointerException If null is used for any key or value.
      */
-    abstract public void putAll(List<Entry<K, V>> entries);
+    abstract public void putAll(List<KeyValue<K, V>> entries);
 
     /**
      * Delete the value from the store (if there is one)

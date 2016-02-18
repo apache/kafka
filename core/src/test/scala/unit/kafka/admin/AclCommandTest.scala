@@ -14,12 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.admin
+package kafka.admin
 
 import java.io.StringReader
 import java.util.Properties
 
-import kafka.admin.AclCommand
+import kafka.admin.AclCommand.AclCommandOptions
 import kafka.security.auth._
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
@@ -108,6 +108,12 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     }
   }
 
+  @Test (expected = classOf[IllegalArgumentException])
+  def testInvalidAuthorizerProperty() {
+    val args = Array("--authorizer-properties", "zookeeper.connect " + zkConnect)
+    AclCommand.withAuthorizer(new AclCommandOptions(args))(null)
+  }
+
   private def testRemove(resources: Set[Resource], resourceCmd: Array[String], args: Array[String], brokerProps: Properties) {
     for (resource <- resources) {
       Console.withIn(new StringReader(s"y${AclCommand.Newline}" * resources.size)) {
@@ -131,7 +137,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   def withAuthorizer(props: Properties)(f: Authorizer => Unit) {
-    val kafkaConfig = KafkaConfig.fromProps(props)
+    val kafkaConfig = KafkaConfig.fromProps(props, doLog = false)
     val authZ = new SimpleAclAuthorizer
     try {
       authZ.configure(kafkaConfig.originals)

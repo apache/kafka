@@ -265,7 +265,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               case None =>
                 true
             }
-          if (leaderAndIsrIsEmpty)
+          if (leaderAndIsrIsEmpty && !controller.deleteTopicManager.isPartitionToBeDeleted(topicAndPartition))
             throw new StateChangeFailedException(
               "Failed to change state of replica %d for partition %s since the leader and isr path in zookeeper is empty"
               .format(replicaId, topicAndPartition))
@@ -352,25 +352,29 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   class BrokerChangeListener() extends IZkChildListener with Logging {
     this.logIdent = "[BrokerChangeListener on Controller " + controller.config.brokerId + "]: "
     def handleChildChange(parentPath : String, currentBrokerList : java.util.List[String]) {
-      info("Broker change listener fired for path %s with children %s".format(parentPath, currentBrokerList.mkString(",")))
+      info("Broker change listener fired for path %s with children %s".format(parentPath, currentBrokerList.sorted.mkString(",")))
       inLock(controllerContext.controllerLock) {
         if (hasStarted.get) {
           ControllerStats.leaderElectionTimer.time {
             try {
-              val curBrokerIds = currentBrokerList.map(_.toInt).toSet
-              val newBrokerIds = curBrokerIds -- controllerContext.liveOrShuttingDownBrokerIds
-              val newBrokerInfo = newBrokerIds.map(zkUtils.getBrokerInfo(_))
-              val newBrokers = newBrokerInfo.filter(_.isDefined).map(_.get)
-              val deadBrokerIds = controllerContext.liveOrShuttingDownBrokerIds -- curBrokerIds
-              controllerContext.liveBrokers = curBrokerIds.map(zkUtils.getBrokerInfo(_)).filter(_.isDefined).map(_.get)
+              val curBrokers = currentBrokerList.map(_.toInt).toSet.flatMap(zkUtils.getBrokerInfo)
+              val curBrokerIds = curBrokers.map(_.id)
+              val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
+              val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
+              val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
+              val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
+              controllerContext.liveBrokers = curBrokers
+              val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
+              val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
+              val liveBrokerIdsSorted = curBrokerIds.toSeq.sorted
               info("Newly added brokers: %s, deleted brokers: %s, all live brokers: %s"
-                .format(newBrokerIds.mkString(","), deadBrokerIds.mkString(","), controllerContext.liveBrokerIds.mkString(",")))
-              newBrokers.foreach(controllerContext.controllerChannelManager.addBroker(_))
-              deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker(_))
+                .format(newBrokerIdsSorted.mkString(","), deadBrokerIdsSorted.mkString(","), liveBrokerIdsSorted.mkString(",")))
+              newBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
+              deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
               if(newBrokerIds.size > 0)
-                controller.onBrokerStartup(newBrokerIds.toSeq)
+                controller.onBrokerStartup(newBrokerIdsSorted)
               if(deadBrokerIds.size > 0)
-                controller.onBrokerFailure(deadBrokerIds.toSeq)
+                controller.onBrokerFailure(deadBrokerIdsSorted)
             } catch {
               case e: Throwable => error("Error while handling broker changes", e)
             }

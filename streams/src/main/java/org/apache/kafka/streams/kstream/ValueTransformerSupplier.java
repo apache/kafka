@@ -20,5 +20,4 @@ package org.apache.kafka.streams.kstream;
 public interface ValueTransformerSupplier<V, R> {
 
     ValueTransformer<V, R> get();
-
 }

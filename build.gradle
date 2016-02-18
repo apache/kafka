@@ -22,44 +22,38 @@ buildscript {
   apply from: file('gradle/buildscript.gradle'), to: buildscript
 
   dependencies {
-    // For Apache Rat plugin to ignore non-Git files, need ancient version for Java 6 compatibility
-    classpath group: 'org.ajoberstar', name: 'grgit', version: '0.2.3'
+    // For Apache Rat plugin to ignore non-Git files
+    classpath "org.ajoberstar:grgit:1.5.0"
   }
 }
 
-def slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.6'
-def slf4japi="org.slf4j:slf4j-api:1.7.6"
-def junit='junit:junit:4.12'
-def easymock='org.easymock:easymock:3.4'
-def powermock='org.powermock:powermock-module-junit4:1.6.3'
-def powermock_easymock='org.powermock:powermock-api-easymock:1.6.3'
-def jackson_version = '2.6.3'
-def jetty_version = '9.2.14.v20151106'
-def jersey_version = '2.22.1'
-
 allprojects {
   apply plugin: 'idea'
+  apply plugin: 'eclipse'
   repositories {
     mavenCentral()
   }
 }
 
 ext {
-    gradleVersion = "2.10"
-    buildVersionFileName = "kafka-version.properties"
+  gradleVersion = "2.11"
+  buildVersionFileName = "kafka-version.properties"
 
-    userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
+  userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
 
-    skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
-    shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
+  skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
+  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
 
-    mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
-    mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
-    mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+  mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
+  mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
+  mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+
+  userShowStandardStreams = project.hasProperty("showStandardStreams") ? showStandardStreams : null
+
 }
 
+apply from: "$rootDir/gradle/dependencies.gradle"
 apply from: file('wrapper.gradle')
-apply from: file('scala.gradle')
 
 if (new File('.git').exists()) {
   apply from: file('gradle/rat.gradle')
@@ -82,9 +76,9 @@ if (new File('.git').exists()) {
 
 subprojects {
   apply plugin: 'java'
-  apply plugin: 'eclipse'
   apply plugin: 'maven'
   apply plugin: 'signing'
+  apply plugin: 'checkstyle'
 
   sourceCompatibility = 1.7
 
@@ -128,8 +122,13 @@ subprojects {
     }
   }
 
-  tasks.withType(Test) {
+  test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    testLogging {
+      events "passed", "skipped", "failed"
+      showStandardStreams = userShowStandardStreams ?: false
+      exceptionFormat = 'full'
+    }
   }
 
   jar {
@@ -137,11 +136,11 @@ subprojects {
     from '../NOTICE'
   }
 
-  task srcJar(type:Jar) {
+  task srcJar(type: Jar) {
     classifier = 'sources'
     from '../LICENSE'
     from '../NOTICE'
-    from sourceSets.main.java
+    from sourceSets.main.allSource
   }
 
   task javadocJar(type: Jar, dependsOn: javadoc) {
@@ -160,15 +159,33 @@ subprojects {
     archives javadocJar
   }
 
-  plugins.withType(ScalaPlugin) {
-    //source jar should also contain scala source:
-    srcJar.from sourceSets.main.scala
+  if(!sourceSets.test.allSource.isEmpty()) {
+    task testJar(type: Jar) {
+      classifier = 'test'
+      from '../LICENSE'
+      from '../NOTICE'
+      from sourceSets.test.output
+    }
 
+    task testSrcJar(type: Jar, dependsOn: testJar) {
+      classifier = 'test-sources'
+      from '../LICENSE'
+      from '../NOTICE'
+      from sourceSets.test.allSource
+    }
+
+    artifacts {
+      archives testJar
+      archives testSrcJar
+    }
+  }
+
+  plugins.withType(ScalaPlugin) {
     task scaladocJar(type:Jar) {
       classifier = 'scaladoc'
       from '../LICENSE'
       from '../NOTICE'
-      from scaladoc
+      from scaladoc.destinationDir
     }
 
     //documentation task should also trigger building scala doc jar
@@ -187,51 +204,57 @@ subprojects {
       jvmArgs = ['-XX:MaxPermSize=512m', '-Xss2m']
     }
   }
+
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 for ( sv in ['2_10', '2_11'] ) {
   String svInDot = sv.replaceAll( "_", ".")
 
   tasks.create(name: "jar_core_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:jar']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "test_core_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:test']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "srcJar_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:srcJar']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "docsJar_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:docsJar']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "install_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['install']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "releaseTarGz_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['releaseTarGz']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "uploadCoreArchives_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:uploadArchives']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 }
 
@@ -255,32 +278,30 @@ tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10', 'releaseT
 tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10', 'uploadCoreArchives_2_11'] + pkgs.collect { it + ":uploadArchives" }) { }
 
 project(':core') {
-  println "Building project 'core' with Scala version $resolvedScalaVersion"
+  println "Building project 'core' with Scala version ${versions.scala}"
 
   apply plugin: 'scala'
-  apply plugin: 'checkstyle'
-  archivesBaseName = "kafka_${baseScalaVersion}"
+  archivesBaseName = "kafka_${versions.baseScala}"
 
   dependencies {
     compile project(':clients')
-    compile "$slf4jlog4j"
-    compile "org.scala-lang:scala-library:$resolvedScalaVersion"
-    compile 'org.apache.zookeeper:zookeeper:3.4.6'
-    compile 'com.101tec:zkclient:0.7'
-    compile 'com.yammer.metrics:metrics-core:2.2.0'
-    compile 'net.sf.jopt-simple:jopt-simple:4.9'
-    if (baseScalaVersion == '2.11') {
-      compile 'org.scala-lang.modules:scala-parser-combinators_2.11:1.0.4'
+    compile libs.joptSimple
+    compile libs.metrics
+    compile libs.scala
+    compile libs.slf4jlog4j
+    compile libs.zkclient
+    compile libs.zookeeper
+    // These modules were broken out of core scala in 2.10. We can remove special handling when 2.10 support is dropped.
+    if (versions.baseScala != '2.10') {
+      compile libs.scalaParserCombinators
     }
 
-    testCompile "$junit"
-    testCompile "$easymock"
-    testCompile 'org.bouncycastle:bcpkix-jdk15on:1.53'
-    testCompile "org.scalatest:scalatest_$baseScalaVersion:2.2.5"
-    testCompile project(':clients')
     testCompile project(':clients').sourceSets.test.output
-    testCompile 'org.apache.hadoop:hadoop-minikdc:2.7.1'
-    testRuntime "$slf4jlog4j"
+    testCompile libs.bcpkix
+    testCompile libs.easymock
+    testCompile libs.hadoopMiniKdc
+    testCompile libs.junit
+    testCompile libs.scalaTest
   }
 
   configurations {
@@ -304,7 +325,7 @@ project(':core') {
     from (configurations.runtime) {
       exclude('kafka-clients*')
     }
-    into "$buildDir/dependant-libs-${resolvedScalaVersion}"
+    into "$buildDir/dependant-libs-${versions.scala}"
   }
 
   tasks.create(name: "genProducerConfigDocs", dependsOn:jar, type: JavaExec) {
@@ -333,7 +354,7 @@ project(':core') {
   }
 
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
-    into "kafka_${baseScalaVersion}-${version}"
+    into "kafka_${versions.baseScala}-${version}"
     compression = Compression.GZIP
     from(project.file("../bin")) { into "bin/" }
     from(project.file("../config")) { into "config/" }
@@ -364,22 +385,6 @@ project(':core') {
     )
   }
 
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-        events "passed", "skipped", "failed"
-        exceptionFormat = 'full'
-    }
-  }
-
-  artifacts {
-    archives testJar
-  }
-
   tasks.create(name: "copyDependantTestLibs", type: Copy) {
     from (configurations.testRuntime) {
       include('*.jar')
@@ -388,14 +393,11 @@ project(':core') {
   }
 
   checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
   }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':examples') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "kafka-examples"
 
   dependencies {
@@ -403,24 +405,22 @@ project(':examples') {
   }
 
   checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
   }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':clients') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "kafka-clients"
 
   dependencies {
-    compile "$slf4japi"
-    compile 'org.xerial.snappy:snappy-java:1.1.2'
-    compile 'net.jpountz.lz4:lz4:1.3'
+    compile libs.lz4
+    compile libs.snappy
+    compile libs.slf4jApi
 
-    testCompile 'org.bouncycastle:bcpkix-jdk15on:1.52'
-    testCompile "$junit"
-    testRuntime "$slf4jlog4j"
+    testCompile libs.bcpkix
+    testCompile libs.junit
+
+    testRuntime libs.slf4jlog4j
   }
 
   task determineCommitId {
@@ -430,13 +430,14 @@ project(':clients') {
       def headRef = file("../.git/HEAD").text
       if (headRef.contains('ref: ')) {
         headRef = headRef.replaceAll('ref: ', '').trim()
+        if (file("../.git/$headRef").exists()) {
         commitId = file("../.git/$headRef").text.trim().take(takeFromHash)
+        }
       } else {
         commitId = headRef.trim().take(takeFromHash)
       }
-    } else {
-      commitId
     }
+    commitId
   }
 
   task createVersionFile(dependsOn: determineCommitId) {
@@ -466,18 +467,6 @@ project(':clients') {
     delete "$buildDir/kafka/"
   }
 
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-        events "passed", "skipped", "failed"
-        exceptionFormat = 'full'
-    }
-  }
-
   javadoc {
     include "**/org/apache/kafka/clients/consumer/*"
     include "**/org/apache/kafka/clients/producer/*"
@@ -485,47 +474,20 @@ project(':clients') {
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/serialization/*"
   }
-
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom (testCompile)
-  }
-
-  checkstyle {
-     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':tools') {
-    apply plugin: 'checkstyle'
     archivesBaseName = "kafka-tools"
 
     dependencies {
         compile project(':clients')
         compile project(':log4j-appender')
-        compile 'net.sourceforge.argparse4j:argparse4j:0.5.0'
-        compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"
-        compile "$slf4jlog4j"
+        compile libs.argparse4j
+        compile libs.jacksonDatabind
+        compile libs.slf4jlog4j
 
-        testCompile "$junit"
-        testCompile project(path: ':clients', configuration: 'archives')
-    }
-
-    task testJar(type: Jar) {
-        classifier = 'test'
-        from sourceSets.test.output
-    }
-
-    test {
-        testLogging {
-            events "passed", "skipped", "failed"
-            exceptionFormat = 'full'
-        }
+        testCompile project(':clients')
+        testCompile libs.junit
     }
 
     javadoc {
@@ -539,53 +501,27 @@ project(':tools') {
         from (configurations.runtime) {
             exclude('kafka-clients*')
         }
-        into "$buildDir/dependant-libs-${resolvedScalaVersion}"
+        into "$buildDir/dependant-libs-${versions.scala}"
     }
 
     jar {
         dependsOn 'copyDependantLibs'
     }
-
-    artifacts {
-        archives testJar
-    }
-
-    configurations {
-        archives.extendsFrom (testCompile)
-    }
-
-    checkstyle {
-        configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-        configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-    }
-    test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':streams') {
-    apply plugin: 'checkstyle'
     archivesBaseName = "kafka-streams"
 
     dependencies {
         compile project(':clients')
-        compile "$slf4jlog4j"
-        compile 'org.rocksdb:rocksdbjni:3.10.1'
-        compile 'com.101tec:zkclient:0.7' // this dependency should be removed after KIP-4
-        compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"  // this dependency should be removed after KIP-4
+        compile project(':connect:json')  // this dependency should be removed after we unify data API
+        compile libs.slf4jlog4j
+        compile libs.rocksDBJni
+        compile libs.zkclient // this dependency should be removed after KIP-4
+        compile libs.jacksonDatabind // this dependency should be removed after KIP-4
 
-        testCompile "$junit"
-        testCompile project(path: ':clients', configuration: 'archives')
-    }
-
-    task testJar(type: Jar) {
-        classifier = 'test'
-        from sourceSets.test.output
-    }
-
-    test {
-        testLogging {
-            events "passed", "skipped", "failed"
-            exceptionFormat = 'full'
-        }
+        testCompile project(':clients').sourceSets.test.output
+        testCompile libs.junit
     }
 
     javadoc {
@@ -599,85 +535,64 @@ project(':streams') {
         from (configurations.runtime) {
             exclude('kafka-clients*')
         }
-        into "$buildDir/dependant-libs-${resolvedScalaVersion}"
+        into "$buildDir/dependant-libs-${versions.scala}"
     }
 
     jar {
         dependsOn 'copyDependantLibs'
     }
+}
 
-    artifacts {
-      archives testJar
-    }
+project(':streams:examples') {
+  archivesBaseName = "kafka-streams-examples"
 
-    configurations {
-      archives.extendsFrom (testCompile)
-    }
+  dependencies {
+    compile project(':streams')
+    compile project(':connect:json')  // this dependency should be removed after we unify data API
+  }
 
-    checkstyle {
-        configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-        configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtime) {
+      exclude('kafka-streams*')
     }
-    test.dependsOn('checkstyleMain', 'checkstyleTest')
+    into "$buildDir/dependant-libs-${versions.scala}"
+  }
+
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
 }
 
 project(':log4j-appender') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "kafka-log4j-appender"
 
   dependencies {
     compile project(':clients')
-    compile "$slf4jlog4j"
+    compile libs.slf4jlog4j
 
-    testCompile "$junit"
-    testCompile project(path: ':clients', configuration: 'archives')
-  }
-
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-        events "passed", "skipped", "failed"
-        exceptionFormat = 'full'
-    }
+    testCompile project(':clients').sourceSets.test.output
+    testCompile libs.junit
   }
 
   javadoc {
     include "**/org/apache/kafka/log4jappender/*"
   }
-
-  checkstyle {
-     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':connect:api') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "connect-api"
 
   dependencies {
-    compile "$slf4japi"
     compile project(':clients')
+    compile libs.slf4jApi
 
-    testCompile "$junit"
-    testRuntime "$slf4jlog4j"
-  }
+    testCompile libs.junit
 
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-      events "passed", "skipped", "failed"
-      exceptionFormat = 'full'
-    }
+    testRuntime libs.slf4jlog4j
   }
 
   javadoc {
@@ -698,48 +613,22 @@ project(':connect:api') {
   jar {
     dependsOn copyDependantLibs
   }
-
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom (testCompile)
-  }
-
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':connect:json') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "connect-json"
 
   dependencies {
     compile project(':connect:api')
-    compile "$slf4japi"
-    compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"
+    compile libs.jacksonDatabind
+    compile libs.slf4jApi
 
-    testCompile "$junit"
-    testCompile "$easymock"
-    testCompile "$powermock"
-    testCompile "$powermock_easymock"
-    testRuntime "$slf4jlog4j"
-  }
+    testCompile libs.easymock
+    testCompile libs.junit
+    testCompile libs.powermock
+    testCompile libs.powermockEasymock
 
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-      events "passed", "skipped", "failed"
-      exceptionFormat = 'full'
-    }
+    testRuntime libs.slf4jlog4j
   }
 
   javadoc {
@@ -760,56 +649,31 @@ project(':connect:json') {
   jar {
     dependsOn copyDependantLibs
   }
-
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom(testCompile)
-  }
-
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':connect:runtime') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "connect-runtime"
 
   dependencies {
     compile project(':connect:api')
     compile project(':clients')
     compile project(':tools')
-    compile "$slf4japi"
+    compile libs.slf4jApi
 
-    compile "org.eclipse.jetty:jetty-server:$jetty_version"
-    compile "org.eclipse.jetty:jetty-servlet:$jetty_version"
-    compile "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$jackson_version"
-    compile "org.glassfish.jersey.containers:jersey-container-servlet:$jersey_version"
+    compile libs.jacksonJaxrsJsonProvider
+    compile libs.jerseyContainerServlet
+    compile libs.jettyServer
+    compile libs.jettyServlet
+    compile libs.reflections
 
-    testCompile "$junit"
-    testCompile "$easymock"
-    testCompile "$powermock"
-    testCompile "$powermock_easymock"
     testCompile project(':clients').sourceSets.test.output
-    testRuntime "$slf4jlog4j"
+    testCompile libs.easymock
+    testCompile libs.junit
+    testCompile libs.powermock
+    testCompile libs.powermockEasymock
+
     testRuntime project(":connect:json")
-  }
-
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-      events "passed", "skipped", "failed"
-      exceptionFormat = 'full'
-    }
+    testRuntime libs.slf4jlog4j
   }
 
   javadoc {
@@ -830,20 +694,6 @@ project(':connect:runtime') {
   jar {
     dependsOn copyDependantLibs
   }
-
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom(testCompile)
-  }
-
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 
   tasks.create(name: "genConnectConfigDocs", dependsOn:jar, type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
@@ -853,30 +703,18 @@ project(':connect:runtime') {
 }
 
 project(':connect:file') {
-  apply plugin: 'checkstyle'
   archivesBaseName = "connect-file"
 
   dependencies {
     compile project(':connect:api')
-    compile "$slf4japi"
+    compile libs.slf4jApi
 
-    testCompile "$junit"
-    testCompile "$easymock"
-    testCompile "$powermock"
-    testCompile "$powermock_easymock"
-    testRuntime "$slf4jlog4j"
-  }
+    testCompile libs.easymock
+    testCompile libs.junit
+    testCompile libs.powermock
+    testCompile libs.powermockEasymock
 
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-      events "passed", "skipped", "failed"
-      exceptionFormat = 'full'
-    }
+    testRuntime libs.slf4jlog4j
   }
 
   javadoc {
@@ -897,18 +735,4 @@ project(':connect:file') {
   jar {
     dependsOn copyDependantLibs
   }
-
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom(testCompile)
-  }
-
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }

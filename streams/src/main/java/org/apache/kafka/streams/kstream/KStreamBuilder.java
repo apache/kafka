@@ -29,7 +29,8 @@ import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * KStreamBuilder is the class to create KStream instances.
+ * KStreamBuilder is a subclass of {@link TopologyBuilder} that provides the {@link KStream} DSL
+ * for users to specify computational logic and translates the given logic to a processor topology.
  */
 public class KStreamBuilder extends TopologyBuilder {
 
@@ -39,6 +40,7 @@ public class KStreamBuilder extends TopologyBuilder {
         super();
     }
 
+    // TODO: needs updated
     /**
      * Creates a KStream instance for the specified topic.
      * The default deserializers specified in the config are used.
@@ -46,8 +48,8 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param topics          the topic names, if empty default to all the topics in the config
      * @return KStream
      */
-    public <K, V> KStream<K, V> from(String... topics) {
-        return from(null, null, topics);
+    public <K, V> KStream<K, V> stream(String... topics) {
+        return stream(null, null, topics);
     }
 
     /**
@@ -60,7 +62,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param topics          the topic names, if empty default to all the topics in the config
      * @return KStream
      */
-    public <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
+    public <K, V> KStream<K, V> stream(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
         String name = newName(KStreamImpl.SOURCE_NAME);
 
         addSource(name, keyDeserializer, valDeserializer, topics);
@@ -115,6 +117,13 @@ public class KStreamBuilder extends TopologyBuilder {
         return KStreamImpl.merge(this, streams);
     }
 
+    /**
+     * Create a unique processor name used for translation into the processor topology.
+     * This function is only for internal usage.
+     *
+     * @param prefix Processor name prefix.
+     * @return The unique processor name.
+     */
     public String newName(String prefix) {
         return prefix + String.format("%010d", index.getAndIncrement());
     }
