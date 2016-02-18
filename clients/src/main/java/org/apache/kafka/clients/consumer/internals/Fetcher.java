@@ -397,7 +397,7 @@ public class Fetcher<K, V> {
             throwIfUnauthorizedTopics();
             throwIfRecordTooLarge();
 
-            int maxRecords = maxPollRecords < 0 ? Integer.MAX_VALUE : maxPollRecords;
+            int maxRecords = maxPollRecords;
             Iterator<PartitionRecords<K, V>> iterator = records.iterator();
             while (iterator.hasNext() && maxRecords > 0) {
                 PartitionRecords<K, V> part = iterator.next();

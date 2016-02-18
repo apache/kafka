@@ -586,6 +586,6 @@ public class FetcherTest {
 
 
     private  Fetcher<byte[], byte[]> createFetcher(SubscriptionState subscriptions, Metrics metrics) {
-        return createFetcher(-1, subscriptions, metrics);
+        return createFetcher(Integer.MAX_VALUE, subscriptions, metrics);
     }
 }

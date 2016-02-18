@@ -290,7 +290,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
                                         startingTimestamp: Long = 0L,
                                         timestampType: TimestampType = TimestampType.CREATE_TIME,
                                         tp: TopicPartition = tp,
-                                        maxPollRecords: Int = -1) {
+                                        maxPollRecords: Int = Int.MaxValue) {
     val records = consumeRecords(consumer, numRecords, maxPollRecords = maxPollRecords)
     val now = System.currentTimeMillis()
     for (i <- 0 until numRecords) {
@@ -314,14 +314,13 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
   protected def consumeRecords[K, V](consumer: Consumer[K, V],
                                      numRecords: Int,
-                                     maxPollRecords: Int = -1): ArrayList[ConsumerRecord[K, V]] = {
+                                     maxPollRecords: Int = Int.MaxValue): ArrayList[ConsumerRecord[K, V]] = {
     val records = new ArrayList[ConsumerRecord[K, V]]
     val maxIters = numRecords * 300
     var iters = 0
     while (records.size < numRecords) {
       val polledRecords = consumer.poll(50).asScala
-      if (maxPollRecords > 0)
-        assertTrue(polledRecords.size <= maxPollRecords)
+      assertTrue(polledRecords.size <= maxPollRecords)
       for (record <- polledRecords)
         records.add(record)
       if (iters > maxIters)

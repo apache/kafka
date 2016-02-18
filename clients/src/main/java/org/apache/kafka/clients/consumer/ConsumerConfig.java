@@ -170,7 +170,7 @@ public class ConsumerConfig extends AbstractConfig {
 
     /** <code>max.poll.records</code> */
     public static final String MAX_POLL_RECORDS_CONFIG = "max.poll.records";
-    public static final String MAX_POLL_RECORDS_DOC = "The maximum number of records to return in a single call to poll(). The default (-1) sets no limit.";
+    private static final String MAX_POLL_RECORDS_DOC = "The maximum number of records returned in a single call to poll().";
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
@@ -312,7 +312,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         INTERCEPTOR_CLASSES_DOC)
                                 .define(MAX_POLL_RECORDS_CONFIG,
                                         Type.INT,
-                                        -1,
+                                        Integer.MAX_VALUE,
+                                        atLeast(1),
                                         Importance.MEDIUM,
                                         MAX_POLL_RECORDS_DOC)
 
