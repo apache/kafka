@@ -62,14 +62,14 @@ class GroupMetadataManager(val brokerId: Int,
   /* group metadata cache */
   private val groupsCache = new Pool[String, GroupMetadata]
 
-  /* partitions of consumer groups that are being loaded, its lock should be always called BEFORE offsetExpireLock and the group lock if needed */
+  /* partitions of consumer groups that are being loaded, its lock should be always called BEFORE removeOffsetLock and the group lock if needed */
   private val loadingPartitions: mutable.Set[Int] = mutable.Set()
 
   /* partitions of consumer groups that are assigned, using the same loading partition lock */
   private val ownedPartitions: mutable.Set[Int] = mutable.Set()
 
-  /* lock for expiring stale offsets, it should be always called BEFORE the group lock if needed */
-  private val offsetExpireLock = new ReentrantReadWriteLock()
+  /* lock for removing stale/deleted topic's offsets, it should be always called BEFORE the group lock if needed */
+  private val removeOffsetLock = new ReentrantReadWriteLock()
 
   /* shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
@@ -167,13 +167,13 @@ class GroupMetadataManager(val brokerId: Int,
    * Removes all the groups and corresponding offsets for this topicPartition.
    * @param topicPartition
    */
-  def removeOffsetsByTopicPartition(topicPartition: TopicAndPartition): Unit = {
+  def removeOffsetsByTopicPartition(topicPartition: TopicPartition): Unit = {
     val startMs = SystemTime.milliseconds
-    val numberOfDeletedExpiredOffsets = inWriteLock(offsetExpireLock) {
-      val expireOffsets = offsetsCache.filter(_._1.topicPartition == topicPartition)
-      deleteOffsets(expireOffsets)
+    val numberOfDeletedExpiredOffsets = inWriteLock(removeOffsetLock) {
+      val offsetsToBeDeleted = offsetsCache.filter(_._1.topicPartition == TopicAndPartition(topicPartition.topic, topicPartition.partition))
+      deleteOffsets(offsetsToBeDeleted)
     }
-    info(s"Removed ${numberOfDeletedExpiredOffsets} expired offsets in ${SystemTime.milliseconds - startMs} milliseconds for topicPartition ${topicPartition}")
+    info(s"Removed ${numberOfDeletedExpiredOffsets} offsets in ${SystemTime.milliseconds - startMs} milliseconds for topicPartition ${topicPartition}")
   }
 
   def prepareStoreGroup(group: GroupMetadata,
@@ -378,7 +378,7 @@ class GroupMetadataManager(val brokerId: Int,
             var currOffset = log.logSegments.head.baseOffset
             val buffer = ByteBuffer.allocate(config.loadBufferSize)
             // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
-            inWriteLock(offsetExpireLock) {
+            inWriteLock(removeOffsetLock) {
               val loadedGroups = mutable.Map[String, GroupMetadata]()
               val removedGroups = mutable.Set[String]()
 
@@ -547,7 +547,7 @@ class GroupMetadataManager(val brokerId: Int,
     debug("Collecting expired offsets.")
     val startMs = SystemTime.milliseconds
 
-    val numExpiredOffsetsRemoved = inWriteLock(offsetExpireLock) {
+    val numExpiredOffsetsRemoved = inWriteLock(removeOffsetLock) {
       val expiredOffsets = offsetsCache.filter { case (groupTopicPartition, offsetAndMetadata) =>
         offsetAndMetadata.expireTimestamp < startMs
       }
@@ -559,17 +559,17 @@ class GroupMetadataManager(val brokerId: Int,
   }
 
   /**
-   * Deletes the provided expired offsets.
-   * @param expiredOffsets collection of expired offsets.
-   * @return number of expired offsets deleted.
+   * Deletes the provided offsets.
+   * @param offsetsToBeDeleted collection of offsets that needs to be deleted.
+   * @return number of deleted offsets.
    */
-  def deleteOffsets(expiredOffsets: scala.Iterable[(GroupTopicPartition, OffsetAndMetadata)]): Int = {
-    debug("Found %d expired offsets.".format(expiredOffsets.size))
+  def deleteOffsets(offsetsToBeDeleted: scala.Iterable[(GroupTopicPartition, OffsetAndMetadata)]): Int = {
+    debug("Found %d offsets that needs to be removed.".format(offsetsToBeDeleted.size))
 
-    // delete the expired offsets from the table and generate tombstone messages to remove them from the log
-    val tombstonesForPartition = expiredOffsets.map { case (groupTopicAndPartition, offsetAndMetadata) =>
+    // delete the offsets from the table and generate tombstone messages to remove them from the log
+    val tombstonesForPartition = offsetsToBeDeleted.map { case (groupTopicAndPartition, offsetAndMetadata) =>
       val offsetsPartition = partitionFor(groupTopicAndPartition.group)
-      trace("Removing expired offset and metadata for %s: %s".format(groupTopicAndPartition, offsetAndMetadata))
+      trace("Removing offset and metadata for %s: %s".format(groupTopicAndPartition, offsetAndMetadata))
 
       offsetsCache.remove(groupTopicAndPartition)
 
@@ -597,7 +597,7 @@ class GroupMetadataManager(val brokerId: Int,
         }
         catch {
           case t: Throwable =>
-            error("Failed to mark %d expired offsets for deletion in %s.".format(messages.size, appendPartition), t)
+            error("Failed to mark %d offsets for deletion in %s.".format(messages.size, appendPartition), t)
             // ignore and continue
             0
         }

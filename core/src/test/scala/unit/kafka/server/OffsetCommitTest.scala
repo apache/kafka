@@ -20,7 +20,7 @@ package kafka.server
 import kafka.admin.AdminUtils
 import kafka.api.{GroupCoordinatorRequest, OffsetCommitRequest, OffsetFetchRequest}
 import kafka.consumer.SimpleConsumer
-import kafka.common.{OffsetMetadata, OffsetMetadataAndError, OffsetAndMetadata, TopicAndPartition}
+import kafka.common._
 import kafka.utils._
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
@@ -325,7 +325,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
       requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(1L, "metadata", -1L)),
       versionId = 0
     )
-    assertEquals(ErrorMapping.NoError, simpleConsumer.commitOffsets(commitRequest0).commitStatus.get(topicPartition).get)
+    assertEquals(Errors.NONE.code(), simpleConsumer.commitOffsets(commitRequest0).commitStatus.get(topicPartition).get)
 
     // start topic deletion
     AdminUtils.deleteTopic(zkUtils, topic)
