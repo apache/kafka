@@ -43,6 +43,7 @@ versions += [
   snappy: "1.1.2.1",
   zkclient: "0.7",
   zookeeper: "3.4.6",
+  hadoopCore: "1.2.1"
 ]
 
 // Add Scala version
@@ -89,5 +90,6 @@ libs += [
   slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   zkclient: "com.101tec:zkclient:$versions.zkclient",
-  zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper"
+  zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
+  hadoopCore: "org.apache.hadoop:hadoop-core:$versions.hadoopCore"
 ]

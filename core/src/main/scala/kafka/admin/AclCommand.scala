@@ -20,6 +20,7 @@ package kafka.admin
 import joptsimple._
 import kafka.security.auth._
 import kafka.utils._
+import org.apache.hadoop.security.UserGroupInformation
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Utils
 
@@ -27,6 +28,7 @@ import scala.collection.JavaConverters._
 
 object AclCommand {
 
+  val REQUESTING_USER = "requesting.user"
   val Newline = scala.util.Properties.lineSeparator
   val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
     Topic -> Set(Read, Write, Describe, All),
@@ -66,6 +68,12 @@ object AclCommand {
       } else {
         Map.empty[String, Any]
       }
+
+    // Add requesting user's information to properties that will be passed to authorizer.
+    // Use UserGroupInformation, instead of system's user.name, which gives unexpected behavior if
+    // the user is logged in via kerberos.  UserGroupInformation.getLoginUser() does the right
+    // thing -- if using kerberos, it gives you the kerberos user, otherwise the OS user.
+    authorizerProperties += (REQUESTING_USER -> UserGroupInformation.getLoginUser.getShortUserName)
 
     val authorizerClass = opts.options.valueOf(opts.authorizerOpt)
     val authZ = CoreUtils.createObject[Authorizer](authorizerClass)
