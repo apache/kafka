@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -71,11 +72,15 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
 
         Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, topicSubscriptions);
 
-        // this class has maintains no user data, so just wrap the results
+        // wrap the results along with any available user data
         Map<String, Assignment> assignments = new HashMap<>();
         for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
-            assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue()));
+            assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue(), getUserData()));
         return assignments;
+    }
+
+    protected ByteBuffer getUserData() {
+        return ByteBuffer.wrap(new byte[0]);
     }
 
     @Override

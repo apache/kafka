@@ -399,7 +399,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     assertEquals(0, consumer0.assignment().size)
 
-    val pattern1 = Pattern.compile(".*o.*") // only 'topic' and 'foo' match this 
+    val pattern1 = Pattern.compile(".*o.*") // only 'topic' and 'foo' match this
     consumer0.subscribe(pattern1, new TestConsumerReassignmentListener)
     consumer0.poll(50)
 
@@ -881,6 +881,73 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     } finally {
       consumerPollers.foreach(_.shutdown())
     }
+  }
+
+  /**
+   * This test runs the following scenario to verify sticky assignor behavior.
+   * Topics: topic0 (0), topic1 (0, 1), topic2 (0, 1, 2) (numbers indicate partitions of each topic)
+   * Consumers:
+   *  - C0: subscribed to topic0
+   *  - C1: subscribed to topic0 and topic1
+   *  - C2: subscribed to topic0, topic1, and topic2
+   * Expected initial assignment:
+   *  - C0: topic0-0
+   *  - C1: topic1-0, topic1-1
+   *  - C2: topic2-0, topic2-1, topic2-2
+   * Then C0 unsubscribes from topic0.
+   * Expected new assignment:
+   *  - C1: topic1-0, topic1-1, topic0-0
+   *  - C2: topic2-0, topic2-1, topic2-2
+   */
+  @Test
+  def testMultiConsumerStickyAssignment() {
+    this.consumers.clear()
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "sticky-group")
+    this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[StickyAssignor].getName)
+
+    // create one new topics
+    val topic0 = "topic0"
+    val subscriptions0 = createTopicAndSendRecords(topic0, 1, 100)
+    val tp00 = new TopicPartition(topic0, 0)
+
+    val (_, consumerPollers) = createConsumerGroupAndWaitForAssignment(1, List(topic0), subscriptions0)
+    validateGroupAssignment(consumerPollers, subscriptions0, s"Did not get valid initial assignment for partitions ${subscriptions0.asJava}")
+
+    // create another new topics
+    val topic1 = "topic1"
+    val subscriptions1 = createTopicAndSendRecords(topic1, 2, 100) ++ subscriptions0
+    val tp10 = new TopicPartition(topic1, 0)
+    val tp11 = new TopicPartition(topic1, 1)
+    // add one more consumer and validate re-assignment
+    addConsumersToGroupAndWaitForGroupAssignment(1, consumers, consumerPollers, List(topic0, topic1), subscriptions1)
+
+    // create another new topics
+    val topic2 = "topic2"
+    val subscriptions2 = createTopicAndSendRecords(topic2, 3, 100) ++ subscriptions1
+    val tp20 = new TopicPartition(topic2, 0)
+    val tp21 = new TopicPartition(topic2, 1)
+    val tp22 = new TopicPartition(topic2, 2)
+    // add one more consumer and validate re-assignment
+    addConsumersToGroupAndWaitForGroupAssignment(1, consumers, consumerPollers, List(topic0, topic1, topic2), subscriptions2)
+
+    val expectedAssignments = Set(Set(tp00), Set(tp10, tp11), Set(tp20, tp21, tp22))
+    var actualAssignmnets = Set[Set[TopicPartition]]()
+    consumerPollers.foreach { cp => actualAssignmnets = actualAssignmnets + cp.consumerAssignment() }
+    assertEquals(expectedAssignments, actualAssignmnets)
+
+    consumerPollers.head.subscribe(List())
+    val removedConsumerPoller = consumerPollers.remove(0)
+    val expectedNewAssignments = Set(Set(tp10, tp11, tp00), Set(tp20, tp21, tp22))
+
+    var actualNewAssignments = scala.collection.mutable.Set[Set[TopicPartition]]()
+    TestUtils.waitUntilTrue(() => {
+      actualNewAssignments.clear
+      consumerPollers.foreach { cp => actualNewAssignments = actualNewAssignments + cp.consumerAssignment() }
+      expectedNewAssignments == actualNewAssignments
+    }, s"Expected assignments ${expectedNewAssignments.asJava} but actually got ${actualNewAssignments.asJava}")
+
+    removedConsumerPoller.shutdown()
+    consumerPollers.foreach(_.shutdown())
   }
 
   /**
