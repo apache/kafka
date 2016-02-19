@@ -54,6 +54,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
             for (int i = 0; i < this.values.length; i++) {
                 this.values[i] = min + i;
             }
+            // We want to randomize the order of data to test not completely predictable processing order
+            // However, values are also use as a timestamp of the record. (TODO: separate data and timestamp)
+            // We keep some correlation of time and order. Thus, the shuffling is done with a sliding window
             shuffle(this.values, 10);
 
             this.index = 0;
@@ -152,21 +155,19 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 value = END;
             }
 
-            if (value != -1) {
-                ProducerRecord<byte[], byte[]> record =
-                        new ProducerRecord<>("data", stringSerializer.serialize("", key), integerSerializer.serialize("", value));
+            ProducerRecord<byte[], byte[]> record =
+                    new ProducerRecord<>("data", stringSerializer.serialize("", key), integerSerializer.serialize("", value));
 
-                producer.send(record);
+            producer.send(record);
 
-                if (value != END) {
-                    numRecordsProduced++;
-                    allData.get(key).add(value);
+            if (value != END) {
+                numRecordsProduced++;
+                allData.get(key).add(value);
 
-                    if (numRecordsProduced % 100 == 0)
-                        System.out.println(numRecordsProduced + " records produced");
+                if (numRecordsProduced % 100 == 0)
+                    System.out.println(numRecordsProduced + " records produced");
 
-                    Thread.sleep(10);
-                }
+                Thread.sleep(10);
             }
         }
 
@@ -178,6 +179,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
     private static void shuffle(int[] data, int windowSize) {
         Random rand = new Random();
         for (int i = 0; i < data.length; i++) {
+            // we shuffle data within windowSize
             int j = rand.nextInt(Math.min(data.length - i, windowSize)) + i;
 
             // swap
