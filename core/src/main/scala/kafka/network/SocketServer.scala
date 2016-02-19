@@ -421,8 +421,7 @@ private[kafka] class Processor(val id: Int,
         selector.completedReceives.asScala.foreach { receive =>
           try {
             val channel = selector.channel(receive.source)
-            val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName),
-              channel.socketAddress)
+            val session = RequestChannel.Session(KafkaPrincipal.fromPrincipal(channel.principal), channel.socketAddress)
             val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session, buffer = receive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
             requestChannel.sendRequest(req)
             selector.mute(receive.source)

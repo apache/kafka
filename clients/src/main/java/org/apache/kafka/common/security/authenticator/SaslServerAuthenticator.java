@@ -34,6 +34,7 @@ import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslException;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.auth.SimplePrincipal;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.ietf.jgss.GSSContext;
@@ -45,7 +46,6 @@ import org.ietf.jgss.Oid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -173,7 +173,7 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     public Principal principal() {
-        return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslServer.getAuthorizationID());
+        return new SimplePrincipal(saslServer.getAuthorizationID());
     }
 
     public boolean complete() {

@@ -18,13 +18,19 @@ package org.apache.kafka.common.security.auth;
 
 import java.security.Principal;
 
+/**
+ * An implementation of `Principal` that contains a `name` and a `principalType`, which is used on the authorization
+ * layer by the broker.
+ *
+ * @see SimplePrincipal
+ */
 public class KafkaPrincipal implements Principal {
     public static final String SEPARATOR = ":";
     public static final String USER_TYPE = "User";
     public final static KafkaPrincipal ANONYMOUS = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "ANONYMOUS");
 
-    private String principalType;
-    private String name;
+    private final String principalType;
+    private final String name;
 
     public KafkaPrincipal(String principalType, String name) {
         if (principalType == null || name == null) {
@@ -46,6 +52,13 @@ public class KafkaPrincipal implements Principal {
         }
 
         return new KafkaPrincipal(split[0], split[1]);
+    }
+
+    /**
+     * Returns a KafkaPrincipal with `USER_TYPE` and with the same name as `principal`.
+     */
+    public static KafkaPrincipal fromPrincipal(Principal principal) {
+        return new KafkaPrincipal(USER_TYPE, principal.getName());
     }
 
     @Override

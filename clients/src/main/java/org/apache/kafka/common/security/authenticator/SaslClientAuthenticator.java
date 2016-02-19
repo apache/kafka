@@ -44,10 +44,10 @@ import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.TransportLayer;
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.KafkaException;
 
+import org.apache.kafka.common.security.auth.SimplePrincipal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -174,7 +174,7 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     public Principal principal() {
-        return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, clientPrincipalName);
+        return new SimplePrincipal(clientPrincipalName);
     }
 
     public boolean complete() {

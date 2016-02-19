@@ -35,7 +35,7 @@ import javax.net.ssl.SSLHandshakeException;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLPeerUnverifiedException;
 
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.SimplePrincipal;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -637,7 +637,7 @@ public class SslTransportLayer implements TransportLayer {
             return sslEngine.getSession().getPeerPrincipal();
         } catch (SSLPeerUnverifiedException se) {
             log.warn("SSL peer is not authenticated, returning ANONYMOUS instead");
-            return KafkaPrincipal.ANONYMOUS;
+            return SimplePrincipal.ANONYMOUS;
         }
     }
 
