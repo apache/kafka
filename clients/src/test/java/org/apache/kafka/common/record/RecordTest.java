@@ -35,16 +35,18 @@ import org.junit.runners.Parameterized.Parameters;
 @RunWith(value = Parameterized.class)
 public class RecordTest {
 
+    private long timestamp;
     private ByteBuffer key;
     private ByteBuffer value;
     private CompressionType compression;
     private Record record;
 
-    public RecordTest(byte[] key, byte[] value, CompressionType compression) {
+    public RecordTest(long timestamp, byte[] key, byte[] value, CompressionType compression) {
+        this.timestamp = timestamp;
         this.key = key == null ? null : ByteBuffer.wrap(key);
         this.value = value == null ? null : ByteBuffer.wrap(value);
         this.compression = compression;
-        this.record = new Record(key, value, compression);
+        this.record = new Record(timestamp, key, value, compression);
     }
 
     @Test
@@ -64,6 +66,7 @@ public class RecordTest {
     public void testChecksum() {
         assertEquals(record.checksum(), record.computeChecksum());
         assertEquals(record.checksum(), Record.computeChecksum(
+            this.timestamp,
             this.key == null ? null : this.key.array(),
             this.value == null ? null : this.value.array(),
             this.compression, 0, -1));
@@ -99,10 +102,11 @@ public class RecordTest {
         byte[] payload = new byte[1000];
         Arrays.fill(payload, (byte) 1);
         List<Object[]> values = new ArrayList<Object[]>();
-        for (byte[] key : Arrays.asList(null, "".getBytes(), "key".getBytes(), payload))
-            for (byte[] value : Arrays.asList(null, "".getBytes(), "value".getBytes(), payload))
-                for (CompressionType compression : CompressionType.values())
-                    values.add(new Object[] {key, value, compression});
+        for (long timestamp : Arrays.asList(Record.NO_TIMESTAMP, 0L, 1L))
+            for (byte[] key : Arrays.asList(null, "".getBytes(), "key".getBytes(), payload))
+                for (byte[] value : Arrays.asList(null, "".getBytes(), "value".getBytes(), payload))
+                    for (CompressionType compression : CompressionType.values())
+                        values.add(new Object[] {timestamp, key, value, compression});
         return values;
     }
 
