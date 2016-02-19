@@ -143,23 +143,4 @@ abstract class WorkerTask implements Runnable {
         }
     }
 
-    private static class DefaultTaskLifecycleListener implements TaskStatus.Listener {
-
-        @Override
-        public void onStartup(ConnectorTaskId id) {
-            log.info("Task {} completed startup", id);
-        }
-
-        @Override
-        public void onFailure(ConnectorTaskId id, Throwable cause) {
-            log.error("Task {} failed", id, cause);
-        }
-
-        @Override
-        public void onShutdown(ConnectorTaskId id) {
-            log.info("Task {} completed shutdown", id);
-        }
-    }
-
-
 }
