@@ -112,7 +112,7 @@ public class Protocol {
                                                                                                                                       INT64))))))));
     /**
      * The body of PRODUCE_REQUEST_V1 is the same as PRODUCE_REQUEST_V0.
-     * The version number is bumped up to indicate the client support quota throttle time field in the response.
+     * The version number is bumped up to indicate that the client supports quota throttle time field in the response.
      */
     public static final Schema PRODUCE_REQUEST_V1 = PRODUCE_REQUEST_V0;
     /**

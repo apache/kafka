@@ -49,7 +49,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     // Validate the compatibility of message format version.
     Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)) match {
       case Some(versionString) =>
-        if (kafkaConfig.interBrokerProtocolVersion.messageFormatVersion < ApiVersion(versionString).messageFormatVersion) {
+        if (!kafkaConfig.interBrokerProtocolVersion.onOrAfter(ApiVersion(versionString))) {
           topicConfig.remove(LogConfig.MessageFormatVersionProp)
           warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for $topic because $versionString " +
             s"is not compatible with Kafka inter broker protocol version ${kafkaConfig.interBrokerProtocolVersion}")
