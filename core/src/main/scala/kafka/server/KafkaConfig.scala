@@ -23,6 +23,7 @@ import kafka.api.ApiVersion
 import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
 import kafka.coordinator.OffsetConfig
+import kafka.log.LogConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
@@ -352,7 +353,7 @@ object KafkaConfig {
   val BrokerIdDoc = "The broker id for this server. If unset, a unique broker id will be generated." +
   "To avoid conflicts between zookeeper generated broker id's and user configured broker id's, generated broker ids" +
   "start from " + MaxReservedBrokerIdProp + " + 1."
-  val MessageMaxBytesDoc = "The maximum size of message that the server can receive"
+  val MessageMaxBytesDoc = LogConfig.MaxMessageSizeDoc
   val NumNetworkThreadsDoc = "the number of network threads that the server uses for handling network requests"
   val NumIoThreadsDoc = "The number of io threads that the server uses for carrying out network requests"
   val BackgroundThreadsDoc = "The number of threads to use for various background processing tasks"
@@ -389,20 +390,20 @@ object KafkaConfig {
   val NumPartitionsDoc = "The default number of log partitions per topic"
   val LogDirDoc = "The directory in which the log data is kept (supplemental for " + LogDirsProp + " property)"
   val LogDirsDoc = "The directories in which the log data is kept. If not set, the value in " + LogDirProp + " is used"
-  val LogSegmentBytesDoc = "The maximum size of a single log file"
-  val LogRollTimeMillisDoc = "The maximum time before a new log segment is rolled out (in milliseconds). If not set, the value in " + LogRollTimeHoursProp + " is used"
+  val LogSegmentBytesDoc = LogConfig.SegmentSizeDoc
+  val LogRollTimeMillisDoc = s"${LogConfig.SegmentMsDoc} If not set, the value in $LogRollTimeHoursProp is used"
   val LogRollTimeHoursDoc = "The maximum time before a new log segment is rolled out (in hours), secondary to " + LogRollTimeMillisProp + " property"
 
-  val LogRollTimeJitterMillisDoc = "The maximum jitter to subtract from logRollTimeMillis (in milliseconds). If not set, the value in " + LogRollTimeJitterHoursProp + " is used"
-  val LogRollTimeJitterHoursDoc = "The maximum jitter to subtract from logRollTimeMillis (in hours), secondary to " + LogRollTimeJitterMillisProp + " property"
+  val LogRollTimeJitterMillisDoc = s"${LogConfig.SegmentJitterMsDoc} If not set, the value in $LogRollTimeJitterHoursProp is used"
+  val LogRollTimeJitterHoursDoc = "The maximum jitter to subtract from the scheduled segment roll time (in hours), secondary to " + LogRollTimeJitterMillisProp + " property"
 
-  val LogRetentionTimeMillisDoc = "The number of milliseconds to keep a log file before deleting it (in milliseconds), If not set, the value in " + LogRetentionTimeMinutesProp + " is used"
+  val LogRetentionTimeMillisDoc = s"${LogConfig.RetentionMsDoc} If not set, the value in $LogRetentionTimeMinutesProp is used"
   val LogRetentionTimeMinsDoc = "The number of minutes to keep a log file before deleting it (in minutes), secondary to " + LogRetentionTimeMillisProp + " property. If not set, the value in " + LogRetentionTimeHoursProp + " is used"
   val LogRetentionTimeHoursDoc = "The number of hours to keep a log file before deleting it (in hours), tertiary to " + LogRetentionTimeMillisProp + " property"
 
-  val LogRetentionBytesDoc = "The maximum size of the log before deleting it"
+  val LogRetentionBytesDoc = LogConfig.RetentionSizeDoc
   val LogCleanupIntervalMsDoc = "The frequency in milliseconds that the log cleaner checks whether any log is eligible for deletion"
-  val LogCleanupPolicyDoc = "The default cleanup policy for segments beyond the retention window, must be either \"delete\" or \"compact\""
+  val LogCleanupPolicyDoc = LogConfig.CompactDoc
   val LogCleanerThreadsDoc = "The number of background threads to use for log cleaning"
   val LogCleanerIoMaxBytesPerSecondDoc = "The log cleaner will be throttled so that the sum of its read and write i/o will be less than this value on average"
   val LogCleanerDedupeBufferSizeDoc = "The total memory used for log deduplication across all cleaner threads"
@@ -410,19 +411,20 @@ object KafkaConfig {
   val LogCleanerDedupeBufferLoadFactorDoc = "Log cleaner dedupe buffer load factor. The percentage full the dedupe buffer can become. A higher value " +
   "will allow more log to be cleaned at once but will lead to more hash collisions"
   val LogCleanerBackoffMsDoc = "The amount of time to sleep when there are no logs to clean"
-  val LogCleanerMinCleanRatioDoc = "The minimum ratio of dirty log to total log for a log to eligible for cleaning"
+  val LogCleanerMinCleanRatioDoc = LogConfig.MinCleanableRatioDoc
   val LogCleanerEnableDoc = "Enable the log cleaner process to run on the server? Should be enabled if using any topics with a cleanup.policy=compact including the internal offsets topic. If disabled those topics will not be compacted and continually grow in size."
-  val LogCleanerDeleteRetentionMsDoc = "How long are delete records retained?"
-  val LogIndexSizeMaxBytesDoc = "The maximum size in bytes of the offset index"
-  val LogIndexIntervalBytesDoc = "The interval with which we add an entry to the offset index"
-  val LogFlushIntervalMessagesDoc = "The number of messages accumulated on a log partition before messages are flushed to disk "
-  val LogDeleteDelayMsDoc = "The amount of time to wait before deleting a file from the filesystem"
+  val LogCleanerDeleteRetentionMsDoc = LogConfig.DeleteRetentionMsDoc
+  val LogIndexSizeMaxBytesDoc = LogConfig.MaxIndexSizeDoc
+  val LogIndexIntervalBytesDoc = LogConfig.IndexIntervalDoc
+  val LogFlushIntervalMessagesDoc = LogConfig.FlushIntervalDoc
+  val LogDeleteDelayMsDoc = LogConfig.FileDeleteDelayMsDoc
   val LogFlushSchedulerIntervalMsDoc = "The frequency in ms that the log flusher checks whether any log needs to be flushed to disk"
-  val LogFlushIntervalMsDoc = "The maximum time in ms that a message in any topic is kept in memory before flushed to disk. If not set, the value in " + LogFlushSchedulerIntervalMsProp + " is used"
+  val LogFlushIntervalMsDoc = s"${LogConfig.FlushMsDoc} If not set, the value in $LogFlushSchedulerIntervalMsProp is used"
   val LogFlushOffsetCheckpointIntervalMsDoc = "The frequency with which we update the persistent record of the last flush which acts as the log recovery point"
-  val LogPreAllocateEnableDoc = "Should pre allocate file when create new segment? If you are using Kafka on Windows, you probably need to set it to true."
+  val LogPreAllocateEnableDoc = LogConfig.PreAllocateEnableDoc
   val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server"
+  val MinInSyncReplicasDoc = LogConfig.MinInSyncReplicasDoc
   val MinInSyncReplicasDoc = "define the minimum number of replicas in ISR needed to satisfy a produce request with acks=all (or -1)"
   val MessageFormatVersionDoc = "Specify the message format version the broker will use to append messages to the logs. The value should be a valid ApiVersion. " +
   "Some examples are: 0.8.2, 0.9.0.0, 0.10.0, check ApiVersion for more details. By setting a particular message format version, the " +
@@ -454,7 +456,7 @@ object KafkaConfig {
   val AutoLeaderRebalanceEnableDoc = "Enables auto leader balancing. A background thread checks and triggers leader balance if required at regular intervals"
   val LeaderImbalancePerBrokerPercentageDoc = "The ratio of leader imbalance allowed per broker. The controller would trigger a leader balance if it goes above this value per broker. The value is specified in percentage."
   val LeaderImbalanceCheckIntervalSecondsDoc = "The frequency with which the partition rebalance check is triggered by the controller"
-  val UncleanLeaderElectionEnableDoc = "Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss"
+  val UncleanLeaderElectionEnableDoc = LogConfig.UncleanLeaderElectionEnableDoc
   val InterBrokerSecurityProtocolDoc = "Security protocol used to communicate between brokers. Valid values are: " +
     s"${SecurityProtocol.nonTestingValues.asScala.toSeq.map(_.name).mkString(", ")}."
   val InterBrokerProtocolVersionDoc = "Specify which version of the inter-broker protocol will be used.\n" +
@@ -490,9 +492,7 @@ object KafkaConfig {
   val QuotaWindowSizeSecondsDoc = "The time span of each sample"
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
-  val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +
-  "('gzip', 'snappy', 'lz4'). It additionally accepts 'uncompressed' which is equivalent to no compression; and " +
-  "'producer' which means retain the original compression codec set by the producer."
+  val CompressionTypeDoc = LogConfig.CompressionTypeDoc
 
   /** ********* Kafka Metrics Configuration ***********/
   val MetricSampleWindowMsDoc = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC
