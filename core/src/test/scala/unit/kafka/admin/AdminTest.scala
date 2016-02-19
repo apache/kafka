@@ -16,10 +16,10 @@
  */
 package kafka.admin
 
-import junit.framework.Assert._
 import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.protocol.ApiKeys
+import org.junit.Assert._
 import org.junit.Test
 import java.util.Properties
 import kafka.utils._
