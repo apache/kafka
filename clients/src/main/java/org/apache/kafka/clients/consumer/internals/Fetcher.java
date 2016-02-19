@@ -700,36 +700,42 @@ public class Fetcher<K, V> {
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {
-            String topicMetricPrefix = "topic." + topic;
+            Map<String, String> metricTags = new HashMap<>();
+            metricTags.put("topic", topic);
 
             // record bytes fetched
-            String name = topicMetricPrefix + ".bytes-fetched";
+            String name = "topic." + topic + ".bytes-fetched";
             Sensor bytesFetched = this.metrics.getSensor(name);
             if (bytesFetched == null) {
                 bytesFetched = this.metrics.sensor(name);
-                bytesFetched.add(this.metrics.metricName(topicMetricPrefix + ".fetch-size-avg",
+                bytesFetched.add(this.metrics.metricName("fetch-size-avg",
                         this.metricGrpName,
-                        "The average number of bytes fetched per request for topic " + topic), new Avg());
-                bytesFetched.add(this.metrics.metricName(topicMetricPrefix + ".fetch-size-max",
+                        "The average number of bytes fetched per request for topic " + topic,
+                        metricTags), new Avg());
+                bytesFetched.add(this.metrics.metricName("fetch-size-max",
                         this.metricGrpName,
-                        "The maximum number of bytes fetched per request for topic " + topic), new Max());
-                bytesFetched.add(this.metrics.metricName(topicMetricPrefix + ".bytes-consumed-rate",
+                        "The maximum number of bytes fetched per request for topic " + topic,
+                        metricTags), new Max());
+                bytesFetched.add(this.metrics.metricName("bytes-consumed-rate",
                         this.metricGrpName,
-                        "The average number of bytes consumed per second for topic " + topic), new Rate());
+                        "The average number of bytes consumed per second for topic " + topic,
+                        metricTags), new Rate());
             }
             bytesFetched.record(bytes);
 
             // record records fetched
-            name = topicMetricPrefix + ".records-fetched";
+            name = "topic." + topic + ".records-fetched";
             Sensor recordsFetched = this.metrics.getSensor(name);
             if (recordsFetched == null) {
                 recordsFetched = this.metrics.sensor(name);
-                recordsFetched.add(this.metrics.metricName(topicMetricPrefix + ".records-per-request-avg",
+                recordsFetched.add(this.metrics.metricName("records-per-request-avg",
                         this.metricGrpName,
-                        "The average number of records in each request for topic " + topic), new Avg());
-                recordsFetched.add(this.metrics.metricName(topicMetricPrefix + ".records-consumed-rate",
+                        "The average number of records in each request for topic " + topic,
+                        metricTags), new Avg());
+                recordsFetched.add(this.metrics.metricName("records-consumed-rate",
                         this.metricGrpName,
-                        "The average number of records consumed per second for topic " + topic), new Rate());
+                        "The average number of records consumed per second for topic " + topic,
+                        metricTags), new Rate());
             }
             recordsFetched.record(records);
         }
