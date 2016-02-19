@@ -370,7 +370,7 @@ private[log] class Cleaner(val id: Int,
         val retainDeletes = old.lastModified > deleteHorizonMs
         info("Cleaning segment %s in log %s (last modified %s) into %s, %s deletes."
             .format(old.baseOffset, log.name, new Date(old.lastModified), cleaned.baseOffset, if(retainDeletes) "retaining" else "discarding"))
-        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes)
+        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes, log.config.messageFormatVersion)
       }
 
       // trim excess index
@@ -401,10 +401,14 @@ private[log] class Cleaner(val id: Int,
    * @param dest The cleaned log segment
    * @param map The key=>offset mapping
    * @param retainDeletes Should delete tombstones be retained while cleaning this segment
-   *
+   * @param messageFormatVersion the message format version to use after compaction
    */
-  private[log] def cleanInto(topicAndPartition: TopicAndPartition, source: LogSegment,
-                             dest: LogSegment, map: OffsetMap, retainDeletes: Boolean) {
+  private[log] def cleanInto(topicAndPartition: TopicAndPartition,
+                             source: LogSegment,
+                             dest: LogSegment,
+                             map: OffsetMap,
+                             retainDeletes: Boolean,
+                             messageFormatVersion: Byte) {
     var position = 0
     while (position < source.log.sizeInBytes) {
       checkDone(topicAndPartition)
@@ -420,19 +424,34 @@ private[log] class Cleaner(val id: Int,
         stats.readMessage(size)
         if (entry.message.compressionCodec == NoCompressionCodec) {
           if (shouldRetainMessage(source, map, retainDeletes, entry)) {
-            ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
+            val convertedMessage = entry.message.toFormatVersion(messageFormatVersion)
+            ByteBufferMessageSet.writeMessage(writeBuffer, convertedMessage, entry.offset)
             stats.recopyMessage(size)
           }
           messagesRead += 1
         } else {
-          val messages = ByteBufferMessageSet.deepIterator(entry.message)
+          // We use absolute offset to decide whether retain the message or not. This is handled by
+          // deep iterator.
+          val messages = ByteBufferMessageSet.deepIterator(entry)
+          var numberOfInnerMessages = 0
+          var formatConversionNeeded = false
           val retainedMessages = messages.filter(messageAndOffset => {
             messagesRead += 1
+            numberOfInnerMessages += 1
+            if (messageAndOffset.message.magic != messageFormatVersion)
+              formatConversionNeeded = true
             shouldRetainMessage(source, map, retainDeletes, messageAndOffset)
           }).toSeq
 
-          if (retainedMessages.nonEmpty)
-            compressMessages(writeBuffer, entry.message.compressionCodec, retainedMessages)
+          // There is no messages compacted out and no message format conversion, write the original message set back
+          if (retainedMessages.size == numberOfInnerMessages && !formatConversionNeeded)
+            ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
+          else if (retainedMessages.nonEmpty) {
+            val convertedRetainedMessages = retainedMessages.map(messageAndOffset => {
+              new MessageAndOffset(messageAndOffset.message.toFormatVersion(messageFormatVersion), messageAndOffset.offset)
+            })
+            compressMessages(writeBuffer, entry.message.compressionCodec, messageFormatVersion, convertedRetainedMessages)
+          }
         }
       }
 
@@ -452,7 +471,10 @@ private[log] class Cleaner(val id: Int,
     restoreBuffers()
   }
 
-  private def compressMessages(buffer: ByteBuffer, compressionCodec: CompressionCodec, messages: Seq[MessageAndOffset]) {
+  private def compressMessages(buffer: ByteBuffer,
+                               compressionCodec: CompressionCodec,
+                               messageFormatVersion: Byte,
+                               messages: Seq[MessageAndOffset]) {
     val messagesIterable = messages.toIterable.map(_.message)
     if (messages.isEmpty) {
       MessageSet.Empty.sizeInBytes
@@ -461,15 +483,24 @@ private[log] class Cleaner(val id: Int,
         ByteBufferMessageSet.writeMessage(buffer, messageOffset.message, messageOffset.offset)
       MessageSet.messageSetSize(messagesIterable)
     } else {
+      val magicAndTimestamp = MessageSet.magicAndLargestTimestamp(messages.map(_.message))
+      val firstAbsoluteOffset = messages.head.offset
       var offset = -1L
+      val timestampType = messages.head.message.timestampType
       val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messagesIterable) / 2, 1024), 1 << 16))
-      messageWriter.write(codec = compressionCodec) { outputStream =>
+      messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = messageFormatVersion) { outputStream =>
         val output = new DataOutputStream(CompressionFactory(compressionCodec, outputStream))
         try {
           for (messageOffset <- messages) {
             val message = messageOffset.message
             offset = messageOffset.offset
-            output.writeLong(offset)
+            // Use inner offset when magic value is greater than 0
+            if (messageFormatVersion > Message.MagicValue_V0) {
+              // The offset of the messages are absolute offset, compute the inner offset.
+              val innerOffset = messageOffset.offset - firstAbsoluteOffset
+              output.writeLong(innerOffset)
+            } else
+              output.writeLong(offset)
             output.writeInt(message.size)
             output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
           }

@@ -20,6 +20,7 @@ package kafka.log
 import java.io._
 import java.util.Properties
 
+import kafka.api.ApiVersion
 import kafka.common._
 import kafka.server.OffsetCheckpoint
 import kafka.utils._

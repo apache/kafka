@@ -31,6 +31,8 @@ import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.network.TransportLayer
 import org.apache.kafka.common.utils.Utils
 
+import scala.collection.mutable.ArrayBuffer
+
 /**
  * An on-disk message set. An optional start and end position can be applied to the message set
  * which will allow slicing a subset of the file.
@@ -139,7 +141,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
       if(offset >= targetOffset)
         return OffsetPosition(offset, position)
       val messageSize = buffer.getInt()
-      if(messageSize < Message.MessageOverhead)
+      if(messageSize < Message.MinMessageOverhead)
         throw new IllegalStateException("Invalid message size: " + messageSize)
       position += MessageSet.LogOverhead + messageSize
     }
@@ -172,6 +174,63 @@ class FileMessageSet private[kafka](@volatile var file: File,
   }
 
   /**
+    * This method is called before we write messages to socket use zero-copy transfer. We need to
+    * make sure all the messages in the message set has expected magic value
+    * @param expectedMagicValue the magic value expected
+    * @return true if all messages has expected magic value, false otherwise
+    */
+  override def magicValueInAllWrapperMessages(expectedMagicValue: Byte): Boolean = {
+    var location = start
+    val offsetAndSizeBuffer = ByteBuffer.allocate(MessageSet.LogOverhead)
+    val crcAndMagicByteBuffer = ByteBuffer.allocate(Message.CrcLength + Message.MagicLength)
+    while(location < end) {
+      offsetAndSizeBuffer.rewind()
+      channel.read(offsetAndSizeBuffer, location)
+      if (offsetAndSizeBuffer.hasRemaining)
+        return true
+      offsetAndSizeBuffer.rewind()
+      offsetAndSizeBuffer.getLong // skip offset field
+      val messageSize = offsetAndSizeBuffer.getInt
+      if(messageSize < Message.MinMessageOverhead)
+        throw new IllegalStateException("Invalid message size: " + messageSize)
+      crcAndMagicByteBuffer.rewind()
+      channel.read(crcAndMagicByteBuffer, location + MessageSet.LogOverhead)
+      if (crcAndMagicByteBuffer.get(Message.MagicOffset) != expectedMagicValue)
+        return false
+      location += (MessageSet.LogOverhead + messageSize)
+    }
+    true
+  }
+
+  /**
+   * Convert this message set to use specified message format.
+   */
+  def toMessageFormat(toMagicValue: Byte): ByteBufferMessageSet = {
+    val offsets = new ArrayBuffer[Long]
+    val newMessages = new ArrayBuffer[Message]
+    this.iterator().foreach(messageAndOffset => {
+      val message = messageAndOffset.message
+      if (message.compressionCodec == NoCompressionCodec) {
+        newMessages += messageAndOffset.message.toFormatVersion(toMagicValue)
+        offsets += messageAndOffset.offset
+      } else {
+        // File message set only has shallow iterator. We need to do deep iteration here if needed.
+        val deepIter = ByteBufferMessageSet.deepIterator(messageAndOffset)
+        for (innerMessageAndOffset <- deepIter) {
+          newMessages += innerMessageAndOffset.message.toFormatVersion(toMagicValue)
+          offsets += innerMessageAndOffset.offset
+        }
+      }
+    })
+
+    // We use the offset seq to assign offsets so the offset of the messages does not change.
+    new ByteBufferMessageSet(
+      compressionCodec = this.headOption.map(_.message.compressionCodec).getOrElse(NoCompressionCodec),
+      offsetSeq = offsets.toSeq,
+      newMessages: _*)
+  }
+
+  /**
    * Get a shallow iterator over the messages in the set.
    */
   override def iterator() = iterator(Int.MaxValue)
@@ -200,7 +259,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
         sizeOffsetBuffer.rewind()
         val offset = sizeOffsetBuffer.getLong()
         val size = sizeOffsetBuffer.getInt()
-        if(size < Message.MinHeaderSize)
+        if(size < Message.MinMessageOverhead)
           return allDone()
         if(size > maxMessageSize)
           throw new CorruptRecordException("Message size exceeds the largest allowable message size (%d).".format(maxMessageSize))
