@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StatusBackingStore;
-import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.ArrayList;
@@ -109,28 +108,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
-    public void connectorStatus(String connName, Callback<ConnectorStateInfo> callback) {
-        ConnectorStateInfo status = connectorStatus(connName);
-
-        if (status == null)
-            throw new NotFoundException("No status found for connector " + connName);
-        else
-            callback.onCompletion(null, status);
-    }
-
-    @Override
-    public void taskStatus(ConnectorTaskId task, Callback<ConnectorStateInfo.TaskState> callback) {
-        ConnectorStateInfo.TaskState status = taskStatus(task);
-        if (status == null)
-            callback.onCompletion(new NotFoundException("No status found for task " + task), null);
-        else
-            callback.onCompletion(null, status);
-    }
-
     public ConnectorStateInfo connectorStatus(String connName) {
         ConnectorStatus connector = statusBackingStore.get(connName);
         if (connector == null)
-            return null;
+            throw new NotFoundException("No status found for connector " + connName);
 
         Collection<TaskStatus> tasks = statusBackingStore.getAll(connName);
 
@@ -148,11 +129,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConnectorStateInfo(connName, connectorState, taskStates);
     }
 
+    @Override
     public ConnectorStateInfo.TaskState taskStatus(ConnectorTaskId id) {
         TaskStatus status = statusBackingStore.get(id);
 
         if (status == null)
-            return null;
+            throw new NotFoundException("No status found for task " + id);
 
         return new ConnectorStateInfo.TaskState(id.task(), status.state().toString(),
                 status.workerId(), status.msg());

@@ -118,16 +118,14 @@ public interface Herder {
     /**
      * Lookup the current status of a connector.
      * @param connName name of the connector
-     * @param callback callback to invoke upon completion
      */
-    void connectorStatus(String connName, Callback<ConnectorStateInfo> callback);
+    ConnectorStateInfo connectorStatus(String connName);
 
     /**
      * Lookup the status of the a task.
      * @param id id of the task
-     * @param callback callback to invoke upon completion
      */
-    void taskStatus(ConnectorTaskId id, Callback<ConnectorStateInfo.TaskState> callback);
+    ConnectorStateInfo.TaskState taskStatus(ConnectorTaskId id);
 
 
     class Created<T> {

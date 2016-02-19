@@ -114,9 +114,7 @@ public class ConnectorsResource {
     @GET
     @Path("/{connector}/status")
     public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") String connector) throws Throwable {
-        FutureCallback<ConnectorStateInfo> cb = new FutureCallback<>();
-        herder.connectorStatus(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector + "/status", "GET", null);
+        return herder.connectorStatus(connector);
     }
 
     @PUT
@@ -157,9 +155,7 @@ public class ConnectorsResource {
     @Path("/{connector}/tasks/{task}/status")
     public ConnectorStateInfo.TaskState getTaskStatus(@PathParam("connector") String connector,
                                                       @PathParam("task") Integer task) throws Throwable {
-        FutureCallback<ConnectorStateInfo.TaskState> cb = new FutureCallback<>();
-        herder.taskStatus(new ConnectorTaskId(connector, task), cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/status", "GET", null);
+        return herder.taskStatus(new ConnectorTaskId(connector, task));
     }
 
     @DELETE
