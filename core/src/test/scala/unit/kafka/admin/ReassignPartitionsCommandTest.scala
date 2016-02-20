@@ -53,25 +53,23 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
   @Test
   def testRackAwareReassign(): Unit = {
     val brokers = 0 to 5
-    TestUtils.createBrokersInZk(zkUtils, brokers)
+    val rackInfo: Map[Int, String] = Map(0 -> "rack1", 1 -> "rack2",2 -> "rack2",3 -> "rack1", 4 -> "rack3",5 -> "rack3")
+    TestUtils.createBrokersInZk(zkUtils, brokers, rackInfo)
 
     // create a non rack aware assignment topic first
     val createOpts = new kafka.admin.TopicCommand.TopicCommandOptions(Array(
       "--partitions", "18",
       "--replication-factor", "3",
+      "--disable-rack-aware",
       "--topic", "foo"))
     kafka.admin.TopicCommand.createTopic(zkUtils, createOpts)
 
     val generateOpts = new ReassignPartitionsCommandOptions(Array(
       "--broker-list", "0,1,2,3,4,5",
-      "--rack-locator-class", "kafka.admin.SimpleRackLocator",
-      "--rack-locator-properties", "0=rack1,1=rack2,2=rack2,3=rack1,4=rack3,5=rack3",
       "--topics-to-move-json-file", file.getAbsolutePath
     ))
-    val assignment = ???
-      // ReassignPartitionsCommand.generateAssignment(zkUtils, generateOpts)
-      // .map(p => p._1.partition -> p._2)
-    val rackInfo: Map[Int, String] = Map(0 -> "rack1", 1 -> "rack2",2 -> "rack2",3 -> "rack1", 4 -> "rack3",5 -> "rack3")
+    val assignment = ReassignPartitionsCommand.generateAssignment(zkUtils, generateOpts)
+      .map(p => p._1.partition -> p._2)
     ensureRackAwareAndEvenDistribution(assignment, rackInfo, 6, 18, 3)
   }
 }

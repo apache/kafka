@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.api.{KAFKA_091, ApiVersion}
+import kafka.api.{KAFKA_0_10_0_IV0, ApiVersion}
 import kafka.cluster.EndPoint
 import kafka.utils._
 import org.apache.kafka.common.protocol.SecurityProtocol
@@ -64,7 +64,7 @@ class KafkaHealthcheck(private val brokerId: Int,
     // only PLAINTEXT is supported as default
     // if the broker doesn't listen on PLAINTEXT protocol, an empty endpoint will be registered and older clients will be unable to connect
     val plaintextEndpoint = updatedEndpoints.getOrElse(SecurityProtocol.PLAINTEXT, new EndPoint(null,-1,null))
-    if (version.onOrAfter(KAFKA_091)) {
+    if (version.onOrAfter(KAFKA_0_10_0_IV0)) {
       zkUtils.registerBrokerInZk(brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, jmxPort, rack)
     } else {
       zkUtils.registerBrokerInZk(brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, jmxPort)

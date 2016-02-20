@@ -184,33 +184,6 @@ object AdminUtils extends Logging {
     ret.toMap
   }
 
-  private def getReplicaListWithRackAwareAssignment(brokerList: Seq[Int],
-                                                    leader: Int,
-                                                    replicationFactor: Int,
-                                                    numRacks: Int,
-                                                    firstReplicaIndex: Int,
-                                                    nextReplicaShift: Int,
-                                                    rackInfo: Map[Int, String]): List[Int] = {
-    var replicaList = List(leader)
-    val racksWithReplicas: mutable.Set[String] = mutable.Set(rackInfo(leader))
-    var k = 0
-    for (j <- 0 until replicationFactor - 1) {
-      var done = false;
-      while (!done) {
-        val broker = brokerList(replicaIndex(firstReplicaIndex, nextReplicaShift * numRacks, k, brokerList.size))
-        val rack = rackInfo(broker)
-        // unless every rack has a replica, try to find the broker on the rack without any replica assigned
-        if (!racksWithReplicas.contains(rack) || racksWithReplicas.size == numRacks) {
-          replicaList ::= broker
-          racksWithReplicas += rack
-          done = true;
-        }
-        k = k + 1
-      }
-    }
-    replicaList.reverse
-  }
-
   /**
     * Given broker and rack information, returns a list of brokers interlaced by the rack. Assume
     * this is the rack and its brokers:
@@ -388,8 +361,9 @@ object AdminUtils extends Logging {
   def topicExists(zkUtils: ZkUtils, topic: String): Boolean =
     zkUtils.zkClient.exists(getTopicPath(topic))
 
-  def getBrokersAndRackInfo(zkUtils: ZkUtils, rackAwareMode: RackAwareMode = RackAwareMode.Enforced) = {
-    val brokers = zkUtils.getAllBrokersInCluster()
+  def getBrokersAndRackInfo(zkUtils: ZkUtils, rackAwareMode: RackAwareMode = RackAwareMode.Enforced, brokerList: Seq[Int] = Seq()) = {
+    val allBrokers = zkUtils.getAllBrokersInCluster()
+    val brokers = if (brokerList.isEmpty) allBrokers else allBrokers.filter(b => brokerList.contains(b.id))
     val brokersWithRack = brokers.filter(_.rack.nonEmpty)
     if (rackAwareMode == RackAwareMode.Enforced && brokersWithRack.size > 0 && brokersWithRack.size < brokers.size) {
       throw new AdminOperationException("Not all brokers have rack information. Add --disable-rack-aware in command line to make replica assignment without rack information.")
@@ -397,11 +371,9 @@ object AdminUtils extends Logging {
     val brokerRackMap: Map[Int, String] = rackAwareMode match {
       case RackAwareMode.Disabled => Map()
       case RackAwareMode.Default if (brokersWithRack.size < brokers.size) => Map()
-      case RackAwareMode.Enforced if (brokersWithRack.size == 0) => Map()
       case _ => brokersWithRack.map(broker => (broker.id -> broker.rack.get)).toMap
     }
-    val brokerList = brokers.map(_.id).sorted
-    (brokerList, brokerRackMap)
+    (brokers.map(_.id).sorted, brokerRackMap)
   }
 
   def createTopic(zkUtils: ZkUtils,

@@ -398,7 +398,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
               val endPoints = broker.endPoints.map { case (securityProtocol, endPoint) =>
                 securityProtocol -> new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port)
               }
-              new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.getOrElse(""))
+              new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
             }
             new UpdateMetadataRequest(version, controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava)
           }

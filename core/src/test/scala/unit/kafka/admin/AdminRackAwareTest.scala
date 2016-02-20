@@ -68,14 +68,14 @@ class AdminRackAwareTest extends RackAwareTest  {
     val brokerList = List(0, 1, 2, 3, 4, 5)
     val brokerRackMapping = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack3", 4 -> "rack3", 5 -> "rack1")
     val assignment: scala.collection.Map[Int, Seq[Int]] = AdminUtils.assignReplicasToBrokers(brokerList, 13, 3, 0, 0, brokerRackMapping)
-    checkDistribution(assignment, brokerRackMapping, 6, 13, 3, verifyRackAware = true)
+    ensureRackAwareAndEvenDistribution(assignment, brokerRackMapping, 6, 13, 3, verifyRackAware = true)
   }
 
   def testAssignmentWithRackAwareWithUnEvenRacks() {
     val brokerList = List(0, 1, 2, 3, 4, 5)
     val brokerRackMapping = Map(0 -> "rack1", 1 -> "rack1", 2 -> "rack2", 3 -> "rack3", 4 -> "rack3", 5 -> "rack1")
     val assignment: scala.collection.Map[Int, Seq[Int]] = AdminUtils.assignReplicasToBrokers(brokerList, 12, 3, rackInfo = brokerRackMapping)
-    checkDistribution(assignment, brokerRackMapping, 6, 12, 3, verifyRackAware = true, verifyLeaderDistribution = true)
+    ensureRackAwareAndEvenDistribution(assignment, brokerRackMapping, 6, 12, 3, verifyRackAware = true, verifyLeaderDistribution = true)
   }
 
 
@@ -154,6 +154,24 @@ class AdminRackAwareTest extends RackAwareTest  {
     for (partition <- 0 to 5) {
       assertEquals(2, distribution.partitionRacks(partition).toSet.size)
     }
+  }
+
+  @Test
+  def testSingleRack(): Unit = {
+    val brokerList = List(0, 1, 2, 3, 4, 5)
+    val brokerRackMapping = Map(0 -> "rack1", 1 -> "rack1", 2 -> "rack1", 3 -> "rack1", 4 -> "rack1", 5 -> "rack1")
+    val assignment = AdminUtils.assignReplicasToBrokers(brokerList, 6, 3, rackInfo = brokerRackMapping)
+    assignment.foreach {
+      case (_, a) => assertEquals(3, a.size)
+    }
+    val distribution = getReplicaDistribution(assignment, brokerRackMapping)
+    for (partition <- 0 to 5) {
+      assertEquals(1, distribution.partitionRacks(partition).toSet.size)
+    }
+    for (broker <- 0 to 5) {
+      assertEquals(1, distribution.brokerLeaderCount(broker))
+    }
+
   }
 
 }

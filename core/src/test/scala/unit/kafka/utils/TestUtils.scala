@@ -180,7 +180,7 @@ object TestUtils extends Logging {
     enablePlaintext: Boolean = true,
     enableSaslPlaintext: Boolean = false, saslPlaintextPort: Int = RandomPort,
     enableSsl: Boolean = false, sslPort: Int = RandomPort,
-    enableSaslSsl: Boolean = false, saslSslPort: Int = RandomPort)
+    enableSaslSsl: Boolean = false, saslSslPort: Int = RandomPort, rack: String = null)
   : Properties = {
 
     def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
@@ -210,6 +210,7 @@ object TestUtils extends Logging {
     props.put("delete.topic.enable", enableDeleteTopic.toString)
     props.put("controlled.shutdown.retry.backoff.ms", "100")
     props.put("log.cleaner.dedupe.buffer.size", "2097152")
+    if (rack != null) props.put("broker.rack", rack)
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
       props.putAll(sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId"))
@@ -591,9 +592,9 @@ object TestUtils extends Logging {
     }
   }
 
-  def createBrokersInZk(zkUtils: ZkUtils, ids: Seq[Int]): Seq[Broker] = {
+  def createBrokersInZk(zkUtils: ZkUtils, ids: Seq[Int], brokerRack: Map[Int, String] = Map()): Seq[Broker] = {
     val brokers = ids.map(id => new Broker(id, "localhost", 6667, SecurityProtocol.PLAINTEXT))
-    brokers.foreach(b => zkUtils.registerBrokerInZk(b.id, "localhost", 6667, b.endPoints, jmxPort = -1))
+    brokers.foreach(b => zkUtils.registerBrokerInZk(b.id, "localhost", 6667, b.endPoints, jmxPort = -1, rack = brokerRack.get(b.id)))
     brokers
   }
 

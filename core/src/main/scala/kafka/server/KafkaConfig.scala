@@ -219,7 +219,7 @@ object KafkaConfig {
   val MaxConnectionsPerIpOverridesProp = "max.connections.per.ip.overrides"
   val ConnectionsMaxIdleMsProp = "connections.max.idle.ms"
   /***************** rack configuration *************/
-  val RackProp = "rack"
+  val RackProp = "broker.rack"
   /** ********* Log Configuration ***********/
   val NumPartitionsProp = "num.partitions"
   val LogDirsProp = "log.dirs"

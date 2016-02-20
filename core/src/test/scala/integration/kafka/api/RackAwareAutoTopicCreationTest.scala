@@ -18,7 +18,7 @@ package kafka.api
 
 import java.util.Properties
 
-import kafka.admin.RackAwareTest
+import kafka.admin.{RackAwareMode, AdminUtils, RackAwareTest}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{ZkUtils, TestUtils}
@@ -28,7 +28,7 @@ import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
 import scala.collection.Map
 
-class RackAwareTopicCreationTest extends KafkaServerTestHarness with RackAwareTest {
+class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwareTest {
   val numServers = 4
 
   val overridingProps = new Properties()
@@ -36,7 +36,9 @@ class RackAwareTopicCreationTest extends KafkaServerTestHarness with RackAwareTe
   overridingProps.put(KafkaConfig.DefaultReplicationFactorProp, 2.toString)
 
   def generateConfigs() =
-    TestUtils.createBrokerConfigs(numServers, zkConnect, false).map(KafkaConfig.fromProps(_, overridingProps))
+    (0 until numServers) map { node =>
+      TestUtils.createBrokerConfig(node, zkConnect, false, rack = (node / 2).toString)
+    } map (KafkaConfig.fromProps(_, overridingProps))
 
   private val topic = "topic"
 
@@ -53,7 +55,9 @@ class RackAwareTopicCreationTest extends KafkaServerTestHarness with RackAwareTe
       TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
       val assignment = zkUtils.getReplicaAssignmentForTopics(Seq(topic))
                               .map(p => p._1.partition -> p._2)
-      val brokerRackMap = Map(0 -> "rack1", 1 -> "rack1", 2 -> "rack2", 3 -> "rack2");
+      val brokerRackMap = AdminUtils.getBrokersAndRackInfo(zkUtils, RackAwareMode.Enforced)._2
+      val expectedMap = Map(0 -> "0", 1 -> "0", 2 -> "1", 3 -> "1");
+      assertEquals(expectedMap, brokerRackMap)
       ensureRackAwareAndEvenDistribution(assignment, brokerRackMap, 4, 8, 2)
     } finally {
       if (producer != null) {

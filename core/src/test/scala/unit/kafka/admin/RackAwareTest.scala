@@ -31,13 +31,8 @@ import scala.collection.{mutable, Map, Seq}
 
 trait RackAwareTest {
   def ensureRackAwareAndEvenDistribution(assignment: scala.collection.Map[Int, Seq[Int]], brokerRackMapping: Map[Int, String], numBrokers: Int,
-                                         numPartitions: Int, replicationFactor: Int): Unit = {
-    checkDistribution(assignment, brokerRackMapping, numBrokers, numPartitions, replicationFactor, true, true, true)
-  }
-
-  def checkDistribution(assignment: scala.collection.Map[Int, Seq[Int]], brokerRackMapping: Map[Int, String], numBrokers: Int,
-                        numPartitions: Int, replicationFactor: Int, verifyRackAware: Boolean = false,
-                        verifyLeaderDistribution: Boolean = false, verifyReplicasDistribution: Boolean = false): Unit = {
+                                         numPartitions: Int, replicationFactor: Int, verifyRackAware: Boolean = false,
+                                         verifyLeaderDistribution: Boolean = false, verifyReplicasDistribution: Boolean = false): Unit = {
     val distribution = getReplicaDistribution(assignment, brokerRackMapping)
     val leaderCount: Map[Int, Int] = distribution.brokerLeaderCount
     val partitionCount: Map[Int, Int] = distribution.brokerReplicasCount

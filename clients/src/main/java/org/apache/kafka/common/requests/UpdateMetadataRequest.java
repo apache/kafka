@@ -250,9 +250,6 @@ public class UpdateMetadataRequest extends AbstractRequest {
                 String rack = null;
                 if (brokerData.hasField(RACK)) { // V2
                     rack = brokerData.getString(RACK);
-                    if ("".equals(rack)) {
-                        rack = null;
-                    }
                 }
                 liveBrokers.add(new Broker(brokerId, endPoints, rack));
             }

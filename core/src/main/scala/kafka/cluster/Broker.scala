@@ -102,11 +102,7 @@ object Broker {
             .map(ep => ep.protocolType -> ep).toMap
     if (expectRack) {
       val rack = readShortString(buffer)
-      if (rack == "") {
-        new Broker(id, endpoints, Option.empty)
-      } else {
-        new Broker(id, endpoints, Option(rack))
-      }
+      new Broker(id, endpoints, Option(rack))
     } else {
       new Broker(id, endpoints, Option.empty)
     }
@@ -132,7 +128,7 @@ case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint], rack: Opt
       endpoint.writeTo(buffer)
     }
     if (includeRack) {
-      writeShortString(buffer, rack.getOrElse(""))
+      writeShortString(buffer, rack.orNull)
     }
   }
 
@@ -140,7 +136,7 @@ case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint], rack: Opt
     4 + /* broker id*/
     4 + /* number of endPoints */
     endPoints.values.map(_.sizeInBytes).sum /* end points */ +
-      (if (includeRack) shortStringLength(rack.getOrElse("")) else 0)
+      (if (includeRack) shortStringLength(rack.orNull) else 0)
 
   def supportsChannel(protocolType: SecurityProtocol): Unit = {
     endPoints.contains(protocolType)

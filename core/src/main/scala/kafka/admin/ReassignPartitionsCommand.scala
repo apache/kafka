@@ -82,7 +82,7 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  def generateAssignment(zkUtils: ZkUtils, opts: ReassignPartitionsCommandOptions) {
+  def generateAssignment(zkUtils: ZkUtils, opts: ReassignPartitionsCommandOptions): Map[TopicAndPartition, Seq[Int]] = {
     if(!(opts.options.has(opts.topicsToMoveJsonFileOpt) && opts.options.has(opts.brokerListOpt)))
       CommandLineUtils.printUsageAndDie(opts.parser, "If --generate option is used, command must include both --topics-to-move-json-file and --broker-list options")
     val topicsToMoveJsonFile = opts.options.valueOf(opts.topicsToMoveJsonFileOpt)
@@ -99,15 +99,19 @@ object ReassignPartitionsCommand extends Logging {
 
     var partitionsToBeReassigned : Map[TopicAndPartition, Seq[Int]] = new mutable.HashMap[TopicAndPartition, List[Int]]()
     val groupedByTopic = topicPartitionsToReassign.groupBy(tp => tp._1.topic)
+    val rackAwareMode = if (opts.options.has(opts.disableRackAware)) RackAwareMode.Disabled
+                        else RackAwareMode.Enforced
+    val brokerRack = AdminUtils.getBrokersAndRackInfo(zkUtils, rackAwareMode, brokerListToReassign)._2
     groupedByTopic.foreach { topicInfo =>
       val assignedReplicas = AdminUtils.assignReplicasToBrokers(brokerListToReassign, topicInfo._2.size,
-        topicInfo._2.head._2.size)
+        topicInfo._2.head._2.size, rackInfo = brokerRack)
       partitionsToBeReassigned ++= assignedReplicas.map(replicaInfo => (TopicAndPartition(topicInfo._1, replicaInfo._1) -> replicaInfo._2))
     }
     val currentPartitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(partitionsToBeReassigned.map(_._1.topic).toSeq)
     println("Current partition replica assignment\n\n%s"
       .format(zkUtils.getPartitionReassignmentZkData(currentPartitionReplicaAssignment)))
     println("Proposed partition reassignment configuration\n\n%s".format(zkUtils.getPartitionReassignmentZkData(partitionsToBeReassigned)))
+    partitionsToBeReassigned
   }
 
   def executeAssignment(zkUtils: ZkUtils, opts: ReassignPartitionsCommandOptions) {
@@ -200,7 +204,8 @@ object ReassignPartitionsCommand extends Logging {
                       .withRequiredArg
                       .describedAs("brokerlist")
                       .ofType(classOf[String])
-                      
+    val disableRackAware = parser.accepts("disable-rack-aware", "if set will disable rack aware replica assignment")
+
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "This command moves topic partitions between replicas.")
 

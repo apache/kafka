@@ -698,7 +698,7 @@ public class Protocol {
     public static final Schema UPDATE_METADATA_REQUEST_BROKER_V2 =
             new Schema(new Field("id", INT32, "The broker id."),
                     new Field("end_points", new ArrayOf(UPDATE_METADATA_REQUEST_END_POINT_V2)),
-                    new Field("rack", STRING, "The rack"));
+                    new Field("rack", NULLABLE_STRING, "The rack"));
 
     public static final Schema UPDATE_METADATA_REQUEST_V2 = new Schema(new Field("controller_id", INT32, "The controller id."),
             new Field("controller_epoch", INT32, "The controller epoch."),
