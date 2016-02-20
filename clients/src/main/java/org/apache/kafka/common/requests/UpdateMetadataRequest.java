@@ -48,16 +48,21 @@ public class UpdateMetadataRequest extends AbstractRequest {
             this.zkVersion = zkVersion;
             this.replicas = replicas;
         }
-
     }
 
     public static final class Broker {
         public final int id;
         public final Map<SecurityProtocol, EndPoint> endPoints;
+        public final String rack;
 
-        public Broker(int id, Map<SecurityProtocol, EndPoint> endPoints) {
+        public Broker(int id, Map<SecurityProtocol, EndPoint> endPoints, String rack) {
             this.id = id;
             this.endPoints = endPoints;
+            this.rack = rack;
+        }
+
+        public Broker(int id, Map<SecurityProtocol, EndPoint> endPoints) {
+            this(id, endPoints, null);
         }
     }
 
@@ -109,6 +114,9 @@ public class UpdateMetadataRequest extends AbstractRequest {
     private static final String PORT_KEY_NAME = "port";
     private static final String SECURITY_PROTOCOL_TYPE_KEY_NAME = "security_protocol_type";
 
+    // Rack
+    private static final String RACK = "rack";
+
     private final int controllerId;
     private final int controllerEpoch;
     private final Map<TopicPartition, PartitionState> partitionStates;
@@ -129,20 +137,20 @@ public class UpdateMetadataRequest extends AbstractRequest {
         for (BrokerEndPoint brokerEndPoint : brokerEndPoints) {
             Map<SecurityProtocol, EndPoint> endPoints = Collections.singletonMap(SecurityProtocol.PLAINTEXT,
                     new EndPoint(brokerEndPoint.host, brokerEndPoint.port));
-            brokers.add(new Broker(brokerEndPoint.id, endPoints));
+            brokers.add(new Broker(brokerEndPoint.id, endPoints, null));
         }
         return brokers;
     }
 
     /**
-     * Constructor for version 1.
+     * Constructor for version 2.
      */
     public UpdateMetadataRequest(int controllerId, int controllerEpoch, Map<TopicPartition,
             PartitionState> partitionStates, Set<Broker> liveBrokers) {
-        this(1, controllerId, controllerEpoch, partitionStates, liveBrokers);
+        this(2, controllerId, controllerEpoch, partitionStates, liveBrokers);
     }
 
-    private UpdateMetadataRequest(int version, int controllerId, int controllerEpoch, Map<TopicPartition,
+    public UpdateMetadataRequest(int version, int controllerId, int controllerEpoch, Map<TopicPartition,
             PartitionState> partitionStates, Set<Broker> liveBrokers) {
         super(new Struct(ProtoUtils.requestSchema(ApiKeys.UPDATE_METADATA_KEY.id, version)));
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
@@ -185,6 +193,9 @@ public class UpdateMetadataRequest extends AbstractRequest {
 
                 }
                 brokerData.set(ENDPOINTS_KEY_NAME, endPointsData.toArray());
+                if (version >= 2) {
+                    brokerData.set(RACK, broker.rack);
+                }
             }
 
             brokersData.add(brokerData);
@@ -238,8 +249,8 @@ public class UpdateMetadataRequest extends AbstractRequest {
                 int port = brokerData.getInt(PORT_KEY_NAME);
                 Map<SecurityProtocol, EndPoint> endPoints = new HashMap<>(1);
                 endPoints.put(SecurityProtocol.PLAINTEXT, new EndPoint(host, port));
-                liveBrokers.add(new Broker(brokerId, endPoints));
-            } else { // V1
+                liveBrokers.add(new Broker(brokerId, endPoints, null));
+            } else { // V1 or V2
                 Map<SecurityProtocol, EndPoint> endPoints = new HashMap<>();
                 for (Object endPointDataObj : brokerData.getArray(ENDPOINTS_KEY_NAME)) {
                     Struct endPointData = (Struct) endPointDataObj;
@@ -248,11 +259,16 @@ public class UpdateMetadataRequest extends AbstractRequest {
                     short protocolTypeId = endPointData.getShort(SECURITY_PROTOCOL_TYPE_KEY_NAME);
                     endPoints.put(SecurityProtocol.forId(protocolTypeId), new EndPoint(host, port));
                 }
-                liveBrokers.add(new Broker(brokerId, endPoints));
+                String rack = null;
+                if (brokerData.hasField(RACK)) { // V2
+                    rack = brokerData.getString(RACK);
+                    if ("".equals(rack)) {
+                        rack = null;
+                    }
+                }
+                liveBrokers.add(new Broker(brokerId, endPoints, rack));
             }
-
         }
-
         controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
         controllerEpoch = struct.getInt(CONTROLLER_EPOCH_KEY_NAME);
         this.partitionStates = partitionStates;

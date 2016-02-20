@@ -109,8 +109,7 @@ object AdminUtils extends Logging {
                               replicationFactor: Int,
                               fixedStartIndex: Int = -1,
                               startPartitionId: Int = -1,
-                              rackInfo: Map[Int, String] = Map(),
-                              strictRackAware: Boolean = false)
+                              rackInfo: Map[Int, String] = Map())
   : Map[Int, Seq[Int]] = {
     if (nPartitions <= 0)
       throw new AdminOperationException("number of partitions must be larger than 0")
@@ -121,13 +120,11 @@ object AdminUtils extends Logging {
         " larger than available brokers: " + brokerList.size)
     if (rackInfo.size > 0) {
       val brokerRackMap = rackInfo.filterKeys(brokerList.contains(_))
-      if (brokerRackMap.size < brokerList.size && strictRackAware) {
+      if (brokerRackMap.size < brokerList.size) {
         throw new AdminOperationException("Not all brokers have rack information for replica rack aware assignment");
       }
       return assignReplicasToBrokersRackAware(brokerList, nPartitions, replicationFactor, brokerRackMap, fixedStartIndex,
         startPartitionId)
-    } else if (strictRackAware) {
-      throw new AdminOperationException("No rack information provided for replica rack aware assignment")
     }
     val ret = new mutable.HashMap[Int, List[Int]]()
     val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
@@ -263,7 +260,8 @@ object AdminUtils extends Logging {
                     topic: String,
                     numPartitions: Int = 1,
                     replicaAssignmentStr: String = "",
-                    checkBrokerAvailable: Boolean = true) {
+                    checkBrokerAvailable: Boolean = true,
+                    rackAwareMode: RackAwareMode = RackAwareMode.Enforced) {
     val existingPartitionsReplicaList = zkUtils.getReplicaAssignmentForTopics(List(topic))
     if (existingPartitionsReplicaList.size == 0)
       throw new AdminOperationException("The topic %s does not exist".format(topic))
@@ -277,13 +275,13 @@ object AdminUtils extends Logging {
       throw new AdminOperationException("The number of partitions for a topic can only be increased")
 
     // create the new partition replication list
-    val brokerList = zkUtils.getSortedBrokerList()
+    val (brokerList, brokerRackMap) = getBrokersAndRackInfo(zkUtils, rackAwareMode)
     val newPartitionReplicaList = if (replicaAssignmentStr == null || replicaAssignmentStr == "") {
       var startIndex = brokerList.indexWhere(_ >= existingReplicaListForPartitionZero.head)
       if(startIndex < 0) {
         startIndex = 0
       }
-      AdminUtils.assignReplicasToBrokers(brokerList, partitionsToAdd, existingReplicaListForPartitionZero.size, startIndex, existingPartitionsReplicaList.size)
+      AdminUtils.assignReplicasToBrokers(brokerList, partitionsToAdd, existingReplicaListForPartitionZero.size, startIndex, existingPartitionsReplicaList.size, rackInfo = brokerRackMap)
     }
     else
       getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet, existingPartitionsReplicaList.size, checkBrokerAvailable)
@@ -390,13 +388,30 @@ object AdminUtils extends Logging {
   def topicExists(zkUtils: ZkUtils, topic: String): Boolean =
     zkUtils.zkClient.exists(getTopicPath(topic))
 
+  def getBrokersAndRackInfo(zkUtils: ZkUtils, rackAwareMode: RackAwareMode = RackAwareMode.Enforced) = {
+    val brokers = zkUtils.getAllBrokersInCluster()
+    val brokersWithRack = brokers.filter(_.rack.nonEmpty)
+    if (rackAwareMode == RackAwareMode.Enforced && brokersWithRack.size > 0 && brokersWithRack.size < brokers.size) {
+      throw new AdminOperationException("Not all brokers have rack information. Add --disable-rack-aware in command line to make replica assignment without rack information.")
+    }
+    val brokerRackMap: Map[Int, String] = rackAwareMode match {
+      case RackAwareMode.Disabled => Map()
+      case RackAwareMode.Default if (brokersWithRack.size < brokers.size) => Map()
+      case RackAwareMode.Enforced if (brokersWithRack.size == 0) => Map()
+      case _ => brokersWithRack.map(broker => (broker.id -> broker.rack.get)).toMap
+    }
+    val brokerList = brokers.map(_.id).sorted
+    (brokerList, brokerRackMap)
+  }
+
   def createTopic(zkUtils: ZkUtils,
                   topic: String,
                   partitions: Int,
                   replicationFactor: Int,
-                  topicConfig: Properties = new Properties) {
-    val brokerList = zkUtils.getSortedBrokerList()
-    val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, partitions, replicationFactor)
+                  topicConfig: Properties = new Properties,
+                  rackAwareMode: RackAwareMode = RackAwareMode.Enforced) {
+    val (brokerList, brokerRackMap) = getBrokersAndRackInfo(zkUtils, rackAwareMode)
+    val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, partitions, replicationFactor, rackInfo = brokerRackMap)
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, replicaAssignment, topicConfig)
   }
 

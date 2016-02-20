@@ -33,7 +33,7 @@ class BrokerEndPointTest extends Logging {
     val endpoint = new EndPoint("myhost", 9092, SecurityProtocol.PLAINTEXT)
     val listEndPoints = Map(SecurityProtocol.PLAINTEXT -> endpoint)
     val origBroker = new Broker(1, listEndPoints)
-    val brokerBytes = ByteBuffer.allocate(origBroker.sizeInBytes)
+    val brokerBytes = ByteBuffer.allocate(origBroker.sizeInBytes())
 
     origBroker.writeTo(brokerBytes)
 

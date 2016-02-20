@@ -20,7 +20,7 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.lang.{Long => JLong, Short => JShort}
 
-import kafka.admin.AdminUtils
+import kafka.admin.{RackAwareMode, AdminUtils}
 import kafka.api._
 import kafka.cluster.Partition
 import kafka.common._
@@ -602,12 +602,12 @@ class KafkaApis(val requestChannel: RequestChannel,
                   config.offsetsTopicReplicationFactor.toInt
               AdminUtils.createTopic(zkUtils, topic, config.offsetsTopicPartitions,
                                      offsetsTopicReplicationFactor,
-                                     coordinator.offsetsTopicConfigs)
+                                     coordinator.offsetsTopicConfigs, rackAwareMode = RackAwareMode.Default)
               info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
                 .format(topic, config.offsetsTopicPartitions, offsetsTopicReplicationFactor))
             }
             else {
-              AdminUtils.createTopic(zkUtils, topic, config.numPartitions, config.defaultReplicationFactor)
+              AdminUtils.createTopic(zkUtils, topic, config.numPartitions, config.defaultReplicationFactor, rackAwareMode = RackAwareMode.Default)
               info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
                    .format(topic, config.numPartitions, config.defaultReplicationFactor))
             }

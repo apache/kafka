@@ -16,7 +16,7 @@
 */
 package kafka.controller
 
-import kafka.api.{LeaderAndIsr, KAFKA_090, PartitionStateInfo}
+import kafka.api.{KAFKA_091, LeaderAndIsr, KAFKA_090, PartitionStateInfo}
 import kafka.utils._
 import org.apache.kafka.clients.{ClientResponse, ClientRequest, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.{TopicPartition, Node}
@@ -380,7 +380,9 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
           topicPartition -> partitionState
         }
 
-        val version = if (controller.config.interBrokerProtocolVersion.onOrAfter(KAFKA_090)) (1: Short) else (0: Short)
+        val version = if (controller.config.interBrokerProtocolVersion.onOrAfter(KAFKA_091)) (2: Short)
+                      else if (controller.config.interBrokerProtocolVersion.compare(KAFKA_090) == 0)  (1: Short)
+                      else 0:Short
 
         val updateMetadataRequest =
           if (version == 0) {
@@ -395,9 +397,9 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
               val endPoints = broker.endPoints.map { case (securityProtocol, endPoint) =>
                 securityProtocol -> new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port)
               }
-              new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava)
+              new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.getOrElse(""))
             }
-            new UpdateMetadataRequest(controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava)
+            new UpdateMetadataRequest(version, controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava)
           }
 
         controller.sendRequest(broker, ApiKeys.UPDATE_METADATA_KEY, Some(version), updateMetadataRequest, null)

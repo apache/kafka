@@ -381,8 +381,8 @@ public class RequestResponseTest {
             endPoints2.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1244));
             endPoints2.put(SecurityProtocol.SSL, new UpdateMetadataRequest.EndPoint("host2", 1234));
 
-            Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1),
-                    new UpdateMetadataRequest.Broker(1, endPoints2)
+            Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1, null),
+                    new UpdateMetadataRequest.Broker(1, endPoints2, null)
             ));
 
             return new UpdateMetadataRequest(1, 10, partitionStates, liveBrokers);

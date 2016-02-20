@@ -28,7 +28,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import scala.collection.Set
 
 object UpdateMetadataRequest {
-  val CurrentVersion = 1.shortValue
+  val CurrentVersion = 2.shortValue
   val IsInit: Boolean = true
   val NotInit: Boolean = false
   val DefaultAckTimeout: Int = 1000
@@ -54,7 +54,10 @@ object UpdateMetadataRequest {
 
     val aliveBrokers = versionId match {
       case 0 => for(i <- 0 until numAliveBrokers) yield new Broker(BrokerEndPoint.readFrom(buffer),SecurityProtocol.PLAINTEXT)
-      case 1 => for(i <- 0 until numAliveBrokers) yield Broker.readFrom(buffer)
+      case v if (v <= 2) => {
+        val hasRack = v != 1
+        for (i <- 0 until numAliveBrokers) yield Broker.readFrom(buffer, hasRack)
+      }
       case v => throw new KafkaException( "Version " + v.toString + " is invalid for UpdateMetadataRequest. Valid versions are 0 or 1.")
     }
 
@@ -94,7 +97,7 @@ case class UpdateMetadataRequest (versionId: Short,
 
     versionId match {
       case 0 => aliveBrokers.foreach(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).writeTo(buffer))
-      case 1 => aliveBrokers.foreach(_.writeTo(buffer))
+      case v if (v <= 2) => aliveBrokers.foreach(_.writeTo(buffer, v == 2))
       case v => throw new KafkaException( "Version " + v.toString + " is invalid for UpdateMetadataRequest. Valid versions are 0 or 1.")
     }
   }
@@ -114,8 +117,8 @@ case class UpdateMetadataRequest (versionId: Short,
     versionId match  {
       case 0 => for(broker <- aliveBrokers)
         size += broker.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).sizeInBytes /* broker info */
-      case 1 => for(broker  <- aliveBrokers)
-        size += broker.sizeInBytes
+      case v if (v <= 2) => for(broker  <- aliveBrokers)
+        size += broker.sizeInBytes(v == 2)
       case v => throw new KafkaException( "Version " + v.toString + " is invalid for UpdateMetadataRequest. Valid versions are 0 or 1.")
     }
 

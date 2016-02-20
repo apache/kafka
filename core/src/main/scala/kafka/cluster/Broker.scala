@@ -33,7 +33,8 @@ object Broker {
 
   /**
    * Create a broker object from id and JSON string.
-   * @param id
+    *
+    * @param id
    * @param brokerInfoString
    *
    * Version 1 JSON schema for a broker is:
@@ -93,13 +94,22 @@ object Broker {
    *               id (int), number of endpoints (int), serialized endpoints
    * @return broker object
    */
-  def readFrom(buffer: ByteBuffer): Broker = {
+  def readFrom(buffer: ByteBuffer, expectRack: Boolean = true): Broker = {
     val id = buffer.getInt
     val numEndpoints = buffer.getInt
 
     val endpoints = List.range(0, numEndpoints).map(i => EndPoint.readFrom(buffer))
             .map(ep => ep.protocolType -> ep).toMap
-    new Broker(id, endpoints)
+    if (expectRack) {
+      val rack = readShortString(buffer)
+      if (rack == "") {
+        new Broker(id, endpoints, Option.empty)
+      } else {
+        new Broker(id, endpoints, Option(rack))
+      }
+    } else {
+      new Broker(id, endpoints, Option.empty)
+    }
   }
 }
 
@@ -115,18 +125,22 @@ case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint], rack: Opt
     this(bep.id, bep.host, bep.port, protocol)
   }
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer, includeRack: Boolean = true) {
     buffer.putInt(id)
     buffer.putInt(endPoints.size)
     for(endpoint <- endPoints.values) {
       endpoint.writeTo(buffer)
     }
+    if (includeRack) {
+      writeShortString(buffer, rack.getOrElse(""))
+    }
   }
 
-  def sizeInBytes: Int =
+  def sizeInBytes(includeRack: Boolean = true): Int =
     4 + /* broker id*/
     4 + /* number of endPoints */
-    endPoints.values.map(_.sizeInBytes).sum /* end points */
+    endPoints.values.map(_.sizeInBytes).sum /* end points */ +
+      (if (includeRack) shortStringLength(rack.getOrElse("")) else 0)
 
   def supportsChannel(protocolType: SecurityProtocol): Unit = {
     endPoints.contains(protocolType)
