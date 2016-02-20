@@ -40,6 +40,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 
 /**
@@ -248,19 +249,21 @@ public class StandaloneHerder extends AbstractHerder {
         }
     }
 
+    private Set<ConnectorTaskId> tasksFor(ConnectorState state) {
+        Set<ConnectorTaskId> tasks = new HashSet<>();
+        for (int i = 0; i < state.taskConfigs.size(); i++)
+            tasks.add(new ConnectorTaskId(state.name, i));
+        return tasks;
+    }
+
     private void removeConnectorTasks(String connName) {
         ConnectorState state = connectors.get(connName);
-        for (int i = 0; i < state.taskConfigs.size(); i++) {
-            ConnectorTaskId taskId = new ConnectorTaskId(connName, i);
-            try {
-                worker.stopAndAwaitTask(taskId);
-            } catch (ConnectException e) {
-                log.error("Failed to stop task {}: ", taskId, e);
-                // Swallow this so we can continue stopping the rest of the tasks
-                // FIXME: Forcibly kill the task?
-            }
+        Set<ConnectorTaskId> tasks = tasksFor(state);
+        if (!tasks.isEmpty()) {
+            worker.stopTasks(tasks);
+            worker.awaitStopTasks(tasks);
+            state.taskConfigs = new ArrayList<>();
         }
-        state.taskConfigs = new ArrayList<>();
     }
 
     private void updateConnectorTasks(String connName) {

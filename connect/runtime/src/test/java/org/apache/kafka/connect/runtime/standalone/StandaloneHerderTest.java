@@ -307,7 +307,10 @@ public class StandaloneHerderTest {
     }
 
     private void expectStop() {
-        worker.stopAndAwaitTask(new ConnectorTaskId(CONNECTOR_NAME, 0));
+        ConnectorTaskId task = new ConnectorTaskId(CONNECTOR_NAME, 0);
+        worker.stopTasks(Collections.singleton(task));
+        EasyMock.expectLastCall();
+        worker.awaitStopTasks(Collections.singleton(task));
         EasyMock.expectLastCall();
         worker.stopConnector(CONNECTOR_NAME);
         EasyMock.expectLastCall();

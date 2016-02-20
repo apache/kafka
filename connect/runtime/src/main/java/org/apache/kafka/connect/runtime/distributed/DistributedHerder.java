@@ -310,13 +310,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     log.error("Failed to shut down connector " + connName, t);
                 }
             }
-            for (ConnectorTaskId taskId : new HashSet<>(worker.taskIds())) {
-                try {
-                    worker.stopAndAwaitTask(taskId);
-                } catch (Throwable t) {
-                    log.error("Failed to shut down task " + taskId, t);
-                }
-            }
+
+            Set<ConnectorTaskId> tasks = new HashSet<>(worker.taskIds());
+            worker.stopTasks(tasks);
+            worker.awaitStopTasks(tasks);
 
             member.stop();
 
