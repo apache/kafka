@@ -68,7 +68,7 @@ public class ConnectorStateInfo {
             return state;
         }
 
-        @JsonProperty
+        @JsonProperty("worker_id")
         public String workerId() {
             return workerId;
         }
