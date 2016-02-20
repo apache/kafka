@@ -704,7 +704,7 @@ public class Fetcher<K, V> {
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {
             Map<String, String> metricTags = new HashMap<>();
-            metricTags.put("topic", topic);
+            metricTags.put("topic", "topic-" + topic.replace(".", "_"));
 
             // record bytes fetched
             String name = "topic." + topic + ".bytes-fetched";
