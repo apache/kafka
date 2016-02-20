@@ -185,8 +185,7 @@ public class NetworkClientTest {
     }
 
     @Test
-    public void testConnectionDelay_connected() {
-        client.ready(node, time.milliseconds());
+    public void testConnectionDelayConnected() {
         awaitReady(client, node);
 
         long now = time.milliseconds();
@@ -196,8 +195,7 @@ public class NetworkClientTest {
     }
 
     @Test
-    public void testConnectionDelay_disconnected() {
-        client.ready(node, time.milliseconds());
+    public void testConnectionDelayDisconnected() {
         awaitReady(client, node);
 
         selector.close(node.idString());
