@@ -13,6 +13,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.BrokerEndPoint;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -76,19 +77,6 @@ public class UpdateMetadataRequest extends AbstractRequest {
         }
     }
 
-    @Deprecated
-    public static final class BrokerEndPoint {
-        public final int id;
-        public final String host;
-        public final int port;
-
-        public BrokerEndPoint(int id, String host, int port) {
-            this.id = id;
-            this.host = host;
-            this.port = port;
-        }
-    }
-
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.UPDATE_METADATA_KEY.id);
 
     private static final String CONTROLLER_ID_KEY_NAME = "controller_id";
@@ -136,8 +124,8 @@ public class UpdateMetadataRequest extends AbstractRequest {
         Set<Broker> brokers = new HashSet<>(brokerEndPoints.size());
         for (BrokerEndPoint brokerEndPoint : brokerEndPoints) {
             Map<SecurityProtocol, EndPoint> endPoints = Collections.singletonMap(SecurityProtocol.PLAINTEXT,
-                    new EndPoint(brokerEndPoint.host, brokerEndPoint.port));
-            brokers.add(new Broker(brokerEndPoint.id, endPoints, null));
+                    new EndPoint(brokerEndPoint.host(), brokerEndPoint.port()));
+            brokers.add(new Broker(brokerEndPoint.id(), endPoints, null));
         }
         return brokers;
     }

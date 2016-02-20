@@ -181,4 +181,15 @@ public class KafkaStreams {
             throw new IllegalStateException("This process has not started yet.");
         }
     }
+
+    /**
+     * Sets the handler invoked when a stream thread abruptly terminates due to an uncaught exception.
+     *
+     * @param eh the object to use as this thread's uncaught exception handler. If null then this thread has no explicit handler.
+     */
+    public void setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler eh) {
+        for (StreamThread thread : threads)
+            thread.setUncaughtExceptionHandler(eh);
+    }
+
 }

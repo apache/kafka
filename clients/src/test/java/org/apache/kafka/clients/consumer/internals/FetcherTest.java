@@ -39,6 +39,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ListOffsetRequest;
 import org.apache.kafka.common.requests.ListOffsetResponse;
@@ -95,9 +96,9 @@ public class FetcherTest {
         metadata.update(cluster, time.milliseconds());
         client.setNode(node);
 
-        records.append(1L, "key".getBytes(), "value-1".getBytes());
-        records.append(2L, "key".getBytes(), "value-2".getBytes());
-        records.append(3L, "key".getBytes(), "value-3".getBytes());
+        records.append(1L, 0L, "key".getBytes(), "value-1".getBytes());
+        records.append(2L, 0L, "key".getBytes(), "value-2".getBytes());
+        records.append(3L, 0L, "key".getBytes(), "value-3".getBytes());
         records.close();
     }
 
@@ -133,9 +134,9 @@ public class FetcherTest {
         // this test verifies the fetcher updates the current fetched/consumed positions correctly for this case
 
         MemoryRecords records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
-        records.append(15L, "key".getBytes(), "value-1".getBytes());
-        records.append(20L, "key".getBytes(), "value-2".getBytes());
-        records.append(30L, "key".getBytes(), "value-3".getBytes());
+        records.append(15L, 0L, "key".getBytes(), "value-1".getBytes());
+        records.append(20L, 0L, "key".getBytes(), "value-2".getBytes());
+        records.append(30L, 0L, "key".getBytes(), "value-3".getBytes());
         records.close();
 
         List<ConsumerRecord<byte[], byte[]>> consumerRecords;
@@ -164,7 +165,7 @@ public class FetcherTest {
         MemoryRecords records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
         byte[] bytes = new byte[this.fetchSize];
         new Random().nextBytes(bytes);
-        records.append(1L, null, bytes);
+        records.append(1L, 0L, null, bytes);
         records.close();
 
         // resize the limit of the buffer to pretend it is only fetch-size large
@@ -469,7 +470,7 @@ public class FetcherTest {
             if (i > 1) {
                 this.records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
                 for (int v = 0; v < 3; v++) {
-                    this.records.append((long) i * 3 + v, "key".getBytes(), String.format("value-%d", v).getBytes());
+                    this.records.append((long) i * 3 + v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
                 }
                 this.records.close();
             }

@@ -16,10 +16,11 @@
 */
 package kafka.controller
 
-import kafka.api.{KAFKA_091, LeaderAndIsr, KAFKA_090, PartitionStateInfo}
+import kafka.api._
 import kafka.utils._
 import org.apache.kafka.clients.{ClientResponse, ClientRequest, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.{TopicPartition, Node}
+import org.apache.kafka.common.requests.UpdateMetadataRequest
+import org.apache.kafka.common.{BrokerEndPoint, TopicPartition, Node}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, Selector, NetworkReceive, Mode}
 import org.apache.kafka.common.protocol.{SecurityProtocol, ApiKeys}
@@ -352,7 +353,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         val leaderIds = partitionStateInfos.map(_._2.leaderIsrAndControllerEpoch.leaderAndIsr.leader).toSet
         val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map { b =>
           val brokerEndPoint = b.getBrokerEndPoint(controller.config.interBrokerSecurityProtocol)
-          new LeaderAndIsrRequest.EndPoint(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
+          new BrokerEndPoint(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
         }
         val partitionStates = partitionStateInfos.map { case (topicPartition, partitionStateInfo) =>
           val LeaderIsrAndControllerEpoch(leaderIsr, controllerEpoch) = partitionStateInfo.leaderIsrAndControllerEpoch
@@ -380,15 +381,15 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
           topicPartition -> partitionState
         }
 
-        val version = if (controller.config.interBrokerProtocolVersion.onOrAfter(KAFKA_091)) (2: Short)
-                      else if (controller.config.interBrokerProtocolVersion.compare(KAFKA_090) == 0)  (1: Short)
+        val version = if (controller.config.interBrokerProtocolVersion.onOrAfter(KAFKA_0_10_0_IV0)) (2: Short)
+                      else if (controller.config.interBrokerProtocolVersion.compare(KAFKA_0_9_0) == 0)  (1: Short)
                       else 0:Short
 
         val updateMetadataRequest =
           if (version == 0) {
             val liveBrokers = controllerContext.liveOrShuttingDownBrokers.map { broker =>
               val brokerEndPoint = broker.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)
-              new UpdateMetadataRequest.BrokerEndPoint(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
+              new BrokerEndPoint(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
             }
             new UpdateMetadataRequest(controllerId, controllerEpoch, liveBrokers.asJava, partitionStates.asJava)
           }

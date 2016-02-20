@@ -59,7 +59,7 @@ public class KStreamTestDriver {
 
         for (StateStoreSupplier stateStoreSupplier : topology.stateStoreSuppliers()) {
             StateStore store = stateStoreSupplier.get();
-            store.init(context);
+            store.init(context, store);
         }
 
         for (ProcessorNode node : topology.processors()) {

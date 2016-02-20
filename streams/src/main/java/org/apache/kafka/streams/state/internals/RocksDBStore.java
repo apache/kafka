@@ -21,6 +21,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Serdes;
@@ -60,6 +61,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private static final String DB_FILE_DIR = "rocksdb";
 
     private final String name;
+    private final String parentDir;
 
     private final Options options;
     private final WriteOptions wOptions;
@@ -91,7 +93,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     public RocksDBStore(String name, Serdes<K, V> serdes) {
+        this(name, DB_FILE_DIR, serdes);
+    }
+
+    public RocksDBStore(String name, String parentDir, Serdes<K, V> serdes) {
         this.name = name;
+        this.parentDir = parentDir;
         this.serdes = serdes;
 
         // initialize the rocksdb options
@@ -131,12 +138,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     public void openDB(ProcessorContext context) {
         this.context = context;
-        this.dbDir = new File(new File(this.context.stateDir(), DB_FILE_DIR), this.name);
+        this.dbDir = new File(new File(this.context.stateDir(), parentDir), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
     }
 
     @SuppressWarnings("unchecked")
-    public void init(ProcessorContext context) {
+    public void init(ProcessorContext context, StateStore root) {
         // first open the DB dir
         openDB(context);
 
@@ -170,7 +177,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             }
         };
 
-        context.register(this, loggingEnabled, new StateRestoreCallback() {
+        context.register(root, loggingEnabled, new StateRestoreCallback() {
 
             @Override
             public void restore(byte[] key, byte[] value) {

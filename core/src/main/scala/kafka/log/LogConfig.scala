@@ -18,12 +18,13 @@
 package kafka.log
 
 import java.util.Properties
+
+import kafka.api.ApiVersion
+import kafka.message.{BrokerCompressionCodec, Message}
 import kafka.server.KafkaConfig
-import org.apache.kafka.common.utils.Utils
-import scala.collection._
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
-import kafka.message.BrokerCompressionCodec
-import kafka.message.Message
+import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.utils.Utils
 
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
@@ -44,6 +45,9 @@ object Defaults {
   val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
   val CompressionType = kafka.server.Defaults.CompressionType
   val PreAllocateEnable = kafka.server.Defaults.LogPreAllocateEnable
+  val MessageFormatVersion = kafka.server.Defaults.MessageFormatVersion
+  val MessageTimestampType = kafka.server.Defaults.MessageTimestampType
+  val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.MessageTimestampDifferenceMaxMs
 }
 
 case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
@@ -69,6 +73,9 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val minInSyncReplicas = getInt(LogConfig.MinInSyncReplicasProp)
   val compressionType = getString(LogConfig.CompressionTypeProp).toLowerCase
   val preallocate = getBoolean(LogConfig.PreAllocateEnableProp)
+  val messageFormatVersion = ApiVersion(getString(LogConfig.MessageFormatVersionProp)).messageFormatVersion
+  val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
+  val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp)
 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
@@ -101,6 +108,9 @@ object LogConfig {
   val MinInSyncReplicasProp = "min.insync.replicas"
   val CompressionTypeProp = "compression.type"
   val PreAllocateEnableProp = "preallocate"
+  val MessageFormatVersionProp = KafkaConfig.MessageFormatVersionProp
+  val MessageTimestampTypeProp = KafkaConfig.MessageTimestampTypeProp
+  val MessageTimestampDifferenceMaxMsProp = KafkaConfig.MessageTimestampDifferenceMaxMsProp
 
   val SegmentSizeDoc = "The hard maximum for the size of a segment file in the log"
   val SegmentMsDoc = "The soft maximum on the amount of time before a new log segment is rolled"
@@ -125,16 +135,18 @@ object LogConfig {
     "standard compression codecs ('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to " +
     "no compression; and 'producer' which means retain the original compression codec set by the producer."
   val PreAllocateEnableDoc ="Should pre allocate file when create new segment?"
+  val MessageFormatVersionDoc = KafkaConfig.MessageFormatVersionDoc
+  val MessageTimestampTypeDoc = KafkaConfig.MessageTimestampTypeDoc
+  val MessageTimestampDifferenceMaxMsDoc = KafkaConfig.MessageTimestampDifferenceMaxMsDoc
 
   private val configDef = {
-    import ConfigDef.Range._
-    import ConfigDef.ValidString._
-    import ConfigDef.Type._
-    import ConfigDef.Importance._
-    import java.util.Arrays.asList
+    import org.apache.kafka.common.config.ConfigDef.Importance._
+    import org.apache.kafka.common.config.ConfigDef.Range._
+    import org.apache.kafka.common.config.ConfigDef.Type._
+    import org.apache.kafka.common.config.ConfigDef.ValidString._
 
     new ConfigDef()
-      .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(Message.MinHeaderSize), MEDIUM, SegmentSizeDoc)
+      .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(Message.MinMessageOverhead), MEDIUM, SegmentSizeDoc)
       .define(SegmentMsProp, LONG, Defaults.SegmentMs, atLeast(0), MEDIUM, SegmentMsDoc)
       .define(SegmentJitterMsProp, LONG, Defaults.SegmentJitterMs, atLeast(0), MEDIUM, SegmentJitterMsDoc)
       .define(SegmentIndexBytesProp, INT, Defaults.MaxIndexSize, atLeast(0), MEDIUM, MaxIndexSizeDoc)
@@ -158,12 +170,15 @@ object LogConfig {
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, in(BrokerCompressionCodec.brokerCompressionOptions:_*), MEDIUM, CompressionTypeDoc)
       .define(PreAllocateEnableProp, BOOLEAN, Defaults.PreAllocateEnable,
         MEDIUM, PreAllocateEnableDoc)
+      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, MEDIUM, MessageFormatVersionDoc)
+      .define(MessageTimestampTypeProp, STRING, Defaults.MessageTimestampType, MEDIUM, MessageTimestampTypeDoc)
+      .define(MessageTimestampDifferenceMaxMsProp, LONG, Defaults.MessageTimestampDifferenceMaxMs, atLeast(0), MEDIUM, MessageTimestampDifferenceMaxMsDoc)
   }
 
   def apply(): LogConfig = LogConfig(new Properties())
 
   def configNames() = {
-    import JavaConversions._
+    import scala.collection.JavaConversions._
     configDef.names().toList.sorted
   }
 
@@ -182,7 +197,7 @@ object LogConfig {
    * Check that property names are valid
    */
   def validateNames(props: Properties) {
-    import JavaConversions._
+    import scala.collection.JavaConversions._
     val names = configDef.names()
     for(name <- props.keys)
       require(names.contains(name), "Unknown configuration \"%s\".".format(name))

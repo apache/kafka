@@ -14,8 +14,10 @@ package kafka.api
 
 import java.util
 
+import kafka.coordinator.GroupCoordinator
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.{Producer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 
@@ -24,11 +26,10 @@ import kafka.server.KafkaConfig
 
 import java.util.ArrayList
 import org.junit.Assert._
-import org.junit.{Test, Before}
+import org.junit.{Before, Test}
 
-import scala.collection.mutable.Buffer
 import scala.collection.JavaConverters._
-import kafka.coordinator.GroupCoordinator
+import scala.collection.mutable.Buffer
 
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
@@ -75,7 +76,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     assertEquals(1, this.consumers(0).assignment.size)
 
     this.consumers(0).seek(tp, 0)
-    consumeAndVerifyRecords(this.consumers(0), numRecords = numRecords, startingOffset = 0)
+    consumeAndVerifyRecords(consumer = this.consumers(0), numRecords = numRecords, startingOffset = 0)
 
     // check async commit callbacks
     val commitCallback = new CountConsumerCommitCallback()
@@ -245,7 +246,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
     sendRecords(5)
     consumer0.subscribe(List(topic).asJava)
-    consumeAndVerifyRecords(consumer0, 5, 0)
+    consumeAndVerifyRecords(consumer = consumer0, numRecords = 5, startingOffset = 0)
     consumer0.pause(tp)
 
     // subscribe to a new topic to trigger a rebalance
@@ -253,7 +254,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
     // after rebalance, our position should be reset and our pause state lost,
     // so we should be able to consume from the beginning
-    consumeAndVerifyRecords(consumer0, 0, 5)
+    consumeAndVerifyRecords(consumer = consumer0, numRecords = 0, startingOffset = 5)
   }
 
   protected class TestConsumerReassignmentListener extends ConsumerRebalanceListener {
@@ -276,21 +277,42 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
   }
 
   protected def sendRecords(numRecords: Int, tp: TopicPartition) {
-    sendRecords(this.producers(0), numRecords, tp)
-  }
-
-  protected def sendRecords(producer: Producer[Array[Byte], Array[Byte]],
-                            numRecords: Int,
-                            tp: TopicPartition) {
     (0 until numRecords).foreach { i =>
-      producer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i".getBytes, s"value $i".getBytes))
+      this.producers(0).send(new ProducerRecord(tp.topic(), tp.partition(), i.toLong, s"key $i".getBytes, s"value $i".getBytes))
     }
-    producer.flush()
+    this.producers(0).flush()
   }
 
-  protected def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]], numRecords: Int, startingOffset: Int,
-                                      startingKeyAndValueIndex: Int = 0, tp: TopicPartition = tp) {
-    val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
+  protected def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]],
+                                        numRecords: Int,
+                                        startingOffset: Int,
+                                        startingKeyAndValueIndex: Int = 0,
+                                        startingTimestamp: Long = 0L,
+                                        timestampType: TimestampType = TimestampType.CREATE_TIME,
+                                        tp: TopicPartition = tp) {
+    val records = consumeRecords(consumer, numRecords)
+    val now = System.currentTimeMillis()
+    for (i <- 0 until numRecords) {
+      val record = records.get(i)
+      val offset = startingOffset + i
+      assertEquals(tp.topic(), record.topic())
+      assertEquals(tp.partition(), record.partition())
+      if (timestampType == TimestampType.CREATE_TIME) {
+        assertEquals(timestampType, record.timestampType())
+        val timestamp = startingTimestamp + i
+        assertEquals(timestamp.toLong, record.timestamp())
+      } else
+        assertTrue(s"Got unexpected timestamp ${record.timestamp()}. Timestamp should be between [$startingTimestamp, $now}]",
+          record.timestamp() >= startingTimestamp && record.timestamp() <= now)
+      assertEquals(offset.toLong, record.offset())
+      val keyAndValueIndex = startingKeyAndValueIndex + i
+      assertEquals(s"key $keyAndValueIndex", new String(record.key()))
+      assertEquals(s"value $keyAndValueIndex", new String(record.value()))
+    }
+  }
+
+  protected def consumeRecords[K, V](consumer: Consumer[K, V], numRecords: Int): ArrayList[ConsumerRecord[K, V]] = {
+    val records = new ArrayList[ConsumerRecord[K, V]]
     val maxIters = numRecords * 300
     var iters = 0
     while (records.size < numRecords) {
@@ -300,23 +322,14 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
         throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
       iters += 1
     }
-    for (i <- 0 until numRecords) {
-      val record = records.get(i)
-      val offset = startingOffset + i
-      assertEquals(tp.topic(), record.topic())
-      assertEquals(tp.partition(), record.partition())
-      assertEquals(offset.toLong, record.offset())
-      val keyAndValueIndex = startingKeyAndValueIndex + i
-      assertEquals(s"key $keyAndValueIndex", new String(record.key()))
-      assertEquals(s"value $keyAndValueIndex", new String(record.value()))
-    }
+    records
   }
 
-  protected def awaitCommitCallback(consumer: Consumer[Array[Byte], Array[Byte]], commitCallback: CountConsumerCommitCallback): Unit = {
+  protected def awaitCommitCallback[K, V](consumer: Consumer[K, V], commitCallback: CountConsumerCommitCallback): Unit = {
     val startCount = commitCallback.count
     val started = System.currentTimeMillis()
     while (commitCallback.count == startCount && System.currentTimeMillis() - started < 10000)
-      this.consumers(0).poll(50)
+      consumer.poll(50)
     assertEquals(startCount + 1, commitCallback.count)
   }
 
