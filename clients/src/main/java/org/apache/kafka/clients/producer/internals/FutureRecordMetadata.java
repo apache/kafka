@@ -26,10 +26,12 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
 
     private final ProduceRequestResult result;
     private final long relativeOffset;
+    private final long timestamp;
 
-    public FutureRecordMetadata(ProduceRequestResult result, long relativeOffset) {
+    public FutureRecordMetadata(ProduceRequestResult result, long relativeOffset, long timestamp) {
         this.result = result;
         this.relativeOffset = relativeOffset;
+        this.timestamp = timestamp;
     }
 
     @Override
@@ -59,11 +61,15 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     }
     
     RecordMetadata value() {
-        return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.relativeOffset);
+        return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.relativeOffset, this.timestamp);
     }
     
     public long relativeOffset() {
         return this.relativeOffset;
+    }
+
+    public long timestamp() {
+        return this.timestamp;
     }
 
     @Override

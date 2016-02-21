@@ -17,6 +17,7 @@
 
 package kafka.producer
 
+import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
 
@@ -30,6 +31,7 @@ import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
 import kafka.utils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.TimestampType
 import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -164,10 +166,11 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       keyEncoder = classOf[StringEncoder].getName,
       partitioner = classOf[StaticPartitioner].getName,
       producerProps = props1)
-
+    val startTime = System.currentTimeMillis()
     // Available partition ids should be 0.
     producer1.send(new KeyedMessage[String, String](topic, "test", "test1"))
     producer1.send(new KeyedMessage[String, String](topic, "test", "test2"))
+    val endTime = System.currentTimeMillis()
     // get the leader
     val leaderOpt = zkUtils.getLeaderForPartition(topic, 0)
     assertTrue("Leader for topic new-topic partition 0 should exist", leaderOpt.isDefined)
@@ -181,8 +184,19 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       response2.messageSet("new-topic", 0).iterator.toBuffer
     }
     assertEquals("Should have fetched 2 messages", 2, messageSet.size)
-    assertEquals(new Message(bytes = "test1".getBytes, key = "test".getBytes), messageSet(0).message)
-    assertEquals(new Message(bytes = "test2".getBytes, key = "test".getBytes), messageSet(1).message)
+    // Message 1
+    assertTrue(ByteBuffer.wrap("test1".getBytes).equals(messageSet(0).message.payload))
+    assertTrue(ByteBuffer.wrap("test".getBytes).equals(messageSet(0).message.key))
+    assertTrue(messageSet(0).message.timestamp >= startTime && messageSet(0).message.timestamp < endTime)
+    assertEquals(TimestampType.CREATE_TIME, messageSet(0).message.timestampType)
+    assertEquals(Message.MagicValue_V1, messageSet(0).message.magic)
+
+    // Message 2
+    assertTrue(ByteBuffer.wrap("test2".getBytes).equals(messageSet(1).message.payload))
+    assertTrue(ByteBuffer.wrap("test".getBytes).equals(messageSet(1).message.key))
+    assertTrue(messageSet(1).message.timestamp >= startTime && messageSet(1).message.timestamp < endTime)
+    assertEquals(TimestampType.CREATE_TIME, messageSet(1).message.timestampType)
+    assertEquals(Message.MagicValue_V1, messageSet(1).message.magic)
     producer1.close()
 
     val props2 = new util.Properties()
@@ -227,7 +241,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       keyEncoder = classOf[StringEncoder].getName,
       partitioner = classOf[StaticPartitioner].getName,
       producerProps = props)
-
+    val startTime = System.currentTimeMillis()
     try {
       // Available partition ids should be 0, 1, 2 and 3, all lead and hosted only
       // on broker 0
@@ -235,7 +249,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     } catch {
       case e: Throwable => fail("Unexpected exception: " + e)
     }
-
+    val endTime = System.currentTimeMillis()
     // kill the broker
     server1.shutdown
     server1.awaitShutdown()
@@ -260,7 +274,12 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
       val messageSet1 = response1.messageSet(topic, 0).iterator
       assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      assertEquals(new Message(bytes = "test1".getBytes, key = "test".getBytes), messageSet1.next.message)
+      val message = messageSet1.next.message
+      assertTrue(ByteBuffer.wrap("test1".getBytes).equals(message.payload))
+      assertTrue(ByteBuffer.wrap("test".getBytes).equals(message.key))
+      assertTrue(message.timestamp >= startTime && message.timestamp < endTime)
+      assertEquals(TimestampType.CREATE_TIME, message.timestampType)
+      assertEquals(Message.MagicValue_V1, message.magic)
       assertFalse("Message set should have another message", messageSet1.hasNext)
     } catch {
       case e: Exception => fail("Not expected", e)

@@ -15,28 +15,20 @@
  * limitations under the License.
  */
 
-package kafka.api
+package org.apache.kafka.common.errors;
 
-import java.nio.ByteBuffer
-import org.apache.kafka.common.protocol.Errors
+/**
+ * Indicate the timestamp of a record is invalid.
+ */
+public class InvalidTimestampException extends ApiException {
 
-object UpdateMetadataResponse {
-  def readFrom(buffer: ByteBuffer): UpdateMetadataResponse = {
-    val correlationId = buffer.getInt
-    val errorCode = buffer.getShort
-    new UpdateMetadataResponse(correlationId, errorCode)
-  }
-}
+    private static final long serialVersionUID = 1L;
 
-case class UpdateMetadataResponse(correlationId: Int,
-                                  errorCode: Short = Errors.NONE.code)
-  extends RequestOrResponse() {
-  def sizeInBytes(): Int = 4 /* correlation id */ + 2 /* error code */
+    public InvalidTimestampException(String message) {
+        super(message);
+    }
 
-  def writeTo(buffer: ByteBuffer) {
-    buffer.putInt(correlationId)
-    buffer.putShort(errorCode)
-  }
-
-  override def describe(details: Boolean):String = { toString }
+    public InvalidTimestampException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

@@ -258,10 +258,9 @@ public class StreamsConfig extends AbstractConfig {
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         // remove properties that are not required for consumers
+        removeStreamsSpecificConfigs(props);
         props.remove(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG);
         props.remove(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG);
-        props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
-        props.remove(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
         return props;
     }
@@ -273,13 +272,25 @@ public class StreamsConfig extends AbstractConfig {
         props.put(ProducerConfig.LINGER_MS_CONFIG, "100");
 
         // remove properties that are not required for producers
+        removeStreamsSpecificConfigs(props);
         props.remove(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG);
         props.remove(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
-        props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        props.remove(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
 
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
 
         return props;
+    }
+
+    private void removeStreamsSpecificConfigs(Map<String, Object> props) {
+        props.remove(StreamsConfig.JOB_ID_CONFIG);
+        props.remove(StreamsConfig.STATE_DIR_CONFIG);
+        props.remove(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
+        props.remove(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        props.remove(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
+        props.remove(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+        props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        props.remove(InternalConfig.STREAM_THREAD_INSTANCE);
     }
 
     public Serializer keySerializer() {

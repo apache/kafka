@@ -18,12 +18,17 @@
 package kafka.message
 
 import kafka.serializer.Decoder
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
 
-case class MessageAndMetadata[K, V](topic: String, partition: Int,
-                                    private val rawMessage: Message, offset: Long,
+case class MessageAndMetadata[K, V](topic: String,
+                                    partition: Int,
+                                    private val rawMessage: Message,
+                                    offset: Long,
+                                    timestamp: Long = Message.NoTimestamp,
+                                    timestampType: TimestampType = TimestampType.CREATE_TIME,
                                     keyDecoder: Decoder[K], valueDecoder: Decoder[V]) {
-
+  
   /**
    * Return the decoded message key and payload
    */
