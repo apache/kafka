@@ -370,7 +370,7 @@ object AdminUtils extends Logging {
     }
     val brokerRackMap: Map[Int, String] = rackAwareMode match {
       case RackAwareMode.Disabled => Map()
-      case RackAwareMode.Default if (brokersWithRack.size < brokers.size) => Map()
+      case RackAwareMode.Safe if (brokersWithRack.size < brokers.size) => Map()
       case _ => brokersWithRack.map(broker => (broker.id -> broker.rack.get)).toMap
     }
     (brokers.map(_.id).sorted, brokerRackMap)

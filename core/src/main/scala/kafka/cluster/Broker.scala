@@ -109,12 +109,16 @@ object Broker {
   }
 }
 
-case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint], rack: Option[String] = None) {
+case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint], rack: Option[String]) {
 
-  override def toString: String = id + " : " + endPoints.values.mkString("(",",",")") + ":" + rack.getOrElse("")
+  override def toString: String = id + " : " + endPoints.values.mkString("(",",",")") + ":" + rack.orNull
+
+  def this(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) = {
+    this(id, endPoints, Option.empty)
+  }
 
   def this(id: Int, host: String, port: Int, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
-    this(id, Map(protocol -> EndPoint(host, port, protocol)))
+    this(id, Map(protocol -> EndPoint(host, port, protocol)), Option.empty)
   }
 
   def this(bep: BrokerEndPoint, protocol: SecurityProtocol) = {

@@ -18,7 +18,7 @@ package kafka.admin
 
 import junit.framework.Assert._
 import kafka.common.TopicAndPartition
-import kafka.utils.{ZkUtils, Logging}
+import kafka.utils.{TestUtils, ZkUtils, Logging}
 import kafka.zk.ZooKeeperTestHarness
 import org.I0Itec.zkclient.ZkClient
 import org.junit.Test
@@ -26,7 +26,7 @@ import org.scalatest.junit.JUnit3Suite
 
 import scala.collection.{mutable, Map, Seq}
 
-class AdminRackAwareTest extends RackAwareTest  {
+class AdminRackAwareTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @Test
   def testInterlaceBrokersByRack(): Unit = {
@@ -171,7 +171,28 @@ class AdminRackAwareTest extends RackAwareTest  {
     for (broker <- 0 to 5) {
       assertEquals(1, distribution.brokerLeaderCount(broker))
     }
-
   }
 
+  @Test
+  def testGetBrokersAndRacks(): Unit = {
+    val brokers = 0 to 5
+    // broker 4 has no rack information
+    val rackInfo: Map[Int, String] = Map(0 -> "rack1", 1 -> "rack2",2 -> "rack2",3 -> "rack1", 5 -> "rack3")
+    TestUtils.createBrokersInZk(zkUtils, brokers, rackInfo)
+    val (brokerList, brokerRack) = AdminUtils.getBrokersAndRackInfo(zkUtils, RackAwareMode.Disabled)
+    assertEquals(brokers, brokerList)
+    assertEquals(Map(), brokerRack)
+    val (brokerList1, brokerRack1) = AdminUtils.getBrokersAndRackInfo(zkUtils, RackAwareMode.Safe)
+    assertEquals(Map(), brokerRack1)
+    intercept[AdminOperationException] {
+      AdminUtils.getBrokersAndRackInfo(zkUtils, RackAwareMode.Enforced)
+    }
+    val partialList = List(0, 1, 2, 3, 5)
+    val (brokerList2, brokerRack2) = AdminUtils.getBrokersAndRackInfo(zkUtils, RackAwareMode.Enforced, partialList)
+    assertEquals(partialList, brokerList2)
+    assertEquals(rackInfo, brokerRack2)
+    AdminUtils.createTopic(zkUtils, "foo", 3, 2, rackAwareMode = RackAwareMode.Safe)
+    val assignment = zkUtils.getReplicaAssignmentForTopics(Seq("foo"))
+    assertEquals(3, assignment.size)
+  }
 }

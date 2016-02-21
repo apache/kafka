@@ -635,12 +635,12 @@ class KafkaApis(val requestChannel: RequestChannel,
                   config.offsetsTopicReplicationFactor.toInt
               AdminUtils.createTopic(zkUtils, topic, config.offsetsTopicPartitions,
                                      offsetsTopicReplicationFactor,
-                                     coordinator.offsetsTopicConfigs, rackAwareMode = RackAwareMode.Default)
+                                     coordinator.offsetsTopicConfigs, rackAwareMode = RackAwareMode.Safe)
               info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
                 .format(topic, config.offsetsTopicPartitions, offsetsTopicReplicationFactor))
             }
             else {
-              AdminUtils.createTopic(zkUtils, topic, config.numPartitions, config.defaultReplicationFactor, rackAwareMode = RackAwareMode.Default)
+              AdminUtils.createTopic(zkUtils, topic, config.numPartitions, config.defaultReplicationFactor, rackAwareMode = RackAwareMode.Safe)
               info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
                    .format(topic, config.numPartitions, config.defaultReplicationFactor))
             }

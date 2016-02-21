@@ -154,11 +154,12 @@ object TestUtils extends Logging {
     enablePlaintext: Boolean = true,
     enableSsl: Boolean = false,
     enableSaslPlaintext: Boolean = false,
-    enableSaslSsl: Boolean = false): Seq[Properties] = {
+    enableSaslSsl: Boolean = false,
+    rackInfo: Map[Int, String] = Map()): Seq[Properties] = {
     (0 until numConfigs).map { node =>
       createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
         interBrokerSecurityProtocol, trustStoreFile, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
-        enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl)
+        enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node).orNull)
     }
   }
 

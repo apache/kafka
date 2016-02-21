@@ -133,7 +133,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
         val endPoints = broker.endPoints.asScala.map { case (protocol, ep) =>
           (protocol, EndPoint(ep.host, ep.port, protocol))
         }.toMap
-        (broker.id, Broker(broker.id, endPoints))
+        (broker.id, Broker(broker.id, endPoints, Option(broker.rack)))
       }.toMap
 
       updateMetadataRequest.partitionStates.asScala.foreach { case (tp, info) =>
