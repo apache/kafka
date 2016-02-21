@@ -340,7 +340,7 @@ public class Struct {
                 Object thisField = this.get(f);
                 Object otherField = other.get(f);
                 if (thisField == null) {
-                    result = (otherField == null);
+                    result = otherField == null;
                 } else {
                     result = thisField.equals(otherField);
                 }
