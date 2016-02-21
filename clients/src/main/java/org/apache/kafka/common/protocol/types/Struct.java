@@ -311,7 +311,10 @@ public class Struct {
                 for (Object arrayItem: arrayObject)
                     result = prime * result + arrayItem.hashCode();
             } else {
-                result = prime * result + this.get(f).hashCode();
+                Object field = this.get(f);
+                if (field != null) {
+                    result = prime * result + field.hashCode();
+                }
             }
         }
         return result;
@@ -334,7 +337,13 @@ public class Struct {
             if (f.type() instanceof ArrayOf) {
                 result = Arrays.equals((Object []) this.get(f), (Object []) other.get(f));
             } else {
-                result = this.get(f).equals(other.get(f));
+                Object thisField = this.get(f);
+                Object otherField = other.get(f);
+                if (thisField == null) {
+                    result = (otherField == null);
+                } else {
+                    result = thisField.equals(otherField);
+                }
             }
             if (!result)
                 return false;
