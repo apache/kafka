@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.easymock.Capture;
@@ -62,9 +62,16 @@ import static org.junit.Assert.fail;
 public class KafkaOffsetBackingStoreTest {
     private static final String TOPIC = "connect-offsets";
     private static final Map<String, String> DEFAULT_PROPS = new HashMap<>();
+    private static final DistributedConfig DEFAULT_DISTRIBUTED_CONFIG;
     static {
         DEFAULT_PROPS.put(KafkaOffsetBackingStore.OFFSET_STORAGE_TOPIC_CONFIG, TOPIC);
         DEFAULT_PROPS.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "broker1:9092,broker2:9093");
+        DEFAULT_PROPS.put(DistributedConfig.CONFIG_TOPIC_CONFIG, "connect-configs");
+        DEFAULT_PROPS.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offsets");
+        DEFAULT_PROPS.put(DistributedConfig.GROUP_ID_CONFIG, "connect");
+        DEFAULT_PROPS.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
+        DEFAULT_DISTRIBUTED_CONFIG = new DistributedConfig(DEFAULT_PROPS);
+
     }
     private static final Map<ByteBuffer, ByteBuffer> FIRST_SET = new HashMap<>();
     static {
@@ -95,12 +102,6 @@ public class KafkaOffsetBackingStoreTest {
         store = PowerMock.createPartialMockAndInvokeDefaultConstructor(KafkaOffsetBackingStore.class, new String[]{"createKafkaBasedLog"});
     }
 
-    @Test(expected = ConnectException.class)
-    public void testMissingTopic() {
-        store = new KafkaOffsetBackingStore();
-        store.configure(Collections.<String, Object>emptyMap());
-    }
-
     @Test
     public void testStartStop() throws Exception {
         expectConfigure();
@@ -109,7 +110,7 @@ public class KafkaOffsetBackingStoreTest {
 
         PowerMock.replayAll();
 
-        store.configure(DEFAULT_PROPS);
+        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
         assertEquals(TOPIC, capturedTopic.getValue());
         assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
         assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
@@ -135,7 +136,7 @@ public class KafkaOffsetBackingStoreTest {
 
         PowerMock.replayAll();
 
-        store.configure(DEFAULT_PROPS);
+        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
         store.start();
         HashMap<ByteBuffer, ByteBuffer> data = Whitebox.getInternalState(store, "data");
         assertEquals(TP0_VALUE_NEW, data.get(TP0_KEY));
@@ -199,9 +200,7 @@ public class KafkaOffsetBackingStoreTest {
 
         PowerMock.replayAll();
 
-
-
-        store.configure(DEFAULT_PROPS);
+        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
         store.start();
 
         // Getting from empty store should return nulls
@@ -285,9 +284,7 @@ public class KafkaOffsetBackingStoreTest {
 
         PowerMock.replayAll();
 
-
-
-        store.configure(DEFAULT_PROPS);
+        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
         store.start();
 
         // Set some offsets

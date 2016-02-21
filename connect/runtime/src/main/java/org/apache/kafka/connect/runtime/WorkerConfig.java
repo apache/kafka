@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.connect.json.JsonConverter;
 
 import java.util.Map;
 
@@ -64,6 +65,8 @@ public class WorkerConfig extends AbstractConfig {
     public static final String INTERNAL_VALUE_CONVERTER_CLASS_CONFIG = "internal.value.converter";
     public static final String INTERNAL_VALUE_CONVERTER_CLASS_DOC =
             "Converter class for offset value Connect data that implements the <code>Converter</code> interface. Used for converting data like offsets and configs.";
+
+    public static final String CONVERTER_CLASS_CONFIG_DEFAULT = JsonConverter.class.getName();
 
     public static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG
             = "task.shutdown.graceful.timeout.ms";
@@ -111,13 +114,13 @@ public class WorkerConfig extends AbstractConfig {
                 .define(CLUSTER_CONFIG, Type.STRING, CLUSTER_DEFAULT, Importance.HIGH, CLUSTER_CONFIG_DOC)
                 .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
-                .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, CONVERTER_CLASS_CONFIG_DEFAULT,
                         Importance.HIGH, KEY_CONVERTER_CLASS_DOC)
-                .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, CONVERTER_CLASS_CONFIG_DEFAULT,
                         Importance.HIGH, VALUE_CONVERTER_CLASS_DOC)
-                .define(INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                .define(INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, CONVERTER_CLASS_CONFIG_DEFAULT,
                         Importance.HIGH, INTERNAL_KEY_CONVERTER_CLASS_DOC)
-                .define(INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                .define(INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, CONVERTER_CLASS_CONFIG_DEFAULT,
                         Importance.HIGH, INTERNAL_VALUE_CONVERTER_CLASS_DOC)
                 .define(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Type.LONG,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT, Importance.LOW,

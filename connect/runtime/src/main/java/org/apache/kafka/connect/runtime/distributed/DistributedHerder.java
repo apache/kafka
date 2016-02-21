@@ -137,7 +137,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             this.configStorage = configStorage;
         } else {
             this.configStorage = new KafkaConfigStorage(worker.getInternalValueConverter(), connectorConfigCallback(), taskConfigCallback());
-            this.configStorage.configure(config.originals());
+            this.configStorage.configure(config);
         }
         configState = ClusterConfigState.EMPTY;
         this.time = time;

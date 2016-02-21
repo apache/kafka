@@ -18,6 +18,8 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +42,6 @@ import java.util.Map;
 public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
     private static final Logger log = LoggerFactory.getLogger(FileOffsetBackingStore.class);
 
-    public final static String OFFSET_STORAGE_FILE_FILENAME_CONFIG = "offset.storage.file.filename";
     private File file;
 
     public FileOffsetBackingStore() {
@@ -48,10 +49,9 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
     }
 
     @Override
-    public void configure(Map<String, ?> props) {
-        super.configure(props);
-        String filename = (String) props.get(OFFSET_STORAGE_FILE_FILENAME_CONFIG);
-        file = new File(filename);
+    public void configure(WorkerConfig config) {
+        super.configure(config);
+        file = new File(config.getString(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG));
     }
 
     @Override

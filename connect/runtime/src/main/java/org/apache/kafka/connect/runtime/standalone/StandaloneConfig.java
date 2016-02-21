@@ -25,8 +25,18 @@ import java.util.Map;
 public class StandaloneConfig extends WorkerConfig {
     private static final ConfigDef CONFIG;
 
+    /**
+     * <code>offset.storage.file.filename</code>
+     */
+    public static final String OFFSET_STORAGE_FILE_FILENAME_CONFIG = "offset.storage.file.filename";
+    private static final String OFFSET_STORAGE_FILE_FILENAME_DOC = "filename used by FileOffsetBackingStore to save data";
+
     static {
-        CONFIG = baseConfigDef();
+        CONFIG = baseConfigDef()
+                .define(OFFSET_STORAGE_FILE_FILENAME_CONFIG,
+                        ConfigDef.Type.STRING,
+                        ConfigDef.Importance.HIGH,
+                        OFFSET_STORAGE_FILE_FILENAME_DOC);
     }
 
     public StandaloneConfig(Map<String, String> props) {

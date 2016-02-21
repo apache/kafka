@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -36,7 +37,8 @@ import static org.junit.Assert.assertEquals;
 public class FileOffsetBackingStoreTest {
 
     FileOffsetBackingStore store;
-    Map<String, Object> props;
+    Map<String, String> props;
+    StandaloneConfig config;
     File tempFile;
 
     private static Map<ByteBuffer, ByteBuffer> firstSet = new HashMap<>();
@@ -50,9 +52,10 @@ public class FileOffsetBackingStoreTest {
     public void setup() throws IOException {
         store = new FileOffsetBackingStore();
         tempFile = File.createTempFile("fileoffsetbackingstore", null);
-        props = new HashMap<>();
-        props.put(FileOffsetBackingStore.OFFSET_STORAGE_FILE_FILENAME_CONFIG, tempFile.getAbsolutePath());
-        store.configure(props);
+        props = new HashMap<String, String>();
+        props.put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, tempFile.getAbsolutePath());
+        config = new StandaloneConfig(props);
+        store.configure(config);
         store.start();
     }
 
@@ -87,7 +90,7 @@ public class FileOffsetBackingStoreTest {
 
         // Restore into a new store to ensure correct reload from scratch
         FileOffsetBackingStore restore = new FileOffsetBackingStore();
-        restore.configure(props);
+        restore.configure(config);
         restore.start();
         Map<ByteBuffer, ByteBuffer> values = restore.get(Arrays.asList(buffer("key")), getCallback).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
