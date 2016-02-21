@@ -199,9 +199,7 @@ public class NetworkClientTest {
         awaitReady(client, node);
 
         selector.close(node.idString());
-
         client.poll(requestTimeoutMs, time.milliseconds());
-
         long delay = client.connectionDelay(node, time.milliseconds());
 
         assertEquals(reconnectBackoffMsTest, delay);
