@@ -95,15 +95,6 @@ final class ClusterConnectionStates {
     }
 
     /**
-     * Return true iff we are in the process of connecting
-     * @param id The id of the connection
-     */
-    public boolean isConnecting(String id) {
-        NodeConnectionState state = nodeState.get(id);
-        return state != null && state.state == ConnectionState.CONNECTING;
-    }
-
-    /**
      * Enter the connected state for the given connection
      * @param id The connection identifier
      */

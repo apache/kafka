@@ -274,7 +274,7 @@ object DumpLogSegments {
         case NoCompressionCodec =>
           getSingleMessageIterator(messageAndOffset)
         case _ =>
-          ByteBufferMessageSet.deepIterator(message)
+          ByteBufferMessageSet.deepIterator(messageAndOffset)
       }
     } else
       getSingleMessageIterator(messageAndOffset)

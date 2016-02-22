@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.record.TimestampType;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -55,7 +56,8 @@ public class MockConsumerInterceptor implements ConsumerInterceptor<String, Stri
         for (TopicPartition tp : records.partitions()) {
             List<ConsumerRecord<String, String>> lst = new ArrayList<>();
             for (ConsumerRecord<String, String> record: records.records(tp)) {
-                lst.add(new ConsumerRecord<>(record.topic(), record.partition(), record.offset(), record.key(), record.value().toUpperCase()));
+                lst.add(new ConsumerRecord<>(record.topic(), record.partition(), record.offset(),
+                    0L, TimestampType.CREATE_TIME, record.key(), record.value().toUpperCase()));
             }
             recordMap.put(tp, lst);
         }

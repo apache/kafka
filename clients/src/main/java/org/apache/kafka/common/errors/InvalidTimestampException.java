@@ -14,16 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.examples;
 
-public class KafkaConsumerProducerDemo {
-    public static void main(String[] args) {
-        boolean isAsync = args.length == 0 || !args[0].trim().toLowerCase().equals("sync");
-        Producer producerThread = new Producer(KafkaProperties.TOPIC, isAsync);
-        producerThread.start();
+package org.apache.kafka.common.errors;
 
-        Consumer consumerThread = new Consumer(KafkaProperties.TOPIC);
-        consumerThread.start();
+/**
+ * Indicate the timestamp of a record is invalid.
+ */
+public class InvalidTimestampException extends ApiException {
 
+    private static final long serialVersionUID = 1L;
+
+    public InvalidTimestampException(String message) {
+        super(message);
+    }
+
+    public InvalidTimestampException(String message, Throwable cause) {
+        super(message, cause);
     }
 }
