@@ -13,7 +13,9 @@
 package org.apache.kafka.clients;
 
 import java.io.Closeable;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -43,10 +45,12 @@ public class ClientUtils {
                 if (host == null || port == null)
                     throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                 try {
-                    InetSocketAddress address = new InetSocketAddress(host, port);
-                    if (address.isUnresolved())
+                    try {
+                        for (InetAddress address : InetAddress.getAllByName(host))
+                            addresses.add(new InetSocketAddress(address, port));
+                    } catch (UnknownHostException e) {
                         throw new ConfigException("DNS resolution failed for url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
-                    addresses.add(address);
+                    }
                 } catch (NumberFormatException e) {
                     throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                 }
