@@ -170,7 +170,7 @@ class Message(val buffer: ByteBuffer,
     buffer.put(magicValue)
     val attributes: Byte =
       if (codec.codec > 0)
-        TimestampType.setTimestampType((CompressionCodeMask & codec.codec).toByte, timestampType)
+        timestampType.updateAttributes((CompressionCodeMask & codec.codec).toByte)
       else 0
     buffer.put(attributes)
     // Only put timestamp when "magic" value is greater than 0
@@ -308,7 +308,7 @@ class Message(val buffer: ByteBuffer,
     if (magic == MagicValue_V0)
       TimestampType.NO_TIMESTAMP_TYPE
     else
-      wrapperMessageTimestampType.getOrElse(TimestampType.getTimestampType(attributes))
+      wrapperMessageTimestampType.getOrElse(TimestampType.forAttributes(attributes))
   }
   
   /**
@@ -344,7 +344,7 @@ class Message(val buffer: ByteBuffer,
   def convertToBuffer(toMagicValue: Byte,
                       byteBuffer: ByteBuffer,
                       now: Long,
-                      timestampType: TimestampType = wrapperMessageTimestampType.getOrElse(TimestampType.getTimestampType(attributes))) {
+                      timestampType: TimestampType = wrapperMessageTimestampType.getOrElse(TimestampType.forAttributes(attributes))) {
     if (byteBuffer.remaining() < size + headerSizeDiff(magic, toMagicValue))
       throw new IndexOutOfBoundsException("The byte buffer does not have enough capacity to hold new message format " +
         s"version $toMagicValue")
@@ -352,7 +352,7 @@ class Message(val buffer: ByteBuffer,
       // Up-conversion, reserve CRC and update magic byte
       byteBuffer.position(Message.MagicOffset)
       byteBuffer.put(Message.MagicValue_V1)
-      byteBuffer.put(TimestampType.setTimestampType(attributes, timestampType))
+      byteBuffer.put(timestampType.updateAttributes(attributes))
       // Up-conversion, insert the timestamp field
       if (timestampType == TimestampType.LOG_APPEND_TIME)
         byteBuffer.putLong(now)
@@ -363,7 +363,7 @@ class Message(val buffer: ByteBuffer,
       // Down-conversion, reserve CRC and update magic byte
       byteBuffer.position(Message.MagicOffset)
       byteBuffer.put(Message.MagicValue_V0)
-      byteBuffer.put(TimestampType.setTimestampType(attributes, TimestampType.CREATE_TIME))
+      byteBuffer.put(TimestampType.CREATE_TIME.updateAttributes(attributes))
       // Down-conversion, skip the timestamp field
       byteBuffer.put(buffer.array(), buffer.arrayOffset() + Message.KeySizeOffset_V1, size - Message.KeySizeOffset_V1)
     }
