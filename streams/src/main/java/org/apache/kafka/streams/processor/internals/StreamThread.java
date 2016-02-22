@@ -491,7 +491,7 @@ public class StreamThread extends Thread {
         try {
             task.commit();
         } catch (CommitFailedException e) {
-            // commit failed due to rebalance. Just log it.
+            // commit failed. Just log it.
             log.warn("Failed to commit " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
         } catch (KafkaException e) {
             // commit failed due to an unexpected exception. Log it and rethrow the exception.
