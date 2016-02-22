@@ -21,17 +21,16 @@ import kafka.utils._
 import kafka.message._
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{LogOffsetMetadata, FetchDataInfo, BrokerTopicStats}
-
-import java.io.{IOException, File}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, LogOffsetMetadata}
+import java.io.{File, IOException}
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.concurrent.atomic._
 import java.text.NumberFormat
-import org.apache.kafka.common.errors.{OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, CorruptRecordException}
+
+import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException}
 import org.apache.kafka.common.record.TimestampType
 
 import scala.collection.JavaConversions
-
 import com.yammer.metrics.core.Gauge
 
 object LogAppendInfo {
@@ -320,7 +319,7 @@ class Log(val dir: File,
     val appendInfo = analyzeAndValidateMessageSet(messages)
 
     // if we have any valid messages, append them to the log
-    if(appendInfo.shallowCount == 0)
+    if (appendInfo.shallowCount == 0)
       return appendInfo
 
     // trim any invalid bytes or partial messages before appending it to the on-disk log
@@ -333,7 +332,7 @@ class Log(val dir: File,
 
         if (assignOffsets) {
           // assign offsets to the message set
-          val offset = new AtomicLong(nextOffsetMetadata.messageOffset)
+          val offset = new LongRef(nextOffsetMetadata.messageOffset)
           val now = time.milliseconds
           val (validatedMessages, messagesRecompressed) = try {
             validMessages.validateMessagesAndAssignOffsets(offset,
@@ -348,7 +347,7 @@ class Log(val dir: File,
             case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
           }
           validMessages = validatedMessages
-          appendInfo.lastOffset = offset.get - 1
+          appendInfo.lastOffset = offset.value - 1
           if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
             appendInfo.timestamp = now
 

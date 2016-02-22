@@ -194,7 +194,7 @@ class LogTest extends JUnitSuite {
 
     // now test the case that we give the offsets and use non-sequential offsets
     for(i <- 0 until messages.length)
-      log.append(new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(messageIds(i)), messages = messages(i)), assignOffsets = false)
+      log.append(new ByteBufferMessageSet(NoCompressionCodec, new LongRef(messageIds(i)), messages = messages(i)), assignOffsets = false)
     for(i <- 50 until messageIds.max) {
       val idx = messageIds.indexWhere(_ >= i)
       val read = log.read(i, 100, None).messageSet.head

@@ -212,7 +212,7 @@ class Message(val buffer: ByteBuffer,
   /**
    * Compute the checksum of the message from the message contents
    */
-  def computeChecksum(): Long = 
+  def computeChecksum: Long =
     CoreUtils.crc32(buffer.array, buffer.arrayOffset + MagicOffset,  buffer.limit - MagicOffset)
   
   /**
@@ -336,18 +336,18 @@ class Message(val buffer: ByteBuffer,
     else {
       val byteBuffer = ByteBuffer.allocate(size + Message.headerSizeDiff(magic, toMagicValue))
       // Copy bytes from old messages to new message
-      convertToBuffer(toMagicValue, byteBuffer)
+      convertToBuffer(toMagicValue, byteBuffer, Message.NoTimestamp)
       new Message(byteBuffer)
     }
   }
 
   def convertToBuffer(toMagicValue: Byte,
                       byteBuffer: ByteBuffer,
-                      now: Long = NoTimestamp,
+                      now: Long,
                       timestampType: TimestampType = wrapperMessageTimestampType.getOrElse(TimestampType.getTimestampType(attributes))) {
     if (byteBuffer.remaining() < size + headerSizeDiff(magic, toMagicValue))
       throw new IndexOutOfBoundsException("The byte buffer does not have enough capacity to hold new message format " +
-        "version " + toMagicValue)
+        s"version $toMagicValue")
     if (toMagicValue == Message.MagicValue_V1) {
       // Up-conversion, reserve CRC and update magic byte
       byteBuffer.position(Message.MagicOffset)
@@ -369,7 +369,7 @@ class Message(val buffer: ByteBuffer,
     }
     // update crc value
     val newMessage = new Message(byteBuffer)
-    Utils.writeUnsignedInt(byteBuffer, Message.CrcOffset, newMessage.computeChecksum())
+    Utils.writeUnsignedInt(byteBuffer, Message.CrcOffset, newMessage.computeChecksum)
     byteBuffer.rewind()
   }
 

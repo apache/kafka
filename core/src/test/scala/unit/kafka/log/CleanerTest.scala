@@ -21,7 +21,6 @@ import java.io.File
 import java.nio._
 import java.nio.file.Paths
 import java.util.Properties
-import java.util.concurrent.atomic.AtomicLong
 
 import kafka.common._
 import kafka.message._
@@ -261,7 +260,7 @@ class CleanerTest extends JUnitSuite {
       log.append(TestUtils.singleMessageSet(payload = "hello".getBytes, key = "hello".getBytes))
     
     // forward offset and append message to next segment at offset Int.MaxValue
-    val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(Int.MaxValue-1),
+    val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new LongRef(Int.MaxValue - 1),
       new Message("hello".getBytes, "hello".getBytes, Message.NoTimestamp, Message.MagicValue_V1))
     log.append(messageSet, assignOffsets = false)
     log.append(TestUtils.singleMessageSet(payload = "hello".getBytes, key = "hello".getBytes))
@@ -284,7 +283,7 @@ class CleanerTest extends JUnitSuite {
       log.append(TestUtils.singleMessageSet(payload = "hello".getBytes, key = "hello".getBytes))
 
     groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue)
-    assertEquals(log.numberOfSegments-1, groups.size)
+    assertEquals(log.numberOfSegments - 1, groups.size)
     for (group <- groups)
       assertTrue("Relative offset greater than Int.MaxValue", group.last.index.lastOffset - group.head.index.baseOffset <= Int.MaxValue)
     checkSegmentOrder(groups)
@@ -313,7 +312,7 @@ class CleanerTest extends JUnitSuite {
       assertEquals("Should have the expected number of messages in the map.", end-start, map.size)
       for(i <- start until end)
         assertEquals("Should find all the keys", i.toLong, map.get(key(i)))
-      assertEquals("Should not find a value too small", -1L, map.get(key(start-1)))
+      assertEquals("Should not find a value too small", -1L, map.get(key(start - 1)))
       assertEquals("Should not find a value too large", -1L, map.get(key(end)))
     }
     val segments = log.logSegments.toSeq
@@ -455,11 +454,11 @@ class CleanerTest extends JUnitSuite {
                                          magicValue = Message.MagicValue_V1))
 
   def unkeyedMessage(value: Int) =
-    new ByteBufferMessageSet(new Message(bytes=value.toString.getBytes))
+    new ByteBufferMessageSet(new Message(bytes = value.toString.getBytes))
 
   def deleteMessage(key: Int) =
-    new ByteBufferMessageSet(new Message(key=key.toString.getBytes,
-                                         bytes=null,
+    new ByteBufferMessageSet(new Message(key = key.toString.getBytes,
+                                         bytes = null,
                                          timestamp = Message.NoTimestamp,
                                          magicValue = Message.MagicValue_V1))
   

@@ -18,8 +18,8 @@
 package kafka.message
 
 import java.nio._
-import java.util.concurrent.atomic.AtomicLong
 
+import kafka.common.LongRef
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidTimestampException
 import org.apache.kafka.common.record.TimestampType
@@ -34,7 +34,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
   @Test
   def testValidBytes() {
     {
-      val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message("hello".getBytes()), new Message("there".getBytes()))
+      val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes))
       val buffer = ByteBuffer.allocate(messages.sizeInBytes + 2)
       buffer.put(messages.buffer)
       buffer.putShort(4)
@@ -51,25 +51,23 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
   @Test
   def testValidBytesWithCompression() {
-    {
-      val messages = new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes()), new Message("there".getBytes()))
-      val buffer = ByteBuffer.allocate(messages.sizeInBytes + 2)
-      buffer.put(messages.buffer)
-      buffer.putShort(4)
-      val messagesPlus = new ByteBufferMessageSet(buffer)
-      assertEquals("Adding invalid bytes shouldn't change byte count", messages.validBytes, messagesPlus.validBytes)
-    }
+    val messages = new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes))
+    val buffer = ByteBuffer.allocate(messages.sizeInBytes + 2)
+    buffer.put(messages.buffer)
+    buffer.putShort(4)
+    val messagesPlus = new ByteBufferMessageSet(buffer)
+    assertEquals("Adding invalid bytes shouldn't change byte count", messages.validBytes, messagesPlus.validBytes)
   }
 
   @Test
   def testEquals() {
-    var messages = new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes()), new Message("there".getBytes()))
-    var moreMessages = new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes()), new Message("there".getBytes()))
+    var messages = new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes))
+    var moreMessages = new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes))
 
     assertTrue(messages.equals(moreMessages))
 
-    messages = new ByteBufferMessageSet(NoCompressionCodec, new Message("hello".getBytes()), new Message("there".getBytes()))
-    moreMessages = new ByteBufferMessageSet(NoCompressionCodec, new Message("hello".getBytes()), new Message("there".getBytes()))
+    messages = new ByteBufferMessageSet(NoCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes))
+    moreMessages = new ByteBufferMessageSet(NoCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes))
 
     assertTrue(messages.equals(moreMessages))
   }
@@ -161,7 +159,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     val compressedMessagesWithoutRecompression =
       getMessages(magicValue = Message.MagicValue_V1, timestamp = -1L, codec = DefaultCompressionCodec)
 
-    val (validatedMessages, _) = messages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+    val (validatedMessages, _) = messages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
                                                                            now = System.currentTimeMillis(),
                                                                            sourceCodec = NoCompressionCodec,
                                                                            targetCodec = NoCompressionCodec,
@@ -170,7 +168,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                                            messageTimestampDiffMaxMs = 1000L)
 
     val (validatedCompressedMessages, _) =
-      compressedMessagesWithRecompresion.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+      compressedMessagesWithRecompresion.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
                                                                           now = System.currentTimeMillis(),
                                                                           sourceCodec = DefaultCompressionCodec,
                                                                           targetCodec = DefaultCompressionCodec,
@@ -179,7 +177,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                                           messageTimestampDiffMaxMs = 1000L)
 
     val (validatedCompressedMessagesWithoutRecompression, _) =
-      compressedMessagesWithoutRecompression.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+      compressedMessagesWithoutRecompression.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
                                                                               now = System.currentTimeMillis(),
                                                                               sourceCodec = DefaultCompressionCodec,
                                                                               targetCodec = DefaultCompressionCodec,
@@ -215,7 +213,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     val messages = getMessages(magicValue = Message.MagicValue_V1, timestamp = now, codec = NoCompressionCodec)
     val compressedMessages = getMessages(magicValue = Message.MagicValue_V1, timestamp = now, codec = DefaultCompressionCodec)
 
-    val (validatedMessages, _) = messages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+    val (validatedMessages, _) = messages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
                                                                            now = System.currentTimeMillis(),
                                                                            sourceCodec = NoCompressionCodec,
                                                                            targetCodec = NoCompressionCodec,
@@ -224,7 +222,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                                            messageTimestampDiffMaxMs = 1000L)
 
     val (validatedCompressedMessages, _) =
-      compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+      compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
                                                           now = System.currentTimeMillis(),
                                                           sourceCodec = DefaultCompressionCodec,
                                                           targetCodec = DefaultCompressionCodec,
@@ -251,7 +249,8 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     val compressedMessages = getMessages(magicValue = Message.MagicValue_V1, timestamp = now - 1001L, codec = DefaultCompressionCodec)
 
     try {
-      messages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+      messages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
+                                                now = System.currentTimeMillis(),
                                                 sourceCodec = NoCompressionCodec,
                                                 targetCodec = NoCompressionCodec,
                                                 messageFormatVersion = 1,
@@ -263,7 +262,8 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     }
 
     try {
-      compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(0),
+      compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
+                                                          now = System.currentTimeMillis(),
                                                           sourceCodec = DefaultCompressionCodec,
                                                           targetCodec = DefaultCompressionCodec,
                                                           messageFormatVersion = 1,
@@ -282,7 +282,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     // check uncompressed offsets
     checkOffsets(messages, 0)
     val offset = 1234567
-    checkOffsets(messages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+    checkOffsets(messages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(offset),
                                                            now = System.currentTimeMillis(),
                                                            sourceCodec = NoCompressionCodec,
                                                            targetCodec = NoCompressionCodec,
@@ -292,7 +292,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
     // check compressed messages
     checkOffsets(compressedMessages, 0)
-    checkOffsets(compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+    checkOffsets(compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(offset),
                                                                      now = System.currentTimeMillis(),
                                                                      sourceCodec = DefaultCompressionCodec,
                                                                      targetCodec = DefaultCompressionCodec,
@@ -311,7 +311,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     // check uncompressed offsets
     checkOffsets(messages, 0)
     val offset = 1234567
-    val (messageWithOffset, _) = messages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+    val (messageWithOffset, _) = messages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(offset),
                                                                            now = System.currentTimeMillis(),
                                                                            sourceCodec = NoCompressionCodec,
                                                                            targetCodec = NoCompressionCodec,
@@ -321,7 +321,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
     // check compressed messages
     checkOffsets(compressedMessages, 0)
-    val (compressedMessagesWithOffset, _) = compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+    val (compressedMessagesWithOffset, _) = compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(offset),
                                                                                                 now = System.currentTimeMillis(),
                                                                                                 sourceCodec = DefaultCompressionCodec,
                                                                                                 targetCodec = DefaultCompressionCodec,
@@ -338,7 +338,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     // check uncompressed offsets
     checkOffsets(messagesV0, 0)
     val offset = 1234567
-    checkOffsets(messagesV0.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+    checkOffsets(messagesV0.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(offset),
                                                              now = System.currentTimeMillis(),
                                                              sourceCodec = NoCompressionCodec,
                                                              targetCodec = NoCompressionCodec,
@@ -348,7 +348,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
     // check compressed messages
     checkOffsets(compressedMessagesV0, 0)
-    checkOffsets(compressedMessagesV0.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+    checkOffsets(compressedMessagesV0.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(offset),
                                                                        now = System.currentTimeMillis(),
                                                                        sourceCodec = DefaultCompressionCodec,
                                                                        targetCodec = DefaultCompressionCodec,
@@ -363,7 +363,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
     // check uncompressed offsets
     checkOffsets(messagesV1, 0)
-    checkOffsets(messagesV1.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+    checkOffsets(messagesV1.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(offset),
                                                              now = System.currentTimeMillis(),
                                                              sourceCodec = NoCompressionCodec,
                                                              targetCodec = NoCompressionCodec,
@@ -373,7 +373,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
     // check compressed messages
     checkOffsets(compressedMessagesV1, 0)
-    checkOffsets(compressedMessagesV1.validateMessagesAndAssignOffsets(offsetCounter = new AtomicLong(offset),
+    checkOffsets(compressedMessagesV1.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(offset),
                                                                        now = System.currentTimeMillis(),
                                                                        sourceCodec = DefaultCompressionCodec,
                                                                        targetCodec = DefaultCompressionCodec,
