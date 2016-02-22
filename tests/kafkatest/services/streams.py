@@ -78,11 +78,12 @@ class StreamsSmokeTestBaseService(Service):
             self.stop_node(node)
             self.start_node(node)
 
-    def bounce(self):
-        # We don't want to do any clean up here, just bounce the process. The running service is killed immediately.
+    def abortThenRestart(self):
+        # We don't want to do any clean up here, just abort then restart the process. The running service is killed immediately.
         for node in self.nodes:
-            self.logger.info("Bouncing Kafka Streams on " + str(node.account))
+            self.logger.info("Aborting Kafka Streams on " + str(node.account))
             self.stop_node(node, False)
+            self.logger.info("Restarting Kafka Streams on " + str(node.account))
             self.start_node(node)
 
     def wait(self):

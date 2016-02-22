@@ -43,6 +43,10 @@ class StreamsSmokeTest(KafkaTest):
         self.processor4 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
 
     def test_streams(self):
+        """
+        Start a few smoke test clients, then repeat start a new one, stop (cleanly) running one a few times.
+        Ensure that all results (stats on values computed by Kafka Streams) are correct.
+        """
 
         self.driver.start()
 

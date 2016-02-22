@@ -40,6 +40,10 @@ class StreamsBounceTest(KafkaTest):
         self.processor1 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
 
     def test_bounce(self):
+        """
+        Start a smoke test client, then abort (kill -9) and restart it a few times.
+        Ensure that all records are delivered.
+        """
 
         self.driver.start()
 
@@ -47,7 +51,7 @@ class StreamsBounceTest(KafkaTest):
 
         time.sleep(15);
 
-        self.processor1.bounce()
+        self.processor1.abortThenRestart()
 
         time.sleep(15);
 
@@ -56,7 +60,7 @@ class StreamsBounceTest(KafkaTest):
 
         time.sleep(15);
 
-        self.processor1.bounce()
+        self.processor1.abortThenRestart()
 
         self.driver.wait()
         self.driver.stop()
@@ -64,5 +68,4 @@ class StreamsBounceTest(KafkaTest):
         self.processor1.stop()
 
         node = self.driver.node
-        node.account.ssh("grep PROCESSED-MORE-THAN-GENERATED %s" % self.driver.STDOUT_FILE, allow_fail=False)
         node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.driver.STDOUT_FILE, allow_fail=False)
