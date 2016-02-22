@@ -23,6 +23,8 @@ import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.TimeUnit
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.utils.Utils
+import kafka.cluster.Partition
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * A thread that answers kafka requests.
@@ -108,6 +110,19 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   val failedFetchRequestRate = newMeter("FailedFetchRequestsPerSec", "requests", TimeUnit.SECONDS, tags)
   val totalProduceRequestRate = newMeter("TotalProduceRequestsPerSec", "requests", TimeUnit.SECONDS, tags)
   val totalFetchRequestRate = newMeter("TotalFetchRequestsPerSec", "requests", TimeUnit.SECONDS, tags)
+
+  val partitions = new ConcurrentHashMap[Int, Partition]
+
+  def delete() {
+    removeMetric("MessagesInPerSec", tags)
+    removeMetric("BytesInPerSec", tags)
+    removeMetric("BytesOutPerSec", tags)
+    removeMetric("BytesRejectedPerSec", tags)
+    removeMetric("FailedProduceRequestsPerSec", tags)
+    removeMetric("FailedFetchRequestsPerSec", tags)
+    removeMetric("TotalProduceRequestsPerSec", tags)
+    removeMetric("TotalFetchRequestsPerSec", tags)
+  }
 }
 
 object BrokerTopicStats extends Logging {
@@ -119,5 +134,20 @@ object BrokerTopicStats extends Logging {
 
   def getBrokerTopicStats(topic: String): BrokerTopicMetrics = {
     stats.getAndMaybePut(topic)
+  }
+
+  def onPartitionAdd(topic: String, partition: Partition) {
+    getBrokerTopicStats(topic).partitions.put(partition.partitionId, partition)
+  }
+
+  def onPartitionDelete(topic: String, partition: Partition) {
+    val metrics = stats.get(topic)
+    if (metrics != null) {
+      metrics.partitions.remove(partition.partitionId, partition)
+      if (metrics.partitions.isEmpty) {
+        stats.remove(topic, metrics)
+        metrics.delete()
+      }
+    }
   }
 }

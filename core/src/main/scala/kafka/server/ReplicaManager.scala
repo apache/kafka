@@ -223,8 +223,10 @@ class ReplicaManager(val config: KafkaConfig,
       case Some(partition) =>
         if(deletePartition) {
           val removedPartition = allPartitions.remove((topic, partitionId))
-          if (removedPartition != null)
+          if (removedPartition != null) {
             removedPartition.delete() // this will delete the local log
+            BrokerTopicStats.onPartitionDelete(topic, removedPartition)
+          }
         }
       case None =>
         // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
@@ -268,8 +270,12 @@ class ReplicaManager(val config: KafkaConfig,
   def getOrCreatePartition(topic: String, partitionId: Int): Partition = {
     var partition = allPartitions.get((topic, partitionId))
     if (partition == null) {
-      allPartitions.putIfNotExists((topic, partitionId), new Partition(topic, partitionId, time, this))
-      partition = allPartitions.get((topic, partitionId))
+      val newPartition = new Partition(topic, partitionId, time, this)
+      partition = allPartitions.putIfNotExists((topic, partitionId), newPartition)
+      if (partition == null) {
+          partition = newPartition
+          BrokerTopicStats.onPartitionAdd(topic, partition)
+      }
     }
     partition
   }
