@@ -27,12 +27,12 @@ import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, Message
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.SaslConfigs
-
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, SslConfigs}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.record.TimestampType
 
-import scala.collection.{Map, immutable, JavaConverters}
+import scala.collection.{JavaConverters, Map, immutable}
 import JavaConverters._
 
 object Defaults {
@@ -799,8 +799,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val logRetentionTimeMillis = getLogRetentionTimeMillis
   val minInSyncReplicas = getInt(KafkaConfig.MinInSyncReplicasProp)
   val logPreAllocateEnable: java.lang.Boolean = getBoolean(KafkaConfig.LogPreAllocateProp)
-  val messageFormatVersion = getString(KafkaConfig.MessageFormatVersionProp)
-  val messageTimestampType = getString(KafkaConfig.MessageTimestampTypeProp)
+  val messageFormatVersion = ApiVersion(getString(KafkaConfig.MessageFormatVersionProp))
+  val messageTimestampType = TimestampType.forName(getString(KafkaConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(KafkaConfig.MessageTimestampDifferenceMaxMsProp)
 
   /** ********* Replication configuration ***********/
@@ -979,7 +979,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
       s"${KafkaConfig.AdvertisedListenersProp} protocols must be equal to or a subset of ${KafkaConfig.ListenersProp} protocols. " +
       s"Found ${advertisedListeners.keySet}. The valid options based on currently configured protocols are ${listeners.keySet}"
     )
-    require(interBrokerProtocolVersion >= ApiVersion(messageFormatVersion),
+    require(interBrokerProtocolVersion >= messageFormatVersion,
       s"message.format.version $messageFormatVersion cannot be used when inter.broker.protocol.version is set to $interBrokerProtocolVersion")
   }
 }
