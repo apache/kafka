@@ -30,19 +30,26 @@ public final class RecordMetadata {
     // user provided one. Otherwise, it will be the producer local time when the producer record was handed to the
     // producer.
     private final long timestamp;
+    private final long checksum;
+    private final int size;
     private final TopicPartition topicPartition;
 
-    private RecordMetadata(TopicPartition topicPartition, long offset, long timestamp) {
+    private RecordMetadata(TopicPartition topicPartition, long offset, long timestamp, long
+        checksum, int size) {
         super();
         this.offset = offset;
         this.timestamp = timestamp;
+        this.checksum = checksum;
+        this.size = size;
         this.topicPartition = topicPartition;
     }
 
-    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset, long timestamp) {
+    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset,
+                          long timestamp, long checksum, int size) {
         // ignore the relativeOffset if the base offset is -1,
         // since this indicates the offset is unknown
-        this(topicPartition, baseOffset == -1 ? baseOffset : baseOffset + relativeOffset, timestamp);
+        this(topicPartition, baseOffset == -1 ? baseOffset : baseOffset + relativeOffset,
+             timestamp, checksum, size);
     }
 
     /**
@@ -57,6 +64,20 @@ public final class RecordMetadata {
      */
     public long timestamp() {
         return timestamp;
+    }
+
+    /**
+     * The checksum of the record.
+     */
+    public long checksum() {
+        return this.checksum;
+    }
+
+    /**
+     * The size of the record (serialized, uncompressed) in bytes.
+     */
+    public int size() {
+        return this.size;
     }
 
     /**

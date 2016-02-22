@@ -96,6 +96,13 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
           assertEquals(offset, metadata.offset())
           assertEquals(topic, metadata.topic())
           assertEquals(partition, metadata.partition())
+          offset match {
+            case 0 => assertEquals(metadata.size(), "key".getBytes.length + "value".getBytes.length)
+            case 1 => assertEquals(metadata.size(), "key".getBytes.length)
+            case 2 => assertEquals(metadata.size(), "value".getBytes.length)
+            case _ => assertTrue(metadata.size() > 0)
+          }
+          assertNotEquals(metadata.checksum(), 0)
           offset += 1
         } else {
           fail("Send callback returns the following exception", exception)

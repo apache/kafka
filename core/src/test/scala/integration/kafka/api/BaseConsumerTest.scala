@@ -309,6 +309,9 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
       val keyAndValueIndex = startingKeyAndValueIndex + i
       assertEquals(s"key $keyAndValueIndex", new String(record.key))
       assertEquals(s"value $keyAndValueIndex", new String(record.value))
+      // this is true only because K and V are byte array
+      val keyValueSize = s"key $keyAndValueIndex".length + s"value $keyAndValueIndex".length
+      assertEquals(keyValueSize, record.size)
     }
   }
 

@@ -39,6 +39,7 @@ public class RecordTest {
     private ByteBuffer key;
     private ByteBuffer value;
     private CompressionType compression;
+    private long crc;
     private Record record;
 
     public RecordTest(long timestamp, byte[] key, byte[] value, CompressionType compression) {
@@ -46,7 +47,8 @@ public class RecordTest {
         this.key = key == null ? null : ByteBuffer.wrap(key);
         this.value = value == null ? null : ByteBuffer.wrap(value);
         this.compression = compression;
-        this.record = new Record(timestamp, key, value, compression);
+        this.crc = Record.computeChecksum(timestamp, key, value, compression, 0, -1);
+        this.record = new Record(timestamp, crc, key, value, compression);
     }
 
     @Test
@@ -60,6 +62,7 @@ public class RecordTest {
         assertEquals(value, record.value());
         if (value != null)
             assertEquals(value.limit(), record.valueSize());
+        assertEquals(crc, record.checksum());
     }
 
     @Test

@@ -644,11 +644,15 @@ public class Fetcher<K, V> {
             long timestamp = logEntry.record().timestamp();
             TimestampType timestampType = logEntry.record().timestampType();
             ByteBuffer keyBytes = logEntry.record().key();
-            K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), Utils.toArray(keyBytes));
+            byte[] keyByteArray = keyBytes == null ? null : Utils.toArray(keyBytes);
+            K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), keyByteArray);
             ByteBuffer valueBytes = logEntry.record().value();
-            V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), Utils.toArray(valueBytes));
+            byte[] valueByteArray = valueBytes == null ? null : Utils.toArray(valueBytes);
+            V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), valueByteArray);
 
-            return new ConsumerRecord<>(partition.topic(), partition.partition(), offset, timestamp, timestampType, key, value);
+            long checksum = logEntry.record().checksum();
+            int size = (keyByteArray == null ? 0 : keyByteArray.length) + (valueByteArray == null ? 0 : valueByteArray.length);
+            return new ConsumerRecord<>(partition.topic(), partition.partition(), offset, timestamp, timestampType, checksum, size, key, value);
         } catch (KafkaException e) {
             throw e;
         } catch (RuntimeException e) {
