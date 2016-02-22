@@ -19,11 +19,17 @@ package kafka.api
 import kafka.admin.AdminClient
 import kafka.server.KafkaConfig
 import kafka.utils.{TestUtils, Logging}
+import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, RequestFuture}
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.TopicPartition
-import org.junit.{Before, Test}
+import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.errors.TimeoutException
+import org.apache.kafka.common.utils.SystemTime
+import org.easymock.EasyMock
 import org.junit.Assert._
+import org.junit.{Before, Test}
+
 import scala.collection.JavaConversions._
 
 class AdminClientTest extends IntegrationTestHarness with Logging {
@@ -41,6 +47,7 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
   val tp2 = new TopicPartition(topic, part2)
 
   var client: AdminClient = null
+  var clientWithTimeout: AdminClient = null
 
   // configure the servers and clients
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
@@ -57,7 +64,14 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
   @Before
   override def setUp() {
     super.setUp
+
+    val nClient = EasyMock.mock(classOf[ConsumerNetworkClient]);
+    EasyMock.expect(nClient.send(EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject())).andReturn(new RequestFuture[ClientResponse]);
+    EasyMock.expect(nClient.poll(EasyMock.anyObject(), EasyMock.anyLong())).andReturn(false);
+    EasyMock.replay(nClient);
     client = AdminClient.createSimplePlaintext(this.brokerList)
+    clientWithTimeout = new AdminClient(new SystemTime(), 0, nClient, List())
+
     TestUtils.createTopic(this.zkUtils, topic, 2, serverCount, this.servers)
   }
 
@@ -74,6 +88,18 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
     val group = groups(0)
     assertEquals(groupId, group.groupId)
     assertEquals("consumer", group.protocolType)
+  }
+
+  @Test(expected = classOf[TimeoutException])
+  def testListGroupsTimeout() {
+    val nClient = EasyMock.mock(classOf[ConsumerNetworkClient]);
+    EasyMock.expect(nClient.send(EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject())).andReturn(new RequestFuture[ClientResponse]);
+    EasyMock.expect(nClient.poll(EasyMock.anyObject(), EasyMock.anyLong())).andReturn(false);
+    EasyMock.replay(nClient);
+
+    val clientWithTimeout = new AdminClient(new SystemTime(), 0, nClient, List())
+
+    clientWithTimeout.listGroups(EasyMock.mock(classOf[Node]));
   }
 
   @Test
