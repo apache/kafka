@@ -187,16 +187,15 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
     val now = System.currentTimeMillis()
     assertEquals("message set size should not change", messages.size, validatedMessages.size)
-    validatedMessages.foreach({case messageAndOffset => validateLogAppendTime(messageAndOffset.message)})
+    validatedMessages.foreach(messageAndOffset => validateLogAppendTime(messageAndOffset.message))
 
     assertEquals("message set size should not change", compressedMessagesWithRecompresion.size, validatedCompressedMessages.size)
-    validatedCompressedMessages.foreach({case messageAndOffset => validateLogAppendTime(messageAndOffset.message)})
+    validatedCompressedMessages.foreach(messageAndOffset => validateLogAppendTime(messageAndOffset.message))
     assertTrue("MessageSet should still valid", validatedCompressedMessages.shallowIterator.next().message.isValid)
 
     assertEquals("message set size should not change", compressedMessagesWithoutRecompression.size,
       validatedCompressedMessagesWithoutRecompression.size)
-    validatedCompressedMessagesWithoutRecompression.foreach({case messageAndOffset =>
-      validateLogAppendTime(messageAndOffset.message)})
+    validatedCompressedMessagesWithoutRecompression.foreach(messageAndOffset => validateLogAppendTime(messageAndOffset.message))
     assertTrue("MessageSet should still valid", validatedCompressedMessagesWithoutRecompression.shallowIterator.next().message.isValid)
 
     def validateLogAppendTime(message: Message) {
