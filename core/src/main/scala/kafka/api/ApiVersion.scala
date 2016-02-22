@@ -51,9 +51,14 @@ object ApiVersion {
     "0.10.0" -> KAFKA_0_10_0_IV0
   )
 
-  def apply(version: String): ApiVersion  = versionNameMap(version.split("\\.").slice(0,3).mkString("."))
+  private val versionPattern = "\\.".r
+
+  def apply(version: String): ApiVersion =
+    versionNameMap.getOrElse(versionPattern.split(version).slice(0,3).mkString("."),
+      throw new IllegalArgumentException(s"Version `$version` is not a valid version"))
 
   def latestVersion = versionNameMap.values.max
+
 }
 
 sealed trait ApiVersion extends Ordered[ApiVersion] {
@@ -61,13 +66,8 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
   val messageFormatVersion: Byte
   val id: Int
 
-  override def compare(that: ApiVersion): Int = {
+  override def compare(that: ApiVersion): Int =
     ApiVersion.orderingByVersion.compare(this, that)
-  }
-
-  def onOrAfter(that: ApiVersion): Boolean = {
-    this.compare(that) >= 0
-  }
 
   override def toString(): String = version
 }
