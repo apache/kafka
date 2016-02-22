@@ -443,7 +443,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             // test might break because some messages in new message format can be delivered to consumers before 0.10.0.0
             // without format down conversion.
             val convertedData = if (replicaManager.getMessageFormatVersion(tp).exists(_ > Message.MagicValue_V0) &&
-              !data.messages.magicValueInAllWrapperMessages(Message.MagicValue_V0)) {
+              !data.messages.isMagicValueInAllWrapperMessages(Message.MagicValue_V0)) {
               trace(s"Down converting message to V0 for fetch request from ${fetchRequest.clientId}")
               new FetchResponsePartitionData(data.error, data.hw, data.messages.asInstanceOf[FileMessageSet].toMessageFormat(Message.MagicValue_V0))
             } else data

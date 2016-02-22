@@ -303,7 +303,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
     written
   }
 
-  override def magicValueInAllWrapperMessages(expectedMagicValue: Byte): Boolean = {
+  override def isMagicValueInAllWrapperMessages(expectedMagicValue: Byte): Boolean = {
     for (messageAndOffset <- shallowIterator) {
       if (messageAndOffset.message.magic != expectedMagicValue)
         return false
@@ -400,7 +400,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       val messageSet = {
         // check the magic value
-        if (!magicValueInAllWrapperMessages(messageFormatVersion)) {
+        if (!isMagicValueInAllWrapperMessages(messageFormatVersion)) {
           // Message format conversion
           convertNonCompressedMessages(offsetCounter, compactedTopic, now, messageTimestampType, messageTimestampDiffMaxMs,
             messageFormatVersion)

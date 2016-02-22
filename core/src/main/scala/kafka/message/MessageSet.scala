@@ -78,7 +78,7 @@ abstract class MessageSet extends Iterable[MessageAndOffset] {
   /**
    * Check if all the wrapper messages in the message set have the expected magic value
    */
-  def magicValueInAllWrapperMessages(expectedMagicValue: Byte): Boolean
+  def isMagicValueInAllWrapperMessages(expectedMagicValue: Byte): Boolean
 
   /**
    * Provides an iterator over the message/offset pairs in this set
