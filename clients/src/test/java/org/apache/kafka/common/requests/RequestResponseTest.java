@@ -88,8 +88,9 @@ public class RequestResponseTest {
                 createStopReplicaRequest(),
                 createStopReplicaRequest().getErrorResponse(0, new UnknownServerException()),
                 createStopReplicaResponse(),
-                createUpdateMetadataRequest(1),
-                createUpdateMetadataRequest(1).getErrorResponse(1, new UnknownServerException()),
+                createUpdateMetadataRequest(2, "rack1"),
+                createUpdateMetadataRequest(2, null),
+                createUpdateMetadataRequest(2, "rack1").getErrorResponse(1, new UnknownServerException()),
                 createUpdateMetadataResponse(),
                 createLeaderAndIsrRequest(),
                 createLeaderAndIsrRequest().getErrorResponse(0, new UnknownServerException()),
@@ -99,8 +100,9 @@ public class RequestResponseTest {
         for (AbstractRequestResponse req : requestResponseList)
             checkSerialization(req, null);
 
-        checkSerialization(createUpdateMetadataRequest(0), 0);
-        checkSerialization(createUpdateMetadataRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
+        checkSerialization(createUpdateMetadataRequest(0, null), 0);
+        checkSerialization(createUpdateMetadataRequest(0, null).getErrorResponse(0, new UnknownServerException()), 0);
+        checkSerialization(createUpdateMetadataRequest(1, null), 1);
     }
 
     private void checkSerialization(AbstractRequestResponse req, Integer version) throws Exception {
@@ -372,7 +374,7 @@ public class RequestResponseTest {
         return new LeaderAndIsrResponse(Errors.NONE.code(), responses);
     }
 
-    private AbstractRequest createUpdateMetadataRequest(int version) {
+    private AbstractRequest createUpdateMetadataRequest(int version, String rack) {
         Map<TopicPartition, UpdateMetadataRequest.PartitionState> partitionStates = new HashMap<>();
         List<Integer> isr = Arrays.asList(1, 2);
         List<Integer> replicas = Arrays.asList(1, 2, 3, 4);
@@ -398,11 +400,11 @@ public class RequestResponseTest {
             endPoints2.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1244));
             endPoints2.put(SecurityProtocol.SSL, new UpdateMetadataRequest.EndPoint("host2", 1234));
 
-            Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1, null),
-                    new UpdateMetadataRequest.Broker(1, endPoints2, null)
+            String rackToSerialize = (version >= 2) ? rack : null;
+            Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1, rackToSerialize),
+                    new UpdateMetadataRequest.Broker(1, endPoints2, rackToSerialize)
             ));
-
-            return new UpdateMetadataRequest(1, 10, partitionStates, liveBrokers);
+            return new UpdateMetadataRequest(version, 1, 10, partitionStates, liveBrokers);
         }
     }
 

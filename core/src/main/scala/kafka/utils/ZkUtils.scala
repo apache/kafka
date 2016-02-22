@@ -36,7 +36,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.zookeeper.ZooDefs
 import scala.collection.JavaConverters._
 import scala.collection._
-import kafka.api.{ApiVersion, LeaderAndIsr}
+import kafka.api.{KAFKA_0_10_0_IV0, ApiVersion, LeaderAndIsr}
 import org.apache.zookeeper.data.{ACL, Stat}
 import kafka.admin._
 import kafka.common.{KafkaException, NoEpochForPartitionException}
@@ -265,18 +265,25 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   /**
-   * Register brokers with v2 json format (which includes multiple endpoints).
+   * Register brokers with v3 json format (which includes multiple endpoints and rack).
    * This format also includes default endpoints for compatibility with older clients.
-    *
-    * @param id
+   *
+   * @param id
    * @param advertisedEndpoints
    * @param jmxPort
    */
-  def registerBrokerInZk(id: Int, host: String, port: Int, advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint], jmxPort: Int, rack: Option[String] = Option.empty) {
+  def registerBrokerInZk(id: Int,
+                         host: String,
+                         port: Int,
+                         advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint],
+                         jmxPort: Int,
+                         rack: Option[String] = Option.empty,
+                         apiVersion: ApiVersion = ApiVersion.latestVersion) {
     val brokerIdPath = BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
 
-    var jsonMap = Map("version" -> 2,
+    val version = if (apiVersion.onOrAfter(KAFKA_0_10_0_IV0)) 3 else 2
+    var jsonMap = Map("version" -> version,
                       "host" -> host,
                       "port" -> port,
                       "endpoints"->advertisedEndpoints.values.map(_.connectionString).toArray,
@@ -284,7 +291,7 @@ class ZkUtils(val zkClient: ZkClient,
                       "timestamp" -> timestamp
     )
     rack match {
-      case Some(rack) => jsonMap += ("rack" -> rack)
+      case Some(rack) if (version >= 3) => jsonMap += ("rack" -> rack)
       case None =>
     }
 

@@ -382,7 +382,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         }
 
         val version = if (controller.config.interBrokerProtocolVersion.onOrAfter(KAFKA_0_10_0_IV0)) (2: Short)
-                      else if (controller.config.interBrokerProtocolVersion.compare(KAFKA_0_9_0) == 0)  (1: Short)
+                      else if (controller.config.interBrokerProtocolVersion.onOrAfter(KAFKA_0_9_0))  (1: Short)
                       else 0:Short
 
         val updateMetadataRequest =

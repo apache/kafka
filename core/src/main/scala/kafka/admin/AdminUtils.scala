@@ -366,7 +366,8 @@ object AdminUtils extends Logging {
     val brokers = if (brokerList.isEmpty) allBrokers else allBrokers.filter(b => brokerList.contains(b.id))
     val brokersWithRack = brokers.filter(_.rack.nonEmpty)
     if (rackAwareMode == RackAwareMode.Enforced && brokersWithRack.size > 0 && brokersWithRack.size < brokers.size) {
-      throw new AdminOperationException("Not all brokers have rack information. Add --disable-rack-aware in command line to make replica assignment without rack information.")
+      throw new AdminOperationException("Not all brokers have rack information. Add --disable-rack-aware in command line" +
+        " to make replica assignment without rack information.")
     }
     val brokerRackMap: Map[Int, String] = rackAwareMode match {
       case RackAwareMode.Disabled => Map()
