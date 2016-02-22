@@ -334,39 +334,42 @@ class Log(val dir: File,
         if (assignOffsets) {
           // assign offsets to the message set
           val offset = new AtomicLong(nextOffsetMetadata.messageOffset)
-          val now = SystemTime.milliseconds
-          try {
-            validMessages = validMessages.validateMessagesAndAssignOffsets(offset,
-                                                                           now,
-                                                                           appendInfo.sourceCodec,
-                                                                           appendInfo.targetCodec,
-                                                                           config.compact,
-                                                                           config.messageFormatVersion,
-                                                                           config.messageTimestampType,
-                                                                           config.messageTimestampDifferenceMaxMs)
+          val now = time.milliseconds
+          val (validatedMessages, messagesRecompressed) = try {
+            validMessages.validateMessagesAndAssignOffsets(offset,
+                                                           now,
+                                                           appendInfo.sourceCodec,
+                                                           appendInfo.targetCodec,
+                                                           config.compact,
+                                                           config.messageFormatVersion,
+                                                           config.messageTimestampType,
+                                                           config.messageTimestampDifferenceMaxMs)
           } catch {
             case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
           }
+          validMessages = validatedMessages
           appendInfo.lastOffset = offset.get - 1
-          // If log append time is used, we put the timestamp assigned to the messages in the append info.
           if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
             appendInfo.timestamp = now
+
+          if (messagesRecompressed) {
+            // re-validate message sizes since after re-compression some may exceed the limit
+            for (messageAndOffset <- validMessages.shallowIterator) {
+              if (MessageSet.entrySize(messageAndOffset.message) > config.maxMessageSize) {
+                // we record the original message set size instead of the trimmed size
+                // to be consistent with pre-compression bytesRejectedRate recording
+                BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesRejectedRate.mark(messages.sizeInBytes)
+                BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(messages.sizeInBytes)
+                throw new RecordTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
+                  .format(MessageSet.entrySize(messageAndOffset.message), config.maxMessageSize))
+              }
+            }
+          }
+
         } else {
           // we are taking the offsets we are given
           if (!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffsetMetadata.messageOffset)
             throw new IllegalArgumentException("Out of order offsets found in " + messages)
-        }
-
-        // re-validate message sizes since after re-compression some may exceed the limit
-        for (messageAndOffset <- validMessages.shallowIterator) {
-          if (MessageSet.entrySize(messageAndOffset.message) > config.maxMessageSize) {
-            // we record the original message set size instead of trimmed size
-            // to be consistent with pre-compression bytesRejectedRate recording
-            BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesRejectedRate.mark(messages.sizeInBytes)
-            BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(messages.sizeInBytes)
-            throw new RecordTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
-              .format(MessageSet.entrySize(messageAndOffset.message), config.maxMessageSize))
-          }
         }
 
         // check messages set size may be exceed config.segmentSize
