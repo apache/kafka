@@ -479,7 +479,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchResponseCallback(0)
       } else {
         quotaManagers(ApiKeys.FETCH.id).recordAndMaybeThrottle(fetchRequest.clientId,
-                                                               FetchResponse.responseSize(convertedPartitionData.groupBy(_._1.topic), // is this change correct?
+                                                               FetchResponse.responseSize(mergedPartitionData.groupBy(_._1.topic),
                                                                                           fetchRequest.versionId),
                                                                fetchResponseCallback)
       }
