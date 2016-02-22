@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -174,7 +175,7 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
         replayAll();
 
-        store.read(new ConsumerRecord<>(STATUS_TOPIC, 0, 0, "status-connector-conn", value));
+        store.read(consumerRecord(0, "status-connector-conn", value));
         store.putSafe(new ConnectorStatus(CONNECTOR, ConnectorStatus.State.UNASSIGNED, WORKER_ID, 0));
 
         ConnectorStatus status = new ConnectorStatus(CONNECTOR, ConnectorStatus.State.RUNNING, otherWorkerId, 1);
@@ -216,14 +217,14 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
                     @Override
                     public Void answer() throws Throwable {
                         callbackCapture.getValue().onCompletion(null, null);
-                        store.read(new ConsumerRecord<>(STATUS_TOPIC, 0, 1, "status-connector-conn", value));
+                        store.read(consumerRecord(1, "status-connector-conn", value));
                         return null;
                     }
                 });
 
         replayAll();
 
-        store.read(new ConsumerRecord<>(STATUS_TOPIC, 0, 0, "status-connector-conn", value));
+        store.read(consumerRecord(0, "status-connector-conn", value));
         store.putSafe(new ConnectorStatus(CONNECTOR, ConnectorStatus.State.UNASSIGNED, WORKER_ID, 0));
 
         ConnectorStatus status = new ConnectorStatus(CONNECTOR, ConnectorStatus.State.UNASSIGNED, WORKER_ID, 0);
@@ -266,13 +267,13 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
                     @Override
                     public Void answer() throws Throwable {
                         callbackCapture.getValue().onCompletion(null, null);
-                        store.read(new ConsumerRecord<>(STATUS_TOPIC, 0, 1, "status-connector-conn", value));
+                        store.read(consumerRecord(1, "status-connector-conn", value));
                         return null;
                     }
                 });
         replayAll();
 
-        store.read(new ConsumerRecord<>(STATUS_TOPIC, 0, 0, "status-connector-conn", value));
+        store.read(consumerRecord(0, "status-connector-conn", value));
 
         ConnectorStatus status = new ConnectorStatus(CONNECTOR, ConnectorStatus.State.UNASSIGNED, WORKER_ID, 0);
         store.put(status);
@@ -299,7 +300,7 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
         replayAll();
 
-        store.read(new ConsumerRecord<>(STATUS_TOPIC, 0, 0, "status-connector-conn", value));
+        store.read(consumerRecord(0, "status-connector-conn", value));
 
         ConnectorStatus status = new ConnectorStatus(CONNECTOR, ConnectorStatus.State.RUNNING, WORKER_ID, 0);
         assertEquals(status, store.get(CONNECTOR));
@@ -356,12 +357,17 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
         replayAll();
 
-        store.read(new ConsumerRecord<>(STATUS_TOPIC, 0, 0, "status-task-conn-0", value));
+        store.read(consumerRecord(0, "status-task-conn-0", value));
 
         TaskStatus status = new TaskStatus(TASK, TaskStatus.State.RUNNING, WORKER_ID, 0);
         assertEquals(status, store.get(TASK));
 
         verifyAll();
+    }
+
+    private static ConsumerRecord<String, byte[]> consumerRecord(long offset, String key, byte[] value) {
+        return new ConsumerRecord<>(STATUS_TOPIC, 0, offset, System.currentTimeMillis(),
+                TimestampType.CREATE_TIME, key, value);
     }
 
 }
