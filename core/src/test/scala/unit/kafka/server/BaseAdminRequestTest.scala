@@ -29,8 +29,8 @@ import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.junit.Before
 
 /**
- * TODO: This is a pseudo-temporary test implementation to test admin requests while we still do not have an AdminClient.
- * Once the AdminClient is added this should be changed to utilize that instead of this custom/duplicated socket code.
+ * TODO: This is a pseudo-temporary test implementation to test admin requests while we still do not have a java AdminClient.
+ * Once the java AdminClient is added this should be changed to utilize that instead of this custom/duplicated socket code.
  */
 class BaseAdminRequestTest extends KafkaServerTestHarness {
     val numBrokers = 3

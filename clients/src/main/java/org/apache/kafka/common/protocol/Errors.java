@@ -30,7 +30,7 @@ import org.apache.kafka.common.errors.GroupLoadInProgressException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
-import org.apache.kafka.common.errors.InvalidEntityConfigurationException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
@@ -142,8 +142,8 @@ public enum Errors {
             new InvalidReplicationFactorException("Replication-factor is invalid.")),
     INVALID_REPLICA_ASSIGNMENT(36,
             new InvalidReplicaAssignmentException("Replica assignment is invalid.")),
-    INVALID_ENTITY_CONFIG(37,
-            new InvalidEntityConfigurationException("Entity configuration is invalid."));
+    INVALID_CONFIG(37,
+            new InvalidConfigurationException("Configuration is invalid."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

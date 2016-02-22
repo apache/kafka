@@ -30,8 +30,8 @@ import org.junit.{Before, Test}
 import scala.collection.JavaConverters._
 
 /**
-  * TODO: This is a pseudo-temporary test implementation to test CreateTopicRequests while we still do not have an AdminClient.
-  * Once the AdminClient is added this should be changed to utilize that instead of this custom/duplicated socket code.
+  * TODO: This is a pseudo-temporary test implementation to test CreateTopicRequests while we still do not have a java AdminClient.
+  * Once the java AdminClient is added this should be changed to utilize that instead of this custom/duplicated socket code.
   */
 class CreateTopicRequestTest extends BaseAdminRequestTest {
 
@@ -42,12 +42,21 @@ class CreateTopicRequestTest extends BaseAdminRequestTest {
     validateValidCreateTopicRequests(new CreateTopicRequest(Map("topic2" -> new CreateTopicRequest.TopicDetails(1, 3)).asJava))
     val config3 = Map("min.insync.replicas" -> "2").asJava
     validateValidCreateTopicRequests(new CreateTopicRequest(Map("topic3" -> new CreateTopicRequest.TopicDetails(5, 2, config3)).asJava))
+
     // Manual assignments
     val assigments4 = replicaAssignmentToJava(Map(0 -> List(0)))
     validateValidCreateTopicRequests(new CreateTopicRequest(Map("topic4" -> new CreateTopicRequest.TopicDetails(assigments4)).asJava))
     val assigments5 = replicaAssignmentToJava(Map(0 -> List(0, 1), 1 -> List(1, 0), 2 -> List(1, 2)))
     val config5 = Map("min.insync.replicas" -> "2").asJava
     validateValidCreateTopicRequests(new CreateTopicRequest(Map("topic5" -> new CreateTopicRequest.TopicDetails(assigments5, config5)).asJava))
+
+    // Mixed
+    val assigments8 = replicaAssignmentToJava(Map(0 -> List(0, 1), 1 -> List(1, 0), 2 -> List(1, 2)))
+    validateValidCreateTopicRequests(new CreateTopicRequest(Map(
+      "topic6" -> new CreateTopicRequest.TopicDetails(1, 1),
+      "topic7" -> new CreateTopicRequest.TopicDetails(5, 2),
+      "topic8" -> new CreateTopicRequest.TopicDetails(assigments8)).asJava)
+    )
   }
 
   private def validateValidCreateTopicRequests(request: CreateTopicRequest): Unit = {
@@ -92,7 +101,7 @@ class CreateTopicRequestTest extends BaseAdminRequestTest {
       Map("invalid-replication" -> Errors.INVALID_REPLICATION_FACTOR))
     val invalidConfig = Map("not.a.property" -> "invalid").asJava
     validateInvalidCreateTopicRequests(new CreateTopicRequest(Map("invalid-config" -> new CreateTopicRequest.TopicDetails(1, 1, invalidConfig)).asJava),
-      Map("invalid-config" -> Errors.INVALID_ENTITY_CONFIG))
+      Map("invalid-config" -> Errors.INVALID_CONFIG))
     val invalidAssignments = replicaAssignmentToJava(Map(0 -> List(0, 1), 1 -> List(0)))
     validateInvalidCreateTopicRequests(new CreateTopicRequest(Map("invalid-assignment" -> new CreateTopicRequest.TopicDetails(invalidAssignments)).asJava),
       Map("invalid-assignment" -> Errors.INVALID_REPLICA_ASSIGNMENT))

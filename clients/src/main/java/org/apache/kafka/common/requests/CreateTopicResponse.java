@@ -45,7 +45,7 @@ public class CreateTopicResponse extends AbstractRequestResponse {
      * INVALID_PARTITIONS(33)
      * INVALID_REPLICATION_FACTOR(34)
      * INVALID_REPLICA_ASSIGNMENT(35)
-     * INVALID_ENTITY_CONFIG(36)
+     * INVALID_CONFIG(36)
      */
 
     private final Map<String, Errors> errors;

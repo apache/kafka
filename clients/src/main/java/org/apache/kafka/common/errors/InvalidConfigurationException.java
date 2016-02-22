@@ -12,15 +12,15 @@
  */
 package org.apache.kafka.common.errors;
 
-public class InvalidEntityConfigurationException extends ApiException {
+public class InvalidConfigurationException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public InvalidEntityConfigurationException(String message) {
+    public InvalidConfigurationException(String message) {
         super(message);
     }
 
-    public InvalidEntityConfigurationException(String message, Throwable cause) {
+    public InvalidConfigurationException(String message, Throwable cause) {
         super(message, cause);
     }
 

@@ -27,7 +27,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
 import org.apache.kafka.common.config.ConfigDef.ValidString._
-import org.apache.kafka.common.errors.InvalidEntityConfigurationException
+import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
 
@@ -200,7 +200,7 @@ object LogConfig {
     val names = configDef.names()
     for(name <- props.asScala.keys)
       if (!names.contains(name))
-        throw new InvalidEntityConfigurationException(s"Unknown configuration $name.")
+        throw new InvalidConfigurationException(s"Unknown configuration $name.")
   }
 
   /**
