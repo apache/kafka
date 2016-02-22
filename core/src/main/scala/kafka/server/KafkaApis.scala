@@ -368,12 +368,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           val respHeader = new ResponseHeader(request.header.correlationId)
           val respBody = request.header.apiVersion match {
             case 0 => new ProduceResponse(mergedResponseStatus.asJava)
-            case 1 => new ProduceResponse(mergedResponseStatus.asJava, delayTimeMs, 1)
-            case 2 => new ProduceResponse(mergedResponseStatus.asJava, delayTimeMs, 2)
+            case version@ (1 | 2) => new ProduceResponse(mergedResponseStatus.asJava, delayTimeMs, version)
             // This case shouldn't happen unless a new version of ProducerRequest is added without
             // updating this part of the code to handle it properly.
-            case _ => throw new IllegalArgumentException("Version %d of ProducerRequest is not handled. Code must be updated."
-              .format(request.header.apiVersion))
+            case version => throw new IllegalArgumentException(s"Version `$version` of ProduceRequest is not handled. Code must be updated.")
           }
 
           requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, respBody)))
@@ -424,52 +422,51 @@ class KafkaApis(val requestChannel: RequestChannel,
       case (topicAndPartition, _) => authorize(request.session, Read, new Resource(Topic, topicAndPartition.topic))
     }
 
-    val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => FetchResponsePartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, MessageSet.Empty))
+    val unauthorizedPartitionData = unauthorizedRequestInfo.mapValues { _ =>
+      FetchResponsePartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, MessageSet.Empty)
+    }
 
     // the callback for sending a fetch response
     def sendResponseCallback(responsePartitionData: Map[TopicAndPartition, FetchResponsePartitionData]) {
 
-      val convertedResponseStatus =
+      val convertedPartitionData =
         // Need to down-convert message when consumer only takes magic value 0.
         if (fetchRequest.versionId <= 1) {
-          responsePartitionData.map({ case (tp, data) =>
-            tp -> {
-              // We only do down-conversion when:
-              // 1. The message format version configured for the topic is using magic value > 0, and
-              // 2. The message set contains message whose magic > 0
-              // This is to reduce the message format conversion as much as possible. The conversion will only occur
-              // when new message format is used for the topic and we see an old request.
-              // Please notice that if the message format is changed from a higher version back to lower version this
-              // test might break because some messages in new message format can be delivered to consumers before 0.10.0.0
-              // without format down conversion.
-              if (replicaManager.getMessageFormatVersion(tp).exists(_ > Message.MagicValue_V0) &&
-                  !data.messages.magicValueInAllWrapperMessages(Message.MagicValue_V0)) {
-                trace("Down converting message to V0 for fetch request from " + fetchRequest.clientId)
-                new FetchResponsePartitionData(data.error, data.hw, data.messages.asInstanceOf[FileMessageSet].toMessageFormat(Message.MagicValue_V0))
-              } else
-                data
-            }
-          })
-        } else
-          responsePartitionData
+          responsePartitionData.map { case (tp, data) =>
 
-      val mergedResponseStatus = convertedResponseStatus ++ unauthorizedResponseStatus
+            // We only do down-conversion when:
+            // 1. The message format version configured for the topic is using magic value > 0, and
+            // 2. The message set contains message whose magic > 0
+            // This is to reduce the message format conversion as much as possible. The conversion will only occur
+            // when new message format is used for the topic and we see an old request.
+            // Please note that if the message format is changed from a higher version back to lower version this
+            // test might break because some messages in new message format can be delivered to consumers before 0.10.0.0
+            // without format down conversion.
+            val convertedData = if (replicaManager.getMessageFormatVersion(tp).exists(_ > Message.MagicValue_V0) &&
+              !data.messages.magicValueInAllWrapperMessages(Message.MagicValue_V0)) {
+              trace(s"Down converting message to V0 for fetch request from ${fetchRequest.clientId}")
+              new FetchResponsePartitionData(data.error, data.hw, data.messages.asInstanceOf[FileMessageSet].toMessageFormat(Message.MagicValue_V0))
+            } else data
 
-      mergedResponseStatus.foreach { case (topicAndPartition, data) =>
-        if (data.error != Errors.NONE.code) {
-          debug("Fetch request with correlation id %d from client %s on partition %s failed due to %s"
-            .format(fetchRequest.correlationId, fetchRequest.clientId,
-            topicAndPartition, Errors.forCode(data.error).exceptionName))
-        }
+            tp -> convertedData
+          }
+        } else responsePartitionData
+
+      val mergedPartitionData = convertedPartitionData ++ unauthorizedPartitionData
+
+      mergedPartitionData.foreach { case (topicAndPartition, data) =>
+        if (data.error != Errors.NONE.code)
+          debug(s"Fetch request with correlation id ${fetchRequest.correlationId} from client ${fetchRequest.clientId} " +
+            s"on partition $topicAndPartition failed due to ${Errors.forCode(data.error).exceptionName}")
         // record the bytes out metrics only when the response is being sent
         BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesOutRate.mark(data.messages.sizeInBytes)
         BrokerTopicStats.getBrokerAllTopicsStats().bytesOutRate.mark(data.messages.sizeInBytes)
       }
 
       def fetchResponseCallback(delayTimeMs: Int) {
-          trace(s"Sending fetch response to ${fetchRequest.clientId} with ${convertedResponseStatus.values.map(_.messages.sizeInBytes).sum}" +
-            s" bytes")
-        val response = FetchResponse(fetchRequest.correlationId, mergedResponseStatus, fetchRequest.versionId, delayTimeMs)
+        trace(s"Sending fetch response to client ${fetchRequest.clientId} of " +
+          s"${convertedPartitionData.values.map(_.messages.sizeInBytes).sum} bytes")
+        val response = FetchResponse(fetchRequest.correlationId, mergedPartitionData, fetchRequest.versionId, delayTimeMs)
         requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
       }
 

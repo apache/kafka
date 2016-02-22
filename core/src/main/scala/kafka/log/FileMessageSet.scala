@@ -174,16 +174,17 @@ class FileMessageSet private[kafka](@volatile var file: File,
   }
 
   /**
-    * This method is called before we write messages to socket use zero-copy transfer. We need to
-    * make sure all the messages in the message set has expected magic value
+    * This method is called before we write messages to the socket using zero-copy transfer. We need to
+    * make sure all the messages in the message set have the expected magic value.
+    *
     * @param expectedMagicValue the magic value expected
-    * @return true if all messages has expected magic value, false otherwise
+    * @return true if all messages have expected magic value, false otherwise
     */
   override def magicValueInAllWrapperMessages(expectedMagicValue: Byte): Boolean = {
     var location = start
     val offsetAndSizeBuffer = ByteBuffer.allocate(MessageSet.LogOverhead)
     val crcAndMagicByteBuffer = ByteBuffer.allocate(Message.CrcLength + Message.MagicLength)
-    while(location < end) {
+    while (location < end) {
       offsetAndSizeBuffer.rewind()
       channel.read(offsetAndSizeBuffer, location)
       if (offsetAndSizeBuffer.hasRemaining)
@@ -191,7 +192,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
       offsetAndSizeBuffer.rewind()
       offsetAndSizeBuffer.getLong // skip offset field
       val messageSize = offsetAndSizeBuffer.getInt
-      if(messageSize < Message.MinMessageOverhead)
+      if (messageSize < Message.MinMessageOverhead)
         throw new IllegalStateException("Invalid message size: " + messageSize)
       crcAndMagicByteBuffer.rewind()
       channel.read(crcAndMagicByteBuffer, location + MessageSet.LogOverhead)
@@ -203,15 +204,15 @@ class FileMessageSet private[kafka](@volatile var file: File,
   }
 
   /**
-   * Convert this message set to use specified message format.
+   * Convert this message set to use the specified message format.
    */
   def toMessageFormat(toMagicValue: Byte): ByteBufferMessageSet = {
     val offsets = new ArrayBuffer[Long]
     val newMessages = new ArrayBuffer[Message]
-    this.iterator().foreach(messageAndOffset => {
+    this.foreach { messageAndOffset =>
       val message = messageAndOffset.message
       if (message.compressionCodec == NoCompressionCodec) {
-        newMessages += messageAndOffset.message.toFormatVersion(toMagicValue)
+        newMessages += message.toFormatVersion(toMagicValue)
         offsets += messageAndOffset.offset
       } else {
         // File message set only has shallow iterator. We need to do deep iteration here if needed.
@@ -221,19 +222,19 @@ class FileMessageSet private[kafka](@volatile var file: File,
           offsets += innerMessageAndOffset.offset
         }
       }
-    })
+    }
 
     // We use the offset seq to assign offsets so the offset of the messages does not change.
     new ByteBufferMessageSet(
       compressionCodec = this.headOption.map(_.message.compressionCodec).getOrElse(NoCompressionCodec),
-      offsetSeq = offsets.toSeq,
+      offsetSeq = offsets,
       newMessages: _*)
   }
 
   /**
    * Get a shallow iterator over the messages in the set.
    */
-  override def iterator() = iterator(Int.MaxValue)
+  override def iterator = iterator(Int.MaxValue)
 
   /**
    * Get an iterator over the messages in the set. We only do shallow iteration here.

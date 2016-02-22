@@ -295,19 +295,19 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     for (i <- 0 until numRecords) {
       val record = records.get(i)
       val offset = startingOffset + i
-      assertEquals(tp.topic(), record.topic())
-      assertEquals(tp.partition(), record.partition())
+      assertEquals(tp.topic, record.topic)
+      assertEquals(tp.partition, record.partition)
       if (timestampType == TimestampType.CREATE_TIME) {
-        assertEquals(timestampType, record.timestampType())
+        assertEquals(timestampType, record.timestampType)
         val timestamp = startingTimestamp + i
-        assertEquals(timestamp.toLong, record.timestamp())
+        assertEquals(timestamp.toLong, record.timestamp)
       } else
-        assertTrue(s"Got unexpected timestamp ${record.timestamp()}. Timestamp should be between [$startingTimestamp, $now}]",
-          record.timestamp() >= startingTimestamp && record.timestamp() <= now)
-      assertEquals(offset.toLong, record.offset())
+        assertTrue(s"Got unexpected timestamp ${record.timestamp}. Timestamp should be between [$startingTimestamp, $now}]",
+          record.timestamp >= startingTimestamp && record.timestamp <= now)
+      assertEquals(offset.toLong, record.offset)
       val keyAndValueIndex = startingKeyAndValueIndex + i
-      assertEquals(s"key $keyAndValueIndex", new String(record.key()))
-      assertEquals(s"value $keyAndValueIndex", new String(record.value()))
+      assertEquals(s"key $keyAndValueIndex", new String(record.key))
+      assertEquals(s"value $keyAndValueIndex", new String(record.value))
     }
   }
 

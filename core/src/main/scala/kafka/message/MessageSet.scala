@@ -37,30 +37,16 @@ object MessageSet {
     messages.foldLeft(0)(_ + entrySize(_))
 
   /**
-   * The size of a list of messages
-   */
-  def messageSetSize(messages: java.util.List[Message]): Int = {
-    var size = 0
-    val iter = messages.iterator
-    while(iter.hasNext) {
-      val message = iter.next
-      size += entrySize(message)
-    }
-    size
-  }
-  
-  /**
    * The size of a size-delimited entry in a message set
    */
   def entrySize(message: Message): Int = LogOverhead + message.size
 
   /**
-   * Validate the "magic" values of messages are the same in a compressed message set and return the magic value of
-   * and the max timestamp of the inner messages.
+   * Validate that all "magic" values in `messages` are the same and return their magic value and max timestamp
    */
   def magicAndLargestTimestamp(messages: Seq[Message]): MagicAndTimestamp = {
     val firstMagicValue = messages.head.magic
-    var largestTimestamp: Long = Message.NoTimestamp
+    var largestTimestamp = Message.NoTimestamp
     for (message <- messages) {
       if (message.magic != firstMagicValue)
         throw new IllegalStateException("Messages in the same message set must have same magic value")
