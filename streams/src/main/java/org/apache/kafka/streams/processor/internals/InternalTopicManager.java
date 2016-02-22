@@ -77,11 +77,11 @@ public class InternalTopicManager {
     }
 
     public void makeReady(String topic, int numPartitions, int replicationFactor) {
-        Map<Integer, List<Integer>> topicMetadata = getTopicMetadata(topic);
-
         boolean topicNotReady = true;
 
         while (topicNotReady) {
+            Map<Integer, List<Integer>> topicMetadata = getTopicMetadata(topic);
+
             if (topicMetadata == null) {
                 try {
                     createTopic(topic, numPartitions, replicationFactor);
@@ -103,9 +103,9 @@ public class InternalTopicManager {
                     } catch (ZkNoNodeException e) {
                         // ignore and continue
                     }
+                } else {
+                    topicNotReady = false;
                 }
-
-                topicNotReady = false;
             }
         }
     }
