@@ -36,24 +36,22 @@ class TestVerifiableProducer(Test):
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}})
 
         self.num_messages = 100
+        # This will produce to source kafka cluster
+        self.producer = VerifiableProducer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
+                                           max_messages=self.num_messages, throughput=1000)
 
     def setUp(self):
         self.zk.start()
+        self.kafka.start()
 
 
-    @parametrize(producer_version=str(LATEST_0_8_2), compression_type=None)
-    @parametrize(producer_version=str(TRUNK), compression_type=None)
-    @parametrize(producer_version=str(TRUNK), compression_type=["snappy"])
-    def test_simple_run(self, producer_version=TRUNK, compression_type=None):
+    @parametrize(producer_version=str(LATEST_0_8_2))
+    @parametrize(producer_version=str(TRUNK))
+    def test_simple_run(self, producer_version=TRUNK):
         """
         Test that we can start VerifiableProducer on trunk or against the 0.8.2 jar, and
         verify that we can produce a small number of messages.
         """
-        self.producer = VerifiableProducer(self.test_context, num_nodes=1, kafka=self.kafka,
-                                           topic=self.topic,
-                                           max_messages=self.num_messages, throughput=1000,
-                                           compression_types=compression_type)
-        self.kafka.start()
 
         node = self.producer.nodes[0]
         node.version = KafkaVersion(producer_version)

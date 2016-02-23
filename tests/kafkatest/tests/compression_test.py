@@ -23,9 +23,7 @@ from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 
 class CompressionTest(ProduceConsumeValidateTest):
     """
-    These tests validate partition reassignment.
-    Create a topic with few partitions, load some data, trigger partition re-assignment with and without broker failure,
-    check that partition re-assignment can complete and there is no data loss.
+    These tests validate produce / consume for compressed topics.
     """
 
     def __init__(self, test_context):
@@ -35,14 +33,12 @@ class CompressionTest(ProduceConsumeValidateTest):
         self.topic = "test_topic"
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics={self.topic: {
-                                                                    "partitions": 20,
-                                                                    "replication-factor": 3,
-                                                                    'configs': {"min.insync.replicas": 2}}
-                                                                })
-        self.num_partitions = 20
+                                                                    "partitions": 10,
+                                                                    "replication-factor": 1}})
+        self.num_partitions = 10
         self.timeout_sec = 60
         self.producer_throughput = 1000
-        self.num_producers = 3
+        self.num_producers = 4
         self.num_consumers = 1
 
     def setUp(self):
@@ -52,14 +48,15 @@ class CompressionTest(ProduceConsumeValidateTest):
         # Override this since we're adding services outside of the constructor
         return super(CompressionTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
-    @parametrize(compression_types=["snappy","gzip","lz4"])
-    @parametrize(compression_types=["snappy","none"])
+    @parametrize(compression_types=["snappy","gzip","lz4","none"])
     def test_compressed_topic(self, compression_types):
         """Test produce => consume => validate for compressed topics
-        Setup: 1 zk, 3 kafka nodes, 1 topic with partitions=3, replication-factor=3, and min.insync.replicas=2
+        Setup: 1 zk, 1 kafka node, 1 topic with partitions=10, replication-factor=1
 
-            - Setup producers with different compression types or a mix of producers with and
-            without compression.
+        compression_types parameter gives a list of compression types (or no compression if
+        "none"). Each producer in a VerifiableProducer group (num_producers = 4) will use a
+        compression type from the list based on producer's index in the group.
+
             - Produce messages in the background
             - Consume messages in the background
             - Stop producing, and finish consuming
