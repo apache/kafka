@@ -23,8 +23,15 @@ import kafka.api.ApiVersion
 import kafka.message.{BrokerCompressionCodec, Message}
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
+import org.apache.kafka.common.config.ConfigDef.Importance._
+import org.apache.kafka.common.config.ConfigDef.Range._
+import org.apache.kafka.common.config.ConfigDef.Type._
+import org.apache.kafka.common.config.ConfigDef.ValidString._
+import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
+
+import scala.collection.JavaConverters._
 
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
@@ -140,11 +147,6 @@ object LogConfig {
   val MessageTimestampDifferenceMaxMsDoc = KafkaConfig.MessageTimestampDifferenceMaxMsDoc
 
   private val configDef = {
-    import org.apache.kafka.common.config.ConfigDef.Importance._
-    import org.apache.kafka.common.config.ConfigDef.Range._
-    import org.apache.kafka.common.config.ConfigDef.Type._
-    import org.apache.kafka.common.config.ConfigDef.ValidString._
-
     new ConfigDef()
       .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(Message.MinMessageOverhead), MEDIUM, SegmentSizeDoc)
       .define(SegmentMsProp, LONG, Defaults.SegmentMs, atLeast(0), MEDIUM, SegmentMsDoc)
@@ -178,10 +180,8 @@ object LogConfig {
   def apply(): LogConfig = LogConfig(new Properties())
 
   def configNames() = {
-    import scala.collection.JavaConversions._
-    configDef.names().toList.sorted
+    configDef.names().asScala.toList.sorted
   }
-
 
   /**
    * Create a log config instance using the given properties and defaults
@@ -197,10 +197,10 @@ object LogConfig {
    * Check that property names are valid
    */
   def validateNames(props: Properties) {
-    import scala.collection.JavaConversions._
     val names = configDef.names()
-    for(name <- props.keys)
-      require(names.contains(name), "Unknown configuration \"%s\".".format(name))
+    for(name <- props.asScala.keys)
+      if (!names.contains(name))
+        throw new InvalidConfigurationException(s"Unknown configuration $name.")
   }
 
   /**

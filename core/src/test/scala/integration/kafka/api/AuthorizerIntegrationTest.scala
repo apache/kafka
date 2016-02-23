@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.{OffsetAndMetadata, Consumer, ConsumerR
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.requests.CreateTopicRequest.TopicDetails
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{BrokerEndPoint, TopicPartition, requests}
@@ -39,8 +40,10 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
 
+
 class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   val topic = "topic"
+  val createTopic = "topic-new"
   val part = 0
   val brokerId: Integer = 0
   val correlationId = 0
@@ -53,6 +56,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
 
   val GroupReadAcl = Map(groupResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)))
   val ClusterAcl = Map(Resource.ClusterResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, ClusterAction)))
+  val ClusterCreateAcl = Map(Resource.ClusterResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Create)))
   val TopicReadAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)))
   val TopicWriteAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)))
   val TopicDescribeAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)))
@@ -88,7 +92,8 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
       ApiKeys.LEAVE_GROUP.id -> classOf[LeaveGroupResponse],
       ApiKeys.LEADER_AND_ISR.id -> classOf[requests.LeaderAndIsrResponse],
       ApiKeys.STOP_REPLICA.id -> classOf[requests.StopReplicaResponse],
-      ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> classOf[requests.ControlledShutdownResponse]
+      ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> classOf[requests.ControlledShutdownResponse],
+      ApiKeys.CREATE_TOPIC.id -> classOf[requests.CreateTopicResponse]
     )
 
   val RequestKeyToErrorCode = Map[Short, (Nothing) => Short](
@@ -106,7 +111,8 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     ApiKeys.LEAVE_GROUP.id -> ((resp: LeaveGroupResponse) => resp.errorCode()),
     ApiKeys.LEADER_AND_ISR.id -> ((resp: requests.LeaderAndIsrResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
     ApiKeys.STOP_REPLICA.id -> ((resp: requests.StopReplicaResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
-    ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ((resp: requests.ControlledShutdownResponse) => resp.errorCode())
+    ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ((resp: requests.ControlledShutdownResponse) => resp.errorCode()),
+    ApiKeys.CREATE_TOPIC.id -> ((resp: requests.CreateTopicResponse) => resp.errors().asScala.find(_._1 == createTopic).get._2.code)
   )
 
   val RequestKeysToAcls = Map[Short, Map[Resource, Set[Acl]]](
@@ -124,7 +130,8 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     ApiKeys.LEAVE_GROUP.id -> GroupReadAcl,
     ApiKeys.LEADER_AND_ISR.id -> ClusterAcl,
     ApiKeys.STOP_REPLICA.id -> ClusterAcl,
-    ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ClusterAcl
+    ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ClusterAcl,
+    ApiKeys.CREATE_TOPIC.id -> ClusterCreateAcl
   )
 
   // configure the servers and clients
@@ -156,7 +163,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   override def tearDown() = {
     producers.foreach(_.close())
     consumers.foreach(_.close())
-    removeAllAcls
+    removeAllAcls()
     super.tearDown()
   }
 
@@ -226,6 +233,10 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     new requests.ControlledShutdownRequest(brokerId)
   }
 
+  private def createTopicRequest = {
+    new CreateTopicRequest(Map(createTopic -> new TopicDetails(1, 1)).asJava)
+  }
+
   @Test
   def testAuthorization() {
     val requestKeyToRequest = mutable.LinkedHashMap[Short, AbstractRequest](
@@ -243,13 +254,14 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
       ApiKeys.LEAVE_GROUP.id -> createLeaveGroupRequest,
       ApiKeys.LEADER_AND_ISR.id -> createLeaderAndIsrRequest,
       ApiKeys.STOP_REPLICA.id -> createStopReplicaRequest,
-      ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> createControlledShutdownRequest
+      ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> createControlledShutdownRequest,
+      ApiKeys.CREATE_TOPIC.id -> createTopicRequest
     )
 
     val socket = new Socket("localhost", servers.head.boundPort())
 
     for ((key, request) <- requestKeyToRequest) {
-      removeAllAcls
+      removeAllAcls()
       val resources = RequestKeysToAcls(key).map(_._1.resourceType).toSet
       sendRequestAndVerifyResponseErrorCode(socket, key, request, resources, isAuthorized = false)
       for ((resource, acls) <- RequestKeysToAcls(key))
@@ -412,8 +424,8 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     addAndVerifyAcls(GroupReadAcl(groupResource), groupResource)
     addAndVerifyAcls(ClusterAcl(Resource.ClusterResource), Resource.ClusterResource)
     try {
-      this.consumers(0).assign(List(topicPartition).asJava)
-      consumeRecords(this.consumers(0))
+      this.consumers.head.assign(List(topicPartition).asJava)
+      consumeRecords(this.consumers.head)
       Assert.fail("should have thrown exception")
     } catch {
       case e: TopicAuthorizationException =>
@@ -424,7 +436,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Create)), Resource.ClusterResource)
 
     sendRecords(numRecords, topicPartition)
-    consumeRecords(this.consumers(0), topic = newTopic, part = 0)
+    consumeRecords(this.consumers.head, topic = newTopic, part = 0)
   }
 
   @Test(expected = classOf[AuthorizationException])
@@ -504,7 +516,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   @Test
   def testListOffsetsWithNoTopicAccess() {
     val e = intercept[TopicAuthorizationException] {
-      this.consumers.head.partitionsFor(topic);
+      this.consumers.head.partitionsFor(topic)
     }
     assertEquals(Set(topic), e.unauthorizedTopics().asScala)
   }
@@ -512,7 +524,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   @Test
   def testListOfsetsWithTopicDescribe() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
-    this.consumers.head.partitionsFor(topic);
+    this.consumers.head.partitionsFor(topic)
   }
 
   def removeAllAcls() = {

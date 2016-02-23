@@ -17,7 +17,7 @@
 package kafka.admin
 
 import junit.framework.Assert._
-import kafka.common.TopicExistsException
+import org.apache.kafka.common.errors.TopicExistsException
 import org.junit.Test
 import kafka.utils.Logging
 import kafka.utils.TestUtils

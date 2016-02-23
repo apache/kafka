@@ -20,6 +20,7 @@ package kafka.common
 import java.nio.ByteBuffer
 
 import kafka.message.InvalidMessageException
+import org.apache.kafka.common.errors.InvalidTopicException
 
 import scala.Predef._
 
@@ -63,6 +64,11 @@ object ErrorMapping {
   val GroupAuthorizationCode: Short = 30
   val ClusterAuthorizationCode: Short = 31
   // 32: INVALID_TIMESTAMP
+  // 33: TOPIC_ALREADY_EXISTS
+  // 34: INVALID_PARTITIONS
+  // 35: INVALID_REPLICATION_FACTOR
+  // 36: INVALID_REPLICA_ASSIGNMENT
+  // 37: INVALID_CONFIG
 
   private val exceptionToCode =
     Map[Class[Throwable], Short](
@@ -102,5 +108,5 @@ object ErrorMapping {
 
   def exceptionFor(code: Short) : Throwable = codeToException(code).newInstance()
 
-  def exceptionNameFor(code: Short) : String = codeToException(code).getName()
+  def exceptionNameFor(code: Short) : String = codeToException(code).getName
 }
