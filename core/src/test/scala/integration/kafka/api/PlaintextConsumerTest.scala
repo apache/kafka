@@ -40,6 +40,21 @@ import scala.collection.mutable.Buffer
 class PlaintextConsumerTest extends BaseConsumerTest {
 
   @Test
+  def testMaxPollRecords() {
+    val maxPollRecords = 2
+    val numRecords = 10000
+
+    sendRecords(numRecords)
+
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumer0.assign(List(tp).asJava)
+
+    consumeAndVerifyRecords(consumer0, numRecords = numRecords, startingOffset = 0,
+      maxPollRecords = maxPollRecords)
+  }
+
+  @Test
   def testAutoCommitOnClose() {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
