@@ -42,13 +42,23 @@ class VerifiableProducer(BackgroundThreadService):
             "collect_default": True}
         }
 
-    def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000, version=TRUNK):
+    def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
+                 compression_types=None, version=TRUNK):
+        """
+        :param compression_types: If None, all producers will not use compression; or a list of one or
+        more compression types (including "none"). Each producer will pick a compression type
+        from the list in round-robin fashion. Example: compression_types = ["none", "snappy"] and
+        num_nodes = 3, then producer 1 and 2 will not use compression, and producer 3 will use
+        compression type = snappy. If in this example, num_nodes is 1, then first (and only)
+        producer will not use compression.
+        """
         super(VerifiableProducer, self).__init__(context, num_nodes)
 
         self.kafka = kafka
         self.topic = topic
         self.max_messages = max_messages
         self.throughput = throughput
+        self.compression_types = compression_types
 
         for node in self.nodes:
             node.version = version
@@ -56,20 +66,25 @@ class VerifiableProducer(BackgroundThreadService):
         self.not_acked_values = []
         self.prop_file = ""
 
-
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % VerifiableProducer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
         self.security_config = self.kafka.security_config.client_config(self.prop_file)
-        self.prop_file += str(self.security_config)
+        producer_prop_file = str(self.security_config)
         log_config = self.render('tools_log4j.properties', log_file=VerifiableProducer.LOG_FILE)
         node.account.create_file(VerifiableProducer.LOG4J_CONFIG, log_config)
 
         # Create and upload config file
+        if self.compression_types is not None:
+            compression_index = (idx - 1) % len(self.compression_types)
+            self.logger.info("VerifiableProducer (index = %d) will use compression type = %s", idx,
+                             self.compression_types[compression_index])
+            producer_prop_file += "\ncompression.type=%s\n" % self.compression_types[compression_index]
+
         self.logger.info("verifiable_producer.properties:")
-        self.logger.info(self.prop_file)
-        node.account.create_file(VerifiableProducer.CONFIG_FILE, self.prop_file)
+        self.logger.info(producer_prop_file)
+        node.account.create_file(VerifiableProducer.CONFIG_FILE, producer_prop_file)
         self.security_config.setup_node(node)
 
         cmd = self.start_cmd(node)
