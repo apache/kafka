@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -25,28 +26,34 @@ public class ProducerRecordTest {
 
     @Test
     public void testEqualsAndHashCode() {
-        ProducerRecord<String, Integer> producerRecord = new ProducerRecord<String, Integer>("test", 1 , "key", 1);
+        ProducerRecord<String, Integer> producerRecord = new ProducerRecord<String, Integer>("test", 1, "key", 1);
         assertEquals(producerRecord, producerRecord);
         assertEquals(producerRecord.hashCode(), producerRecord.hashCode());
 
-        ProducerRecord<String, Integer> equalRecord = new ProducerRecord<String, Integer>("test", 1 , "key", 1);
+        ProducerRecord<String, Integer> equalRecord = new ProducerRecord<String, Integer>("test", 1, "key", 1);
         assertEquals(producerRecord, equalRecord);
         assertEquals(producerRecord.hashCode(), equalRecord.hashCode());
 
-        ProducerRecord<String, Integer> topicMisMatch = new ProducerRecord<String, Integer>("test-1", 1 , "key", 1);
+        ProducerRecord<String, Integer> topicMisMatch = new ProducerRecord<String, Integer>("test-1", 1, "key", 1);
         assertFalse(producerRecord.equals(topicMisMatch));
 
-        ProducerRecord<String, Integer> partitionMismatch = new ProducerRecord<String, Integer>("test", 2 , "key", 1);
+        ProducerRecord<String, Integer> partitionMismatch = new ProducerRecord<String, Integer>("test", 2, "key", 1);
         assertFalse(producerRecord.equals(partitionMismatch));
 
-        ProducerRecord<String, Integer> keyMisMatch = new ProducerRecord<String, Integer>("test", 1 , "key-1", 1);
+        ProducerRecord<String, Integer> keyMisMatch = new ProducerRecord<String, Integer>("test", 1, "key-1", 1);
         assertFalse(producerRecord.equals(keyMisMatch));
 
-        ProducerRecord<String, Integer> valueMisMatch = new ProducerRecord<String, Integer>("test", 1 , "key", 2);
+        ProducerRecord<String, Integer> valueMisMatch = new ProducerRecord<String, Integer>("test", 1, "key", 2);
         assertFalse(producerRecord.equals(valueMisMatch));
 
         ProducerRecord<String, Integer> nullFieldsRecord = new ProducerRecord<String, Integer>("topic", null, null, null, null);
         assertEquals(nullFieldsRecord, nullFieldsRecord);
         assertEquals(nullFieldsRecord.hashCode(), nullFieldsRecord.hashCode());
+    }
+
+    @Test(expected = InvalidTopicException.class)
+    public void testInvalidTopicName() {
+        String topicName = "\"this/name/is/invalid\"";
+        ProducerRecord<String, Integer> record = new ProducerRecord<String, Integer>(topicName, "key", 1);
     }
 }
