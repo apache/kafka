@@ -371,8 +371,7 @@ public class ConfigDef {
 
     }
 
-    public String toHtmlTable() {
-        // sort first required fields, then by importance, then name
+    private List<ConfigDef.ConfigKey> getSortedList() {
         List<ConfigDef.ConfigKey> configs = new ArrayList<ConfigDef.ConfigKey>(this.configKeys.values());
         Collections.sort(configs, new Comparator<ConfigDef.ConfigKey>() {
             public int compare(ConfigDef.ConfigKey k1, ConfigDef.ConfigKey k2) {
@@ -391,6 +390,142 @@ public class ConfigDef {
                     return cmp;
             }
         });
+        return configs;
+    }
+
+    public String toMarkdown() {
+        StringBuilder b = new StringBuilder();
+
+        List<ConfigDef.ConfigKey> configs = getSortedList();
+        String[] headers = new String[]{
+            "Name", "Description", "Type", "Default", "Valid Values", "Importance"
+        };
+        int[] lengths = new int[headers.length];
+        for (int i = 0; i < headers.length; i++) {
+            lengths[i] = headers[i].length();
+        }
+
+        for (ConfigDef.ConfigKey def:configs) {
+            for (int i = 0; i < headers.length; i++) {
+                int length = 0;
+                switch (i) {
+                    case 0: //Name
+                        length = null == def.name ? 0 : def.name.length();
+                        break;
+                    case 1:
+                        length = null == def.documentation ? 0 : def.documentation.length();
+                        break;
+                    case 2:
+                        length = null == def.type ? 0 : def.type.toString().length();
+                        break;
+                    case 3:
+                        String defaultValue = getDefaultValue(def);
+                        length = null == defaultValue ? 0 : defaultValue.length();
+                        break;
+                    case 4:
+                        String validValues = def.validator != null ? def.validator.toString() : "";
+                        length = null == validValues ? 0 : validValues.length();
+                        break;
+                    case 5:
+                        length = null == def.importance ? 0 : def.importance.toString().length();
+                        break;
+                    default:
+                        throw new IllegalArgumentException("There are more headers than columns.");
+                }
+                if (length > lengths[i]) {
+                    lengths[i] = length;
+                }
+            }
+        }
+
+        for (int i = 0; i < headers.length; i++) {
+            String header = headers[i];
+            String format = " %-" + lengths[i] + "s ";
+            String value = String.format(format, header);
+
+            if (i == 0) {
+                b.append("|");
+            }
+            b.append(value);
+            b.append("|");
+            if (i == headers.length - 1) {
+                b.append("\n");
+            }
+        }
+
+        for (int i = 0; i < headers.length; i++) {
+            String format = " %-" + lengths[i] + "s ";
+            String value = String.format(format, "").replace(" ", "-");
+
+            if (i == 0) {
+                b.append("|");
+            }
+            b.append(value);
+            b.append("|");
+            if (i == headers.length - 1) {
+                b.append("\n");
+            }
+        }
+
+        for (ConfigDef.ConfigKey def:configs) {
+            for (int i = 0; i < headers.length; i++) {
+                int length = lengths[i];
+                String format = " %-" + lengths[i] + "s ";
+                String value;
+                switch (i) {
+                    case 0: //Name
+                        value = def.name;
+                        break;
+                    case 1:
+                        value = null == def.documentation ? "" : def.documentation;
+                        break;
+                    case 2:
+                        value = def.type.toString().toLowerCase();
+                        break;
+                    case 3:
+                        String defaultValue = getDefaultValue(def);
+                        value = null == defaultValue ? "" : defaultValue;
+                        break;
+                    case 4:
+                        String validValues = def.validator != null ? def.validator.toString() : "";
+                        value = null == validValues ? "" : validValues;
+                        break;
+                    case 5:
+                        value = def.importance.toString().toLowerCase();
+                        break;
+                    default:
+                        throw new IllegalArgumentException("There are more headers than columns.");
+                }
+
+                if (i == 0) {
+                    b.append("|");
+                }
+                b.append(String.format(format, value));
+                b.append("|");
+                if (i == headers.length - 1) {
+                    b.append("\n");
+                }
+            }
+        }
+
+        return b.toString();
+    }
+
+    static String getDefaultValue(ConfigKey def) {
+        if (def.hasDefault()) {
+            if (def.defaultValue == null)
+                return "null";
+            else if (def.type == Type.STRING && def.defaultValue.toString().isEmpty())
+                return "\"\"";
+            else
+                return def.defaultValue.toString();
+        } else
+            return "";
+    }
+
+    public String toHtmlTable() {
+        // sort first required fields, then by importance, then name
+        List<ConfigDef.ConfigKey> configs = getSortedList();
         StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>\n");
@@ -413,15 +548,7 @@ public class ConfigDef {
             b.append(def.type.toString().toLowerCase());
             b.append("</td>");
             b.append("<td>");
-            if (def.hasDefault()) {
-                if (def.defaultValue == null)
-                    b.append("null");
-                else if (def.type == Type.STRING && def.defaultValue.toString().isEmpty())
-                    b.append("\"\"");
-                else
-                    b.append(def.defaultValue);
-            } else
-                b.append("");
+            b.append(getDefaultValue(def));
             b.append("</td>");
             b.append("<td>");
             b.append(def.validator != null ? def.validator.toString() : "");
