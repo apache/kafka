@@ -138,10 +138,13 @@ class WorkerSourceTask extends WorkerTask {
             }
 
             while (!isStopping()) {
-                if (toSend == null)
+                if (toSend == null) {
+                    log.debug("Nothing to send to Kafka. Polling source for additional records");
                     toSend = task.poll();
+                }
                 if (toSend == null)
                     continue;
+                log.debug("About to send " + toSend.size() + " records to Kafka");
                 if (!sendRecords())
                     stopRequestedLatch.await(SEND_FAILED_BACKOFF_MS, TimeUnit.MILLISECONDS);
             }
