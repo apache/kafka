@@ -86,6 +86,10 @@ public class StreamsConfig extends AbstractConfig {
     public static final String JOB_ID_CONFIG = "job.id";
     public static final String JOB_ID_DOC = "An id string to identify for the stream job. It is used as 1) the default client-id prefix, 2) the group-id for membership management, 3) the changelog topic prefix.";
 
+    /** <code>replication.factor</code> */
+    public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
+    public static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the job.";
+
     /** <code>key.serializer</code> */
     public static final String KEY_SERIALIZER_CLASS_CONFIG = ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 
@@ -139,6 +143,11 @@ public class StreamsConfig extends AbstractConfig {
                                         "/tmp/kafka-streams",
                                         Importance.MEDIUM,
                                         STATE_DIR_DOC)
+                                .define(REPLICATION_FACTOR_CONFIG,
+                                        Type.INT,
+                                        1,
+                                        Importance.MEDIUM,
+                                        REPLICATION_FACTOR_DOC)
                                 .define(KEY_SERIALIZER_CLASS_CONFIG,        // required with no default value
                                         Type.CLASS,
                                         Importance.HIGH,
@@ -284,8 +293,8 @@ public class StreamsConfig extends AbstractConfig {
 
     private void removeStreamsSpecificConfigs(Map<String, Object> props) {
         props.remove(StreamsConfig.JOB_ID_CONFIG);
+        props.remove(StreamsConfig.REPLICATION_FACTOR_CONFIG);
         props.remove(StreamsConfig.STATE_DIR_CONFIG);
-        props.remove(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
         props.remove(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         props.remove(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
         props.remove(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
