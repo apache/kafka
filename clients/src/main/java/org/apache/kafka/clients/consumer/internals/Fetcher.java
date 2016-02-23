@@ -676,7 +676,10 @@ public class Fetcher<K, V> {
         }
 
         private List<ConsumerRecord<K, V>> take(int n) {
-            if (n > records.size()) {
+            if (records == null)
+                return Collections.emptyList();
+
+            if (n >= records.size()) {
                 List<ConsumerRecord<K, V>> res = this.records;
                 this.records = null;
                 return res;
