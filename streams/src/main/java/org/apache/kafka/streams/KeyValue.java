@@ -47,9 +47,6 @@ public class KeyValue<K, V> {
 
     @Override
     public boolean equals(Object other) {
-        if (other == null)
-            return false;
-
         if (this == other)
             return true;
 
