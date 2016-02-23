@@ -19,11 +19,11 @@ package org.apache.kafka.connect.runtime;
 public class ConnectorStatus extends AbstractStatus<String> {
 
     public ConnectorStatus(String connector, State state, String msg, String workerUrl, int generation) {
-        super(connector, state, msg, workerUrl, generation);
+        super(connector, state, workerUrl, generation, msg);
     }
 
     public ConnectorStatus(String connector, State state, String workerUrl, int generation) {
-        super(connector, state, null, workerUrl, generation);
+        super(connector, state, workerUrl, generation, null);
     }
 
     public interface Listener {

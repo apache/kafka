@@ -21,6 +21,9 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -82,7 +85,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     @Override
     public void onFailure(String connector, Throwable cause) {
         statusBackingStore.putSafe(new ConnectorStatus(connector, ConnectorStatus.State.FAILED,
-                message(cause), workerId, generation()));
+                trace(cause), workerId, generation()));
     }
 
     @Override
@@ -92,7 +95,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public void onFailure(ConnectorTaskId id, Throwable cause) {
-        statusBackingStore.putSafe(new TaskStatus(id, TaskStatus.State.FAILED, message(cause), workerId, generation()));
+        statusBackingStore.putSafe(new TaskStatus(id, TaskStatus.State.FAILED, workerId, generation(), trace(cause)));
     }
 
     @Override
@@ -116,12 +119,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Collection<TaskStatus> tasks = statusBackingStore.getAll(connName);
 
         ConnectorStateInfo.ConnectorState connectorState = new ConnectorStateInfo.ConnectorState(
-                connector.state().toString(), connector.workerId(), connector.msg());
+                connector.state().toString(), connector.workerId(), connector.trace());
         List<ConnectorStateInfo.TaskState> taskStates = new ArrayList<>();
 
         for (TaskStatus status : tasks) {
             taskStates.add(new ConnectorStateInfo.TaskState(status.id().task(),
-                    status.state().toString(), status.workerId(), status.msg()));
+                    status.state().toString(), status.workerId(), status.trace()));
         }
 
         Collections.sort(taskStates);
@@ -137,15 +140,17 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             throw new NotFoundException("No status found for task " + id);
 
         return new ConnectorStateInfo.TaskState(id.task(), status.state().toString(),
-                status.workerId(), status.msg());
+                status.workerId(), status.trace());
     }
 
-    private String message(Throwable t) {
-        if (t == null)
+    private String trace(Throwable t) {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(output));
+        try {
+            return output.toString("UTF-8");
+        } catch (UnsupportedEncodingException e) {
             return null;
-        while (t.getCause() != null)
-            t = t.getCause();
-        return t.getMessage();
+        }
     }
 
 }

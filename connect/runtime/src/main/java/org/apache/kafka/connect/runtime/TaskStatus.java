@@ -20,12 +20,12 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 
 public class TaskStatus extends AbstractStatus<ConnectorTaskId> {
 
-    public TaskStatus(ConnectorTaskId id, State state, String msg, String workerUrl, int generation) {
-        super(id, state, msg, workerUrl, generation);
+    public TaskStatus(ConnectorTaskId id, State state, String workerUrl, int generation, String trace) {
+        super(id, state, workerUrl, generation, trace);
     }
 
     public TaskStatus(ConnectorTaskId id, State state, String workerUrl, int generation) {
-        super(id, state, null, workerUrl, generation);
+        super(id, state, workerUrl, generation, null);
     }
 
     public interface Listener {

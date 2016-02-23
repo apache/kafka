@@ -82,13 +82,13 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
     private static final String CONNECTOR_STATUS_PREFIX = "status-connector-";
 
     public static final String STATE_KEY_NAME = "state";
-    public static final String MSG_KEY_NAME = "msg";
+    public static final String TRACE_KEY_NAME = "trace";
     public static final String WORKER_ID_KEY_NAME = "worker_id";
     public static final String GENERATION_KEY_NAME = "generation";
 
     private static final Schema STATUS_SCHEMA_V0 = SchemaBuilder.struct()
             .field(STATE_KEY_NAME, Schema.STRING_SCHEMA)
-            .field(MSG_KEY_NAME, SchemaBuilder.string().optional().build())
+            .field(TRACE_KEY_NAME, SchemaBuilder.string().optional().build())
             .field(WORKER_ID_KEY_NAME, Schema.STRING_SCHEMA)
             .field(GENERATION_KEY_NAME, Schema.INT32_SCHEMA)
             .build();
@@ -302,10 +302,10 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
             Map<String, Object> statusMap = (Map<String, Object>) schemaAndValue.value();
             TaskStatus.State state = TaskStatus.State.valueOf((String) statusMap.get(STATE_KEY_NAME));
-            String msg = (String) statusMap.get(MSG_KEY_NAME);
+            String trace = (String) statusMap.get(TRACE_KEY_NAME);
             String workerUrl = (String) statusMap.get(WORKER_ID_KEY_NAME);
             int generation = ((Long) statusMap.get(GENERATION_KEY_NAME)).intValue();
-            return new ConnectorStatus(connector, state, msg, workerUrl, generation);
+            return new ConnectorStatus(connector, state, trace, workerUrl, generation);
         } catch (Exception e) {
             log.error("Failed to deserialize connector status", e);
             return null;
@@ -321,10 +321,10 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             }
             Map<String, Object> statusMap = (Map<String, Object>) schemaAndValue.value();
             TaskStatus.State state = TaskStatus.State.valueOf((String) statusMap.get(STATE_KEY_NAME));
-            String msg = (String) statusMap.get(MSG_KEY_NAME);
+            String trace = (String) statusMap.get(TRACE_KEY_NAME);
             String workerUrl = (String) statusMap.get(WORKER_ID_KEY_NAME);
             int generation = ((Long) statusMap.get(GENERATION_KEY_NAME)).intValue();
-            return new TaskStatus(taskId, state, msg, workerUrl, generation);
+            return new TaskStatus(taskId, state, workerUrl, generation, trace);
         } catch (Exception e) {
             log.error("Failed to deserialize task status", e);
             return null;
@@ -334,8 +334,8 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
     private byte[] serialize(AbstractStatus status) {
         Struct struct = new Struct(STATUS_SCHEMA_V0);
         struct.put(STATE_KEY_NAME, status.state().name());
-        if (status.msg() != null)
-            struct.put(MSG_KEY_NAME, status.msg());
+        if (status.trace() != null)
+            struct.put(TRACE_KEY_NAME, status.trace());
         struct.put(WORKER_ID_KEY_NAME, status.workerId());
         struct.put(GENERATION_KEY_NAME, status.generation());
         return converter.fromConnectData(topic, STATUS_SCHEMA_V0, struct);

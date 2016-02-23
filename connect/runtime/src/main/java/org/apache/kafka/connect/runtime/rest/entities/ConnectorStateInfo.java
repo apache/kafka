@@ -54,13 +54,13 @@ public class ConnectorStateInfo {
 
     public abstract static class AbstractState {
         private final String state;
-        private final String msg;
+        private final String trace;
         private final String workerId;
 
-        public AbstractState(String state, String workerId, String msg) {
+        public AbstractState(String state, String workerId, String trace) {
             this.state = state;
             this.workerId = workerId;
-            this.msg = msg;
+            this.trace = trace;
         }
 
         @JsonProperty
@@ -75,8 +75,8 @@ public class ConnectorStateInfo {
 
         @JsonProperty
         @JsonInclude(JsonInclude.Include.NON_EMPTY)
-        public String msg() {
-            return msg;
+        public String trace() {
+            return trace;
         }
     }
 

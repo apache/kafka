@@ -27,20 +27,20 @@ public abstract class AbstractStatus<T> {
 
     private final T id;
     private final State state;
-    private final String msg;
+    private final String trace;
     private final String workerId;
     private final int generation;
 
     public AbstractStatus(T id,
                           State state,
-                          String msg,
                           String workerId,
-                          int generation) {
+                          int generation,
+                          String trace) {
         this.id = id;
         this.state = state;
         this.workerId = workerId;
-        this.msg = msg;
         this.generation = generation;
+        this.trace = trace;
     }
 
     public T id() {
@@ -51,8 +51,8 @@ public abstract class AbstractStatus<T> {
         return state;
     }
 
-    public String msg() {
-        return msg;
+    public String trace() {
+        return trace;
     }
 
     public String workerId() {
@@ -68,7 +68,6 @@ public abstract class AbstractStatus<T> {
         return "Status{" +
                 "id=" + id +
                 ", state=" + state +
-                ", msg='" + msg + '\'' +
                 ", workerId='" + workerId + '\'' +
                 ", generation=" + generation +
                 '}';
@@ -84,7 +83,7 @@ public abstract class AbstractStatus<T> {
         if (generation != that.generation) return false;
         if (id != null ? !id.equals(that.id) : that.id != null) return false;
         if (state != that.state) return false;
-        if (msg != null ? !msg.equals(that.msg) : that.msg != null) return false;
+        if (trace != null ? !trace.equals(that.trace) : that.trace != null) return false;
         return workerId != null ? workerId.equals(that.workerId) : that.workerId == null;
 
     }
@@ -93,7 +92,7 @@ public abstract class AbstractStatus<T> {
     public int hashCode() {
         int result = id != null ? id.hashCode() : 0;
         result = 31 * result + (state != null ? state.hashCode() : 0);
-        result = 31 * result + (msg != null ? msg.hashCode() : 0);
+        result = 31 * result + (trace != null ? trace.hashCode() : 0);
         result = 31 * result + (workerId != null ? workerId.hashCode() : 0);
         result = 31 * result + generation;
         return result;
