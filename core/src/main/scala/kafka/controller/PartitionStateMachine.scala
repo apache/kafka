@@ -505,7 +505,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     def handleDataChange(dataPath : String, data: Object) {
       inLock(controllerContext.controllerLock) {
         try {
-          info("Partition modification triggered " + data.toString + " for path " + dataPath)
+          info(s"Partition modification triggered $data for path $dataPath")
           val partitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic))
           val partitionsToBeAdded = partitionReplicaAssignment.filter(p =>
             !controllerContext.partitionReplicaAssignment.contains(p._1))
