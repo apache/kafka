@@ -54,7 +54,25 @@ object MessageSet {
    */
   def entrySize(message: Message): Int = LogOverhead + message.size
 
+  /**
+   * Validate the "magic" values of messages are the same in a compressed message set and return the magic value of
+   * and the max timestamp of the inner messages.
+   */
+  def magicAndLargestTimestamp(messages: Seq[Message]): MagicAndTimestamp = {
+    val firstMagicValue = messages.head.magic
+    var largestTimestamp: Long = Message.NoTimestamp
+    for (message <- messages) {
+      if (message.magic != firstMagicValue)
+        throw new IllegalStateException("Messages in the same message set must have same magic value")
+      if (firstMagicValue > Message.MagicValue_V0)
+        largestTimestamp = math.max(largestTimestamp, message.timestamp)
+    }
+    MagicAndTimestamp(firstMagicValue, largestTimestamp)
+  }
+
 }
+
+case class MagicAndTimestamp(magic: Byte, timestamp: Long)
 
 /**
  * A set of messages with offsets. A message set has a fixed serialized form, though the container
@@ -70,7 +88,12 @@ abstract class MessageSet extends Iterable[MessageAndOffset] {
     * Less than the complete amount may be written, but no more than maxSize can be. The number
     * of bytes written is returned */
   def writeTo(channel: GatheringByteChannel, offset: Long, maxSize: Int): Int
-  
+
+  /**
+   * Check if all the wrapper messages in the message set have the expected magic value
+   */
+  def magicValueInAllWrapperMessages(expectedMagicValue: Byte): Boolean
+
   /**
    * Provides an iterator over the message/offset pairs in this set
    */

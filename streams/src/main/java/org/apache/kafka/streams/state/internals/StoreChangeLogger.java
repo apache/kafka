@@ -20,6 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.Serdes;
 
@@ -46,17 +47,17 @@ public class StoreChangeLogger<K, V> {
     protected Set<K> dirty;
     protected Set<K> removed;
 
-    public StoreChangeLogger(String topic, ProcessorContext context, Serdes<K, V> serialization) {
-        this(topic, context, serialization, DEFAULT_WRITE_BATCH_SIZE, DEFAULT_WRITE_BATCH_SIZE);
+    public StoreChangeLogger(String storeName, ProcessorContext context, Serdes<K, V> serialization) {
+        this(storeName, context, serialization, DEFAULT_WRITE_BATCH_SIZE, DEFAULT_WRITE_BATCH_SIZE);
     }
 
-    public StoreChangeLogger(String topic, ProcessorContext context, Serdes<K, V> serialization, int maxDirty, int maxRemoved) {
-        this(topic, context, context.id().partition, serialization, maxDirty, maxRemoved);
+    public StoreChangeLogger(String storeName, ProcessorContext context, Serdes<K, V> serialization, int maxDirty, int maxRemoved) {
+        this(storeName, context, context.taskId().partition, serialization, maxDirty, maxRemoved);
         init();
     }
 
-    protected StoreChangeLogger(String topic, ProcessorContext context, int partition, Serdes<K, V> serialization, int maxDirty, int maxRemoved) {
-        this.topic = topic;
+    protected StoreChangeLogger(String storeName, ProcessorContext context, int partition, Serdes<K, V> serialization, int maxDirty, int maxRemoved) {
+        this.topic = ProcessorStateManager.storeChangelogTopic(context.jobId(), storeName);
         this.context = context;
         this.partition = partition;
         this.serialization = serialization;
@@ -85,6 +86,9 @@ public class StoreChangeLogger<K, V> {
     }
 
     public void logChange(ValueGetter<K, V> getter) {
+        if (this.removed.isEmpty() && this.dirty.isEmpty())
+            return;
+
         RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
         if (collector != null) {
             Serializer<K> keySerializer = serialization.keySerializer();

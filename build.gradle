@@ -22,8 +22,8 @@ buildscript {
   apply from: file('gradle/buildscript.gradle'), to: buildscript
 
   dependencies {
-    // For Apache Rat plugin to ignore non-Git files, need ancient version for Java 6 compatibility
-    classpath group: 'org.ajoberstar', name: 'grgit', version: '0.2.3'
+    // For Apache Rat plugin to ignore non-Git files
+    classpath "org.ajoberstar:grgit:1.5.0"
   }
 }
 
@@ -36,7 +36,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "2.10"
+  gradleVersion = "2.11"
   buildVersionFileName = "kafka-version.properties"
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
@@ -216,45 +216,45 @@ for ( sv in ['2_10', '2_11'] ) {
   String svInDot = sv.replaceAll( "_", ".")
 
   tasks.create(name: "jar_core_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:jar']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "test_core_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:test']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "srcJar_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:srcJar']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "docsJar_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:docsJar']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "install_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['install']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "releaseTarGz_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['releaseTarGz']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "uploadCoreArchives_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:uploadArchives']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 }
 
@@ -540,6 +540,10 @@ project(':streams') {
 
     jar {
         dependsOn 'copyDependantLibs'
+    }
+
+    systemTestLibs {
+        dependsOn testJar
     }
 }
 

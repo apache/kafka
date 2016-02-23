@@ -64,7 +64,6 @@ object RequestChannel extends Logging {
     private val keyToNameAndDeserializerMap: Map[Short, (ByteBuffer) => RequestOrResponse]=
       Map(ApiKeys.FETCH.id -> FetchRequest.readFrom,
         ApiKeys.METADATA.id -> TopicMetadataRequest.readFrom,
-        ApiKeys.UPDATE_METADATA_KEY.id -> UpdateMetadataRequest.readFrom,
         ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ControlledShutdownRequest.readFrom,
         ApiKeys.OFFSET_COMMIT.id -> OffsetCommitRequest.readFrom,
         ApiKeys.OFFSET_FETCH.id -> OffsetFetchRequest.readFrom
@@ -84,7 +83,12 @@ object RequestChannel extends Logging {
         null
     val body: AbstractRequest =
       if (requestObj == null)
-        AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
+        try {
+          AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
+        } catch {
+          case ex: Throwable =>
+            throw new InvalidRequestException(s"Error getting request for apiKey: ${header.apiKey} and apiVersion: ${header.apiVersion}", ex)
+        }
       else
         null
 

@@ -13,6 +13,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.BrokerEndPoint;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -22,6 +23,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.record.Record;
 import org.junit.Test;
 
 import java.lang.reflect.Method;
@@ -81,7 +83,7 @@ public class RequestResponseTest {
                 createOffsetFetchRequest().getErrorResponse(0, new UnknownServerException()),
                 createOffsetFetchResponse(),
                 createProduceRequest(),
-                createProduceRequest().getErrorResponse(1, new UnknownServerException()),
+                createProduceRequest().getErrorResponse(2, new UnknownServerException()),
                 createProduceResponse(),
                 createStopReplicaRequest(),
                 createStopReplicaRequest().getErrorResponse(0, new UnknownServerException()),
@@ -121,16 +123,19 @@ public class RequestResponseTest {
     @Test
     public void produceResponseVersionTest() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
-        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000));
-
+        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000, Record.NO_TIMESTAMP));
         ProduceResponse v0Response = new ProduceResponse(responseData);
-        ProduceResponse v1Response = new ProduceResponse(responseData, 10);
+        ProduceResponse v1Response = new ProduceResponse(responseData, 10, 1);
+        ProduceResponse v2Response = new ProduceResponse(responseData, 10, 2);
         assertEquals("Throttle time must be zero", 0, v0Response.getThrottleTime());
         assertEquals("Throttle time must be 10", 10, v1Response.getThrottleTime());
+        assertEquals("Throttle time must be 10", 10, v2Response.getThrottleTime());
         assertEquals("Should use schema version 0", ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 0), v0Response.toStruct().schema());
         assertEquals("Should use schema version 1", ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 1), v1Response.toStruct().schema());
+        assertEquals("Should use schema version 2", ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 2), v2Response.toStruct().schema());
         assertEquals("Response data does not match", responseData, v0Response.responses());
         assertEquals("Response data does not match", responseData, v1Response.responses());
+        assertEquals("Response data does not match", responseData, v2Response.responses());
     }
 
     @Test
@@ -159,6 +164,18 @@ public class RequestResponseTest {
         assertEquals(response.partitionsRemaining(), deserialized.partitionsRemaining());
     }
 
+    @Test
+    public void testRequestHeaderWithNullClientId() {
+        RequestHeader header = new RequestHeader((short) 10, (short) 1, null, 10);
+        ByteBuffer buffer = ByteBuffer.allocate(header.sizeOf());
+        header.writeTo(buffer);
+        buffer.rewind();
+        RequestHeader deserialized = RequestHeader.parse(buffer);
+        assertEquals(header.apiKey(), deserialized.apiKey());
+        assertEquals(header.apiVersion(), deserialized.apiVersion());
+        assertEquals(header.correlationId(), deserialized.correlationId());
+        assertEquals("", deserialized.clientId()); // null is defaulted to ""
+    }
 
     private AbstractRequestResponse createRequestHeader() {
         return new RequestHeader((short) 10, (short) 1, "", 10);
@@ -303,7 +320,7 @@ public class RequestResponseTest {
 
     private AbstractRequestResponse createProduceResponse() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
-        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000));
+        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000, Record.NO_TIMESTAMP));
         return new ProduceResponse(responseData, 0);
     }
 
@@ -341,9 +358,9 @@ public class RequestResponseTest {
         partitionStates.put(new TopicPartition("topic20", 1),
                 new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
-        Set<LeaderAndIsrRequest.EndPoint> leaders = new HashSet<>(Arrays.asList(
-                new LeaderAndIsrRequest.EndPoint(0, "test0", 1223),
-                new LeaderAndIsrRequest.EndPoint(1, "test1", 1223)
+        Set<BrokerEndPoint> leaders = new HashSet<>(Arrays.asList(
+                new BrokerEndPoint(0, "test0", 1223),
+                new BrokerEndPoint(1, "test1", 1223)
         ));
 
         return new LeaderAndIsrRequest(1, 10, partitionStates, leaders);
@@ -367,9 +384,9 @@ public class RequestResponseTest {
                 new UpdateMetadataRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
         if (version == 0) {
-            Set<UpdateMetadataRequest.BrokerEndPoint> liveBrokers = new HashSet<>(Arrays.asList(
-                    new UpdateMetadataRequest.BrokerEndPoint(0, "host1", 1223),
-                    new UpdateMetadataRequest.BrokerEndPoint(1, "host2", 1234)
+            Set<BrokerEndPoint> liveBrokers = new HashSet<>(Arrays.asList(
+                    new BrokerEndPoint(0, "host1", 1223),
+                    new BrokerEndPoint(1, "host2", 1234)
             ));
 
             return new UpdateMetadataRequest(1, 10, liveBrokers, partitionStates);

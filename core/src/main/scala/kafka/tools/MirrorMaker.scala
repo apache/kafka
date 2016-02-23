@@ -485,7 +485,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     override def receive() : BaseConsumerRecord = {
       val messageAndMetadata = iter.next()
-      BaseConsumerRecord(messageAndMetadata.topic, messageAndMetadata.partition, messageAndMetadata.offset, messageAndMetadata.key, messageAndMetadata.message)
+      BaseConsumerRecord(messageAndMetadata.topic,
+                         messageAndMetadata.partition,
+                         messageAndMetadata.offset,
+                         messageAndMetadata.timestamp,
+                         messageAndMetadata.timestampType,
+                         messageAndMetadata.key,
+                         messageAndMetadata.message)
     }
 
     override def stop() {
@@ -527,19 +533,27 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       }
     }
 
-    // New consumer always hasNext
     override def hasData = true
 
     override def receive() : BaseConsumerRecord = {
-      while (recordIter == null || !recordIter.hasNext)
+      if (recordIter == null || !recordIter.hasNext) {
         recordIter = consumer.poll(1000).iterator
+        if (!recordIter.hasNext)
+          throw new ConsumerTimeoutException
+      }
 
       val record = recordIter.next()
       val tp = new TopicPartition(record.topic, record.partition)
 
       offsets.put(tp, record.offset + 1)
 
-      BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)
+      BaseConsumerRecord(record.topic,
+                         record.partition,
+                         record.offset,
+                         record.timestamp,
+                         record.timestampType,
+                         record.key,
+                         record.value)
     }
 
     override def stop() {

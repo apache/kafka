@@ -38,7 +38,7 @@ public interface StateStore {
     /**
      * Initializes this state store
      */
-    void init(ProcessorContext context);
+    void init(ProcessorContext context, StateStore root);
 
     /**
      * Flush any cached data

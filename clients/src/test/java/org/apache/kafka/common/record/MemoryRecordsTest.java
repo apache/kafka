@@ -45,13 +45,13 @@ public class MemoryRecordsTest {
     public void testIterator() {
         MemoryRecords recs1 = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), compression);
         MemoryRecords recs2 = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), compression);
-        List<Record> list = Arrays.asList(new Record("a".getBytes(), "1".getBytes()),
-                                          new Record("b".getBytes(), "2".getBytes()),
-                                          new Record("c".getBytes(), "3".getBytes()));
+        List<Record> list = Arrays.asList(new Record(0L, "a".getBytes(), "1".getBytes()),
+                                          new Record(0L, "b".getBytes(), "2".getBytes()),
+                                          new Record(0L, "c".getBytes(), "3".getBytes()));
         for (int i = 0; i < list.size(); i++) {
             Record r = list.get(i);
             recs1.append(i, r);
-            recs2.append(i, toArray(r.key()), toArray(r.value()));
+            recs2.append(i, 0L, toArray(r.key()), toArray(r.value()));
         }
         recs1.close();
         recs2.close();

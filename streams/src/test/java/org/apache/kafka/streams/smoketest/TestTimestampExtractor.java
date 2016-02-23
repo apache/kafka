@@ -15,28 +15,23 @@
  * limitations under the License.
  */
 
-package kafka.api
+package org.apache.kafka.streams.smoketest;
 
-import java.nio.ByteBuffer
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.streams.processor.TimestampExtractor;
 
-object UpdateMetadataResponse {
-  def readFrom(buffer: ByteBuffer): UpdateMetadataResponse = {
-    val correlationId = buffer.getInt
-    val errorCode = buffer.getShort
-    new UpdateMetadataResponse(correlationId, errorCode)
-  }
-}
+public class TestTimestampExtractor implements TimestampExtractor {
 
-case class UpdateMetadataResponse(correlationId: Int,
-                                  errorCode: Short = Errors.NONE.code)
-  extends RequestOrResponse() {
-  def sizeInBytes(): Int = 4 /* correlation id */ + 2 /* error code */
+    private final long base = SmokeTestUtil.START_TIME;
 
-  def writeTo(buffer: ByteBuffer) {
-    buffer.putInt(correlationId)
-    buffer.putShort(errorCode)
-  }
+    @Override
+    public long extract(ConsumerRecord<Object, Object> record) {
+        switch (record.topic()) {
+            case "data":
+                return base + (Integer) record.value();
+            default:
+                return System.currentTimeMillis();
+        }
+    }
 
-  override def describe(details: Boolean):String = { toString }
 }

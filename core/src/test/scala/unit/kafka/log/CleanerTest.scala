@@ -261,7 +261,8 @@ class CleanerTest extends JUnitSuite {
       log.append(TestUtils.singleMessageSet(payload = "hello".getBytes, key = "hello".getBytes))
     
     // forward offset and append message to next segment at offset Int.MaxValue
-    val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(Int.MaxValue-1), new Message("hello".getBytes, "hello".getBytes))
+    val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(Int.MaxValue-1),
+      new Message("hello".getBytes, "hello".getBytes, Message.NoTimestamp, Message.MagicValue_V1))
     log.append(messageSet, assignOffsets = false)
     log.append(TestUtils.singleMessageSet(payload = "hello".getBytes, key = "hello".getBytes))
     assertEquals(Int.MaxValue, log.activeSegment.index.lastOffset)
@@ -448,13 +449,19 @@ class CleanerTest extends JUnitSuite {
   def key(id: Int) = ByteBuffer.wrap(id.toString.getBytes)
   
   def message(key: Int, value: Int) = 
-    new ByteBufferMessageSet(new Message(key=key.toString.getBytes, bytes=value.toString.getBytes))
+    new ByteBufferMessageSet(new Message(key = key.toString.getBytes,
+                                         bytes = value.toString.getBytes,
+                                         timestamp = Message.NoTimestamp,
+                                         magicValue = Message.MagicValue_V1))
 
   def unkeyedMessage(value: Int) =
     new ByteBufferMessageSet(new Message(bytes=value.toString.getBytes))
 
   def deleteMessage(key: Int) =
-    new ByteBufferMessageSet(new Message(key=key.toString.getBytes, bytes=null))
+    new ByteBufferMessageSet(new Message(key=key.toString.getBytes,
+                                         bytes=null,
+                                         timestamp = Message.NoTimestamp,
+                                         magicValue = Message.MagicValue_V1))
   
 }
 

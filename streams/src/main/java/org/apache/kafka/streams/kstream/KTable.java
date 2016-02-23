@@ -190,15 +190,15 @@ public interface KTable<K, V> {
      * @param selector the KeyValue mapper that select the aggregate key
      * @param name the name of the resulted table
      * @param <K1>   the key type of the aggregated table
-     * @param <V1>   the value type of the aggregated table
      * @return the instance of KTable
      */
-    <K1, V1> KTable<K1, Long> count(KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                    Serializer<K1> keySerializer,
-                                    Serializer<V1> valueSerializer,
-                                    Serializer<Long> aggValueSerializer,
-                                    Deserializer<K1> keyDeserializer,
-                                    Deserializer<V1> valueDeserializer,
-                                    Deserializer<Long> aggValueDeserializer,
-                                    String name);
+    <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector,
+                                Serializer<K1> keySerializer,
+                                Serializer<V> valueSerializer,
+                                Serializer<Long> aggValueSerializer,
+                                Deserializer<K1> keyDeserializer,
+                                Deserializer<V> valueDeserializer,
+                                Deserializer<Long> aggValueDeserializer,
+                                String name);
+
 }

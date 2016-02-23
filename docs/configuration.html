@@ -247,7 +247,8 @@ The essential old consumer configurations are the following:
     <tr>
       <td>rebalance.backoff.ms</td>
       <td>2000</td>
-      <td>Backoff time between retries during rebalance.</td>
+      <td>Backoff time between retries during rebalance. If not set explicitly, the value in zookeeper.sync.time.ms is used.
+      </td>
     </tr>
     <tr>
       <td>refresh.leader.backoff.ms</td>
