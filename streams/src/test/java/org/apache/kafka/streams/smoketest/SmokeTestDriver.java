@@ -67,6 +67,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
     }
 
+    // This main() is not used by the system test. It is intended to be used for local debugging.
     public static void main(String[] args) throws Exception {
         final String kafka = "localhost:9092";
         final String zookeeper = "localhost:2181";
