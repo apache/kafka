@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -69,6 +70,9 @@ public abstract class AbstractTask {
     }
 
     protected void initializeStateStores() {
+        // set initial offset limits
+        initializeOffsetLimits();
+
         for (StateStoreSupplier stateStoreSupplier : this.topology.stateStoreSuppliers()) {
             StateStore store = stateStoreSupplier.get();
             store.init(this.processorContext, store);
@@ -107,6 +111,13 @@ public abstract class AbstractTask {
 
     protected Map<TopicPartition, Long> recordCollectorOffsets() {
         return Collections.emptyMap();
+    }
+
+    protected void initializeOffsetLimits() {
+        for (TopicPartition partition : partitions) {
+            OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
+            stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
+        }
     }
 
 }

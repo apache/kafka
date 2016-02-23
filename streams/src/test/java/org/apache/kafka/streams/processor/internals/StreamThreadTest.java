@@ -144,6 +144,11 @@ public class StreamThreadTest {
             super.commit();
             committed = true;
         }
+
+        @Override
+        protected void initializeOffsetLimits() {
+            // do nothing
+        }
     }
 
     private ByteArraySerializer serializer = new ByteArraySerializer();
