@@ -31,7 +31,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.{TopicPartition, requests}
+import org.apache.kafka.common.{BrokerEndPoint, TopicPartition, requests}
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
 
@@ -154,6 +154,8 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
 
   @After
   override def tearDown() = {
+    producers.foreach(_.close())
+    consumers.foreach(_.close())
     removeAllAcls
     super.tearDown()
   }
@@ -213,7 +215,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   private def createLeaderAndIsrRequest = {
     new requests.LeaderAndIsrRequest(brokerId, Int.MaxValue,
       Map(tp -> new requests.LeaderAndIsrRequest.PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Set(brokerId).asJava)).asJava,
-      Set(new requests.LeaderAndIsrRequest.EndPoint(brokerId,"localhost", 0)).asJava)
+      Set(new BrokerEndPoint(brokerId,"localhost", 0)).asJava)
   }
 
   private def createStopReplicaRequest = {

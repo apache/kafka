@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidRequiredAcksException;
 import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
+import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
@@ -125,7 +126,9 @@ public enum Errors {
     GROUP_AUTHORIZATION_FAILED(30,
             new GroupAuthorizationException("Group authorization failed.")),
     CLUSTER_AUTHORIZATION_FAILED(31,
-            new ClusterAuthorizationException("Cluster authorization failed."));
+            new ClusterAuthorizationException("Cluster authorization failed.")),
+    INVALID_TIMESTAMP(32,
+            new InvalidTimestampException("The timestamp of the message is out of acceptable range."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
@@ -192,10 +195,17 @@ public enum Errors {
     }
 
     /**
-     * Return the error instance associated with this exception (or UNKNOWN if there is none)
+     * Return the error instance associated with this exception or any of its superclasses (or UNKNOWN if there is none).
+     * If there are multiple matches in the class hierarchy, the first match starting from the bottom is used.
      */
     public static Errors forException(Throwable t) {
-        Errors error = classToError.get(t.getClass());
-        return error == null ? UNKNOWN : error;
+        Class clazz = t.getClass();
+        while (clazz != null) {
+            Errors error = classToError.get(clazz);
+            if (error != null)
+                return error;
+            clazz = clazz.getSuperclass();
+        }
+        return UNKNOWN;
     }
 }

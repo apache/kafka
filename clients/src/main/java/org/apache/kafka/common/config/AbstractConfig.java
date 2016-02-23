@@ -199,9 +199,19 @@ public class AbstractConfig {
         return t.cast(o);
     }
 
+    /**
+     * Get a list of configured instances of the given class specified by the given configuration key. The configuration
+     * may specify either null or an empty string to indicate no configured instances. In both cases, this method
+     * returns an empty list to indicate no configured instances.
+     * @param key The configuration key for the class
+     * @param t The interface the class should implement
+     * @return The list of configured instances
+     */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t) {
         List<String> klasses = getList(key);
         List<T> objects = new ArrayList<T>();
+        if (klasses == null)
+            return objects;
         for (String klass : klasses) {
             Object o;
             try {

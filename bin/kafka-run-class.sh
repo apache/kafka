@@ -52,6 +52,11 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
+for file in $base_dir/streams/build/dependant-libs-${SCALA_VERSION}/rocksdb*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
 for file in $base_dir/tools/build/libs/kafka-tools*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
