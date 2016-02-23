@@ -37,13 +37,12 @@ class TestVerifiableProducer(Test):
 
         self.num_messages = 100
         # This will produce to source kafka cluster
-        self.producer = VerifiableProducer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
+        self.producer = VerifiableProducer(test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
                                            max_messages=self.num_messages, throughput=1000)
 
     def setUp(self):
         self.zk.start()
         self.kafka.start()
-
 
     @parametrize(producer_version=str(LATEST_0_8_2))
     @parametrize(producer_version=str(TRUNK))
@@ -52,7 +51,6 @@ class TestVerifiableProducer(Test):
         Test that we can start VerifiableProducer on trunk or against the 0.8.2 jar, and
         verify that we can produce a small number of messages.
         """
-
         node = self.producer.nodes[0]
         node.version = KafkaVersion(producer_version)
         self.producer.start()
