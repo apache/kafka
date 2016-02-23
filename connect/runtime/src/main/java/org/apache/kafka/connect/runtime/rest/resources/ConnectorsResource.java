@@ -18,10 +18,13 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.rest.RestServer;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigDefInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
@@ -31,6 +34,14 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.net.URI;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
@@ -43,13 +54,6 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.net.URI;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 @Path("/connectors")
 @Produces(MediaType.APPLICATION_JSON)
@@ -164,6 +168,23 @@ public class ConnectorsResource {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.putConnectorConfig(connector, null, true, cb);
         completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", null);
+    }
+
+    @GET
+    @Path("{connectorType}/config")
+    public ConfigDefInfo getConfigDef(final @PathParam("connectorType") String connectorType) throws Throwable {
+        FutureCallback<ConfigDefInfo> cb = new FutureCallback<>();
+        herder.getConfigDef(connectorType, cb);
+        return completeOrForwardRequest(cb, "/connectors/" + connectorType + "/config", "GET", null, new TypeReference<ConfigDefInfo>(){});
+    }
+
+    @PUT
+    @Path("/{connectorType}/config/validate")
+    public ConfigInfos validateConfigs(final @PathParam("connectorType") String connType,
+                                       final Map<String, String> connectorConfig) throws Throwable {
+        FutureCallback<ConfigInfos> cb = new FutureCallback<>();
+        herder.validateConfigs(connType, connectorConfig, cb);
+        return completeOrForwardRequest(cb, "/connectors/" + connType + "/config/validate", "PUT", null, new TypeReference<ConfigInfos>() {});
     }
 
     // Wait for a FutureCallback to complete. If it succeeds, return the parsed response. If it fails, try to forward the

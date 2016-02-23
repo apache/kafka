@@ -19,6 +19,8 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.Config;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
@@ -466,7 +468,11 @@ public class WorkerTest extends ThreadedTest {
 
 
     /* Name here needs to be unique as we are testing the aliasing mechanism */
-    private static class WorkerTestConnector extends Connector {
+    public static class WorkerTestConnector extends Connector {
+
+        private ConfigDef configDef = new ConfigDef()
+            .define("configName", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Test configName.");
+
         @Override
         public String version() {
             return "1.0";
@@ -490,6 +496,16 @@ public class WorkerTest extends ThreadedTest {
         @Override
         public void stop() {
 
+        }
+
+        @Override
+        public ConfigDef configuration() {
+            return configDef;
+        }
+
+        @Override
+        public List<Config> validate(ConfigDef configDef, Map<String, String> connectorConfigs) {
+            return null;
         }
     }
 

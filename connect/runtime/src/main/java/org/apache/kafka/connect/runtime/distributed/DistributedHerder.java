@@ -17,10 +17,13 @@
 
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.common.config.Config;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -31,6 +34,10 @@ import org.apache.kafka.connect.runtime.HerderConnectorContext;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.RestServer;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigDefInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.storage.KafkaConfigStorage;
@@ -45,6 +52,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -112,6 +120,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private volatile int generation;
 
     private final ExecutorService forwardRequestExecutor;
+
+    private Map<String, ConfigDef> configs = new HashMap<>();
+    private Map<String, Connector> tempConnectors = new HashMap<>();
 
     public DistributedHerder(DistributedConfig config,
                              Time time,
@@ -551,6 +562,95 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         return generation;
     }
 
+    @Override
+    public synchronized void getConfigDef(final String connType, final Callback<ConfigDefInfo> callback) {
+        log.trace("Submitting get connector configuration definitions request {}", connType);
+
+        addRequest(
+            new Callable<Void>() {
+                @Override
+                public Void call() throws Exception {
+                    ConfigDef configDef = getConfig(connType);
+                    Collection<ConfigDef.ConfigKey> configKeys = configDef.configKeys().values();
+                    List<ConfigKeyInfo> configKeyInfos = new LinkedList<>();
+                    for (ConfigDef.ConfigKey configKey: configKeys) {
+                        configKeyInfos.add(convertConfigKey(configKey));
+                    }
+                    ConfigDefInfo configDefInfo = new ConfigDefInfo(connType, configKeyInfos);
+                    callback.onCompletion(null, configDefInfo);
+                    return null;
+                }
+            },
+            forwardErrorCallback(callback)
+        );
+    }
+
+    @Override
+    public synchronized void validateConfigs(final String connType, final Map<String, String> connectorConfig, final Callback<ConfigInfos> callback) {
+        log.trace("Submitting validate configuration request {}", connType);
+
+        addRequest(
+            new Callable<Void>() {
+                @Override
+                public Void call() throws Exception {
+                    ConnectorConfig connConfig = new ConnectorConfig(connectorConfig);
+                    String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
+                    ConfigDef configDef = getConfig(connType);
+                    Connector connector = getConnector(connType, connName);
+                    List<Config> configs = connector.validate(configDef, connectorConfig);
+                    List<ConfigInfo> configInfoList = new LinkedList<>();
+                    int errorCount = 0;
+                    for (Config config : configs) {
+                        ConfigInfo configInfo = new ConfigInfo(config.getName(), config
+                            .getValue(), config.getRecommendedValues(), config.getErrorMessages(), config.isVisible());
+                        configInfoList.add(configInfo);
+                        errorCount += config.getErrorMessages().size();
+                    }
+                    ConfigInfos
+                        configInfos = new ConfigInfos(connName, errorCount, configInfoList);
+                    callback.onCompletion(null, configInfos);
+                    return null;
+                }
+            },
+            forwardErrorCallback(callback)
+        );
+
+    }
+
+    private ConfigDef getConfig(String connType) {
+        if (configs.containsKey(connType)) {
+            return configs.get(connType);
+        } else {
+            ConfigDef configDef = worker.getConnectorConfigDef(connType);
+            configs.put(connType, configDef);
+            return configDef;
+        }
+    }
+
+    private Connector getConnector(String connType, String connName) {
+        if (tempConnectors.containsKey(connName)) {
+            return tempConnectors.get(connName);
+        } else {
+            Connector connector = worker.getConnector(connType);
+            tempConnectors.put(connName, connector);
+            return connector;
+        }
+    }
+
+    private ConfigKeyInfo convertConfigKey(ConfigDef.ConfigKey configKey) {
+        String name = configKey.name;
+        String type = configKey.type.name();
+        Object defaultValue = configKey.defaultValue;
+        String importance = configKey.importance.name();
+        String documentation = configKey.documentation;
+        String group = configKey.group;
+        int orderInGroup = configKey.orderInGroup;
+        String width = configKey.width.name();
+        String displayName = configKey.displayName;
+        List<String> dependents = configKey.dependents;
+        return new ConfigKeyInfo(name, type, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents);
+    }
+
     // Should only be called from work thread, so synchronization should not be needed
     private boolean isLeader() {
         return assignment != null && member.memberId().equals(assignment.leader());
@@ -702,6 +802,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         ConnectorContext ctx = new HerderConnectorContext(DistributedHerder.this, connName);
         worker.startConnector(connConfig, ctx, this);
 
+        if (tempConnectors.containsKey(connName)) {
+            tempConnectors.remove(connName);
+        }
         // Immediately request configuration since this could be a brand new connector. However, also only update those
         // task configs if they are actually different from the existing ones to avoid unnecessary updates when this is
         // just restoring an existing connector.

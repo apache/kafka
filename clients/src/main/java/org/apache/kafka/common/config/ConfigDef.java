@@ -12,17 +12,20 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.utils.Utils;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.utils.Utils;
 
 /**
  * This class is used for specifying the set of expected configurations, their type, their defaults, their
@@ -50,7 +53,7 @@ public class ConfigDef {
 
     public static final Object NO_DEFAULT_VALUE = new String("");
 
-    private final Map<String, ConfigKey> configKeys = new HashMap<String, ConfigKey>();
+    private final Map<String, ConfigKey> configKeys = new HashMap<>();
 
     /**
      * Returns unmodifiable set of properties names defined in this {@linkplain ConfigDef}
@@ -63,7 +66,71 @@ public class ConfigDef {
 
     /**
      * Define a new configuration
-     *
+     * @param name          the name of the config parameter
+     * @param type          the type of the config
+     * @param defaultValue  the default value to use if this config isn't present
+     * @param validator     the validator to use in checking the correctness of the config
+     * @param importance    the importance of this config
+     * @param documentation the documentation string for the config
+     * @param group         the group this config belongs to
+     * @param orderInGroup  the order of this config in the group
+     * @param width         the width of the config
+     * @param displayName   the name suitable for display
+     * @param dependents    the configurations that are dependents of this configuration
+     * @param recommender   the recommnder provides valid values given the parent configuration values
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
+                            String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
+        if (configKeys.containsKey(name)) {
+            throw new ConfigException("Configuration " + name + " is defined twice.");
+        }
+        Object parsedDefault = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
+        configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender));
+        return this;
+    }
+
+    /**
+     * Define a new configuration
+     * @param name          the name of the config parameter
+     * @param type          the type of the config
+     * @param defaultValue  the default value to use if this config isn't present
+     * @param importance    the importance of this config
+     * @param documentation the documentation string for the config
+     * @param group         the group this config belongs to
+     * @param orderInGroup  the order of this config in the group
+     * @param width         the width of the config
+     * @param displayName   the name suitable for display
+     * @param dependents    the configurations that are dependents of this configuration
+     * @param recommender   the recommnder provides valid values given the parent configuration values
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
+                                      String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
+        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender);
+    }
+
+    /**
+     * Define a new configuration with no default value and no special validation logic
+     * @param name          the name of the config parameter
+     * @param type          the type of the config
+     * @param importance    the importance of this config
+     * @param documentation the documentation string for the config
+     * @param group         the group this config belongs to
+     * @param orderInGroup  the order of this config in the group
+     * @param width         the width of the config
+     * @param displayName   the name suitable for display
+     * @param dependents    the configurations that are dependents of this configuration
+     * @param recommender   the recommnder provides valid values given the parent configuration value
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
+                            Width width, String displayName, List<String> dependents, Recommender recommender) {
+        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender);
+    }
+
+    /**
+     * Define a new configuration
      * @param name          The name of the config parameter
      * @param type          The type of the config
      * @param defaultValue  The default value to use if this config isn't present
@@ -82,7 +149,6 @@ public class ConfigDef {
 
     /**
      * Define a new configuration with no special validation logic
-     *
      * @param name          The name of the config parameter
      * @param type          The type of the config
      * @param defaultValue  The default value to use if this config isn't present
@@ -96,7 +162,6 @@ public class ConfigDef {
 
     /**
      * Define a new configuration with no default value and no special validation logic
-     *
      * @param name          The name of the config parameter
      * @param type          The type of the config
      * @param importance    The importance of this config: is this something you will likely need to change.
@@ -154,6 +219,97 @@ public class ConfigDef {
             values.put(key.name, value);
         }
         return values;
+    }
+
+
+    /**
+     * Validate the provided connector configuration values with the configuration definition
+     * @param connectorConfigs the provided connector configuration values
+     * @return List of Config, each Config contains the updated configuration information given
+     * the current configuration values.
+     */
+    public List<Config> validate(Map<String, String> connectorConfigs) {
+        List<String> configsWithNoParent = getConfigsWithNoParent();
+        Map<String, Config> configValues = new HashMap<>();
+        for (String name: configsWithNoParent) {
+            validate(name, connectorConfigs, configValues, name, null);
+        }
+        return new LinkedList<>(configValues.values());
+    }
+
+
+    private List<String> getConfigsWithNoParent() {
+        Set<String> configs = configKeys.keySet();
+        Set<String> configsWithParent = new HashSet<>();
+
+        for (ConfigDef.ConfigKey configKey: configKeys.values()) {
+            List<String> dependents = configKey.dependents;
+            for (String name: dependents) {
+                configsWithParent.add(name);
+            }
+        }
+
+        List<String> configsWithNoParent = new LinkedList<>();
+        for (String name: configs) {
+            if (!configsWithParent.contains(name)) {
+                configsWithNoParent.add(name);
+            }
+        }
+        return configsWithNoParent;
+    }
+
+    private void validate(String name, Map<String, String> connectorConfigs, Map<String, Config> configs, String parentName, Object parentValue) {
+        ConfigKey key = configKeys.get(name);
+
+        Config config;
+        if (configs.containsKey(name)) {
+            config = configs.get(name);
+        } else {
+            config = new Config(name);
+        }
+
+        Object value;
+        if (connectorConfigs.containsKey(key.name)) {
+            value = parseType(key.name, connectorConfigs.get(key.name), key.type);
+        } else if (key.defaultValue == NO_DEFAULT_VALUE) {
+            config.addErrorMessage("Missing required configuration \"" + key.name + "\" which has no default value.");
+            value = null;
+        } else {
+            value = key.defaultValue;
+        }
+        if (key.validator != null) {
+            key.validator.ensureValid(key.name, value);
+        }
+
+        config.setValue(value);
+
+        Set<Object> recommendedValues;
+        if (key.recommender != null) {
+            recommendedValues = key.recommender.validValues(name, parentName, parentValue);
+            List<Object> originalRecommendedValues = config.getRecommendedValues();
+
+            if (!originalRecommendedValues.isEmpty()) {
+                Set<Object> originalRecommendedValueSet = new HashSet<>(originalRecommendedValues);
+                Iterator<Object> it = recommendedValues.iterator();
+                while(it.hasNext()) {
+                    Object o = it.next();
+                    if (!originalRecommendedValueSet.contains(o)) {
+                        it.remove();
+                    }
+                }
+            }
+            config.setRecommendedValues(new LinkedList<>(recommendedValues));
+            if (value != null && !recommendedValues.contains(value)) {
+                config.addErrorMessage("Invalid value for configuration " + key.name);
+            }
+
+            config.setVisible(key.recommender.visible(name, parentName, parentValue));
+        }
+
+        configs.put(name, config);
+        for (String dependent: key.dependents) {
+            validate(dependent, connectorConfigs, configs, name, value);
+        }
     }
 
     /**
@@ -267,11 +423,23 @@ public class ConfigDef {
         HIGH, MEDIUM, LOW
     }
 
+    public enum Width {
+        NONE, SHORT, MEDIUM, LONG
+    }
+
+    /**
+     *
+     */
+    public interface Recommender {
+        Set<Object> validValues(String name, String parentName, Object parentValue);
+        boolean visible(String name, String parentName, Object parentValue);
+    }
+
     /**
      * Validation logic the user may provide
      */
     public interface Validator {
-        public void ensureValid(String name, Object o);
+        void ensureValid(String name, Object o);
     }
 
     /**
@@ -345,16 +513,28 @@ public class ConfigDef {
         }
     }
 
-    private static class ConfigKey {
+    public static class ConfigKey {
         public final String name;
         public final Type type;
         public final String documentation;
         public final Object defaultValue;
         public final Validator validator;
         public final Importance importance;
+        public final String group;
+        public final int orderInGroup;
+        public final Width width;
+        public final String displayName;
+        public final List<String> dependents;
+        public final Recommender recommender;
 
         public ConfigKey(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation) {
-            super();
+            this(name, type, defaultValue, validator, importance, documentation, null, -1, Width.NONE, name, null, null);
+        }
+
+        public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
+                         Importance importance, String documentation, String group,
+                         int orderInGroup, Width width, String displayName,
+                         List<String> dependents, Recommender recommender) {
             this.name = name;
             this.type = type;
             this.defaultValue = defaultValue;
@@ -363,12 +543,21 @@ public class ConfigDef {
             if (this.validator != null && this.hasDefault())
                 this.validator.ensureValid(name, defaultValue);
             this.documentation = documentation;
+            this.dependents = dependents;
+            this.group = group;
+            this.orderInGroup = orderInGroup;
+            this.width = width;
+            this.displayName = displayName;
+            this.recommender = recommender;
         }
 
         public boolean hasDefault() {
             return this.defaultValue != NO_DEFAULT_VALUE;
         }
+    }
 
+    public Map<String, ConfigKey> configKeys() {
+        return configKeys;
     }
 
     public String toHtmlTable() {

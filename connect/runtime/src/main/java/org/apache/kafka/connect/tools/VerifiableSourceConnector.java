@@ -17,7 +17,9 @@
 
 package org.apache.kafka.connect.tools;
 
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.config.Config;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 
@@ -60,5 +62,15 @@ public class VerifiableSourceConnector extends SourceConnector {
 
     @Override
     public void stop() {
+    }
+
+    @Override
+    public ConfigDef configuration() {
+        return null;
+    }
+
+    @Override
+    public List<Config> validate(ConfigDef configDef, Map<String, String> connectorConfigs) {
+        return null;
     }
 }

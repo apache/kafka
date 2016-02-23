@@ -20,6 +20,7 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
@@ -189,7 +190,11 @@ public class Worker {
         return SinkConnector.class.isAssignableFrom(workerConnector.delegate.getClass());
     }
 
-    @SuppressWarnings("unchecked")
+    public Connector getConnector(String connType) {
+        Class<? extends Connector> connectorClass = getConnectorClass(connType);
+        return instantiateConnector(connectorClass);
+    }
+    
     private Class<? extends Connector> getConnectorClass(String connectorAlias) {
         // Avoid the classpath scan if the full class name was provided
         try {

@@ -12,21 +12,28 @@
  */
 package org.apache.kafka.common.config;
 
-import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
-
 import org.apache.kafka.common.config.ConfigDef.Importance;
-import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigDef.Range;
-import org.apache.kafka.common.config.ConfigDef.ValidString;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigDef.ValidString;
+import org.apache.kafka.common.config.ConfigDef.Validator;
+import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.types.Password;
 import org.junit.Test;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+
+import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class ConfigDefTest {
 
@@ -156,12 +163,97 @@ public class ConfigDefTest {
         final String key = "enum_test";
 
         ConfigDef def = new ConfigDef();
-        def.define(key, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ValidString.in("ONE", "TWO", "THREE"), Importance.HIGH, "docs");
+        def.define(key, Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
+                   ValidString.in("ONE", "TWO", "THREE"), Importance.HIGH, "docs");
 
         Properties props = new Properties();
         props.put(key, "ONE");
         Map<String, Object> vals = def.parse(props);
         assertEquals("ONE", vals.get(key));
+    }
+
+    @Test
+    public void testValidate() {
+        Map<String, Config> expected = new HashMap<>();
+        String errorMessageB = "Missing required configuration \"b\" which has no default value.";
+        String errorMessageC = "Missing required configuration \"c\" which has no default value.";
+        String errorMessageD = "Invalid value for configuration d";
+
+        Config configA = new Config("a", 1, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
+        Config configB = new Config("b", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageB, errorMessageB));
+        Config configC = new Config("c", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageC));
+        Config configD = new Config("d", 10, Arrays.<Object>asList(1, 2, 3), Arrays.asList(errorMessageD));
+        expected.put("a", configA);
+        expected.put("b", configB);
+        expected.put("c", configC);
+        expected.put("d", configD);
+
+        ConfigDef def = new ConfigDef()
+            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommnder())
+            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", Collections.<String>emptyList(), new IntegerRecommnder())
+            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", Collections.<String>emptyList(), new IntegerRecommnder())
+            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Collections.singletonList("b"), new IntegerRecommnder());
+
+        Map<String, String> props = new HashMap<>();
+        props.put("a", "1");
+        props.put("d", "10");
+
+        List<Config> configs = def.validate(props);
+        for (Config config : configs) {
+            String name = config.getName();
+            Config expectedConfig = expected.get(name);
+            assertTrue(compareConfigValues(expectedConfig, config));
+        }
+    }
+
+    private boolean compareConfigValues(Config a, Config b) {
+        String aName = a.getName();
+        String bName = b.getName();
+        if (!aName.equals(bName)) {
+            return false;
+        }
+        if ((a.getValue() == null && b.getValue() != null) || (a.getValue() != null && b.getValue() == null))  {
+            return false;
+        }
+        if (a.getValue() != null && b.getValue() != null) {
+            int aValue = (int) a.getValue();
+            int bValue = (int) b.getValue();
+            if (aValue != bValue) {
+                return false;
+            }
+        }
+
+        List<Object> aRecommendedValues = a.getRecommendedValues();
+        List<Object> bRecommendedValues = b.getRecommendedValues();
+        if (aRecommendedValues.size() != bRecommendedValues.size()) {
+            return false;
+        }
+
+        List<String> aErrorMessages = a.getErrorMessages();
+        List<String> bErrorMessages = b.getErrorMessages();
+        if (aErrorMessages.size() != bErrorMessages.size()) {
+            return false;
+        }
+        return true;
+    }
+
+    private static class IntegerRecommnder implements ConfigDef.Recommender {
+
+        @Override
+        public Set<Object> validValues(String name, String parentName, Object parentValue) {
+            Set<Object> values = new HashSet<>();
+            if (parentValue == null) {
+                values.addAll(Arrays.asList(1, 2, 3));
+            } else {
+                values.addAll(Arrays.asList(4, 5));
+            }
+            return values;
+        }
+
+        @Override
+        public boolean visible(String name, String parentName, Object parentValue) {
+            return true;
+        }
     }
 
     private void testValidators(Type type, Validator validator, Object defaultVal, Object[] okValues, Object[] badValues) {

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.runtime.rest.entities.ConfigDefInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -127,6 +129,21 @@ public interface Herder {
      */
     ConnectorStateInfo.TaskState taskStatus(ConnectorTaskId id);
 
+    /**
+     * Get the configuration definitions for the connector class.
+     * @param connType the connector class
+     * @param callback callback to invoke upon completion
+     */
+    void getConfigDef(String connType, Callback<ConfigDefInfo> callback);
+
+
+    /**
+     * Validate the provided connector config values against the configuration definition.
+     * @param connType the connector class
+     * @param connectorConfig the provided connector config values
+     * @param callback callback to invoke upon completion
+     */
+    void validateConfigs(String connType, Map<String, String> connectorConfig, Callback<ConfigInfos> callback);
 
     class Created<T> {
         private final boolean created;

@@ -17,6 +17,10 @@
 
 package org.apache.kafka.connect.runtime.standalone;
 
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.ConfigKey;
+import org.apache.kafka.common.config.Config;
+import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -25,6 +29,10 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigDefInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.storage.MemoryStatusBackingStore;
@@ -38,6 +46,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,6 +60,11 @@ public class StandaloneHerder extends AbstractHerder {
 
     private final Worker worker;
     private HashMap<String, ConnectorState> connectors = new HashMap<>();
+
+    private Map<String, ConfigDef> configs = new HashMap<>();
+
+    // Connectors for
+    private Map<String, Connector> tempConnectors = new HashMap<>();
 
     public StandaloneHerder(Worker worker) {
         this(worker.workerId(), worker, new MemoryStatusBackingStore());
@@ -204,6 +218,71 @@ public class StandaloneHerder extends AbstractHerder {
         throw new UnsupportedOperationException("Kafka Connect in standalone mode does not support externally setting task configurations.");
     }
 
+    @Override
+    public void getConfigDef(String connType, Callback<ConfigDefInfo> callback) {
+        ConfigDef configDef = getConfig(connType);
+        Collection<ConfigKey> configKeys = configDef.configKeys().values();
+        List<ConfigKeyInfo> configKeyInfos = new LinkedList<>();
+        for (ConfigKey configKey: configKeys) {
+            configKeyInfos.add(convertConfigKey(configKey));
+        }
+        ConfigDefInfo configDefInfo = new ConfigDefInfo(connType, configKeyInfos);
+        callback.onCompletion(null, configDefInfo);
+    }
+
+    @Override
+    public void validateConfigs(String connType, Map<String, String> connectorConfig, Callback<ConfigInfos> callback) {
+        ConnectorConfig connConfig = new ConnectorConfig(connectorConfig);
+        String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
+        ConfigDef configDef = getConfig(connType);
+        Connector connector = getConnector(connType, connName);
+        List<Config> configs = connector.validate(configDef, connectorConfig);
+        List<ConfigInfo> configInfoList = new LinkedList<>();
+        int errorCount = 0;
+        for (Config config : configs) {
+            ConfigInfo configInfo = new ConfigInfo(config.getName(), config
+                .getValue(), config.getRecommendedValues(), config.getErrorMessages(), config.isVisible());
+            configInfoList.add(configInfo);
+            errorCount += config.getErrorMessages().size();
+        }
+        ConfigInfos configInfos = new ConfigInfos(connName, errorCount, configInfoList);
+        callback.onCompletion(null, configInfos);
+    }
+
+    private ConfigDef getConfig(String connType) {
+        if (configs.containsKey(connType)) {
+            return configs.get(connType);
+        } else {
+            ConfigDef configDef = worker.getConnectorConfigDef(connType);
+            configs.put(connType, configDef);
+            return configDef;
+        }
+    }
+
+    private Connector getConnector(String connType, String connName) {
+        if (tempConnectors.containsKey(connName)) {
+            return tempConnectors.get(connName);
+        } else {
+            Connector connector = worker.getConnector(connType);
+            tempConnectors.put(connName, connector);
+            return connector;
+        }
+    }
+
+    private ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
+        String name = configKey.name;
+        String type = configKey.type.name();
+        Object defaultValue = configKey.defaultValue;
+        String importance = configKey.importance.name();
+        String documentation = configKey.documentation;
+        String group = configKey.group;
+        int orderInGroup = configKey.orderInGroup;
+        String width = configKey.width.name();
+        String displayName = configKey.displayName;
+        List<String> dependents = configKey.dependents;
+        return new ConfigKeyInfo(name, type, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents);
+    }
+
     /**
      * Start a connector in the worker and record its state.
      * @param connectorProps new connector configuration
@@ -220,6 +299,11 @@ public class StandaloneHerder extends AbstractHerder {
             state.configOriginals = connectorProps;
             state.config = connConfig;
         }
+
+        if (tempConnectors.containsKey(connName)) {
+            tempConnectors.remove(connName);
+        }
+
         return connName;
     }
 
