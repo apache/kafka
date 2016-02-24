@@ -30,6 +30,7 @@ class ConnectRestApiTest(KafkaTest):
     TOPIC = "test"
     OFFSETS_TOPIC = "connect-offsets"
     CONFIG_TOPIC = "connect-configs"
+    STATUS_TOPIC = "connect-status"
 
     # Since tasks can be assigned to any node and we're testing with files, we need to make sure the content is the same
     # across all nodes.
@@ -161,3 +162,4 @@ class ConnectRestApiTest(KafkaTest):
 
     def _config_dict_from_props(self, connector_props):
         return dict([line.strip().split('=', 1) for line in connector_props.split('\n') if line.strip() and not line.strip().startswith('#')])
+
