@@ -24,6 +24,7 @@ import org.I0Itec.zkclient.ZkClient;
 import org.I0Itec.zkclient.exception.ZkNoNodeException;
 import org.I0Itec.zkclient.exception.ZkNodeExistsException;
 import org.I0Itec.zkclient.serialize.ZkSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.zookeeper.ZooDefs;
 import org.slf4j.Logger;
@@ -47,6 +48,7 @@ public class InternalTopicManager {
     private static final String ZK_DELETE_TOPIC_PATH = "/admin/delete_topics";
 
     private final ZkClient zkClient;
+    private final int replicationFactor;
 
     private class ZKStringSerializer implements ZkSerializer {
 
@@ -72,11 +74,12 @@ public class InternalTopicManager {
         }
     }
 
-    public InternalTopicManager(String zkConnect) {
-        zkClient = new ZkClient(zkConnect, 30 * 1000, 30 * 1000, new ZKStringSerializer());
+    public InternalTopicManager(String zkConnect, int replicationFactor) {
+        this.zkClient = new ZkClient(zkConnect, 30 * 1000, 30 * 1000, new ZKStringSerializer());
+        this.replicationFactor = replicationFactor;
     }
 
-    public void makeReady(String topic, int numPartitions, int replicationFactor) {
+    public void makeReady(String topic, int numPartitions) {
         boolean topicNotReady = true;
 
         while (topicNotReady) {

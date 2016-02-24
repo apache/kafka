@@ -198,7 +198,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
 
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props);
-        List<TopicPartition> partitions = getAllPartitions(consumer, "echo", "max", "min", "dif", "sum", "cnt", "avg", "wcnt");
+        List<TopicPartition> partitions = getAllPartitions(consumer, "echo", "max", "min", "dif", "sum", "cnt", "avg", "wcnt", "tagg");
         consumer.assign(partitions);
         consumer.seekToBeginning(partitions.toArray(new TopicPartition[partitions.size()]));
 
@@ -212,6 +212,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         HashMap<String, Long> cnt = new HashMap<>();
         HashMap<String, Double> avg = new HashMap<>();
         HashMap<String, Long> wcnt = new HashMap<>();
+        HashMap<String, Long> tagg = new HashMap<>();
 
         HashSet<String> keys = new HashSet<>();
         HashMap<String, Set<Integer>> received = new HashMap<>();
@@ -268,6 +269,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
                         case "wcnt":
                             wcnt.put(key, longDeserializer.deserialize("", record.value()));
                             break;
+                        case "tagg":
+                            tagg.put(key, longDeserializer.deserialize("", record.value()));
+                            break;
                         default:
                             System.out.println("unknown topic: " + record.topic());
                     }
@@ -308,6 +312,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         success &= verifyCnt(cnt);
         success &= verifyAvg(avg);
         success &= verifyWCnt(wcnt);
+        success &= verifyTAgg(tagg, allData.keySet());
 
         System.out.println(success ? "SUCCESS" : "FAILURE");
     }
@@ -454,6 +459,42 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
                 if (expected != entry.getValue()) {
                     System.out.println("fail: key=" + entry.getKey() + " wcnt=" + entry.getValue() + " expected=" + expected);
+                    success = false;
+                }
+            }
+        }
+        return success;
+    }
+
+    private static boolean verifyTAgg(Map<String, Long> map, Set<String> keys) {
+        boolean success = true;
+        if (map.isEmpty()) {
+            System.out.println("tagg is empty");
+            success = false;
+        } else {
+            System.out.println("verifying tagg");
+
+            // generate expected answer
+            Map<String, Long> expected = new HashMap<>();
+            for (String key : keys) {
+                int min = getMin(key);
+                int max = getMax(key);
+                String cnt = Long.toString(max - min + 1L);
+
+                if (expected.containsKey(cnt)) {
+                    expected.put(cnt, expected.get(cnt) + 1L);
+                } else {
+                    expected.put(cnt, 1L);
+                }
+            }
+
+            // check the result
+            for (Map.Entry<String, Long> entry : map.entrySet()) {
+                String key = entry.getKey();
+                long expectedCount = expected.get(key) == null ? 0 : expected.get(key);
+
+                if (entry.getValue() != expectedCount) {
+                    System.out.println("fail: key=" + key + " tagg=" + entry.getValue() + " expected=" + expected.get(key));
                     success = false;
                 }
             }

@@ -33,7 +33,8 @@ class StreamsBounceTest(KafkaTest):
             'dif' : { 'partitions': 5, 'replication-factor': 2 },
             'cnt' : { 'partitions': 5, 'replication-factor': 2 },
             'avg' : { 'partitions': 5, 'replication-factor': 2 },
-            'wcnt' : { 'partitions': 5, 'replication-factor': 2 }
+            'wcnt' : { 'partitions': 5, 'replication-factor': 2 },
+            'tagg' : { 'partitions': 5, 'replication-factor': 2 }
         })
 
         self.driver = StreamsSmokeTestDriverService(test_context, self.kafka)
@@ -58,7 +59,7 @@ class StreamsBounceTest(KafkaTest):
         # enable this after we add change log partition replicas
         #self.kafka.signal_leader("data")
 
-        time.sleep(15);
+        #time.sleep(15);
 
         self.processor1.abortThenRestart()
 
