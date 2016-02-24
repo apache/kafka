@@ -140,7 +140,7 @@ public class ProducerConfig extends AbstractConfig {
     public static final String BLOCK_ON_BUFFER_FULL_CONFIG = "block.on.buffer.full";
     private static final String BLOCK_ON_BUFFER_FULL_DOC = "When our memory buffer is exhausted we must either stop accepting new records (block) or throw errors. By default "
                                                            + "this setting is true and we block for max.block.ms, however in some scenarios blocking is not desirable and it is better to "
-                                                           + "immediately give an error. Setting this to <code>false</code> will accomplish that: the producer will throw a BufferExhaustedException if a recrord is sent and the buffer space is full.";
+                                                           + "immediately give an error. Setting this to <code>false</code> will accomplish that: the producer will throw a BufferExhaustedException if a record is sent and the buffer space is full.";
 
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = "retries";
@@ -193,7 +193,7 @@ public class ProducerConfig extends AbstractConfig {
                                                     + "These methods can be blocked either because the buffer is full or metadata unavailable."
                                                     + "Blocking in the user-supplied serializers or partitioner will not be counted against this timeout."
                                                     + "If <code>block.on.buffer.full == false</code>, calls to <code>send()</code> will not block, but throw BufferExhaustedException"
-                                                    + "Immediately if the producer is unable to send.";
+                                                    + "immediately if the producer is unable to send.";
 
     /** <code>request.timeout.ms</code> */
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
