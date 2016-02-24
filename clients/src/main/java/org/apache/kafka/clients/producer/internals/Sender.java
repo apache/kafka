@@ -240,6 +240,8 @@ public class Sender implements Runnable {
     private void handleProduceResponse(ClientResponse response, Map<TopicPartition, RecordBatch> batches, long now) {
         int correlationId = response.request().request().header().correlationId();
         if (response.wasDisconnected()) {
+            System.out.println("request " + response.request() + " cancelled due to disconnection");
+
             log.trace("Cancelled request {} due to node {} being disconnected", response, response.request()
                                                                                                   .request()
                                                                                                   .destination());
@@ -258,6 +260,8 @@ public class Sender implements Runnable {
                     Errors error = Errors.forCode(partResp.errorCode);
                     RecordBatch batch = batches.get(tp);
                     completeBatch(batch, error, partResp.baseOffset, partResp.timestamp, correlationId, now);
+
+                    System.out.println("response " + response + " received, complete batch " + batch);
                 }
                 this.sensors.recordLatency(response.request().request().destination(), response.requestLatencyMs());
                 this.sensors.recordThrottleTime(response.request().request().destination(),
@@ -343,6 +347,9 @@ public class Sender implements Runnable {
                 handleProduceResponse(response, recordsByPartition, time.milliseconds());
             }
         };
+
+        System.out.println("created produce with send " + send);
+
         return new ClientRequest(now, acks != 0, send, callback);
     }
 

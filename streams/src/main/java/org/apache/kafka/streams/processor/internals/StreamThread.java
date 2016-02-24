@@ -277,11 +277,15 @@ public class StreamThread extends Thread {
 
         // Exceptions should not prevent this call from going through all shutdown steps
 
+        System.out.println("committing upon shutdown");
+
         try {
             commitAll();
         } catch (Throwable e) {
             // already logged in commitAll()
         }
+
+        System.out.println("closing producer upon shutdown");
 
         // We need to first close the underlying clients before closing the state
         // manager, for example we need to make sure producer's message sends
@@ -292,16 +296,20 @@ public class StreamThread extends Thread {
         } catch (Throwable e) {
             log.error("Failed to close producer in thread [" + this.getName() + "]: ", e);
         }
+        System.out.println("closing consumer upon shutdown");
         try {
             consumer.close();
         } catch (Throwable e) {
             log.error("Failed to close consumer in thread [" + this.getName() + "]: ", e);
         }
+        System.out.println("closing restore consumer upon shutdown");
         try {
             restoreConsumer.close();
         } catch (Throwable e) {
             log.error("Failed to close restore consumer in thread [" + this.getName() + "]: ", e);
         }
+
+        System.out.println("removing tasks upon shutdown");
 
         removeStreamTasks();
         removeStandbyTasks();
