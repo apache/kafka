@@ -21,7 +21,6 @@ import javax.security.auth.login.AppConfigurationEntry;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.io.IOException;
-import java.io.File;
 
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
@@ -88,25 +87,17 @@ public class JaasUtils {
         boolean zkSaslEnabled = Boolean.parseBoolean(System.getProperty(ZK_SASL_CLIENT, "true"));
         String zkLoginContextName = System.getProperty(ZK_LOGIN_CONTEXT_NAME_KEY, "Client");
 
-        String loginConfigFile = System.getProperty(JAVA_LOGIN_CONFIG_PARAM);
-        if (loginConfigFile != null && loginConfigFile.length() > 0) {
-            File configFile = new File(loginConfigFile);
-            if (!configFile.canRead()) {
-                throw new KafkaException("File " + loginConfigFile + "cannot be read.");
-            }
-                
-            try {
-                Configuration loginConf = Configuration.getConfiguration();
-                isSecurityEnabled = loginConf.getAppConfigurationEntry(zkLoginContextName) != null;
-            } catch (Exception e) {
-                throw new KafkaException(e);
-            }
-            if (isSecurityEnabled && !zkSaslEnabled) {
-                LOG.error("JAAS file is present, but system property " + 
-                            ZK_SASL_CLIENT + " is set to false, which disables " +
-                            "SASL in the ZooKeeper client");
-                throw new KafkaException("Exception while determining if ZooKeeper is secure");
-            }
+        try {
+            Configuration loginConf = Configuration.getConfiguration();
+            isSecurityEnabled = loginConf.getAppConfigurationEntry(zkLoginContextName) != null;
+        } catch (Exception e) {
+            throw new KafkaException(e);
+        }
+        if (isSecurityEnabled && !zkSaslEnabled) {
+            LOG.error("JAAS configuration is present, but system property " +
+                        ZK_SASL_CLIENT + " is set to false, which disables " +
+                        "SASL in the ZooKeeper client");
+            throw new KafkaException("Exception while determining if ZooKeeper is secure");
         }
 
         return isSecurityEnabled;
