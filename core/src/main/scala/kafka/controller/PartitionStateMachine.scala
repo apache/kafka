@@ -51,7 +51,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   private val noOpPartitionLeaderSelector = new NoOpLeaderSelector(controllerContext)
   private val topicChangeListener = new TopicChangeListener()
   private val deleteTopicsListener = new DeleteTopicsListener()
-  private val addPartitionsListener: mutable.Map[String, AddPartitionsListener] = mutable.Map.empty
+  private val partitionModificationsListeners: mutable.Map[String, PartitionModificationsListener] = mutable.Map.empty
   private val stateChangeLogger = KafkaController.stateChangeLogger
 
   this.logIdent = "[Partition state machine on Controller " + controllerId + "]: "
@@ -82,11 +82,11 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   // de-register topic and partition change listeners
   def deregisterListeners() {
     deregisterTopicChangeListener()
-    addPartitionsListener.foreach {
+    partitionModificationsListeners.foreach {
       case (topic, listener) =>
         zkUtils.zkClient.unsubscribeDataChanges(getTopicPath(topic), listener)
     }
-    addPartitionsListener.clear()
+    partitionModificationsListeners.clear()
     if(controller.config.deleteTopicEnable)
       deregisterDeleteTopicListener()
   }
@@ -379,13 +379,13 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   }
 
   def registerPartitionChangeListener(topic: String) = {
-    addPartitionsListener.put(topic, new AddPartitionsListener(topic))
-    zkUtils.zkClient.subscribeDataChanges(getTopicPath(topic), addPartitionsListener(topic))
+    partitionModificationsListeners.put(topic, new PartitionModificationsListener(topic))
+    zkUtils.zkClient.subscribeDataChanges(getTopicPath(topic), partitionModificationsListeners(topic))
   }
 
   def deregisterPartitionChangeListener(topic: String) = {
-    zkUtils.zkClient.unsubscribeDataChanges(getTopicPath(topic), addPartitionsListener(topic))
-    addPartitionsListener.remove(topic)
+    zkUtils.zkClient.unsubscribeDataChanges(getTopicPath(topic), partitionModificationsListeners(topic))
+    partitionModificationsListeners.remove(topic)
   }
 
   private def registerDeleteTopicListener() = {
@@ -497,7 +497,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     }
   }
 
-  class AddPartitionsListener(topic: String) extends IZkDataListener with Logging {
+  class PartitionModificationsListener(topic: String) extends IZkDataListener with Logging {
 
     this.logIdent = "[AddPartitionsListener on " + controller.config.brokerId + "]: "
 
@@ -505,7 +505,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     def handleDataChange(dataPath : String, data: Object) {
       inLock(controllerContext.controllerLock) {
         try {
-          info("Add Partition triggered " + data.toString + " for path " + dataPath)
+          info(s"Partition modification triggered $data for path $dataPath")
           val partitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic))
           val partitionsToBeAdded = partitionReplicaAssignment.filter(p =>
             !controllerContext.partitionReplicaAssignment.contains(p._1))

@@ -175,6 +175,35 @@ public class NetworkClientTest {
         assertEquals("There should be NO leastloadednode", leastNode, null);
         
     }
+
+    @Test
+    public void testConnectionDelay() {
+        long now = time.milliseconds();
+        long delay = client.connectionDelay(node, now);
+
+        assertEquals(0, delay);
+    }
+
+    @Test
+    public void testConnectionDelayConnected() {
+        awaitReady(client, node);
+
+        long now = time.milliseconds();
+        long delay = client.connectionDelay(node, now);
+
+        assertEquals(Long.MAX_VALUE, delay);
+    }
+
+    @Test
+    public void testConnectionDelayDisconnected() {
+        awaitReady(client, node);
+
+        selector.close(node.idString());
+        client.poll(requestTimeoutMs, time.milliseconds());
+        long delay = client.connectionDelay(node, time.milliseconds());
+
+        assertEquals(reconnectBackoffMsTest, delay);
+    }
     
     private static class TestCallbackHandler implements RequestCompletionHandler {
         public boolean executed = false;

@@ -25,34 +25,28 @@ import java.util.NoSuchElementException;
 public enum TimestampType {
     NO_TIMESTAMP_TYPE(-1, "NoTimestampType"), CREATE_TIME(0, "CreateTime"), LOG_APPEND_TIME(1, "LogAppendTime");
 
-    public final int value;
+    public final int id;
     public final String name;
-    TimestampType(int value, String name) {
-        this.value = value;
+    TimestampType(int id, String name) {
+        this.id = id;
         this.name = name;
     }
 
-    public static TimestampType getTimestampType(byte attributes) {
+    public byte updateAttributes(byte attributes) {
+        return this == CREATE_TIME ?
+            (byte) (attributes & ~Record.TIMESTAMP_TYPE_MASK) : (byte) (attributes | Record.TIMESTAMP_TYPE_MASK);
+    }
+
+    public static TimestampType forAttributes(byte attributes) {
         int timestampType = (attributes & Record.TIMESTAMP_TYPE_MASK) >> Record.TIMESTAMP_TYPE_ATTRIBUTE_OFFSET;
         return timestampType == 0 ? CREATE_TIME : LOG_APPEND_TIME;
     }
 
-    public static byte setTimestampType(byte attributes, TimestampType timestampType) {
-        return timestampType == CREATE_TIME ?
-                (byte) (attributes & ~Record.TIMESTAMP_TYPE_MASK) : (byte) (attributes | Record.TIMESTAMP_TYPE_MASK);
-    }
-
     public static TimestampType forName(String name) {
-        switch (name) {
-            case "NoTimestampType":
-                return NO_TIMESTAMP_TYPE;
-            case "CreateTime":
-                return CREATE_TIME;
-            case "LogAppendTime":
-                return LOG_APPEND_TIME;
-            default:
-                throw new NoSuchElementException("Invalid timestamp type " + name);
-        }
+        for (TimestampType t : values())
+            if (t.name.equals(name))
+                return t;
+        throw new NoSuchElementException("Invalid timestamp type " + name);
     }
 
     @Override

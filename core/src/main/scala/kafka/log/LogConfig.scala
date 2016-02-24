@@ -19,6 +19,8 @@ package kafka.log
 
 import java.util.Properties
 
+import scala.collection.JavaConverters._
+
 import kafka.api.ApiVersion
 import kafka.message.{BrokerCompressionCodec, Message}
 import kafka.server.KafkaConfig
@@ -73,9 +75,9 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val minInSyncReplicas = getInt(LogConfig.MinInSyncReplicasProp)
   val compressionType = getString(LogConfig.CompressionTypeProp).toLowerCase
   val preallocate = getBoolean(LogConfig.PreAllocateEnableProp)
-  val messageFormatVersion = ApiVersion(getString(LogConfig.MessageFormatVersionProp)).messageFormatVersion
+  val messageFormatVersion = ApiVersion(getString(LogConfig.MessageFormatVersionProp))
   val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
-  val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp)
+  val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp).longValue
 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
@@ -177,12 +179,8 @@ object LogConfig {
 
   def apply(): LogConfig = LogConfig(new Properties())
 
-  def configNames() = {
-    import scala.collection.JavaConversions._
-    configDef.names().toList.sorted
-  }
-
-
+  def configNames: Seq[String] = configDef.names.asScala.toSeq.sorted
+  
   /**
    * Create a log config instance using the given properties and defaults
    */
@@ -197,10 +195,8 @@ object LogConfig {
    * Check that property names are valid
    */
   def validateNames(props: Properties) {
-    import scala.collection.JavaConversions._
-    val names = configDef.names()
-    for(name <- props.keys)
-      require(names.contains(name), "Unknown configuration \"%s\".".format(name))
+    val names = configNames
+    for (name <- props.keys.asScala) require(names.contains(name), s"Unknown configuration `$name`.")
   }
 
   /**

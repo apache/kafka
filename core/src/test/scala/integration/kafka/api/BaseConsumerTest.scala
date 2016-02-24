@@ -289,34 +289,39 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
                                         startingKeyAndValueIndex: Int = 0,
                                         startingTimestamp: Long = 0L,
                                         timestampType: TimestampType = TimestampType.CREATE_TIME,
-                                        tp: TopicPartition = tp) {
-    val records = consumeRecords(consumer, numRecords)
+                                        tp: TopicPartition = tp,
+                                        maxPollRecords: Int = Int.MaxValue) {
+    val records = consumeRecords(consumer, numRecords, maxPollRecords = maxPollRecords)
     val now = System.currentTimeMillis()
     for (i <- 0 until numRecords) {
       val record = records.get(i)
       val offset = startingOffset + i
-      assertEquals(tp.topic(), record.topic())
-      assertEquals(tp.partition(), record.partition())
+      assertEquals(tp.topic, record.topic)
+      assertEquals(tp.partition, record.partition)
       if (timestampType == TimestampType.CREATE_TIME) {
-        assertEquals(timestampType, record.timestampType())
+        assertEquals(timestampType, record.timestampType)
         val timestamp = startingTimestamp + i
-        assertEquals(timestamp.toLong, record.timestamp())
+        assertEquals(timestamp.toLong, record.timestamp)
       } else
-        assertTrue(s"Got unexpected timestamp ${record.timestamp()}. Timestamp should be between [$startingTimestamp, $now}]",
-          record.timestamp() >= startingTimestamp && record.timestamp() <= now)
-      assertEquals(offset.toLong, record.offset())
+        assertTrue(s"Got unexpected timestamp ${record.timestamp}. Timestamp should be between [$startingTimestamp, $now}]",
+          record.timestamp >= startingTimestamp && record.timestamp <= now)
+      assertEquals(offset.toLong, record.offset)
       val keyAndValueIndex = startingKeyAndValueIndex + i
-      assertEquals(s"key $keyAndValueIndex", new String(record.key()))
-      assertEquals(s"value $keyAndValueIndex", new String(record.value()))
+      assertEquals(s"key $keyAndValueIndex", new String(record.key))
+      assertEquals(s"value $keyAndValueIndex", new String(record.value))
     }
   }
 
-  protected def consumeRecords[K, V](consumer: Consumer[K, V], numRecords: Int): ArrayList[ConsumerRecord[K, V]] = {
+  protected def consumeRecords[K, V](consumer: Consumer[K, V],
+                                     numRecords: Int,
+                                     maxPollRecords: Int = Int.MaxValue): ArrayList[ConsumerRecord[K, V]] = {
     val records = new ArrayList[ConsumerRecord[K, V]]
     val maxIters = numRecords * 300
     var iters = 0
     while (records.size < numRecords) {
-      for (record <- consumer.poll(50).asScala)
+      val polledRecords = consumer.poll(50).asScala
+      assertTrue(polledRecords.size <= maxPollRecords)
+      for (record <- polledRecords)
         records.add(record)
       if (iters > maxIters)
         throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")

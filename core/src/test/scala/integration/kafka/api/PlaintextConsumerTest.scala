@@ -40,6 +40,21 @@ import scala.collection.mutable.Buffer
 class PlaintextConsumerTest extends BaseConsumerTest {
 
   @Test
+  def testMaxPollRecords() {
+    val maxPollRecords = 2
+    val numRecords = 10000
+
+    sendRecords(numRecords)
+
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumer0.assign(List(tp).asJava)
+
+    consumeAndVerifyRecords(consumer0, numRecords = numRecords, startingOffset = 0,
+      maxPollRecords = maxPollRecords)
+  }
+
+  @Test
   def testAutoCommitOnClose() {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
@@ -320,7 +335,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
         retries = 0, lingerMs = Long.MaxValue, props = Some(producerProps))
     (0 until numRecords).foreach { i =>
-      producer.send(new ProducerRecord(tp.topic(), tp.partition(), i.toLong, s"key $i".getBytes, s"value $i".getBytes))
+      producer.send(new ProducerRecord(tp.topic, tp.partition, i.toLong, s"key $i".getBytes, s"value $i".getBytes))
     }
     producer.close()
   }

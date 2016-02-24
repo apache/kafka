@@ -18,10 +18,13 @@
 
 import org.junit.Assert._
 import java.util.concurrent.atomic._
-import org.junit.{Test, After}
+
+import kafka.common.LongRef
+import org.junit.{After, Test}
 import kafka.utils.TestUtils
 import kafka.message._
 import kafka.utils.SystemTime
+
 import scala.collection._
 
 class LogSegmentTest {
@@ -43,7 +46,7 @@ class LogSegmentTest {
   /* create a ByteBufferMessageSet for the given messages starting from the given offset */
   def messages(offset: Long, messages: String*): ByteBufferMessageSet = {
     new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, 
-                             offsetCounter = new AtomicLong(offset), 
+                             offsetCounter = new LongRef(offset),
                              messages = messages.map(s => new Message(s.getBytes)):_*)
   }
   

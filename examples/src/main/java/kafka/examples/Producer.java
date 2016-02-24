@@ -35,7 +35,7 @@ public class Producer extends Thread {
         props.put("client.id", "DemoProducer");
         props.put("key.serializer", "org.apache.kafka.common.serialization.IntegerSerializer");
         props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-        producer = new KafkaProducer<Integer, String>(props);
+        producer = new KafkaProducer<>(props);
         this.topic = topic;
         this.isAsync = isAsync;
     }
@@ -46,18 +46,16 @@ public class Producer extends Thread {
             String messageStr = "Message_" + messageNo;
             long startTime = System.currentTimeMillis();
             if (isAsync) { // Send asynchronously
-                producer.send(new ProducerRecord<Integer, String>(topic,
+                producer.send(new ProducerRecord<>(topic,
                     messageNo,
                     messageStr), new DemoCallBack(startTime, messageNo, messageStr));
             } else { // Send synchronously
                 try {
-                    producer.send(new ProducerRecord<Integer, String>(topic,
+                    producer.send(new ProducerRecord<>(topic,
                         messageNo,
                         messageStr)).get();
                     System.out.println("Sent message: (" + messageNo + ", " + messageStr + ")");
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (ExecutionException e) {
+                } catch (InterruptedException | ExecutionException e) {
                     e.printStackTrace();
                 }
             }
@@ -68,9 +66,9 @@ public class Producer extends Thread {
 
 class DemoCallBack implements Callback {
 
-    private long startTime;
-    private int key;
-    private String message;
+    private final long startTime;
+    private final int key;
+    private final String message;
 
     public DemoCallBack(long startTime, int key, String message) {
         this.startTime = startTime;

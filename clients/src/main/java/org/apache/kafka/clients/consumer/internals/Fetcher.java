@@ -58,6 +58,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -76,6 +77,7 @@ public class Fetcher<K, V> {
     private final int maxWaitMs;
     private final int fetchSize;
     private final long retryBackoffMs;
+    private final int maxPollRecords;
     private final boolean checkCrcs;
     private final Metadata metadata;
     private final FetchManagerMetrics sensors;
@@ -92,6 +94,7 @@ public class Fetcher<K, V> {
                    int minBytes,
                    int maxWaitMs,
                    int fetchSize,
+                   int maxPollRecords,
                    boolean checkCrcs,
                    Deserializer<K> keyDeserializer,
                    Deserializer<V> valueDeserializer,
@@ -109,6 +112,7 @@ public class Fetcher<K, V> {
         this.minBytes = minBytes;
         this.maxWaitMs = maxWaitMs;
         this.fetchSize = fetchSize;
+        this.maxPollRecords = maxPollRecords;
         this.checkCrcs = checkCrcs;
 
         this.keyDeserializer = keyDeserializer;
@@ -128,7 +132,7 @@ public class Fetcher<K, V> {
      *
      * @param cluster The current cluster metadata
      */
-    public void initFetches(Cluster cluster) {
+    public void sendFetches(Cluster cluster) {
         for (Map.Entry<Node, FetchRequest> fetchEntry: createFetchRequests(cluster).entrySet()) {
             final FetchRequest fetch = fetchEntry.getValue();
             client.send(fetchEntry.getKey(), ApiKeys.FETCH, fetch)
@@ -393,44 +397,57 @@ public class Fetcher<K, V> {
             throwIfUnauthorizedTopics();
             throwIfRecordTooLarge();
 
-            for (PartitionRecords<K, V> part : this.records) {
-                if (!subscriptions.isAssigned(part.partition)) {
-                    // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
-                    log.debug("Not returning fetched records for partition {} since it is no longer assigned", part.partition);
-                    continue;
-                }
-
-                // note that the consumed position should always be available
-                // as long as the partition is still assigned
-                long position = subscriptions.position(part.partition);
-                if (!subscriptions.isFetchable(part.partition)) {
-                    // this can happen when a partition is paused before fetched records are returned to the consumer's poll call
-                    log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", part.partition);
-                } else if (part.fetchOffset == position) {
-                    long nextOffset = part.records.get(part.records.size() - 1).offset() + 1;
-
-                    log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
-                            "position to {}", position, part.partition, nextOffset);
-
-                    List<ConsumerRecord<K, V>> records = drained.get(part.partition);
-                    if (records == null) {
-                        records = part.records;
-                        drained.put(part.partition, records);
-                    } else {
-                        records.addAll(part.records);
-                    }
-
-                    subscriptions.position(part.partition, nextOffset);
-                } else {
-                    // these records aren't next in line based on the last consumed position, ignore them
-                    // they must be from an obsolete request
-                    log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
-                            part.partition, part.fetchOffset, position);
-                }
+            int maxRecords = maxPollRecords;
+            Iterator<PartitionRecords<K, V>> iterator = records.iterator();
+            while (iterator.hasNext() && maxRecords > 0) {
+                PartitionRecords<K, V> part = iterator.next();
+                maxRecords -= append(drained, part, maxRecords);
+                if (part.isConsumed())
+                    iterator.remove();
             }
-            this.records.clear();
             return drained;
         }
+    }
+
+    private int append(Map<TopicPartition, List<ConsumerRecord<K, V>>> drained,
+                       PartitionRecords<K, V> part,
+                       int maxRecords) {
+        if (!subscriptions.isAssigned(part.partition)) {
+            // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
+            log.debug("Not returning fetched records for partition {} since it is no longer assigned", part.partition);
+        } else {
+            // note that the consumed position should always be available as long as the partition is still assigned
+            long position = subscriptions.position(part.partition);
+            if (!subscriptions.isFetchable(part.partition)) {
+                // this can happen when a partition is paused before fetched records are returned to the consumer's poll call
+                log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", part.partition);
+            } else if (part.fetchOffset == position) {
+                List<ConsumerRecord<K, V>> partRecords = part.take(maxRecords);
+                long nextOffset = partRecords.get(partRecords.size() - 1).offset() + 1;
+
+                log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
+                        "position to {}", position, part.partition, nextOffset);
+
+                List<ConsumerRecord<K, V>> records = drained.get(part.partition);
+                if (records == null) {
+                    records = partRecords;
+                    drained.put(part.partition, records);
+                } else {
+                    records.addAll(partRecords);
+                }
+
+                subscriptions.position(part.partition, nextOffset);
+                return partRecords.size();
+            } else {
+                // these records aren't next in line based on the last consumed position, ignore them
+                // they must be from an obsolete request
+                log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
+                        part.partition, part.fetchOffset, position);
+            }
+        }
+
+        part.discard();
+        return 0;
     }
 
     /**
@@ -441,7 +458,7 @@ public class Fetcher<K, V> {
      * @return A response which can be polled to obtain the corresponding offset.
      */
     private RequestFuture<Long> sendListOffsetRequest(final TopicPartition topicPartition, long timestamp) {
-        Map<TopicPartition, ListOffsetRequest.PartitionData> partitions = new HashMap<TopicPartition, ListOffsetRequest.PartitionData>(1);
+        Map<TopicPartition, ListOffsetRequest.PartitionData> partitions = new HashMap<>(1);
         partitions.put(topicPartition, new ListOffsetRequest.PartitionData(timestamp, 1));
         PartitionInfo info = metadata.fetch().partition(topicPartition);
         if (info == null) {
@@ -494,6 +511,15 @@ public class Fetcher<K, V> {
         }
     }
 
+    private Set<TopicPartition> fetchablePartitions() {
+        Set<TopicPartition> fetchable = subscriptions.fetchablePartitions();
+        if (records.isEmpty())
+            return fetchable;
+        for (PartitionRecords<K, V> partitionRecords : records)
+            fetchable.remove(partitionRecords.partition);
+        return fetchable;
+    }
+
     /**
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
@@ -501,7 +527,7 @@ public class Fetcher<K, V> {
     private Map<Node, FetchRequest> createFetchRequests(Cluster cluster) {
         // create the fetch info
         Map<Node, Map<TopicPartition, FetchRequest.PartitionData>> fetchable = new HashMap<>();
-        for (TopicPartition partition : subscriptions.fetchablePartitions()) {
+        for (TopicPartition partition : fetchablePartitions()) {
             Node node = cluster.leaderFor(partition);
             if (node == null) {
                 metadata.requestUpdate();
@@ -639,6 +665,37 @@ public class Fetcher<K, V> {
             this.fetchOffset = fetchOffset;
             this.partition = partition;
             this.records = records;
+        }
+
+        private boolean isConsumed() {
+            return records == null || records.isEmpty();
+        }
+
+        private void discard() {
+            this.records = null;
+        }
+
+        private List<ConsumerRecord<K, V>> take(int n) {
+            if (records == null)
+                return Collections.emptyList();
+
+            if (n >= records.size()) {
+                List<ConsumerRecord<K, V>> res = this.records;
+                this.records = null;
+                return res;
+            }
+
+            List<ConsumerRecord<K, V>> res = new ArrayList<>(n);
+            Iterator<ConsumerRecord<K, V>> iterator = records.iterator();
+            for (int i = 0; i < n; i++) {
+                res.add(iterator.next());
+                iterator.remove();
+            }
+
+            if (iterator.hasNext())
+                this.fetchOffset = iterator.next().offset();
+
+            return res;
         }
     }
 

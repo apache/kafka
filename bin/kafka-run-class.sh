@@ -52,6 +52,11 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
+for file in $base_dir/streams/build/dependant-libs-${SCALA_VERSION}/rocksdb*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
 for file in $base_dir/tools/build/libs/kafka-tools*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
@@ -113,6 +118,28 @@ KAFKA_LOG4J_OPTS="-Dkafka.logs.dir=$LOG_DIR $KAFKA_LOG4J_OPTS"
 # Generic jvm settings you want to add
 if [ -z "$KAFKA_OPTS" ]; then
   KAFKA_OPTS=""
+fi
+
+# Set Debug options if enabled
+if [ "x$KAFKA_DEBUG" != "x" ]; then
+
+    # Use default ports
+    DEFAULT_JAVA_DEBUG_PORT="5005"
+
+    if [ -z "$JAVA_DEBUG_PORT" ]; then
+        JAVA_DEBUG_PORT="$DEFAULT_JAVA_DEBUG_PORT"
+    fi
+
+    # Use the defaults if JAVA_DEBUG_OPTS was not set
+    DEFAULT_JAVA_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=${DEBUG_SUSPEND_FLAG:-n},address=$JAVA_DEBUG_PORT"
+    if [ -z "$JAVA_DEBUG_OPTS" ]; then
+        JAVA_DEBUG_OPTS="$DEFAULT_JAVA_DEBUG_OPTS"
+    fi
+
+
+
+    echo "Enabling Java debug options: $JAVA_DEBUG_OPTS"
+    KAFKA_OPTS="$JAVA_DEBUG_OPTS $KAFKA_OPTS"
 fi
 
 # Which java to use
