@@ -567,9 +567,10 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def getMessageFormatVersion(topicAndPartition: TopicAndPartition): Option[Byte] = {
-    getReplica(topicAndPartition.topic, topicAndPartition.partition).flatMap(_.log.map(_.config.messageFormatVersion))
-  }
+  def getMessageFormatVersion(topicAndPartition: TopicAndPartition): Option[Byte] =
+    getReplica(topicAndPartition.topic, topicAndPartition.partition).flatMap { replica =>
+      replica.log.map(_.config.messageFormatVersion.messageFormatVersion)
+    }
 
   def maybeUpdateMetadataCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest, metadataCache: MetadataCache) {
     replicaStateChangeLock synchronized {

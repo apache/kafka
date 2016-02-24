@@ -334,13 +334,13 @@ class Log(val dir: File,
           // assign offsets to the message set
           val offset = new LongRef(nextOffsetMetadata.messageOffset)
           val now = time.milliseconds
-          val (validatedMessages, messagesRecompressed) = try {
+          val (validatedMessages, messageSizesMaybeChanged) = try {
             validMessages.validateMessagesAndAssignOffsets(offset,
                                                            now,
                                                            appendInfo.sourceCodec,
                                                            appendInfo.targetCodec,
                                                            config.compact,
-                                                           config.messageFormatVersion,
+                                                           config.messageFormatVersion.messageFormatVersion,
                                                            config.messageTimestampType,
                                                            config.messageTimestampDifferenceMaxMs)
           } catch {
@@ -351,8 +351,9 @@ class Log(val dir: File,
           if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
             appendInfo.timestamp = now
 
-          if (messagesRecompressed) {
-            // re-validate message sizes since after re-compression some may exceed the limit
+          // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
+          // format conversion)
+          if (messageSizesMaybeChanged) {
             for (messageAndOffset <- validMessages.shallowIterator) {
               if (MessageSet.entrySize(messageAndOffset.message) > config.maxMessageSize) {
                 // we record the original message set size instead of the trimmed size

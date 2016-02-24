@@ -54,7 +54,7 @@ object ApiVersion {
   private val versionPattern = "\\.".r
 
   def apply(version: String): ApiVersion =
-    versionNameMap.getOrElse(versionPattern.split(version).slice(0,3).mkString("."),
+    versionNameMap.getOrElse(versionPattern.split(version).slice(0, 3).mkString("."),
       throw new IllegalArgumentException(s"Version `$version` is not a valid version"))
 
   def latestVersion = versionNameMap.values.max

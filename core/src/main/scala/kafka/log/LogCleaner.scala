@@ -370,7 +370,7 @@ private[log] class Cleaner(val id: Int,
         val retainDeletes = old.lastModified > deleteHorizonMs
         info("Cleaning segment %s in log %s (last modified %s) into %s, %s deletes."
             .format(old.baseOffset, log.name, new Date(old.lastModified), cleaned.baseOffset, if(retainDeletes) "retaining" else "discarding"))
-        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes, log.config.messageFormatVersion)
+        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes, log.config.messageFormatVersion.messageFormatVersion)
       }
 
       // trim excess index
@@ -476,17 +476,17 @@ private[log] class Cleaner(val id: Int,
   private def compressMessages(buffer: ByteBuffer,
                                compressionCodec: CompressionCodec,
                                messageFormatVersion: Byte,
-                               messageOffsets: Seq[MessageAndOffset]) {
-    val messages = messageOffsets.map(_.message)
-    if (messageOffsets.isEmpty) {
+                               messageAndOffsets: Seq[MessageAndOffset]) {
+    val messages = messageAndOffsets.map(_.message)
+    if (messageAndOffsets.isEmpty) {
       MessageSet.Empty.sizeInBytes
     } else if (compressionCodec == NoCompressionCodec) {
-      for(messageOffset <- messageOffsets)
+      for (messageOffset <- messageAndOffsets)
         ByteBufferMessageSet.writeMessage(buffer, messageOffset.message, messageOffset.offset)
       MessageSet.messageSetSize(messages)
     } else {
       val magicAndTimestamp = MessageSet.magicAndLargestTimestamp(messages)
-      val firstMessageOffset = messageOffsets.head
+      val firstMessageOffset = messageAndOffsets.head
       val firstAbsoluteOffset = firstMessageOffset.offset
       var offset = -1L
       val timestampType = firstMessageOffset.message.timestampType
@@ -494,7 +494,7 @@ private[log] class Cleaner(val id: Int,
       messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = messageFormatVersion) { outputStream =>
         val output = new DataOutputStream(CompressionFactory(compressionCodec, outputStream))
         try {
-          for (messageOffset <- messageOffsets) {
+          for (messageOffset <- messageAndOffsets) {
             val message = messageOffset.message
             offset = messageOffset.offset
             if (messageFormatVersion > Message.MagicValue_V0) {

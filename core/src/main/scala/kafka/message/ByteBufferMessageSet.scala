@@ -387,7 +387,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
    * If no format conversion or value overwriting is required for messages, this method will perform in-place
    * operations and avoid re-compression.
    *
-   * Returns the message set and a boolean indicating whether recompression took place.
+   * Returns the message set and a boolean indicating whether the message sizes may have changed.
    */
   private[kafka] def validateMessagesAndAssignOffsets(offsetCounter: LongRef,
                                                       now: Long,
@@ -398,19 +398,16 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
                                                       messageTimestampType: TimestampType,
                                                       messageTimestampDiffMaxMs: Long): (ByteBufferMessageSet, Boolean) = {
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
-      val messageSet = {
-        // check the magic value
-        if (!isMagicValueInAllWrapperMessages(messageFormatVersion)) {
-          // Message format conversion
-          convertNonCompressedMessages(offsetCounter, compactedTopic, now, messageTimestampType, messageTimestampDiffMaxMs,
-            messageFormatVersion)
-        } else {
-          // Do in-place validation, offset assignment and maybe set timestamp
-          validateNonCompressedMessagesAndAssignOffsetInPlace(offsetCounter, now, compactedTopic, messageTimestampType,
-            messageTimestampDiffMaxMs)
-        }
+      // check the magic value
+      if (!isMagicValueInAllWrapperMessages(messageFormatVersion)) {
+        // Message format conversion
+        (convertNonCompressedMessages(offsetCounter, compactedTopic, now, messageTimestampType, messageTimestampDiffMaxMs,
+          messageFormatVersion), true)
+      } else {
+        // Do in-place validation, offset assignment and maybe set timestamp
+        (validateNonCompressedMessagesAndAssignOffsetInPlace(offsetCounter, now, compactedTopic, messageTimestampType,
+          messageTimestampDiffMaxMs), false)
       }
-      (messageSet, false)
     } else {
       // Deal with compressed messages
       // We cannot do in place assignment in one of the following situations:
@@ -456,10 +453,10 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         }
 
         (new ByteBufferMessageSet(compressionCodec = targetCodec,
-                                 offsetCounter = offsetCounter,
-                                 wrapperMessageTimestamp = wrapperMessageTimestamp,
-                                 timestampType = messageTimestampType,
-                                 messages = validatedMessages: _*), true)
+                                  offsetCounter = offsetCounter,
+                                  wrapperMessageTimestamp = wrapperMessageTimestamp,
+                                  timestampType = messageTimestampType,
+                                  messages = validatedMessages: _*), true)
       } else {
         // Do not do re-compression but simply update the offset, timestamp and attributes field of the wrapper message.
         buffer.putLong(0, offsetCounter.addAndGet(validatedMessages.size) - 1)

@@ -94,7 +94,8 @@ object Defaults {
   val LogFlushSchedulerIntervalMs = Long.MaxValue
   val LogFlushOffsetCheckpointIntervalMs = 60000
   val LogPreAllocateEnable = false
-  val MessageFormatVersion = ApiVersion.latestVersion.toString()
+  // lazy val as `InterBrokerProtocolVersion` is defined later
+  lazy val MessageFormatVersion = InterBrokerProtocolVersion
   val NumRecoveryThreadsPerDataDir = 1
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
@@ -799,7 +800,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val logRetentionTimeMillis = getLogRetentionTimeMillis
   val minInSyncReplicas = getInt(KafkaConfig.MinInSyncReplicasProp)
   val logPreAllocateEnable: java.lang.Boolean = getBoolean(KafkaConfig.LogPreAllocateProp)
-  val messageFormatVersion = ApiVersion(getString(KafkaConfig.MessageFormatVersionProp))
+  // We keep the user-provided String as `ApiVersion.apply` can choose a slightly different version (eg if `0.10.0`
+  // is passed, `0.10.0-IV0` may be picked)
+  val messageFormatVersionString = getString(KafkaConfig.MessageFormatVersionProp)
+  val messageFormatVersion = ApiVersion(messageFormatVersionString)
   val messageTimestampType = TimestampType.forName(getString(KafkaConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(KafkaConfig.MessageTimestampDifferenceMaxMsProp)
 
@@ -822,7 +826,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val leaderImbalanceCheckIntervalSeconds = getLong(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp)
   val uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(KafkaConfig.UncleanLeaderElectionEnableProp)
   val interBrokerSecurityProtocol = SecurityProtocol.forName(getString(KafkaConfig.InterBrokerSecurityProtocolProp))
-  val interBrokerProtocolVersion = ApiVersion(getString(KafkaConfig.InterBrokerProtocolVersionProp))
+  // We keep the user-provided String as `ApiVersion.apply` can choose a slightly different version (eg if `0.10.0`
+  // is passed, `0.10.0-IV0` may be picked)
+  val interBrokerProtocolVersionString = getString(KafkaConfig.InterBrokerProtocolVersionProp)
+  val interBrokerProtocolVersion = ApiVersion(interBrokerProtocolVersionString)
 
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownMaxRetries = getInt(KafkaConfig.ControlledShutdownMaxRetriesProp)
@@ -980,6 +987,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
       s"Found ${advertisedListeners.keySet}. The valid options based on currently configured protocols are ${listeners.keySet}"
     )
     require(interBrokerProtocolVersion >= messageFormatVersion,
-      s"message.format.version $messageFormatVersion cannot be used when inter.broker.protocol.version is set to $interBrokerProtocolVersion")
+      s"message.format.version $messageFormatVersionString cannot be used when inter.broker.protocol.version is set to $interBrokerProtocolVersionString")
   }
 }
