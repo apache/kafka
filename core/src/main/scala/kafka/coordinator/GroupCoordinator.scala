@@ -724,10 +724,10 @@ object GroupCoordinator {
   // TODO: we store both group metadata and offset data here despite the topic name being offsets only
   val GroupMetadataTopicName = "__consumer_offsets"
 
-  def create(config: KafkaConfig,
-             zkUtils: ZkUtils,
-             replicaManager: ReplicaManager,
-             time: Time): GroupCoordinator = {
+  def apply(config: KafkaConfig,
+            zkUtils: ZkUtils,
+            replicaManager: ReplicaManager,
+            time: Time): GroupCoordinator = {
     val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
       offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,

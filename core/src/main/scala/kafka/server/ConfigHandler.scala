@@ -20,14 +20,13 @@ package kafka.server
 import java.util.Properties
 
 import kafka.api.ApiVersion
-import kafka.common.TopicAndPartition
-import kafka.log.{Log, LogConfig, LogManager}
+import kafka.log.{LogConfig, LogManager}
 import kafka.utils.Logging
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.protocol.ApiKeys
 
-import scala.collection.mutable
 import scala.collection.Map
+import scala.collection.JavaConverters._
 
 /**
  * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
@@ -42,29 +41,27 @@ trait ConfigHandler {
  */
 class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig) extends ConfigHandler with Logging {
 
-  def processConfigChanges(topic : String, topicConfig : Properties) {
-    val logs: mutable.Buffer[(TopicAndPartition, Log)] = logManager.logsByTopicPartition.toBuffer
-    val logsByTopic: Map[String, mutable.Buffer[Log]] = logs.groupBy{ case (topicAndPartition, log) => topicAndPartition.topic }
-            .mapValues{ case v: mutable.Buffer[(TopicAndPartition, Log)] => v.map(_._2) }
+  def processConfigChanges(topic: String, topicConfig: Properties) {
     // Validate the compatibility of message format version.
-    Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)) match {
-      case Some(versionString) =>
-        if (!kafkaConfig.interBrokerProtocolVersion.onOrAfter(ApiVersion(versionString))) {
-          topicConfig.remove(LogConfig.MessageFormatVersionProp)
-          warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for $topic because $versionString " +
-            s"is not compatible with Kafka inter broker protocol version ${kafkaConfig.interBrokerProtocolVersion}")
-        }
-      case _ =>
+    val configNameToExclude = Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
+      if (kafkaConfig.interBrokerProtocolVersion < ApiVersion(versionString)) {
+        warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
+          s"is not compatible with Kafka inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
+        Some(LogConfig.MessageFormatVersionProp)
+      }
+      else None
     }
 
-    if (logsByTopic.contains(topic)) {
+    val logs = logManager.logsByTopicPartition.filterKeys(_.topic == topic).values.toBuffer
+    if (logs.nonEmpty) {
       /* combine the default properties with the overrides in zk to create the new LogConfig */
       val props = new Properties()
       props.putAll(logManager.defaultConfig.originals)
-      props.putAll(topicConfig)
+      topicConfig.asScala.foreach { case (key, value) =>
+        if (key != configNameToExclude) props.put(key, value)
+      }
       val logConfig = LogConfig(props)
-      for (log <- logsByTopic(topic))
-        log.config = logConfig
+      logs.foreach(_.config = logConfig)
     }
   }
 }

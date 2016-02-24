@@ -40,7 +40,7 @@ class MessageWriter(segmentSize: Int) extends BufferingOutputStream(segmentSize)
       if (codec.codec > 0)
         attributes = (attributes | (CompressionCodeMask & codec.codec)).toByte
       if (magicValue > MagicValue_V0)
-        attributes = TimestampType.setTimestampType(attributes, timestampType)
+        attributes = timestampType.updateAttributes(attributes)
       write(attributes)
       // Write timestamp
       if (magicValue > MagicValue_V0)
