@@ -340,11 +340,11 @@ public class RecordAccumulatorTest {
         // Test drain with muted partition
         accum.mutePartition(tp1);
         Map<Integer, List<RecordBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
-        assertEquals("There should be no batch drained.", 0, drained.get(node1.id()).size());
+        assertEquals("No batch should have been drained", 0, drained.get(node1.id()).size());
 
         // Test drain without muted partition.
         accum.unmutePartition(tp1);
         drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
-        assertNotEquals("There should be no batch drained.", 0, drained.get(node1.id()).size());
+        assertNotEquals("No batch should have been drained.", 0, drained.get(node1.id()).size());
     }
 }

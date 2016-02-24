@@ -260,8 +260,8 @@ public final class RecordAccumulator {
      * partition will be ready; Also return the flag for whether there are any unknown leaders for the accumulated
      * partition batches.
      * <p>
-     * A destination node is ready to send data if ANY one of its partition is not backing off the send and has no
-     * in flight batches and ANY of the following are true :
+     * A destination node is ready to send data if ANY one of its partition is not backing off the send and is not muted
+     * and ANY of the followings are true :
      * <ol>
      * <li>The record set is full
      * <li>The record set has sat in the accumulator for at least lingerMs milliseconds
@@ -283,7 +283,7 @@ public final class RecordAccumulator {
             Node leader = cluster.leaderFor(part);
             if (leader == null) {
                 unknownLeadersExist = true;
-            } else if (!readyNodes.contains(leader) && (!muted.contains(part))) {
+            } else if (!readyNodes.contains(leader) && !muted.contains(part)) {
                 synchronized (deque) {
                     RecordBatch batch = deque.peekFirst();
                     if (batch != null) {

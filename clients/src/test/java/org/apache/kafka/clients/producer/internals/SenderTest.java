@@ -219,9 +219,7 @@ public class SenderTest {
         // Update metadata before sender receives response from broker 0. Now partition 2 moves to broker 0
         Cluster cluster2 = TestUtils.singletonCluster("test", 2);
         metadata.update(cluster2, time.milliseconds());
-        // Sender should not send the second message to node 0. Try twice to make sure.
-        sender.run(time.milliseconds());
-        assertEquals(1, client.inFlightRequestCount());
+        // Sender should not send the second message to node 0.
         sender.run(time.milliseconds());
         assertEquals(1, client.inFlightRequestCount());
 
