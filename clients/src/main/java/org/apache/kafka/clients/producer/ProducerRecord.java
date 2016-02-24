@@ -12,6 +12,9 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.utils.TopicValidator;
+
 /**
  * A key/value pair to be sent to Kafka. This consists of a topic name to which the record is being sent, an optional
  * partition number, and an optional key and value.
@@ -56,6 +59,8 @@ public final class ProducerRecord<K, V> {
     public ProducerRecord(String topic, Integer partition, Long timestamp, K key, V value) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null");
+        if (!TopicValidator.isValidateTopicName(topic))
+            throw new InvalidTopicException(topic + " is not a valid topic name.");
         if (timestamp != null && timestamp < 0)
             throw new IllegalArgumentException("Invalid timestamp " + timestamp);
         this.topic = topic;
