@@ -205,9 +205,12 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
+        
+        expectCommitRecord(1);
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
+
 
         PowerMock.replayAll();
 
@@ -256,6 +259,13 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
+    private void expectCommitRecord(int count) throws Exception {
+        for (int i = 0; i < count; i++) {
+            sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class));
+            EasyMock.expectLastCall();
+        }
+    }
+
     @Test
     public void testSendRecordsConvertsData() throws Exception {
         createWorkerTask();
@@ -265,6 +275,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD));
 
         Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
+
+        expectCommitRecord(records.size());
 
         PowerMock.replayAll();
 
@@ -293,6 +305,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // Second round
         expectSendRecordOnce(true);
         expectSendRecordOnce(false);
+
+        expectCommitRecord(3);
 
         PowerMock.replayAll();
 

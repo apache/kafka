@@ -209,6 +209,7 @@ class WorkerSourceTask extends WorkerTask {
                                             recordMetadata.offset());
                                 }
                                 recordSent(producerRecord);
+                                commitTaskRecord(record);
                             }
                         });
                 lastSendFailed = false;
@@ -224,6 +225,14 @@ class WorkerSourceTask extends WorkerTask {
         }
         toSend = null;
         return true;
+    }
+
+    private void commitTaskRecord(SourceRecord record) {
+        try {
+            task.commitRecord(record);
+        } catch (InterruptedException e) {
+            log.error("Exception thrown", e);
+        }
     }
 
     private synchronized void recordSent(final ProducerRecord<byte[], byte[]> record) {
