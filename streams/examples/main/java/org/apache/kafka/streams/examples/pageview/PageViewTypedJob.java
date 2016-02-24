@@ -46,7 +46,6 @@ public class PageViewTypedJob {
     }
 
     static public class UserProfile {
-        public String user;
         public String region;
     }
 
