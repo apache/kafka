@@ -46,6 +46,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
     super.tearDown()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     System.clearProperty(authProvider)
+    Configuration.setConfiguration(null)
   }
 
   /**

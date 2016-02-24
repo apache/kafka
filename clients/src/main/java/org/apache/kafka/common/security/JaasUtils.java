@@ -91,7 +91,7 @@ public class JaasUtils {
             Configuration loginConf = Configuration.getConfiguration();
             isSecurityEnabled = loginConf.getAppConfigurationEntry(zkLoginContextName) != null;
         } catch (Exception e) {
-            throw new KafkaException(e);
+            throw new KafkaException("Exception while loading Zookeeper JAAS login context '" + zkLoginContextName + "'", e);
         }
         if (isSecurityEnabled && !zkSaslEnabled) {
             LOG.error("JAAS configuration is present, but system property " +
