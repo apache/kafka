@@ -108,6 +108,9 @@ abstract class WorkerTask implements Runnable {
     private void doClose() {
         try {
             close();
+        } catch (Throwable t) {
+            log.error("Task {} threw an uncaught and unrecoverable exception during shutdown", id, t);
+            throw t;
         } finally {
             running.set(false);
             shutdownLatch.countDown();
@@ -124,6 +127,10 @@ abstract class WorkerTask implements Runnable {
 
             lifecycleListener.onStartup(id);
             execute();
+        } catch (Throwable t) {
+            log.error("Task {} threw an uncaught and unrecoverable exception", id, t);
+            log.error("Task is being killed and will not recover until manually restarted");
+            throw t;
         } finally {
             doClose();
         }
@@ -136,8 +143,6 @@ abstract class WorkerTask implements Runnable {
             if (!cancelled.get())
                 lifecycleListener.onShutdown(id);
         } catch (Throwable t) {
-            log.error("Task {} threw an uncaught and unrecoverable exception", id);
-            log.error("Task is being killed and will not recover until manually restarted:", t);
             if (!cancelled.get())
                 lifecycleListener.onFailure(id, t);
         }

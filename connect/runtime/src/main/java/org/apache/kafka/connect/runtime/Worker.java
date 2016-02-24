@@ -184,7 +184,8 @@ public class Worker {
 
     /* Now that the configuration doesn't contain the actual class name, we need to be able to tell the herder whether a connector is a Sink */
     public boolean isSinkConnector(String connName) {
-        return SinkConnector.class.isAssignableFrom(connectors.get(connName).getClass());
+        WorkerConnector workerConnector = connectors.get(connName);
+        return SinkConnector.class.isAssignableFrom(workerConnector.delegate.getClass());
     }
 
     private Class<? extends Connector> getConnectorClass(String connectorAlias) {
