@@ -380,7 +380,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
           topicPartition -> partitionState
         }
 
-        val version = if (controller.config.interBrokerProtocolVersion.onOrAfter(KAFKA_0_9_0)) (1: Short) else (0: Short)
+        val version = if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) (1: Short) else (0: Short)
 
         val updateMetadataRequest =
           if (version == 0) {

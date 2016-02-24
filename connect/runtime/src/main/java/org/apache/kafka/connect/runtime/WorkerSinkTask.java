@@ -76,11 +76,12 @@ class WorkerSinkTask extends WorkerTask {
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
+                          TaskStatus.Listener lifecycleListener,
                           WorkerConfig workerConfig,
                           Converter keyConverter,
                           Converter valueConverter,
                           Time time) {
-        super(id);
+        super(id, lifecycleListener);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -184,6 +185,7 @@ class WorkerSinkTask extends WorkerTask {
      * Initializes and starts the SinkTask.
      */
     protected void initializeAndStart() {
+        log.debug("Initializing task {} with config {}", id, taskConfig);
         String topicsStr = taskConfig.get(SinkTask.TOPICS_CONFIG);
         if (topicsStr == null || topicsStr.isEmpty())
             throw new ConnectException("Sink tasks require a list of topics.");

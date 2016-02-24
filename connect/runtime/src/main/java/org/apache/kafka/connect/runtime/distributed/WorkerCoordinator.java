@@ -112,7 +112,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         // tasks. It's the responsibility of the code driving this process to decide how to react (e.g. trying to get
         // up to date, try to rejoin again, leaving the group and backing off, etc.).
         rejoinRequested = false;
-        listener.onAssigned(assignmentSnapshot);
+        listener.onAssigned(assignmentSnapshot, generation);
     }
 
     @Override
