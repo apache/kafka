@@ -425,6 +425,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       this.internalIterator(isShallow = false).foreach { messageAndOffset =>
         val message = messageAndOffset.message
         validateMessageKey(message, compactedTopic)
+
         if (message.magic > Message.MagicValue_V0 && messageFormatVersion > Message.MagicValue_V0) {
           // No in place assignment situation 3
           // Validate the timestamp
@@ -435,12 +436,17 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
           maxTimestamp = math.max(maxTimestamp, message.timestamp)
         }
 
+        if (sourceCodec != NoCompressionCodec && message.compressionCodec != NoCompressionCodec)
+          throw new InvalidMessageException("Compressed outer message should not have an inner message with a " +
+            s"compression attribute set: $message")
+
         // No in place assignment situation 4
         if (message.magic != messageFormatVersion)
           inPlaceAssignment = false
 
         validatedMessages += message.toFormatVersion(messageFormatVersion)
       }
+
       if (!inPlaceAssignment) {
         // Cannot do in place assignment.
         val wrapperMessageTimestamp = {
