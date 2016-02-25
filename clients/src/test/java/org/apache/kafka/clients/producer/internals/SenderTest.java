@@ -203,7 +203,7 @@ public class SenderTest {
 
         // Send the first message.
         TopicPartition tp2 = new TopicPartition("test", 1);
-        accumulator.append(tp2, "key1".getBytes(), "value1".getBytes(), null, MAX_BLOCK_TIMEOUT);
+        accumulator.append(tp2, 0L, "key1".getBytes(), "value1".getBytes(), null, MAX_BLOCK_TIMEOUT);
         sender.run(time.milliseconds()); // connect
         sender.run(time.milliseconds()); // send produce request
         String id = client.requests().peek().request().destination();
@@ -214,7 +214,7 @@ public class SenderTest {
 
         time.sleep(900);
         // Now send another message to tp2
-        accumulator.append(tp2, "key2".getBytes(), "value2".getBytes(), null, MAX_BLOCK_TIMEOUT);
+        accumulator.append(tp2, 0L, "key2".getBytes(), "value2".getBytes(), null, MAX_BLOCK_TIMEOUT);
 
         // Update metadata before sender receives response from broker 0. Now partition 2 moves to broker 0
         Cluster cluster2 = TestUtils.singletonCluster("test", 2);
