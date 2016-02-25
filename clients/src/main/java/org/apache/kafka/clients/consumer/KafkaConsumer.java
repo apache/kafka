@@ -1237,6 +1237,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Get the set of partitions that were previously paused by a call to {@link #pause(TopicPartition...)}.
+     *
+     * @return The set of paused partitions
+     */
+    @Override
+    public Set<TopicPartition> paused() {
+        acquire();
+        try {
+            return Collections.unmodifiableSet(subscriptions.pausedPartitions());
+        } finally {
+            release();
+        }
+    }
+
+    /**
      * Resume specified partitions which have been paused with {@link #pause(TopicPartition...)}. New calls to
      * {@link #poll(long)} will return records from these partitions if there are any to be fetched.
      * If the partitions were not previously paused, this method is a no-op.
