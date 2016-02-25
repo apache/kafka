@@ -32,7 +32,7 @@ else
 fi
 
 echo "Checking Vagrant installation..."
-vagrant_version=`vagrant --version | egrep -o "[0-9]+\.[0-9]+\.[0-9]+"`
+vagrant_version=`vagrant --version | egrep --colour=never -o "[0-9]+\.[0-9]+\.[0-9]+"`
 bad_vagrant=false
 if [ "$(version $vagrant_version)" -lt "$(version 1.6.4)" ]; then
     echo "Found Vagrant version $vagrant_version. Please upgrade to 1.6.4 or higher (see http://www.vagrantup.com for details)"
