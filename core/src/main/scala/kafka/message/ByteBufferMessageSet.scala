@@ -420,7 +420,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       var inPlaceAssignment = sourceCodec == targetCodec && messageFormatVersion > Message.MagicValue_V0
 
       var maxTimestamp = Message.NoTimestamp
-      val expectedInnerOffset = new AtomicLong(0)
+      val expectedInnerOffset = new LongRef(0)
       val validatedMessages = new mutable.ArrayBuffer[Message]
       this.internalIterator(isShallow = false).foreach { messageAndOffset =>
         val message = messageAndOffset.message
