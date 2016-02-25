@@ -276,9 +276,6 @@ public class StreamThread extends Thread {
         log.info("Shutting down stream thread [" + this.getName() + "]");
 
         // Exceptions should not prevent this call from going through all shutdown steps
-
-        System.out.println("committing upon shutdown");
-
         try {
             commitAll();
         } catch (Throwable e) {

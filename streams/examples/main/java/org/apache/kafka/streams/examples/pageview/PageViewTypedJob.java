@@ -121,10 +121,12 @@ public class PageViewTypedJob {
                     PageViewByRegion viewByRegion = new PageViewByRegion();
                     viewByRegion.user = view.user;
                     viewByRegion.page = view.page;
-                    viewByRegion.region = profile.region;
 
-                    System.out.println("Joined " + view + " and " + profile);
-
+                    if (profile != null) {
+                        viewByRegion.region = profile.region;
+                    } else {
+                        viewByRegion.region = "UNKNOWN";
+                    }
                     return viewByRegion;
                 })
                 .map((user, viewRegion) -> new KeyValue<>(viewRegion.region, viewRegion))

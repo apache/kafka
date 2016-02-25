@@ -20,6 +20,7 @@ package org.apache.kafka.streams.examples.pageview;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -45,13 +46,17 @@ public class PageViewUnTypedJob {
 
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
-        props.put(StreamsConfig.JOB_ID_CONFIG, "streams-pageview");
+        props.put(StreamsConfig.JOB_ID_CONFIG, "streams-pageview-untyped");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
         props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
         props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+        props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
+
+        // can specify underlying client configs if necessary
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -59,23 +64,22 @@ public class PageViewUnTypedJob {
         final Deserializer<String> stringDeserializer = new StringDeserializer();
         final Serializer<Long> longSerializer = new LongSerializer();
         final Deserializer<Long> longDeserializer = new LongDeserializer();
+        final Serializer<JsonNode> jsonSerializer = new JsonSerializer();
+        final Deserializer<JsonNode> jsonDeserializer = new JsonDeserializer();
 
+        KStream<String, JsonNode> views = builder.stream(stringDeserializer, jsonDeserializer, "streams-pageview-input");
 
-        KStream<String, JsonNode> views = builder.stream("streams-pageview-input");
-
-        KStream<String, JsonNode> viewsByUser = views.map((dummy, record) -> new KeyValue<>(record.get("user").textValue(), record));
-
-        KTable<String, JsonNode> users = builder.table("streams-userprofile-input");
+        KTable<String, JsonNode> users = builder.table(stringSerializer, jsonSerializer, stringDeserializer, jsonDeserializer, "streams-userprofile-input");
 
         KTable<String, String> userRegions = users.mapValues(record -> record.get("region").textValue());
 
-        KStream<JsonNode, JsonNode> regionCount = viewsByUser
+        KStream<JsonNode, JsonNode> regionCount = views
                 .leftJoin(userRegions, (view, region) -> {
                     ObjectNode jNode = JsonNodeFactory.instance.objectNode();
 
                     return (JsonNode) jNode.put("user", view.get("user").textValue())
                             .put("page", view.get("page").textValue())
-                            .put("region", region);
+                            .put("region", region == null ? "UNKNOWN" : region);
                 })
                 .map((user, viewRegion) -> new KeyValue<>(viewRegion.get("region").textValue(), viewRegion))
                 .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000),
@@ -88,19 +92,23 @@ public class PageViewUnTypedJob {
                     public KeyValue<JsonNode, JsonNode> apply(Windowed<String> key, Long value) {
                         ObjectNode keyNode = JsonNodeFactory.instance.objectNode();
                         keyNode.put("window-start", key.window().start())
-                                .put("region", key.window().start());
+                                .put("region", key.value());
 
                         ObjectNode valueNode = JsonNodeFactory.instance.objectNode();
-                        keyNode.put("count", value);
+                        valueNode.put("count", value);
 
                         return new KeyValue<>((JsonNode) keyNode, (JsonNode) valueNode);
                     }
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-untyped-output");
+        regionCount.to("streams-pageviewstats-untyped-output", jsonSerializer, jsonSerializer);
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
+
+        Thread.sleep(8000L);
+
+        streams.close();
     }
 }

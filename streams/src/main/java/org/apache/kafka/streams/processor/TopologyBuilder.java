@@ -430,6 +430,26 @@ public class TopologyBuilder {
     }
 
     /**
+     * Connects a list of processors
+     *
+     * @param processorNames the name of the processors
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public final TopologyBuilder connectProcessors(String... processorNames) {
+        for (String processorName : processorNames) {
+            if (!nodeFactories.containsKey(processorName))
+                throw new TopologyBuilderException("Processor " + processorName + " is not added yet.");
+
+        }
+
+        String firstProcessorName = processorNames[0];
+
+        nodeGrouper.unite(firstProcessorName, Arrays.copyOfRange(processorNames, 1, processorNames.length));
+
+        return this;
+    }
+
+    /**
      * Adds an internal topic
      *
      * @param topicName the name of the topic
