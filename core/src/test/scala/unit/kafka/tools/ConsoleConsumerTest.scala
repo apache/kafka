@@ -39,7 +39,7 @@ class ConsoleConsumerTest extends JUnitSuite {
 
     //Expectations
     val messageLimit: Int = 10
-    EasyMock.expect(formatter.writeTo(EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject())).times(messageLimit)
+    EasyMock.expect(formatter.writeTo(EasyMock.anyObject(), EasyMock.anyObject())).times(messageLimit)
     EasyMock.expect(consumer.receive()).andReturn(record).times(messageLimit)
 
     EasyMock.replay(consumer)

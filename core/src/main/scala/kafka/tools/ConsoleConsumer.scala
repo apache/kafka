@@ -20,19 +20,20 @@ package kafka.tools
 import java.io.PrintStream
 import java.util.concurrent.CountDownLatch
 import java.util.{Properties, Random}
+
 import joptsimple._
 import kafka.common.StreamEndException
 import kafka.consumer._
 import kafka.message._
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils._
-import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.Logger
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 /**
  * Consumer that dumps messages to standard out.
@@ -125,7 +126,8 @@ object ConsoleConsumer extends Logging {
       }
       messageCount += 1
       try {
-        formatter.writeTo(msg.key, msg.value, msg.timestamp, msg.timestampType, System.out)
+        formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp, msg.timestampType,
+          msg.key, msg.value), System.out)
       } catch {
         case e: Throwable =>
           if (skipMessageOnError) {
@@ -284,7 +286,7 @@ object ConsoleConsumer extends Logging {
     val fromBeginning = options.has(resetBeginningOpt)
     val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
-    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt))
+    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
     val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
     val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).intValue else -1
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
@@ -309,9 +311,9 @@ object ConsoleConsumer extends Logging {
     }
 
     //Provide the consumer with a randomly assigned group id
-    if(!consumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG)) {
-      consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG,"console-consumer-" + new Random().nextInt(100000))
-      groupIdPassed=false
+    if (!consumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG)) {
+      consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
+      groupIdPassed = false
     }
 
     def tryParse(parser: OptionParser, args: Array[String]) = {
@@ -336,7 +338,7 @@ object ConsoleConsumer extends Logging {
 }
 
 trait MessageFormatter{
-  def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream)
+  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream)
 
   def init(props: Properties) {}
 
@@ -360,7 +362,8 @@ class DefaultMessageFormatter extends MessageFormatter {
       lineSeparator = props.getProperty("line.separator").getBytes
   }
 
-  def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream) {
+  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
+    import consumerRecord._
     if (printTimestamp) {
       if (timestampType != TimestampType.NO_TIMESTAMP_TYPE)
         output.write(s"$timestampType:$timestamp".getBytes)
@@ -369,10 +372,10 @@ class DefaultMessageFormatter extends MessageFormatter {
       output.write(keySeparator)
     }
     if (printKey) {
-      output.write(if (key == null) "null".getBytes else key)
+      output.write(Option(key).getOrElse("null".getBytes))
       output.write(keySeparator)
     }
-    output.write(if (value == null) "null".getBytes else value)
+    output.write(Option(value).getOrElse("null".getBytes))
     output.write(lineSeparator)
   }
 }
@@ -381,9 +384,10 @@ class LoggingMessageFormatter extends MessageFormatter   {
   private val defaultWriter: DefaultMessageFormatter = new DefaultMessageFormatter
   val logger = Logger.getLogger(getClass().getName)
 
-  def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream): Unit = {
-    defaultWriter.writeTo(key, value, timestamp, timestampType, output)
-    if(logger.isInfoEnabled)
+  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
+    import consumerRecord._
+    defaultWriter.writeTo(consumerRecord, output)
+    if (logger.isInfoEnabled)
       logger.info({if (timestampType != TimestampType.NO_TIMESTAMP_TYPE) s"$timestampType:$timestamp, " else ""} +
                   s"key:${if (key == null) "null" else new String(key)}, " +
                   s"value:${if (value == null) "null" else new String(value)}")
@@ -393,7 +397,7 @@ class LoggingMessageFormatter extends MessageFormatter   {
 class NoOpMessageFormatter extends MessageFormatter {
   override def init(props: Properties) {}
 
-  def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream){}
+  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream){}
 }
 
 class ChecksumMessageFormatter extends MessageFormatter {
@@ -407,7 +411,8 @@ class ChecksumMessageFormatter extends MessageFormatter {
       topicStr = ""
   }
 
-  def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream) {
+  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
+    import consumerRecord._
     val chksum =
       if (timestampType != TimestampType.NO_TIMESTAMP_TYPE)
         new Message(value, key, timestamp, timestampType, NoCompressionCodec, 0, -1, Message.MagicValue_V1).checksum
