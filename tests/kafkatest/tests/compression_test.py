@@ -18,8 +18,9 @@ from ducktape.mark import parametrize
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.console_consumer import ConsoleConsumer, is_int
+from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
+from kafkatest.utils import is_int_with_prefix
 
 class CompressionTest(ProduceConsumeValidateTest):
     """
@@ -68,9 +69,10 @@ class CompressionTest(ProduceConsumeValidateTest):
         new_consumer = False if  self.kafka.security_protocol == "PLAINTEXT" else True
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
                                            self.topic, throughput=self.producer_throughput,
+                                           message_validator=is_int_with_prefix,
                                            compression_types=compression_types)
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic,
-                                        new_consumer=new_consumer, consumer_timeout_ms=60000, message_validator=is_int)
+                                        new_consumer=new_consumer, consumer_timeout_ms=60000, message_validator=is_int_with_prefix)
         self.kafka.start()
         
         self.run_produce_consume_validate()

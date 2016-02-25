@@ -40,3 +40,31 @@ def is_version(node, version_list, proc_grep_string="kafka"):
     versions = _kafka_jar_versions(lines[0])
     return versions == {str(v) for v in version_list}
 
+
+def is_int(msg):
+    """Method used to check whether the given message is an integer
+
+    return int or None
+    """
+    try:
+        return int(msg)
+    except ValueError:
+        return None
+
+
+def is_int_with_prefix(msg):
+    """
+    Method used check whether the given message is of format 'integer_prefix'.'integer_value'
+
+    :param msg: message to validate
+    :return: msg or None if message is of wrong format
+    """
+    try:
+        parts = msg.split(".")
+        if len(parts) != 2:
+            return None
+        int(parts[0])
+        int(parts[1])
+        return msg
+    except ValueError:
+        return None

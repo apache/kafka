@@ -17,13 +17,13 @@ from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
+from kafkatest.utils import is_int, is_int_with_prefix
 
 import json
 import os
 import signal
 import subprocess
 import time
-
 
 class VerifiableProducer(BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_producer"
@@ -43,8 +43,14 @@ class VerifiableProducer(BackgroundThreadService):
         }
 
     def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
-                 compression_types=None, version=TRUNK):
+                 message_validator=is_int, compression_types=None, version=TRUNK):
         """
+        :param message_validator checks for an expected format of messages produced. There are
+        currently two:
+               * is_int is an integer format; this is default and expected to be used if
+               num_nodes = 1
+               * is_int_with_prefix recommended if num_nodes > 1, because otherwise each producer
+               will produce exactly same messages, and validation may miss missing messages.
         :param compression_types: If None, all producers will not use compression; or a list of one or
         more compression types (including "none"). Each producer will pick a compression type
         from the list in round-robin fashion. Example: compression_types = ["none", "snappy"] and
@@ -58,6 +64,7 @@ class VerifiableProducer(BackgroundThreadService):
         self.topic = topic
         self.max_messages = max_messages
         self.throughput = throughput
+        self.message_validator = message_validator
         self.compression_types = compression_types
 
         for node in self.nodes:
@@ -87,7 +94,7 @@ class VerifiableProducer(BackgroundThreadService):
         node.account.create_file(VerifiableProducer.CONFIG_FILE, producer_prop_file)
         self.security_config.setup_node(node)
 
-        cmd = self.start_cmd(node)
+        cmd = self.start_cmd(node, idx)
         self.logger.debug("VerifiableProducer %d command: %s" % (idx, cmd))
 
 
@@ -102,10 +109,10 @@ class VerifiableProducer(BackgroundThreadService):
                 with self.lock:
                     if data["name"] == "producer_send_error":
                         data["node"] = idx
-                        self.not_acked_values.append(int(data["value"]))
+                        self.not_acked_values.append(self.message_validator(data["value"]))
 
                     elif data["name"] == "producer_send_success":
-                        self.acked_values.append(int(data["value"]))
+                        self.acked_values.append(self.message_validator(data["value"]))
 
                         # Log information if there is a large gap between successively acknowledged messages
                         t = time.time()
@@ -118,7 +125,7 @@ class VerifiableProducer(BackgroundThreadService):
                         last_produced_time = t
                         prev_msg = data
 
-    def start_cmd(self, node):
+    def start_cmd(self, node, idx):
 
         cmd = ""
         if node.version <= LATEST_0_8_2:
@@ -137,6 +144,8 @@ class VerifiableProducer(BackgroundThreadService):
             cmd += " --max-messages %s" % str(self.max_messages)
         if self.throughput > 0:
             cmd += " --throughput %s" % str(self.throughput)
+        if self.message_validator == is_int_with_prefix:
+            cmd += " --value-prefix %s" % str(idx)
 
         cmd += " --producer.config %s" % VerifiableProducer.CONFIG_FILE
         cmd += " 2>> %s | tee -a %s &" % (VerifiableProducer.STDOUT_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
