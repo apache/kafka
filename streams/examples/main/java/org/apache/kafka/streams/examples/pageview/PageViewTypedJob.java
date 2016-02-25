@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.examples.pageview;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -43,10 +44,12 @@ public class PageViewTypedJob {
     static public class PageView {
         public String user;
         public String page;
+        public Long timestamp;
     }
 
     static public class UserProfile {
         public String region;
+        public Long timestamp;
     }
 
     static public class PageViewByRegion {
@@ -74,6 +77,10 @@ public class PageViewTypedJob {
         props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonPOJOSerializer.class);
         props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonPOJODeserializer.class);
+        props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
+
+        // can specify underlying client configs if necessary
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -91,7 +98,7 @@ public class PageViewTypedJob {
 
         final Deserializer<UserProfile> userProfileDeserializer = new JsonPOJODeserializer<>();
         serdeProps.put("JsonPOJOClass", UserProfile.class);
-        pageViewDeserializer.configure(serdeProps, false);
+        userProfileDeserializer.configure(serdeProps, false);
 
         final Serializer<UserProfile> userProfileSerializer = new JsonPOJOSerializer<>();
         serdeProps.put("JsonPOJOClass", UserProfile.class);
@@ -99,24 +106,24 @@ public class PageViewTypedJob {
 
         final Serializer<WindowedPageViewByRegion> wPageViewByRegionSerializer = new JsonPOJOSerializer<>();
         serdeProps.put("JsonPOJOClass", WindowedPageViewByRegion.class);
-        userProfileSerializer.configure(serdeProps, false);
+        wPageViewByRegionSerializer.configure(serdeProps, false);
 
         final Serializer<RegionCount> regionCountSerializer = new JsonPOJOSerializer<>();
         serdeProps.put("JsonPOJOClass", RegionCount.class);
-        userProfileSerializer.configure(serdeProps, false);
+        regionCountSerializer.configure(serdeProps, false);
 
         KStream<String, PageView> views = builder.stream(stringDeserializer, pageViewDeserializer, "streams-pageview-input");
 
-        KStream<String, PageView> viewsByUser = views.map((dummy, record) -> new KeyValue<>(record.user, record));
-
         KTable<String, UserProfile> users = builder.table(stringSerializer, userProfileSerializer, stringDeserializer, userProfileDeserializer, "streams-userprofile-input");
 
-        KStream<WindowedPageViewByRegion, RegionCount> regionCount = viewsByUser
+        KStream<WindowedPageViewByRegion, RegionCount> regionCount = views
                 .leftJoin(users, (view, profile) -> {
                     PageViewByRegion viewByRegion = new PageViewByRegion();
                     viewByRegion.user = view.user;
                     viewByRegion.page = view.page;
                     viewByRegion.region = profile.region;
+
+                    System.out.println("Joined " + view + " and " + profile);
 
                     return viewByRegion;
                 })
@@ -142,9 +149,13 @@ public class PageViewTypedJob {
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-output", wPageViewByRegionSerializer, regionCountSerializer);
+        regionCount.to("streams-pageviewstats-typed-output", wPageViewByRegionSerializer, regionCountSerializer);
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
+
+        Thread.sleep(8000L);
+
+        streams.close();
     }
 }

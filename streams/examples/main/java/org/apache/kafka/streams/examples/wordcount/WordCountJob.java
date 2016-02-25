@@ -85,5 +85,9 @@ public class WordCountJob {
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
+
+        Thread.sleep(5000L);
+
+        streams.close();
     }
 }

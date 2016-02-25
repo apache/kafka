@@ -72,7 +72,7 @@ public class WordCountProcessorJob {
                 public void punctuate(long timestamp) {
                     KeyValueIterator<String, Integer> iter = this.kvStore.all();
 
-                    System.out.println("----------- " + timestamp + "----------- ");
+                    System.out.println("----------- " + timestamp + " ----------- ");
 
                     while (iter.hasNext()) {
                         KeyValue<String, Integer> entry = iter.next();
@@ -113,9 +113,13 @@ public class WordCountProcessorJob {
         builder.addProcessor("Process", new MyProcessorSupplier(), "Source");
         builder.addStateStore(Stores.create("Counts").withStringKeys().withIntegerValues().inMemory().build(), "Process");
 
-        builder.addSink("Sink", "streams-wordcount-output", "Process");
+        builder.addSink("Sink", "streams-wordcount-processor-output", "Process");
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
+
+        Thread.sleep(5000L);
+
+        streams.close();
     }
 }

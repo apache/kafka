@@ -98,7 +98,7 @@ public class PageViewUnTypedJob {
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-output");
+        regionCount.to("streams-pageviewstats-untyped-output");
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
