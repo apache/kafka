@@ -217,18 +217,23 @@ public class ProcessorStateManager {
                 restoreConsumer.seekToBeginning(storePartition);
             }
 
-            // restore its state from changelog records; while restoring the log end offset
-            // should not change since it is only written by this thread.
+            // restore its state from changelog records
             long limit = offsetLimit(storePartition);
             while (true) {
+                long offset = 0L;
                 for (ConsumerRecord<byte[], byte[]> record : restoreConsumer.poll(100).records(storePartition)) {
-                    if (record.offset() >= limit) break;
+                    offset = record.offset();
+                    if (offset >= limit) break;
                     stateRestoreCallback.restore(record.key(), record.value());
                 }
 
-                if (restoreConsumer.position(storePartition) == endOffset) {
+                if (offset >= limit) {
+                    break;
+                } else if (restoreConsumer.position(storePartition) == endOffset) {
                     break;
                 } else if (restoreConsumer.position(storePartition) > endOffset) {
+                    // For a logging enabled changelog (no offset limit),
+                    // the log end offset should not change while restoring since it is only written by this thread.
                     throw new IllegalStateException("Log end offset should not change while restoring");
                 }
             }

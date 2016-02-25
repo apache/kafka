@@ -293,11 +293,9 @@ public class StreamsConfig extends AbstractConfig {
 
     private void removeStreamsSpecificConfigs(Map<String, Object> props) {
         props.remove(StreamsConfig.JOB_ID_CONFIG);
-        props.remove(StreamsConfig.REPLICATION_FACTOR_CONFIG);
         props.remove(StreamsConfig.STATE_DIR_CONFIG);
         props.remove(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         props.remove(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
-        props.remove(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
         props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
         props.remove(InternalConfig.STREAM_THREAD_INSTANCE);
     }
