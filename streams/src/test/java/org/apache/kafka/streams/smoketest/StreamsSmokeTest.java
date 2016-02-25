@@ -21,9 +21,6 @@ import java.io.File;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Created by yasuhiro on 2/10/16.
- */
 public class StreamsSmokeTest {
 
     /**

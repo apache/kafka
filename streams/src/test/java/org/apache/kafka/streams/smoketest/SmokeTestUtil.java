@@ -27,6 +27,8 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.Processor;
@@ -84,6 +86,45 @@ public class SmokeTestUtil {
     public static final class Unwindow<K, V> implements KeyValueMapper<Windowed<K>, V, KeyValue<K, V>> {
         public KeyValue<K, V> apply(Windowed<K> winKey, V value) {
             return new KeyValue<K, V>(winKey.value(), value);
+        }
+    }
+
+    public static class Agg {
+
+        public KeyValueMapper<String, Long, KeyValue<String, Long>> selector() {
+            return new KeyValueMapper<String, Long, KeyValue<String, Long>>() {
+                @Override
+                public KeyValue<String, Long> apply(String key, Long value) {
+                    return new KeyValue<>(Long.toString(value), 1L);
+                }
+            };
+        }
+
+        public Initializer<Long> init() {
+            return new Initializer<Long>() {
+                @Override
+                public Long apply() {
+                    return 0L;
+                }
+            };
+        }
+
+        public Aggregator<String, Long, Long> adder() {
+            return new Aggregator<String, Long, Long>() {
+                @Override
+                public Long apply(String aggKey, Long value, Long aggregate) {
+                    return aggregate + value;
+                }
+            };
+        }
+
+        public Aggregator<String, Long, Long> remover() {
+            return new Aggregator<String, Long, Long>() {
+                @Override
+                public Long apply(String aggKey, Long value, Long aggregate) {
+                    return aggregate - value;
+                }
+            };
         }
     }
 
