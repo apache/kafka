@@ -94,6 +94,29 @@ IF ["%KAFKA_OPTS%"] EQU [""] (
 	set KAFKA_OPTS=
 )
 
+set DEFAULT_JAVA_DEBUG_PORT=5005
+set DEFAULT_DEBUG_SUSPEND_FLAG=n
+rem Set Debug options if enabled
+IF ["%KAFKA_DEBUG%"] NEQ [""] (
+
+
+	IF ["%JAVA_DEBUG_PORT%"] EQU [""] (
+		set JAVA_DEBUG_PORT=%DEFAULT_JAVA_DEBUG_PORT%
+	)
+
+	IF ["%DEBUG_SUSPEND_FLAG%"] EQU [""] (
+		set DEBUG_SUSPEND_FLAG=%DEFAULT_DEBUG_SUSPEND_FLAG%
+	)
+	set DEFAULT_JAVA_DEBUG_OPTS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=!DEBUG_SUSPEND_FLAG!,address=!JAVA_DEBUG_PORT!
+
+	IF ["%JAVA_DEBUG_OPTS%"] EQU [""] (
+		set JAVA_DEBUG_OPTS=!DEFAULT_JAVA_DEBUG_OPTS!
+	)
+
+	echo Enabling Java debug options: !JAVA_DEBUG_OPTS!
+	set KAFKA_OPTS=!JAVA_DEBUG_OPTS! !KAFKA_OPTS!
+)
+
 rem Which java to use
 IF ["%JAVA_HOME%"] EQU [""] (
 	set JAVA=java

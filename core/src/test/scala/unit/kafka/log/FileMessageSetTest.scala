@@ -20,6 +20,8 @@ package kafka.log
 import java.io._
 import java.nio._
 import java.util.concurrent.atomic._
+
+import kafka.common.LongRef
 import org.junit.Assert._
 import kafka.utils.TestUtils._
 import kafka.message._
@@ -103,7 +105,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   def testSearch() {
     // append a new message with a high offset
     val lastMessage = new Message("test".getBytes)
-    messageSet.append(new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(50), lastMessage))
+    messageSet.append(new ByteBufferMessageSet(NoCompressionCodec, new LongRef(50), lastMessage))
     var position = 0
     assertEquals("Should be able to find the first message by its offset", 
                  OffsetPosition(0L, position), 

@@ -20,7 +20,6 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
@@ -66,25 +65,25 @@ public class Worker {
 
     private final ExecutorService executor;
     private final Time time;
+    private final String workerId;
     private final WorkerConfig config;
+    private final Converter keyConverter;
+    private final Converter valueConverter;
+    private final Converter internalKeyConverter;
+    private final Converter internalValueConverter;
+    private final OffsetBackingStore offsetBackingStore;
 
-    private Converter keyConverter;
-    private Converter valueConverter;
-    private Converter internalKeyConverter;
-    private Converter internalValueConverter;
-    private OffsetBackingStore offsetBackingStore;
-    private HashMap<String, Connector> connectors = new HashMap<>();
+    private HashMap<String, WorkerConnector> connectors = new HashMap<>();
     private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<>();
     private KafkaProducer<byte[], byte[]> producer;
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
-    public Worker(WorkerConfig config, OffsetBackingStore offsetBackingStore) {
-        this(new SystemTime(), config, offsetBackingStore);
-    }
-
-    @SuppressWarnings("unchecked")
-    public Worker(Time time, WorkerConfig config, OffsetBackingStore offsetBackingStore) {
+    public Worker(String workerId,
+                  Time time,
+                  WorkerConfig config,
+                  OffsetBackingStore offsetBackingStore) {
         this.executor = Executors.newCachedThreadPool();
+        this.workerId = workerId;
         this.time = time;
         this.config = config;
         this.keyConverter = config.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
@@ -132,34 +131,18 @@ public class Worker {
         long started = time.milliseconds();
         long limit = started + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
 
-        for (Map.Entry<String, Connector> entry : connectors.entrySet()) {
-            Connector conn = entry.getValue();
+        for (Map.Entry<String, WorkerConnector> entry : connectors.entrySet()) {
+            WorkerConnector conn = entry.getValue();
             log.warn("Shutting down connector {} uncleanly; herder should have shut down connectors before the" +
                     "Worker is stopped.", conn);
-            try {
-                conn.stop();
-            } catch (ConnectException e) {
-                log.error("Error while shutting down connector " + conn, e);
-            }
+            conn.stop();
         }
 
-        for (Map.Entry<ConnectorTaskId, WorkerTask> entry : tasks.entrySet()) {
-            WorkerTask task = entry.getValue();
-            log.warn("Shutting down task {} uncleanly; herder should have shut down "
-                    + "tasks before the Worker is stopped.", task);
-            try {
-                task.stop();
-            } catch (ConnectException e) {
-                log.error("Error while shutting down task " + task, e);
-            }
-        }
-
-        for (Map.Entry<ConnectorTaskId, WorkerTask> entry : tasks.entrySet()) {
-            WorkerTask task = entry.getValue();
-            log.debug("Waiting for task {} to finish shutting down", task);
-            if (!task.awaitStop(Math.max(limit - time.milliseconds(), 0)))
-                log.error("Graceful shutdown of task {} failed.", task);
-        }
+        Collection<ConnectorTaskId> taskIds = tasks.keySet();
+        log.warn("Shutting down tasks {} uncleanly; herder should have shut down "
+                + "tasks before the Worker is stopped.", taskIds);
+        stopTasks(taskIds);
+        awaitStopTasks(taskIds);
 
         long timeoutMs = limit - time.milliseconds();
         sourceTaskOffsetCommitter.close(timeoutMs);
@@ -169,16 +152,12 @@ public class Worker {
         log.info("Worker stopped");
     }
 
-    public WorkerConfig config() {
-        return config;
-    }
-
     /**
      * Add a new connector.
      * @param connConfig connector configuration
      * @param ctx context for the connector
      */
-    public void addConnector(ConnectorConfig connConfig, ConnectorContext ctx) {
+    public void startConnector(ConnectorConfig connConfig, ConnectorContext ctx, ConnectorStatus.Listener lifecycleListener) {
         String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
         Class<? extends Connector> connClass = getConnectorClass(connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
 
@@ -188,22 +167,25 @@ public class Worker {
             throw new ConnectException("Connector with name " + connName + " already exists");
 
         final Connector connector = instantiateConnector(connClass);
+        WorkerConnector workerConnector = new WorkerConnector(connName, connector, ctx, lifecycleListener);
+
         log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connClass.getName());
-        connector.initialize(ctx);
+        workerConnector.initialize();
         try {
-            connector.start(connConfig.originalsStrings());
+            workerConnector.start(connConfig.originalsStrings());
         } catch (ConnectException e) {
             throw new ConnectException("Connector threw an exception while starting", e);
         }
 
-        connectors.put(connName, connector);
+        connectors.put(connName, workerConnector);
 
         log.info("Finished creating connector {}", connName);
     }
 
     /* Now that the configuration doesn't contain the actual class name, we need to be able to tell the herder whether a connector is a Sink */
     public boolean isSinkConnector(String connName) {
-        return SinkConnector.class.isAssignableFrom(connectors.get(connName).getClass());
+        WorkerConnector workerConnector = connectors.get(connName);
+        return SinkConnector.class.isAssignableFrom(workerConnector.delegate.getClass());
     }
 
     private Class<? extends Connector> getConnectorClass(String connectorAlias) {
@@ -267,10 +249,11 @@ public class Worker {
     public List<Map<String, String>> connectorTaskConfigs(String connName, int maxTasks, List<String> sinkTopics) {
         log.trace("Reconfiguring connector tasks for {}", connName);
 
-        Connector connector = connectors.get(connName);
-        if (connector == null)
+        WorkerConnector workerConnector = connectors.get(connName);
+        if (workerConnector == null)
             throw new ConnectException("Connector " + connName + " not found in this worker.");
 
+        Connector connector = workerConnector.delegate;
         List<Map<String, String>> result = new ArrayList<>();
         String taskClassName = connector.taskClass().getName();
         for (Map<String, String> taskProps : connector.taskConfigs(maxTasks)) {
@@ -286,16 +269,11 @@ public class Worker {
     public void stopConnector(String connName) {
         log.info("Stopping connector {}", connName);
 
-        Connector connector = connectors.get(connName);
+        WorkerConnector connector = connectors.get(connName);
         if (connector == null)
             throw new ConnectException("Connector " + connName + " not found in this worker.");
 
-        try {
-            connector.stop();
-        } catch (ConnectException e) {
-            log.error("Error shutting down connector {}: ", connector, e);
-        }
-
+        connector.stop();
         connectors.remove(connName);
 
         log.info("Stopped connector {}", connName);
@@ -313,7 +291,7 @@ public class Worker {
      * @param id Globally unique ID for this task.
      * @param taskConfig the parsed task configuration
      */
-    public void addTask(ConnectorTaskId id, TaskConfig taskConfig) {
+    public void startTask(ConnectorTaskId id, TaskConfig taskConfig, TaskStatus.Listener lifecycleListener) {
         log.info("Creating task {}", id);
 
         if (tasks.containsKey(id)) {
@@ -327,22 +305,7 @@ public class Worker {
         final Task task = instantiateTask(taskClass);
         log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
-        // Decide which type of worker task we need based on the type of task.
-        final WorkerTask workerTask;
-        if (task instanceof SourceTask) {
-            SourceTask sourceTask = (SourceTask) task;
-            OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
-                    internalKeyConverter, internalValueConverter);
-            OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
-                    internalKeyConverter, internalValueConverter);
-            workerTask = new WorkerSourceTask(id, sourceTask, keyConverter, valueConverter, producer,
-                    offsetReader, offsetWriter, config, time);
-        } else if (task instanceof SinkTask) {
-            workerTask = new WorkerSinkTask(id, (SinkTask) task, config, keyConverter, valueConverter, time);
-        } else {
-            log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
-            throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
-        }
+        final WorkerTask workerTask = buildWorkerTask(id, task, lifecycleListener);
 
         // Start the task before adding modifying any state, any exceptions are caught higher up the
         // call chain and there's no cleanup to do here
@@ -356,6 +319,23 @@ public class Worker {
         tasks.put(id, workerTask);
     }
 
+    private WorkerTask buildWorkerTask(ConnectorTaskId id, Task task, TaskStatus.Listener lifecycleListener) {
+        // Decide which type of worker task we need based on the type of task.
+        if (task instanceof SourceTask) {
+            OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
+                    internalKeyConverter, internalValueConverter);
+            OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
+                    internalKeyConverter, internalValueConverter);
+            return new WorkerSourceTask(id, (SourceTask) task, lifecycleListener, keyConverter, valueConverter, producer,
+                    offsetReader, offsetWriter, config, time);
+        } else if (task instanceof SinkTask) {
+            return new WorkerSinkTask(id, (SinkTask) task, lifecycleListener, config, keyConverter, valueConverter, time);
+        } else {
+            log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
+            throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
+        }
+    }
+
     private static Task instantiateTask(Class<? extends Task> taskClass) {
         try {
             return Utils.newInstance(taskClass);
@@ -364,16 +344,39 @@ public class Worker {
         }
     }
 
-    public void stopTask(ConnectorTaskId id) {
-        log.info("Stopping task {}", id);
+    public void stopTasks(Collection<ConnectorTaskId> ids) {
+        for (ConnectorTaskId id : ids)
+            stopTask(getTask(id));
+    }
 
-        WorkerTask task = getTask(id);
+    public void awaitStopTasks(Collection<ConnectorTaskId> ids) {
+        long now = time.milliseconds();
+        long deadline = now + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
+        for (ConnectorTaskId id : ids) {
+            long remaining = Math.max(0, deadline - time.milliseconds());
+            awaitStopTask(getTask(id), remaining);
+        }
+    }
+
+    private void awaitStopTask(WorkerTask task, long timeout) {
+        if (!task.awaitStop(timeout)) {
+            log.error("Graceful stop of task {} failed.", task.id());
+            task.cancel();
+        }
+        tasks.remove(task.id());
+    }
+
+    private void stopTask(WorkerTask task) {
+        log.info("Stopping task {}", task.id());
         if (task instanceof WorkerSourceTask)
-            sourceTaskOffsetCommitter.remove(id);
+            sourceTaskOffsetCommitter.remove(task.id());
         task.stop();
-        if (!task.awaitStop(config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG)))
-            log.error("Graceful stop of task {} failed.", task);
-        tasks.remove(id);
+    }
+
+    public void stopAndAwaitTask(ConnectorTaskId id) {
+        WorkerTask task = getTask(id);
+        stopTask(task);
+        awaitStopTask(task, config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG));
     }
 
     /**
@@ -398,6 +401,57 @@ public class Worker {
 
     public Converter getInternalValueConverter() {
         return internalValueConverter;
+    }
+
+    public String workerId() {
+        return workerId;
+    }
+
+    private static class WorkerConnector  {
+        private final String connName;
+        private final ConnectorStatus.Listener lifecycleListener;
+        private final ConnectorContext ctx;
+        private final Connector delegate;
+
+        public WorkerConnector(String connName,
+                               Connector delegate,
+                               ConnectorContext ctx,
+                               ConnectorStatus.Listener lifecycleListener) {
+            this.connName = connName;
+            this.ctx = ctx;
+            this.delegate = delegate;
+            this.lifecycleListener = lifecycleListener;
+        }
+
+        public void initialize() {
+            delegate.initialize(ctx);
+        }
+
+        public void start(Map<String, String> props) {
+            try {
+                delegate.start(props);
+                lifecycleListener.onStartup(connName);
+            } catch (Throwable t) {
+                log.error("Error while starting connector {}", connName, t);
+                lifecycleListener.onFailure(connName, t);
+            }
+        }
+
+        public void stop() {
+            try {
+                delegate.stop();
+                lifecycleListener.onShutdown(connName);
+            } catch (Throwable t) {
+                log.error("Error while shutting down connector {}", connName, t);
+                lifecycleListener.onFailure(connName, t);
+            }
+        }
+
+        @Override
+        public String toString() {
+            return delegate.toString();
+        }
+
     }
 
 }

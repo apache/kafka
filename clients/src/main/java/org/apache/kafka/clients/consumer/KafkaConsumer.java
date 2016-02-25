@@ -632,6 +632,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
                     config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG),
                     config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG),
+                    config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG),
                     config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG),
                     this.keyDeserializer,
                     this.valueDeserializer,
@@ -867,7 +868,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // task execution since the consumed positions has already been updated and we
                     // must return these records to users to process before being interrupted or
                     // auto-committing offsets
-                    fetcher.initFetches(metadata.fetch());
+                    fetcher.sendFetches(metadata.fetch());
                     client.quickPoll();
                     return this.interceptors == null
                         ? new ConsumerRecords<>(records) : this.interceptors.onConsume(new ConsumerRecords<>(records));
@@ -912,7 +913,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             return records;
         }
 
-        fetcher.initFetches(cluster);
+        fetcher.sendFetches(cluster);
         client.poll(timeout);
         return fetcher.fetchedRecords();
     }

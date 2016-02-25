@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -138,14 +139,15 @@ public class StreamThread extends Thread {
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             try {
                 commitAll();
-                // TODO: right now upon partition revocation, we always remove all the tasks;
-                // this behavior can be optimized to only remove affected tasks in the future
-                removeStreamTasks();
-                removeStandbyTasks();
                 lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
+            } finally {
+                // TODO: right now upon partition revocation, we always remove all the tasks;
+                // this behavior can be optimized to only remove affected tasks in the future
+                removeStreamTasks();
+                removeStandbyTasks();
             }
         }
     };
@@ -273,11 +275,16 @@ public class StreamThread extends Thread {
     private void shutdown() {
         log.info("Shutting down stream thread [" + this.getName() + "]");
 
+        // Exceptions should not prevent this call from going through all shutdown steps
+
         try {
             commitAll();
         } catch (Throwable e) {
             // already logged in commitAll()
         }
+
+        // Close standby tasks before closing the restore consumer since closing standby tasks uses the restore consumer.
+        removeStandbyTasks();
 
         // We need to first close the underlying clients before closing the state
         // manager, for example we need to make sure producer's message sends
@@ -299,13 +306,7 @@ public class StreamThread extends Thread {
             log.error("Failed to close restore consumer in thread [" + this.getName() + "]: ", e);
         }
 
-        // Exceptions should not prevent this call from going through all shutdown steps
-        try {
-            removeStreamTasks();
-            removeStandbyTasks();
-        } catch (Throwable e) {
-            // already logged in removeStreamTasks() and removeStandbyTasks()
-        }
+        removeStreamTasks();
 
         log.info("Stream thread shutdown complete [" + this.getName() + "]");
     }
@@ -489,7 +490,11 @@ public class StreamThread extends Thread {
     private void commitOne(AbstractTask task, long now) {
         try {
             task.commit();
+        } catch (CommitFailedException e) {
+            // commit failed. Just log it.
+            log.warn("Failed to commit " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
         } catch (KafkaException e) {
+            // commit failed due to an unexpected exception. Log it and rethrow the exception.
             log.error("Failed to commit " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
             throw e;
         }
@@ -627,15 +632,19 @@ public class StreamThread extends Thread {
     }
 
     private void removeStreamTasks() {
-        for (StreamTask task : activeTasks.values()) {
-            closeOne(task);
+        try {
+            for (StreamTask task : activeTasks.values()) {
+                closeOne(task);
+            }
+            prevTasks.clear();
+            prevTasks.addAll(activeTasks.keySet());
+
+            activeTasks.clear();
+            activeTasksByPartition.clear();
+
+        } catch (Exception e) {
+            log.error("Failed to remove stream tasks in thread [" + this.getName() + "]: ", e);
         }
-
-        prevTasks.clear();
-        prevTasks.addAll(activeTasks.keySet());
-
-        activeTasks.clear();
-        activeTasksByPartition.clear();
     }
 
     private void closeOne(AbstractTask task) {
@@ -644,7 +653,6 @@ public class StreamThread extends Thread {
             task.close();
         } catch (StreamsException e) {
             log.error("Failed to close a " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
-            throw e;
         }
         sensors.taskDestructionSensor.record();
     }
@@ -701,15 +709,20 @@ public class StreamThread extends Thread {
 
 
     private void removeStandbyTasks() {
-        for (StandbyTask task : standbyTasks.values()) {
-            closeOne(task);
-        }
-        // un-assign the change log partitions
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        try {
+            for (StandbyTask task : standbyTasks.values()) {
+                closeOne(task);
+            }
+            standbyTasks.clear();
+            standbyTasksByPartition.clear();
+            standbyRecords.clear();
 
-        standbyTasks.clear();
-        standbyTasksByPartition.clear();
-        standbyRecords.clear();
+            // un-assign the change log partitions
+            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+
+        } catch (Exception e) {
+            log.error("Failed to remove standby tasks in thread [" + this.getName() + "]: ", e);
+        }
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups) {

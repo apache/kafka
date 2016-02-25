@@ -347,7 +347,7 @@ public final class Record {
         if (magic() == 0)
             return TimestampType.NO_TIMESTAMP_TYPE;
         else
-            return wrapperRecordTimestampType == null ? TimestampType.getTimestampType(attributes()) : wrapperRecordTimestampType;
+            return wrapperRecordTimestampType == null ? TimestampType.forAttributes(attributes()) : wrapperRecordTimestampType;
     }
 
     /**

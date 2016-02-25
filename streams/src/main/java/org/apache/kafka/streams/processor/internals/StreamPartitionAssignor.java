@@ -24,7 +24,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
@@ -35,19 +34,6 @@ import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.zookeeper.ZooDefs;
-
-import org.I0Itec.zkclient.exception.ZkNodeExistsException;
-import org.I0Itec.zkclient.exception.ZkNoNodeException;
-import org.I0Itec.zkclient.serialize.ZkSerializer;
-import org.I0Itec.zkclient.ZkClient;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -100,132 +86,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private Map<String, Set<TaskId>> internalSourceTopicToTaskIds;
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
 
-    // TODO: the following ZK dependency should be removed after KIP-4
-    private static final String ZK_TOPIC_PATH = "/brokers/topics";
-    private static final String ZK_BROKER_PATH = "/brokers/ids";
-    private static final String ZK_DELETE_TOPIC_PATH = "/admin/delete_topics";
-
-    private ZkClient zkClient;
-
-    private class ZKStringSerializer implements ZkSerializer {
-
-        @Override
-        public byte[] serialize(Object data) {
-            try {
-                return ((String) data).getBytes("UTF-8");
-            } catch (UnsupportedEncodingException e) {
-                throw new AssertionError(e);
-            }
-        }
-
-        @Override
-        public Object deserialize(byte[] bytes) {
-            try {
-                if (bytes == null)
-                    return null;
-                else
-                    return new String(bytes, "UTF-8");
-            } catch (UnsupportedEncodingException e) {
-                throw new AssertionError(e);
-            }
-        }
-    }
-
-    private List<Integer> getBrokers() {
-        List<Integer> brokers = new ArrayList<>();
-        for (String broker: zkClient.getChildren(ZK_BROKER_PATH)) {
-            brokers.add(Integer.parseInt(broker));
-        }
-        Collections.sort(brokers);
-
-        log.debug("Read brokers {} from ZK in partition assignor.", brokers);
-
-        return brokers;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<Integer, List<Integer>> getTopicMetadata(String topic) {
-        String data = zkClient.readData(ZK_TOPIC_PATH + "/" + topic, true);
-
-        if (data == null) return null;
-
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-
-            Map<String, Object> dataMap = mapper.readValue(data, new TypeReference<Map<String, Object>>() {
-
-            });
-
-            Map<Integer, List<Integer>> partitions = (Map<Integer, List<Integer>>) dataMap.get("partitions");
-
-            log.debug("Read partitions {} for topic {} from ZK in partition assignor.", partitions, topic);
-
-            return partitions;
-        } catch (IOException e) {
-            throw new StreamsException("Error while reading topic metadata from ZK for internal topic " + topic, e);
-        }
-    }
-
-    private void createTopic(String topic, int numPartitions) throws ZkNodeExistsException {
-        log.debug("Creating topic {} with {} partitions from ZK in partition assignor.", topic, numPartitions);
-
-        // we always assign leaders to brokers starting at the first one with replication factor 1
-        List<Integer> brokers = getBrokers();
-
-        Map<Integer, List<Integer>> assignment = new HashMap<>();
-        for (int i = 0; i < numPartitions; i++) {
-            assignment.put(i, Collections.singletonList(brokers.get(i % brokers.size())));
-        }
-
-        // try to write to ZK with open ACL
-        try {
-            Map<String, Object> dataMap = new HashMap<>();
-            dataMap.put("version", 1);
-            dataMap.put("partitions", assignment);
-
-            ObjectMapper mapper = new ObjectMapper();
-            String data = mapper.writeValueAsString(dataMap);
-
-            zkClient.createPersistent(ZK_TOPIC_PATH + "/" + topic, data, ZooDefs.Ids.OPEN_ACL_UNSAFE);
-        } catch (JsonProcessingException e) {
-            throw new StreamsException("Error while creating topic metadata in ZK for internal topic " + topic, e);
-        }
-    }
-
-    private void deleteTopic(String topic) throws ZkNodeExistsException {
-        log.debug("Deleting topic {} from ZK in partition assignor.", topic);
-
-        zkClient.createPersistent(ZK_DELETE_TOPIC_PATH + "/" + topic, "", ZooDefs.Ids.OPEN_ACL_UNSAFE);
-    }
-
-    private void addPartitions(String topic, int numPartitions, Map<Integer, List<Integer>> existingAssignment) {
-        log.debug("Adding {} partitions topic {} from ZK with existing partitions assigned as {} in partition assignor.", topic, numPartitions, existingAssignment);
-
-        // we always assign new leaders to brokers starting at the last broker of the existing assignment with replication factor 1
-        List<Integer> brokers = getBrokers();
-
-        int startIndex = existingAssignment.size();
-
-        Map<Integer, List<Integer>> newAssignment = new HashMap<>(existingAssignment);
-
-        for (int i = 0; i < numPartitions; i++) {
-            newAssignment.put(i + startIndex, Collections.singletonList(brokers.get(i + startIndex) % brokers.size()));
-        }
-
-        // try to write to ZK with open ACL
-        try {
-            Map<String, Object> dataMap = new HashMap<>();
-            dataMap.put("version", 1);
-            dataMap.put("partitions", newAssignment);
-
-            ObjectMapper mapper = new ObjectMapper();
-            String data = mapper.writeValueAsString(dataMap);
-
-            zkClient.writeData(ZK_TOPIC_PATH + "/" + topic, data);
-        } catch (JsonProcessingException e) {
-            throw new StreamsException("Error while updating topic metadata in ZK for internal topic " + topic, e);
-        }
-    }
+    private InternalTopicManager internalTopicManager;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
@@ -254,8 +115,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         this.topicGroups = streamThread.builder.topicGroups();
 
-        if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG))
-            zkClient = new ZkClient((String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG), 30 * 1000, 30 * 1000, new ZKStringSerializer());
+        if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
+            internalTopicManager = new InternalTopicManager(
+                    (String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG),
+                    (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG));
+        }
     }
 
     @Override
@@ -411,7 +275,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         // if ZK is specified, get the tasks / internal topics for each state topic and validate the topic partitions
-        if (zkClient != null) {
+        if (internalTopicManager != null) {
             log.debug("Starting to validate changelog topics in partition assignor.");
 
             Map<String, Set<TaskId>> topicToTaskIds = new HashMap<>();
@@ -428,38 +292,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         numPartitions = task.partition + 1;
                 }
 
-                boolean topicNotReady = true;
-
-                while (topicNotReady) {
-                    Map<Integer, List<Integer>> topicMetadata = getTopicMetadata(topic);
-
-                    // if topic does not exist, create it
-                    if (topicMetadata == null) {
-                        try {
-                            createTopic(topic, numPartitions);
-                        } catch (ZkNodeExistsException e) {
-                            // ignore and continue
-                        }
-                    } else {
-                        if (topicMetadata.size() > numPartitions) {
-                            // else if topic exists with more #.partitions than needed, delete in order to re-create it
-                            try {
-                                deleteTopic(topic);
-                            } catch (ZkNodeExistsException e) {
-                                // ignore and continue
-                            }
-                        } else if (topicMetadata.size() < numPartitions) {
-                            // else if topic exists with less #.partitions than needed, add partitions
-                            try {
-                                addPartitions(topic, numPartitions - topicMetadata.size(), topicMetadata);
-                            } catch (ZkNoNodeException e) {
-                                // ignore and continue
-                            }
-                        }
-
-                        topicNotReady = false;
-                    }
-                }
+                internalTopicManager.makeReady(topic, numPartitions);
 
                 // wait until the topic metadata has been propagated to all brokers
                 List<PartitionInfo> partitions;

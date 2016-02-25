@@ -181,10 +181,12 @@ class ConnectStandaloneService(ConnectServiceBase):
 class ConnectDistributedService(ConnectServiceBase):
     """Runs Kafka Connect in distributed mode."""
 
-    def __init__(self, context, num_nodes, kafka, files, offsets_topic="connect-offsets", configs_topic="connect-configs"):
+    def __init__(self, context, num_nodes, kafka, files, offsets_topic="connect-offsets",
+                 configs_topic="connect-configs", status_topic="connect-status"):
         super(ConnectDistributedService, self).__init__(context, num_nodes, kafka, files)
         self.offsets_topic = offsets_topic
         self.configs_topic = configs_topic
+        self.status_topic = status_topic
 
     def start_cmd(self, node):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
