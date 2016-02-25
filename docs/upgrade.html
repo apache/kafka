@@ -66,7 +66,10 @@ are introduced, it is important to upgrade your Kafka clusters before upgrading 
     <li> ProduceRequest/Response v2 has been introduced and it is used by default to support message format 0.10.0 </li>
     <li> FetchRequest/Response v2 has been introduced and it is used by default to support message format 0.10.0 </li>
     <li> MessageFormatter interface was changed from <code>void writeTo(byte[] key, byte[] value, PrintStream output)</code> to
-        <code>void writeTo(byte[] key, byte[] value, long timestamp, TimestampType timestampType, PrintStream output)</code> </li>
+        <code>def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream)</code> </li>
+    <li> MessageReader interface was changed from <code>def readMessage(): KeyedMessage[Array[Byte], Array[Byte]]</code> to
+        <code>def readMessage(): ProducerRecord[Array[Byte], Array[Byte]]</code> </li>
+    </li>
     <li> MirrorMakerMessageHandler no longer exposes <em>handle(record: MessageAndMetadata[Array[Byte], Array[Byte]])</em> method as it was never called. </li>
 </ul>
 
