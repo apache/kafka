@@ -37,7 +37,7 @@ import kafka.message._
 import kafka.log.FileMessageSet
 import kafka.metrics.KafkaMetricsGroup
 import kafka.common.TopicAndPartition
-import kafka.tools.MessageFormatter
+import kafka.common.MessageFormatter
 import kafka.server.ReplicaManager
 
 import scala.collection._

@@ -19,6 +19,7 @@ package kafka.tools
 
 import java.io.FileOutputStream
 
+import kafka.common.MessageFormatter
 import kafka.consumer.{BaseConsumer, BaseConsumerRecord}
 import kafka.utils.TestUtils
 import org.easymock.EasyMock

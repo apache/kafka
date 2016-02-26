@@ -25,7 +25,7 @@ import kafka.api.{FetchRequestBuilder, OffsetRequest, Request}
 import kafka.cluster.BrokerEndPoint
 
 import scala.collection.JavaConversions._
-import kafka.common.TopicAndPartition
+import kafka.common.{MessageFormatter, TopicAndPartition}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.utils.Utils
 
@@ -188,7 +188,7 @@ object SimpleConsumerShell extends Logging {
     }
 
     // initializing formatter
-    val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
+    val formatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
     formatter.init(formatterArgs)
 
     val replicaString = if(replicaId > 0) "leader" else "replica"

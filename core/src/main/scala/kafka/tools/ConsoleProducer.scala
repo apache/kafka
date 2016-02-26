@@ -284,12 +284,6 @@ object ConsoleProducer {
     val maxBlockMs = options.valueOf(maxBlockMsOpt)
   }
 
-  trait MessageReader {
-    def init(inputStream: InputStream, props: Properties) {}
-    def readMessage(): ProducerRecord[Array[Byte], Array[Byte]]
-    def close() {}
-  }
-
   class LineMessageReader extends MessageReader {
     var topic: String = null
     var reader: BufferedReader = null

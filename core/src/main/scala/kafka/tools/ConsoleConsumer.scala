@@ -22,7 +22,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.{Properties, Random}
 
 import joptsimple._
-import kafka.common.StreamEndException
+import kafka.common.{MessageFormatter, StreamEndException}
 import kafka.consumer._
 import kafka.message._
 import kafka.metrics.KafkaMetricsReporter
@@ -335,14 +335,6 @@ object ConsoleConsumer extends Logging {
       case _: Throwable => false
     }
   }
-}
-
-trait MessageFormatter{
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream)
-
-  def init(props: Properties) {}
-
-  def close() {}
 }
 
 class DefaultMessageFormatter extends MessageFormatter {
