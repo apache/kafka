@@ -122,14 +122,14 @@ public final class ConsumerRecord<K, V> {
     }
 
     /**
-     * The size of serialized, uncompressed key in bytes.
+     * The size of the serialized, uncompressed key in bytes.
      */
     public int keySize() {
         return this.keySize;
     }
 
     /**
-     * The size of serialized, uncompressed value in bytes.
+     * The size of the serialized, uncompressed value in bytes.
      */
     public int valueSize() {
         return this.valueSize;
@@ -139,6 +139,6 @@ public final class ConsumerRecord<K, V> {
     public String toString() {
         return "ConsumerRecord(topic = " + topic() + ", partition = " + partition() + ", offset = " + offset()
                 + ", " + timestampType + " = " + timestamp + ", checksum = " + checksum + ", key size = "
-               + keySize + ", value size = " + valueSize + ", key = " + "" + key + ", value = " + value + ")";
+               + keySize + ", value size = " + valueSize + ", key = " + key + ", value = " + value + ")";
     }
 }

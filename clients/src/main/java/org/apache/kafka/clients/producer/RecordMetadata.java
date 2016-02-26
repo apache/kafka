@@ -76,14 +76,14 @@ public final class RecordMetadata {
     }
 
     /**
-     * The size of serialized, uncompressed key in bytes.
+     * The size of the serialized, uncompressed key in bytes.
      */
     public int keySize() {
         return this.keySize;
     }
 
     /**
-     * The size of serialized, uncompressed value in bytes.
+     * The size of the serialized, uncompressed value in bytes.
      */
     public int valueSize() {
         return this.valueSize;
