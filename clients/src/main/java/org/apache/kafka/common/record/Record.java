@@ -118,8 +118,7 @@ public final class Record {
      * @param valueOffset The offset into the payload array used to extract payload
      * @param valueSize The size of the payload to use
      */
-    public Record(long timestamp, byte[] key, byte[] value, CompressionType type,
-                  int valueOffset, int valueSize) {
+    public Record(long timestamp, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
         this(ByteBuffer.allocate(recordSize(key == null ? 0 : key.length,
             value == null ? 0 : valueSize >= 0 ? valueSize : value.length - valueOffset)));
         write(this.buffer, timestamp, key, value, type, valueOffset, valueSize);
@@ -144,8 +143,7 @@ public final class Record {
 
     // Write a record to the buffer, if the record's compression type is none, then
     // its value payload should be already compressed with the specified type
-    public static void write(ByteBuffer buffer, long timestamp, byte[] key, byte[] value,
-                             CompressionType type, int valueOffset, int valueSize) {
+    public static void write(ByteBuffer buffer, long timestamp, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
         // construct the compressor with compression type none since this function will not do any
         //compression according to the input type, it will just write the record's payload as is
         Compressor compressor = new Compressor(buffer, CompressionType.NONE, buffer.capacity());
