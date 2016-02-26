@@ -196,10 +196,11 @@ class VerifiableProducer(BackgroundThreadService):
             return len(self.not_acked_values)
 
     def each_produced_at_least(self, count):
-        for idx in range(1, self.num_nodes):
-            if self.produced_count.get(idx) is None or self.produced_count[idx] < count:
-                return False
-        return True
+        with self.lock:
+            for idx in range(1, self.num_nodes):
+                if self.produced_count.get(idx) is None or self.produced_count[idx] < count:
+                    return False
+            return True
 
     def stop_node(self, node):
         self.kill_node(node, clean_shutdown=False, allow_fail=False)
