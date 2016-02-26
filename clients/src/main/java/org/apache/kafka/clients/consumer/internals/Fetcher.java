@@ -651,8 +651,11 @@ public class Fetcher<K, V> {
             V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), valueByteArray);
 
             long checksum = logEntry.record().checksum();
-            int size = (keyByteArray == null ? 0 : keyByteArray.length) + (valueByteArray == null ? 0 : valueByteArray.length);
-            return new ConsumerRecord<>(partition.topic(), partition.partition(), offset, timestamp, timestampType, checksum, size, key, value);
+            return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
+                                        timestamp, timestampType, checksum,
+                                        keyByteArray == null ? 0 : keyByteArray.length,
+                                        valueByteArray == null ? 0 : valueByteArray.length,
+                                        key, value);
         } catch (KafkaException e) {
             throw e;
         } catch (RuntimeException e) {

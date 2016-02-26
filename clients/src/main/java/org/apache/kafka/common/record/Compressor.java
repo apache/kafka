@@ -138,7 +138,7 @@ public class Compressor {
             buffer.putLong(numRecords - 1);
             buffer.putInt(pos - initPos - Records.LOG_OVERHEAD);
             // write the shallow message (the crc and value size are not correct yet)
-            Record.write(buffer, maxTimestamp, 0, null, null, type, 0, -1);
+            Record.write(buffer, maxTimestamp, null, null, type, 0, -1);
             // compute the fill the value size
             int valueSize = pos - initPos - Records.LOG_OVERHEAD - Record.RECORD_OVERHEAD;
             buffer.putInt(initPos + Records.LOG_OVERHEAD + Record.KEY_OFFSET_V1, valueSize);
@@ -201,16 +201,17 @@ public class Compressor {
         }
     }
 
-    public void putRecord(long timestamp, long crc, byte[] key, byte[] value, CompressionType type,
+    public long putRecord(long timestamp, byte[] key, byte[] value, CompressionType type,
                           int valueOffset, int valueSize) {
         // put a record as un-compressed into the underlying stream
+        long crc = Record.computeChecksum(timestamp, key, value, type, valueOffset, valueSize);
         byte attributes = Record.computeAttributes(type);
         putRecord(crc, attributes, timestamp, key, value, valueOffset, valueSize);
-
+        return crc;
     }
 
-    public void putRecord(long timestamp, long crc, byte[] key, byte[] value) {
-        putRecord(timestamp, crc, key, value, CompressionType.NONE, 0, -1);
+    public long putRecord(long timestamp, byte[] key, byte[] value) {
+        return putRecord(timestamp, key, value, CompressionType.NONE, 0, -1);
     }
 
     private void putRecord(final long crc, final byte attributes, final long timestamp, final byte[] key, final byte[] value, final int valueOffset, final int valueSize) {

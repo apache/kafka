@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.CompressionType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,13 +67,13 @@ public final class RecordBatch {
         if (!this.records.hasRoomFor(key, value)) {
             return null;
         } else {
-            long checksum = Record.computeChecksum(timestamp, key, value, CompressionType.NONE, 0, -1);
-            int keyValueSize = (key == null ? 0 : key.length) + (value == null ? 0 : value.length);
-            this.records.append(offsetCounter++, timestamp, checksum, key, value);
+            long checksum = this.records.append(offsetCounter++, timestamp, key, value);
             this.maxRecordSize = Math.max(this.maxRecordSize, Record.recordSize(key, value));
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
-                                                                   timestamp, checksum, keyValueSize);
+                                                                   timestamp, checksum,
+                                                                   key == null ? 0 : key.length,
+                                                                   value == null ? 0 : value.length);
             if (callback != null)
                 thunks.add(new Thunk(callback, future));
             this.recordCount++;
@@ -102,7 +101,7 @@ public final class RecordBatch {
                     // If the timestamp returned by server is NoTimestamp, that means CreateTime is used. Otherwise LogAppendTime is used.
                     RecordMetadata metadata = new RecordMetadata(this.topicPartition,  baseOffset, thunk.future.relativeOffset(),
                                                                  timestamp == Record.NO_TIMESTAMP ? thunk.future.timestamp() : timestamp,
-                                                                 thunk.future.checksum(), thunk.future.size());
+                                                                 thunk.future.checksum(), thunk.future.keySize(), thunk.future.valueSize());
                     thunk.callback.onCompletion(metadata, null);
                 } else {
                     thunk.callback.onCompletion(null, exception);

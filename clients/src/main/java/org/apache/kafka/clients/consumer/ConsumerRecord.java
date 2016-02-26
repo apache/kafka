@@ -25,7 +25,8 @@ public final class ConsumerRecord<K, V> {
     private final long timestamp;
     private final TimestampType timestampType;
     private final long checksum;
-    private final int size;
+    private final int keySize;
+    private final int valueSize;
     private final K key;
     private final V value;
 
@@ -46,7 +47,8 @@ public final class ConsumerRecord<K, V> {
                           long timestamp,
                           TimestampType timestampType,
                           long checksum,
-                          int size,
+                          int keySize,
+                          int valueSize,
                           K key,
                           V value) {
         if (topic == null)
@@ -57,7 +59,8 @@ public final class ConsumerRecord<K, V> {
         this.timestamp = timestamp;
         this.timestampType = timestampType;
         this.checksum = checksum;
-        this.size = size;
+        this.keySize = keySize;
+        this.valueSize = valueSize;
         this.key = key;
         this.value = value;
     }
@@ -112,22 +115,30 @@ public final class ConsumerRecord<K, V> {
     }
 
     /**
-     * The checksum of the record.
+     * The checksum (CRC32) of the record.
      */
     public long checksum() {
         return this.checksum;
     }
 
     /**
-     * The size of the record (serialized, uncompressed) in bytes.
+     * The size of serialized, uncompressed key in bytes.
      */
-    public int size() {
-        return this.size;
+    public int keySize() {
+        return this.keySize;
+    }
+
+    /**
+     * The size of serialized, uncompressed value in bytes.
+     */
+    public int valueSize() {
+        return this.valueSize;
     }
 
     @Override
     public String toString() {
         return "ConsumerRecord(topic = " + topic() + ", partition = " + partition() + ", offset = " + offset()
-                + ", " + timestampType + " = " + timestamp + ", key = " + key + ", value = " + value + ")";
+                + ", " + timestampType + " = " + timestamp + ", checksum = " + checksum + ", key size = "
+               + keySize + ", value size = " + valueSize + ", key = " + "" + key + ", value = " + value + ")";
     }
 }

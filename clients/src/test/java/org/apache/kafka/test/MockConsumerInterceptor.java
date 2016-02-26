@@ -57,7 +57,7 @@ public class MockConsumerInterceptor implements ConsumerInterceptor<String, Stri
             for (ConsumerRecord<String, String> record: records.records(tp)) {
                 lst.add(new ConsumerRecord<>(record.topic(), record.partition(), record.offset(),
                                              record.timestamp(), record.timestampType(),
-                                             record.checksum(), record.size(),
+                                             record.checksum(), record.keySize(), record.valueSize(),
                                              record.key(), record.value().toUpperCase()));
             }
             recordMap.put(tp, lst);

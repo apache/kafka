@@ -89,23 +89,16 @@ public class MemoryRecords implements Records {
     /**
      * Append a new record and offset to the buffer
      */
-    public void append(long offset, long timestamp, long checksum, byte[] key, byte[] value) {
+    public long append(long offset, long timestamp, byte[] key, byte[] value) {
         if (!writable)
             throw new IllegalStateException("Memory records is not writable");
 
         int size = Record.recordSize(key, value);
         compressor.putLong(offset);
         compressor.putInt(size);
-        compressor.putRecord(timestamp, checksum, key, value);
+        long crc = compressor.putRecord(timestamp, key, value);
         compressor.recordWritten(size + Records.LOG_OVERHEAD);
-    }
-
-    /**
-     * Append a new record and offset to the buffer
-     */
-    public void append(long offset, long timestamp, byte[] key, byte[] value) {
-        long crc = Record.computeChecksum(timestamp, key, value, CompressionType.NONE, 0, -1);
-        append(offset, timestamp, crc, key, value);
+        return crc;
     }
 
     /**

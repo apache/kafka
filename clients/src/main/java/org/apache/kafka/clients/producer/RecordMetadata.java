@@ -31,25 +31,27 @@ public final class RecordMetadata {
     // producer.
     private final long timestamp;
     private final long checksum;
-    private final int size;
+    private final int keySize;
+    private final int valueSize;
     private final TopicPartition topicPartition;
 
     private RecordMetadata(TopicPartition topicPartition, long offset, long timestamp, long
-        checksum, int size) {
+        checksum, int keySize, int valueSize) {
         super();
         this.offset = offset;
         this.timestamp = timestamp;
         this.checksum = checksum;
-        this.size = size;
+        this.keySize = keySize;
+        this.valueSize = valueSize;
         this.topicPartition = topicPartition;
     }
 
     public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset,
-                          long timestamp, long checksum, int size) {
+                          long timestamp, long checksum, int keySize, int valueSize) {
         // ignore the relativeOffset if the base offset is -1,
         // since this indicates the offset is unknown
         this(topicPartition, baseOffset == -1 ? baseOffset : baseOffset + relativeOffset,
-             timestamp, checksum, size);
+             timestamp, checksum, keySize, valueSize);
     }
 
     /**
@@ -67,17 +69,24 @@ public final class RecordMetadata {
     }
 
     /**
-     * The checksum of the record.
+     * The checksum (CRC32) of the record.
      */
     public long checksum() {
         return this.checksum;
     }
 
     /**
-     * The size of the record (serialized, uncompressed) in bytes.
+     * The size of serialized, uncompressed key in bytes.
      */
-    public int size() {
-        return this.size;
+    public int keySize() {
+        return this.keySize;
+    }
+
+    /**
+     * The size of serialized, uncompressed value in bytes.
+     */
+    public int valueSize() {
+        return this.valueSize;
     }
 
     /**
