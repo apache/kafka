@@ -26,6 +26,12 @@ import org.apache.kafka.streams.StreamsConfig;
 
 import java.util.Properties;
 
+/**
+ * Implements a simple "Pipe" program that consumes from a source topic "streams-file-input"
+ * into a sink topic "streams-pipe-output".
+ *
+ * This example shows how to specify the source / sink topic names using the high-level KStream DSL.
+ */
 public class PipeJob {
 
     public static void main(String[] args) throws Exception {

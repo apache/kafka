@@ -33,6 +33,12 @@ import org.apache.kafka.streams.state.Stores;
 
 import java.util.Properties;
 
+/**
+ * Implements the "WordCount" program that computes a simple word occurrence histogram over text files.
+ * Assumes the input stream is named "streams-file-input".
+ *
+ * This example shows how to write a simple Kafka Streams program using the low-level Processor APIs.
+ */
 public class WordCountProcessorJob {
 
     private static class MyProcessorSupplier implements ProcessorSupplier<String, String> {

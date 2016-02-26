@@ -32,7 +32,6 @@ import org.apache.kafka.connect.json.JsonDeserializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.HoppingWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KStream;
@@ -44,6 +43,15 @@ import org.apache.kafka.streams.kstream.Windowed;
 
 import java.util.Properties;
 
+/**
+ * Implements the "PageView Stats" program that joins the pageview stream with
+ * the user profile table to count the number of pageview per user region.
+ * Assumes the input stream is named "streams-pageview-input".
+ *
+ * This example shows how to:
+ *   1. write stateful computations like joins / aggregations using the high-level KStream DSL.
+ *   2. use general data types (e.g. JSON, Avro, etc) for serdes in Kafka Streams.
+ */
 public class PageViewUntypedJob {
 
     public static void main(String[] args) throws Exception {

@@ -39,6 +39,15 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+/**
+ * Implements the "PageView Stats" program that joins the pageview stream with
+ * the user profile table to count the number of pageview per user region.
+ * Assumes the input stream is named "streams-pageview-input".
+ *
+ * This example shows how to:
+ *   1. write stateful computations like joins / aggregations using the high-level KStream DSL.
+ *   2. use specific data types (e.g. JSON POJO, Avro Specific Binding, etc) for serdes in Kafka Streams.
+ */
 public class PageViewTypedJob {
 
     // POJO classes
