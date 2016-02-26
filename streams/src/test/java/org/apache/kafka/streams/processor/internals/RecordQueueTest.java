@@ -58,7 +58,7 @@ public class RecordQueueTest {
         queue.addRawRecords(list1, timestampExtractor);
 
         assertEquals(3, queue.size());
-        assertEquals(TimestampTracker.NOT_KNOWN, queue.timestamp());
+        assertEquals(1L, queue.timestamp());
 
         // poll the first record, now with 1, 3
         assertEquals(2L, queue.poll().timestamp);
@@ -107,7 +107,7 @@ public class RecordQueueTest {
         queue.addRawRecords(list3, timestampExtractor);
 
         assertEquals(3, queue.size());
-        assertEquals(3L, queue.timestamp());
+        assertEquals(4L, queue.timestamp());
 
         // poll one record again, the timestamp should advance now
         assertEquals(4L, queue.poll().timestamp);
