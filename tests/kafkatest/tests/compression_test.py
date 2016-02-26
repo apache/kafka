@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from ducktape.mark import parametrize
+from ducktape.utils.util import wait_until
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
@@ -40,6 +41,7 @@ class CompressionTest(ProduceConsumeValidateTest):
         self.timeout_sec = 60
         self.producer_throughput = 1000
         self.num_producers = 4
+        self.messages_per_producer = 1000
         self.num_consumers = 1
 
     def setUp(self):
@@ -49,8 +51,9 @@ class CompressionTest(ProduceConsumeValidateTest):
         # Override this since we're adding services outside of the constructor
         return super(CompressionTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
-    @parametrize(compression_types=["snappy","gzip","lz4","none"])
-    def test_compressed_topic(self, compression_types):
+    @parametrize(compression_types=["snappy","gzip","lz4","none"], new_consumer=True)
+    @parametrize(compression_types=["snappy","gzip","lz4","none"], new_consumer=False)
+    def test_compressed_topic(self, compression_types, new_consumer):
         """Test produce => consume => validate for compressed topics
         Setup: 1 zk, 1 kafka node, 1 topic with partitions=10, replication-factor=1
 
@@ -66,13 +69,17 @@ class CompressionTest(ProduceConsumeValidateTest):
 
         self.kafka.security_protocol = "PLAINTEXT"
         self.kafka.interbroker_security_protocol = self.kafka.security_protocol
-        new_consumer = False if  self.kafka.security_protocol == "PLAINTEXT" else True
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
                                            self.topic, throughput=self.producer_throughput,
                                            message_validator=is_int_with_prefix,
                                            compression_types=compression_types)
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic,
-                                        new_consumer=new_consumer, consumer_timeout_ms=60000, message_validator=is_int_with_prefix)
+                                        new_consumer=new_consumer, consumer_timeout_ms=60000,
+                                        message_validator=is_int_with_prefix)
         self.kafka.start()
-        
-        self.run_produce_consume_validate()
+
+        self.run_produce_consume_validate(lambda: wait_until(
+            lambda: self.producer.each_produced_at_least(self.messages_per_producer) == True,
+            timeout_sec=120, backoff_sec=1,
+            err_msg="Producer did not produce all messages in reasonable amount of time"))
+

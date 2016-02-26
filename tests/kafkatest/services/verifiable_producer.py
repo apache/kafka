@@ -45,6 +45,7 @@ class VerifiableProducer(BackgroundThreadService):
     def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
                  message_validator=is_int, compression_types=None, version=TRUNK):
         """
+        :param max_messages is a number of messages to be produced per producer
         :param message_validator checks for an expected format of messages produced. There are
         currently two:
                * is_int is an integer format; this is default and expected to be used if
@@ -71,6 +72,7 @@ class VerifiableProducer(BackgroundThreadService):
             node.version = version
         self.acked_values = []
         self.not_acked_values = []
+        self.produced_count = {}
         self.prop_file = ""
 
     def _worker(self, idx, node):
@@ -98,6 +100,7 @@ class VerifiableProducer(BackgroundThreadService):
         self.logger.debug("VerifiableProducer %d command: %s" % (idx, cmd))
 
 
+        self.produced_count[idx] = 0
         last_produced_time = time.time()
         prev_msg = None
         for line in node.account.ssh_capture(cmd):
@@ -110,9 +113,11 @@ class VerifiableProducer(BackgroundThreadService):
                     if data["name"] == "producer_send_error":
                         data["node"] = idx
                         self.not_acked_values.append(self.message_validator(data["value"]))
+                        self.produced_count[idx] += 1
 
                     elif data["name"] == "producer_send_success":
                         self.acked_values.append(self.message_validator(data["value"]))
+                        self.produced_count[idx] += 1
 
                         # Log information if there is a large gap between successively acknowledged messages
                         t = time.time()
@@ -189,6 +194,12 @@ class VerifiableProducer(BackgroundThreadService):
     def num_not_acked(self):
         with self.lock:
             return len(self.not_acked_values)
+
+    def each_produced_at_least(self, count):
+        for idx in range(1, self.num_nodes):
+            if self.produced_count.get(idx) is None or self.produced_count[idx] < count:
+                return False
+        return True
 
     def stop_node(self, node):
         self.kill_node(node, clean_shutdown=False, allow_fail=False)
