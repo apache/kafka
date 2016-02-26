@@ -33,6 +33,7 @@ class ConnectDistributedTest(KafkaTest):
     TOPIC = "test"
     OFFSETS_TOPIC = "connect-offsets"
     CONFIG_TOPIC = "connect-configs"
+    STATUS_TOPIC = "connect-status"
 
     # Since tasks can be assigned to any node and we're testing with files, we need to make sure the content is the same
     # across all nodes.

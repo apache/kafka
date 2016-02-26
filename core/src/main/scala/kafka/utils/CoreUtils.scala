@@ -19,7 +19,6 @@ package kafka.utils
 
 import java.io._
 import java.nio._
-import charset.Charset
 import java.nio.channels._
 import java.util.concurrent.locks.{ReadWriteLock, Lock}
 import java.lang.management._
@@ -29,10 +28,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 
 import scala.collection._
 import scala.collection.mutable
-import java.util.Properties
 import kafka.cluster.EndPoint
-import kafka.common.KafkaException
-import kafka.common.KafkaStorageException
 import org.apache.kafka.common.utils.Crc32
 import org.apache.kafka.common.utils.Utils
 

@@ -89,6 +89,7 @@ public class Compressor {
     public long writtenUncompressed;
     public long numRecords;
     public float compressionRate;
+    public long maxTimestamp;
 
     public Compressor(ByteBuffer buffer, CompressionType type, int blockSize) {
         this.type = type;
@@ -97,6 +98,7 @@ public class Compressor {
         this.numRecords = 0;
         this.writtenUncompressed = 0;
         this.compressionRate = 1;
+        this.maxTimestamp = Record.NO_TIMESTAMP;
 
         if (type != CompressionType.NONE) {
             // for compressed records, leave space for the header and the shallow message metadata
@@ -136,10 +138,10 @@ public class Compressor {
             buffer.putLong(numRecords - 1);
             buffer.putInt(pos - initPos - Records.LOG_OVERHEAD);
             // write the shallow message (the crc and value size are not correct yet)
-            Record.write(buffer, null, null, type, 0, -1);
+            Record.write(buffer, maxTimestamp, null, null, type, 0, -1);
             // compute the fill the value size
             int valueSize = pos - initPos - Records.LOG_OVERHEAD - Record.RECORD_OVERHEAD;
-            buffer.putInt(initPos + Records.LOG_OVERHEAD + Record.KEY_OFFSET, valueSize);
+            buffer.putInt(initPos + Records.LOG_OVERHEAD + Record.KEY_OFFSET_V1, valueSize);
             // compute and fill the crc at the beginning of the message
             long crc = Record.computeChecksum(buffer,
                 initPos + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET,
@@ -199,19 +201,21 @@ public class Compressor {
         }
     }
 
-    public void putRecord(byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
+    public void putRecord(long timestamp, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
         // put a record as un-compressed into the underlying stream
-        long crc = Record.computeChecksum(key, value, type, valueOffset, valueSize);
+        long crc = Record.computeChecksum(timestamp, key, value, type, valueOffset, valueSize);
         byte attributes = Record.computeAttributes(type);
-        putRecord(crc, attributes, key, value, valueOffset, valueSize);
+        putRecord(crc, attributes, timestamp, key, value, valueOffset, valueSize);
+
     }
 
-    public void putRecord(byte[] key, byte[] value) {
-        putRecord(key, value, CompressionType.NONE, 0, -1);
+    public void putRecord(long timestamp, byte[] key, byte[] value) {
+        putRecord(timestamp, key, value, CompressionType.NONE, 0, -1);
     }
 
-    private void putRecord(final long crc, final byte attributes, final byte[] key, final byte[] value, final int valueOffset, final int valueSize) {
-        Record.write(this, crc, attributes, key, value, valueOffset, valueSize);
+    private void putRecord(final long crc, final byte attributes, final long timestamp, final byte[] key, final byte[] value, final int valueOffset, final int valueSize) {
+        maxTimestamp = Math.max(maxTimestamp, timestamp);
+        Record.write(this, crc, attributes, timestamp, key, value, valueOffset, valueSize);
     }
 
     public void recordWritten(int size) {

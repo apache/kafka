@@ -37,13 +37,21 @@ abstract class WorkerTask implements Runnable {
     protected final ConnectorTaskId id;
     private final AtomicBoolean stopping;
     private final AtomicBoolean running;
+    private final AtomicBoolean cancelled;
     private final CountDownLatch shutdownLatch;
+    private final TaskStatus.Listener lifecycleListener;
 
-    public WorkerTask(ConnectorTaskId id) {
+    public WorkerTask(ConnectorTaskId id, TaskStatus.Listener lifecycleListener) {
         this.id = id;
         this.stopping = new AtomicBoolean(false);
         this.running = new AtomicBoolean(false);
+        this.cancelled = new AtomicBoolean(false);
         this.shutdownLatch = new CountDownLatch(1);
+        this.lifecycleListener = lifecycleListener;
+    }
+
+    public ConnectorTaskId id() {
+        return id;
     }
 
     /**
@@ -61,9 +69,17 @@ abstract class WorkerTask implements Runnable {
     }
 
     /**
+     * Cancel this task. This won't actually stop it, but it will prevent the state from being
+     * updated when it eventually does shutdown.
+     */
+    public void cancel() {
+        this.cancelled.set(true);
+    }
+
+    /**
      * Wait for this task to finish stopping.
      *
-     * @param timeoutMs
+     * @param timeoutMs time in milliseconds to await stop
      * @return true if successful, false if the timeout was reached
      */
     public boolean awaitStop(long timeoutMs) {
@@ -85,28 +101,50 @@ abstract class WorkerTask implements Runnable {
         return stopping.get();
     }
 
+    protected boolean isStopped() {
+        return !running.get();
+    }
+
     private void doClose() {
         try {
             close();
         } catch (Throwable t) {
-            log.error("Unhandled exception in task shutdown {}", id, t);
+            log.error("Task {} threw an uncaught and unrecoverable exception during shutdown", id, t);
+            throw t;
         } finally {
             running.set(false);
             shutdownLatch.countDown();
         }
     }
 
-    @Override
-    public void run() {
+    private void doRun() {
         if (!this.running.compareAndSet(false, true))
             throw new IllegalStateException("The task cannot be started while still running");
 
         try {
+            if (stopping.get())
+                return;
+
+            lifecycleListener.onStartup(id);
             execute();
         } catch (Throwable t) {
-            log.error("Unhandled exception in task {}", id, t);
+            log.error("Task {} threw an uncaught and unrecoverable exception", id, t);
+            log.error("Task is being killed and will not recover until manually restarted");
+            throw t;
         } finally {
             doClose();
+        }
+    }
+
+    @Override
+    public void run() {
+        try {
+            doRun();
+            if (!cancelled.get())
+                lifecycleListener.onShutdown(id);
+        } catch (Throwable t) {
+            if (!cancelled.get())
+                lifecycleListener.onFailure(id, t);
         }
     }
 

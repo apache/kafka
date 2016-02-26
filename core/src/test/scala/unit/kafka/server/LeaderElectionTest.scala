@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{BrokerEndPoint, TopicPartition}
 import org.apache.kafka.common.requests.LeaderAndIsrRequest.PartitionState
 
 import scala.collection.JavaConverters._
@@ -130,7 +130,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", s.boundPort()))
     val brokerEndPoints = brokers.map { b =>
       val brokerEndPoint = b.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)
-      new LeaderAndIsrRequest.EndPoint(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
+      new BrokerEndPoint(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
     }
 
     val controllerContext = new ControllerContext(zkUtils, 6000)

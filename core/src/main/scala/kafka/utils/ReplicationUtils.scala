@@ -21,7 +21,6 @@ import kafka.api.LeaderAndIsr
 import kafka.common.TopicAndPartition
 import kafka.controller.{IsrChangeNotificationListener, LeaderIsrAndControllerEpoch}
 import kafka.utils.ZkUtils._
-import org.I0Itec.zkclient.ZkClient
 import org.apache.zookeeper.data.Stat
 
 import scala.collection._

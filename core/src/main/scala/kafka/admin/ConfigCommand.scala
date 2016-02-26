@@ -17,18 +17,18 @@
 
 package kafka.admin
 
-import joptsimple._
 import java.util.Properties
+
+import joptsimple._
 import kafka.admin.TopicCommand._
-import kafka.consumer.ConsumerConfig
 import kafka.log.{Defaults, LogConfig}
 import kafka.server.{ClientConfigOverride, ConfigType}
-import kafka.utils.{ZkUtils, CommandLineUtils}
-import org.I0Itec.zkclient.ZkClient
-import scala.collection._
-import scala.collection.JavaConversions._
-import org.apache.kafka.common.utils.Utils
+import kafka.utils.{CommandLineUtils, ZkUtils}
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.utils.Utils
+
+import scala.collection.JavaConversions._
+import scala.collection._
 
 
 /**
@@ -117,6 +117,10 @@ object ConfigCommand {
             "Invalid entity config: all configs to be added must be in the format \"key=val\".")
     val props = new Properties
     configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).trim))
+    if (props.containsKey(LogConfig.MessageFormatVersionProp)) {
+      println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
+        s"This configuration will be ignored if the value is on a version newer than the specified inter.broker.protocol.version in the broker.")
+    }
     props
   }
 

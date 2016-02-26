@@ -913,7 +913,8 @@ public class ConsumerCoordinatorTest {
                 retryBackoffMs,
                 defaultOffsetCommitCallback,
                 autoCommitEnabled,
-                autoCommitIntervalMs);
+                autoCommitIntervalMs,
+                null);
     }
 
     private Struct consumerMetadataResponse(Node node, short error) {

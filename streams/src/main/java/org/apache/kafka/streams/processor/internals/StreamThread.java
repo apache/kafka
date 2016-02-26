@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -51,6 +52,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.channels.FileLock;
 import java.util.ArrayList;
@@ -103,8 +105,9 @@ public class StreamThread extends Thread {
     private long lastClean;
     private long lastCommit;
     private long recordsProcessed;
+    private Throwable rebalanceException = null;
 
-    private final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
+    private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
 
     static File makeStateDir(String jobId, String baseDirName) {
@@ -122,19 +125,30 @@ public class StreamThread extends Thread {
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
-            addStreamTasks(assignment);
-            addStandbyTasks();
-            lastClean = time.milliseconds(); // start the cleaning cycle
+            try {
+                addStreamTasks(assignment);
+                addStandbyTasks();
+                lastClean = time.milliseconds(); // start the cleaning cycle
+            } catch (Throwable t) {
+                rebalanceException = t;
+                throw t;
+            }
         }
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
-            commitAll();
-            // TODO: right now upon partition revocation, we always remove all the tasks;
-            // this behavior can be optimized to only remove affected tasks in the future
-            removeStreamTasks();
-            removeStandbyTasks();
-            lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
+            try {
+                commitAll();
+                lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
+            } catch (Throwable t) {
+                rebalanceException = t;
+                throw t;
+            } finally {
+                // TODO: right now upon partition revocation, we always remove all the tasks;
+                // this behavior can be optimized to only remove affected tasks in the future
+                removeStreamTasks();
+                removeStandbyTasks();
+            }
         }
     };
 
@@ -261,11 +275,16 @@ public class StreamThread extends Thread {
     private void shutdown() {
         log.info("Shutting down stream thread [" + this.getName() + "]");
 
+        // Exceptions should not prevent this call from going through all shutdown steps
+
         try {
             commitAll();
         } catch (Throwable e) {
             // already logged in commitAll()
         }
+
+        // Close standby tasks before closing the restore consumer since closing standby tasks uses the restore consumer.
+        removeStandbyTasks();
 
         // We need to first close the underlying clients before closing the state
         // manager, for example we need to make sure producer's message sends
@@ -287,19 +306,14 @@ public class StreamThread extends Thread {
             log.error("Failed to close restore consumer in thread [" + this.getName() + "]: ", e);
         }
 
-        // Exceptions should not prevent this call from going through all shutdown steps
-        try {
-            removeStreamTasks();
-            removeStandbyTasks();
-        } catch (Throwable e) {
-            // already logged in removeStreamTasks() and removeStandbyTasks()
-        }
+        removeStreamTasks();
 
         log.info("Stream thread shutdown complete [" + this.getName() + "]");
     }
 
     private void runLoop() {
         int totalNumBuffered = 0;
+        long lastPoll = 0L;
         boolean requiresPoll = true;
 
         ensureCopartitioning(builder.copartitionGroups());
@@ -314,6 +328,10 @@ public class StreamThread extends Thread {
                 long startPoll = time.milliseconds();
 
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(totalNumBuffered == 0 ? this.pollTimeMs : 0);
+                lastPoll = time.milliseconds();
+
+                if (rebalanceException != null)
+                    throw new StreamsException("Failed to rebalance", rebalanceException);
 
                 if (!records.isEmpty()) {
                     for (TopicPartition partition : records.partitions()) {
@@ -340,6 +358,12 @@ public class StreamThread extends Thread {
                 }
 
                 maybePunctuate();
+
+                // if pollTimeMs has passed since the last poll, we poll to respond to a possible rebalance
+                // even when we paused all partitions.
+                if (lastPoll + this.pollTimeMs < time.milliseconds())
+                    requiresPoll = true;
+
             } else {
                 // even when no task is assigned, we must poll to get a task.
                 requiresPoll = true;
@@ -355,18 +379,22 @@ public class StreamThread extends Thread {
         if (!standbyTasks.isEmpty()) {
             if (processStandbyRecords) {
                 if (!standbyRecords.isEmpty()) {
+                    Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> remainingStandbyRecords = new HashMap<>();
+
                     for (TopicPartition partition : standbyRecords.keySet()) {
-                        StandbyTask task = standbyTasksByPartition.get(partition);
-                        List<ConsumerRecord<byte[], byte[]>> remaining = standbyRecords.remove(partition);
+                        List<ConsumerRecord<byte[], byte[]>> remaining = standbyRecords.get(partition);
                         if (remaining != null) {
+                            StandbyTask task = standbyTasksByPartition.get(partition);
                             remaining = task.update(partition, remaining);
                             if (remaining != null) {
-                                standbyRecords.put(partition, remaining);
+                                remainingStandbyRecords.put(partition, remaining);
                             } else {
                                 restoreConsumer.resume(partition);
                             }
                         }
                     }
+
+                    standbyRecords = remainingStandbyRecords;
                 }
                 processStandbyRecords = false;
             }
@@ -376,6 +404,12 @@ public class StreamThread extends Thread {
             if (!records.isEmpty()) {
                 for (TopicPartition partition : records.partitions()) {
                     StandbyTask task = standbyTasksByPartition.get(partition);
+
+                    if (task == null) {
+                        log.error("missing standby task for partition {}", partition);
+                        throw new StreamsException("missing standby task for partition " + partition);
+                    }
+
                     List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
                     if (remaining != null) {
                         restoreConsumer.pause(partition);
@@ -456,7 +490,11 @@ public class StreamThread extends Thread {
     private void commitOne(AbstractTask task, long now) {
         try {
             task.commit();
+        } catch (CommitFailedException e) {
+            // commit failed. Just log it.
+            log.warn("Failed to commit " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
         } catch (KafkaException e) {
+            // commit failed due to an unexpected exception. Log it and rethrow the exception.
             log.error("Failed to commit " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
             throw e;
         }
@@ -479,21 +517,25 @@ public class StreamThread extends Thread {
                         TaskId id = TaskId.parse(dirName.substring(dirName.lastIndexOf("-") + 1));
 
                         // try to acquire the exclusive lock on the state directory
-                        FileLock directoryLock = null;
-                        try {
-                            directoryLock = ProcessorStateManager.lockStateDirectory(dir);
-                            if (directoryLock != null) {
-                                log.info("Deleting obsolete state directory {} for task {} after delayed {} ms.", dir.getAbsolutePath(), id, cleanTimeMs);
-                                Utils.delete(dir);
-                            }
-                        } catch (IOException e) {
-                            log.error("Failed to lock the state directory due to an unexpected exception", e);
-                        } finally {
-                            if (directoryLock != null) {
-                                try {
-                                    directoryLock.release();
-                                } catch (IOException e) {
-                                    log.error("Failed to release the state directory lock");
+                        if (dir.exists()) {
+                            FileLock directoryLock = null;
+                            try {
+                                directoryLock = ProcessorStateManager.lockStateDirectory(dir);
+                                if (directoryLock != null) {
+                                    log.info("Deleting obsolete state directory {} for task {} after delayed {} ms.", dir.getAbsolutePath(), id, cleanTimeMs);
+                                    Utils.delete(dir);
+                                }
+                            } catch (FileNotFoundException e) {
+                                // the state directory may be deleted by another thread
+                            } catch (IOException e) {
+                                log.error("Failed to lock the state directory due to an unexpected exception", e);
+                            } finally {
+                                if (directoryLock != null) {
+                                    try {
+                                        directoryLock.release();
+                                    } catch (IOException e) {
+                                        log.error("Failed to release the state directory lock");
+                                    }
                                 }
                             }
                         }
@@ -590,15 +632,19 @@ public class StreamThread extends Thread {
     }
 
     private void removeStreamTasks() {
-        for (StreamTask task : activeTasks.values()) {
-            closeOne(task);
+        try {
+            for (StreamTask task : activeTasks.values()) {
+                closeOne(task);
+            }
+            prevTasks.clear();
+            prevTasks.addAll(activeTasks.keySet());
+
+            activeTasks.clear();
+            activeTasksByPartition.clear();
+
+        } catch (Exception e) {
+            log.error("Failed to remove stream tasks in thread [" + this.getName() + "]: ", e);
         }
-
-        prevTasks.clear();
-        prevTasks.addAll(activeTasks.keySet());
-
-        activeTasks.clear();
-        activeTasksByPartition.clear();
     }
 
     private void closeOne(AbstractTask task) {
@@ -607,7 +653,6 @@ public class StreamThread extends Thread {
             task.close();
         } catch (StreamsException e) {
             log.error("Failed to close a " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
-            throw e;
         }
         sensors.taskDestructionSensor.record();
     }
@@ -642,6 +687,9 @@ public class StreamThread extends Thread {
                 }
                 // collect checked pointed offsets to position the restore consumer
                 // this include all partitions from which we restore states
+                for (TopicPartition partition : task.checkpointedOffsets().keySet()) {
+                    standbyTasksByPartition.put(partition, task);
+                }
                 checkpointedOffsets.putAll(task.checkpointedOffsets());
             }
         }
@@ -661,14 +709,20 @@ public class StreamThread extends Thread {
 
 
     private void removeStandbyTasks() {
-        for (StandbyTask task : standbyTasks.values()) {
-            closeOne(task);
-        }
-        // un-assign the change log partitions
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        try {
+            for (StandbyTask task : standbyTasks.values()) {
+                closeOne(task);
+            }
+            standbyTasks.clear();
+            standbyTasksByPartition.clear();
+            standbyRecords.clear();
 
-        standbyTasks.clear();
-        standbyTasksByPartition.clear();
+            // un-assign the change log partitions
+            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+
+        } catch (Exception e) {
+            log.error("Failed to remove standby tasks in thread [" + this.getName() + "]: ", e);
+        }
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups) {

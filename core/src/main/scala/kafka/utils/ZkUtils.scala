@@ -18,7 +18,6 @@
 package kafka.utils
 
 import java.util.concurrent.CountDownLatch
-
 import kafka.cluster._
 import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.server.ConfigType
@@ -28,9 +27,7 @@ import org.I0Itec.zkclient.exception.{ZkException, ZkNodeExistsException, ZkNoNo
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
-
 import org.apache.zookeeper.ZooDefs
-import scala.collection.JavaConverters._
 import scala.collection._
 import kafka.api.LeaderAndIsr
 import org.apache.zookeeper.data.{ACL, Stat}
@@ -41,7 +38,6 @@ import kafka.controller.KafkaController
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
 import kafka.utils.ZkUtils._
-
 import org.apache.zookeeper.AsyncCallback.{DataCallback,StringCallback}
 import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.KeeperException
