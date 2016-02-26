@@ -21,13 +21,13 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import config_property
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
-from kafkatest.utils import is_int
+from kafkatest.utils import is_int_with_prefix
 
 
 class TestUpgrade(ProduceConsumeValidateTest):
 
     def __init__(self, test_context):
-        super(TestUpgrade, self).__init__(test_context=test_context)
+        super(TestUpgrade, self).__init__(test_context=test_context, verify_successful_acks=True)
 
     def setUp(self):
         self.topic = "test_topic"
@@ -57,7 +57,6 @@ class TestUpgrade(ProduceConsumeValidateTest):
             else:
                 node.config[config_property.MESSAGE_FORMAT_VERSION] = to_message_format_version
             self.kafka.start_node(node)
-
 
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None)
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, new_consumer=True)
@@ -90,12 +89,14 @@ class TestUpgrade(ProduceConsumeValidateTest):
 
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
                                            self.topic, throughput=self.producer_throughput,
+                                           message_validator=is_int_with_prefix,
+                                           compression_types=["none","snappy"],
                                            version=KafkaVersion(from_kafka_version))
 
         # TODO - reduce the timeout
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
                                         self.topic, consumer_timeout_ms=30000, new_consumer=new_consumer,
-                                        message_validator=is_int, version=KafkaVersion(from_kafka_version))
+                                        message_validator=is_int_with_prefix, version=KafkaVersion(from_kafka_version))
 
         self.run_produce_consume_validate(core_test_action=self.perform_upgrade(from_kafka_version,
                                                                                 to_message_format_version))
