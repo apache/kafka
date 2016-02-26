@@ -88,6 +88,7 @@ public class MemoryRecords implements Records {
 
     /**
      * Append a new record and offset to the buffer
+     * @return crc of the record
      */
     public long append(long offset, long timestamp, byte[] key, byte[] value) {
         if (!writable)

@@ -201,6 +201,9 @@ public class Compressor {
         }
     }
 
+    /**
+     * @return CRC of the record
+     */
     public long putRecord(long timestamp, byte[] key, byte[] value, CompressionType type,
                           int valueOffset, int valueSize) {
         // put a record as un-compressed into the underlying stream
@@ -210,6 +213,10 @@ public class Compressor {
         return crc;
     }
 
+    /**
+     * Put a record as uncompressed into the underlying stream
+     * @return CRC of the record
+     */
     public long putRecord(long timestamp, byte[] key, byte[] value) {
         return putRecord(timestamp, key, value, CompressionType.NONE, 0, -1);
     }
