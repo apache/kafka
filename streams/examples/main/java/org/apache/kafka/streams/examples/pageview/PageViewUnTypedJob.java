@@ -38,11 +38,13 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
 
 import java.util.Properties;
 
-public class PageViewUnTypedJob {
+public class PageViewUntypedJob {
 
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
@@ -55,7 +57,7 @@ public class PageViewUnTypedJob {
         props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
         props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
 
-        // can specify underlying client configs if necessary
+        // setting offset reset to earliest so that we can re-run the demo code with the same loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();
@@ -71,17 +73,30 @@ public class PageViewUnTypedJob {
 
         KTable<String, JsonNode> users = builder.table(stringSerializer, jsonSerializer, stringDeserializer, jsonDeserializer, "streams-userprofile-input");
 
-        KTable<String, String> userRegions = users.mapValues(record -> record.get("region").textValue());
+        KTable<String, String> userRegions = users.mapValues(new ValueMapper<JsonNode, String>() {
+            @Override
+            public String apply(JsonNode record) {
+                return record.get("region").textValue();
+            }
+        });
 
         KStream<JsonNode, JsonNode> regionCount = views
-                .leftJoin(userRegions, (view, region) -> {
-                    ObjectNode jNode = JsonNodeFactory.instance.objectNode();
+                .leftJoin(userRegions, new ValueJoiner<JsonNode, String, JsonNode>() {
+                            @Override
+                            public JsonNode apply(JsonNode view, String region) {
+                                ObjectNode jNode = JsonNodeFactory.instance.objectNode();
 
-                    return (JsonNode) jNode.put("user", view.get("user").textValue())
-                            .put("page", view.get("page").textValue())
-                            .put("region", region == null ? "UNKNOWN" : region);
+                                return jNode.put("user", view.get("user").textValue())
+                                        .put("page", view.get("page").textValue())
+                                        .put("region", region == null ? "UNKNOWN" : region);
+                            }
+                        })
+                .map(new KeyValueMapper<String, JsonNode, KeyValue<String, JsonNode>>() {
+                    @Override
+                    public KeyValue<String, JsonNode> apply(String user, JsonNode viewRegion) {
+                        return new KeyValue<>(viewRegion.get("region").textValue(), viewRegion);
+                    }
                 })
-                .map((user, viewRegion) -> new KeyValue<>(viewRegion.get("region").textValue(), viewRegion))
                 .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000),
                         stringSerializer, longSerializer,
                         stringDeserializer, longDeserializer)
@@ -107,7 +122,9 @@ public class PageViewUnTypedJob {
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
 
-        Thread.sleep(8000L);
+        // usually the streaming job would be ever running,
+        // in this example we just let it run for some time and stop since the input data is finite.
+        Thread.sleep(5000L);
 
         streams.close();
     }

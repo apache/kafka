@@ -103,7 +103,7 @@ public class WordCountProcessorJob {
         props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
-        // can specify underlying client configs if necessary
+        // setting offset reset to earliest so that we can re-run the demo code with the same loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         TopologyBuilder builder = new TopologyBuilder();
@@ -118,6 +118,8 @@ public class WordCountProcessorJob {
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
 
+        // usually the streaming job would be ever running,
+        // in this example we just let it run for some time and stop since the input data is finite.
         Thread.sleep(5000L);
 
         streams.close();
