@@ -21,7 +21,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import config_property
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
-from kafkatest.utils import is_int_with_prefix
+from kafkatest.utils import is_int
 
 
 class TestUpgrade(ProduceConsumeValidateTest):
@@ -36,7 +36,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
 
         # Producer and consumer
         self.producer_throughput = 10000
-        self.num_producers = 2
+        self.num_producers = 1
         self.num_consumers = 1
 
     def perform_upgrade(self, from_kafka_version, to_message_format_version=None):
@@ -58,11 +58,13 @@ class TestUpgrade(ProduceConsumeValidateTest):
                 node.config[config_property.MESSAGE_FORMAT_VERSION] = to_message_format_version
             self.kafka.start_node(node)
 
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None)
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, new_consumer=True)
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=str(LATEST_0_9))
-    @parametrize(from_kafka_version=str(LATEST_0_8_2), to_message_format_version=None)
-    def test_upgrade(self, from_kafka_version, to_message_format_version, new_consumer=False):
+    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"])
+    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["snappy"], new_consumer=True)
+    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=str(LATEST_0_9), compression_types=["none"])
+    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=str(LATEST_0_9), compression_types=["snappy"], new_consumer=True)
+    @parametrize(from_kafka_version=str(LATEST_0_8_2), to_message_format_version=None, compression_types=["none"])
+    @parametrize(from_kafka_version=str(LATEST_0_8_2), to_message_format_version=None, compression_types=["snappy"])
+    def test_upgrade(self, from_kafka_version, to_message_format_version, compression_types, new_consumer=False):
         """Test upgrade of Kafka broker cluster from 0.8.2 or 0.9.0 to 0.10
 
         from_kafka_version is a Kafka version to upgrade from: either 0.8.2.X or 0.9
@@ -89,14 +91,14 @@ class TestUpgrade(ProduceConsumeValidateTest):
 
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
                                            self.topic, throughput=self.producer_throughput,
-                                           message_validator=is_int_with_prefix,
-                                           compression_types=["none","snappy"],
+                                           message_validator=is_int,
+                                           compression_types=compression_types,
                                            version=KafkaVersion(from_kafka_version))
 
         # TODO - reduce the timeout
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
                                         self.topic, consumer_timeout_ms=30000, new_consumer=new_consumer,
-                                        message_validator=is_int_with_prefix, version=KafkaVersion(from_kafka_version))
+                                        message_validator=is_int, version=KafkaVersion(from_kafka_version))
 
         self.run_produce_consume_validate(core_test_action=self.perform_upgrade(from_kafka_version,
                                                                                 to_message_format_version))
