@@ -26,7 +26,10 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
 
 * Bring up the test cluster
 
-        $ vagrant up
+        $ vagrant/vagrant-up.sh
+        $ # Note: on local machines, this is equivalent to:
+        $ # vagrant up
+        $ # vagrant hostmanager
 
 * Build the desired branch of Kafka
        
@@ -122,7 +125,7 @@ the test driver machine.
 
 * Start up the instances (note we have found bringing up machines in parallel can cause errors on aws):
 
-        $ vagrant up --provider=aws --no-provision --no-parallel && vagrant provision
+        $ vagrant/vagrant-up.sh --aws
 
 * Now you should be able to run tests:
 
