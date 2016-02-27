@@ -27,7 +27,7 @@ from kafkatest.utils import is_int
 class TestUpgrade(ProduceConsumeValidateTest):
 
     def __init__(self, test_context):
-        super(TestUpgrade, self).__init__(test_context=test_context, verify_successful_acks=True)
+        super(TestUpgrade, self).__init__(test_context=test_context, verify_successful_acks=False)
 
     def setUp(self):
         self.topic = "test_topic"
@@ -100,5 +100,5 @@ class TestUpgrade(ProduceConsumeValidateTest):
                                         self.topic, consumer_timeout_ms=30000, new_consumer=new_consumer,
                                         message_validator=is_int, version=KafkaVersion(from_kafka_version))
 
-        self.run_produce_consume_validate(core_test_action=self.perform_upgrade(from_kafka_version,
-                                                                                to_message_format_version))
+        self.run_produce_consume_validate(core_test_action=lambda: self.perform_upgrade(from_kafka_version,
+                                                                                        to_message_format_version))

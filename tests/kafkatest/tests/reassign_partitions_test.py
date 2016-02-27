@@ -107,4 +107,4 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, new_consumer=new_consumer, consumer_timeout_ms=60000, message_validator=is_int)
         self.kafka.start()
         
-        self.run_produce_consume_validate(core_test_action=self.reassign_partitions(bounce_brokers))
+        self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(bounce_brokers))

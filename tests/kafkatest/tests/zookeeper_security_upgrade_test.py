@@ -114,4 +114,4 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         self.create_producer_and_consumer()
 
         #Run upgrade
-        self.run_produce_consume_validate(self.run_zk_migration)
+        self.run_produce_consume_validate(lambda: self.run_zk_migration)
