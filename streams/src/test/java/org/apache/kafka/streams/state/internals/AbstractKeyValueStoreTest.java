@@ -202,11 +202,11 @@ public abstract class AbstractKeyValueStoreTest {
         try {
 
             // Verify that the store reads and writes correctly ...
-            store.putIfAbsent(0, "zero");
-            store.putIfAbsent(1, "one");
-            store.putIfAbsent(2, "two");
-            store.putIfAbsent(4, "four");
-            store.putIfAbsent(4, "unexpected value");
+            assertNull(store.putIfAbsent(0, "zero"));
+            assertNull(store.putIfAbsent(1, "one"));
+            assertNull(store.putIfAbsent(2, "two"));
+            assertNull(store.putIfAbsent(4, "four"));
+            assertEquals("four", store.putIfAbsent(4, "unexpected value"));
             assertEquals(4, driver.sizeOf(store));
             assertEquals("zero", store.get(0));
             assertEquals("one", store.get(1));
