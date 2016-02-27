@@ -438,6 +438,8 @@ public class DistributedHerderTest {
         TestFuture<Void> readToEndFuture = new TestFuture<>();
         readToEndFuture.resolveOnGet(new TimeoutException());
         EasyMock.expect(configStorage.readToEnd()).andReturn(readToEndFuture);
+        member.maybeLeaveGroup();
+        EasyMock.expectLastCall();
         PowerMock.expectPrivate(herder, "backoff", DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_DEFAULT);
         member.requestRejoin();
 

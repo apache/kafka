@@ -574,21 +574,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         //      even attempting to. If we can't we should drop out of the group because we will block everyone from making
         //      progress. We can backoff and try rejoining later.
         //  1b. We are not the leader. We might need to catch up. If we're already caught up we can rejoin immediately,
-        //      otherwise, we just want to wait indefinitely to catch up and rejoin whenever we're finally ready.
+        //      otherwise, we just want to wait reasonable amount of time to catch up and rejoin if we are ready.
         // 2. Assignment succeeded.
         //  2a. We are caught up on configs. Awesome! We can proceed to run our assigned work.
-        //  2b. We need to try to catch up. We can do this potentially indefinitely because if it takes to long, we'll
-        //      be kicked out of the group anyway due to lack of heartbeats.
+        //  2b. We need to try to catch up - try reading configs for reasonable amount of time.
 
         boolean needsReadToEnd = false;
-        long syncConfigsTimeoutMs = Long.MAX_VALUE;
         boolean needsRejoin = false;
         if (assignment.failed()) {
             needsRejoin = true;
             if (isLeader()) {
                 log.warn("Join group completed, but assignment failed and we are the leader. Reading to end of config and retrying.");
                 needsReadToEnd = true;
-                syncConfigsTimeoutMs = workerSyncTimeoutMs;
             } else if (configState.offset() < assignment.offset()) {
                 log.warn("Join group completed, but assignment failed and we lagging. Reading to end of config and retrying.");
                 needsReadToEnd = true;
@@ -604,10 +601,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         if (needsReadToEnd) {
             // Force exiting this method to avoid creating any connectors/tasks and require immediate rejoining if
-            // we timed out. This should only happen if we were the leader and didn't finish quickly enough, in which
-            // case we've waited a long time and should have already left the group OR the timeout should have been
-            // very long and not having finished also indicates we've waited longer than the session timeout.
-            if (!readConfigToEnd(syncConfigsTimeoutMs))
+            // we timed out. This should only happen if we failed to read configuration for long enough,
+            // in which case giving back control to the main loop will prevent hanging around indefinitely after getting kicked out of the group.
+            if (!readConfigToEnd(workerSyncTimeoutMs))
                 needsRejoin = true;
         }
 
@@ -646,11 +642,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.info("Finished reading to end of log and updated config snapshot, new config log offset: {}", configState.offset());
             return true;
         } catch (TimeoutException e) {
+            // in case reading the log takes too long, leave the group to ensure a quick rebalance (although by default we should be out of the group already)
+            // and back off to avoid a tight loop of rejoin-attempt-to-catch-up-leave
             log.warn("Didn't reach end of config log quickly enough", e);
-            // TODO: With explicit leave group support, it would be good to explicitly leave the group *before* this
-            // backoff since it'll be longer than the session timeout
-            if (isLeader())
-                backoff(workerUnsyncBackoffMs);
+            member.maybeLeaveGroup();
+            backoff(workerUnsyncBackoffMs);
             return false;
         } catch (InterruptedException | ExecutionException e) {
             throw new ConnectException("Error trying to catch up after assignment", e);
