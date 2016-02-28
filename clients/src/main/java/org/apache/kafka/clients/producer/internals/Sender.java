@@ -67,7 +67,7 @@ public class Sender implements Runnable {
     /* the metadata for the client */
     private final Metadata metadata;
 
-    /* the map tracks the number of batch in progress for each partition. */
+    /* the flag indicating whether the producer should send messages in order or not. */
     private final boolean sendInOrder;
 
     /* the maximum request size to attempt to send to the server */
@@ -196,8 +196,8 @@ public class Sender implements Runnable {
                                                                          now);
         if (sendInOrder) {
             // Mute all the partitions drained
-            for (Map.Entry<Integer, List<RecordBatch>> entry : batches.entrySet()) {
-                for (RecordBatch batch : entry.getValue())
+            for (List<RecordBatch> batchList : batches.values()) {
+                for (RecordBatch batch : batchList)
                     this.accumulator.mutePartition(batch.topicPartition);
             }
         }

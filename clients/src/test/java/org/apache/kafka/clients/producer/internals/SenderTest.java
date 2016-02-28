@@ -185,43 +185,47 @@ public class SenderTest {
     public void testSendInOrder() throws Exception {
         int maxRetries = 1;
         Metrics m = new Metrics();
-        Sender sender = new Sender(client,
-                                   metadata,
-                                   this.accumulator,
-                                   true,
-                                   MAX_REQUEST_SIZE,
-                                   ACKS_ALL,
-                                   maxRetries,
-                                   m,
-                                   time,
-                                   "clientId",
-                                   REQUEST_TIMEOUT);
+        try {
+            Sender sender = new Sender(client,
+                metadata,
+                this.accumulator,
+                true,
+                MAX_REQUEST_SIZE,
+                ACKS_ALL,
+                maxRetries,
+                m,
+                time,
+                "clientId",
+                REQUEST_TIMEOUT);
 
-        // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
-        Cluster cluster1 = TestUtils.clusterWith(2, "test", 2);
-        metadata.update(cluster1, time.milliseconds());
+            // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
+            Cluster cluster1 = TestUtils.clusterWith(2, "test", 2);
+            metadata.update(cluster1, time.milliseconds());
 
-        // Send the first message.
-        TopicPartition tp2 = new TopicPartition("test", 1);
-        accumulator.append(tp2, 0L, "key1".getBytes(), "value1".getBytes(), null, MAX_BLOCK_TIMEOUT);
-        sender.run(time.milliseconds()); // connect
-        sender.run(time.milliseconds()); // send produce request
-        String id = client.requests().peek().request().destination();
-        assertEquals(ApiKeys.PRODUCE.id, client.requests().peek().request().header().apiKey());
-        Node node = new Node(Integer.valueOf(id), "localhost", 0);
-        assertEquals(1, client.inFlightRequestCount());
-        assertTrue("Client ready status should be true", client.isReady(node, 0L));
+            // Send the first message.
+            TopicPartition tp2 = new TopicPartition("test", 1);
+            accumulator.append(tp2, 0L, "key1".getBytes(), "value1".getBytes(), null, MAX_BLOCK_TIMEOUT);
+            sender.run(time.milliseconds()); // connect
+            sender.run(time.milliseconds()); // send produce request
+            String id = client.requests().peek().request().destination();
+            assertEquals(ApiKeys.PRODUCE.id, client.requests().peek().request().header().apiKey());
+            Node node = new Node(Integer.valueOf(id), "localhost", 0);
+            assertEquals(1, client.inFlightRequestCount());
+            assertTrue("Client ready status should be true", client.isReady(node, 0L));
 
-        time.sleep(900);
-        // Now send another message to tp2
-        accumulator.append(tp2, 0L, "key2".getBytes(), "value2".getBytes(), null, MAX_BLOCK_TIMEOUT);
+            time.sleep(900);
+            // Now send another message to tp2
+            accumulator.append(tp2, 0L, "key2".getBytes(), "value2".getBytes(), null, MAX_BLOCK_TIMEOUT);
 
-        // Update metadata before sender receives response from broker 0. Now partition 2 moves to broker 0
-        Cluster cluster2 = TestUtils.singletonCluster("test", 2);
-        metadata.update(cluster2, time.milliseconds());
-        // Sender should not send the second message to node 0.
-        sender.run(time.milliseconds());
-        assertEquals(1, client.inFlightRequestCount());
+            // Update metadata before sender receives response from broker 0. Now partition 2 moves to broker 0
+            Cluster cluster2 = TestUtils.singletonCluster("test", 2);
+            metadata.update(cluster2, time.milliseconds());
+            // Sender should not send the second message to node 0.
+            sender.run(time.milliseconds());
+            assertEquals(1, client.inFlightRequestCount());
+        } finally {
+            m.close();
+        }
 
     }
 

@@ -260,14 +260,20 @@ public final class RecordAccumulator {
      * partition will be ready; Also return the flag for whether there are any unknown leaders for the accumulated
      * partition batches.
      * <p>
-     * A destination node is ready to send data if ANY one of its partition is not backing off the send and is not muted
-     * and ANY of the followings are true :
+     * A destination node is ready to send data if:
      * <ol>
-     * <li>The record set is full
-     * <li>The record set has sat in the accumulator for at least lingerMs milliseconds
-     * <li>The accumulator is out of memory and threads are blocking waiting for data (in this case all partitions are
-     * immediately considered ready).
-     * <li>The accumulator has been closed
+     * <li>There is at least one partition that is not backing off its send
+     * <li><b>and</b> those partitions are not muted (to prevent reordering if
+     *   {@value org.apache.kafka.clients.producer.ProducerConfig#MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION}
+     *   is set to one)</li>
+     * <li><b>and <i>any</i></b> of the following are true</li>
+     * <ul>
+     *     <li>The record set is full</li>
+     *     <li>The record set has sat in the accumulator for at least lingerMs milliseconds</li>
+     *     <li>The accumulator is out of memory and threads are blocking waiting for data (in this case all partitions
+     *     are immediately considered ready).</li>
+     *     <li>The accumulator has been closed</li>
+     * </ul>
      * </ol>
      */
     public ReadyCheckResult ready(Cluster cluster, long nowMs) {
