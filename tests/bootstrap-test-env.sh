@@ -15,6 +15,7 @@
 # limitations under the License.
 
 # This script automates the process of setting up a local machine for running Kafka system tests
+export GREP_OPTIONS='--color=never'
 
 # Helper function which prints version numbers so they can be compared lexically or numerically
 function version { echo "$@" | awk -F. '{ printf("%03d%03d%03d%03d\n", $1,$2,$3,$4); }'; }
@@ -32,7 +33,7 @@ else
 fi
 
 echo "Checking Vagrant installation..."
-vagrant_version=`vagrant --version | egrep --colour=never -o "[0-9]+\.[0-9]+\.[0-9]+"`
+vagrant_version=`vagrant --version | egrep -o "[0-9]+\.[0-9]+\.[0-9]+"`
 bad_vagrant=false
 if [ "$(version $vagrant_version)" -lt "$(version 1.6.4)" ]; then
     echo "Found Vagrant version $vagrant_version. Please upgrade to 1.6.4 or higher (see http://www.vagrantup.com for details)"
