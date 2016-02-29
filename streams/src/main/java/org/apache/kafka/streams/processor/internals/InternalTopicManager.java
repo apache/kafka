@@ -47,6 +47,7 @@ public class InternalTopicManager {
     private static final String ZK_DELETE_TOPIC_PATH = "/admin/delete_topics";
 
     private final ZkClient zkClient;
+    private final int replicationFactor;
 
     private class ZKStringSerializer implements ZkSerializer {
 
@@ -72,11 +73,12 @@ public class InternalTopicManager {
         }
     }
 
-    public InternalTopicManager(String zkConnect) {
-        zkClient = new ZkClient(zkConnect, 30 * 1000, 30 * 1000, new ZKStringSerializer());
+    public InternalTopicManager(String zkConnect, int replicationFactor) {
+        this.zkClient = new ZkClient(zkConnect, 30 * 1000, 30 * 1000, new ZKStringSerializer());
+        this.replicationFactor = replicationFactor;
     }
 
-    public void makeReady(String topic, int numPartitions, int replicationFactor) {
+    public void makeReady(String topic, int numPartitions) {
         boolean topicNotReady = true;
 
         while (topicNotReady) {

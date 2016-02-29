@@ -142,6 +142,11 @@ public interface Consumer<K, V> extends Closeable {
     public void pause(TopicPartition... partitions);
 
     /**
+     * @see KafkaConsumer#paused()
+     */
+    public Set<TopicPartition> paused();
+
+    /**
      * @see KafkaConsumer#resume(TopicPartition...)
      */
     public void resume(TopicPartition... partitions);

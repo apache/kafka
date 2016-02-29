@@ -93,6 +93,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
+        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 2);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();
@@ -234,6 +235,22 @@ public class SmokeTestClient extends SmokeTestUtil {
                     }
                 }
         ).to("wcnt", stringSerializer, longSerializer);
+
+        // test repartition
+        Agg agg = new Agg();
+        cntTable.aggregate(
+                agg.init(),
+                agg.adder(),
+                agg.remover(),
+                agg.selector(),
+                stringSerializer,
+                longSerializer,
+                longSerializer,
+                stringDeserializer,
+                longDeserializer,
+                longDeserializer,
+                "cntByCnt"
+        ).to("tagg", stringSerializer, longSerializer);
 
         return new KafkaStreams(builder, props);
     }
