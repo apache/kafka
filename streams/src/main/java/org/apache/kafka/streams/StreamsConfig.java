@@ -116,7 +116,6 @@ public class StreamsConfig extends AbstractConfig {
 
     /** <code>auto.offset.reset</code> */
     public static final String AUTO_OFFSET_RESET_CONFIG = ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
-    private static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server (e.g. because that data has been deleted): <ul><li>earliest: automatically reset the offset to the earliest offset<li>latest: automatically reset the offset to the latest offset</li><li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li><li>anything else: throw exception to the consumer.</li></ul>";
 
     private static final String WALLCLOCK_TIMESTAMP_EXTRACTOR = "org.apache.kafka.streams.processor.internals.WallclockTimestampExtractor";
 
@@ -210,7 +209,7 @@ public class StreamsConfig extends AbstractConfig {
                                         "latest",
                                         in("latest", "earliest", "none"),
                                         Importance.MEDIUM,
-                                        AUTO_OFFSET_RESET_DOC)
+                                        ConsumerConfig.AUTO_OFFSET_RESET_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         "",
