@@ -350,8 +350,8 @@ class DefaultMessageFormatter extends MessageFormatter {
   var keySeparator = "\t".getBytes
   var lineSeparator = "\n".getBytes
 
-  var keyDecoder : Deserializer[_ <: Object] = new ByteArrayDeserializer()
-  var valDecoder : Deserializer[_ <: Object] = new ByteArrayDeserializer()
+  var keyDeserializer : Deserializer[_ <: Object] = new ByteArrayDeserializer()
+  var valueDeserializer : Deserializer[_ <: Object] = new ByteArrayDeserializer()
 
   override def init(props: Properties) {
     if (props.containsKey("print.timestamp"))
@@ -362,10 +362,10 @@ class DefaultMessageFormatter extends MessageFormatter {
       keySeparator = props.getProperty("key.separator").getBytes
     if (props.containsKey("line.separator"))
       lineSeparator = props.getProperty("line.separator").getBytes
-    if (props.containsKey("key.decoder"))
-      keyDecoder = Class.forName(props.getProperty("key.decoder")).newInstance().asInstanceOf[Deserializer[_ <: Object]]
-    if (props.containsKey("value.decoder"))
-      valDecoder = Class.forName(props.getProperty("value.decoder")).newInstance().asInstanceOf[Deserializer[_ <: Object]]
+    if (props.containsKey("key.deserializer"))
+      keyDeserializer = Class.forName(props.getProperty("key.deserializer")).newInstance().asInstanceOf[Deserializer[_ <: Object]]
+    if (props.containsKey("value.deserializer"))
+      valueDeserializer = Class.forName(props.getProperty("value.deserializer")).newInstance().asInstanceOf[Deserializer[_ <: Object]]
   }
 
   def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream) {
@@ -377,10 +377,10 @@ class DefaultMessageFormatter extends MessageFormatter {
       output.write(keySeparator)
     }
     if (printKey) {
-      output.write(if (key == null) "null".getBytes else keyDecoder.deserialize(null, key).toString.getBytes)
+      output.write(if (key == null) "null".getBytes else keyDeserializer.deserialize(null, key).toString.getBytes)
       output.write(keySeparator)
     }
-    output.write(if (value == null) "null".getBytes else valDecoder.deserialize(null, value).toString.getBytes)
+    output.write(if (value == null) "null".getBytes else valueDeserializer.deserialize(null, value).toString.getBytes)
     output.write(lineSeparator)
   }
 }
