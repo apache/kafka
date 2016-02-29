@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.examples.pageview;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -30,22 +31,38 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.StreamsConfig;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
+/**
+ * Demonstrates how to perform a join between a KStream and a KTable, i.e. an example of a stateful computation,
+ * using specific data types (here: JSON POJO; but can also be Avro specific bindings, etc.) for serdes
+ * in Kafka Streams.
+ *
+ * In this example, we join a stream of pageviews (aka clickstreams) that reads from  a topic named "streams-pageview-input"
+ * with a user profile table that reads from a topic named "streams-userprofile-input", where the data format
+ * is JSON string representing a record in the stream or table, to compute the number of pageviews per user region.
+ *
+ * Before running this example you must create the source topic (e.g. via bin/kafka-topics.sh --create ...)
+ * and write some data to it (e.g. via bin-kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
+ */
 public class PageViewTypedJob {
 
     // POJO classes
     static public class PageView {
         public String user;
         public String page;
+        public Long timestamp;
     }
 
     static public class UserProfile {
-        public String user;
         public String region;
+        public Long timestamp;
     }
 
     static public class PageViewByRegion {
@@ -66,13 +83,17 @@ public class PageViewTypedJob {
 
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
-        props.put(StreamsConfig.JOB_ID_CONFIG, "streams-pageview");
+        props.put(StreamsConfig.JOB_ID_CONFIG, "streams-pageview-typed");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
         props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonPOJOSerializer.class);
         props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonPOJODeserializer.class);
+        props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
+
+        // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -81,26 +102,59 @@ public class PageViewTypedJob {
         final Serializer<Long> longSerializer = new LongSerializer();
         final Deserializer<Long> longDeserializer = new LongDeserializer();
 
+        // TODO: the following can be removed with a serialization factory
+        Map<String, Object> serdeProps = new HashMap<>();
 
-        KStream<String, PageView> views = builder.stream("streams-pageview-input");
+        final Deserializer<PageView> pageViewDeserializer = new JsonPOJODeserializer<>();
+        serdeProps.put("JsonPOJOClass", PageView.class);
+        pageViewDeserializer.configure(serdeProps, false);
 
-        KStream<String, PageView> viewsByUser = views.map((dummy, record) -> new KeyValue<>(record.user, record));
+        final Deserializer<UserProfile> userProfileDeserializer = new JsonPOJODeserializer<>();
+        serdeProps.put("JsonPOJOClass", UserProfile.class);
+        userProfileDeserializer.configure(serdeProps, false);
 
-        KTable<String, UserProfile> users = builder.table("streams-userprofile-input");
+        final Serializer<UserProfile> userProfileSerializer = new JsonPOJOSerializer<>();
+        serdeProps.put("JsonPOJOClass", UserProfile.class);
+        userProfileSerializer.configure(serdeProps, false);
 
-        KStream<WindowedPageViewByRegion, RegionCount> regionCount = viewsByUser
-                .leftJoin(users, (view, profile) -> {
-                    PageViewByRegion viewByRegion = new PageViewByRegion();
-                    viewByRegion.user = view.user;
-                    viewByRegion.page = view.page;
-                    viewByRegion.region = profile.region;
+        final Serializer<WindowedPageViewByRegion> wPageViewByRegionSerializer = new JsonPOJOSerializer<>();
+        serdeProps.put("JsonPOJOClass", WindowedPageViewByRegion.class);
+        wPageViewByRegionSerializer.configure(serdeProps, false);
 
-                    return viewByRegion;
+        final Serializer<RegionCount> regionCountSerializer = new JsonPOJOSerializer<>();
+        serdeProps.put("JsonPOJOClass", RegionCount.class);
+        regionCountSerializer.configure(serdeProps, false);
+
+        KStream<String, PageView> views = builder.stream(stringDeserializer, pageViewDeserializer, "streams-pageview-input");
+
+        KTable<String, UserProfile> users = builder.table(stringSerializer, userProfileSerializer, stringDeserializer, userProfileDeserializer, "streams-userprofile-input");
+
+        KStream<WindowedPageViewByRegion, RegionCount> regionCount = views
+                .leftJoin(users, new ValueJoiner<PageView, UserProfile, PageViewByRegion>() {
+                    @Override
+                    public PageViewByRegion apply(PageView view, UserProfile profile) {
+                        PageViewByRegion viewByRegion = new PageViewByRegion();
+                        viewByRegion.user = view.user;
+                        viewByRegion.page = view.page;
+
+                        if (profile != null) {
+                            viewByRegion.region = profile.region;
+                        } else {
+                            viewByRegion.region = "UNKNOWN";
+                        }
+                        return viewByRegion;
+                    }
                 })
-                .map((user, viewRegion) -> new KeyValue<>(viewRegion.region, viewRegion))
+                .map(new KeyValueMapper<String, PageViewByRegion, KeyValue<String, PageViewByRegion>>() {
+                    @Override
+                    public KeyValue<String, PageViewByRegion> apply(String user, PageViewByRegion viewRegion) {
+                        return new KeyValue<>(viewRegion.region, viewRegion);
+                    }
+                })
                 .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000),
                         stringSerializer, longSerializer,
                         stringDeserializer, longDeserializer)
+                // TODO: we can merge ths toStream().map(...) with a single toStream(...)
                 .toStream()
                 .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<WindowedPageViewByRegion, RegionCount>>() {
                     @Override
@@ -118,9 +172,15 @@ public class PageViewTypedJob {
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-output", new JsonPOJOSerializer<>(), new JsonPOJOSerializer<>());
+        regionCount.to("streams-pageviewstats-typed-output", wPageViewByRegionSerializer, regionCountSerializer);
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
+
+        // usually the streaming job would be ever running,
+        // in this example we just let it run for some time and stop since the input data is finite.
+        Thread.sleep(5000L);
+
+        streams.close();
     }
 }

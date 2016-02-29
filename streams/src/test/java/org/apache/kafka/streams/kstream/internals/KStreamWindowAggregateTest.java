@@ -39,7 +39,7 @@ import java.nio.file.Files;
 
 import static org.junit.Assert.assertEquals;
 
-public class KStreamAggregateTest {
+public class KStreamWindowAggregateTest {
 
     private final Serializer<String> strSerializer = new StringSerializer();
     private final Deserializer<String> strDeserializer = new StringDeserializer();

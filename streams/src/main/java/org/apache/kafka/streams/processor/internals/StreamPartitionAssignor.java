@@ -118,7 +118,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
             internalTopicManager = new InternalTopicManager(
                     (String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG),
-                    (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG));
+                    configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1);
         }
     }
 
