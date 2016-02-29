@@ -275,7 +275,7 @@ class ZkUtils(val zkClient: ZkClient,
     val brokerIdPath = BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
 
-    val version = if (apiVersion.onOrAfter(KAFKA_0_10_0_IV0)) 3 else 2
+    val version = if (apiVersion >= KAFKA_0_10_0_IV0) 3 else 2
     var jsonMap = Map("version" -> version,
                       "host" -> host,
                       "port" -> port,
