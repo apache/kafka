@@ -219,22 +219,25 @@ public class StreamThread extends Thread {
     }
 
     private Producer<byte[], byte[]> createProducer() {
-        log.info("Creating producer client for stream thread [" + this.getName() + "]");
-        return new KafkaProducer<>(config.getProducerConfigs(this.clientId),
+        String threadName = this.getName();
+        log.info("Creating producer client for stream thread [" + threadName + "]");
+        return new KafkaProducer<>(config.getProducerConfigs(this.clientId + "-" + threadName),
                 new ByteArraySerializer(),
                 new ByteArraySerializer());
     }
 
     private Consumer<byte[], byte[]> createConsumer() {
-        log.info("Creating consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getConsumerConfigs(this, this.jobId, this.clientId),
+        String threadName = this.getName();
+        log.info("Creating consumer client for stream thread [" + threadName + "]");
+        return new KafkaConsumer<>(config.getConsumerConfigs(this, this.jobId, this.clientId + "-" + threadName),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
 
     private Consumer<byte[], byte[]> createRestoreConsumer() {
-        log.info("Creating restore consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(this.clientId),
+        String threadName = this.getName();
+        log.info("Creating restore consumer client for stream thread [" + threadName + "]");
+        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(this.clientId + "-" + threadName),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
