@@ -40,13 +40,16 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * Implements the "PageView Stats" program that joins the pageview stream with
- * the user profile table to count the number of pageview per user region.
- * Assumes the input stream is named "streams-pageview-input".
+ * Demonstrates how to perform a join between a KStream and a KTable, i.e. an example of a stateful computation,
+ * using specific data types (here: JSON POJO; but can also be Avro specific bindings, etc.) for serdes
+ * in Kafka Streams.
  *
- * This example shows how to:
- *   1. write stateful computations like joins / aggregations using the high-level KStream DSL.
- *   2. use specific data types (e.g. JSON POJO, Avro Specific Binding, etc) for serdes in Kafka Streams.
+ * In this example, we join a stream of pageviews (aka clickstreams) that reads from  a topic named "streams-pageview-input"
+ * with a user profile table that reads from a topic named "streams-userprofile-input", where the data format
+ * is JSON string representing a record in the stream or table, to compute the number of pageviews per user region.
+ *
+ * Before running this example you must create the source topic (e.g. via bin/kafka-topics.sh --create ...)
+ * and write some data to it (e.g. via bin-kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
  */
 public class PageViewTypedJob {
 
@@ -89,7 +92,7 @@ public class PageViewTypedJob {
         props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonPOJODeserializer.class);
         props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
 
-        // setting offset reset to earliest so that we can re-run the demo code with the same loaded data
+        // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();

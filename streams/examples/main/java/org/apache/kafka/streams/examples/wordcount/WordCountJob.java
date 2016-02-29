@@ -37,10 +37,15 @@ import java.util.Arrays;
 import java.util.Properties;
 
 /**
- * Implements the "WordCount" program that computes a simple word occurrence histogram over text files.
- * Assumes the input stream is named "streams-file-input".
+ * Demonstrates, using the high-level KStream DSL, how to implement the WordCount program
+ * that computes a simple word occurrence histogram from an input text.
  *
- * This example shows how to write a simple Kafka Streams program using the high-level KStream DSL.
+ * In this example, the input stream reads from a topic named "streams-file-input", where the values of messages
+ * represent lines of text; and the histogram output is written to topic "streams-wordcount-output" where each record
+ * is an updated count of a single word.
+ *
+ * Before running this example you must create the source topic (e.g. via bin/kafka-topics.sh --create ...)
+ * and write some data to it (e.g. via bin-kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
  */
 public class WordCountJob {
 
@@ -54,7 +59,7 @@ public class WordCountJob {
         props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
-        // setting offset reset to earliest so that we can re-run the demo code with the same loaded data
+        // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();
