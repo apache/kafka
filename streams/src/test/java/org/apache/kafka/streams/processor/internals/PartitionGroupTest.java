@@ -77,7 +77,7 @@ public class PartitionGroupTest {
         assertEquals(6, group.numBuffered());
         assertEquals(3, group.numBuffered(partition1));
         assertEquals(3, group.numBuffered(partition2));
-        assertEquals(TimestampTracker.NOT_KNOWN, group.timestamp());
+        assertEquals(1L, group.timestamp());
 
         StampedRecord record;
         PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
@@ -89,7 +89,7 @@ public class PartitionGroupTest {
         assertEquals(5, group.numBuffered());
         assertEquals(2, group.numBuffered(partition1));
         assertEquals(3, group.numBuffered(partition2));
-        assertEquals(TimestampTracker.NOT_KNOWN, group.timestamp());
+        assertEquals(2L, group.timestamp());
 
         // get one record, now the time should be advanced
         record = group.nextRecord(info);

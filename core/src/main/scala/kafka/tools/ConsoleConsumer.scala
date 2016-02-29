@@ -29,6 +29,7 @@ import kafka.utils._
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.serialization.{Deserializer, ByteArrayDeserializer}
 import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.Logger
 
@@ -349,7 +350,12 @@ class DefaultMessageFormatter extends MessageFormatter {
   var keySeparator = "\t".getBytes
   var lineSeparator = "\n".getBytes
 
+  var keyDecoder : Deserializer[_ <: Object] = new ByteArrayDeserializer()
+  var valDecoder : Deserializer[_ <: Object] = new ByteArrayDeserializer()
+
   override def init(props: Properties) {
+    System.out.println(props)
+
     if (props.containsKey("print.timestamp"))
       printTimestamp = props.getProperty("print.timestamp").trim.toLowerCase.equals("true")
     if (props.containsKey("print.key"))
@@ -358,6 +364,19 @@ class DefaultMessageFormatter extends MessageFormatter {
       keySeparator = props.getProperty("key.separator").getBytes
     if (props.containsKey("line.separator"))
       lineSeparator = props.getProperty("line.separator").getBytes
+
+    if (props.containsKey("key.decoder")) {
+      keyDecoder = Class.forName(props.getProperty("key.decoder")).newInstance().asInstanceOf[Deserializer[_ <: Object]]
+
+      System.out.println("update key decoder")
+    }
+    if (props.containsKey("value.decoder")) {
+      valDecoder = Class.forName(props.getProperty("value.decoder")).newInstance().asInstanceOf[Deserializer[_ <: Object]]
+
+      System.out.println("update value decoder")
+    }
+    System.out.println(keyDecoder)
+    System.out.println(valDecoder)
   }
 
   def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream) {
@@ -369,10 +388,10 @@ class DefaultMessageFormatter extends MessageFormatter {
       output.write(keySeparator)
     }
     if (printKey) {
-      output.write(if (key == null) "null".getBytes else key)
+      output.write(if (key == null) "null".getBytes else keyDecoder.deserialize(null, key).toString.getBytes)
       output.write(keySeparator)
     }
-    output.write(if (value == null) "null".getBytes else value)
+    output.write(if (value == null) "null".getBytes else valDecoder.deserialize(null, value).toString.getBytes)
     output.write(lineSeparator)
   }
 }
