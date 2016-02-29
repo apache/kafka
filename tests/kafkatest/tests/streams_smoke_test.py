@@ -33,7 +33,8 @@ class StreamsSmokeTest(KafkaTest):
             'dif' : { 'partitions': 5, 'replication-factor': 1 },
             'cnt' : { 'partitions': 5, 'replication-factor': 1 },
             'avg' : { 'partitions': 5, 'replication-factor': 1 },
-            'wcnt' : { 'partitions': 5, 'replication-factor': 1 }
+            'wcnt' : { 'partitions': 5, 'replication-factor': 1 },
+            'tagg' : { 'partitions': 5, 'replication-factor': 1 }
         })
 
         self.driver = StreamsSmokeTestDriverService(test_context, self.kafka)

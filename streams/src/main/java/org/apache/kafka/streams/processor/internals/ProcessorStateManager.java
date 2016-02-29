@@ -85,7 +85,7 @@ public class ProcessorStateManager {
         createStateDirectory(baseDir);
 
         // try to acquire the exclusive lock on the state directory
-        directoryLock = lockStateDirectory(baseDir);
+        directoryLock = lockStateDirectory(baseDir, 5);
         if (directoryLock == null) {
             throw new IOException("Failed to lock the state directory: " + baseDir.getCanonicalPath());
         }
@@ -109,14 +109,35 @@ public class ProcessorStateManager {
     }
 
     public static FileLock lockStateDirectory(File stateDir) throws IOException {
+        return lockStateDirectory(stateDir, 0);
+    }
+
+    private static FileLock lockStateDirectory(File stateDir, int retry) throws IOException {
         File lockFile = new File(stateDir, ProcessorStateManager.LOCK_FILE_NAME);
         FileChannel channel = new RandomAccessFile(lockFile, "rw").getChannel();
+
+        FileLock lock = lockStateDirectory(channel);
+        while (lock == null && retry > 0) {
+            try {
+                Thread.sleep(200);
+            } catch (Exception ex) {
+                // do nothing
+            }
+            retry--;
+            lock = lockStateDirectory(channel);
+        }
+        return lock;
+    }
+
+    private static FileLock lockStateDirectory(FileChannel channel) throws IOException {
         try {
             return channel.tryLock();
         } catch (OverlappingFileLockException e) {
             return null;
         }
     }
+
+
 
     public File baseDir() {
         return this.baseDir;
@@ -196,18 +217,23 @@ public class ProcessorStateManager {
                 restoreConsumer.seekToBeginning(storePartition);
             }
 
-            // restore its state from changelog records; while restoring the log end offset
-            // should not change since it is only written by this thread.
+            // restore its state from changelog records
             long limit = offsetLimit(storePartition);
             while (true) {
+                long offset = 0L;
                 for (ConsumerRecord<byte[], byte[]> record : restoreConsumer.poll(100).records(storePartition)) {
-                    if (record.offset() >= limit) break;
+                    offset = record.offset();
+                    if (offset >= limit) break;
                     stateRestoreCallback.restore(record.key(), record.value());
                 }
 
-                if (restoreConsumer.position(storePartition) == endOffset) {
+                if (offset >= limit) {
+                    break;
+                } else if (restoreConsumer.position(storePartition) == endOffset) {
                     break;
                 } else if (restoreConsumer.position(storePartition) > endOffset) {
+                    // For a logging enabled changelog (no offset limit),
+                    // the log end offset should not change while restoring since it is only written by this thread.
                     throw new IllegalStateException("Log end offset should not change while restoring");
                 }
             }

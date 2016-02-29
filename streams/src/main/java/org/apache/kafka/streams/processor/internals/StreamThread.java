@@ -219,22 +219,25 @@ public class StreamThread extends Thread {
     }
 
     private Producer<byte[], byte[]> createProducer() {
-        log.info("Creating producer client for stream thread [" + this.getName() + "]");
-        return new KafkaProducer<>(config.getProducerConfigs(this.clientId),
+        String threadName = this.getName();
+        log.info("Creating producer client for stream thread [" + threadName + "]");
+        return new KafkaProducer<>(config.getProducerConfigs(this.clientId + "-" + threadName),
                 new ByteArraySerializer(),
                 new ByteArraySerializer());
     }
 
     private Consumer<byte[], byte[]> createConsumer() {
-        log.info("Creating consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getConsumerConfigs(this, this.jobId, this.clientId),
+        String threadName = this.getName();
+        log.info("Creating consumer client for stream thread [" + threadName + "]");
+        return new KafkaConsumer<>(config.getConsumerConfigs(this, this.jobId, this.clientId + "-" + threadName),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
 
     private Consumer<byte[], byte[]> createRestoreConsumer() {
-        log.info("Creating restore consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(this.clientId),
+        String threadName = this.getName();
+        log.info("Creating restore consumer client for stream thread [" + threadName + "]");
+        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(this.clientId + "-" + threadName),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
@@ -276,12 +279,14 @@ public class StreamThread extends Thread {
         log.info("Shutting down stream thread [" + this.getName() + "]");
 
         // Exceptions should not prevent this call from going through all shutdown steps
-
         try {
             commitAll();
         } catch (Throwable e) {
             // already logged in commitAll()
         }
+
+        // Close standby tasks before closing the restore consumer since closing standby tasks uses the restore consumer.
+        removeStandbyTasks();
 
         // We need to first close the underlying clients before closing the state
         // manager, for example we need to make sure producer's message sends
@@ -304,7 +309,6 @@ public class StreamThread extends Thread {
         }
 
         removeStreamTasks();
-        removeStandbyTasks();
 
         log.info("Stream thread shutdown complete [" + this.getName() + "]");
     }

@@ -198,7 +198,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
 
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props);
-        List<TopicPartition> partitions = getAllPartitions(consumer, "echo", "max", "min", "dif", "sum", "cnt", "avg", "wcnt");
+        List<TopicPartition> partitions = getAllPartitions(consumer, "echo", "max", "min", "dif", "sum", "cnt", "avg", "wcnt", "tagg");
         consumer.assign(partitions);
         consumer.seekToBeginning(partitions.toArray(new TopicPartition[partitions.size()]));
 
@@ -212,6 +212,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         HashMap<String, Long> cnt = new HashMap<>();
         HashMap<String, Double> avg = new HashMap<>();
         HashMap<String, Long> wcnt = new HashMap<>();
+        HashMap<String, Long> tagg = new HashMap<>();
 
         HashSet<String> keys = new HashSet<>();
         HashMap<String, Set<Integer>> received = new HashMap<>();
@@ -268,6 +269,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
                         case "wcnt":
                             wcnt.put(key, longDeserializer.deserialize("", record.value()));
                             break;
+                        case "tagg":
+                            tagg.put(key, longDeserializer.deserialize("", record.value()));
+                            break;
                         default:
                             System.out.println("unknown topic: " + record.topic());
                     }
@@ -301,18 +305,19 @@ public class SmokeTestDriver extends SmokeTestUtil {
             System.out.println("missedRecords=" + missedCount);
         }
 
-        success &= verifyMin(min);
-        success &= verifyMax(max);
-        success &= verifyDif(dif);
-        success &= verifySum(sum);
-        success &= verifyCnt(cnt);
-        success &= verifyAvg(avg);
-        success &= verifyWCnt(wcnt);
+        success &= verifyMin(min, allData);
+        success &= verifyMax(max, allData);
+        success &= verifyDif(dif, allData);
+        success &= verifySum(sum, allData);
+        success &= verifyCnt(cnt, allData);
+        success &= verifyAvg(avg, allData);
+        success &= verifyWCnt(wcnt, allData);
+        success &= verifyTAgg(tagg, allData);
 
         System.out.println(success ? "SUCCESS" : "FAILURE");
     }
 
-    private static boolean verifyMin(Map<String, Integer> map) {
+    private static boolean verifyMin(Map<String, Integer> map, Map<String, Set<Integer>> allData) {
         boolean success = true;
         if (map.isEmpty()) {
             System.out.println("min is empty");
@@ -320,6 +325,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
         } else {
             System.out.println("verifying min");
 
+            if (map.size() != allData.size()) {
+                System.out.println("fail: resultCount=" + map.size() + " expectedCount=" + allData.size());
+                success = false;
+            }
             for (Map.Entry<String, Integer> entry : map.entrySet()) {
                 int expected = getMin(entry.getKey());
                 if (expected != entry.getValue()) {
@@ -331,7 +340,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return success;
     }
 
-    private static boolean verifyMax(Map<String, Integer> map) {
+    private static boolean verifyMax(Map<String, Integer> map, Map<String, Set<Integer>> allData) {
         boolean success = true;
         if (map.isEmpty()) {
             System.out.println("max is empty");
@@ -339,6 +348,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
         } else {
             System.out.println("verifying max");
 
+            if (map.size() != allData.size()) {
+                System.out.println("fail: resultCount=" + map.size() + " expectedCount=" + allData.size());
+                success = false;
+            }
             for (Map.Entry<String, Integer> entry : map.entrySet()) {
                 int expected = getMax(entry.getKey());
                 if (expected != entry.getValue()) {
@@ -350,7 +363,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return success;
     }
 
-    private static boolean verifyDif(Map<String, Integer> map) {
+    private static boolean verifyDif(Map<String, Integer> map, Map<String, Set<Integer>> allData) {
         boolean success = true;
         if (map.isEmpty()) {
             System.out.println("dif is empty");
@@ -358,6 +371,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
         } else {
             System.out.println("verifying dif");
 
+            if (map.size() != allData.size()) {
+                System.out.println("fail: resultCount=" + map.size() + " expectedCount=" + allData.size());
+                success = false;
+            }
             for (Map.Entry<String, Integer> entry : map.entrySet()) {
                 int min = getMin(entry.getKey());
                 int max = getMax(entry.getKey());
@@ -371,7 +388,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return success;
     }
 
-    private static boolean verifyCnt(Map<String, Long> map) {
+    private static boolean verifyCnt(Map<String, Long> map, Map<String, Set<Integer>> allData) {
         boolean success = true;
         if (map.isEmpty()) {
             System.out.println("cnt is empty");
@@ -379,6 +396,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
         } else {
             System.out.println("verifying cnt");
 
+            if (map.size() != allData.size()) {
+                System.out.println("fail: resultCount=" + map.size() + " expectedCount=" + allData.size());
+                success = false;
+            }
             for (Map.Entry<String, Long> entry : map.entrySet()) {
                 int min = getMin(entry.getKey());
                 int max = getMax(entry.getKey());
@@ -392,7 +413,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return success;
     }
 
-    private static boolean verifySum(Map<String, Long> map) {
+    private static boolean verifySum(Map<String, Long> map, Map<String, Set<Integer>> allData) {
         boolean success = true;
         if (map.isEmpty()) {
             System.out.println("sum is empty");
@@ -400,6 +421,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
         } else {
             System.out.println("verifying sum");
 
+            if (map.size() != allData.size()) {
+                System.out.println("fail: resultCount=" + map.size() + " expectedCount=" + allData.size());
+                success = false;
+            }
             for (Map.Entry<String, Long> entry : map.entrySet()) {
                 int min = getMin(entry.getKey());
                 int max = getMax(entry.getKey());
@@ -413,7 +438,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return success;
     }
 
-    private static boolean verifyAvg(Map<String, Double> map) {
+    private static boolean verifyAvg(Map<String, Double> map, Map<String, Set<Integer>> allData) {
         boolean success = true;
         if (map.isEmpty()) {
             System.out.println("avg is empty");
@@ -421,6 +446,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
         } else {
             System.out.println("verifying avg");
 
+            if (map.size() != allData.size()) {
+                System.out.println("fail: resultCount=" + map.size() + " expectedCount=" + allData.size());
+                success = false;
+            }
             for (Map.Entry<String, Double> entry : map.entrySet()) {
                 int min = getMin(entry.getKey());
                 int max = getMax(entry.getKey());
@@ -435,7 +464,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return success;
     }
 
-    private static boolean verifyWCnt(Map<String, Long> map) {
+    private static boolean verifyWCnt(Map<String, Long> map, Map<String, Set<Integer>> allData) {
         boolean success = true;
         if (map.isEmpty()) {
             System.out.println("wcnt is empty");
@@ -443,6 +472,17 @@ public class SmokeTestDriver extends SmokeTestUtil {
         } else {
             System.out.println("verifying wcnt");
 
+            int expectedSize = 0;
+            for (Set<Integer> values : allData.values()) {
+                int maxValue = Collections.max(values);
+                int minValue = Collections.min(values);
+                expectedSize += maxValue / WINDOW_SIZE + 1;
+                expectedSize -= minValue / WINDOW_SIZE;
+            }
+            if (map.size() != expectedSize) {
+                System.out.println("fail: resultCount=" + map.size() + " expectedCount=" + expectedSize);
+                success = false;
+            }
             for (Map.Entry<String, Long> entry : map.entrySet()) {
                 long minTime = getMinFromWKey(entry.getKey()) + START_TIME;
                 long maxTime = getMaxFromWKey(entry.getKey()) + START_TIME;
@@ -456,6 +496,47 @@ public class SmokeTestDriver extends SmokeTestUtil {
                     System.out.println("fail: key=" + entry.getKey() + " wcnt=" + entry.getValue() + " expected=" + expected);
                     success = false;
                 }
+            }
+        }
+        return success;
+    }
+
+    private static boolean verifyTAgg(Map<String, Long> map, Map<String, Set<Integer>> allData) {
+        boolean success = true;
+        if (map.isEmpty()) {
+            System.out.println("tagg is empty");
+            success = false;
+        } else {
+            System.out.println("verifying tagg");
+
+            // generate expected answer
+            Map<String, Long> expected = new HashMap<>();
+            for (String key : allData.keySet()) {
+                int min = getMin(key);
+                int max = getMax(key);
+                String cnt = Long.toString(max - min + 1L);
+
+                if (expected.containsKey(cnt)) {
+                    expected.put(cnt, expected.get(cnt) + 1L);
+                } else {
+                    expected.put(cnt, 1L);
+                }
+            }
+
+            // check the result
+            for (Map.Entry<String, Long> entry : map.entrySet()) {
+                String key = entry.getKey();
+                Long expectedCount = expected.remove(key);
+                if (expectedCount == null)
+                    expectedCount = 0L;
+
+                if (entry.getValue() != expectedCount) {
+                    System.out.println("fail: key=" + key + " tagg=" + entry.getValue() + " expected=" + expected.get(key));
+                    success = false;
+                }
+            }
+            for (Map.Entry<String, Long> entry : expected.entrySet()) {
+                System.out.println("fail: missingKey=" + entry.getKey() + " expected=" + entry.getValue());
             }
         }
         return success;

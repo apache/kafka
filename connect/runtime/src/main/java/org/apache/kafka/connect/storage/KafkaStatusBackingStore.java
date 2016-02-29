@@ -213,7 +213,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             public void onCompletion(RecordMetadata metadata, Exception exception) {
                 if (exception != null) {
                     if (exception instanceof RetriableException) {
-                        synchronized (this) {
+                        synchronized (KafkaStatusBackingStore.this) {
                             if (entry.isDeleted()
                                     || status.generation() != generation
                                     || (safeWrite && !entry.canWrite(status, sequence)))

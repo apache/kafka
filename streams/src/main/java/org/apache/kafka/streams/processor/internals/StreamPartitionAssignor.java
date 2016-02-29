@@ -115,8 +115,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         this.topicGroups = streamThread.builder.topicGroups();
 
-        if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG))
-            internalTopicManager = new InternalTopicManager((String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG));
+        if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
+            internalTopicManager = new InternalTopicManager(
+                    (String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG),
+                    configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1);
+        }
     }
 
     @Override
@@ -289,7 +292,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         numPartitions = task.partition + 1;
                 }
 
-                internalTopicManager.makeReady(topic, numPartitions, 1);
+                internalTopicManager.makeReady(topic, numPartitions);
 
                 // wait until the topic metadata has been propagated to all brokers
                 List<PartitionInfo> partitions;

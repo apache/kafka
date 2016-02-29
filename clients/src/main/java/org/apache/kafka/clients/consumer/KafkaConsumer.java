@@ -166,11 +166,12 @@ import java.util.regex.Pattern;
  * In this example the client is subscribing to the topics <i>foo</i> and <i>bar</i> as part of a group of consumers
  * called <i>test</i> as described above.
  * <p>
- * The broker will automatically detect failed processes in the <i>test</i> group by using a heartbeat mechanism. The
- * consumer will automatically ping the cluster periodically, which lets the cluster know that it is alive. As long as
- * the consumer is able to do this it is considered alive and retains the right to consume from the partitions assigned
- * to it. If it stops heartbeating for a period of time longer than <code>session.timeout.ms</code> then it will be
- * considered dead and its partitions will be assigned to another process.
+ * The broker will automatically detect failed processes in the <i>test</i> group by using a heartbeat mechanism. The 
+ * consumer will automatically ping the cluster periodically, which lets the cluster know that it is alive. Note that 
+ * the consumer is single-threaded, so periodic heartbeats can only be sent when {@link #poll(long)} is called. As long as 
+ * the consumer is able to do this it is considered alive and retains the right to consume from the partitions assigned 
+ * to it. If it stops heartbeating by failing to call {@link #poll(long)} for a period of time longer than <code>session.timeout.ms</code> 
+ * then it will be considered dead and its partitions will be assigned to another process.
  * <p>
  * The deserializer settings specify how to turn bytes into objects. For example, by specifying string deserializers, we
  * are saying that our record's key and value will just be simple strings.
@@ -1231,6 +1232,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 log.debug("Pausing partition {}", partition);
                 subscriptions.pause(partition);
             }
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * Get the set of partitions that were previously paused by a call to {@link #pause(TopicPartition...)}.
+     *
+     * @return The set of paused partitions
+     */
+    @Override
+    public Set<TopicPartition> paused() {
+        acquire();
+        try {
+            return Collections.unmodifiableSet(subscriptions.pausedPartitions());
         } finally {
             release();
         }
