@@ -17,13 +17,13 @@
 
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -76,6 +76,7 @@ class WorkerSourceTask extends WorkerTask {
 
     public WorkerSourceTask(ConnectorTaskId id,
                             SourceTask task,
+                            TaskStatus.Listener lifecycleListener,
                             Converter keyConverter,
                             Converter valueConverter,
                             KafkaProducer<byte[], byte[]> producer,
@@ -83,7 +84,7 @@ class WorkerSourceTask extends WorkerTask {
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
                             Time time) {
-        super(id);
+        super(id, lifecycleListener);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -138,25 +139,25 @@ class WorkerSourceTask extends WorkerTask {
             }
 
             while (!isStopping()) {
-                if (toSend == null)
+                if (toSend == null) {
+                    log.debug("Nothing to send to Kafka. Polling source for additional records");
                     toSend = task.poll();
+                }
                 if (toSend == null)
                     continue;
+                log.debug("About to send " + toSend.size() + " records to Kafka");
                 if (!sendRecords())
                     stopRequestedLatch.await(SEND_FAILED_BACKOFF_MS, TimeUnit.MILLISECONDS);
             }
         } catch (InterruptedException e) {
             // Ignore and allow to exit.
-        } catch (Throwable t) {
-            log.error("Task {} threw an uncaught and unrecoverable exception", id);
-            log.error("Task is being killed and will not recover until manually restarted:", t);
-            // It should still be safe to let this fall through and commit offsets since this exception would have
+        } finally {
+            // It should still be safe to commit offsets since any exception would have
             // simply resulted in not getting more records but all the existing records should be ok to flush
             // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit
             // to fail.
+            commitOffsets();
         }
-
-        commitOffsets();
     }
 
     /**

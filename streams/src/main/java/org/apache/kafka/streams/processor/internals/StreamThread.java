@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -218,22 +219,25 @@ public class StreamThread extends Thread {
     }
 
     private Producer<byte[], byte[]> createProducer() {
-        log.info("Creating producer client for stream thread [" + this.getName() + "]");
-        return new KafkaProducer<>(config.getProducerConfigs(this.clientId),
+        String threadName = this.getName();
+        log.info("Creating producer client for stream thread [" + threadName + "]");
+        return new KafkaProducer<>(config.getProducerConfigs(this.clientId + "-" + threadName),
                 new ByteArraySerializer(),
                 new ByteArraySerializer());
     }
 
     private Consumer<byte[], byte[]> createConsumer() {
-        log.info("Creating consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getConsumerConfigs(this, this.jobId, this.clientId),
+        String threadName = this.getName();
+        log.info("Creating consumer client for stream thread [" + threadName + "]");
+        return new KafkaConsumer<>(config.getConsumerConfigs(this, this.jobId, this.clientId + "-" + threadName),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
 
     private Consumer<byte[], byte[]> createRestoreConsumer() {
-        log.info("Creating restore consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(this.clientId),
+        String threadName = this.getName();
+        log.info("Creating restore consumer client for stream thread [" + threadName + "]");
+        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(this.clientId + "-" + threadName),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
@@ -282,6 +286,9 @@ public class StreamThread extends Thread {
             // already logged in commitAll()
         }
 
+        // Close standby tasks before closing the restore consumer since closing standby tasks uses the restore consumer.
+        removeStandbyTasks();
+
         // We need to first close the underlying clients before closing the state
         // manager, for example we need to make sure producer's message sends
         // have all been acked before the state manager records
@@ -303,7 +310,6 @@ public class StreamThread extends Thread {
         }
 
         removeStreamTasks();
-        removeStandbyTasks();
 
         log.info("Stream thread shutdown complete [" + this.getName() + "]");
     }
@@ -487,7 +493,11 @@ public class StreamThread extends Thread {
     private void commitOne(AbstractTask task, long now) {
         try {
             task.commit();
+        } catch (CommitFailedException e) {
+            // commit failed. Just log it.
+            log.warn("Failed to commit " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
         } catch (KafkaException e) {
+            // commit failed due to an unexpected exception. Log it and rethrow the exception.
             log.error("Failed to commit " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
             throw e;
         }

@@ -14,6 +14,7 @@ package org.apache.kafka.common.serialization;
 
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -72,6 +73,28 @@ public class SerializationTest {
 
         assertEquals("Should support null in serialization and deserialization",
                 null, deserializer.deserialize(mytopic, serializer.serialize(mytopic, null)));
+
+        serializer.close();
+        deserializer.close();
+    }
+
+    @Test
+    public void testByteBufferSerializer() {
+        String mytopic = "testTopic";
+        ByteBuffer buf = ByteBuffer.allocate(10);
+        buf.put("my string".getBytes());
+
+        Serializer<ByteBuffer> serializer = new ByteBufferSerializer();
+        Deserializer<ByteBuffer> deserializer = new ByteBufferDeserializer();
+
+        assertEquals("Should get the original ByteBuffer after serialization and deserialization",
+              buf, deserializer.deserialize(mytopic, serializer.serialize(mytopic, buf)));
+
+        assertEquals("Should support null in serialization and deserialization",
+                null, deserializer.deserialize(mytopic, serializer.serialize(mytopic, null)));
+
+        serializer.close();
+        deserializer.close();
     }
 
     private SerDeser<String> getStringSerDeser(String encoder) {

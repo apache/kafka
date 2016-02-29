@@ -161,6 +161,7 @@ public class OffsetStorageWriter {
 
         // And submit the data
         log.debug("Submitting {} entries to backing store", offsetsSerialized.size());
+        log.debug("The offsets are: " + toFlush.toString());
         return backingStore.set(offsetsSerialized, new Callback<Void>() {
             @Override
             public void onCompletion(Throwable error, Void result) {

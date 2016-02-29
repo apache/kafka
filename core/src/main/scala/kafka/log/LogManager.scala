@@ -19,11 +19,13 @@ package kafka.log
 
 import java.io._
 import java.util.concurrent.TimeUnit
+
 import kafka.utils._
+
 import scala.collection._
-import kafka.common.{TopicAndPartition, KafkaException}
-import kafka.server.{RecoveringFromUncleanShutdown, BrokerState, OffsetCheckpoint}
-import java.util.concurrent.{Executors, ExecutorService, ExecutionException, Future}
+import kafka.common.{KafkaException, TopicAndPartition}
+import kafka.server.{BrokerState, OffsetCheckpoint, RecoveringFromUncleanShutdown}
+import java.util.concurrent.{ExecutionException, ExecutorService, Executors, Future}
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
@@ -463,7 +465,7 @@ class LogManager(val logDirs: Array[File],
   /**
    * Get a map of TopicAndPartition => Log
    */
-  def logsByTopicPartition = logs.toMap
+  def logsByTopicPartition: Map[TopicAndPartition, Log] = logs.toMap
 
   /**
    * Map of log dir to logs by topic and partitions in that dir

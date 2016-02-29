@@ -18,15 +18,15 @@
 <h3><a id="upgrade" href="#upgrade">1.5 Upgrading From Previous Versions</a></h3>
 
 <h4><a id="upgrade_10" href="#upgrade_10">Upgrading from 0.8.x or 0.9.x to 0.10.0.0</a></h4>
-0.10.0.0 has <a href="#upgrade_10_performance_impact">potential performance impact during upgrade</a> and
-<a href="#upgrade_10_breaking">potential breaking changes</a> (please review before upgrading). Because new protocols
+0.10.0.0 has <a href="#upgrade_10_breaking">potential breaking changes</a> (please review before upgrading) and
+there may be a <a href="#upgrade_10_performance_impact">performance impact during the upgrade</a>. Because new protocols
 are introduced, it is important to upgrade your Kafka clusters before upgrading your clients.
 
 <p><b>For a rolling upgrade:</b></p>
 
 <ol>
-    <li> Update server.properties file on all brokers and add the following property: inter.broker.protocol.version=CURRENT_KAFKA_VERSION(e.g. 0.8.2, 0.9.0.0).
-         We recommend the users to set message.format.version=CURRENT_KAFKA_VERSION as well to avoid performance regression
+    <li> Update server.properties file on all brokers and add the following property: inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2 or 0.9.0.0).
+         We recommend that users set message.format.version=CURRENT_KAFKA_VERSION as well to avoid a performance regression
          during upgrade. See <a href="#upgrade_10_performance_impact">potential performance impact during upgrade</a> for the details.
     </li>
     <li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
@@ -38,35 +38,36 @@ are introduced, it is important to upgrade your Kafka clusters before upgrading 
 
 <p><b>Note:</b> Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
 
-<h5><a id="upgrade_10_performance_impact" href="#upgrade_10_performance_impact">potential performance impact in 0.10.0.0 during upgrade</a></h5>
+<h5><a id="upgrade_10_performance_impact" href="#upgrade_10_performance_impact">Potential performance impact during upgrade to 0.10.0.0</a></h5>
 <p>
-    Message format in 0.10.0 now includes a new timestamp field and uses relative offsets for compressed messages.
-    The on disk message format can be configured through message.format.version in server.properties file.
+    The message format in 0.10.0 includes a new timestamp field and uses relative offsets for compressed messages.
+    The on disk message format can be configured through message.format.version in the server.properties file.
     The default on-disk message format is 0.10.0. If a consumer client is on a version before 0.10.0.0, it only understands
-    message format before 0.10.0. In this case, the broker is able to convert messages of the format in 0.10.0 to earlier format
-    before sending a response to the consumer on an older version. However, the broker can't use zero-copy transfer in this case.
+    message formats before 0.10.0. In this case, the broker is able to convert messages from the 0.10.0 format to an earlier format
+    before sending the response to the consumer on an older version. However, the broker can't use zero-copy transfer in this case.
 
-    To avoid such message conversion before consumers are upgraded to 0.10.0.0, one can set the message format to 0.9.0 when
-    upgrading the broker to 0.10.0.0. This way, the broker can still use zero-copy transfer to send the data to the old
-    consumers. Once most consumers are upgraded, one can change the message format to 0.10.0 on the broker.
+    To avoid such message conversion before consumers are upgraded to 0.10.0.0, one can set the message format to
+    e.g. 0.9.0 when upgrading the broker to 0.10.0.0. This way, the broker can still use zero-copy transfer to send the
+    data to the old consumers. Once most consumers are upgraded, one can change the message format to 0.10.0 on the broker.
 </p>
 <p>
     For clients that are upgraded to 0.10.0.0, there is no performance impact.
 </p>
 <p>
-    <b>Note:</b> By setting the message format version, one certifies all the existing messages are on or below that
+    <b>Note:</b> By setting the message format version, one certifies that all existing messages are on or below that
     message format version. Otherwise consumers before 0.10.0.0 might break. In particular, after the message format
-    is set to 0.10.0, one should not change it back to earlier format since it may break the consumer on versions before 0.10.0.0.
+    is set to 0.10.0, one should not change it back to an earlier format as it may break consumers on versions before 0.10.0.0.
 </p>
 
 <h5><a id="upgrade_10_breaking" href="#upgrade_10_breaking">potential breaking changes in 0.10.0.0</a></h5>
 <ul>
-    <li> Starting from Kafka 0.10.0.0, message format version in Kafka is represented as the Kafka version. For example, message format 0.9.0 refers to the highest message version supported by Kafka 0.9.0. </li>
-    <li> Message format 0.10.0 is added and used by default to include a timestamp field in the messages and use relative offsets for compressed messages. </li>
-    <li> ProduceRequest/Response v2 is added and used by default to support message format 0.10.0 </li>
-    <li> FetchRequest/Response v2 is added and used by default to support message format 0.10.0 </li>
-    <li> MessageFormatter interface changed from <code>void writeTo(byte[] key, byte[] value, PrintStream output)</code> to
-         <code>void writeTo(byte[] key, byte[] value, long timestamp, TimestampType timestampType, PrintStream output)</code> </li>
+    <li> Starting from Kafka 0.10.0.0, the message format version in Kafka is represented as the Kafka version. For example, message format 0.9.0 refers to the highest message version supported by Kafka 0.9.0. </li>
+    <li> Message format 0.10.0 has been introduced and it is used by default. It includes a timestamp field in the messages and relative offsets are used for compressed messages. </li>
+    <li> ProduceRequest/Response v2 has been introduced and it is used by default to support message format 0.10.0 </li>
+    <li> FetchRequest/Response v2 has been introduced and it is used by default to support message format 0.10.0 </li>
+    <li> MessageFormatter interface was changed from <code>void writeTo(byte[] key, byte[] value, PrintStream output)</code> to
+        <code>void writeTo(byte[] key, byte[] value, long timestamp, TimestampType timestampType, PrintStream output)</code> </li>
+    <li> MirrorMakerMessageHandler no longer exposes <em>handle(record: MessageAndMetadata[Array[Byte], Array[Byte]])</em> method as it was never called. </li>
 </ul>
 
 <h4><a id="upgrade_9" href="#upgrade_9">Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.9.0.0</a></h4>
@@ -107,9 +108,8 @@ are introduced, it is important to upgrade your Kafka clusters before upgrading 
 <h5><a id="upgrade_901_notable" href="#upgrade_901_notable">Notable changes in 0.9.0.1</a></h5>
 
 <ul>
-    <li> The new broker id generation feature can be disable by setting broker.id.generation.enable to false. </li>
+    <li> The new broker id generation feature can be disabled by setting broker.id.generation.enable to false. </li>
     <li> Configuration parameter log.cleaner.enable is now true by default. This means topics with a cleanup.policy=compact will now be compacted by default, and 128 MB of heap will be allocated to the cleaner process via log.cleaner.dedupe.buffer.size. You may want to review log.cleaner.dedupe.buffer.size and the other log.cleaner configuration values based on your usage of compacted topics. </li>
-    <li> MirrorMakerMessageHandler no longer exposes <em>handle(record: MessageAndMetadata[Array[Byte], Array[Byte]])</em> method as it was never called. </li>
     <li> Default value of configuration parameter fetch.min.bytes for the new consumer is now 1 by default. </li>
 </ul>
 
