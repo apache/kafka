@@ -32,27 +32,39 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 object Broker {
 
   /**
-   * Create a broker object from id and JSON string.
+    * Create a broker object from id and JSON string.
     *
     * @param id
-   * @param brokerInfoString
-   *
-   * Version 1 JSON schema for a broker is:
-   * {"version":1,
-   *  "host":"localhost",
-   *  "port":9092
-   *  "jmx_port":9999,
-   *  "timestamp":"2233345666" }
-   *
-   * The current JSON schema for a broker is:
-   * {"version":2,
-   *  "host","localhost",
-   *  "port",9092
-   *  "jmx_port":9999,
-   *  "timestamp":"2233345666",
-   *  "endpoints": ["PLAINTEXT://host1:9092",
-   *                "SSL://host1:9093"]
-   */
+    * @param brokerInfoString
+    *
+    * Version 1 JSON schema for a broker is:
+    * {"version":1,
+    *  "host":"localhost",
+    *  "port":9092
+    *  "jmx_port":9999,
+    *  "timestamp":"2233345666" }
+    *
+    * Version 2 JSON schema for a broker is:
+    * {"version":2,
+    *  "host","localhost",
+    *  "port",9092
+    *  "jmx_port":9999,
+    *  "timestamp":"2233345666",
+    *  "endpoints": ["PLAINTEXT://host1:9092",
+    *                "SSL://host1:9093"]
+    * }
+    *
+    * Version 3 (current) JSON schema for a broker is:
+    * {"version":3,
+    *  "host","localhost",
+    *  "port",9092
+    *  "jmx_port":9999,
+    *  "timestamp":"2233345666",
+    *  "endpoints": ["PLAINTEXT://host1:9092",
+    *                "SSL://host1:9093"],
+    *  "rack": "dc1"
+    * }
+    */
   def createBroker(id: Int, brokerInfoString: String): Broker = {
     if (brokerInfoString == null)
       throw new BrokerNotAvailableException(s"Broker id $id does not exist")

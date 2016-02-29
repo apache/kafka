@@ -96,14 +96,12 @@ public class UpdateMetadataRequest extends AbstractRequest {
     // Broker key names
     private static final String BROKER_ID_KEY_NAME = "id";
     private static final String ENDPOINTS_KEY_NAME = "end_points";
+    private static final String RACK_KEY_NAME = "rack";
 
     // EndPoint key names
     private static final String HOST_KEY_NAME = "host";
     private static final String PORT_KEY_NAME = "port";
     private static final String SECURITY_PROTOCOL_TYPE_KEY_NAME = "security_protocol_type";
-
-    // Rack
-    private static final String RACK = "rack";
 
     private final int controllerId;
     private final int controllerEpoch;
@@ -182,7 +180,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
                 }
                 brokerData.set(ENDPOINTS_KEY_NAME, endPointsData.toArray());
                 if (version >= 2) {
-                    brokerData.set(RACK, broker.rack);
+                    brokerData.set(RACK_KEY_NAME, broker.rack);
                 }
             }
 
@@ -248,8 +246,8 @@ public class UpdateMetadataRequest extends AbstractRequest {
                     endPoints.put(SecurityProtocol.forId(protocolTypeId), new EndPoint(host, port));
                 }
                 String rack = null;
-                if (brokerData.hasField(RACK)) { // V2
-                    rack = brokerData.getString(RACK);
+                if (brokerData.hasField(RACK_KEY_NAME)) { // V2
+                    rack = brokerData.getString(RACK_KEY_NAME);
                 }
                 liveBrokers.add(new Broker(brokerId, endPoints, rack));
             }
