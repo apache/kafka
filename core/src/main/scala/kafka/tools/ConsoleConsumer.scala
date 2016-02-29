@@ -214,7 +214,7 @@ object ConsoleConsumer extends Logging {
       .describedAs("class")
       .ofType(classOf[String])
       .defaultsTo(classOf[DefaultMessageFormatter].getName)
-    val messageFormatterArgOpt = parser.accepts("property")
+    val messageFormatterArgOpt = parser.accepts("property", "The properties to initialize the message formatter.")
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])
@@ -345,10 +345,13 @@ trait MessageFormatter{
 
 class DefaultMessageFormatter extends MessageFormatter {
   var printKey = false
+  var printTimestamp = false
   var keySeparator = "\t".getBytes
   var lineSeparator = "\n".getBytes
 
   override def init(props: Properties) {
+    if (props.containsKey("print.timestamp"))
+      printTimestamp = props.getProperty("print.timestamp").trim.toLowerCase.equals("true")
     if (props.containsKey("print.key"))
       printKey = props.getProperty("print.key").trim.toLowerCase.equals("true")
     if (props.containsKey("key.separator"))
@@ -358,8 +361,11 @@ class DefaultMessageFormatter extends MessageFormatter {
   }
 
   def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream) {
-    if (timestampType != TimestampType.NO_TIMESTAMP_TYPE) {
-      output.write(s"$timestampType:$timestamp".getBytes)
+    if (printTimestamp) {
+      if (timestampType != TimestampType.NO_TIMESTAMP_TYPE)
+        output.write(s"$timestampType:$timestamp".getBytes)
+      else
+        output.write(s"NO_TIMESTAMP".getBytes)
       output.write(keySeparator)
     }
     if (printKey) {

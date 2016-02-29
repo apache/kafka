@@ -17,12 +17,7 @@
 
 package kafka.utils
 
-import java.io.File
-import java.net.URI
-import java.security.URIParameter
-import javax.security.auth.login.Configuration
 import java.util.concurrent.CountDownLatch
-
 import kafka.cluster._
 import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.server.{KafkaConfig, ConfigType}
@@ -32,9 +27,7 @@ import org.I0Itec.zkclient.exception.{ZkException, ZkNodeExistsException, ZkNoNo
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
-
 import org.apache.zookeeper.ZooDefs
-import scala.collection.JavaConverters._
 import scala.collection._
 import kafka.api.{KAFKA_0_10_0_IV0, ApiVersion, LeaderAndIsr}
 import org.apache.zookeeper.data.{ACL, Stat}
@@ -45,12 +38,10 @@ import kafka.controller.KafkaController
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
 import kafka.utils.ZkUtils._
-
 import org.apache.zookeeper.AsyncCallback.{DataCallback,StringCallback}
 import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
-import org.apache.zookeeper.ZooDefs.Ids
 import org.apache.zookeeper.ZooKeeper
 
 object ZkUtils {
@@ -269,6 +260,8 @@ class ZkUtils(val zkClient: ZkClient,
    * This format also includes default endpoints for compatibility with older clients.
    *
    * @param id
+   * @param host
+   * @param port
    * @param advertisedEndpoints
    * @param jmxPort
    */
@@ -772,8 +765,8 @@ class ZkUtils(val zkClient: ZkClient,
   /**
    * This API takes in a broker id, queries zookeeper for the broker metadata and returns the metadata for that broker
    * or throws an exception if the broker dies before the query to zookeeper finishes
-    *
-    * @param brokerId The broker id
+   *
+   * @param brokerId The broker id
    * @return An optional Broker object encapsulating the broker metadata
    */
   def getBrokerInfo(brokerId: Int): Option[Broker] = {

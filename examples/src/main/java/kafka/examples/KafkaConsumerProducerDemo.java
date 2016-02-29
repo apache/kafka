@@ -16,9 +16,9 @@
  */
 package kafka.examples;
 
-public class KafkaConsumerProducerDemo implements KafkaProperties {
+public class KafkaConsumerProducerDemo {
     public static void main(String[] args) {
-        final boolean isAsync = args.length > 0 ? !args[0].trim().toLowerCase().equals("sync") : true;
+        boolean isAsync = args.length == 0 || !args[0].trim().toLowerCase().equals("sync");
         Producer producerThread = new Producer(KafkaProperties.TOPIC, isAsync);
         producerThread.start();
 
