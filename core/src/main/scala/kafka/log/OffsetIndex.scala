@@ -55,7 +55,8 @@ import kafka.common.InvalidOffsetException
  * storage format.
  */
 class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1) extends Logging {
-  
+  import OffsetIndex._
+
   private val lock = new ReentrantLock
   
   /* initialize the memory mapping for this index */
@@ -66,9 +67,10 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
       try {
         /* pre-allocate the file if necessary */
         if(newlyCreated) {
-          if(maxIndexSize < 8)
-            throw new IllegalArgumentException("Invalid max index size: " + maxIndexSize)
-          raf.setLength(roundToExactMultiple(maxIndexSize, 8))
+          if(maxIndexSize < OffsetIndexEntrySize)
+            throw new IllegalArgumentException(s"Invalid max index size: $maxIndexSize. Max index size must be greater " +
+              s"than $OffsetIndexEntrySize")
+          raf.setLength(roundToExactMultiple(maxIndexSize, OffsetIndexEntrySize))
         }
           
         /* memory-map the file */
@@ -80,7 +82,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
           idx.position(0)
         else
           // if this is a pre-existing index, assume it is all valid and set position to last entry
-          idx.position(roundToExactMultiple(idx.limit, 8))
+          idx.position(roundToExactMultiple(idx.limit, OffsetIndexEntrySize))
         idx
       } finally {
         CoreUtils.swallow(raf.close())
@@ -88,13 +90,13 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
     }
   
   /* the number of eight-byte entries currently in the index */
-  private var size = new AtomicInteger(mmap.position / 8)
+  private var size = new AtomicInteger(mmap.position / OffsetIndexEntrySize)
   
   /**
    * The maximum number of eight-byte entries this index can hold
    */
   @volatile
-  var maxEntries = mmap.limit / 8
+  var maxEntries = mmap.limit / OffsetIndexEntrySize
   
   /* the last offset in the index */
   var lastOffset = readLastEntry.offset
@@ -173,10 +175,10 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   }
   
   /* return the nth offset relative to the base offset */
-  private def relativeOffset(buffer: ByteBuffer, n: Int): Int = buffer.getInt(n * 8)
+  private def relativeOffset(buffer: ByteBuffer, n: Int): Int = buffer.getInt(n * OffsetIndexEntrySize)
   
   /* return the nth physical position */
-  private def physical(buffer: ByteBuffer, n: Int): Int = buffer.getInt(n * 8 + 4)
+  private def physical(buffer: ByteBuffer, n: Int): Int = buffer.getInt(n * OffsetIndexEntrySize + 4)
   
   /**
    * Get the nth offset mapping from the index
@@ -204,7 +206,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
         this.mmap.putInt(position)
         this.size.incrementAndGet()
         this.lastOffset = offset
-        require(entries * 8 == mmap.position, entries + " entries but file position in index is " + mmap.position + ".")
+        require(entries * OffsetIndexEntrySize == mmap.position, entries + " entries but file position in index is " + mmap.position + ".")
       } else {
         throw new InvalidOffsetException("Attempt to append an offset (%d) to position %d no larger than the last offset appended (%d) to %s."
           .format(offset, entries, lastOffset, file.getAbsolutePath))
@@ -253,7 +255,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   private def truncateToEntries(entries: Int) {
     inLock(lock) {
       this.size.set(entries)
-      mmap.position(this.size.get * 8)
+      mmap.position(this.size.get * OffsetIndexEntrySize)
       this.lastOffset = readLastEntry.offset
     }
   }
@@ -264,7 +266,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
    */
   def trimToValidSize() {
     inLock(lock) {
-      resize(entries * 8)
+      resize(entries * OffsetIndexEntrySize)
     }
   }
 
@@ -277,7 +279,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   def resize(newSize: Int) {
     inLock(lock) {
       val raf = new RandomAccessFile(file, "rw")
-      val roundedNewSize = roundToExactMultiple(newSize, 8)
+      val roundedNewSize = roundToExactMultiple(newSize, OffsetIndexEntrySize)
       val position = this.mmap.position
       
       /* Windows won't let us modify the file length while the file is mmapped :-( */
@@ -286,7 +288,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
       try {
         raf.setLength(roundedNewSize)
         this.mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
-        this.maxEntries = this.mmap.limit / 8
+        this.maxEntries = this.mmap.limit / OffsetIndexEntrySize
         this.mmap.position(position)
       } finally {
         CoreUtils.swallow(raf.close())
@@ -331,7 +333,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   /**
    * The number of bytes actually used by this index
    */
-  def sizeInBytes() = 8 * entries
+  def sizeInBytes() = OffsetIndexEntrySize * entries
   
   /** Close the index */
   def close() {
@@ -356,9 +358,8 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
             "Corrupt index found, index file (%s) has non-zero size but the last offset is %d and the base offset is %d"
             .format(file.getAbsolutePath, lastOffset, baseOffset))
       val len = file.length()
-      require(len % 8 == 0, 
-              "Index file " + file.getName + " is corrupt, found " + len + 
-              " bytes which is not positive or not a multiple of 8.")
+      require(len % OffsetIndexEntrySize == 0, s"Index file ${file.getName} is corrupt, found $len bytes which is " +
+        s"not positive or not a multiple of $OffsetIndexEntrySize.")
   }
   
   /**
@@ -382,4 +383,8 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
         lock.unlock()
     }
   }
+}
+
+object OffsetIndex {
+  val OffsetIndexEntrySize = 8
 }

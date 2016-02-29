@@ -65,6 +65,21 @@ class LogConfigTest {
     })
   }
 
+  @Test
+  def testMaxIndexSize() {
+    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    kafkaProps.put(LogConfig.SegmentBytesProp, "1024")
+    kafkaProps.put(LogConfig.IndexIntervalBytesProp, "256")
+
+    kafkaProps.put(LogConfig.SegmentIndexBytesProp, "4096")
+    val logConfig1 = new LogConfig(kafkaProps)
+    assertEquals("The max offset index size should be 40.", logConfig1.maxIndexSize, 40)
+
+    kafkaProps.put(LogConfig.SegmentIndexBytesProp, "16")
+    val logConfig2 = new LogConfig(kafkaProps)
+    assertEquals("The max offset index size should be 16.", logConfig2.maxIndexSize, 16)
+  }
+
   private def assertPropertyInvalid(name: String, values: AnyRef*) {
     values.foreach((value) => {
       val props = new Properties
