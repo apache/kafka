@@ -310,8 +310,8 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
       assertEquals(s"key $keyAndValueIndex", new String(record.key))
       assertEquals(s"value $keyAndValueIndex", new String(record.value))
       // this is true only because K and V are byte arrays
-      assertEquals(s"key $keyAndValueIndex".length, record.keySize)
-      assertEquals(s"value $keyAndValueIndex".length, record.valueSize)
+      assertEquals(s"key $keyAndValueIndex".length, record.serializedKeySize)
+      assertEquals(s"value $keyAndValueIndex".length, record.serializedValueSize)
     }
   }
 

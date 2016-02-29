@@ -97,10 +97,10 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
           assertEquals(topic, metadata.topic())
           assertEquals(partition, metadata.partition())
           offset match {
-            case 0 => assertEquals(metadata.keySize + metadata.valueSize, "key".getBytes.length + "value".getBytes.length)
-            case 1 => assertEquals(metadata.keySize(), "key".getBytes.length)
-            case 2 => assertEquals(metadata.valueSize(), "value".getBytes.length)
-            case _ => assertTrue(metadata.valueSize() > 0)
+            case 0 => assertEquals(metadata.serializedKeySize + metadata.serializedValueSize, "key".getBytes.length + "value".getBytes.length)
+            case 1 => assertEquals(metadata.serializedKeySize(), "key".getBytes.length)
+            case 2 => assertEquals(metadata.serializedValueSize, "value".getBytes.length)
+            case _ => assertTrue(metadata.serializedValueSize > 0)
           }
           assertNotEquals(metadata.checksum(), 0)
           offset += 1

@@ -31,18 +31,18 @@ public final class RecordMetadata {
     // producer.
     private final long timestamp;
     private final long checksum;
-    private final int keySize;
-    private final int valueSize;
+    private final int serializedKeySize;
+    private final int serializedValueSize;
     private final TopicPartition topicPartition;
 
     private RecordMetadata(TopicPartition topicPartition, long offset, long timestamp, long
-        checksum, int keySize, int valueSize) {
+        checksum, int serializedKeySize, int serializedValueSize) {
         super();
         this.offset = offset;
         this.timestamp = timestamp;
         this.checksum = checksum;
-        this.keySize = keySize;
-        this.valueSize = valueSize;
+        this.serializedKeySize = serializedKeySize;
+        this.serializedValueSize = serializedValueSize;
         this.topicPartition = topicPartition;
     }
 
@@ -76,17 +76,19 @@ public final class RecordMetadata {
     }
 
     /**
-     * The size of the serialized, uncompressed key in bytes.
+     * The size of the serialized, uncompressed key in bytes. If key is null, the returned size
+     * is -1.
      */
-    public int keySize() {
-        return this.keySize;
+    public int serializedKeySize() {
+        return this.serializedKeySize;
     }
 
     /**
-     * The size of the serialized, uncompressed value in bytes.
+     * The size of the serialized, uncompressed value in bytes. If value is null, the returned
+     * size is -1.
      */
-    public int valueSize() {
-        return this.valueSize;
+    public int serializedValueSize() {
+        return this.serializedValueSize;
     }
 
     /**

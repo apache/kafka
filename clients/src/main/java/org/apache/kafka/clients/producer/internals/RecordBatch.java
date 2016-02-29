@@ -72,8 +72,8 @@ public final class RecordBatch {
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp, checksum,
-                                                                   key == null ? 0 : key.length,
-                                                                   value == null ? 0 : value.length);
+                                                                   key == null ? -1 : key.length,
+                                                                   value == null ? -1 : value.length);
             if (callback != null)
                 thunks.add(new Thunk(callback, future));
             this.recordCount++;
@@ -101,7 +101,9 @@ public final class RecordBatch {
                     // If the timestamp returned by server is NoTimestamp, that means CreateTime is used. Otherwise LogAppendTime is used.
                     RecordMetadata metadata = new RecordMetadata(this.topicPartition,  baseOffset, thunk.future.relativeOffset(),
                                                                  timestamp == Record.NO_TIMESTAMP ? thunk.future.timestamp() : timestamp,
-                                                                 thunk.future.checksum(), thunk.future.keySize(), thunk.future.valueSize());
+                                                                 thunk.future.checksum(),
+                                                                 thunk.future.serializedKeySize(),
+                                                                 thunk.future.serializedValueSize());
                     thunk.callback.onCompletion(metadata, null);
                 } else {
                     thunk.callback.onCompletion(null, exception);

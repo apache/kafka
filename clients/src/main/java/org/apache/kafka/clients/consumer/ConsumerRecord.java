@@ -25,8 +25,8 @@ public final class ConsumerRecord<K, V> {
     private final long timestamp;
     private final TimestampType timestampType;
     private final long checksum;
-    private final int keySize;
-    private final int valueSize;
+    private final int serializedKeySize;
+    private final int serializedValueSize;
     private final K key;
     private final V value;
 
@@ -47,8 +47,8 @@ public final class ConsumerRecord<K, V> {
                           long timestamp,
                           TimestampType timestampType,
                           long checksum,
-                          int keySize,
-                          int valueSize,
+                          int serializedKeySize,
+                          int serializedValueSize,
                           K key,
                           V value) {
         if (topic == null)
@@ -59,8 +59,8 @@ public final class ConsumerRecord<K, V> {
         this.timestamp = timestamp;
         this.timestampType = timestampType;
         this.checksum = checksum;
-        this.keySize = keySize;
-        this.valueSize = valueSize;
+        this.serializedKeySize = serializedKeySize;
+        this.serializedValueSize = serializedValueSize;
         this.key = key;
         this.value = value;
     }
@@ -122,23 +122,27 @@ public final class ConsumerRecord<K, V> {
     }
 
     /**
-     * The size of the serialized, uncompressed key in bytes.
+     * The size of the serialized, uncompressed key in bytes. If key is null, the returned size
+     * is -1.
      */
-    public int keySize() {
-        return this.keySize;
+    public int serializedKeySize() {
+        return this.serializedKeySize;
     }
 
     /**
-     * The size of the serialized, uncompressed value in bytes.
+     * The size of the serialized, uncompressed value in bytes. If value is null, the
+     * returned size is -1.
      */
-    public int valueSize() {
-        return this.valueSize;
+    public int serializedValueSize() {
+        return this.serializedValueSize;
     }
 
     @Override
     public String toString() {
         return "ConsumerRecord(topic = " + topic() + ", partition = " + partition() + ", offset = " + offset()
-                + ", " + timestampType + " = " + timestamp + ", checksum = " + checksum + ", key size = "
-               + keySize + ", value size = " + valueSize + ", key = " + key + ", value = " + value + ")";
+               + ", " + timestampType + " = " + timestamp + ", checksum = " + checksum
+               + ", serialized key size = "  + serializedKeySize
+               + ", serialized value size = " + serializedValueSize
+               + ", key = " + key + ", value = " + value + ")";
     }
 }

@@ -652,8 +652,8 @@ public class Fetcher<K, V> {
 
             return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
                                         timestamp, timestampType, logEntry.record().checksum(),
-                                        keyByteArray == null ? 0 : keyByteArray.length,
-                                        valueByteArray == null ? 0 : valueByteArray.length,
+                                        keyByteArray == null ? -1 : keyByteArray.length,
+                                        valueByteArray == null ? -1 : valueByteArray.length,
                                         key, value);
         } catch (KafkaException e) {
             throw e;

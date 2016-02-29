@@ -28,17 +28,17 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     private final long relativeOffset;
     private final long timestamp;
     private final long checksum;
-    private final int keySize;
-    private final int valueSize;
+    private final int serializedKeySize;
+    private final int serializedValueSize;
 
     public FutureRecordMetadata(ProduceRequestResult result, long relativeOffset, long timestamp,
-                                long checksum, int keySize, int valueSize) {
+                                long checksum, int serializedKeySize, int serializedValueSize) {
         this.result = result;
         this.relativeOffset = relativeOffset;
         this.timestamp = timestamp;
         this.checksum = checksum;
-        this.keySize = keySize;
-        this.valueSize = valueSize;
+        this.serializedKeySize = serializedKeySize;
+        this.serializedValueSize = serializedValueSize;
     }
 
     @Override
@@ -69,7 +69,7 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     
     RecordMetadata value() {
         return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.relativeOffset,
-                                  this.timestamp, this.checksum, this.keySize, this.valueSize);
+                                  this.timestamp, this.checksum, this.serializedKeySize, this.serializedValueSize);
     }
     
     public long relativeOffset() {
@@ -84,12 +84,12 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
         return this.checksum;
     }
 
-    public int keySize() {
-        return this.keySize;
+    public int serializedKeySize() {
+        return this.serializedKeySize;
     }
 
-    public int valueSize() {
-        return this.valueSize;
+    public int serializedValueSize() {
+        return this.serializedValueSize;
     }
 
     @Override
