@@ -354,8 +354,6 @@ class DefaultMessageFormatter extends MessageFormatter {
   var valDecoder : Deserializer[_ <: Object] = new ByteArrayDeserializer()
 
   override def init(props: Properties) {
-    System.out.println(props)
-
     if (props.containsKey("print.timestamp"))
       printTimestamp = props.getProperty("print.timestamp").trim.toLowerCase.equals("true")
     if (props.containsKey("print.key"))
@@ -364,19 +362,10 @@ class DefaultMessageFormatter extends MessageFormatter {
       keySeparator = props.getProperty("key.separator").getBytes
     if (props.containsKey("line.separator"))
       lineSeparator = props.getProperty("line.separator").getBytes
-
-    if (props.containsKey("key.decoder")) {
+    if (props.containsKey("key.decoder"))
       keyDecoder = Class.forName(props.getProperty("key.decoder")).newInstance().asInstanceOf[Deserializer[_ <: Object]]
-
-      System.out.println("update key decoder")
-    }
-    if (props.containsKey("value.decoder")) {
+    if (props.containsKey("value.decoder"))
       valDecoder = Class.forName(props.getProperty("value.decoder")).newInstance().asInstanceOf[Deserializer[_ <: Object]]
-
-      System.out.println("update value decoder")
-    }
-    System.out.println(keyDecoder)
-    System.out.println(valDecoder)
   }
 
   def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream) {
