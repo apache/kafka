@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
+import static java.util.Arrays.asList;
 
 import java.io.File;
 import java.io.IOException;
@@ -26,6 +24,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 
 
 /**
@@ -48,13 +50,13 @@ public class TestUtils {
     }
 
     public static Cluster clusterWith(int nodes, String topic, int partitions) {
-        List<Node> ns = new ArrayList<>();
+        Node[] ns = new Node[nodes];
         for (int i = 0; i < nodes; i++)
-            ns.add(new Node(0, "localhost", 1969));
-        List<PartitionInfo> parts = new ArrayList<>();
+            ns[i] = new Node(0, "localhost", 1969);
+        List<PartitionInfo> parts = new ArrayList<PartitionInfo>();
         for (int i = 0; i < partitions; i++)
-            parts.add(new PartitionInfo(topic, i, ns.get(i % nodes), ns, ns));
-        return new Cluster(ns, parts, Collections.<String>emptySet());
+            parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
+        return new Cluster(asList(ns), parts, Collections.<String>emptySet());
     }
 
     /**

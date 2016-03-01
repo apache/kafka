@@ -12,8 +12,6 @@
  */
 package org.apache.kafka.common;
 
-import java.util.Collection;
-
 /**
  * Information about a topic-partition.
  */
@@ -32,11 +30,6 @@ public class PartitionInfo {
         this.replicas = replicas;
         this.inSyncReplicas = inSyncReplicas;
     }
-
-    public PartitionInfo(String topic, int partition, Node leader, Collection<Node> replicas, Collection<Node> inSyncReplicas) {
-        this(topic, partition, leader, toArray(replicas), toArray(inSyncReplicas));
-    }
-
 
     /**
      * The topic name
@@ -97,10 +90,6 @@ public class PartitionInfo {
         }
         b.append("]");
         return b.toString();
-    }
-
-    private static Node[] toArray(Collection<Node> nodes) {
-        return nodes.toArray(new Node[nodes.size()]);
     }
 
 }

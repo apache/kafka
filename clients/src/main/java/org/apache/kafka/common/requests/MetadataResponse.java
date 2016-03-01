@@ -190,7 +190,7 @@ public class MetadataResponse extends AbstractRequestResponse {
             if (metadata.error == Errors.NONE) {
                 for (PartitionMetadata partitionMetadata : metadata.partitionMetadata)
                     partitions.add(new PartitionInfo(metadata.topic, partitionMetadata.partition,
-                            partitionMetadata.leader, partitionMetadata.replicas, partitionMetadata.isr));
+                            partitionMetadata.leader, toArray(partitionMetadata.replicas), toArray(partitionMetadata.isr)));
             } else if (metadata.error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                 unauthorizedTopics.add(metadata.topic);
             }
@@ -277,6 +277,10 @@ public class MetadataResponse extends AbstractRequestResponse {
             return isr;
         }
 
+    }
+
+    private static Node[] toArray(Collection<Node> nodes) {
+        return nodes.toArray(new Node[nodes.size()]);
     }
 
 }

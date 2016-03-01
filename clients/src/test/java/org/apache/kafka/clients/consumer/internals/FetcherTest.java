@@ -564,8 +564,8 @@ public class FetcherTest {
                 partitionsMetadata.add(new MetadataResponse.PartitionMetadata(
                         Errors.NONE, partitionInfo.partition(),
                         partitionInfo.leader(),
-                        partitionInfo.replicas(),
-                        partitionInfo.inSyncReplicas()));
+                        Arrays.asList(partitionInfo.replicas()),
+                        Arrays.asList(partitionInfo.inSyncReplicas())));
             }
         }
 
