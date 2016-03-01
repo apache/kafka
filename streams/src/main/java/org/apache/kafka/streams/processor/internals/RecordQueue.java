@@ -87,6 +87,14 @@ public class RecordQueue {
             timeTracker.addElement(stampedRecord);
         }
 
+        // update the partition timestamp if its currently
+        // tracked min timestamp has exceed its value; this will
+        // usually only take effect for the first added batch
+        long timestamp = timeTracker.get();
+
+        if (timestamp > partitionTime)
+            partitionTime = timestamp;
+
         return size();
     }
 

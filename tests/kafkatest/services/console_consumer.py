@@ -26,16 +26,6 @@ import os
 import subprocess
 
 
-def is_int(msg):
-    """Default method used to check whether text pulled from console consumer is a message.
-
-    return int or None
-    """
-    try:
-        return int(msg)
-    except ValueError:
-        return None
-
 """
 0.8.2.1 ConsoleConsumer options
 

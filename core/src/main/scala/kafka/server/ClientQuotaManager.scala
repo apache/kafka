@@ -200,7 +200,10 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
        */
       lock.writeLock().lock()
       try {
+        // Set the var for both sensors in case another thread has won the race to acquire the write lock. This will
+        // ensure that we initialise `ClientSensors` with non-null parameters.
         quotaSensor = metrics.getSensor(quotaSensorName)
+        throttleTimeSensor = metrics.getSensor(throttleTimeSensorName)
         if (quotaSensor == null) {
           // create the throttle time sensor also. Use default metric config
           throttleTimeSensor = metrics.sensor(throttleTimeSensorName,

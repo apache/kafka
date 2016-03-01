@@ -30,6 +30,7 @@ import kafka.utils._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.serialization.Deserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.Logger
 
@@ -343,6 +344,9 @@ class DefaultMessageFormatter extends MessageFormatter {
   var keySeparator = "\t".getBytes
   var lineSeparator = "\n".getBytes
 
+  var keyDeserializer: Option[Deserializer[_]] = None
+  var valueDeserializer: Option[Deserializer[_]] = None
+
   override def init(props: Properties) {
     if (props.containsKey("print.timestamp"))
       printTimestamp = props.getProperty("print.timestamp").trim.toLowerCase.equals("true")
@@ -352,10 +356,25 @@ class DefaultMessageFormatter extends MessageFormatter {
       keySeparator = props.getProperty("key.separator").getBytes
     if (props.containsKey("line.separator"))
       lineSeparator = props.getProperty("line.separator").getBytes
+    // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
+    if (props.containsKey("key.deserializer"))
+      keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
+    // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
+    if (props.containsKey("value.deserializer"))
+      valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
   }
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
+
+    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], separator: Array[Byte]) {
+      val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes)
+      val convertedBytes = deserializer.map(_.deserialize(null, nonNullBytes).toString.getBytes).getOrElse(nonNullBytes)
+      output.write(convertedBytes)
+      output.write(separator)
+    }
+
     import consumerRecord._
+
     if (printTimestamp) {
       if (timestampType != TimestampType.NO_TIMESTAMP_TYPE)
         output.write(s"$timestampType:$timestamp".getBytes)
@@ -363,12 +382,9 @@ class DefaultMessageFormatter extends MessageFormatter {
         output.write(s"NO_TIMESTAMP".getBytes)
       output.write(keySeparator)
     }
-    if (printKey) {
-      output.write(Option(key).getOrElse("null".getBytes))
-      output.write(keySeparator)
-    }
-    output.write(Option(value).getOrElse("null".getBytes))
-    output.write(lineSeparator)
+
+    if (printKey) write(keyDeserializer, key, keySeparator)
+    write(valueDeserializer, value, lineSeparator)
   }
 }
 

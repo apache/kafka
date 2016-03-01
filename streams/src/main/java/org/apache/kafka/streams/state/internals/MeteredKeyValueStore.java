@@ -43,6 +43,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     protected final Time time;
 
     private Sensor putTime;
+    private Sensor putIfAbsentTime;
     private Sensor getTime;
     private Sensor deleteTime;
     private Sensor putAllTime;
@@ -69,6 +70,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         final String name = name();
         this.metrics = context.metrics();
         this.putTime = this.metrics.addLatencySensor(metricScope, name, "put");
+        this.putIfAbsentTime = this.metrics.addLatencySensor(metricScope, name, "put-if-absent");
         this.getTime = this.metrics.addLatencySensor(metricScope, name, "get");
         this.deleteTime = this.metrics.addLatencySensor(metricScope, name, "delete");
         this.putAllTime = this.metrics.addLatencySensor(metricScope, name, "put-all");
@@ -108,6 +110,16 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             this.inner.put(key, value);
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
+        }
+    }
+
+    @Override
+    public V putIfAbsent(K key, V value) {
+        long startNs = time.nanoseconds();
+        try {
+            return this.inner.putIfAbsent(key, value);
+        } finally {
+            this.metrics.recordLatency(this.putIfAbsentTime, startNs, time.nanoseconds());
         }
     }
 

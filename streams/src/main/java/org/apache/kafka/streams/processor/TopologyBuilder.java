@@ -430,6 +430,32 @@ public class TopologyBuilder {
     }
 
     /**
+     * Connects a list of processors.
+     *
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
+     * @param processorNames the name of the processors
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public final TopologyBuilder connectProcessors(String... processorNames) {
+        if (processorNames.length < 2)
+            throw new TopologyBuilderException("At least two processors need to participate in the connection.");
+
+        for (String processorName : processorNames) {
+            if (!nodeFactories.containsKey(processorName))
+                throw new TopologyBuilderException("Processor " + processorName + " is not added yet.");
+
+        }
+
+        String firstProcessorName = processorNames[0];
+
+        nodeGrouper.unite(firstProcessorName, Arrays.copyOfRange(processorNames, 1, processorNames.length));
+
+        return this;
+    }
+
+    /**
      * Adds an internal topic
      *
      * @param topicName the name of the topic
