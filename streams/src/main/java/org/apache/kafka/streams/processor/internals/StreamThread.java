@@ -27,7 +27,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
@@ -44,7 +43,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -56,7 +54,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.channels.FileLock;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -315,8 +312,6 @@ public class StreamThread extends Thread {
         int totalNumBuffered = 0;
         long lastPoll = 0L;
         boolean requiresPoll = true;
-
-        ensureCopartitioning(builder.copartitionGroups());
 
         consumer.subscribe(new ArrayList<>(sourceTopics), rebalanceListener);
 
@@ -717,31 +712,6 @@ public class StreamThread extends Thread {
 
         } catch (Exception e) {
             log.error("Failed to remove standby tasks in thread [" + this.getName() + "]: ", e);
-        }
-    }
-
-    private void ensureCopartitioning(Collection<Set<String>> copartitionGroups) {
-        for (Set<String> copartitionGroup : copartitionGroups) {
-            ensureCopartitioning(copartitionGroup);
-        }
-    }
-
-    private void ensureCopartitioning(Set<String> copartitionGroup) {
-        int numPartitions = -1;
-
-        for (String topic : copartitionGroup) {
-            List<PartitionInfo> infos = consumer.partitionsFor(topic);
-
-            if (infos == null)
-                throw new TopologyBuilderException("Topic not found: " + topic);
-
-            if (numPartitions == -1) {
-                numPartitions = infos.size();
-            } else if (numPartitions != infos.size()) {
-                String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
-                Arrays.sort(topics);
-                throw new TopologyBuilderException("Topics not copartitioned: [" + Utils.mkString(Arrays.asList(topics), ",") + "]");
-            }
         }
     }
 
