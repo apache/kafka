@@ -47,11 +47,11 @@ public final class RecordMetadata {
     }
 
     public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset,
-                          long timestamp, long checksum, int keySize, int valueSize) {
+                          long timestamp, long checksum, int serializedKeySize, int serializedValueSize) {
         // ignore the relativeOffset if the base offset is -1,
         // since this indicates the offset is unknown
         this(topicPartition, baseOffset == -1 ? baseOffset : baseOffset + relativeOffset,
-             timestamp, checksum, keySize, valueSize);
+             timestamp, checksum, serializedKeySize, serializedValueSize);
     }
 
     /**
