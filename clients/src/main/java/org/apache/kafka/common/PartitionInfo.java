@@ -13,7 +13,6 @@
 package org.apache.kafka.common;
 
 import java.util.Collection;
-import java.util.List;
 
 /**
  * Information about a topic-partition.
