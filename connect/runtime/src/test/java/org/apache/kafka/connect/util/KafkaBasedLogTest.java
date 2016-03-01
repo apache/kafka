@@ -97,8 +97,8 @@ public class KafkaBasedLogTest {
     private static final Node LEADER = new Node(1, "broker1", 9092);
     private static final Node REPLICA = new Node(1, "broker2", 9093);
 
-    private static final PartitionInfo TPINFO0 = new PartitionInfo(TOPIC, 0, LEADER, Arrays.asList(REPLICA), Arrays.asList(REPLICA));
-    private static final PartitionInfo TPINFO1 = new PartitionInfo(TOPIC, 1, LEADER, Arrays.asList(REPLICA), Arrays.asList(REPLICA));
+    private static final PartitionInfo TPINFO0 = new PartitionInfo(TOPIC, 0, LEADER, new Node[]{REPLICA}, new Node[]{REPLICA});
+    private static final PartitionInfo TPINFO1 = new PartitionInfo(TOPIC, 1, LEADER, new Node[]{REPLICA}, new Node[]{REPLICA});
 
     private static final String TP0_KEY = "TP0KEY";
     private static final String TP1_KEY = "TP1KEY";

@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -22,16 +23,21 @@ public class PartitionInfo {
     private final String topic;
     private final int partition;
     private final Node leader;
-    private final List<Node> replicas;
-    private final List<Node> inSyncReplicas;
+    private final Node[] replicas;
+    private final Node[] inSyncReplicas;
 
-    public PartitionInfo(String topic, int partition, Node leader, List<Node> replicas, List<Node> inSyncReplicas) {
+    public PartitionInfo(String topic, int partition, Node leader, Node[] replicas, Node[] inSyncReplicas) {
         this.topic = topic;
         this.partition = partition;
         this.leader = leader;
         this.replicas = replicas;
         this.inSyncReplicas = inSyncReplicas;
     }
+
+    public PartitionInfo(String topic, int partition, Node leader, Collection<Node> replicas, Collection<Node> inSyncReplicas) {
+        this(topic, partition, leader, toArray(replicas), toArray(inSyncReplicas));
+    }
+
 
     /**
      * The topic name
@@ -57,7 +63,7 @@ public class PartitionInfo {
     /**
      * The complete set of replicas for this partition regardless of whether they are alive or up-to-date
      */
-    public List<Node> replicas() {
+    public Node[] replicas() {
         return replicas;
     }
 
@@ -65,7 +71,7 @@ public class PartitionInfo {
      * The subset of the replicas that are in sync, that is caught-up to the leader and ready to take over as leader if
      * the leader should fail
      */
-    public List<Node> inSyncReplicas() {
+    public Node[] inSyncReplicas() {
         return inSyncReplicas;
     }
 
@@ -80,19 +86,22 @@ public class PartitionInfo {
     }
 
     /* Extract the node ids from each item in the array and format for display */
-    private String fmtNodeIds(List<Node> nodes) {
-        int length = nodes.size();
+    private String fmtNodeIds(Node[] nodes) {
         StringBuilder b = new StringBuilder("[");
-        for (int i = 0; i < length - 1; i++) {
-            b.append(Integer.toString(nodes.get(i).id()));
+        for (int i = 0; i < nodes.length - 1; i++) {
+            b.append(Integer.toString(nodes[i].id()));
             b.append(',');
         }
-        if (!nodes.isEmpty()) {
-            b.append(Integer.toString(nodes.get(length - 1).id()));
+        if (nodes.length > 0) {
+            b.append(Integer.toString(nodes[nodes.length - 1].id()));
             b.append(',');
         }
         b.append("]");
         return b.toString();
+    }
+
+    private static Node[] toArray(Collection<Node> nodes) {
+        return nodes.toArray(new Node[nodes.size()]);
     }
 
 }

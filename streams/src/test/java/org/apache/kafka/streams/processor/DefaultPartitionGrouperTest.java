@@ -36,13 +36,12 @@ import static org.junit.Assert.assertEquals;
 
 public class DefaultPartitionGrouperTest {
 
-    private static final List<Node> EMPTY_NODES = Collections.emptyList();
     private List<PartitionInfo> infos = Arrays.asList(
-            new PartitionInfo("topic1", 0, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
-            new PartitionInfo("topic1", 1, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
-            new PartitionInfo("topic1", 2, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
-            new PartitionInfo("topic2", 0, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
-            new PartitionInfo("topic2", 1, Node.noNode(), EMPTY_NODES, EMPTY_NODES)
+            new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic2", 0, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic2", 1, Node.noNode(), new Node[0], new Node[0])
     );
 
     private Cluster metadata = new Cluster(Collections.singletonList(Node.noNode()), infos, Collections.<String>emptySet());

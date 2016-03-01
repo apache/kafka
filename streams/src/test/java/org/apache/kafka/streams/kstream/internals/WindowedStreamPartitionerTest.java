@@ -40,14 +40,13 @@ public class WindowedStreamPartitionerTest {
     private IntegerSerializer keySerializer = new IntegerSerializer();
     private StringSerializer valSerializer = new StringSerializer();
 
-    private static final List<Node> EMPTY_NODES = Collections.emptyList();
     private List<PartitionInfo> infos = Arrays.asList(
-            new PartitionInfo(topicName, 0, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
-            new PartitionInfo(topicName, 1, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
-            new PartitionInfo(topicName, 2, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
-            new PartitionInfo(topicName, 3, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
-            new PartitionInfo(topicName, 4, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
-            new PartitionInfo(topicName, 5, Node.noNode(), EMPTY_NODES, EMPTY_NODES)
+            new PartitionInfo(topicName, 0, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo(topicName, 1, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo(topicName, 2, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo(topicName, 3, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo(topicName, 4, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo(topicName, 5, Node.noNode(), new Node[0], new Node[0])
     );
 
     private Cluster cluster = new Cluster(Arrays.asList(Node.noNode()), infos, Collections.<String>emptySet());

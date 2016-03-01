@@ -63,7 +63,6 @@ public class ProcessorStateManagerTest {
         private long endOffset = 0L;
         private long currentOffset = 0L;
 
-
         private ArrayList<ConsumerRecord<byte[], byte[]>> recordBuffer = new ArrayList<>();
 
         MockRestoreConsumer() {
@@ -190,7 +189,6 @@ public class ProcessorStateManagerTest {
     private final String nonPersistentStoreName = "nonPersistentStore";
     private final String persistentStoreTopicName = ProcessorStateManager.storeChangelogTopic(jobId, persistentStoreName);
     private final String nonPersistentStoreTopicName = ProcessorStateManager.storeChangelogTopic(jobId, nonPersistentStoreName);
-    private List<Node> emptyNodes = Collections.emptyList();
 
     @Test
     public void testLockStateDirectory() throws IOException {
@@ -251,8 +249,8 @@ public class ProcessorStateManagerTest {
             MockRestoreConsumer restoreConsumer = new MockRestoreConsumer();
 
             restoreConsumer.updatePartitions(persistentStoreTopicName, Utils.mkList(
-                    new PartitionInfo(persistentStoreTopicName, 1, Node.noNode(), emptyNodes, emptyNodes),
-                    new PartitionInfo(persistentStoreTopicName, 2, Node.noNode(), emptyNodes, emptyNodes)
+                    new PartitionInfo(persistentStoreTopicName, 1, Node.noNode(), new Node[0], new Node[0]),
+                    new PartitionInfo(persistentStoreTopicName, 2, Node.noNode(), new Node[0], new Node[0])
             ));
 
             TopicPartition partition = new TopicPartition(persistentStoreTopicName, 2);
@@ -304,8 +302,8 @@ public class ProcessorStateManagerTest {
             checkpoint.write(Collections.singletonMap(new TopicPartition(persistentStoreTopicName, 2), lastCheckpointedOffset));
 
             restoreConsumer.updatePartitions(nonPersistentStoreTopicName, Utils.mkList(
-                    new PartitionInfo(nonPersistentStoreTopicName, 1, Node.noNode(), emptyNodes, emptyNodes),
-                    new PartitionInfo(nonPersistentStoreTopicName, 2, Node.noNode(), emptyNodes, emptyNodes)
+                    new PartitionInfo(nonPersistentStoreTopicName, 1, Node.noNode(), new Node[0], new Node[0]),
+                    new PartitionInfo(nonPersistentStoreTopicName, 2, Node.noNode(), new Node[0], new Node[0])
             ));
 
             TopicPartition partition = new TopicPartition(persistentStoreTopicName, 2);
@@ -363,14 +361,14 @@ public class ProcessorStateManagerTest {
             MockRestoreConsumer restoreConsumer = new MockRestoreConsumer();
 
             restoreConsumer.updatePartitions(storeTopicName1, Utils.mkList(
-                    new PartitionInfo(storeTopicName1, 0, Node.noNode(), emptyNodes, emptyNodes)
+                    new PartitionInfo(storeTopicName1, 0, Node.noNode(), new Node[0], new Node[0])
             ));
             restoreConsumer.updatePartitions(storeTopicName2, Utils.mkList(
-                    new PartitionInfo(storeTopicName2, 0, Node.noNode(), emptyNodes, emptyNodes)
+                    new PartitionInfo(storeTopicName2, 0, Node.noNode(), new Node[0], new Node[0])
             ));
             restoreConsumer.updatePartitions(storeTopicName3, Utils.mkList(
-                    new PartitionInfo(storeTopicName3, 0, Node.noNode(), emptyNodes, emptyNodes),
-                    new PartitionInfo(storeTopicName3, 1, Node.noNode(), emptyNodes, emptyNodes)
+                    new PartitionInfo(storeTopicName3, 0, Node.noNode(), new Node[0], new Node[0]),
+                    new PartitionInfo(storeTopicName3, 1, Node.noNode(), new Node[0], new Node[0])
             ));
 
             TopicPartition partition1 = new TopicPartition(storeTopicName1, 0);
@@ -422,7 +420,7 @@ public class ProcessorStateManagerTest {
             MockRestoreConsumer restoreConsumer = new MockRestoreConsumer();
 
             restoreConsumer.updatePartitions(nonPersistentStoreTopicName, Utils.mkList(
-                    new PartitionInfo(nonPersistentStoreTopicName, 1, Node.noNode(), emptyNodes, emptyNodes)
+                    new PartitionInfo(nonPersistentStoreTopicName, 1, Node.noNode(), new Node[0], new Node[0])
             ));
 
             MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false);
@@ -454,10 +452,10 @@ public class ProcessorStateManagerTest {
             MockRestoreConsumer restoreConsumer = new MockRestoreConsumer();
 
             restoreConsumer.updatePartitions(persistentStoreTopicName, Utils.mkList(
-                    new PartitionInfo(persistentStoreTopicName, 1, Node.noNode(), emptyNodes, emptyNodes)
+                    new PartitionInfo(persistentStoreTopicName, 1, Node.noNode(), new Node[0], new Node[0])
             ));
             restoreConsumer.updatePartitions(nonPersistentStoreTopicName, Utils.mkList(
-                    new PartitionInfo(nonPersistentStoreTopicName, 1, Node.noNode(), emptyNodes, emptyNodes)
+                    new PartitionInfo(nonPersistentStoreTopicName, 1, Node.noNode(), new Node[0], new Node[0])
             ));
 
             // set up ack'ed offsets
