@@ -12,6 +12,8 @@
  */
 package org.apache.kafka.common;
 
+import java.util.List;
+
 /**
  * Information about a topic-partition.
  */
@@ -20,10 +22,10 @@ public class PartitionInfo {
     private final String topic;
     private final int partition;
     private final Node leader;
-    private final Node[] replicas;
-    private final Node[] inSyncReplicas;
+    private final List<Node> replicas;
+    private final List<Node> inSyncReplicas;
 
-    public PartitionInfo(String topic, int partition, Node leader, Node[] replicas, Node[] inSyncReplicas) {
+    public PartitionInfo(String topic, int partition, Node leader, List<Node> replicas, List<Node> inSyncReplicas) {
         this.topic = topic;
         this.partition = partition;
         this.leader = leader;
@@ -55,7 +57,7 @@ public class PartitionInfo {
     /**
      * The complete set of replicas for this partition regardless of whether they are alive or up-to-date
      */
-    public Node[] replicas() {
+    public List<Node> replicas() {
         return replicas;
     }
 
@@ -63,7 +65,7 @@ public class PartitionInfo {
      * The subset of the replicas that are in sync, that is caught-up to the leader and ready to take over as leader if
      * the leader should fail
      */
-    public Node[] inSyncReplicas() {
+    public List<Node> inSyncReplicas() {
         return inSyncReplicas;
     }
 
@@ -78,14 +80,15 @@ public class PartitionInfo {
     }
 
     /* Extract the node ids from each item in the array and format for display */
-    private String fmtNodeIds(Node[] nodes) {
+    private String fmtNodeIds(List<Node> nodes) {
+        int length = nodes.size();
         StringBuilder b = new StringBuilder("[");
-        for (int i = 0; i < nodes.length - 1; i++) {
-            b.append(Integer.toString(nodes[i].id()));
+        for (int i = 0; i < length - 1; i++) {
+            b.append(Integer.toString(nodes.get(i).id()));
             b.append(',');
         }
-        if (nodes.length > 0) {
-            b.append(Integer.toString(nodes[nodes.length - 1].id()));
+        if (!nodes.isEmpty()) {
+            b.append(Integer.toString(nodes.get(length - 1).id()));
             b.append(',');
         }
         b.append("]");

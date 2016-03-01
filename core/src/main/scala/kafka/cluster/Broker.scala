@@ -21,6 +21,7 @@ import java.nio.ByteBuffer
 
 import kafka.common.{BrokerEndPointNotAvailableException, BrokerNotAvailableException, KafkaException}
 import kafka.utils.Json
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.protocol.SecurityProtocol
 
 /**
@@ -131,6 +132,15 @@ case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) {
 
   def supportsChannel(protocolType: SecurityProtocol): Unit = {
     endPoints.contains(protocolType)
+  }
+
+  def getNode(protocolType: SecurityProtocol): Node = {
+    val endpoint = endPoints.get(protocolType)
+    endpoint match {
+      case Some(endpoint) => new Node(id, endpoint.host, endpoint.port)
+      case None =>
+        throw new BrokerEndPointNotAvailableException("End point %s not found for broker %d".format(protocolType,id))
+    }
   }
 
   def getBrokerEndPoint(protocolType: SecurityProtocol): BrokerEndPoint = {

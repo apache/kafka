@@ -215,13 +215,14 @@ public class Fetcher<K, V> {
                     throw new TopicAuthorizationException(unauthorizedTopics);
 
                 boolean shouldRetry = false;
-                if (!response.errors().isEmpty()) {
+                Map<String, Errors> errors = response.errors();
+                if (!errors.isEmpty()) {
                     // if there were errors, we need to check whether they were fatal or whether
                     // we should just retry
 
-                    log.debug("Topic metadata fetch included errors: {}", response.errors());
+                    log.debug("Topic metadata fetch included errors: {}", errors);
 
-                    for (Map.Entry<String, Errors> errorEntry : response.errors().entrySet()) {
+                    for (Map.Entry<String, Errors> errorEntry : errors.entrySet()) {
                         String topic = errorEntry.getKey();
                         Errors error = errorEntry.getValue();
 

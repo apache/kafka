@@ -59,6 +59,8 @@ import java.util.UUID;
 
 public class StreamThreadTest {
 
+    private static final List<Node> EMPTY_NODES = Collections.emptyList();
+    
     private final String clientId = "clientId";
     private final String jobId = "stream-thread-test";
     private final UUID processId = UUID.randomUUID();
@@ -71,15 +73,15 @@ public class StreamThreadTest {
     private TopicPartition t3p2 = new TopicPartition("topic3", 2);
 
     private List<PartitionInfo> infos = Arrays.asList(
-            new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic2", 0, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic2", 1, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic2", 2, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic3", 0, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic3", 1, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic3", 2, Node.noNode(), new Node[0], new Node[0])
+            new PartitionInfo("topic1", 0, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic1", 1, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic1", 2, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic2", 0, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic2", 1, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic2", 2, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic3", 0, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic3", 1, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic3", 2, Node.noNode(), EMPTY_NODES, EMPTY_NODES)
     );
 
     private Cluster metadata = new Cluster(Arrays.asList(Node.noNode()), infos, Collections.<String>emptySet());

@@ -52,6 +52,7 @@ import java.util.UUID;
 import static org.junit.Assert.assertEquals;
 
 public class StreamPartitionAssignorTest {
+    private static final List<Node> EMPTY_NODES = Collections.emptyList();
 
     private TopicPartition t1p0 = new TopicPartition("topic1", 0);
     private TopicPartition t1p1 = new TopicPartition("topic1", 1);
@@ -67,16 +68,16 @@ public class StreamPartitionAssignorTest {
     private Set<String> allTopics = Utils.mkSet("topic1", "topic2");
 
     private List<PartitionInfo> infos = Arrays.asList(
-            new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic2", 0, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic2", 1, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic2", 2, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic3", 0, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic3", 1, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic3", 2, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic3", 3, Node.noNode(), new Node[0], new Node[0])
+            new PartitionInfo("topic1", 0, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic1", 1, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic1", 2, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic2", 0, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic2", 1, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic2", 2, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic3", 0, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic3", 1, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic3", 2, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic3", 3, Node.noNode(), EMPTY_NODES, EMPTY_NODES)
     );
 
     private Cluster metadata = new Cluster(Arrays.asList(Node.noNode()), infos, Collections.<String>emptySet());

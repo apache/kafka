@@ -12,15 +12,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -29,6 +20,15 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class MetadataResponse extends AbstractRequestResponse {
 
@@ -71,18 +71,18 @@ public class MetadataResponse extends AbstractRequestResponse {
     private static final String REPLICAS_KEY_NAME = "replicas";
     private static final String ISR_KEY_NAME = "isr";
 
-    private final Cluster cluster;
-    private final Map<String, Errors> errors;
+    private final Collection<Node> brokers;
+    private final List<TopicMetadata> topicMetadata;
 
-    /**
-     * Constructor for MetadataResponse where there are errors for some of the topics,
-     * error data take precedence over cluster information for particular topic
-     */
-    public MetadataResponse(Cluster cluster, Map<String, Errors> errors) {
+
+    public MetadataResponse(List<Node> brokers, List<TopicMetadata> topicMetadata) {
         super(new Struct(CURRENT_SCHEMA));
 
-        List<Struct> brokerArray = new ArrayList<Struct>();
-        for (Node node : cluster.nodes()) {
+        this.brokers = brokers;
+        this.topicMetadata = topicMetadata;
+
+        List<Struct> brokerArray = new ArrayList<>();
+        for (Node node : brokers) {
             Struct broker = struct.instance(BROKERS_KEY_NAME);
             broker.set(NODE_ID_KEY_NAME, node.id());
             broker.set(HOST_KEY_NAME, node.host());
@@ -91,51 +91,39 @@ public class MetadataResponse extends AbstractRequestResponse {
         }
         struct.set(BROKERS_KEY_NAME, brokerArray.toArray());
 
-
-        List<Struct> topicArray = new ArrayList<Struct>();
-        for (Map.Entry<String, Errors> errorEntry : errors.entrySet()) {
+        List<Struct> topicMetadataArray = new ArrayList<>(topicMetadata.size());
+        for (TopicMetadata metadata : topicMetadata) {
             Struct topicData = struct.instance(TOPIC_METATDATA_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, errorEntry.getKey());
-            topicData.set(TOPIC_ERROR_CODE_KEY_NAME, errorEntry.getValue().code());
-            topicData.set(PARTITION_METADATA_KEY_NAME, new Struct[0]);
-            topicArray.add(topicData);
-        }
+            topicData.set(TOPIC_KEY_NAME, metadata.topic);
+            topicData.set(TOPIC_ERROR_CODE_KEY_NAME, metadata.error.code());
 
-        for (String topic : cluster.topics()) {
-            if (!errors.containsKey(topic)) {
-                Struct topicData = struct.instance(TOPIC_METATDATA_KEY_NAME);
-                topicData.set(TOPIC_KEY_NAME, topic);
-                topicData.set(TOPIC_ERROR_CODE_KEY_NAME, Errors.NONE.code());
-                List<Struct> partitionArray = new ArrayList<Struct>();
-                for (PartitionInfo fetchPartitionData : cluster.partitionsForTopic(topic)) {
-                    Struct partitionData = topicData.instance(PARTITION_METADATA_KEY_NAME);
-                    partitionData.set(PARTITION_ERROR_CODE_KEY_NAME, Errors.NONE.code());
-                    partitionData.set(PARTITION_KEY_NAME, fetchPartitionData.partition());
-                    partitionData.set(LEADER_KEY_NAME, fetchPartitionData.leader().id());
-                    ArrayList<Integer> replicas = new ArrayList<Integer>();
-                    for (Node node : fetchPartitionData.replicas())
-                        replicas.add(node.id());
-                    partitionData.set(REPLICAS_KEY_NAME, replicas.toArray());
-                    ArrayList<Integer> isr = new ArrayList<Integer>();
-                    for (Node node : fetchPartitionData.inSyncReplicas())
-                        isr.add(node.id());
-                    partitionData.set(ISR_KEY_NAME, isr.toArray());
-                    partitionArray.add(partitionData);
-                }
-                topicData.set(PARTITION_METADATA_KEY_NAME, partitionArray.toArray());
-                topicArray.add(topicData);
+            List<Struct> partitionMetadataArray = new ArrayList<>(metadata.partitionMetadata.size());
+            for (PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
+                Struct partitionData = topicData.instance(PARTITION_METADATA_KEY_NAME);
+                partitionData.set(PARTITION_ERROR_CODE_KEY_NAME, partitionMetadata.error.code());
+                partitionData.set(PARTITION_KEY_NAME, partitionMetadata.partition);
+                partitionData.set(LEADER_KEY_NAME, partitionMetadata.leader.id());
+                ArrayList<Integer> replicas = new ArrayList<>(partitionMetadata.replicas.size());
+                for (Node node : partitionMetadata.replicas)
+                    replicas.add(node.id());
+                partitionData.set(REPLICAS_KEY_NAME, replicas.toArray());
+                ArrayList<Integer> isr = new ArrayList<>(partitionMetadata.isr.size());
+                for (Node node : partitionMetadata.isr)
+                    isr.add(node.id());
+                partitionData.set(ISR_KEY_NAME, isr.toArray());
+                partitionMetadataArray.add(partitionData);
+
             }
+            topicData.set(PARTITION_METADATA_KEY_NAME, partitionMetadataArray.toArray());
+            topicMetadataArray.add(topicData);
         }
-        struct.set(TOPIC_METATDATA_KEY_NAME, topicArray.toArray());
-
-        this.cluster = cluster;
-        this.errors = errors;
+        struct.set(TOPIC_METATDATA_KEY_NAME, topicMetadataArray.toArray());
     }
 
     public MetadataResponse(Struct struct) {
         super(struct);
-        Map<String, Errors> errors = new HashMap<String, Errors>();
-        Map<Integer, Node> brokers = new HashMap<Integer, Node>();
+
+        Map<Integer, Node> brokers = new HashMap<>();
         Object[] brokerStructs = (Object[]) struct.get(BROKERS_KEY_NAME);
         for (int i = 0; i < brokerStructs.length; i++) {
             Struct broker = (Struct) brokerStructs[i];
@@ -144,63 +132,151 @@ public class MetadataResponse extends AbstractRequestResponse {
             int port = broker.getInt(PORT_KEY_NAME);
             brokers.put(nodeId, new Node(nodeId, host, port));
         }
-        List<PartitionInfo> partitions = new ArrayList<PartitionInfo>();
+
+        List<TopicMetadata> topicMetadata = new ArrayList<>();
         Object[] topicInfos = (Object[]) struct.get(TOPIC_METATDATA_KEY_NAME);
         for (int i = 0; i < topicInfos.length; i++) {
             Struct topicInfo = (Struct) topicInfos[i];
-            short topicError = topicInfo.getShort(TOPIC_ERROR_CODE_KEY_NAME);
+            Errors topicError = Errors.forCode(topicInfo.getShort(TOPIC_ERROR_CODE_KEY_NAME));
             String topic = topicInfo.getString(TOPIC_KEY_NAME);
-            if (topicError == Errors.NONE.code()) {
-                Object[] partitionInfos = (Object[]) topicInfo.get(PARTITION_METADATA_KEY_NAME);
-                for (int j = 0; j < partitionInfos.length; j++) {
-                    Struct partitionInfo = (Struct) partitionInfos[j];
-                    int partition = partitionInfo.getInt(PARTITION_KEY_NAME);
-                    int leader = partitionInfo.getInt(LEADER_KEY_NAME);
-                    Node leaderNode = leader == -1 ? null : brokers.get(leader);
-                    Object[] replicas = (Object[]) partitionInfo.get(REPLICAS_KEY_NAME);
-                    Node[] replicaNodes = new Node[replicas.length];
-                    for (int k = 0; k < replicas.length; k++)
-                        replicaNodes[k] = brokers.get(replicas[k]);
-                    Object[] isr = (Object[]) partitionInfo.get(ISR_KEY_NAME);
-                    Node[] isrNodes = new Node[isr.length];
-                    for (int k = 0; k < isr.length; k++)
-                        isrNodes[k] = brokers.get(isr[k]);
-                    partitions.add(new PartitionInfo(topic, partition, leaderNode, replicaNodes, isrNodes));
-                }
-            } else {
-                errors.put(topic, Errors.forCode(topicError));
+            List<PartitionMetadata> partitionMetadata = new ArrayList<>();
+
+            Object[] partitionInfos = (Object[]) topicInfo.get(PARTITION_METADATA_KEY_NAME);
+            for (int j = 0; j < partitionInfos.length; j++) {
+                Struct partitionInfo = (Struct) partitionInfos[j];
+                Errors partitionError = Errors.forCode(partitionInfo.getShort(PARTITION_ERROR_CODE_KEY_NAME));
+                int partition = partitionInfo.getInt(PARTITION_KEY_NAME);
+                int leader = partitionInfo.getInt(LEADER_KEY_NAME);
+                Node leaderNode = leader == -1 ? null : brokers.get(leader);
+                Object[] replicas = (Object[]) partitionInfo.get(REPLICAS_KEY_NAME);
+                List<Node> replicaNodes = new ArrayList<>(replicas.length);
+                for (Object replicaNodeId : replicas)
+                    replicaNodes.add(brokers.get(replicaNodeId));
+                Object[] isr = (Object[]) partitionInfo.get(ISR_KEY_NAME);
+                List<Node> isrNodes = new ArrayList<>(isr.length);
+                for (Object isrNode : isr)
+                    isrNodes.add(brokers.get(isrNode));
+                partitionMetadata.add(new PartitionMetadata(partitionError, partition, leaderNode, replicaNodes, isrNodes));
+            }
+
+            topicMetadata.add(new TopicMetadata(topicError, topic, partitionMetadata));
+        }
+
+        this.brokers = brokers.values();
+        this.topicMetadata = topicMetadata;
+    }
+
+    /**
+     * Get a map of the topics which had metadata errors
+     * @return the map
+     */
+    public Map<String, Errors> errors() {
+        Map<String, Errors> errors = new HashMap<>();
+        for (TopicMetadata metadata : topicMetadata) {
+            if (metadata.error != Errors.NONE)
+                errors.put(metadata.topic(), metadata.error);
+        }
+        return errors;
+    }
+
+    /**
+     * Get a snapshot of the cluster metadata from this response
+     * @return the cluster snapshot
+     */
+    public Cluster cluster() {
+        Set<String> unauthorizedTopics = new HashSet<>();
+        List<PartitionInfo> partitions = new ArrayList<>();
+        for (TopicMetadata metadata : topicMetadata) {
+            if (metadata.error == Errors.NONE) {
+                for (PartitionMetadata partitionMetadata : metadata.partitionMetadata)
+                    partitions.add(new PartitionInfo(metadata.topic, partitionMetadata.partition,
+                            partitionMetadata.leader, partitionMetadata.replicas, partitionMetadata.isr));
+            } else if (metadata.error == Errors.TOPIC_AUTHORIZATION_FAILED) {
+                unauthorizedTopics.add(metadata.topic);
             }
         }
 
-        this.errors = errors;
-        this.cluster = new Cluster(brokers.values(), partitions, unauthorizedTopics(errors));
+        return new Cluster(this.brokers, partitions, unauthorizedTopics);
     }
 
-    private Set<String> unauthorizedTopics(Map<String, Errors> topicErrors) {
-        if (topicErrors.isEmpty())
-            return Collections.emptySet();
-
-        Set<String> unauthorizedTopics = new HashSet<>();
-        for (Map.Entry<String, Errors> topicErrorEntry : topicErrors.entrySet()) {
-            if (topicErrorEntry.getValue() == Errors.TOPIC_AUTHORIZATION_FAILED)
-                unauthorizedTopics.add(topicErrorEntry.getKey());
-        }
-        return unauthorizedTopics;
-    }
-
-    public Map<String, Errors> errors() {
-        return this.errors;
-    }
-
-    public boolean hasError(String topic) {
-        return this.errors.containsKey(topic);
-    }
-
-    public Cluster cluster() {
-        return this.cluster;
+    /**
+     * Get all brokers returned in metadata response
+     * @return the brokers
+     */
+    public Collection<Node> brokers() {
+        return brokers;
     }
 
     public static MetadataResponse parse(ByteBuffer buffer) {
         return new MetadataResponse(CURRENT_SCHEMA.read(buffer));
     }
+
+    public static class TopicMetadata {
+        private final Errors error;
+        private final String topic;
+        private final List<PartitionMetadata> partitionMetadata;
+
+        public TopicMetadata(Errors error,
+                             String topic,
+                             List<PartitionMetadata> partitionMetadata) {
+            this.error = error;
+            this.topic = topic;
+            this.partitionMetadata = partitionMetadata;
+        }
+
+        public Errors error() {
+            return error;
+        }
+
+        public String topic() {
+            return topic;
+        }
+
+        public List<PartitionMetadata> partitionMetadata() {
+            return partitionMetadata;
+        }
+
+    }
+
+    public static class PartitionMetadata {
+        private final Errors error;
+        private final int partition;
+        private final Node leader;
+        private final List<Node> replicas;
+        private final List<Node> isr;
+
+        public PartitionMetadata(Errors error,
+                                 int partition,
+                                 Node leader,
+                                 List<Node> replicas,
+                                 List<Node> isr) {
+            this.error = error;
+            this.partition = partition;
+            this.leader = leader;
+            this.replicas = replicas;
+            this.isr = isr;
+        }
+
+        public Errors error() {
+            return error;
+        }
+
+        public int partition() {
+            return partition;
+        }
+
+        public Node leader() {
+            return leader;
+        }
+
+        public List<Node> replicas() {
+            return replicas;
+        }
+
+        public List<Node> isr() {
+            return isr;
+        }
+
+    }
+
 }

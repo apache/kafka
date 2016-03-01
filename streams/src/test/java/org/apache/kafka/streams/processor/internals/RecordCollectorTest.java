@@ -41,10 +41,12 @@ import static org.junit.Assert.assertEquals;
  */
 public class RecordCollectorTest {
 
+    private static final List<Node> EMPTY_NODES = Collections.emptyList();
+
     private List<PartitionInfo> infos = Arrays.asList(
-            new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0])
+            new PartitionInfo("topic1", 0, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic1", 1, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+            new PartitionInfo("topic1", 2, Node.noNode(), EMPTY_NODES, EMPTY_NODES)
     );
 
     private Cluster cluster = new Cluster(Collections.singletonList(Node.noNode()), infos, Collections.<String>emptySet());

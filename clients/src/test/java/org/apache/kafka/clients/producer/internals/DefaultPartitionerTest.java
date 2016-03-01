@@ -16,6 +16,7 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -31,7 +32,7 @@ public class DefaultPartitionerTest {
     private Node node0 = new Node(0, "localhost", 99);
     private Node node1 = new Node(1, "localhost", 100);
     private Node node2 = new Node(2, "localhost", 101);
-    private Node[] nodes = new Node[] {node0, node1, node2};
+    private List<Node> nodes = Arrays.asList(node0, node1, node2);
     private String topic = "test";
     // Intentionally make the partition list not in partition order to test the edge cases.
     private List<PartitionInfo> partitions = asList(new PartitionInfo(topic, 1, null, nodes, nodes),

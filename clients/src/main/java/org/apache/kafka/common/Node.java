@@ -17,6 +17,8 @@ package org.apache.kafka.common;
  */
 public class Node {
 
+    private static final Node NO_NODE = new Node(-1, "", -1);
+
     private final int id;
     private final String idString;
     private final String host;
@@ -31,7 +33,16 @@ public class Node {
     }
 
     public static Node noNode() {
-        return new Node(-1, "", -1);
+        return NO_NODE;
+    }
+
+    /**
+     * Check whether this node is empty, which may be the case if noNode() is used as a placeholder
+     * in a response payload with an error.
+     * @return true if it is, false otherwise
+     */
+    public boolean isEmpty() {
+        return host == null || host.isEmpty() || port < 0;
     }
 
     /**

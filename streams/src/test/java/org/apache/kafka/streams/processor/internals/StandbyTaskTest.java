@@ -53,6 +53,8 @@ import static org.junit.Assert.assertNull;
 
 public class StandbyTaskTest {
 
+    private static final List<Node> EMPTY_NODES = Collections.emptyList();
+
     private final TaskId taskId = new TaskId(0, 1);
 
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
@@ -112,17 +114,17 @@ public class StandbyTaskTest {
     public void setup() {
         restoreStateConsumer.reset();
         restoreStateConsumer.updatePartitions(storeChangelogTopicName1, Utils.mkList(
-                new PartitionInfo(storeChangelogTopicName1, 0, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo(storeChangelogTopicName1, 1, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo(storeChangelogTopicName1, 2, Node.noNode(), new Node[0], new Node[0])
+                new PartitionInfo(storeChangelogTopicName1, 0, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+                new PartitionInfo(storeChangelogTopicName1, 1, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+                new PartitionInfo(storeChangelogTopicName1, 2, Node.noNode(), EMPTY_NODES, EMPTY_NODES)
         ));
 
         System.out.println("added " + storeChangelogTopicName1);
 
         restoreStateConsumer.updatePartitions(storeChangelogTopicName2, Utils.mkList(
-                new PartitionInfo(storeChangelogTopicName2, 0, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo(storeChangelogTopicName2, 1, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo(storeChangelogTopicName2, 2, Node.noNode(), new Node[0], new Node[0])
+                new PartitionInfo(storeChangelogTopicName2, 0, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+                new PartitionInfo(storeChangelogTopicName2, 1, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+                new PartitionInfo(storeChangelogTopicName2, 2, Node.noNode(), EMPTY_NODES, EMPTY_NODES)
         ));
 
         System.out.println("added " + storeChangelogTopicName2);
@@ -224,9 +226,9 @@ public class StandbyTaskTest {
             consumer.commitSync(committedOffsets);
 
             restoreStateConsumer.updatePartitions("ktable1", Utils.mkList(
-                    new PartitionInfo("ktable1", 0, Node.noNode(), new Node[0], new Node[0]),
-                    new PartitionInfo("ktable1", 1, Node.noNode(), new Node[0], new Node[0]),
-                    new PartitionInfo("ktable1", 2, Node.noNode(), new Node[0], new Node[0])
+                    new PartitionInfo("ktable1", 0, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+                    new PartitionInfo("ktable1", 1, Node.noNode(), EMPTY_NODES, EMPTY_NODES),
+                    new PartitionInfo("ktable1", 2, Node.noNode(), EMPTY_NODES, EMPTY_NODES)
             ));
 
             StreamsConfig config = createConfig(baseDir);
