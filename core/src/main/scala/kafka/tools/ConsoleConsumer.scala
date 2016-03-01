@@ -350,12 +350,10 @@ class DefaultMessageFormatter extends MessageFormatter {
   var keySeparator = "\t".getBytes
   var lineSeparator = "\n".getBytes
 
-  var keyDecoder : Deserializer[_ <: Object] = new ByteArrayDeserializer()
-  var valDecoder : Deserializer[_ <: Object] = new ByteArrayDeserializer()
+  var keyDeserializer: Option[Deserializer[_]] = None
+  var valueDeserializer: Option[Deserializer[_]] = None
 
   override def init(props: Properties) {
-    System.out.println(props)
-
     if (props.containsKey("print.timestamp"))
       printTimestamp = props.getProperty("print.timestamp").trim.toLowerCase.equals("true")
     if (props.containsKey("print.key"))
@@ -364,22 +362,23 @@ class DefaultMessageFormatter extends MessageFormatter {
       keySeparator = props.getProperty("key.separator").getBytes
     if (props.containsKey("line.separator"))
       lineSeparator = props.getProperty("line.separator").getBytes
-
-    if (props.containsKey("key.decoder")) {
-      keyDecoder = Class.forName(props.getProperty("key.decoder")).newInstance().asInstanceOf[Deserializer[_ <: Object]]
-
-      System.out.println("update key decoder")
-    }
-    if (props.containsKey("value.decoder")) {
-      valDecoder = Class.forName(props.getProperty("value.decoder")).newInstance().asInstanceOf[Deserializer[_ <: Object]]
-
-      System.out.println("update value decoder")
-    }
-    System.out.println(keyDecoder)
-    System.out.println(valDecoder)
+    // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
+    if (props.containsKey("key.deserializer"))
+      keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
+    // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
+    if (props.containsKey("value.deserializer"))
+      valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
   }
 
   def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream) {
+
+    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], separator: Array[Byte]) {
+      val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes)
+      val convertedBytes = deserializer.map(_.deserialize(null, nonNullBytes).toString.getBytes).getOrElse(nonNullBytes)
+      output.write(convertedBytes)
+      output.write(separator)
+    }
+
     if (printTimestamp) {
       if (timestampType != TimestampType.NO_TIMESTAMP_TYPE)
         output.write(s"$timestampType:$timestamp".getBytes)
@@ -387,12 +386,8 @@ class DefaultMessageFormatter extends MessageFormatter {
         output.write(s"NO_TIMESTAMP".getBytes)
       output.write(keySeparator)
     }
-    if (printKey) {
-      output.write(if (key == null) "null".getBytes else keyDecoder.deserialize(null, key).toString.getBytes)
-      output.write(keySeparator)
-    }
-    output.write(if (value == null) "null".getBytes else valDecoder.deserialize(null, value).toString.getBytes)
-    output.write(lineSeparator)
+    if (printKey) write(keyDeserializer, key, keySeparator)
+    write(valueDeserializer, value, lineSeparator)
   }
 }
 
