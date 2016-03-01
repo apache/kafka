@@ -97,7 +97,6 @@ public class StreamThread extends Thread {
     private final long pollTimeMs;
     private final long cleanTimeMs;
     private final long commitTimeMs;
-    private final long totalRecordsToProcess;
     private final StreamsMetricsImpl sensors;
 
     private StreamPartitionAssignor partitionAssignor = null;
@@ -202,7 +201,6 @@ public class StreamThread extends Thread {
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.cleanTimeMs = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
-        this.totalRecordsToProcess = config.getLong(StreamsConfig.TOTAL_RECORDS_TO_PROCESS);
 
         this.lastClean = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommit = time.milliseconds();
@@ -425,11 +423,6 @@ public class StreamThread extends Thread {
     private boolean stillRunning() {
         if (!running.get()) {
             log.debug("Shutting down at user request.");
-            return false;
-        }
-
-        if (totalRecordsToProcess >= 0 && recordsProcessed >= totalRecordsToProcess) {
-            log.debug("Shutting down as we've reached the user configured limit of {} records to process.", totalRecordsToProcess);
             return false;
         }
 
