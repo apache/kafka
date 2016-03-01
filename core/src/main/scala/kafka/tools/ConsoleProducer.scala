@@ -20,14 +20,13 @@ package kafka.tools
 import kafka.common._
 import kafka.message._
 import kafka.serializer._
-import kafka.utils.{ToolsUtils, CommandLineUtils}
-import kafka.producer.{NewShinyProducer,OldProducer,KeyedMessage}
-
+import kafka.utils.{CommandLineUtils, ToolsUtils}
+import kafka.producer.{NewShinyProducer, OldProducer}
 import java.util.Properties
 import java.io._
 
 import joptsimple._
-import org.apache.kafka.clients.producer.ProducerConfig
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.utils.Utils
 
 object ConsoleProducer {
@@ -52,12 +51,12 @@ object ConsoleProducer {
           }
         })
 
-        var message: KeyedMessage[Array[Byte], Array[Byte]] = null
+        var message: ProducerRecord[Array[Byte], Array[Byte]] = null
         do {
           message = reader.readMessage()
-          if(message != null)
-            producer.send(message.topic, message.key, message.message)
-        } while(message != null)
+          if (message != null)
+            producer.send(message.topic, message.key, message.value)
+        } while (message != null)
     } catch {
       case e: joptsimple.OptionException =>
         System.err.println(e.getMessage)
@@ -285,12 +284,6 @@ object ConsoleProducer {
     val maxBlockMs = options.valueOf(maxBlockMsOpt)
   }
 
-  trait MessageReader {
-    def init(inputStream: InputStream, props: Properties) {}
-    def readMessage(): KeyedMessage[Array[Byte], Array[Byte]]
-    def close() {}
-  }
-
   class LineMessageReader extends MessageReader {
     var topic: String = null
     var reader: BufferedReader = null
@@ -301,11 +294,11 @@ object ConsoleProducer {
 
     override def init(inputStream: InputStream, props: Properties) {
       topic = props.getProperty("topic")
-      if(props.containsKey("parse.key"))
+      if (props.containsKey("parse.key"))
         parseKey = props.getProperty("parse.key").trim.toLowerCase.equals("true")
-      if(props.containsKey("key.separator"))
+      if (props.containsKey("key.separator"))
         keySeparator = props.getProperty("key.separator")
-      if(props.containsKey("ignore.error"))
+      if (props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.toLowerCase.equals("true")
       reader = new BufferedReader(new InputStreamReader(inputStream))
     }
@@ -317,17 +310,14 @@ object ConsoleProducer {
         case (line, true) =>
           line.indexOf(keySeparator) match {
             case -1 =>
-              if(ignoreError)
-                new KeyedMessage[Array[Byte], Array[Byte]](topic, line.getBytes())
-              else
-                throw new KafkaException("No key found on line " + lineNumber + ": " + line)
+              if (ignoreError) new ProducerRecord(topic, line.getBytes)
+              else throw new KafkaException(s"No key found on line ${lineNumber}: $line")
             case n =>
-              new KeyedMessage[Array[Byte], Array[Byte]](topic,
-                             line.substring(0, n).getBytes,
-                             (if(n + keySeparator.size > line.size) "" else line.substring(n + keySeparator.size)).getBytes())
+              val value = (if (n + keySeparator.size > line.size) "" else line.substring(n + keySeparator.size)).getBytes
+              new ProducerRecord(topic, line.substring(0, n).getBytes, value)
           }
         case (line, false) =>
-          new KeyedMessage[Array[Byte], Array[Byte]](topic, line.getBytes())
+          new ProducerRecord(topic, line.getBytes)
       }
     }
   }
