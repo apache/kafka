@@ -26,9 +26,8 @@ class ProduceConsumeValidateTest(Test):
         - perform validation
     """
 
-    def __init__(self, test_context, verify_successful_acks=False):
+    def __init__(self, test_context):
         super(ProduceConsumeValidateTest, self).__init__(test_context=test_context)
-        self.verify_successful_acks = verify_successful_acks
 
     def setup_producer_and_consumer(self):
         raise NotImplementedError("Subclasses should implement this")
@@ -103,18 +102,6 @@ class ProduceConsumeValidateTest(Test):
                    "This suggests they were lost on their way to the consumer." % number_validated
         return msg
 
-    @staticmethod
-    def annotate_not_acked_msgs(not_acked, msg):
-        print_limit = 20
-        msg += "%s messages were not successfully acked. They are: " % len(not_acked)
-        if len(not_acked) < print_limit:
-            msg += str(not_acked) + ". "
-        else:
-            for i in range(print_limit):
-                msg += str(not_acked.pop()) + ", "
-            msg += "... plus %s more." % len(not_acked)
-        return msg
-
     def validate(self):
         """Check that each acked message was consumed."""
         success = True
@@ -139,13 +126,6 @@ class ProduceConsumeValidateTest(Test):
         # Are there duplicates?
         if len(set(consumed)) != len(consumed):
             msg += "(There are also %s duplicate messages in the log - but that is an acceptable outcome)\n" % abs(len(set(consumed)) - len(consumed))
-
-        # some of the tests expect that all produced messages were successfully acked
-        if self.verify_successful_acks == True and self.producer.num_not_acked > 0:
-            not_acked = self.producer.not_acked
-            msg = self.annotate_not_acked_msgs(not_acked, msg)
-            success = False
-
 
         # Collect all logs if validation fails
         if not success:

@@ -27,7 +27,7 @@ from kafkatest.utils import is_int
 class TestUpgrade(ProduceConsumeValidateTest):
 
     def __init__(self, test_context):
-        super(TestUpgrade, self).__init__(test_context=test_context, verify_successful_acks=False)
+        super(TestUpgrade, self).__init__(test_context=test_context)
 
     def setUp(self):
         self.topic = "test_topic"
