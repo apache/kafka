@@ -245,6 +245,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 do {
                     partitions = streamThread.restoreConsumer.partitionsFor(topic);
                 } while (partitions == null || partitions.size() != numPartitions);
+
+                metadata.update(topic, partitions);
             }
 
             log.info("Completed validating internal source topics in partition assignor.");
@@ -417,9 +419,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         int numPartitions = -1;
 
         for (String topic : copartitionGroup) {
-            List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
-
             if (!internalTopics.contains(topic)) {
+                List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
+
                 if (infos == null)
                     throw new TopologyBuilderException("External source topic not found: " + topic);
 
