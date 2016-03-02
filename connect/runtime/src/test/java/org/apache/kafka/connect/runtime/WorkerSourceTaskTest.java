@@ -17,11 +17,11 @@
 
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -60,9 +60,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
 public class WorkerSourceTaskTest extends ThreadedTest {
@@ -133,6 +132,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         final CountDownLatch pollLatch = expectPolls(10);
         // In this test, we don't flush, so nothing goes any further than the offset writer
 
+
+        sourceTask.commit();
+        EasyMock.expectLastCall();
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
@@ -169,6 +171,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         statusListener.onFailure(taskId, exception);
         EasyMock.expectLastCall();
 
+        sourceTask.commit();
+        EasyMock.expectLastCall();
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
@@ -200,6 +204,11 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         final CountDownLatch pollLatch = expectPolls(1);
         expectOffsetFlush(true);
 
+        // first commit comes from offset flush in poll
+        sourceTask.commit();
+        EasyMock.expectLastCall();
+
+        // second commit comes from manual trigger below
         sourceTask.commit();
         EasyMock.expectLastCall();
         sourceTask.stop();
@@ -235,11 +244,13 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectPolls(1);
-        expectOffsetFlush(false);
+        expectOffsetFlush(true);
+        sourceTask.commit();
+        EasyMock.expectLastCall();
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
+        expectOffsetFlush(false);
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -249,7 +260,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         workerTask.initialize(EMPTY_TASK_PROPS);
         executor.submit(workerTask);
         awaitPolls(pollLatch);
-        assertFalse(workerTask.commitOffsets());
+        assertTrue(workerTask.commitOffsets());
         workerTask.stop();
         assertEquals(true, workerTask.awaitStop(1000));
 
@@ -319,9 +330,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
         EasyMock.expectLastCall();
         sourceTask.start(EMPTY_TASK_PROPS);
-        statusListener.onStartup(taskId);
         EasyMock.expectLastCall();
 
+        statusListener.onStartup(taskId);
         EasyMock.expectLastCall().andAnswer(new IAnswer<Object>() {
             @Override
             public Object answer() throws Throwable {
@@ -330,8 +341,12 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                 return null;
             }
         });
+
+        sourceTask.commit();
+        EasyMock.expectLastCall();
         sourceTask.stop();
         EasyMock.expectLastCall();
+        expectOffsetFlush(true);
 
         PowerMock.replayAll();
 
