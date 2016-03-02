@@ -20,6 +20,7 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -217,8 +218,8 @@ public class KafkaConfigStorage {
 
     public void configure(DistributedConfig config) {
         topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
-        if (topic == null)
-            throw new ConnectException("Must specify topic for connector configuration.");
+        if (topic.equals(""))
+            throw new ConfigException("Must specify topic for connector configuration.");
 
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.putAll(config.originals());

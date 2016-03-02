@@ -21,10 +21,10 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
@@ -63,8 +63,8 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     @Override
     public void configure(WorkerConfig config) {
         String topic = config.getString(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG);
-        if (topic == null)
-            throw new ConnectException("Offset storage topic must be specified");
+        if (topic.equals(""))
+            throw new ConfigException("Offset storage topic must be specified");
 
         data = new HashMap<>();
 

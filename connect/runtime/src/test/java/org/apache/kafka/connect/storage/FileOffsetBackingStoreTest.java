@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.EasyMock;
@@ -54,6 +55,10 @@ public class FileOffsetBackingStoreTest {
         tempFile = File.createTempFile("fileoffsetbackingstore", null);
         props = new HashMap<String, String>();
         props.put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, tempFile.getAbsolutePath());
+        props.put(DistributedConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        props.put(DistributedConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        props.put(DistributedConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        props.put(DistributedConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         config = new StandaloneConfig(props);
         store.configure(config);
         store.start();
