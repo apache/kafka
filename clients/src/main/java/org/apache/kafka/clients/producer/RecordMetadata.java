@@ -30,19 +30,28 @@ public final class RecordMetadata {
     // user provided one. Otherwise, it will be the producer local time when the producer record was handed to the
     // producer.
     private final long timestamp;
+    private final long checksum;
+    private final int serializedKeySize;
+    private final int serializedValueSize;
     private final TopicPartition topicPartition;
 
-    private RecordMetadata(TopicPartition topicPartition, long offset, long timestamp) {
+    private RecordMetadata(TopicPartition topicPartition, long offset, long timestamp, long
+        checksum, int serializedKeySize, int serializedValueSize) {
         super();
         this.offset = offset;
         this.timestamp = timestamp;
+        this.checksum = checksum;
+        this.serializedKeySize = serializedKeySize;
+        this.serializedValueSize = serializedValueSize;
         this.topicPartition = topicPartition;
     }
 
-    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset, long timestamp) {
+    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset,
+                          long timestamp, long checksum, int serializedKeySize, int serializedValueSize) {
         // ignore the relativeOffset if the base offset is -1,
         // since this indicates the offset is unknown
-        this(topicPartition, baseOffset == -1 ? baseOffset : baseOffset + relativeOffset, timestamp);
+        this(topicPartition, baseOffset == -1 ? baseOffset : baseOffset + relativeOffset,
+             timestamp, checksum, serializedKeySize, serializedValueSize);
     }
 
     /**
@@ -57,6 +66,29 @@ public final class RecordMetadata {
      */
     public long timestamp() {
         return timestamp;
+    }
+
+    /**
+     * The checksum (CRC32) of the record.
+     */
+    public long checksum() {
+        return this.checksum;
+    }
+
+    /**
+     * The size of the serialized, uncompressed key in bytes. If key is null, the returned size
+     * is -1.
+     */
+    public int serializedKeySize() {
+        return this.serializedKeySize;
+    }
+
+    /**
+     * The size of the serialized, uncompressed value in bytes. If value is null, the returned
+     * size is -1.
+     */
+    public int serializedValueSize() {
+        return this.serializedValueSize;
     }
 
     /**
