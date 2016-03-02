@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.examples.pipe;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
