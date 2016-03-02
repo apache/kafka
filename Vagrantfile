@@ -22,6 +22,8 @@ VAGRANTFILE_API_VERSION = "2"
 
 # General config
 enable_dns = false
+# Override to false when bringing up a cluster on AWS
+enable_hostmanager = true
 enable_jmx = false
 num_zookeepers = 1
 num_brokers = 3
@@ -55,7 +57,7 @@ end
 
 # TODO(ksweeney): RAM requirements are not empirical and can probably be significantly lowered.
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
-  config.hostmanager.enabled = false
+  config.hostmanager.enabled = enable_hostmanager
   config.hostmanager.manage_host = enable_dns
   config.hostmanager.include_offline = false
 

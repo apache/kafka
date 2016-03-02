@@ -118,25 +118,34 @@ function read_vagrant_machines {
     done < <(vagrant status)
 }
 
-# Bring up machines in batches of size $group_size
-# This is annoying but necessary on aws
-function up_group_aws {
-    local machines="$1"
-    local group_size="$2"
+# Run a vagrant command on batches of machines of size $group_size
+# This is annoying but necessary on aws to avoid errors due to AWS request rate
+# throttling
+#
+# Example
+#   $ vagrant_batch_command "vagrant up" "m1 m2 m3 m4 m5" "2"
+#
+#   This is equivalent to running "vagrant up" on groups of machines of size 2 or less, i.e.:
+#   $ vagrant up m1 m2
+#   $ vagrant up m3 m4
+#   $ vagrant up m5
+function vagrant_batch_command {
+    local vagrant_cmd="$1"
+    local machines="$2"
+    local group_size="$3"
 
     local count=1
     local m_group=""
     # Using --provision flag makes this command useable both when bringing up a cluster from scratch,
     # and when bringing up a halted cluster. Permissions on certain directores set during provisioning
     # seem to revert when machines are halted, so --provision ensures permissions are set correctly in all cases
-    local vagrant_up_cmd="vagrant up --provider=aws --provision"
     for machine in $machines; do
         m_group="$m_group $machine"
 
         if [[ $(expr $count % $group_size) == 0 ]]; then
             # We've reached a full group
             # Bring up this part of the cluster
-            $vagrant_up_cmd $m_group
+            $vagrant_cmd $m_group
             m_group=""
         fi
         ((count++))
@@ -144,17 +153,17 @@ function up_group_aws {
 
     # Take care of any leftover partially complete group
     if [[ ! -z "$m_group" ]]; then
-        $vagrant_up_cmd $m_group
+        $vagrant_cmd $m_group
     fi
 }
 
-# We assume vagrant-hostmanager is installed, but disabled
-# In this fashion, we only run hostmanager *after* machines are up
-# Even though enabling hostmanager during bringup doesn't technically cause
-# problems on local machines, it's faster to run it only after machines are already up.
+# We assume vagrant-hostmanager is installed, but may or may not be disabled during vagrant up
+# In this fashion, we ensure we run hostmanager after machines are up, and before provisioning.
+# This sequence of commands is necessary for example for bringing up a multi-node zookeeper cluster
 function bring_up_local {
-    vagrant up
+    vagrant up --no-provision
     vagrant hostmanager
+    vagrant provision
 }
 
 function bring_up_aws {
@@ -164,11 +173,19 @@ function bring_up_aws {
 
     if [[ "$parallel" == "true" ]]; then
         echo "Bringing up machines in batches of size $max_parallel"
-        up_group_aws "$machines" "$max_parallel"
+        vagrant_batch_command "vagrant up --provider=aws --no-provision" "$machines" "$max_parallel"
+
+        # Ensure hostmanager is run after machines are up, and before provisioning
+        vagrant_batch_command "vagrant hostmanager" "$machines" "$max_parallel"
+
+        # Provision the machines. Note we provision with a call to "vagrant up --provision" instead of "vagrant provision"
+        # This is because "vagrant provision" does *not* provision machines in parallel
+        vagrant_batch_command "vagrant up --provider=aws --provision" "$machines" "$max_parallel"
     else
-        vagrant up --no-parallel --no-provision && vagrant provision
+        vagrant up --no-parallel --no-provision
+        vagrant hostmanager
+        vagrant provision
     fi
-    vagrant hostmanager
 }
 
 function main {

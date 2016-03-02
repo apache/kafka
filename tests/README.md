@@ -27,9 +27,7 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
 * Bring up the test cluster
 
         $ vagrant/vagrant-up.sh
-        $ # Note: on local machines, this is equivalent to:
-        $ # vagrant up
-        $ # vagrant hostmanager
+        $ # When using Virtualbox, it also works to run: vagrant up
 
 * Build the desired branch of Kafka
        
