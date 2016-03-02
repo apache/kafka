@@ -88,15 +88,15 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     }.toList
   }
 
-  def getTopicMetadata(topics: Set[String], protocol: SecurityProtocol): mutable.Buffer[MetadataResponse.TopicMetadata] = {
+  def getTopicMetadata(topics: Set[String], protocol: SecurityProtocol): Seq[MetadataResponse.TopicMetadata] = {
     inReadLock(partitionMetadataLock) {
       val isAllTopics = topics.isEmpty
-      val topicsRequested = if (isAllTopics) cache.keySet else getExistingTopics(topics)
+      val topicsRequested = if (isAllTopics) cache.keySet else cache.keySet & topics
       topicsRequested.map { topic =>
         val partitionMetadata = getPartitionMetadata(topic, protocol)
         new MetadataResponse.TopicMetadata(Errors.NONE, topic, partitionMetadata.asJava)
-      }.toBuffer
-    }
+      }
+    }.toSeq
   }
 
   def hasTopicMetadata(topic: String): Boolean = {
@@ -107,13 +107,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
 
   def getAllTopics(): Set[String] = {
     inReadLock(partitionMetadataLock) {
-      Set(cache.keys.toSeq: _*)
-    }
-  }
-
-  def getExistingTopics(topics: Set[String]): Set[String] = {
-    inReadLock(partitionMetadataLock) {
-      cache.keySet & topics
+      cache.keySet.toSet
     }
   }
 
@@ -123,7 +117,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  def getAliveBrokers(): Seq[Broker] = {
+  def getAliveBrokers: Seq[Broker] = {
     inReadLock(partitionMetadataLock) {
       aliveBrokers.values.toSeq
     }

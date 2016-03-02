@@ -621,10 +621,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     ret.toSeq.sortBy(- _)
   }
 
-  private def createAndGetTopicMetadata(topic: String,
-                                        numPartitions: Int,
-                                        replicationFactor: Int,
-                                        properties: Properties = new Properties()): MetadataResponse.TopicMetadata = {
+  private def createTopic(topic: String,
+                          numPartitions: Int,
+                          replicationFactor: Int,
+                          properties: Properties = new Properties()): MetadataResponse.TopicMetadata = {
     try {
       AdminUtils.createTopic(zkUtils, topic, numPartitions, replicationFactor, properties)
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
@@ -638,14 +638,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def createAndGetGroupMetadataTopic(): MetadataResponse.TopicMetadata = {
-    val aliveBrokers = metadataCache.getAliveBrokers()
+  private def createGroupMetadataTopic(): MetadataResponse.TopicMetadata = {
+    val aliveBrokers = metadataCache.getAliveBrokers
     val offsetsTopicReplicationFactor =
       if (aliveBrokers.nonEmpty)
         Math.min(config.offsetsTopicReplicationFactor.toInt, aliveBrokers.length)
       else
         config.offsetsTopicReplicationFactor.toInt
-    createAndGetTopicMetadata(GroupCoordinator.GroupMetadataTopicName, config.offsetsTopicPartitions,
+    createTopic(GroupCoordinator.GroupMetadataTopicName, config.offsetsTopicPartitions,
       offsetsTopicReplicationFactor, coordinator.offsetsTopicConfigs)
   }
 
@@ -654,25 +654,26 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (topicMetadata.nonEmpty)
       topicMetadata.head
     else
-      createAndGetGroupMetadataTopic()
+      createGroupMetadataTopic()
   }
 
   private def getTopicMetadata(topics: Set[String], securityProtocol: SecurityProtocol): Seq[MetadataResponse.TopicMetadata] = {
     val topicResponses = metadataCache.getTopicMetadata(topics, securityProtocol)
-    if (topics.nonEmpty && topicResponses.size != topics.size) {
+    if (topics.isEmpty || topicResponses.size == topics.size) {
+      topicResponses
+    } else {
       val nonExistentTopics = topics -- topicResponses.map(_.topic).toSet
       val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
         if (topic == GroupCoordinator.GroupMetadataTopicName) {
-          createAndGetGroupMetadataTopic()
+          createGroupMetadataTopic()
         } else if (config.autoCreateTopicsEnable) {
-          createAndGetTopicMetadata(topic, config.numPartitions, config.defaultReplicationFactor)
+          createTopic(topic, config.numPartitions, config.defaultReplicationFactor)
         } else {
           new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, java.util.Collections.emptyList())
         }
       }
-      topicResponses.appendAll(responsesForNonExistentTopics)
+      topicResponses ++ responsesForNonExistentTopics
     }
-    topicResponses
   }
 
   /**
@@ -711,7 +712,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     else
       getTopicMetadata(authorizedTopics, request.securityProtocol)
 
-    val brokers = metadataCache.getAliveBrokers()
+    val brokers = metadataCache.getAliveBrokers
 
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(topicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
