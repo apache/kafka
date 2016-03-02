@@ -67,7 +67,7 @@ class LogCleaner(val config: CleanerConfig,
                  val logDirs: Array[File],
                  val logs: Pool[TopicAndPartition, Log], 
                  time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
-  
+
   /* for managing the state of partitions being cleaned. package-private to allow access in tests */
   private[log] val cleanerManager = new LogCleanerManager(logDirs, logs)
 
@@ -80,7 +80,7 @@ class LogCleaner(val config: CleanerConfig,
                                         time = time)
   
   /* the threads */
-  private val cleaners = (0 until config.numThreads).map(new CleanerThread(_))
+  private val cleaners = (0 until config.numThreads).map(i => new CleanerThread(i, config.brokerCompressionType))
   
   /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
   newGauge("max-buffer-utilization-percent", 
@@ -174,7 +174,7 @@ class LogCleaner(val config: CleanerConfig,
    * The cleaner threads do the actual log cleaning. Each thread processes does its cleaning repeatedly by
    * choosing the dirtiest log, cleaning it, and then swapping in the cleaned segments.
    */
-  private class CleanerThread(threadId: Int)
+  private class CleanerThread(threadId: Int, brokerCompressionType: String)
     extends ShutdownableThread(name = "kafka-log-cleaner-thread-" + threadId, isInterruptible = false) {
     
     override val loggerName = classOf[LogCleaner].getName
@@ -190,7 +190,8 @@ class LogCleaner(val config: CleanerConfig,
                               dupBufferLoadFactor = config.dedupeBufferLoadFactor,
                               throttler = throttler,
                               time = time,
-                              checkDone = checkDone)
+                              checkDone = checkDone,
+                              brokerCompressionType = brokerCompressionType)
     
     @volatile var lastStats: CleanerStats = new CleanerStats()
     private val backOffWaitLatch = new CountDownLatch(1)
@@ -280,6 +281,7 @@ class LogCleaner(val config: CleanerConfig,
  * @param throttler The throttler instance to use for limiting I/O rate.
  * @param time The time instance
  * @param checkDone Check if the cleaning for a partition is finished or aborted.
+ * @param brokerCompressionType Compression type set for broker.
  */
 private[log] class Cleaner(val id: Int,
                            val offsetMap: OffsetMap,
@@ -288,7 +290,8 @@ private[log] class Cleaner(val id: Int,
                            dupBufferLoadFactor: Double,
                            throttler: Throttler,
                            time: Time,
-                           checkDone: (TopicAndPartition) => Unit) extends Logging {
+                           checkDone: (TopicAndPartition) => Unit,
+                           brokerCompressionType: String) extends Logging {
   
   override val loggerName = classOf[LogCleaner].getName
 
@@ -422,11 +425,17 @@ private[log] class Cleaner(val id: Int,
       for (entry <- messages.shallowIterator) {
         val size = MessageSet.entrySize(entry.message)
         stats.readMessage(size)
-        if (entry.message.compressionCodec == NoCompressionCodec) {
+        val sourceCodec: CompressionCodec = entry.message.compressionCodec
+        val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(brokerCompressionType, sourceCodec)
+        if (sourceCodec == NoCompressionCodec) {
           if (shouldRetainMessage(source, map, retainDeletes, entry)) {
             val convertedMessage = entry.message.toFormatVersion(messageFormatVersion)
-            ByteBufferMessageSet.writeMessage(writeBuffer, convertedMessage, entry.offset)
-            stats.recopyMessage(size)
+            if (targetCodec == NoCompressionCodec) {
+              ByteBufferMessageSet.writeMessage(writeBuffer, convertedMessage, entry.offset)
+              stats.recopyMessage(size)
+            } else {
+              compressMessages(writeBuffer, targetCodec, messageFormatVersion, Seq(new MessageAndOffset(entry.message, entry.offset)))
+            }
           }
           messagesRead += 1
         } else {
@@ -453,7 +462,7 @@ private[log] class Cleaner(val id: Int,
           if (writeOriginalMessageSet)
             ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
           else if (retainedMessages.nonEmpty)
-            compressMessages(writeBuffer, entry.message.compressionCodec, messageFormatVersion, retainedMessages)
+            compressMessages(writeBuffer, targetCodec, messageFormatVersion, retainedMessages)
         }
       }
 

@@ -438,7 +438,8 @@ class CleanerTest extends JUnitSuite {
                 dupBufferLoadFactor = 0.75,                
                 throttler = throttler, 
                 time = time,
-                checkDone = checkDone )
+                checkDone = checkDone,
+                brokerCompressionType = "uncompressed")
   
   def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for((key, value) <- seq)
