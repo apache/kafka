@@ -21,6 +21,15 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.requests.AlterAclsRequest.Action;
+import org.apache.kafka.common.requests.AlterAclsRequest.ActionRequest;
+import org.apache.kafka.common.requests.AlterAclsResponse.ActionResponse;
+import org.apache.kafka.common.security.auth.Acl;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.Operation;
+import org.apache.kafka.common.security.auth.PermissionType;
+import org.apache.kafka.common.security.auth.Resource;
+import org.apache.kafka.common.security.auth.ResourceType;
 import org.junit.Test;
 
 import java.lang.reflect.Method;
@@ -91,7 +100,12 @@ public class RequestResponseTest {
                 createUpdateMetadataResponse(),
                 createLeaderAndIsrRequest(),
                 createLeaderAndIsrRequest().getErrorResponse(0, new UnknownServerException()),
-                createLeaderAndIsrResponse()
+                createLeaderAndIsrResponse(),
+                createListAclsRequest(null, null),
+                createListAclsRequest(KafkaPrincipal.ANONYMOUS, Resource.CLUSTER_RESOURCE),
+                createListAclsResponse(),
+                createAlterAclsRequest(),
+                createAlterAclsResponse()
         );
 
         for (AbstractRequestResponse req : requestResponseList)
@@ -425,5 +439,32 @@ public class RequestResponseTest {
         return new UpdateMetadataResponse(Errors.NONE.code());
     }
 
+    private AbstractRequest createListAclsRequest(KafkaPrincipal principal, Resource resource) {
+        return new ListAclsRequest(principal, resource);
+    }
 
+    private AbstractRequestResponse createListAclsResponse() {
+        Map<Resource, Set<Acl>> acls = new HashMap<>();
+        Set<Acl> aclSet = new HashSet<>();
+        aclSet.add(new Acl(KafkaPrincipal.ANONYMOUS, PermissionType.ALLOW, "*", Operation.ALL));
+        acls.put(new Resource(ResourceType.TOPIC, "topic"), aclSet);
+
+        return new ListAclsResponse(acls, Errors.NONE);
+    }
+
+    private AbstractRequest createAlterAclsRequest() {
+        Map<Resource, List<ActionRequest>> requests = new HashMap<>();
+        List<ActionRequest> actions = new ArrayList<>();
+        actions.add(new ActionRequest(Action.ADD, new Acl(KafkaPrincipal.ANONYMOUS, PermissionType.ALLOW, "*", Operation.ALL)));
+        requests.put(Resource.CLUSTER_RESOURCE, actions);
+        return new AlterAclsRequest(requests);
+    }
+
+    private AbstractRequestResponse createAlterAclsResponse() {
+        Map<Resource, List<ActionResponse>> responses = new HashMap<>();
+        List<ActionResponse> actionResponses = new ArrayList<>();
+        actionResponses.add(new ActionResponse(Action.ADD, new Acl(KafkaPrincipal.ANONYMOUS, PermissionType.ALLOW, "*", Operation.ALL), Errors.NONE));
+        responses.put(Resource.CLUSTER_RESOURCE, actionResponses);
+        return new AlterAclsResponse(responses);
+    }
 }

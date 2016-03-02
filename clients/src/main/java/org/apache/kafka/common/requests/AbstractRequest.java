@@ -72,6 +72,10 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return DescribeGroupsRequest.parse(buffer, versionId);
             case LIST_GROUPS:
                 return ListGroupsRequest.parse(buffer, versionId);
+            case LIST_ACLS:
+                return ListAclsRequest.parse(buffer, versionId);
+            case ALTER_ACLS:
+                return AlterAclsRequest.parse(buffer, versionId);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +
                         "code should be updated to do so.", apiKey));

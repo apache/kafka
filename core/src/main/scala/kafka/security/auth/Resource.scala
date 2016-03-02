@@ -16,6 +16,8 @@
  */
 package kafka.security.auth
 
+import org.apache.kafka.common.security.auth.{Resource => JResource, ResourceType => JResourceType}
+
 object Resource {
   val Separator = ":"
   val ClusterResourceName = "kafka-cluster"
@@ -27,6 +29,10 @@ object Resource {
       case Array(resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name)
       case s => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
     }
+  }
+
+  def fromJava(jResource: JResource): Resource = {
+    new Resource(ResourceType.fromString(jResource.getResourceType.name), jResource.getName)
   }
 }
 
@@ -40,6 +46,10 @@ case class Resource(val resourceType: ResourceType, val name: String) {
 
   override def toString: String = {
     resourceType.name + Resource.Separator + name
+  }
+
+  def asJava: JResource = {
+    new JResource(JResourceType.forName(resourceType.name), name)
   }
 }
 

@@ -19,7 +19,7 @@ package kafka.server
 
 import java.nio.ByteBuffer
 import java.lang.{Long => JLong, Short => JShort}
-import java.util.Properties
+import java.util.{Set => JSet, Properties}
 
 import kafka.admin.{RackAwareMode, AdminUtils}
 import kafka.api._
@@ -31,18 +31,21 @@ import kafka.log._
 import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
 import kafka.network._
 import kafka.network.RequestChannel.{Session, Response}
-import kafka.security.auth.{Authorizer, ClusterAction, Group, Create, Describe, Operation, Read, Resource, Topic, Write}
+import kafka.security.auth.{Acl, Authorizer, ClusterAction, Group, Create, Describe, Operation, Read, Resource, Topic, Write, All}
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{InvalidTopicException, NotLeaderForPartitionException, UnknownTopicOrPartitionException,
 ClusterAuthorizationException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
-import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse,
+import org.apache.kafka.common.requests.AlterAclsResponse.ActionResponse
+import org.apache.kafka.common.requests.{AlterAclsResponse, AlterAclsRequest, ListAclsResponse, ListAclsRequest,
+ListOffsetRequest, ListOffsetResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse,
 DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse,
 LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse,
 StopReplicaRequest, StopReplicaResponse, ProduceRequest, ProduceResponse, UpdateMetadataRequest, UpdateMetadataResponse,
 MetadataRequest, MetadataResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.security.auth.{Acl => JAcl, Resource => JResource, PermissionType}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Node}
 import org.apache.kafka.common.internals.TopicConstants
@@ -93,6 +96,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request)
         case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
         case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
+        case ApiKeys.LIST_ACLS => handleListAclsRequest(request)
+        case ApiKeys.ALTER_ACLS => handleAlterAclsRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -853,8 +858,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleJoinGroupRequest(request: RequestChannel.Request) {
-    import JavaConversions._
-
     val joinGroupRequest = request.body.asInstanceOf[JoinGroupRequest]
     val responseHeader = new ResponseHeader(request.header.correlationId)
 
@@ -862,7 +865,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(joinResult: JoinGroupResult) {
       val members = joinResult.members map { case (memberId, metadataArray) => (memberId, ByteBuffer.wrap(metadataArray)) }
       val responseBody = new JoinGroupResponse(joinResult.errorCode, joinResult.generationId, joinResult.subProtocol,
-        joinResult.memberId, joinResult.leaderId, members)
+        joinResult.memberId, joinResult.leaderId, members.asJava)
 
       trace("Sending join group response %s for correlation id %d to client %s."
         .format(responseBody, request.header.correlationId, request.header.clientId))
@@ -876,11 +879,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         JoinGroupResponse.UNKNOWN_PROTOCOL,
         JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
         JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
-        Map.empty[String, ByteBuffer])
+        Map.empty[String, ByteBuffer].asJava)
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     } else {
       // let the coordinator to handle join-group
-      val protocols = joinGroupRequest.groupProtocols().map(protocol =>
+      val protocols = joinGroupRequest.groupProtocols().asScala.map(protocol =>
         (protocol.name, Utils.toArray(protocol.metadata))).toList
       coordinator.handleJoinGroup(
         joinGroupRequest.groupId,
@@ -895,8 +898,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleSyncGroupRequest(request: RequestChannel.Request) {
-    import JavaConversions._
-
     val syncGroupRequest = request.body.asInstanceOf[SyncGroupRequest]
 
     def sendResponseCallback(memberState: Array[Byte], errorCode: Short) {
@@ -912,7 +913,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         syncGroupRequest.groupId(),
         syncGroupRequest.generationId(),
         syncGroupRequest.memberId(),
-        syncGroupRequest.groupAssignment().mapValues(Utils.toArray(_)),
+        syncGroupRequest.groupAssignment().asScala.mapValues(Utils.toArray),
         sendResponseCallback
       )
     }
@@ -991,6 +992,112 @@ class KafkaApis(val requestChannel: RequestChannel,
         leaveGroupRequest.memberId(),
         sendResponseCallback)
     }
+  }
+
+  def handleListAclsRequest(request: RequestChannel.Request): Unit = {
+    val listAclsRequest = request.body.asInstanceOf[ListAclsRequest]
+
+    val respHeader = new ResponseHeader(request.header.correlationId)
+    val responseBody =
+      authorizer match {
+        case None =>
+          error("Error processing list acls request. No Authorizer is available.")
+          new ListAclsResponse(Map[JResource, JSet[JAcl]]().asJava, Errors.CLUSTER_AUTHORIZATION_FAILED)
+        case Some(auth) =>
+          // authorized if the principal has all access on the cluster
+          // or the principal is requesting their own acls
+          val isAuthorized = authorize(request.session, All, Resource.ClusterResource)
+          val isUserPrinciple = listAclsRequest.hasPrincipal && listAclsRequest.getPrincipal == request.session.principal
+
+          if (isAuthorized || isUserPrinciple) {
+            val aclsByResource =
+              if (listAclsRequest.hasPrincipal)
+                auth.getAcls(listAclsRequest.getPrincipal)
+              else
+                auth.getAcls()
+
+            // only show users their acls of permission type allow
+            val filteredAclsByResource =
+              if (!isAuthorized)
+                aclsByResource.mapValues(_.filter(_.permissionType == PermissionType.ALLOW))
+              else
+                aclsByResource
+
+            val acls =
+              if (listAclsRequest.hasResource)
+                filteredAclsByResource.filterKeys(_ == listAclsRequest.getResource)
+              else
+                filteredAclsByResource
+
+            val responses =
+              acls.map { case (resource, acls) =>
+                (resource.asJava, acls.map(_.asJava).asJava)
+              }.asJava
+            new ListAclsResponse(responses, Errors.NONE)
+          } else {
+            new ListAclsResponse(Map[JResource, JSet[JAcl]]().asJava, Errors.CLUSTER_AUTHORIZATION_FAILED)
+          }
+      }
+
+    trace(s"Sending list acls response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, responseBody)))
+  }
+
+  def handleAlterAclsRequest(request: RequestChannel.Request): Unit = {
+    val alterAclsRequest = request.body.asInstanceOf[AlterAclsRequest]
+
+    def unauthorizedResponse: AlterAclsResponse = {
+      val responses = alterAclsRequest.requests.asScala.map { case (resource, actionRequests) =>
+        val actionResponses = actionRequests.asScala.map { actionRequest =>
+          new ActionResponse(actionRequest.action, actionRequest.acl, Errors.CLUSTER_AUTHORIZATION_FAILED)
+        }
+        (resource, actionResponses.asJava)
+      }
+      new AlterAclsResponse(responses.asJava)
+    }
+
+    val respHeader = new ResponseHeader(request.header.correlationId)
+    val responseBody =
+      authorizer match {
+        case None =>
+          error("Error processing list acls request. No Authorizer is available.")
+          unauthorizedResponse
+        case Some(auth) =>
+          // authorized if the principal has all access on the cluster
+          if (authorize(request.session, All, Resource.ClusterResource)) {
+            val results = alterAclsRequest.requests.asScala.map { case (resource, actionRequests) =>
+              val actionResponses = actionRequests.asScala
+                // Group acls by action
+                .groupBy(_.action).mapValues(_.map(_.acl)).toList
+                // process deletes first
+                .sortBy { case(action, acls) => action.id }
+                .flatMap { case(action, acls) =>
+                  try {
+                    val sAcls = acls.map(Acl.fromJava).toSet
+                    action match {
+                      case AlterAclsRequest.Action.DELETE =>
+                        debug(s"Deleting $acls for $resource")
+                        auth.removeAcls(sAcls, Resource.fromJava(resource))
+                      case AlterAclsRequest.Action.ADD =>
+                        debug(s"Adding $acls for $resource")
+                        auth.addAcls(sAcls, Resource.fromJava(resource))
+                    }
+                  } catch {
+                    case e: Throwable =>
+                      error("Error while responding to alter acl request", e)
+                      acls.map { acl => new ActionResponse(action, acl, Errors.forException(e)) }
+                  }
+                  acls.map { acl => new ActionResponse(action, acl, Errors.NONE) }
+                }
+              (resource, actionResponses.asJava)
+            }
+            new AlterAclsResponse(results.asJava)
+          } else
+            unauthorizedResponse
+      }
+
+    trace(s"Sending alter acls response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, responseBody)))
   }
 
   def close() {

@@ -718,6 +718,61 @@ public class Protocol {
     public static final Schema[] UPDATE_METADATA_REQUEST = new Schema[] {UPDATE_METADATA_REQUEST_V0, UPDATE_METADATA_REQUEST_V1, UPDATE_METADATA_REQUEST_V2};
     public static final Schema[] UPDATE_METADATA_RESPONSE = new Schema[] {UPDATE_METADATA_RESPONSE_V0, UPDATE_METADATA_RESPONSE_V1, UPDATE_METADATA_RESPONSE_V2};
 
+    /* Common acls api */
+    public static final Schema ACLS_RESOURCE_V0 = new Schema(
+        new Field("resource_type", INT8, "The id of the resource type"),
+        new Field("resource_name", STRING));
+
+    public static final Schema ACLS_ACL_V0 = new Schema(
+        new Field("acl_principle", STRING),
+        new Field("acl_permission_type", INT8, "The id of the permission type"),
+        new Field("acl_host", STRING),
+        new Field("acl_operation", INT8, "The id of the operation"));
+
+    /* List acls api */
+    public static final Schema LIST_ACLS_REQUEST_V0 = new Schema(
+        new Field("principal", NULLABLE_STRING, "The principle to list acls for. null indicates all"),
+        new Field("resource", ACLS_RESOURCE_V0, "The resoure to list acls for. A resource_type of -1 indicates all."));
+
+    public static final Schema LIST_ACLS_RESPONSE_RESOURCE_ACLS_V0 = new Schema(
+        new Field("resource", ACLS_RESOURCE_V0),
+        new Field("acls", new ArrayOf(ACLS_ACL_V0)));
+
+    public static final Schema LIST_ACLS_RESPONSE_V0 = new Schema(
+        new Field("responses", new ArrayOf(LIST_ACLS_RESPONSE_RESOURCE_ACLS_V0)),
+        new Field("error_code", INT16));
+
+    public static final Schema[] LIST_ACLS_REQUEST = new Schema[] {LIST_ACLS_REQUEST_V0};
+    public static final Schema[] LIST_ACLS_RESPONSE = new Schema[] {LIST_ACLS_RESPONSE_V0};
+
+    /* Alter acls api */
+    public static final Schema ALTER_ACLS_REQUEST_ACTION_ENTRY_V0 = new Schema(
+        new Field("action", INT8, "The id of the action to take"),
+        new Field("acl", ACLS_ACL_V0));
+
+    public static final Schema ALTER_ACLS_REQUEST_RESOURCE_ENTRY_V0 = new Schema(
+        new Field("resource", ACLS_RESOURCE_V0),
+        new Field("actions", new ArrayOf(ALTER_ACLS_REQUEST_ACTION_ENTRY_V0)));
+
+    public static final Schema ALTER_ACLS_REQUEST_V0 = new Schema(
+        new Field("requests", new ArrayOf(ALTER_ACLS_REQUEST_RESOURCE_ENTRY_V0)));
+
+
+    public static final Schema ALTER_ACLS_RESPONSE_ACTION_ENTRY_V0 = new Schema(
+        new Field("action", INT8, "The id of the action to taken"),
+        new Field("acl", ACLS_ACL_V0),
+        new Field("error_code", INT16));
+
+    public static final Schema ALTER_ACLS_RESPONSE_RESOURCE_ENTRY_V0 = new Schema(
+        new Field("resource", ACLS_RESOURCE_V0),
+        new Field("results", new ArrayOf(ALTER_ACLS_RESPONSE_ACTION_ENTRY_V0)));
+
+    public static final Schema ALTER_ACLS_RESPONSE_V0 = new Schema(
+        new Field("responses", new ArrayOf(ALTER_ACLS_RESPONSE_RESOURCE_ENTRY_V0)));
+
+    public static final Schema[] ALTER_ACLS_REQUEST = new Schema[] {ALTER_ACLS_REQUEST_V0};
+    public static final Schema[] ALTER_ACLS_RESPONSE = new Schema[] {ALTER_ACLS_RESPONSE_V0};
+
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
@@ -744,6 +799,8 @@ public class Protocol {
         REQUESTS[ApiKeys.SYNC_GROUP.id] = SYNC_GROUP_REQUEST;
         REQUESTS[ApiKeys.DESCRIBE_GROUPS.id] = DESCRIBE_GROUPS_REQUEST;
         REQUESTS[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_REQUEST;
+        REQUESTS[ApiKeys.LIST_ACLS.id] = LIST_ACLS_REQUEST;
+        REQUESTS[ApiKeys.ALTER_ACLS.id] = ALTER_ACLS_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -762,6 +819,8 @@ public class Protocol {
         RESPONSES[ApiKeys.SYNC_GROUP.id] = SYNC_GROUP_RESPONSE;
         RESPONSES[ApiKeys.DESCRIBE_GROUPS.id] = DESCRIBE_GROUPS_RESPONSE;
         RESPONSES[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_RESPONSE;
+        RESPONSES[ApiKeys.LIST_ACLS.id] = LIST_ACLS_RESPONSE;
+        RESPONSES[ApiKeys.ALTER_ACLS.id] = ALTER_ACLS_RESPONSE;
 
         /* set the maximum version of each api */
         for (ApiKeys api : ApiKeys.values())
