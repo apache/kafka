@@ -88,9 +88,9 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(ProcessorContext context, StateStore root) {
             if (loggingEnabled) {
-                context.register(this, true, new StateRestoreCallback() {
+                context.register(root, true, new StateRestoreCallback() {
 
                     @Override
                     public void restore(byte[] key, byte[] value) {
@@ -114,6 +114,15 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         @Override
         public void put(K key, V value) {
             this.map.put(key, value);
+        }
+
+        @Override
+        public V putIfAbsent(K key, V value) {
+            V originalValue = get(key);
+            if (originalValue == null) {
+                put(key, value);
+            }
+            return originalValue;
         }
 
         @Override

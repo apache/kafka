@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.util.Properties;
 
@@ -32,9 +33,9 @@ public class AppInfoParser {
     private static String commitId = "unknown";
 
     static {
-        try {
+        try (InputStream resourceStream = AppInfoParser.class.getResourceAsStream("/kafka/kafka-version.properties")) {
             Properties props = new Properties();
-            props.load(AppInfoParser.class.getResourceAsStream("/kafka/kafka-version.properties"));
+            props.load(resourceStream);
             version = props.getProperty("version", version).trim();
             commitId = props.getProperty("commitId", commitId).trim();
         } catch (Exception e) {

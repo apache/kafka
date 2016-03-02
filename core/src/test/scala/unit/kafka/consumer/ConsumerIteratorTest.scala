@@ -20,9 +20,11 @@ package kafka.consumer
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
+
+import kafka.common.LongRef
+
 import scala.collection._
 import org.junit.Assert._
-
 import kafka.message._
 import kafka.server._
 import kafka.utils.TestUtils._
@@ -64,7 +66,7 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
   def testConsumerIteratorDeduplicationDeepIterator() {
     val messageStrings = (0 until 10).map(_.toString).toList
     val messages = messageStrings.map(s => new Message(s.getBytes))
-    val messageSet = new ByteBufferMessageSet(DefaultCompressionCodec, new AtomicLong(0), messages:_*)
+    val messageSet = new ByteBufferMessageSet(DefaultCompressionCodec, new LongRef(0), messages:_*)
 
     topicInfos(0).enqueue(messageSet)
     assertEquals(1, queue.size)
@@ -88,7 +90,7 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
   def testConsumerIteratorDecodingFailure() {
     val messageStrings = (0 until 10).map(_.toString).toList
     val messages = messageStrings.map(s => new Message(s.getBytes))
-    val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(0), messages:_*)
+    val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new LongRef(0), messages:_*)
 
     topicInfos(0).enqueue(messageSet)
     assertEquals(1, queue.size)

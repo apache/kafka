@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Serdes;
@@ -87,9 +88,9 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void init(ProcessorContext context) {
+    public void init(ProcessorContext context, StateStore root) {
         if (loggingEnabled) {
-            context.register(this, true, new StateRestoreCallback() {
+            context.register(root, true, new StateRestoreCallback() {
 
                 @Override
                 public void restore(byte[] key, byte[] value) {
@@ -114,6 +115,15 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     public void put(K key, V value) {
         this.map.put(key, value);
         this.keys.add(key);
+    }
+
+    @Override
+    public V putIfAbsent(K key, V value) {
+        V originalValue = get(key);
+        if (originalValue == null) {
+            put(key, value);
+        }
+        return originalValue;
     }
 
     @Override

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams;
 
+import java.util.Objects;
+
 /**
  * A key-value pair defined for a single Kafka Streams record.
  * If the record comes directly from a Kafka topic then its
@@ -41,5 +43,25 @@ public class KeyValue<K, V> {
 
     public String toString() {
         return "KeyValue(" + key + ", " + value + ")";
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other)
+            return true;
+
+        if (other instanceof KeyValue) {
+            KeyValue otherKV = (KeyValue) other;
+
+            return key == null ? otherKV.key == null : key.equals(otherKV.key)
+                    && value == null ? otherKV.value == null : value.equals(otherKV.value);
+        } else {
+            return false;
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(key, value);
     }
 }

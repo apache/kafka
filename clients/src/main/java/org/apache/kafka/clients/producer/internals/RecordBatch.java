@@ -44,6 +44,7 @@ public final class RecordBatch {
     public final ProduceRequestResult produceFuture;
     public long lastAppendTime;
     private final List<Thunk> thunks;
+    private long offsetCounter = 0L;
     private boolean retry;
 
     public RecordBatch(TopicPartition tp, MemoryRecords records, long now) {
@@ -62,14 +63,17 @@ public final class RecordBatch {
      * 
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
-    public FutureRecordMetadata tryAppend(byte[] key, byte[] value, Callback callback, long now) {
+    public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, long now) {
         if (!this.records.hasRoomFor(key, value)) {
             return null;
         } else {
-            this.records.append(0L, key, value);
+            long checksum = this.records.append(offsetCounter++, timestamp, key, value);
             this.maxRecordSize = Math.max(this.maxRecordSize, Record.recordSize(key, value));
             this.lastAppendTime = now;
-            FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount);
+            FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
+                                                                   timestamp, checksum,
+                                                                   key == null ? -1 : key.length,
+                                                                   value == null ? -1 : value.length);
             if (callback != null)
                 thunks.add(new Thunk(callback, future));
             this.recordCount++;
@@ -81,9 +85,10 @@ public final class RecordBatch {
      * Complete the request
      * 
      * @param baseOffset The base offset of the messages assigned by the server
+     * @param timestamp The timestamp returned by the broker.
      * @param exception The exception that occurred (or null if the request was successful)
      */
-    public void done(long baseOffset, RuntimeException exception) {
+    public void done(long baseOffset, long timestamp, RuntimeException exception) {
         log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
                   topicPartition,
                   baseOffset,
@@ -93,7 +98,12 @@ public final class RecordBatch {
             try {
                 Thunk thunk = this.thunks.get(i);
                 if (exception == null) {
-                    RecordMetadata metadata = new RecordMetadata(this.topicPartition,  baseOffset, thunk.future.relativeOffset());
+                    // If the timestamp returned by server is NoTimestamp, that means CreateTime is used. Otherwise LogAppendTime is used.
+                    RecordMetadata metadata = new RecordMetadata(this.topicPartition,  baseOffset, thunk.future.relativeOffset(),
+                                                                 timestamp == Record.NO_TIMESTAMP ? thunk.future.timestamp() : timestamp,
+                                                                 thunk.future.checksum(),
+                                                                 thunk.future.serializedKeySize(),
+                                                                 thunk.future.serializedValueSize());
                     thunk.callback.onCompletion(metadata, null);
                 } else {
                     thunk.callback.onCompletion(null, exception);
@@ -133,7 +143,7 @@ public final class RecordBatch {
         if ((this.records.isFull() && requestTimeout < (now - this.lastAppendTime)) || requestTimeout < (now - (this.lastAttemptMs + lingerMs))) {
             expire = true;
             this.records.close();
-            this.done(-1L, new TimeoutException("Batch Expired"));
+            this.done(-1L, Record.NO_TIMESTAMP, new TimeoutException("Batch Expired"));
         }
 
         return expire;

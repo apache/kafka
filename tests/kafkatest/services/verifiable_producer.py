@@ -17,13 +17,13 @@ from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
+from kafkatest.utils import is_int, is_int_with_prefix
 
 import json
 import os
 import signal
 import subprocess
 import time
-
 
 class VerifiableProducer(BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_producer"
@@ -42,40 +42,65 @@ class VerifiableProducer(BackgroundThreadService):
             "collect_default": True}
         }
 
-    def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000, version=TRUNK):
+    def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
+                 message_validator=is_int, compression_types=None, version=TRUNK):
+        """
+        :param max_messages is a number of messages to be produced per producer
+        :param message_validator checks for an expected format of messages produced. There are
+        currently two:
+               * is_int is an integer format; this is default and expected to be used if
+               num_nodes = 1
+               * is_int_with_prefix recommended if num_nodes > 1, because otherwise each producer
+               will produce exactly same messages, and validation may miss missing messages.
+        :param compression_types: If None, all producers will not use compression; or a list of one or
+        more compression types (including "none"). Each producer will pick a compression type
+        from the list in round-robin fashion. Example: compression_types = ["none", "snappy"] and
+        num_nodes = 3, then producer 1 and 2 will not use compression, and producer 3 will use
+        compression type = snappy. If in this example, num_nodes is 1, then first (and only)
+        producer will not use compression.
+        """
         super(VerifiableProducer, self).__init__(context, num_nodes)
 
         self.kafka = kafka
         self.topic = topic
         self.max_messages = max_messages
         self.throughput = throughput
+        self.message_validator = message_validator
+        self.compression_types = compression_types
 
         for node in self.nodes:
             node.version = version
         self.acked_values = []
         self.not_acked_values = []
+        self.produced_count = {}
         self.prop_file = ""
-
 
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % VerifiableProducer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
         self.security_config = self.kafka.security_config.client_config(self.prop_file)
-        self.prop_file += str(self.security_config)
+        producer_prop_file = str(self.security_config)
         log_config = self.render('tools_log4j.properties', log_file=VerifiableProducer.LOG_FILE)
         node.account.create_file(VerifiableProducer.LOG4J_CONFIG, log_config)
 
         # Create and upload config file
+        if self.compression_types is not None:
+            compression_index = (idx - 1) % len(self.compression_types)
+            self.logger.info("VerifiableProducer (index = %d) will use compression type = %s", idx,
+                             self.compression_types[compression_index])
+            producer_prop_file += "\ncompression.type=%s\n" % self.compression_types[compression_index]
+
         self.logger.info("verifiable_producer.properties:")
-        self.logger.info(self.prop_file)
-        node.account.create_file(VerifiableProducer.CONFIG_FILE, self.prop_file)
+        self.logger.info(producer_prop_file)
+        node.account.create_file(VerifiableProducer.CONFIG_FILE, producer_prop_file)
         self.security_config.setup_node(node)
 
-        cmd = self.start_cmd(node)
+        cmd = self.start_cmd(node, idx)
         self.logger.debug("VerifiableProducer %d command: %s" % (idx, cmd))
 
 
+        self.produced_count[idx] = 0
         last_produced_time = time.time()
         prev_msg = None
         for line in node.account.ssh_capture(cmd):
@@ -87,10 +112,12 @@ class VerifiableProducer(BackgroundThreadService):
                 with self.lock:
                     if data["name"] == "producer_send_error":
                         data["node"] = idx
-                        self.not_acked_values.append(int(data["value"]))
+                        self.not_acked_values.append(self.message_validator(data["value"]))
+                        self.produced_count[idx] += 1
 
                     elif data["name"] == "producer_send_success":
-                        self.acked_values.append(int(data["value"]))
+                        self.acked_values.append(self.message_validator(data["value"]))
+                        self.produced_count[idx] += 1
 
                         # Log information if there is a large gap between successively acknowledged messages
                         t = time.time()
@@ -103,7 +130,7 @@ class VerifiableProducer(BackgroundThreadService):
                         last_produced_time = t
                         prev_msg = data
 
-    def start_cmd(self, node):
+    def start_cmd(self, node, idx):
 
         cmd = ""
         if node.version <= LATEST_0_8_2:
@@ -122,6 +149,8 @@ class VerifiableProducer(BackgroundThreadService):
             cmd += " --max-messages %s" % str(self.max_messages)
         if self.throughput > 0:
             cmd += " --throughput %s" % str(self.throughput)
+        if self.message_validator == is_int_with_prefix:
+            cmd += " --value-prefix %s" % str(idx)
 
         cmd += " --producer.config %s" % VerifiableProducer.CONFIG_FILE
         cmd += " 2>> %s | tee -a %s &" % (VerifiableProducer.STDOUT_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
@@ -165,6 +194,13 @@ class VerifiableProducer(BackgroundThreadService):
     def num_not_acked(self):
         with self.lock:
             return len(self.not_acked_values)
+
+    def each_produced_at_least(self, count):
+        with self.lock:
+            for idx in range(1, self.num_nodes):
+                if self.produced_count.get(idx) is None or self.produced_count[idx] < count:
+                    return False
+            return True
 
     def stop_node(self, node):
         self.kill_node(node, clean_shutdown=False, allow_fail=False)

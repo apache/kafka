@@ -75,6 +75,9 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public boolean equals(Object o) {
+        if (this == o)
+            return true;
+
         if (o instanceof TaskId) {
             TaskId other = (TaskId) o;
             return other.topicGroupId == this.topicGroupId && other.partition == this.partition;

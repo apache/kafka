@@ -27,7 +27,7 @@ import kafka.common._
 import kafka.controller.KafkaController
 import kafka.coordinator.{GroupCoordinator, JoinGroupResult}
 import kafka.log._
-import kafka.message.{ByteBufferMessageSet, MessageSet}
+import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
 import kafka.network._
 import kafka.network.RequestChannel.{Session, Response}
 import kafka.security.auth.{Authorizer, ClusterAction, Group, Create, Describe, Operation, Read, Resource, Topic, Write}
@@ -35,11 +35,11 @@ import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{InvalidTopicException, NotLeaderForPartitionException, UnknownTopicOrPartitionException,
 ClusterAuthorizationException}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{ProtoUtils, ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse,
 DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse,
 LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse,
-StopReplicaRequest, StopReplicaResponse, ProduceRequest, ProduceResponse}
+StopReplicaRequest, StopReplicaResponse, ProduceRequest, ProduceResponse, UpdateMetadataRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Node}
@@ -175,14 +175,19 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleUpdateMetadataRequest(request: RequestChannel.Request) {
-    val updateMetadataRequest = request.requestObj.asInstanceOf[UpdateMetadataRequest]
+    val correlationId = request.header.correlationId
+    val updateMetadataRequest = request.body.asInstanceOf[UpdateMetadataRequest]
 
-    authorizeClusterAction(request)
+    val updateMetadataResponse =
+      if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+        replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest, metadataCache)
+        new UpdateMetadataResponse(Errors.NONE.code)
+      } else {
+        new UpdateMetadataResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.code)
+      }
 
-    replicaManager.maybeUpdateMetadataCache(updateMetadataRequest, metadataCache)
-
-    val updateMetadataResponse = new UpdateMetadataResponse(updateMetadataRequest.correlationId)
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, updateMetadataResponse)))
+    val responseHeader = new ResponseHeader(correlationId)
+    requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, responseHeader, updateMetadataResponse)))
   }
 
   def handleControlledShutdownRequest(request: RequestChannel.Request) {
@@ -325,7 +330,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
 
-      val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ => new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1))
+      val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ =>
+        new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, Message.NoTimestamp))
 
       var errorInResponse = false
 
@@ -362,11 +368,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           val respHeader = new ResponseHeader(request.header.correlationId)
           val respBody = request.header.apiVersion match {
             case 0 => new ProduceResponse(mergedResponseStatus.asJava)
-            case 1 => new ProduceResponse(mergedResponseStatus.asJava, delayTimeMs)
+            case version@ (1 | 2) => new ProduceResponse(mergedResponseStatus.asJava, delayTimeMs, version)
             // This case shouldn't happen unless a new version of ProducerRequest is added without
             // updating this part of the code to handle it properly.
-            case _ => throw new IllegalArgumentException("Version %d of ProducerRequest is not handled. Code must be updated."
-              .format(request.header.apiVersion))
+            case version => throw new IllegalArgumentException(s"Version `$version` of ProduceRequest is not handled. Code must be updated.")
           }
 
           requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, respBody)))
@@ -417,25 +422,51 @@ class KafkaApis(val requestChannel: RequestChannel,
       case (topicAndPartition, _) => authorize(request.session, Read, new Resource(Topic, topicAndPartition.topic))
     }
 
-    val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => FetchResponsePartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, MessageSet.Empty))
+    val unauthorizedPartitionData = unauthorizedRequestInfo.mapValues { _ =>
+      FetchResponsePartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, MessageSet.Empty)
+    }
 
     // the callback for sending a fetch response
     def sendResponseCallback(responsePartitionData: Map[TopicAndPartition, FetchResponsePartitionData]) {
-      val mergedResponseStatus = responsePartitionData ++ unauthorizedResponseStatus
 
-      mergedResponseStatus.foreach { case (topicAndPartition, data) =>
-        if (data.error != Errors.NONE.code) {
-          debug("Fetch request with correlation id %d from client %s on partition %s failed due to %s"
-            .format(fetchRequest.correlationId, fetchRequest.clientId,
-            topicAndPartition, Errors.forCode(data.error).exceptionName))
-        }
+      val convertedPartitionData =
+        // Need to down-convert message when consumer only takes magic value 0.
+        if (fetchRequest.versionId <= 1) {
+          responsePartitionData.map { case (tp, data) =>
+
+            // We only do down-conversion when:
+            // 1. The message format version configured for the topic is using magic value > 0, and
+            // 2. The message set contains message whose magic > 0
+            // This is to reduce the message format conversion as much as possible. The conversion will only occur
+            // when new message format is used for the topic and we see an old request.
+            // Please note that if the message format is changed from a higher version back to lower version this
+            // test might break because some messages in new message format can be delivered to consumers before 0.10.0.0
+            // without format down conversion.
+            val convertedData = if (replicaManager.getMessageFormatVersion(tp).exists(_ > Message.MagicValue_V0) &&
+              !data.messages.isMagicValueInAllWrapperMessages(Message.MagicValue_V0)) {
+              trace(s"Down converting message to V0 for fetch request from ${fetchRequest.clientId}")
+              new FetchResponsePartitionData(data.error, data.hw, data.messages.asInstanceOf[FileMessageSet].toMessageFormat(Message.MagicValue_V0))
+            } else data
+
+            tp -> convertedData
+          }
+        } else responsePartitionData
+
+      val mergedPartitionData = convertedPartitionData ++ unauthorizedPartitionData
+
+      mergedPartitionData.foreach { case (topicAndPartition, data) =>
+        if (data.error != Errors.NONE.code)
+          debug(s"Fetch request with correlation id ${fetchRequest.correlationId} from client ${fetchRequest.clientId} " +
+            s"on partition $topicAndPartition failed due to ${Errors.forCode(data.error).exceptionName}")
         // record the bytes out metrics only when the response is being sent
         BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesOutRate.mark(data.messages.sizeInBytes)
         BrokerTopicStats.getBrokerAllTopicsStats().bytesOutRate.mark(data.messages.sizeInBytes)
       }
 
       def fetchResponseCallback(delayTimeMs: Int) {
-        val response = FetchResponse(fetchRequest.correlationId, mergedResponseStatus, fetchRequest.versionId, delayTimeMs)
+        trace(s"Sending fetch response to client ${fetchRequest.clientId} of " +
+          s"${convertedPartitionData.values.map(_.messages.sizeInBytes).sum} bytes")
+        val response = FetchResponse(fetchRequest.correlationId, mergedPartitionData, fetchRequest.versionId, delayTimeMs)
         requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
       }
 
@@ -448,10 +479,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchResponseCallback(0)
       } else {
         quotaManagers(ApiKeys.FETCH.id).recordAndMaybeThrottle(fetchRequest.clientId,
-                                                                   FetchResponse.responseSize(responsePartitionData
-                                                                                                      .groupBy(_._1.topic),
-                                                                                              fetchRequest.versionId),
-                                                                   fetchResponseCallback)
+                                                               FetchResponse.responseSize(mergedPartitionData.groupBy(_._1.topic),
+                                                                                          fetchRequest.versionId),
+                                                               fetchResponseCallback)
       }
     }
 

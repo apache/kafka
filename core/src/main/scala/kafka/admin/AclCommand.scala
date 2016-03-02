@@ -59,11 +59,13 @@ object AclCommand {
   }
 
   def withAuthorizer(opts: AclCommandOptions)(f: Authorizer => Unit) {
-    var authorizerProperties = Map.empty[String, Any]
-    if (opts.options.has(opts.authorizerPropertiesOpt)) {
-      val props = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala.map(_.split("="))
-      props.foreach(pair => authorizerProperties += (pair(0).trim -> pair(1).trim))
-    }
+    val authorizerProperties =
+      if (opts.options.has(opts.authorizerPropertiesOpt)) {
+        val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
+        CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
+      } else {
+        Map.empty[String, Any]
+      }
 
     val authorizerClass = opts.options.valueOf(opts.authorizerOpt)
     val authZ = CoreUtils.createObject[Authorizer](authorizerClass)
@@ -113,10 +115,9 @@ object AclCommand {
     withAuthorizer(opts) { authorizer =>
       val resources = getResource(opts, dieIfNoResourceFound = false)
 
-      val resourceToAcls = if (resources.isEmpty)
-        authorizer.getAcls()
-      else
-        resources.map(resource => (resource -> authorizer.getAcls(resource)))
+      val resourceToAcls: Iterable[(Resource, Set[Acl])] =
+        if (resources.isEmpty) authorizer.getAcls()
+        else resources.map(resource => (resource -> authorizer.getAcls(resource)))
 
       for ((resource, acls) <- resourceToAcls)
         println(s"Current ACLs for resource `${resource}`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")

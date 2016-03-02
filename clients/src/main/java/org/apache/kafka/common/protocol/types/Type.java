@@ -216,6 +216,62 @@ public abstract class Type {
         }
     };
 
+    public static final Type NULLABLE_STRING = new Type() {
+        @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o == null) {
+                buffer.putShort((short) -1);
+                return;
+            }
+
+            byte[] bytes = Utils.utf8((String) o);
+            if (bytes.length > Short.MAX_VALUE)
+                throw new SchemaException("String is longer than the maximum string length.");
+            buffer.putShort((short) bytes.length);
+            buffer.put(bytes);
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            int length = buffer.getShort();
+            if (length < 0)
+                return null;
+
+            byte[] bytes = new byte[length];
+            buffer.get(bytes);
+            return Utils.utf8(bytes);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            if (o == null)
+                return 2;
+
+            return 2 + Utils.utf8Length((String) o);
+        }
+
+        @Override
+        public String toString() {
+            return "NULLABLE_STRING";
+        }
+
+        @Override
+        public String validate(Object item) {
+            if (item == null)
+                return null;
+
+            if (item instanceof String)
+                return (String) item;
+            else
+                throw new SchemaException(item + " is not a String.");
+        }
+    };
+
     public static final Type BYTES = new Type() {
         @Override
         public void write(ByteBuffer buffer, Object o) {

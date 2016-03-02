@@ -118,6 +118,42 @@ public final class Cluster {
     }
 
     /**
+     * Update the cluster information for specific topic with new partition information
+     */
+    public Cluster update(String topic, Collection<PartitionInfo> partitions) {
+
+        // re-index the partitions by topic/partition for quick lookup
+        for (PartitionInfo p : partitions)
+            this.partitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
+
+        // re-index the partitions by topic and node respectively
+        this.partitionsByTopic.put(topic, Collections.unmodifiableList(new ArrayList<>(partitions)));
+
+        List<PartitionInfo> availablePartitions = new ArrayList<>();
+        for (PartitionInfo part : partitions) {
+            if (part.leader() != null)
+                availablePartitions.add(part);
+        }
+        this.availablePartitionsByTopic.put(topic, Collections.unmodifiableList(availablePartitions));
+
+        HashMap<Integer, List<PartitionInfo>> partsForNode = new HashMap<>();
+        for (Node n : this.nodes) {
+            partsForNode.put(n.id(), new ArrayList<PartitionInfo>());
+        }
+        for (PartitionInfo p : partitions) {
+            if (p.leader() != null) {
+                List<PartitionInfo> psNode = Utils.notNull(partsForNode.get(p.leader().id()));
+                psNode.add(p);
+            }
+        }
+
+        for (Map.Entry<Integer, List<PartitionInfo>> entry : partsForNode.entrySet())
+            this.partitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
+
+        return this;
+    }
+
+    /**
      * @return The known set of nodes
      */
     public List<Node> nodes() {

@@ -21,33 +21,41 @@ import kafka.utils._
 import kafka.message._
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{LogOffsetMetadata, FetchDataInfo, BrokerTopicStats}
-
-import java.io.{IOException, File}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, LogOffsetMetadata}
+import java.io.{File, IOException}
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.concurrent.atomic._
 import java.text.NumberFormat
-import org.apache.kafka.common.errors.{OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, CorruptRecordException}
+
+import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException}
+import org.apache.kafka.common.record.TimestampType
 
 import scala.collection.JavaConversions
-
 import com.yammer.metrics.core.Gauge
 
 object LogAppendInfo {
-  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, NoCompressionCodec, NoCompressionCodec, -1, -1, false)
+  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, Message.NoTimestamp, NoCompressionCodec, NoCompressionCodec, -1, -1, false)
 }
 
 /**
  * Struct to hold various quantities we compute about each message set before appending to the log
  * @param firstOffset The first offset in the message set
  * @param lastOffset The last offset in the message set
- * @param shallowCount The number of shallow messages
- * @param validBytes The number of valid bytes
+ * @param timestamp The log append time (if used) of the message set, otherwise Message.NoTimestamp
  * @param sourceCodec The source codec used in the message set (send by the producer)
  * @param targetCodec The target codec of the message set(after applying the broker compression configuration if any)
+ * @param shallowCount The number of shallow messages
+ * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
  */
-case class LogAppendInfo(var firstOffset: Long, var lastOffset: Long, sourceCodec: CompressionCodec, targetCodec: CompressionCodec, shallowCount: Int, validBytes: Int, offsetsMonotonic: Boolean)
+case class LogAppendInfo(var firstOffset: Long,
+                         var lastOffset: Long,
+                         var timestamp: Long,
+                         sourceCodec: CompressionCodec,
+                         targetCodec: CompressionCodec,
+                         shallowCount: Int,
+                         validBytes: Int,
+                         offsetsMonotonic: Boolean)
 
 
 /**
@@ -311,7 +319,7 @@ class Log(val dir: File,
     val appendInfo = analyzeAndValidateMessageSet(messages)
 
     // if we have any valid messages, append them to the log
-    if(appendInfo.shallowCount == 0)
+    if (appendInfo.shallowCount == 0)
       return appendInfo
 
     // trim any invalid bytes or partial messages before appending it to the on-disk log
@@ -324,30 +332,44 @@ class Log(val dir: File,
 
         if (assignOffsets) {
           // assign offsets to the message set
-          val offset = new AtomicLong(nextOffsetMetadata.messageOffset)
-          try {
-            validMessages = validMessages.validateMessagesAndAssignOffsets(offset, appendInfo.sourceCodec, appendInfo.targetCodec, config
-              .compact)
+          val offset = new LongRef(nextOffsetMetadata.messageOffset)
+          val now = time.milliseconds
+          val (validatedMessages, messageSizesMaybeChanged) = try {
+            validMessages.validateMessagesAndAssignOffsets(offset,
+                                                           now,
+                                                           appendInfo.sourceCodec,
+                                                           appendInfo.targetCodec,
+                                                           config.compact,
+                                                           config.messageFormatVersion.messageFormatVersion,
+                                                           config.messageTimestampType,
+                                                           config.messageTimestampDifferenceMaxMs)
           } catch {
             case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
           }
-          appendInfo.lastOffset = offset.get - 1
+          validMessages = validatedMessages
+          appendInfo.lastOffset = offset.value - 1
+          if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
+            appendInfo.timestamp = now
+
+          // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
+          // format conversion)
+          if (messageSizesMaybeChanged) {
+            for (messageAndOffset <- validMessages.shallowIterator) {
+              if (MessageSet.entrySize(messageAndOffset.message) > config.maxMessageSize) {
+                // we record the original message set size instead of the trimmed size
+                // to be consistent with pre-compression bytesRejectedRate recording
+                BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesRejectedRate.mark(messages.sizeInBytes)
+                BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(messages.sizeInBytes)
+                throw new RecordTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
+                  .format(MessageSet.entrySize(messageAndOffset.message), config.maxMessageSize))
+              }
+            }
+          }
+
         } else {
           // we are taking the offsets we are given
           if (!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffsetMetadata.messageOffset)
             throw new IllegalArgumentException("Out of order offsets found in " + messages)
-        }
-
-        // re-validate message sizes since after re-compression some may exceed the limit
-        for (messageAndOffset <- validMessages.shallowIterator) {
-          if (MessageSet.entrySize(messageAndOffset.message) > config.maxMessageSize) {
-            // we record the original message set size instead of trimmed size
-            // to be consistent with pre-compression bytesRejectedRate recording
-            BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesRejectedRate.mark(messages.sizeInBytes)
-            BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(messages.sizeInBytes)
-            throw new RecordTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
-              .format(MessageSet.entrySize(messageAndOffset.message), config.maxMessageSize))
-          }
         }
 
         // check messages set size may be exceed config.segmentSize
@@ -436,7 +458,7 @@ class Log(val dir: File,
     // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
 
-    LogAppendInfo(firstOffset, lastOffset, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic)
+    LogAppendInfo(firstOffset, lastOffset, Message.NoTimestamp, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic)
   }
 
   /**

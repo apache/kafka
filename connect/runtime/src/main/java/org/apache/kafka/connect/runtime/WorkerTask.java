@@ -17,38 +17,135 @@
 
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Handles processing for an individual task. This interface only provides the basic methods
  * used by {@link Worker} to manage the tasks. Implementations combine a user-specified Task with
  * Kafka to create a data flow.
  */
-interface WorkerTask {
+abstract class WorkerTask implements Runnable {
+    private static final Logger log = LoggerFactory.getLogger(WorkerTask.class);
+
+    protected final ConnectorTaskId id;
+    private final AtomicBoolean stopping;
+    private final AtomicBoolean running;
+    private final AtomicBoolean cancelled;
+    private final CountDownLatch shutdownLatch;
+    private final TaskStatus.Listener lifecycleListener;
+
+    public WorkerTask(ConnectorTaskId id, TaskStatus.Listener lifecycleListener) {
+        this.id = id;
+        this.stopping = new AtomicBoolean(false);
+        this.running = new AtomicBoolean(false);
+        this.cancelled = new AtomicBoolean(false);
+        this.shutdownLatch = new CountDownLatch(1);
+        this.lifecycleListener = lifecycleListener;
+    }
+
+    public ConnectorTaskId id() {
+        return id;
+    }
+
     /**
-     * Start the Task
+     * Initialize the task for execution.
      * @param props initial configuration
      */
-    void start(Map<String, String> props);
+    public abstract void initialize(Map<String, String> props);
 
     /**
      * Stop this task from processing messages. This method does not block, it only triggers
      * shutdown. Use #{@link #awaitStop} to block until completion.
      */
-    void stop();
+    public void stop() {
+        this.stopping.set(true);
+    }
+
+    /**
+     * Cancel this task. This won't actually stop it, but it will prevent the state from being
+     * updated when it eventually does shutdown.
+     */
+    public void cancel() {
+        this.cancelled.set(true);
+    }
 
     /**
      * Wait for this task to finish stopping.
      *
-     * @param timeoutMs
+     * @param timeoutMs time in milliseconds to await stop
      * @return true if successful, false if the timeout was reached
      */
-    boolean awaitStop(long timeoutMs);
+    public boolean awaitStop(long timeoutMs) {
+        if (!running.get())
+            return true;
 
-    /**
-     * Close this task. This is different from #{@link #stop} and #{@link #awaitStop} in that the
-     * stop methods ensure processing has stopped but may leave resources allocated. This method
-     * should clean up all resources.
-     */
-    void close();
+        try {
+            return shutdownLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            return false;
+        }
+    }
+
+    protected abstract void execute();
+
+    protected abstract void close();
+
+    protected boolean isStopping() {
+        return stopping.get();
+    }
+
+    protected boolean isStopped() {
+        return !running.get();
+    }
+
+    private void doClose() {
+        try {
+            close();
+        } catch (Throwable t) {
+            log.error("Task {} threw an uncaught and unrecoverable exception during shutdown", id, t);
+            throw t;
+        } finally {
+            running.set(false);
+            shutdownLatch.countDown();
+        }
+    }
+
+    private void doRun() {
+        if (!this.running.compareAndSet(false, true))
+            throw new IllegalStateException("The task cannot be started while still running");
+
+        try {
+            if (stopping.get())
+                return;
+
+            lifecycleListener.onStartup(id);
+            execute();
+        } catch (Throwable t) {
+            log.error("Task {} threw an uncaught and unrecoverable exception", id, t);
+            log.error("Task is being killed and will not recover until manually restarted");
+            throw t;
+        } finally {
+            doClose();
+        }
+    }
+
+    @Override
+    public void run() {
+        try {
+            doRun();
+            if (!cancelled.get())
+                lifecycleListener.onShutdown(id);
+        } catch (Throwable t) {
+            if (!cancelled.get())
+                lifecycleListener.onFailure(id, t);
+        }
+    }
+
 }

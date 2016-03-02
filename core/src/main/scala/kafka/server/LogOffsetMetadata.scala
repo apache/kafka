@@ -43,23 +43,20 @@ case class LogOffsetMetadata(messageOffset: Long,
                              relativePositionInSegment: Int = LogOffsetMetadata.UnknownFilePosition) {
 
   // check if this offset is already on an older segment compared with the given offset
-  def offsetOnOlderSegment(that: LogOffsetMetadata): Boolean = {
+  def onOlderSegment(that: LogOffsetMetadata): Boolean = {
     if (messageOffsetOnly())
-      throw new KafkaException("%s cannot compare its segment info with %s since it only has message offset info".format(this, that))
+      throw new KafkaException(s"$this cannot compare its segment info with $that since it only has message offset info")
 
     this.segmentBaseOffset < that.segmentBaseOffset
   }
 
   // check if this offset is on the same segment with the given offset
-  def offsetOnSameSegment(that: LogOffsetMetadata): Boolean = {
+  def onSameSegment(that: LogOffsetMetadata): Boolean = {
     if (messageOffsetOnly())
-      throw new KafkaException("%s cannot compare its segment info with %s since it only has message offset info".format(this, that))
+      throw new KafkaException(s"$this cannot compare its segment info with $that since it only has message offset info")
 
     this.segmentBaseOffset == that.segmentBaseOffset
   }
-
-  // check if this offset is before the given offset
-  def precedes(that: LogOffsetMetadata): Boolean = this.messageOffset < that.messageOffset
 
   // compute the number of messages between this offset to the given offset
   def offsetDiff(that: LogOffsetMetadata): Long = {
@@ -69,10 +66,10 @@ case class LogOffsetMetadata(messageOffset: Long,
   // compute the number of bytes between this offset to the given offset
   // if they are on the same segment and this offset precedes the given offset
   def positionDiff(that: LogOffsetMetadata): Int = {
-    if(!offsetOnSameSegment(that))
-      throw new KafkaException("%s cannot compare its segment position with %s since they are not on the same segment".format(this, that))
+    if(!onSameSegment(that))
+      throw new KafkaException(s"$this cannot compare its segment position with $that since they are not on the same segment")
     if(messageOffsetOnly())
-      throw new KafkaException("%s cannot compare its segment position with %s since it only has message offset info".format(this, that))
+      throw new KafkaException(s"$this cannot compare its segment position with $that since it only has message offset info")
 
     this.relativePositionInSegment - that.relativePositionInSegment
   }

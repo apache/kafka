@@ -17,15 +17,18 @@
 
 package kafka.server
 
+import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
+import kafka.security.auth.Resource
 import kafka.utils.Json
 import kafka.utils.Logging
 import kafka.utils.SystemTime
 import kafka.utils.Time
 import kafka.utils.ZkUtils
+import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection._
 import kafka.admin.AdminUtils
-import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
+import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 
 
 /**
@@ -76,62 +79,21 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
                            private val time: Time = SystemTime) extends Logging {
   private var lastExecutedChange = -1L
 
-  /**
-   * Begin watching for config changes
-   */
-  def startup() {
-    zkUtils.makeSurePersistentPathExists(ZkUtils.EntityConfigChangesPath)
-    zkUtils.zkClient.subscribeChildChanges(ZkUtils.EntityConfigChangesPath, ConfigChangeListener)
-    processAllConfigChanges()
-  }
-
-  /**
-   * Process all config changes
-   */
-  private def processAllConfigChanges() {
-    val configChanges = zkUtils.zkClient.getChildren(ZkUtils.EntityConfigChangesPath)
-    import JavaConversions._
-    processConfigChanges((configChanges: mutable.Buffer[String]).sorted)
-  }
-
-  /**
-   * Process the given list of config changes
-   */
-  private def processConfigChanges(notifications: Seq[String]) {
-    if (notifications.size > 0) {
-      info("Processing config change notification(s)...")
-      val now = time.milliseconds
-      for (notification <- notifications) {
-        val changeId = changeNumber(notification)
-
-        if (changeId > lastExecutedChange) {
-          val changeZnode = ZkUtils.EntityConfigChangesPath + "/" + notification
-
-          val (jsonOpt, stat) = zkUtils.readDataMaybeNull(changeZnode)
-          processNotification(jsonOpt)
-        }
-        lastExecutedChange = changeId
-      }
-      purgeObsoleteNotifications(now, notifications)
-    }
-  }
-
-  def processNotification(jsonOpt: Option[String]) = {
-    if(jsonOpt.isDefined) {
-      val json = jsonOpt.get
+  object ConfigChangedNotificationHandler extends NotificationHandler {
+    override def processNotification(json: String) = {
       Json.parseFull(json) match {
         case None => // There are no config overrides.
-          // Ignore non-json notifications because they can be from the deprecated TopicConfigManager
+        // Ignore non-json notifications because they can be from the deprecated TopicConfigManager
         case Some(mapAnon: Map[_, _]) =>
           val map = mapAnon collect
-                  { case (k: String, v: Any) => k -> v }
+            { case (k: String, v: Any) => k -> v }
           require(map("version") == 1)
 
           val entityType = map.get("entity_type") match {
             case Some(ConfigType.Topic) => ConfigType.Topic
             case Some(ConfigType.Client) => ConfigType.Client
             case _ => throw new IllegalArgumentException("Config change notification must have 'entity_type' set to either 'client' or 'topic'." +
-                    " Received: " + json)
+              " Received: " + json)
           }
 
           val entity = map.get("entity_name") match {
@@ -143,43 +105,20 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
           configHandlers(entityType).processConfigChanges(entity, entityConfig)
 
         case o => throw new IllegalArgumentException("Config change notification has an unexpected value. The format is:" +
-                                                             "{\"version\" : 1," +
-                                                             " \"entity_type\":\"topic/client\"," +
-                                                             " \"entity_name\" : \"topic_name/client_id\"}." +
-                                                             " Received: " + json)
+          "{\"version\" : 1," +
+          " \"entity_type\":\"topic/client\"," +
+          " \"entity_name\" : \"topic_name/client_id\"}." +
+          " Received: " + json)
       }
     }
   }
 
-  private def purgeObsoleteNotifications(now: Long, notifications: Seq[String]) {
-    for(notification <- notifications.sorted) {
-      val (jsonOpt, stat) = zkUtils.readDataMaybeNull(ZkUtils.EntityConfigChangesPath + "/" + notification)
-      if(jsonOpt.isDefined) {
-        val changeZnode = ZkUtils.EntityConfigChangesPath + "/" + notification
-        if (now - stat.getCtime > changeExpirationMs) {
-          debug("Purging config change notification " + notification)
-          zkUtils.deletePath(changeZnode)
-        } else {
-          return
-        }
-      }
-    }
-  }
-
-  /* get the change number from a change notification znode */
-  private def changeNumber(name: String): Long = name.substring(AdminUtils.EntityConfigChangeZnodePrefix.length).toLong
+  private val configChangeListener = new ZkNodeChangeNotificationListener(zkUtils, ZkUtils.EntityConfigChangesPath, AdminUtils.EntityConfigChangeZnodePrefix, ConfigChangedNotificationHandler)
 
   /**
-   * A listener that applies config changes to logs
+   * Begin watching for config changes
    */
-  object ConfigChangeListener extends IZkChildListener {
-    override def handleChildChange(path: String, chillins: java.util.List[String]) {
-      try {
-        import JavaConversions._
-        processConfigChanges(chillins: mutable.Buffer[String])
-      } catch {
-        case e: Exception => error("Error processing config change:", e)
-      }
-    }
+  def startup(): Unit = {
+    configChangeListener.init()
   }
 }
