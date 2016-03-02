@@ -199,9 +199,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectPolls(1);
         expectOffsetFlush(true);
-
-        sourceTask.commit();
-        EasyMock.expectLastCall();
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
@@ -332,6 +329,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         });
         sourceTask.stop();
         EasyMock.expectLastCall();
+        expectOffsetFlush(true);
 
         PowerMock.replayAll();
 
@@ -451,6 +449,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                 flushFuture.get(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class)));
         if (succeed) {
             futureGetExpect.andReturn(null);
+            sourceTask.commit();
+            EasyMock.expectLastCall();
         } else {
             futureGetExpect.andThrow(new TimeoutException());
             offsetWriter.cancelFlush();
