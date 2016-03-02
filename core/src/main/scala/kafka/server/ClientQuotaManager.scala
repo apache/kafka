@@ -119,12 +119,12 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         // Compute the delay
         val clientMetric = metrics.metrics().get(clientRateMetricName(clientId))
         throttleTimeMs = throttleTime(clientMetric, getQuotaMetricConfig(quota(clientId)))
+        clientSensors.throttleTimeSensor.record(throttleTimeMs)
         // If delayed, add the element to the delayQueue
         delayQueue.add(new ThrottledResponse(time, throttleTimeMs, callback))
         delayQueueSensor.record()
         logger.debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
     }
-    clientSensors.throttleTimeSensor.record(throttleTimeMs)
     throttleTimeMs
   }
 
