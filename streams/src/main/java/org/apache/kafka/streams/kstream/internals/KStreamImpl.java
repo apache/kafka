@@ -307,7 +307,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         StateStoreSupplier thisWindow = Stores.create(windows.name() + "-this")
                 .withKeys(keySerializer, keyDeserializer)
-                .withValues(otherValueSerializer, otherValueDeserializer)
+                .withValues(thisValueSerializer, thisValueDeserializer)
                 .persistent()
                 .windowed(windows.maintainMs(), windows.segments, true)
                 .build();
