@@ -58,12 +58,11 @@ public class TopologyBuilder {
     private final Map<String, StateStoreFactory> stateFactories = new HashMap<>();
 
     private final Set<String> sourceTopicNames = new HashSet<>();
-
     private final Set<String> internalTopicNames = new HashSet<>();
-
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
     private final List<Set<String>> copartitionSourceGroups = new ArrayList<>();
-    private final HashMap<String, String[]> nodeToTopics = new HashMap<>();
+    private final HashMap<String, String[]> nodeToSourceTopics = new HashMap<>();
+    private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
     private Map<Integer, Set<String>> nodeGroups = null;
 
     private static class StateStoreFactory {
@@ -154,11 +153,13 @@ public class TopologyBuilder {
     }
 
     public static class TopicsInfo {
+        public Set<String> sinkTopics;
         public Set<String> sourceTopics;
         public Set<String> interSourceTopics;
         public Set<String> stateChangelogTopics;
 
-        public TopicsInfo(Set<String> sourceTopics, Set<String> interSourceTopics, Set<String> stateChangelogTopics) {
+        public TopicsInfo(Set<String> sinkTopics, Set<String> sourceTopics, Set<String> interSourceTopics, Set<String> stateChangelogTopics) {
+            this.sinkTopics = sinkTopics;
             this.sourceTopics = sourceTopics;
             this.interSourceTopics = interSourceTopics;
             this.stateChangelogTopics = stateChangelogTopics;
@@ -228,7 +229,7 @@ public class TopologyBuilder {
         }
 
         nodeFactories.put(name, new SourceNodeFactory(name, topics, keyDeserializer, valDeserializer));
-        nodeToTopics.put(name, topics.clone());
+        nodeToSourceTopics.put(name, topics.clone());
         nodeGrouper.add(name);
 
         return this;
@@ -345,6 +346,7 @@ public class TopologyBuilder {
         }
 
         nodeFactories.put(name, new SinkNodeFactory(name, parentNames, topic, keySerializer, valSerializer, partitioner));
+        nodeToSinkTopic.put(name, topic);
         nodeGrouper.add(name);
         nodeGrouper.unite(name, parentNames);
         return this;
@@ -502,12 +504,13 @@ public class TopologyBuilder {
             nodeGroups = makeNodeGroups();
 
         for (Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
+            Set<String> sinkTopics = new HashSet<>();
             Set<String> sourceTopics = new HashSet<>();
             Set<String> internalSourceTopics = new HashSet<>();
             Set<String> stateChangelogTopics = new HashSet<>();
             for (String node : entry.getValue()) {
                 // if the node is a source node, add to the source topics
-                String[] topics = nodeToTopics.get(node);
+                String[] topics = nodeToSourceTopics.get(node);
                 if (topics != null) {
                     sourceTopics.addAll(Arrays.asList(topics));
 
@@ -517,6 +520,11 @@ public class TopologyBuilder {
                             internalSourceTopics.add(topic);
                     }
                 }
+
+                // if the node is a sink node, add to the sink topics
+                String topic = nodeToSinkTopic.get(node);
+                if (topic != null)
+                    sinkTopics.add(topic);
 
                 // if the node is connected to a state, add to the state topics
                 for (StateStoreFactory stateFactory : stateFactories.values()) {
@@ -529,6 +537,7 @@ public class TopologyBuilder {
                 }
             }
             topicGroups.put(entry.getKey(), new TopicsInfo(
+                    Collections.unmodifiableSet(sinkTopics),
                     Collections.unmodifiableSet(sourceTopics),
                     Collections.unmodifiableSet(internalSourceTopics),
                     Collections.unmodifiableSet(stateChangelogTopics)));
@@ -556,7 +565,7 @@ public class TopologyBuilder {
         int nodeGroupId = 0;
 
         // Go through source nodes first. This makes the group id assignment easy to predict in tests
-        for (String nodeName : Utils.sorted(nodeToTopics.keySet())) {
+        for (String nodeName : Utils.sorted(nodeToSourceTopics.keySet())) {
             String root = nodeGrouper.root(nodeName);
             Set<String> nodeGroup = rootToNodeGroup.get(root);
             if (nodeGroup == null) {
@@ -569,7 +578,7 @@ public class TopologyBuilder {
 
         // Go through non-source nodes
         for (String nodeName : Utils.sorted(nodeFactories.keySet())) {
-            if (!nodeToTopics.containsKey(nodeName)) {
+            if (!nodeToSourceTopics.containsKey(nodeName)) {
                 String root = nodeGrouper.root(nodeName);
                 Set<String> nodeGroup = rootToNodeGroup.get(root);
                 if (nodeGroup == null) {
@@ -597,7 +606,7 @@ public class TopologyBuilder {
 
     /**
      * Returns the copartition groups.
-     * A copartition group is a group of topics that are required to be copartitioned.
+     * A copartition group is a group of source topics that are required to be copartitioned.
      *
      * @return groups of topic names
      */
@@ -606,7 +615,7 @@ public class TopologyBuilder {
         for (Set<String> nodeNames : copartitionSourceGroups) {
             Set<String> copartitionGroup = new HashSet<>();
             for (String node : nodeNames) {
-                String[] topics = nodeToTopics.get(node);
+                String[] topics = nodeToSourceTopics.get(node);
                 if (topics != null)
                     copartitionGroup.addAll(Arrays.asList(topics));
             }

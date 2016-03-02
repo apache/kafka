@@ -223,8 +223,10 @@ object SimpleConsumerShell extends Logging {
                 val message = messageAndOffset.message
                 val key = if (message.hasKey) Utils.readBytes(message.key) else null
                 val value = if (message.isNull) null else Utils.readBytes(message.payload)
+                val serializedKeySize = if (message.hasKey) key.size else -1
+                val serializedValueSize = if (message.isNull) -1 else value.size
                 formatter.writeTo(new ConsumerRecord(topic, partitionId, offset, message.timestamp,
-                  message.timestampType, key, value), System.out)
+                  message.timestampType, message.checksum, serializedKeySize, serializedValueSize, key, value), System.out)
                 numMessagesConsumed += 1
               } catch {
                 case e: Throwable =>
