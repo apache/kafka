@@ -483,7 +483,7 @@ public class KafkaConfigStorage {
                     Map<String, Set<Integer>> updatedConfigIdsByConnector = taskIdsByConnector(deferred);
                     Set<Integer> taskIdSet = updatedConfigIdsByConnector.get(connectorName);
                     if (taskIdSet == null) {
-                        //TODO: Figure out why this happens (KAFKA-3299)
+                        //TODO: Figure out why this happens (KAFKA-3321)
                         log.error("Received a commit message for connector " + connectorName + " but there is no matching configuration for tasks in this connector. This should never happen.");
                         return;
                     }
