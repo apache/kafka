@@ -15,6 +15,7 @@
 # limitations under the License.
 
 # This script automates the process of setting up a local machine for running Kafka system tests
+export GREP_OPTIONS='--color=never'
 
 # Helper function which prints version numbers so they can be compared lexically or numerically
 function version { echo "$@" | awk -F. '{ printf("%03d%03d%03d%03d\n", $1,$2,$3,$4); }'; }

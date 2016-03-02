@@ -124,8 +124,8 @@ public class StreamTaskTest {
             assertEquals(0, source2.numReceived);
 
             assertEquals(4, task.process());
-            assertEquals(1, source1.numReceived);
-            assertEquals(1, source2.numReceived);
+            assertEquals(2, source1.numReceived);
+            assertEquals(0, source2.numReceived);
 
             assertEquals(3, task.process());
             assertEquals(2, source1.numReceived);
@@ -188,14 +188,21 @@ public class StreamTaskTest {
             assertTrue(consumer.paused().contains(partition2));
 
             assertEquals(7, task.process());
-            assertEquals(1, source1.numReceived);
-            assertEquals(1, source2.numReceived);
+            assertEquals(2, source1.numReceived);
+            assertEquals(0, source2.numReceived);
 
             assertEquals(1, consumer.paused().size());
-            assertTrue(consumer.paused().contains(partition1));
+            assertTrue(consumer.paused().contains(partition2));
 
             assertEquals(6, task.process());
-            assertEquals(2, source1.numReceived);
+            assertEquals(3, source1.numReceived);
+            assertEquals(0, source2.numReceived);
+
+            assertEquals(1, consumer.paused().size());
+            assertTrue(consumer.paused().contains(partition2));
+
+            assertEquals(5, task.process());
+            assertEquals(3, source1.numReceived);
             assertEquals(1, source2.numReceived);
 
             assertEquals(0, consumer.paused().size());
