@@ -92,15 +92,15 @@ public class PageViewUntypedJob {
 
         KStream<JsonNode, JsonNode> regionCount = views
                 .leftJoin(userRegions, new ValueJoiner<JsonNode, String, JsonNode>() {
-                            @Override
-                            public JsonNode apply(JsonNode view, String region) {
-                                ObjectNode jNode = JsonNodeFactory.instance.objectNode();
+                    @Override
+                    public JsonNode apply(JsonNode view, String region) {
+                        ObjectNode jNode = JsonNodeFactory.instance.objectNode();
 
-                                return jNode.put("user", view.get("user").textValue())
-                                        .put("page", view.get("page").textValue())
-                                        .put("region", region == null ? "UNKNOWN" : region);
-                            }
-                        })
+                        return jNode.put("user", view.get("user").textValue())
+                                .put("page", view.get("page").textValue())
+                                .put("region", region == null ? "UNKNOWN" : region);
+                    }
+                })
                 .map(new KeyValueMapper<String, JsonNode, KeyValue<String, JsonNode>>() {
                     @Override
                     public KeyValue<String, JsonNode> apply(String user, JsonNode viewRegion) {

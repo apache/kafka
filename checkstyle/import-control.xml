@@ -127,6 +127,11 @@
 
     <allow pkg="org.apache.kafka.streams"/>
 
+    <subpackage name="examples">
+      <allow pkg="com.fasterxml.jackson.databind" />
+      <allow pkg="org.apache.kafka.connect.json" />
+    </subpackage>
+
     <subpackage name="state">
       <allow pkg="org.rocksdb" />
     </subpackage>

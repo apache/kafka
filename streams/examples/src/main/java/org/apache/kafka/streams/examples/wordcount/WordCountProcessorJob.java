@@ -63,7 +63,7 @@ public class WordCountProcessorJob {
 
                 @Override
                 public void process(String dummy, String line) {
-                    String words[] = line.toLowerCase().split(" ");
+                    String[] words = line.toLowerCase().split(" ");
 
                     for (String word : words) {
                         Integer oldValue = this.kvStore.get(word);
