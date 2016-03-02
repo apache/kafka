@@ -341,7 +341,7 @@ class CleanerTest extends JUnitSuite {
 
     val config = LogConfig.fromProps(logConfig.originals, logProps)
       
-    def recoverAndCheck(config: LogConfig, expectedKeys : Iterable[Int]) : Log = {   
+    def recoverAndCheck(config: LogConfig, expectedKeys : Iterable[Int]) : Log = {
       // Recover log file and check that after recovery, keys are as expected
       // and all temporary files have been deleted
       val recoveredLog = makeLog(config = config)

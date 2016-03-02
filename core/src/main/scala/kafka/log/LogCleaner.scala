@@ -434,7 +434,7 @@ private[log] class Cleaner(val id: Int,
               ByteBufferMessageSet.writeMessage(writeBuffer, convertedMessage, entry.offset)
               stats.recopyMessage(size)
             } else {
-              compressMessages(writeBuffer, targetCodec, messageFormatVersion, Seq(new MessageAndOffset(entry.message, entry.offset)))
+              compressMessages(writeBuffer, targetCodec, messageFormatVersion, Seq(new MessageAndOffset(convertedMessage, entry.offset)))
             }
           }
           messagesRead += 1
