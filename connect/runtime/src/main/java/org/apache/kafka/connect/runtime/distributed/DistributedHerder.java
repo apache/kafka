@@ -100,6 +100,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // and the from other nodes are safe to process
     private boolean rebalanceResolved;
     private ConnectProtocol.Assignment assignment;
+    private boolean canReadConfigs;
 
     // To handle most external requests, like creating or destroying a connector, we can use a generic request where
     // the caller specifies all the code that should be executed.
@@ -150,6 +151,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         rebalanceResolved = true; // If we still need to follow up after a rebalance occurred, starting up tasks
         needsReconfigRebalance = false;
+        canReadConfigs = true; // We didn't try yet, but Configs are readable until proven otherwise
 
         forwardRequestExecutor = Executors.newSingleThreadExecutor();
     }
@@ -206,6 +208,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // blocking up this thread (especially those in callbacks due to rebalance events).
 
         try {
+            // if we failed to read to end of log before, we need to make sure the issue was resolved before joining group
+            // Joining and immediately leaving for failure to read configs is exceedingly impolite
+            if (!canReadConfigs && !readConfigToEnd(workerSyncTimeoutMs))
+                return; // Safe to return and tick immediately because readConfigToEnd will do the backoff for us
+
             member.ensureActive();
             // Ensure we're in a good state in our group. If not restart and everything should be setup to rejoin
             if (!handleRebalanceCompleted()) return;
@@ -603,8 +610,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             // Force exiting this method to avoid creating any connectors/tasks and require immediate rejoining if
             // we timed out. This should only happen if we failed to read configuration for long enough,
             // in which case giving back control to the main loop will prevent hanging around indefinitely after getting kicked out of the group.
-            if (!readConfigToEnd(workerSyncTimeoutMs))
+            // We also indicate to the main loop that we failed to readConfigs so it will check that the issue was resolved before trying to join the group
+            if (!readConfigToEnd(workerSyncTimeoutMs)) {
+                canReadConfigs = false;
                 needsRejoin = true;
+            }
         }
 
         if (needsRejoin) {
