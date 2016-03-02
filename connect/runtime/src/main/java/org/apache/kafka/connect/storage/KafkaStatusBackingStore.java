@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -31,7 +32,6 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.ConnectorStatus;
 import org.apache.kafka.connect.runtime.TaskStatus;
@@ -118,9 +118,9 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     @Override
     public void configure(WorkerConfig config) {
-        if (config.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG) == null)
-            throw new ConnectException("Must specify topic for connector status.");
         this.topic = config.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG);
+        if (topic.equals(""))
+            throw new ConfigException("Must specify topic for connector status.");
 
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.putAll(config.originals());
