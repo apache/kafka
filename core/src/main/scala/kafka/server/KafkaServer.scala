@@ -655,12 +655,12 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   }
 
   private def checkpointBrokerId(brokerId: Int) {
-    var logDirsWithoutMetaProps: List[String] = List()
+    var logDirsWithoutMetaProps: Vector[String] = Vector()
 
     for (logDir <- config.logDirs) {
       val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
       if(brokerMetadataOpt.isEmpty)
-          logDirsWithoutMetaProps ++= List(logDir)
+          logDirsWithoutMetaProps :+= logDir
     }
 
     for(logDir <- logDirsWithoutMetaProps) {
