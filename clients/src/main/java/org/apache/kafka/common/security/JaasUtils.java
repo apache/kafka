@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.common.security;
 
+import javax.security.auth.Subject;
+import javax.security.auth.kerberos.KerberosTicket;
 import javax.security.auth.login.Configuration;
 import javax.security.auth.login.AppConfigurationEntry;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.io.IOException;
 import java.io.File;
 
 import org.apache.kafka.common.KafkaException;
@@ -38,17 +39,19 @@ public class JaasUtils {
     public static final String ZK_SASL_CLIENT = "zookeeper.sasl.client";
     public static final String ZK_LOGIN_CONTEXT_NAME_KEY = "zookeeper.sasl.clientconfig";
 
+    private JaasUtils() {}
+
     /**
      * Construct a JAAS configuration object per kafka jaas configuration file
      * @param loginContextName
      * @param key
      * @return JAAS configuration object
      */
-    public static String jaasConfig(String loginContextName, String key) throws IOException {
+    public static String jaasConfig(String loginContextName, String key) {
         AppConfigurationEntry[] configurationEntries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
         if (configurationEntries == null) {
-            String errorMessage = "Could not find a '" + loginContextName + "' entry in this configuration.";
-            throw new IOException(errorMessage);
+            LOG.warn("Could not find a '{}' entry in this configuration.", loginContextName);
+            return null;
         }
 
         for (AppConfigurationEntry entry: configurationEntries) {
@@ -94,7 +97,7 @@ public class JaasUtils {
             if (!configFile.canRead()) {
                 throw new KafkaException("File " + loginConfigFile + "cannot be read.");
             }
-                
+
             try {
                 Configuration loginConf = Configuration.getConfiguration();
                 isSecurityEnabled = loginConf.getAppConfigurationEntry(zkLoginContextName) != null;
@@ -102,7 +105,7 @@ public class JaasUtils {
                 throw new KafkaException(e);
             }
             if (isSecurityEnabled && !zkSaslEnabled) {
-                LOG.error("JAAS file is present, but system property " + 
+                LOG.error("JAAS file is present, but system property " +
                             ZK_SASL_CLIENT + " is set to false, which disables " +
                             "SASL in the ZooKeeper client");
                 throw new KafkaException("Exception while determining if ZooKeeper is secure");
@@ -110,6 +113,20 @@ public class JaasUtils {
         }
 
         return isSecurityEnabled;
+    }
+
+    /**
+   * Determines whether or not a given Subject has a valid ticket already present.
+   * @param subject Kerberos Subject
+   * @return true if there is a valid kerberos ticket present in this Subject
+   */
+    public static boolean hasValidKerberosTicket(Subject subject) {
+        for (KerberosTicket ticket : subject.getPrivateCredentials(KerberosTicket.class)) {
+            if (ticket.isCurrent()) {
+                return true;
+            }
+        }
+        return false;
     }
 }
 
