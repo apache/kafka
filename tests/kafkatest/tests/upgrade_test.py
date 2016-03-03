@@ -22,6 +22,7 @@ from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import config_property
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
+import time
 
 
 class TestUpgrade(ProduceConsumeValidateTest):
@@ -48,6 +49,8 @@ class TestUpgrade(ProduceConsumeValidateTest):
             node.config[config_property.MESSAGE_FORMAT_VERSION] = from_kafka_version
             self.kafka.start_node(node)
 
+        time.sleep(10)
+
         self.logger.info("Second pass bounce - remove inter.broker.protocol.version config")
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
@@ -57,6 +60,8 @@ class TestUpgrade(ProduceConsumeValidateTest):
             else:
                 node.config[config_property.MESSAGE_FORMAT_VERSION] = to_message_format_version
             self.kafka.start_node(node)
+
+        time.sleep(30)
 
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"])
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["snappy"], new_consumer=True)
