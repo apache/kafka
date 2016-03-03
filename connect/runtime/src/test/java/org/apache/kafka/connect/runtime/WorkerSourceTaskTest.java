@@ -146,7 +146,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         executor.submit(workerTask);
         awaitPolls(pollLatch);
         workerTask.stop();
-        assertEquals(true, workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(1000));
 
         PowerMock.verifyAll();
     }
@@ -179,7 +179,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         executor.submit(workerTask);
         awaitPolls(pollLatch);
         workerTask.stop();
-        assertEquals(true, workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(1000));
 
         PowerMock.verifyAll();
     }
@@ -214,7 +214,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         awaitPolls(pollLatch);
         assertTrue(workerTask.commitOffsets());
         workerTask.stop();
-        assertEquals(true, workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(1000));
 
         PowerMock.verifyAll();
     }
@@ -249,7 +249,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         awaitPolls(pollLatch);
         assertTrue(workerTask.commitOffsets());
         workerTask.stop();
-        assertEquals(true, workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(1000));
 
         PowerMock.verifyAll();
     }
@@ -342,7 +342,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // cannot be invoked immediately in the thread trying to stop the task.
         startupLatch.await(1000, TimeUnit.MILLISECONDS);
         workerTask.stop();
-        assertEquals(true, workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(1000));
 
         PowerMock.verifyAll();
     }
