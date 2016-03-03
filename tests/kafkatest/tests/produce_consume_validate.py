@@ -127,6 +127,11 @@ class ProduceConsumeValidateTest(Test):
         if len(set(consumed)) != len(consumed):
             msg += "(There are also %s duplicate messages in the log - but that is an acceptable outcome)\n" % abs(len(set(consumed)) - len(consumed))
 
+        if not success:
+            self.logger.info("TEST ACTUALLY FAILED!")
+
+        success = False
+
         # Collect all logs if validation fails
         if not success:
             for s in self.test_context.services:
