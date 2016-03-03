@@ -134,6 +134,13 @@ class LogCleaner(val config: CleanerConfig,
   }
 
   /**
+   * Truncate cleaner offset checkpoint for the given partition if its checkpointed offset larger than the given offset
+   */
+  def truncateCheckpoint(dataDir: File, topicAndPartition: TopicAndPartition, offset: Long) = {
+    cleanerManager.truncateCheckpoint(dataDir, topicAndPartition, offset)
+  }
+
+  /**
    *  Abort the cleaning of a particular partition if it's in progress, and pause any future cleaning of this partition.
    *  This call blocks until the cleaning of the partition is aborted and paused.
    */
