@@ -132,9 +132,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         final CountDownLatch pollLatch = expectPolls(10);
         // In this test, we don't flush, so nothing goes any further than the offset writer
 
-
-        sourceTask.commit();
-        EasyMock.expectLastCall();
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
@@ -171,8 +168,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         statusListener.onFailure(taskId, exception);
         EasyMock.expectLastCall();
 
-        sourceTask.commit();
-        EasyMock.expectLastCall();
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
@@ -204,13 +199,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         final CountDownLatch pollLatch = expectPolls(1);
         expectOffsetFlush(true);
 
-        // first commit comes from offset flush in poll
-        sourceTask.commit();
-        EasyMock.expectLastCall();
-
-        // second commit comes from manual trigger below
-        sourceTask.commit();
-        EasyMock.expectLastCall();
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
@@ -245,8 +233,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectPolls(1);
         expectOffsetFlush(true);
-        sourceTask.commit();
-        EasyMock.expectLastCall();
 
         sourceTask.stop();
         EasyMock.expectLastCall();
@@ -342,8 +328,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             }
         });
 
-        sourceTask.commit();
-        EasyMock.expectLastCall();
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
@@ -465,6 +449,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         IExpectationSetters<Void> futureGetExpect = EasyMock.expect(
                 flushFuture.get(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class)));
         if (succeed) {
+            sourceTask.commit();
+            EasyMock.expectLastCall();
             futureGetExpect.andReturn(null);
         } else {
             futureGetExpect.andThrow(new TimeoutException());
