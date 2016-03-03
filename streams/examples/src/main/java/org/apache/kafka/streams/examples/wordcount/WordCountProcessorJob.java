@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.examples.wordcount;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
@@ -33,6 +32,17 @@ import org.apache.kafka.streams.state.Stores;
 
 import java.util.Properties;
 
+/**
+ * Demonstrates, using the low-level Processor APIs, how to implement the WordCount program
+ * that computes a simple word occurrence histogram from an input text.
+ *
+ * In this example, the input stream reads from a topic named "streams-file-input", where the values of messages
+ * represent lines of text; and the histogram output is written to topic "streams-wordcount-processor-output" where each record
+ * is an updated count of a single word.
+ *
+ * Before running this example you must create the source topic (e.g. via bin/kafka-topics.sh --create ...)
+ * and write some data to it (e.g. via bin-kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
+ */
 public class WordCountProcessorJob {
 
     private static class MyProcessorSupplier implements ProcessorSupplier<String, String> {
@@ -53,7 +63,7 @@ public class WordCountProcessorJob {
 
                 @Override
                 public void process(String dummy, String line) {
-                    String words[] = line.toLowerCase().split(" ");
+                    String[] words = line.toLowerCase().split(" ");
 
                     for (String word : words) {
                         Integer oldValue = this.kvStore.get(word);
@@ -72,7 +82,7 @@ public class WordCountProcessorJob {
                 public void punctuate(long timestamp) {
                     KeyValueIterator<String, Integer> iter = this.kvStore.all();
 
-                    System.out.println("----------- " + timestamp + "----------- ");
+                    System.out.println("----------- " + timestamp + " ----------- ");
 
                     while (iter.hasNext()) {
                         KeyValue<String, Integer> entry = iter.next();
@@ -103,8 +113,8 @@ public class WordCountProcessorJob {
         props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
-        // can specify underlying client configs if necessary
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
+        props.put(StreamsConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         TopologyBuilder builder = new TopologyBuilder();
 
@@ -113,9 +123,15 @@ public class WordCountProcessorJob {
         builder.addProcessor("Process", new MyProcessorSupplier(), "Source");
         builder.addStateStore(Stores.create("Counts").withStringKeys().withIntegerValues().inMemory().build(), "Process");
 
-        builder.addSink("Sink", "streams-wordcount-output", "Process");
+        builder.addSink("Sink", "streams-wordcount-processor-output", "Process");
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
+
+        // usually the streaming job would be ever running,
+        // in this example we just let it run for some time and stop since the input data is finite.
+        Thread.sleep(5000L);
+
+        streams.close();
     }
 }

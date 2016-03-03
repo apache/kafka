@@ -31,27 +31,44 @@ import org.apache.kafka.connect.json.JsonDeserializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.HoppingWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
 
 import java.util.Properties;
 
-public class PageViewUnTypedJob {
+/**
+ * Demonstrates how to perform a join between a KStream and a KTable, i.e. an example of a stateful computation,
+ * using general data types (here: JSON; but can also be Avro generic bindings, etc.) for serdes
+ * in Kafka Streams.
+ *
+ * In this example, we join a stream of pageviews (aka clickstreams) that reads from  a topic named "streams-pageview-input"
+ * with a user profile table that reads from a topic named "streams-userprofile-input", where the data format
+ * is JSON string representing a record in the stream or table, to compute the number of pageviews per user region.
+ *
+ * Before running this example you must create the source topic (e.g. via bin/kafka-topics.sh --create ...)
+ * and write some data to it (e.g. via bin-kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
+ */
+public class PageViewUntypedJob {
 
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
-        props.put(StreamsConfig.JOB_ID_CONFIG, "streams-pageview");
+        props.put(StreamsConfig.JOB_ID_CONFIG, "streams-pageview-untyped");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
         props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
         props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+        props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
+
+        // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
+        props.put(StreamsConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -59,47 +76,66 @@ public class PageViewUnTypedJob {
         final Deserializer<String> stringDeserializer = new StringDeserializer();
         final Serializer<Long> longSerializer = new LongSerializer();
         final Deserializer<Long> longDeserializer = new LongDeserializer();
+        final Serializer<JsonNode> jsonSerializer = new JsonSerializer();
+        final Deserializer<JsonNode> jsonDeserializer = new JsonDeserializer();
 
+        KStream<String, JsonNode> views = builder.stream(stringDeserializer, jsonDeserializer, "streams-pageview-input");
 
-        KStream<String, JsonNode> views = builder.stream("streams-pageview-input");
+        KTable<String, JsonNode> users = builder.table(stringSerializer, jsonSerializer, stringDeserializer, jsonDeserializer, "streams-userprofile-input");
 
-        KStream<String, JsonNode> viewsByUser = views.map((dummy, record) -> new KeyValue<>(record.get("user").textValue(), record));
+        KTable<String, String> userRegions = users.mapValues(new ValueMapper<JsonNode, String>() {
+            @Override
+            public String apply(JsonNode record) {
+                return record.get("region").textValue();
+            }
+        });
 
-        KTable<String, JsonNode> users = builder.table("streams-userprofile-input");
+        KStream<JsonNode, JsonNode> regionCount = views
+                .leftJoin(userRegions, new ValueJoiner<JsonNode, String, JsonNode>() {
+                    @Override
+                    public JsonNode apply(JsonNode view, String region) {
+                        ObjectNode jNode = JsonNodeFactory.instance.objectNode();
 
-        KTable<String, String> userRegions = users.mapValues(record -> record.get("region").textValue());
-
-        KStream<JsonNode, JsonNode> regionCount = viewsByUser
-                .leftJoin(userRegions, (view, region) -> {
-                    ObjectNode jNode = JsonNodeFactory.instance.objectNode();
-
-                    return (JsonNode) jNode.put("user", view.get("user").textValue())
-                            .put("page", view.get("page").textValue())
-                            .put("region", region);
+                        return jNode.put("user", view.get("user").textValue())
+                                .put("page", view.get("page").textValue())
+                                .put("region", region == null ? "UNKNOWN" : region);
+                    }
                 })
-                .map((user, viewRegion) -> new KeyValue<>(viewRegion.get("region").textValue(), viewRegion))
+                .map(new KeyValueMapper<String, JsonNode, KeyValue<String, JsonNode>>() {
+                    @Override
+                    public KeyValue<String, JsonNode> apply(String user, JsonNode viewRegion) {
+                        return new KeyValue<>(viewRegion.get("region").textValue(), viewRegion);
+                    }
+                })
                 .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000),
                         stringSerializer, longSerializer,
                         stringDeserializer, longDeserializer)
+                // TODO: we can merge ths toStream().map(...) with a single toStream(...)
                 .toStream()
                 .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<JsonNode, JsonNode>>() {
                     @Override
                     public KeyValue<JsonNode, JsonNode> apply(Windowed<String> key, Long value) {
                         ObjectNode keyNode = JsonNodeFactory.instance.objectNode();
                         keyNode.put("window-start", key.window().start())
-                                .put("region", key.window().start());
+                                .put("region", key.value());
 
                         ObjectNode valueNode = JsonNodeFactory.instance.objectNode();
-                        keyNode.put("count", value);
+                        valueNode.put("count", value);
 
-                        return new KeyValue<JsonNode, JsonNode>((JsonNode) keyNode, (JsonNode) valueNode);
+                        return new KeyValue<>((JsonNode) keyNode, (JsonNode) valueNode);
                     }
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-output");
+        regionCount.to("streams-pageviewstats-untyped-output", jsonSerializer, jsonSerializer);
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
+
+        // usually the streaming job would be ever running,
+        // in this example we just let it run for some time and stop since the input data is finite.
+        Thread.sleep(5000L);
+
+        streams.close();
     }
 }

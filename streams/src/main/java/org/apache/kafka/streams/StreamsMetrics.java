@@ -20,7 +20,7 @@ package org.apache.kafka.streams;
 import org.apache.kafka.common.metrics.Sensor;
 
 /**
- * The stream metrics interface for adding metric sensors and collecting metric values.
+ * The Kafka Streams metrics interface for adding metric sensors and collecting metric values.
  */
 public interface StreamsMetrics {
 

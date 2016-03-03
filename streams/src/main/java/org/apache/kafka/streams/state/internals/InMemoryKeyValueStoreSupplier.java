@@ -117,6 +117,15 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         @Override
+        public V putIfAbsent(K key, V value) {
+            V originalValue = get(key);
+            if (originalValue == null) {
+                put(key, value);
+            }
+            return originalValue;
+        }
+
+        @Override
         public void putAll(List<KeyValue<K, V>> entries) {
             for (KeyValue<K, V> entry : entries)
                 put(entry.key, entry.value);

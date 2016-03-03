@@ -65,6 +65,7 @@ public class KTableAggregateTest {
         }
     }
 
+
     @Test
     public void testAggBasic() throws Exception {
         final File baseDir = Files.createTempDirectory("test").toFile();

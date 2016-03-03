@@ -55,26 +55,26 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Internally the {@link KafkaStreams} instance contains a normal {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}
  * and {@link org.apache.kafka.clients.consumer.KafkaConsumer KafkaConsumer} instance that is used for reading input and writing output.
  * <p>
+ *
  * A simple example might look like this:
  * <pre>
  *    Map&lt;String, Object&gt; props = new HashMap&lt;&gt;();
- *    props.put("bootstrap.servers", "localhost:4242");
- *    props.put("key.deserializer", StringDeserializer.class);
- *    props.put("value.deserializer", StringDeserializer.class);
- *    props.put("key.serializer", StringSerializer.class);
- *    props.put("value.serializer", IntegerSerializer.class);
- *    props.put("timestamp.extractor", MyTimestampExtractor.class);
+ *    props.put(StreamsConfig.JOB_ID_CONFIG, "my-job");
+ *    props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+ *    props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+ *    props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+ *    props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+ *    props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
  *    StreamsConfig config = new StreamsConfig(props);
  *
  *    KStreamBuilder builder = new KStreamBuilder();
- *    builder.from("topic1").mapValue(value -&gt; value.length()).to("topic2");
+ *    builder.from("my-input-topic").mapValue(value -&gt; value.length().toString()).to("my-output-topic");
  *
  *    KafkaStreams streams = new KafkaStreams(builder, config);
  *    streams.start();
  * </pre>
  *
  */
-// TODO: about example may need to be updated after KAFKA-3153
 
 @InterfaceStability.Unstable
 public class KafkaStreams {

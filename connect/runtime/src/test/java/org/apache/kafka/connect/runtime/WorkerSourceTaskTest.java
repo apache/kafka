@@ -408,7 +408,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             public Future<RecordMetadata> answer() throws Throwable {
                 synchronized (producerCallbacks) {
                     for (org.apache.kafka.clients.producer.Callback cb : producerCallbacks.getValues()) {
-                        cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0, 0L), null);
+                        cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0,
+                                                           0L, 0L, 0, 0), null);
                     }
                     producerCallbacks.reset();
                 }
