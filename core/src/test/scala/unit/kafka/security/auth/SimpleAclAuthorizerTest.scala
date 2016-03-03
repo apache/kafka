@@ -25,12 +25,14 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
   val simpleAclAuthorizer = new SimpleAclAuthorizer
+  val simpleAclAuthorizer2 = new SimpleAclAuthorizer
   val testPrincipal = Acl.WildCardPrincipal
   val testHostName = InetAddress.getByName("192.168.0.1")
   val session = new Session(testPrincipal, testHostName)
@@ -46,14 +48,18 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     props.put(SimpleAclAuthorizer.SuperUsersProp, superUsers)
 
+    Logger.getLogger(classOf[SimpleAclAuthorizer]).setLevel(Level.DEBUG)
+
     config = KafkaConfig.fromProps(props)
     simpleAclAuthorizer.configure(config.originals)
+    simpleAclAuthorizer2.configure(config.originals)
     resource = new Resource(Topic, UUID.randomUUID().toString)
   }
 
   @After
   override def tearDown(): Unit = {
     simpleAclAuthorizer.close()
+    simpleAclAuthorizer2.close()
   }
 
   @Test
@@ -253,6 +259,40 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     assertEquals(acls, authorizer.getAcls(resource))
     assertEquals(acls1, authorizer.getAcls(resource1))
   }
+
+  @Test
+  def testLocalConcurrentModificationOfResourceAcls() {
+    val commonResource = new Resource(Topic, "test")
+
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val acl1 = new Acl(user1, Allow, WildCardHost, Read)
+
+    val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob")
+    val acl2 = new Acl(user2, Deny, WildCardHost, Read)
+
+    simpleAclAuthorizer.addAcls(Set(acl1), commonResource)
+    simpleAclAuthorizer.addAcls(Set(acl2), commonResource)
+
+    TestUtils.waitAndVerifyAcls(Set(acl1, acl2), simpleAclAuthorizer, commonResource)
+  }
+
+  @Test
+  def testDistributedConcurrentModificationOfResourceAcls() {
+    val commonResource = new Resource(Topic, "test")
+
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val acl1 = new Acl(user1, Allow, WildCardHost, Read)
+
+    val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob")
+    val acl2 = new Acl(user2, Deny, WildCardHost, Read)
+
+    simpleAclAuthorizer.addAcls(Set(acl1), commonResource)
+    simpleAclAuthorizer2.addAcls(Set(acl2), commonResource)
+
+    TestUtils.waitAndVerifyAcls(Set(acl1, acl2), simpleAclAuthorizer, commonResource)
+    TestUtils.waitAndVerifyAcls(Set(acl1, acl2), simpleAclAuthorizer2, commonResource)
+  }
+
 
   private def changeAclAndVerify(originalAcls: Set[Acl], addedAcls: Set[Acl], removedAcls: Set[Acl], resource: Resource = resource): Set[Acl] = {
     var acls = originalAcls

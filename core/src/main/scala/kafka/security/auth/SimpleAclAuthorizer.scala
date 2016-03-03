@@ -164,7 +164,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def addAcls(acls: Set[Acl], resource: Resource) {
     if (acls != null && acls.nonEmpty) {
-      val updatedAcls = getAcls(resource) ++ acls
+      val updatedAcls = getAclsFromZk(resource) ++ acls
       val path = toResourcePath(resource)
 
       if (zkUtils.pathExists(path))
@@ -172,13 +172,14 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       else
         zkUtils.createPersistentPath(path, Json.encode(Acl.toJsonCompatibleMap(updatedAcls)))
 
+      updateCache(resource, updatedAcls)
       updateAclChangedFlag(resource)
     }
   }
 
   override def removeAcls(aclsTobeRemoved: Set[Acl], resource: Resource): Boolean = {
     if (zkUtils.pathExists(toResourcePath(resource))) {
-      val existingAcls = getAcls(resource)
+      val existingAcls = getAclsFromZk(resource)
       val filteredAcls = existingAcls.filter((acl: Acl) => !aclsTobeRemoved.contains(acl))
 
       val aclNeedsRemoval = (existingAcls != filteredAcls)
@@ -189,6 +190,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
         else
           zkUtils.deletePath(toResourcePath(resource))
 
+        updateCache(resource, filteredAcls)
         updateAclChangedFlag(resource)
       }
 
@@ -200,6 +202,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     if (zkUtils.pathExists(toResourcePath(resource))) {
       zkUtils.deletePath(toResourcePath(resource))
       updateAclChangedFlag(resource)
+      updateCache(resource, Set())
       true
     } else false
   }
