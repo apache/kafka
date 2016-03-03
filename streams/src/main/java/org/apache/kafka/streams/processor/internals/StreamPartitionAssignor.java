@@ -229,24 +229,26 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         if (internalTopicManager != null) {
             log.debug("Starting to validate internal source topics in partition assignor.");
 
-            for (Map.Entry<String, Set<TaskId>> entry : internalSourceTopicToTaskIds.entrySet()) {
-                String topic = streamThread.jobId + "-" + entry.getKey();
+            if (internalSourceTopicToTaskIds != null) {
+                for (Map.Entry<String, Set<TaskId>> entry : internalSourceTopicToTaskIds.entrySet()) {
+                    String topic = streamThread.jobId + "-" + entry.getKey();
 
-                // should have size 1 only
-                int numPartitions = -1;
-                for (TaskId task : entry.getValue()) {
-                    numPartitions = task.partition;
+                    // should have size 1 only
+                    int numPartitions = -1;
+                    for (TaskId task : entry.getValue()) {
+                        numPartitions = task.partition;
+                    }
+
+                    internalTopicManager.makeReady(topic, numPartitions);
+
+                    // wait until the topic metadata has been propagated to all brokers
+                    List<PartitionInfo> partitions;
+                    do {
+                        partitions = streamThread.restoreConsumer.partitionsFor(topic);
+                    } while (partitions == null || partitions.size() != numPartitions);
+
+                    metadata.update(topic, partitions);
                 }
-
-                internalTopicManager.makeReady(topic, numPartitions);
-
-                // wait until the topic metadata has been propagated to all brokers
-                List<PartitionInfo> partitions;
-                do {
-                    partitions = streamThread.restoreConsumer.partitionsFor(topic);
-                } while (partitions == null || partitions.size() != numPartitions);
-
-                metadata.update(topic, partitions);
             }
 
             log.info("Completed validating internal source topics in partition assignor.");

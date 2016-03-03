@@ -21,7 +21,7 @@ package org.apache.kafka.streams.state;
 
 import java.nio.ByteBuffer;
 
-public class WindowStoreUtils<K, V> {
+public class WindowStoreUtils {
 
     public static final int TIMESTAMP_SIZE = 8;
     public static final int SEQNUM_SIZE = 4;

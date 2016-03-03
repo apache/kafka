@@ -145,6 +145,9 @@ abstract class WorkerTask implements Runnable {
         } catch (Throwable t) {
             if (!cancelled.get())
                 lifecycleListener.onFailure(id, t);
+
+            if (t instanceof Error)
+                throw t;
         }
     }
 
