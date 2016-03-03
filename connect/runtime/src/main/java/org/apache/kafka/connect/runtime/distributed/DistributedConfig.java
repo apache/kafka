@@ -71,7 +71,7 @@ public class DistributedConfig extends WorkerConfig {
      * <code>offset.storage.topic</code>
      */
     public static final String OFFSET_STORAGE_TOPIC_CONFIG = "offset.storage.topic";
-    private static final String OFFSET_STORAGE_TOPIC_CONFIG_DOC = "kafka topic used by KafkaOffsetBackingStore to store offset";
+    private static final String OFFSET_STORAGE_TOPIC_CONFIG_DOC = "kafka topic to store connector offsets in";
 
     /**
      * <code>config.storage.topic</code>

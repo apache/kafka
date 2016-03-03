@@ -55,8 +55,6 @@ import java.util.concurrent.TimeoutException;
 public class KafkaOffsetBackingStore implements OffsetBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaOffsetBackingStore.class);
 
-    public final static String OFFSET_STORAGE_TOPIC_CONFIG = "offset.storage.topic";
-
     private KafkaBasedLog<byte[], byte[]> offsetLog;
     private HashMap<ByteBuffer, ByteBuffer> data;
 
