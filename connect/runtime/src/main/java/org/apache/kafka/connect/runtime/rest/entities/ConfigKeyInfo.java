@@ -38,13 +38,13 @@ public class ConfigKeyInfo {
     @JsonCreator
     public ConfigKeyInfo(@JsonProperty("name") String name,
                          @JsonProperty("type") String type,
-                         @JsonProperty("defaultValue") Object defaultValue,
+                         @JsonProperty("default_value") Object defaultValue,
                          @JsonProperty("importance") String importance,
                          @JsonProperty("documentation") String documentation,
                          @JsonProperty("group") String group,
-                         @JsonProperty("orderInGroup") int orderInGroup,
+                         @JsonProperty("order_in_group") int orderInGroup,
                          @JsonProperty("width") String width,
-                         @JsonProperty("displayName") String displayName,
+                         @JsonProperty("display_name") String displayName,
                          @JsonProperty("dependents") List<String> dependents) {
         this.name = name;
         this.type = type;
@@ -68,7 +68,7 @@ public class ConfigKeyInfo {
         return type;
     }
 
-    @JsonProperty
+    @JsonProperty("default_value")
     public Object defaultValue() {
         return defaultValue;
     }
@@ -83,7 +83,7 @@ public class ConfigKeyInfo {
         return group;
     }
 
-    @JsonProperty
+    @JsonProperty("order_in_group")
     public int orderInGroup() {
         return orderInGroup;
     }
@@ -98,7 +98,7 @@ public class ConfigKeyInfo {
         return importance;
     }
 
-    @JsonProperty
+    @JsonProperty("display_name")
     public String displayName() {
         return displayName;
     }

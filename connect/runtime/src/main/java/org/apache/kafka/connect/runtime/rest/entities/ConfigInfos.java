@@ -26,15 +26,15 @@ public class ConfigInfos {
 
     private final String name;
     private final int errorCount;
-    private final List<ConfigInfo> values;
+    private final List<ConfigInfo> configs;
 
     @JsonCreator
     public ConfigInfos(@JsonProperty("name") String name,
-                       @JsonProperty("errorCount") int errorCount,
-                       @JsonProperty("values") List<ConfigInfo> values) {
+                       @JsonProperty("error-count") int errorCount,
+                       @JsonProperty("config") List<ConfigInfo> configs) {
         this.name = name;
         this.errorCount = errorCount;
-        this.values = values;
+        this.configs = configs;
     }
 
 
@@ -43,14 +43,14 @@ public class ConfigInfos {
         return name;
     }
 
-    @JsonProperty
+    @JsonProperty("error-count")
     public int errorCount() {
         return errorCount;
     }
 
 
-    @JsonProperty
+    @JsonProperty("config")
     public List<ConfigInfo> values() {
-        return values;
+        return configs;
     }
 }

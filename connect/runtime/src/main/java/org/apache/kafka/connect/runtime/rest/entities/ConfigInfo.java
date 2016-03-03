@@ -20,52 +20,26 @@ package org.apache.kafka.connect.runtime.rest.entities;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.List;
-
 public class ConfigInfo {
 
-    private String name;
-    private Object value;
-    private List<Object> recommendedValues;
-    private List<String> errors;
-    private boolean visible;
+    private ConfigKeyInfo configKey;
+    private ConfigValueInfo configValue;
 
     @JsonCreator
     public ConfigInfo(
-        @JsonProperty("name") String name,
-        @JsonProperty("value") Object value,
-        @JsonProperty("recommendedValues") List<Object> recommendedValues,
-        @JsonProperty("errors") List<String> errors,
-        @JsonProperty("visible") boolean visible) {
-        this.name = name;
-        this.value = value;
-        this.recommendedValues = recommendedValues;
-        this.errors = errors;
-        this.visible = visible;
+        @JsonProperty("config_key") ConfigKeyInfo configKey,
+        @JsonProperty("config_value") ConfigValueInfo configValue) {
+        this.configKey = configKey;
+        this.configValue = configValue;
     }
 
-    @JsonProperty
-    public String name() {
-        return name;
+    @JsonProperty("config_key")
+    public ConfigKeyInfo configKey() {
+        return configKey;
     }
 
-    @JsonProperty
-    public Object value() {
-        return value;
-    }
-
-    @JsonProperty
-    public List<Object> recommendedValues() {
-        return recommendedValues;
-    }
-
-    @JsonProperty
-    public List<String> errors() {
-        return errors;
-    }
-
-    @JsonProperty
-    public boolean visible() {
-        return visible;
+    @JsonProperty("config_value")
+    public ConfigValueInfo configValue() {
+        return configValue;
     }
 }

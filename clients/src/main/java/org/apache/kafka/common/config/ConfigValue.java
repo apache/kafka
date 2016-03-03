@@ -21,7 +21,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 
-public class Config {
+public class ConfigValue {
 
     private String name;
     private Object value;
@@ -29,23 +29,23 @@ public class Config {
     private List<String> errorMessages;
     private boolean visible;
 
-    public Config(String name) {
+    public ConfigValue(String name) {
         this(name, null);
     }
 
-    public Config(String name, Object value) {
+    public ConfigValue(String name, Object value) {
         this(name, value, new LinkedList<Object>());
     }
 
-    public Config(String name, Object value, List<Object> recommendedValues) {
+    public ConfigValue(String name, Object value, List<Object> recommendedValues) {
         this(name, value, recommendedValues, new LinkedList<String>());
     }
 
-    public Config(String name, Object value, List<Object> recommendedValues, List<String> errorMessages) {
+    public ConfigValue(String name, Object value, List<Object> recommendedValues, List<String> errorMessages) {
         this(name, value, recommendedValues, errorMessages, true);
     }
 
-    public Config(String name, Object value, List<Object> recommendedValues, List<String> errorMessages, boolean visible) {
+    public ConfigValue(String name, Object value, List<Object> recommendedValues, List<String> errorMessages, boolean visible) {
         this.name = name;
         this.value = value;
         this.recommendedValues = recommendedValues;
@@ -53,31 +53,31 @@ public class Config {
         this.visible = visible;
     }
 
-    public String getName() {
+    public String name() {
         return name;
     }
 
-    public Object getValue() {
+    public Object value() {
         return value;
     }
 
-    public List<Object> getRecommendedValues() {
+    public List<Object> recommendedValues() {
         return recommendedValues;
     }
 
-    public List<String> getErrorMessages() {
+    public List<String> errorMessages() {
         return errorMessages;
     }
 
-    public boolean isVisible() {
+    public boolean visible() {
         return visible;
     }
 
-    public void setValue(Object value) {
+    public void value(Object value) {
         this.value = value;
     }
 
-    public void setRecommendedValues(List<Object> recommendedValues) {
+    public void recommendedValues(List<Object> recommendedValues) {
         this.recommendedValues = recommendedValues;
     }
 
@@ -85,7 +85,7 @@ public class Config {
         this.errorMessages.add(errorMessage);
     }
 
-    public void setVisible(boolean visible) {
+    public void visible(boolean visible) {
         this.visible = visible;
     }
 
@@ -93,7 +93,7 @@ public class Config {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        Config that = (Config) o;
+        ConfigValue that = (ConfigValue) o;
         return Objects.equals(name, that.name) &&
                Objects.equals(value, that.value) &&
                Objects.equals(recommendedValues, that.recommendedValues) &&

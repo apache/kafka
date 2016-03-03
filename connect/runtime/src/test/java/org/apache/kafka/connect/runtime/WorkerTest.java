@@ -18,9 +18,9 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.Config;
+import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
@@ -499,12 +499,7 @@ public class WorkerTest extends ThreadedTest {
         }
 
         @Override
-        public ConfigDef configuration() {
-            return configDef;
-        }
-
-        @Override
-        public List<Config> validate(ConfigDef configDef, Map<String, String> connectorConfigs) {
+        public List<ConfigValue> validate(Map<String, String> connectorConfigs) {
             return null;
         }
     }

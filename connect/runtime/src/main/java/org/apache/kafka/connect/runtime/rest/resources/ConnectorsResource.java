@@ -23,7 +23,6 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.rest.RestServer;
-import org.apache.kafka.connect.runtime.rest.entities.ConfigDefInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -170,21 +169,11 @@ public class ConnectorsResource {
         completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", null);
     }
 
-    @GET
-    @Path("{connectorType}/config")
-    public ConfigDefInfo getConfigDef(final @PathParam("connectorType") String connectorType) throws Throwable {
-        FutureCallback<ConfigDefInfo> cb = new FutureCallback<>();
-        herder.getConfigDef(connectorType, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connectorType + "/config", "GET", null, new TypeReference<ConfigDefInfo>(){});
-    }
-
     @PUT
     @Path("/{connectorType}/config/validate")
     public ConfigInfos validateConfigs(final @PathParam("connectorType") String connType,
                                        final Map<String, String> connectorConfig) throws Throwable {
-        FutureCallback<ConfigInfos> cb = new FutureCallback<>();
-        herder.validateConfigs(connType, connectorConfig, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connType + "/config/validate", "PUT", null, new TypeReference<ConfigInfos>() {});
+        return herder.validateConfigs(connType, connectorConfig);
     }
 
     // Wait for a FutureCallback to complete. If it succeeds, return the parsed response. If it fails, try to forward the

@@ -19,8 +19,9 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.Config;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
@@ -30,10 +31,10 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.rest.RestServer;
-import org.apache.kafka.connect.runtime.rest.entities.ConfigDefInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
-import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -93,22 +94,6 @@ public class ConnectorsResourceTest {
         TASK_INFOS.add(new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 1), TASK_CONFIGS.get(1)));
     }
 
-    private static ConfigDefInfo CONFIG_DEF_INFO;
-    static {
-        Map<String, ConfigDef.ConfigKey> configKeys = WorkerTestConnector.configDef.configKeys();
-        List<ConfigKeyInfo> configKeyInfos = new LinkedList<>();
-        for (ConfigDef.ConfigKey configKey : configKeys.values()) {
-            ConfigKeyInfo configKeyInfo = new ConfigKeyInfo(
-                configKey.name, configKey.type.name(),
-                configKey.defaultValue, configKey.importance.name(),
-                configKey.documentation, configKey.group,
-                configKey.orderInGroup, configKey.width.name(),
-                configKey.displayName, configKey.dependents);
-            configKeyInfos.add(configKeyInfo);
-        }
-        CONFIG_DEF_INFO = new ConfigDefInfo(WorkerTestConnector.class.getName(), configKeyInfos);
-    }
-
     private static Map<String, String> props = new HashMap<>();
     static {
         props.put("test.string.config", "testString");
@@ -117,15 +102,21 @@ public class ConnectorsResourceTest {
 
     private static ConfigInfos CONFIG_INFOS;
     static {
-        List<ConfigInfo> values = new LinkedList<>();
-        ConfigInfo configInfo = new ConfigInfo("test.string.config", "testString",
-                                               Collections.<Object>emptyList(), Collections.<String>emptyList(), true);
-        values.add(configInfo);
+        List<ConfigInfo> configs = new LinkedList<>();
 
-        configInfo = new ConfigInfo("test.int.config", "10", Collections.<Object>emptyList(), Collections.<String>emptyList(), true);
-        values.add(configInfo);
-        CONFIG_INFOS = new ConfigInfos("test", 0, values);
+        ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", "", "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", new LinkedList<String>());
+        ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", Collections.<Object>emptyList(), Collections.<String>emptyList(), true);
+        ConfigInfo configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
+        configs.add(configInfo);
+
+        configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", "", "MEDIUM", "Test configuration for integer type.", null, -1, "NONE", "test.int.config", new LinkedList<String>());
+        configValueInfo = new ConfigValueInfo("test.int.config", "10", Collections.<Object>emptyList(), Collections.<String>emptyList(), true);
+        configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
+        configs.add(configInfo);
+
+        CONFIG_INFOS = new ConfigInfos("test", 0, configs);
     }
+
 
     @Mock
     private Herder herder;
@@ -215,6 +206,8 @@ public class ConnectorsResourceTest {
         connectorsResource.createConnector(body);
 
         PowerMock.verifyAll();
+
+
     }
 
     @Test(expected = AlreadyExistsException.class)
@@ -304,29 +297,19 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testGetConfigDefs() throws Throwable {
-        final Capture<Callback<ConfigDefInfo>> cb = Capture.newInstance();
-        herder.getConfigDef(EasyMock.eq(WorkerTestConnector.class.getName()), EasyMock.capture(cb));
-        expectAndCallbackResult(cb, CONFIG_DEF_INFO);
-
-        PowerMock.replayAll();
-
-        ConfigDefInfo configDefInfo = connectorsResource.getConfigDef(WorkerTestConnector.class.getName());
-        assertEquals(CONFIG_DEF_INFO, configDefInfo);
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
     public void testValidateConfig() throws Throwable {
-        final Capture<Callback<ConfigInfos>> cb = Capture.newInstance();
-        herder.validateConfigs(EasyMock.eq(WorkerTestConnector.class.getName()), EasyMock.eq(props), EasyMock.capture(cb));
-        expectAndCallbackResult(cb, CONFIG_INFOS);
+        herder.validateConfigs(EasyMock.eq(WorkerTestConnector.class.getName()), EasyMock.eq(props));
+
+        PowerMock.expectLastCall().andAnswer(new IAnswer<ConfigInfos>() {
+            @Override
+            public ConfigInfos answer() throws Throwable {
+               return CONFIG_INFOS;
+            }
+        });
 
         PowerMock.replayAll();
 
-        ConfigInfos
-            configInfos = connectorsResource.validateConfigs(WorkerTestConnector.class.getName(), props);
+        ConfigInfos configInfos = connectorsResource.validateConfigs(WorkerTestConnector.class.getName(), props);
         assertEquals(CONFIG_INFOS, configInfos);
 
         PowerMock.verifyAll();
@@ -441,9 +424,11 @@ public class ConnectorsResourceTest {
         public static final String TEST_STRING_CONFIG = "test.string.config";
         public static final String TEST_INT_CONFIG = "test.int.config";
 
-        private static ConfigDef configDef = new ConfigDef()
-            .define(TEST_STRING_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Test configuration for string type.")
-            .define(TEST_INT_CONFIG, ConfigDef.Type.INT, ConfigDef.Importance.MEDIUM, "Test configuration for integer type.");
+        static {
+            configDef
+                .define(TEST_STRING_CONFIG, Type.STRING, Importance.HIGH, "Test configuration for string type.")
+                .define(TEST_INT_CONFIG, Type.INT, Importance.MEDIUM, "Test configuration for integer type.");
+        }
 
         @Override
         public String version() {
@@ -471,26 +456,21 @@ public class ConnectorsResourceTest {
         }
 
         @Override
-        public ConfigDef configuration() {
-            return configDef;
-        }
-
-        @Override
-        public List<Config> validate(ConfigDef configDef, Map<String, String> connectorConfigs) {
-            List<Config> values = new LinkedList<>();
+        public List<ConfigValue> validate(Map<String, String> connectorConfigs) {
+            List<ConfigValue> values = new LinkedList<>();
 
             String stringConfig = connectorConfigs.get(TEST_STRING_CONFIG);
-            Config config = new Config(TEST_STRING_CONFIG, stringConfig, Collections.<Object>emptyList());
-            values.add(config);
+            ConfigValue configValue = new ConfigValue(TEST_STRING_CONFIG, stringConfig, Collections.<Object>emptyList());
+            values.add(configValue);
 
             String intConfig = connectorConfigs.get(TEST_INT_CONFIG);
-            config = new Config(TEST_INT_CONFIG, intConfig, Collections.<Object>emptyList());
+            configValue = new ConfigValue(TEST_INT_CONFIG, intConfig, Collections.<Object>emptyList());
             try {
                 Integer.parseInt(intConfig);
             } catch (NumberFormatException e) {
-                config.addErrorMessage("Not a valid integer.");
+                configValue.addErrorMessage("Not a valid integer.");
             } finally {
-                values.add(config);
+                values.add(configValue);
             }
             return values;
         }

@@ -24,15 +24,13 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ConfigDefTest {
@@ -174,15 +172,16 @@ public class ConfigDefTest {
 
     @Test
     public void testValidate() {
-        Map<String, Config> expected = new HashMap<>();
+        Map<String, ConfigValue> expected = new HashMap<>();
         String errorMessageB = "Missing required configuration \"b\" which has no default value.";
         String errorMessageC = "Missing required configuration \"c\" which has no default value.";
         String errorMessageD = "Invalid value for configuration d";
 
-        Config configA = new Config("a", 1, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
-        Config configB = new Config("b", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageB, errorMessageB));
-        Config configC = new Config("c", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageC));
-        Config configD = new Config("d", 10, Arrays.<Object>asList(1, 2, 3), Arrays.asList(errorMessageD));
+        ConfigValue configA = new ConfigValue("a", 1, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
+        ConfigValue configB = new ConfigValue("b", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageB, errorMessageB));
+        ConfigValue configC = new ConfigValue("c", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageC));
+        ConfigValue configD = new ConfigValue("d", 10, Arrays.<Object>asList(1, 2, 3), Arrays.asList(errorMessageD));
+
         expected.put("a", configA);
         expected.put("b", configB);
         expected.put("c", configC);
@@ -198,51 +197,38 @@ public class ConfigDefTest {
         props.put("a", "1");
         props.put("d", "10");
 
-        List<Config> configs = def.validate(props);
-        for (Config config : configs) {
-            String name = config.getName();
-            Config expectedConfig = expected.get(name);
-            assertTrue(compareConfigValues(expectedConfig, config));
+        List<ConfigValue> configs = def.validate(props);
+        for (ConfigValue config : configs) {
+            String name = config.name();
+            ConfigValue expectedConfig = expected.get(name);
+            verifyConfigValues(expectedConfig, config);
         }
     }
 
-    private boolean compareConfigValues(Config a, Config b) {
-        String aName = a.getName();
-        String bName = b.getName();
-        if (!aName.equals(bName)) {
-            return false;
-        }
-        if ((a.getValue() == null && b.getValue() != null) || (a.getValue() != null && b.getValue() == null))  {
-            return false;
-        }
-        if (a.getValue() != null && b.getValue() != null) {
-            int aValue = (int) a.getValue();
-            int bValue = (int) b.getValue();
-            if (aValue != bValue) {
-                return false;
-            }
+    private void verifyConfigValues(ConfigValue a, ConfigValue b) {
+        assertEquals(a.name(), b.name());
+
+        if (a.value() != null && b.value() != null) {
+            int aValue = (int) a.value();
+            int bValue = (int) b.value();
+            assertEquals(aValue, bValue);
         }
 
-        List<Object> aRecommendedValues = a.getRecommendedValues();
-        List<Object> bRecommendedValues = b.getRecommendedValues();
-        if (aRecommendedValues.size() != bRecommendedValues.size()) {
-            return false;
-        }
+        List<Object> aRecommendedValues = a.recommendedValues();
+        List<Object> bRecommendedValues = b.recommendedValues();
+        assertEquals(aRecommendedValues.size(), bRecommendedValues.size());
 
-        List<String> aErrorMessages = a.getErrorMessages();
-        List<String> bErrorMessages = b.getErrorMessages();
-        if (aErrorMessages.size() != bErrorMessages.size()) {
-            return false;
-        }
-        return true;
+        List<String> aErrorMessages = a.errorMessages();
+        List<String> bErrorMessages = b.errorMessages();
+        assertEquals(aErrorMessages.size(), bErrorMessages.size());
     }
 
     private static class IntegerRecommnder implements ConfigDef.Recommender {
 
         @Override
-        public Set<Object> validValues(String name, String parentName, Object parentValue) {
-            Set<Object> values = new HashSet<>();
-            if (parentValue == null) {
+        public List<Object> validValues(String name, List<String> ancestors, Map<String, String> connectorConfigs) {
+            List<Object> values = new LinkedList<>();
+            if (ancestors.isEmpty()) {
                 values.addAll(Arrays.asList(1, 2, 3));
             } else {
                 values.addAll(Arrays.asList(4, 5));
@@ -251,7 +237,7 @@ public class ConfigDefTest {
         }
 
         @Override
-        public boolean visible(String name, String parentName, Object parentValue) {
+        public boolean visible(String name, List<String> ancestors, Map<String, String> connectorConfigs) {
             return true;
         }
     }

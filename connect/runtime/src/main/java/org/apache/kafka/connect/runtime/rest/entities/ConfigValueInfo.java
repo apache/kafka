@@ -22,25 +22,49 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
 
-public class ConfigDefInfo {
-    private final String connectorType;
-    private final List<ConfigKeyInfo> configs;
+public class ConfigValueInfo {
+    private String name;
+    private Object value;
+    private List<Object> recommendedValues;
+    private List<String> errors;
+    private boolean visible;
 
     @JsonCreator
-    public ConfigDefInfo(
-        @JsonProperty("connectorType") String connectorType,
-        @JsonProperty("configs") List<ConfigKeyInfo> configs) {
-        this.connectorType = connectorType;
-        this.configs = configs;
+    public ConfigValueInfo(
+        @JsonProperty("name") String name,
+        @JsonProperty("value") Object value,
+        @JsonProperty("recommended_values") List<Object> recommendedValues,
+        @JsonProperty("errors") List<String> errors,
+        @JsonProperty("visible") boolean visible) {
+        this.name = name;
+        this.value = value;
+        this.recommendedValues = recommendedValues;
+        this.errors = errors;
+        this.visible = visible;
     }
 
     @JsonProperty
-    public String connectorType() {
-        return connectorType;
+    public String name() {
+        return name;
     }
 
     @JsonProperty
-    public List<ConfigKeyInfo> configs() {
-        return configs;
+    public Object value() {
+        return value;
+    }
+
+    @JsonProperty("recommended_values")
+    public List<Object> recommendedValues() {
+        return recommendedValues;
+    }
+
+    @JsonProperty
+    public List<String> errors() {
+        return errors;
+    }
+
+    @JsonProperty
+    public boolean visible() {
+        return visible;
     }
 }

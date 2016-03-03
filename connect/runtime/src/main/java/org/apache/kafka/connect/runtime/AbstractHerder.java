@@ -16,7 +16,14 @@
  **/
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.config.ConfigDef.ConfigKey;
+import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -27,7 +34,10 @@ import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Abstract Herder implementation which handles connector/task lifecycle tracking. Extensions
@@ -52,10 +62,14 @@ import java.util.List;
  */
 public abstract class AbstractHerder implements Herder, TaskStatus.Listener, ConnectorStatus.Listener {
 
+    protected final Worker worker;
     protected final StatusBackingStore statusBackingStore;
     private final String workerId;
 
-    public AbstractHerder(StatusBackingStore statusBackingStore, String workerId) {
+    protected Map<String, Connector> tempConnectors = new HashMap<>();
+
+    public AbstractHerder(Worker worker, StatusBackingStore statusBackingStore, String workerId) {
+        this.worker = worker;
         this.statusBackingStore = statusBackingStore;
         this.workerId = workerId;
     }
@@ -143,6 +157,56 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 status.workerId(), status.trace());
     }
 
+
+    @Override
+    public ConfigInfos validateConfigs(String connType, Map<String, String> connectorConfig) {
+        ConnectorConfig connConfig = new ConnectorConfig(connectorConfig);
+        String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
+        Connector connector = getConnector(connType, connName);
+
+        Map<String, ConfigKey> configKeys = connector.configDef().configKeys();
+
+        List<ConfigValue> configValues = connector.validate(connectorConfig);
+        Map<String, ConfigValue> configValueMap = new HashMap<>();
+        for (ConfigValue configValue: configValues) {
+            configValueMap.put(configValue.name(), configValue);
+        }
+
+        int errorCount = 0;
+        List<ConfigInfo> configInfoList = new LinkedList<>();
+        for (String configName: configKeys.keySet()) {
+            ConfigKeyInfo configKeyInfo = convertConfigKey(configKeys.get(configName));
+            ConfigValueInfo configValueInfo = null;
+            if (configValueMap.containsKey(configName)) {
+                ConfigValue configValue = configValueMap.get(configName);
+                configValueInfo = convertConfigValue(configValue);
+                errorCount += configValue.errorMessages().size();
+            }
+            configInfoList.add(new ConfigInfo(configKeyInfo, configValueInfo));
+        }
+
+        return new ConfigInfos(connName, errorCount, configInfoList);
+    }
+
+    private ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
+        String name = configKey.name;
+        String type = configKey.type.name();
+        Object defaultValue = configKey.defaultValue;
+        String importance = configKey.importance.name();
+        String documentation = configKey.documentation;
+        String group = configKey.group;
+        int orderInGroup = configKey.orderInGroup;
+        String width = configKey.width.name();
+        String displayName = configKey.displayName;
+        List<String> dependents = configKey.dependents;
+        return new ConfigKeyInfo(name, type, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents);
+    }
+
+    private ConfigValueInfo convertConfigValue(ConfigValue configValue) {
+        return new ConfigValueInfo(configValue.name(), configValue.value(), configValue.recommendedValues(), configValue.errorMessages(), configValue.visible());
+    }
+
+
     private String trace(Throwable t) {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         t.printStackTrace(new PrintStream(output));
@@ -150,6 +214,16 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             return output.toString("UTF-8");
         } catch (UnsupportedEncodingException e) {
             return null;
+        }
+    }
+
+    private Connector getConnector(String connType, String connName) {
+        if (tempConnectors.containsKey(connName)) {
+            return tempConnectors.get(connName);
+        } else {
+            Connector connector = worker.getConnector(connType);
+            tempConnectors.put(connName, connector);
+            return connector;
         }
     }
 

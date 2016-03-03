@@ -143,7 +143,7 @@ public class ConfigDef {
         if (configKeys.containsKey(name))
             throw new ConfigException("Configuration " + name + " is defined twice.");
         Object parsedDefault = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
-        configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, importance, documentation));
+        configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, importance, documentation, null, -1, Width.NONE, name, null, null));
         return this;
     }
 
@@ -228,11 +228,12 @@ public class ConfigDef {
      * @return List of Config, each Config contains the updated configuration information given
      * the current configuration values.
      */
-    public List<Config> validate(Map<String, String> connectorConfigs) {
+    public List<ConfigValue> validate(Map<String, String> connectorConfigs) {
         List<String> configsWithNoParent = getConfigsWithNoParent();
-        Map<String, Config> configValues = new HashMap<>();
+        Map<String, ConfigValue> configValues = new HashMap<>();
         for (String name: configsWithNoParent) {
-            validate(name, connectorConfigs, configValues, name, null);
+            List<String> ancestors = new LinkedList<>();
+            validate(name, ancestors, connectorConfigs, configValues);
         }
         return new LinkedList<>(configValues.values());
     }
@@ -242,30 +243,23 @@ public class ConfigDef {
         Set<String> configs = configKeys.keySet();
         Set<String> configsWithParent = new HashSet<>();
 
-        for (ConfigDef.ConfigKey configKey: configKeys.values()) {
+        for (ConfigKey configKey: configKeys.values()) {
             List<String> dependents = configKey.dependents;
-            for (String name: dependents) {
-                configsWithParent.add(name);
-            }
+            configsWithParent.addAll(dependents);
         }
 
-        List<String> configsWithNoParent = new LinkedList<>();
-        for (String name: configs) {
-            if (!configsWithParent.contains(name)) {
-                configsWithNoParent.add(name);
-            }
-        }
-        return configsWithNoParent;
+        configs.removeAll(configsWithParent);
+        return new LinkedList<>(configs);
     }
 
-    private void validate(String name, Map<String, String> connectorConfigs, Map<String, Config> configs, String parentName, Object parentValue) {
+    private void validate(String name, List<String> ancestors, Map<String, String> connectorConfigs, Map<String, ConfigValue> configs) {
         ConfigKey key = configKeys.get(name);
 
-        Config config;
+        ConfigValue config;
         if (configs.containsKey(name)) {
             config = configs.get(name);
         } else {
-            config = new Config(name);
+            config = new ConfigValue(name);
         }
 
         Object value;
@@ -281,12 +275,12 @@ public class ConfigDef {
             key.validator.ensureValid(key.name, value);
         }
 
-        config.setValue(value);
+        config.value(value);
 
-        Set<Object> recommendedValues;
+        List<Object> recommendedValues;
         if (key.recommender != null) {
-            recommendedValues = key.recommender.validValues(name, parentName, parentValue);
-            List<Object> originalRecommendedValues = config.getRecommendedValues();
+            recommendedValues = key.recommender.validValues(name, ancestors, connectorConfigs);
+            List<Object> originalRecommendedValues = config.recommendedValues();
 
             if (!originalRecommendedValues.isEmpty()) {
                 Set<Object> originalRecommendedValueSet = new HashSet<>(originalRecommendedValues);
@@ -298,17 +292,18 @@ public class ConfigDef {
                     }
                 }
             }
-            config.setRecommendedValues(new LinkedList<>(recommendedValues));
+            config.recommendedValues(recommendedValues);
             if (value != null && !recommendedValues.contains(value)) {
                 config.addErrorMessage("Invalid value for configuration " + key.name);
             }
 
-            config.setVisible(key.recommender.visible(name, parentName, parentValue));
+            config.visible(key.recommender.visible(name, ancestors, connectorConfigs));
         }
 
         configs.put(name, config);
+        ancestors.add(name);
         for (String dependent: key.dependents) {
-            validate(dependent, connectorConfigs, configs, name, value);
+            validate(dependent, ancestors, connectorConfigs, configs);
         }
     }
 
@@ -428,11 +423,11 @@ public class ConfigDef {
     }
 
     /**
-     *
+     * Recommender interface
      */
     public interface Recommender {
-        Set<Object> validValues(String name, String parentName, Object parentValue);
-        boolean visible(String name, String parentName, Object parentValue);
+        List<Object> validValues(String name, List<String> ancestors, Map<String, String> connectorConfigs);
+        boolean visible(String name, List<String> ancestors, Map<String, String> connectorConfigs);
     }
 
     /**
@@ -526,10 +521,6 @@ public class ConfigDef {
         public final String displayName;
         public final List<String> dependents;
         public final Recommender recommender;
-
-        public ConfigKey(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation) {
-            this(name, type, defaultValue, validator, importance, documentation, null, -1, Width.NONE, name, null, null);
-        }
 
         public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
                          Importance importance, String documentation, String group,
