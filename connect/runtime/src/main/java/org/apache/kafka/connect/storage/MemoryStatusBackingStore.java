@@ -18,6 +18,7 @@ package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.connect.runtime.ConnectorStatus;
 import org.apache.kafka.connect.runtime.TaskStatus;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.Table;
 
@@ -37,7 +38,7 @@ public class MemoryStatusBackingStore implements StatusBackingStore {
     }
 
     @Override
-    public void configure(Map<String, ?> configs) {
+    public void configure(WorkerConfig config) {
 
     }
 
