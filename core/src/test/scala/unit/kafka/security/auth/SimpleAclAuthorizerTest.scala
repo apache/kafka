@@ -48,8 +48,6 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     props.put(SimpleAclAuthorizer.SuperUsersProp, superUsers)
 
-    Logger.getLogger(classOf[SimpleAclAuthorizer]).setLevel(Level.DEBUG)
-
     config = KafkaConfig.fromProps(props)
     simpleAclAuthorizer.configure(config.originals)
     simpleAclAuthorizer2.configure(config.originals)
@@ -286,13 +284,25 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob")
     val acl2 = new Acl(user2, Deny, WildCardHost, Read)
 
+    // Add on each instance
     simpleAclAuthorizer.addAcls(Set(acl1), commonResource)
     simpleAclAuthorizer2.addAcls(Set(acl2), commonResource)
 
     TestUtils.waitAndVerifyAcls(Set(acl1, acl2), simpleAclAuthorizer, commonResource)
     TestUtils.waitAndVerifyAcls(Set(acl1, acl2), simpleAclAuthorizer2, commonResource)
-  }
 
+    val user3 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "joe")
+    val acl3 = new Acl(user3, Deny, WildCardHost, Read)
+
+    // Add on one instance and delete on another
+    simpleAclAuthorizer.addAcls(Set(acl3), commonResource)
+    val deleted = simpleAclAuthorizer2.removeAcls(Set(acl3), commonResource)
+
+    assertTrue("The authorizer should see a value that needs to be deleted", deleted)
+
+    TestUtils.waitAndVerifyAcls(Set(acl1, acl2), simpleAclAuthorizer, commonResource)
+    TestUtils.waitAndVerifyAcls(Set(acl1, acl2), simpleAclAuthorizer2, commonResource)
+  }
 
   private def changeAclAndVerify(originalAcls: Set[Acl], addedAcls: Set[Acl], removedAcls: Set[Acl], resource: Resource = resource): Set[Acl] = {
     var acls = originalAcls
