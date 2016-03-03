@@ -28,6 +28,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
@@ -64,10 +65,19 @@ import static org.junit.Assert.fail;
 public class KafkaConfigStorageTest {
     private static final String TOPIC = "connect-configs";
     private static final Map<String, String> DEFAULT_CONFIG_STORAGE_PROPS = new HashMap<>();
+    private static final DistributedConfig DEFAULT_DISTRIBUTED_CONFIG;
 
     static {
-        DEFAULT_CONFIG_STORAGE_PROPS.put(KafkaConfigStorage.CONFIG_TOPIC_CONFIG, TOPIC);
+        DEFAULT_CONFIG_STORAGE_PROPS.put(DistributedConfig.CONFIG_TOPIC_CONFIG, TOPIC);
+        DEFAULT_CONFIG_STORAGE_PROPS.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offsets");
+        DEFAULT_CONFIG_STORAGE_PROPS.put(DistributedConfig.GROUP_ID_CONFIG, "connect");
+        DEFAULT_CONFIG_STORAGE_PROPS.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
         DEFAULT_CONFIG_STORAGE_PROPS.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "broker1:9092,broker2:9093");
+        DEFAULT_CONFIG_STORAGE_PROPS.put(DistributedConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        DEFAULT_CONFIG_STORAGE_PROPS.put(DistributedConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        DEFAULT_CONFIG_STORAGE_PROPS.put(DistributedConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        DEFAULT_CONFIG_STORAGE_PROPS.put(DistributedConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        DEFAULT_DISTRIBUTED_CONFIG = new DistributedConfig(DEFAULT_CONFIG_STORAGE_PROPS);
     }
 
     private static final List<String> CONNECTOR_IDS = Arrays.asList("connector1", "connector2");
@@ -139,7 +149,7 @@ public class KafkaConfigStorageTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_CONFIG_STORAGE_PROPS);
+        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
         assertEquals(TOPIC, capturedTopic.getValue());
         assertEquals("org.apache.kafka.common.serialization.StringSerializer", capturedProducerProps.getValue().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
         assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
@@ -179,7 +189,7 @@ public class KafkaConfigStorageTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_CONFIG_STORAGE_PROPS);
+        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
 
         // Null before writing
@@ -247,7 +257,7 @@ public class KafkaConfigStorageTest {
         PowerMock.replayAll();
 
 
-        configStorage.configure(DEFAULT_CONFIG_STORAGE_PROPS);
+        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
 
         // Bootstrap as if we had already added the connector, but no tasks had been added yet
@@ -314,7 +324,7 @@ public class KafkaConfigStorageTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_CONFIG_STORAGE_PROPS);
+        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
 
         // Should see a single connector and its config should be the last one seen anywhere in the log
@@ -383,7 +393,7 @@ public class KafkaConfigStorageTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_CONFIG_STORAGE_PROPS);
+        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
         // After reading the log, it should have been in an inconsistent state
         ClusterConfigState configState = configStorage.snapshot();

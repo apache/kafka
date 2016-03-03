@@ -20,6 +20,7 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -33,6 +34,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
@@ -147,8 +149,6 @@ import java.util.concurrent.TimeoutException;
 public class KafkaConfigStorage {
     private static final Logger log = LoggerFactory.getLogger(KafkaConfigStorage.class);
 
-    public static final String CONFIG_TOPIC_CONFIG = "config.storage.topic";
-
     public static final String CONNECTOR_PREFIX = "connector-";
 
     public static String CONNECTOR_KEY(String connectorName) {
@@ -216,19 +216,19 @@ public class KafkaConfigStorage {
         offset = -1;
     }
 
-    public void configure(Map<String, ?> configs) {
-        if (configs.get(CONFIG_TOPIC_CONFIG) == null)
-            throw new ConnectException("Must specify topic for connector configuration.");
-        topic = (String) configs.get(CONFIG_TOPIC_CONFIG);
+    public void configure(DistributedConfig config) {
+        topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
+        if (topic.equals(""))
+            throw new ConfigException("Must specify topic for connector configuration.");
 
         Map<String, Object> producerProps = new HashMap<>();
-        producerProps.putAll(configs);
+        producerProps.putAll(config.originals());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
 
         Map<String, Object> consumerProps = new HashMap<>();
-        consumerProps.putAll(configs);
+        consumerProps.putAll(config.originals());
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 

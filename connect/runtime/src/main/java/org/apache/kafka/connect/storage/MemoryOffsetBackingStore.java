@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +47,7 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     }
 
     @Override
-    public void configure(Map<String, ?> props) {
+    public void configure(WorkerConfig config) {
     }
 
     @Override

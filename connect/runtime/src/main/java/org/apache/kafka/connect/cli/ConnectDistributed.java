@@ -67,12 +67,12 @@ public class ConnectDistributed {
         String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 
         KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore();
-        offsetBackingStore.configure(config.originals());
+        offsetBackingStore.configure(config);
 
         Worker worker = new Worker(workerId, time, config, offsetBackingStore);
 
         StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, worker.getInternalValueConverter());
-        statusBackingStore.configure(config.originals());
+        statusBackingStore.configure(config);
 
         DistributedHerder herder = new DistributedHerder(config, time, worker, statusBackingStore, advertisedUrl.toString());
         final Connect connect = new Connect(worker, herder, rest);

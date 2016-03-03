@@ -16,15 +16,15 @@
  **/
 package org.apache.kafka.connect.storage;
 
-import org.apache.kafka.common.Configurable;
 import org.apache.kafka.connect.runtime.ConnectorStatus;
 import org.apache.kafka.connect.runtime.TaskStatus;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Collection;
 import java.util.Set;
 
-public interface StatusBackingStore extends Configurable {
+public interface StatusBackingStore {
 
     /**
      * Start dependent services (if needed)
@@ -97,4 +97,10 @@ public interface StatusBackingStore extends Configurable {
      * Flush any pending writes
      */
     void flush();
+
+    /**
+     * Configure class with the given key-value pairs
+     * @param config config for StatusBackingStore
+     */
+    public void configure(WorkerConfig config);
 }
