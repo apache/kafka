@@ -77,13 +77,13 @@ public class DistributedConfig extends WorkerConfig {
      * <code>config.storage.topic</code>
      */
     public static final String CONFIG_TOPIC_CONFIG = "config.storage.topic";
-    private static final String CONFIG_TOPIC_CONFIG_DOC = "kafka topic used by KafkaConfigStorage to store configs";
+    private static final String CONFIG_TOPIC_CONFIG_DOC = "kafka topic to store configs";
 
     /**
      * <code>status.storage.topic</code>
      */
     public static final String STATUS_STORAGE_TOPIC_CONFIG = "status.storage.topic";
-    public static final String STATUS_STORAGE_TOPIC_CONFIG_DOC = "kafka topic used by KafkaStatusBackingStore";
+    public static final String STATUS_STORAGE_TOPIC_CONFIG_DOC = "kafka topic to track connector and task status";
 
     static {
         CONFIG = baseConfigDef()
