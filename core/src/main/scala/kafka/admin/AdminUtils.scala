@@ -123,7 +123,7 @@ object AdminUtils extends Logging {
       if (brokerRackMap.size < brokerList.size) {
         throw new AdminOperationException("Not all brokers have rack information for replica rack aware assignment");
       }
-      return assignReplicasToBrokersRackAware(brokerList, nPartitions, replicationFactor, brokerRackMap, fixedStartIndex,
+      return assignReplicasToBrokersRackAware(nPartitions, replicationFactor, brokerRackMap, fixedStartIndex,
         startPartitionId)
     }
     val ret = new mutable.HashMap[Int, List[Int]]()
@@ -144,14 +144,13 @@ object AdminUtils extends Logging {
     ret.toMap
   }
 
-  private def assignReplicasToBrokersRackAware(brokerList: Seq[Int],
-                                               nPartitions: Int,
+  private def assignReplicasToBrokersRackAware(nPartitions: Int,
                                                replicationFactor: Int,
                                                brokerRackMap: Map[Int, String],
                                                fixedStartIndex: Int = -1,
                                                startPartitionId: Int = -1): Map[Int, Seq[Int]] = {
     val numRacks = brokerRackMap.values.toSet.size
-    val arrangedBrokerList = interlaceBrokersByRack(brokerRackMap)
+    val arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap)
     val ret = new mutable.HashMap[Int, List[Int]]()
     val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(arrangedBrokerList.size)
     var currentPartitionId = if (startPartitionId >= 0) startPartitionId else 0
@@ -199,7 +198,7 @@ object AdminUtils extends Logging {
     * the even distribution of leader count and replica count on each broker, while
     * making sure replicas are distributed to all racks.
     */
-  private[admin] def interlaceBrokersByRack(brokerRackMap: Map[Int, String]): Seq[Int] = {
+  private[admin] def getRackAlternatedBrokerList(brokerRackMap: Map[Int, String]): Seq[Int] = {
     val reverseMap = getInverseMap(brokerRackMap)
     val brokerListsByRack = reverseMap.map { case(rack, list) => (rack, reverseMap(rack).toIterator) }
     val racks = brokerListsByRack.keys.toArray.sorted

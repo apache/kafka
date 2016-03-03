@@ -29,11 +29,11 @@ import scala.collection.{mutable, Map, Seq}
 class AdminRackAwareTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @Test
-  def testInterlaceBrokersByRack(): Unit = {
+  def testGetRackAlternatedBrokerList(): Unit = {
     val rackMap = Map(0 -> "rack1", 1 -> "rack3", 2 -> "rack3", 3 -> "rack2", 4 -> "rack2", 5 -> "rack1")
-    val newList = AdminUtils.interlaceBrokersByRack(rackMap)
+    val newList = AdminUtils.getRackAlternatedBrokerList(rackMap)
     assertEquals(List(0, 3, 1, 5, 4, 2), newList)
-    val anotherList = AdminUtils.interlaceBrokersByRack(rackMap - 5)
+    val anotherList = AdminUtils.getRackAlternatedBrokerList(rackMap - 5)
     assertEquals(List(0, 3, 1, 4, 2), anotherList)
     val brokerList = List(0, 1, 2, 3, 4, 5)
     val assignment: scala.collection.Map[Int, Seq[Int]] = AdminUtils.assignReplicasToBrokers(brokerList, 7, 3, 0, 0, rackMap)
