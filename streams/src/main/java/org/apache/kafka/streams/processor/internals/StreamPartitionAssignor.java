@@ -188,6 +188,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         // ensure the co-partitioning topics within the group have the same number of partitions,
         // and enforce the number of partitions for those internal topics.
+        internalSourceTopicToTaskIds = new HashMap<>();
         Map<Integer, Set<String>> sourceTopicGroups = new HashMap<>();
         Map<Integer, Set<String>> internalSourceTopicGroups = new HashMap<>();
         for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
@@ -229,37 +230,35 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         if (internalTopicManager != null) {
             log.debug("Starting to validate internal source topics in partition assignor.");
 
-            if (internalSourceTopicToTaskIds != null) {
-                for (Map.Entry<String, Set<TaskId>> entry : internalSourceTopicToTaskIds.entrySet()) {
-                    String topic = streamThread.jobId + "-" + entry.getKey();
+            for (Map.Entry<String, Set<TaskId>> entry : internalSourceTopicToTaskIds.entrySet()) {
+                String topic = streamThread.jobId + "-" + entry.getKey();
 
-                    // should have size 1 only
-                    int numPartitions = -1;
-                    for (TaskId task : entry.getValue()) {
-                        numPartitions = task.partition;
-                    }
-
-                    internalTopicManager.makeReady(topic, numPartitions);
-
-                    // wait until the topic metadata has been propagated to all brokers
-                    List<PartitionInfo> partitions;
-                    do {
-                        partitions = streamThread.restoreConsumer.partitionsFor(topic);
-                    } while (partitions == null || partitions.size() != numPartitions);
-
-                    metadata.update(topic, partitions);
+                // should have size 1 only
+                int numPartitions = -1;
+                for (TaskId task : entry.getValue()) {
+                    numPartitions = task.partition;
                 }
+
+                internalTopicManager.makeReady(topic, numPartitions);
+
+                // wait until the topic metadata has been propagated to all brokers
+                List<PartitionInfo> partitions;
+                do {
+                    partitions = streamThread.restoreConsumer.partitionsFor(topic);
+                } while (partitions == null || partitions.size() != numPartitions);
+
+                metadata.update(topic, partitions);
             }
 
             log.info("Completed validating internal source topics in partition assignor.");
         }
+        internalSourceTopicToTaskIds.clear();
 
         // get the tasks as partition groups from the partition grouper
         Map<TaskId, Set<TopicPartition>> partitionsForTask = streamThread.partitionGrouper.partitionGroups(sourceTopicGroups, metadata);
 
-        // add tasks to state topic subscribers
+        // add tasks to state change log topic subscribers
         stateChangelogTopicToTaskIds = new HashMap<>();
-        internalSourceTopicToTaskIds = new HashMap<>();
         for (TaskId task : partitionsForTask.keySet()) {
             for (String topicName : topicGroups.get(task.topicGroupId).stateChangelogTopics) {
                 Set<TaskId> tasks = stateChangelogTopicToTaskIds.get(topicName);
