@@ -20,7 +20,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 /**
- * A byte buffer backed input outputStream
+ * A byte buffer backed input inputStream
  */
 public class ByteBufferInputStream extends InputStream {
 

@@ -22,23 +22,22 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.utils.CoreUtils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.protocol.types.{ArrayOf, Struct, Schema, Field}
+import org.apache.kafka.common.protocol.types.{ArrayOf, Field, Schema, Struct}
 import org.apache.kafka.common.protocol.types.Type.STRING
 import org.apache.kafka.common.protocol.types.Type.INT32
 import org.apache.kafka.common.protocol.types.Type.INT64
 import org.apache.kafka.common.protocol.types.Type.BYTES
-import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.Time
-
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import kafka.utils._
 import kafka.common._
 import kafka.message._
 import kafka.log.FileMessageSet
 import kafka.metrics.KafkaMetricsGroup
 import kafka.common.TopicAndPartition
-import kafka.tools.MessageFormatter
+import kafka.common.MessageFormatter
 import kafka.server.ReplicaManager
 
 import scala.collection._
@@ -968,37 +967,46 @@ object GroupMetadataManager {
   // Formatter for use with tools such as console consumer: Consumer should also set exclude.internal.topics to false.
   // (specify --formatter "kafka.coordinator.GroupMetadataManager\$OffsetsMessageFormatter" when consuming __consumer_offsets)
   class OffsetsMessageFormatter extends MessageFormatter {
-    def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream) {
-      val formattedKey = if (key == null) "NULL" else GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))
-      // We ignore the timestamp of the message because GroupMetadataMessage has its own timestamp.
-      // only print if the message is an offset record
-      if (formattedKey.isInstanceOf[OffsetKey]) {
-        val groupTopicPartition = formattedKey.asInstanceOf[OffsetKey].toString
-        val formattedValue = if (value == null) "NULL" else GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(value)).toString
-        output.write(groupTopicPartition.getBytes)
-        output.write("::".getBytes)
-        output.write(formattedValue.getBytes)
-        output.write("\n".getBytes)
+    def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
+      Option(consumerRecord.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {
+        // Only print if the message is an offset record.
+        // We ignore the timestamp of the message because GroupMetadataMessage has its own timestamp.
+        case offsetKey: OffsetKey =>
+          val groupTopicPartition = offsetKey.key
+          val value = consumerRecord.value
+          val formattedValue =
+            if (value == null) "NULL"
+            else GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(value)).toString
+          output.write(groupTopicPartition.toString.getBytes)
+          output.write("::".getBytes)
+          output.write(formattedValue.getBytes)
+          output.write("\n".getBytes)
+        case _ => // no-op
       }
     }
   }
 
   // Formatter for use with tools to read group metadata history
   class GroupMetadataMessageFormatter extends MessageFormatter {
-    def writeTo(key: Array[Byte], value: Array[Byte], timestamp: Long, timestampType: TimestampType, output: PrintStream) {
-      val formattedKey = if (key == null) "NULL" else GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))
-      // We ignore the timestamp of the message because GroupMetadataMessage has its own timestamp.
-      // only print if the message is a group metadata record
-      if (formattedKey.isInstanceOf[GroupMetadataKey]) {
-        val groupId = formattedKey.asInstanceOf[GroupMetadataKey].key
-        val formattedValue = if (value == null) "NULL" else GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(value)).toString
-        output.write(groupId.getBytes)
-        output.write("::".getBytes)
-        output.write(formattedValue.getBytes)
-        output.write("\n".getBytes)
+    def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
+      Option(consumerRecord.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {
+        // Only print if the message is a group metadata record.
+        // We ignore the timestamp of the message because GroupMetadataMessage has its own timestamp.
+        case groupMetadataKey: GroupMetadataKey =>
+          val groupId = groupMetadataKey.key
+          val value = consumerRecord.value
+          val formattedValue =
+            if (value == null) "NULL"
+            else GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(value)).toString
+          output.write(groupId.getBytes)
+          output.write("::".getBytes)
+          output.write(formattedValue.getBytes)
+          output.write("\n".getBytes)
+        case _ => // no-op
       }
     }
   }
+
 }
 
 case class GroupTopicPartition(group: String, topicPartition: TopicAndPartition) {
