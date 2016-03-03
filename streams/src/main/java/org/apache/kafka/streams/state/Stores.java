@@ -33,7 +33,7 @@ import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 
 /**
- * Factory for creating key-value stores.
+ * Factory for creating state stores in Kafka Streams.
  */
 public class Stores {
 

@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * DefaultPartitionGrouper groups partitions by the partition id. This behavior is assumed by the join processing in KStream.
+ * Default implementation of the {@link PartitionGrouper} interface that groups partitions by the partition id.
  *
  * Join operations requires that topics of the joining entities are copartitoned, i.e., being partitioned by the same key and having the same
  * number of partitions. Copartitioning is ensured by having the same number of partitions on

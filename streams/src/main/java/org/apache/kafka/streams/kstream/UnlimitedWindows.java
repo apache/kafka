@@ -22,6 +22,9 @@ import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * The unlimited window specifications.
+ */
 public class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
     private static final long DEFAULT_START_TIMESTAMP = 0L;

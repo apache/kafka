@@ -17,6 +17,15 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
+
+/**
+ * The windowed key interface used in {@link KTable}, used for representing a windowed table result from windowed stream aggregations,
+ * i.e. {@link KStream#aggregateByKey(Initializer, Aggregator, Windows, Serializer, Serializer, Deserializer, Deserializer)}
+ *
+ * @param <T> Type of the key
+ */
 public class Windowed<T> {
 
     private T value;
