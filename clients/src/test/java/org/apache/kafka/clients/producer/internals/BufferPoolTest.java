@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
@@ -51,7 +52,7 @@ public class BufferPoolTest {
     public void testSimple() throws Exception {
         long totalMemory = 64 * 1024;
         int size = 1024;
-        BufferPool pool = new BufferPool(totalMemory, size, metrics, time, metricGroup);
+        BufferPool pool = new BufferPool(totalMemory, size, false, metrics, time, metricGroup);
         ByteBuffer buffer = pool.allocate(size, maxBlockTimeMs);
         assertEquals("Buffer size should equal requested size.", size, buffer.limit());
         assertEquals("Unallocated memory should have shrunk", totalMemory - size, pool.unallocatedMemory());
@@ -78,7 +79,7 @@ public class BufferPoolTest {
      */
     @Test(expected = IllegalArgumentException.class)
     public void testCantAllocateMoreMemoryThanWeHave() throws Exception {
-        BufferPool pool = new BufferPool(1024, 512, metrics, time, metricGroup);
+        BufferPool pool = new BufferPool(1024, 512, true, metrics, time, metricGroup);
         ByteBuffer buffer = pool.allocate(1024, maxBlockTimeMs);
         assertEquals(1024, buffer.limit());
         pool.deallocate(buffer);
@@ -90,7 +91,7 @@ public class BufferPoolTest {
      */
     @Test
     public void testDelayedAllocation() throws Exception {
-        BufferPool pool = new BufferPool(5 * 1024, 1024, metrics, time, metricGroup);
+        BufferPool pool = new BufferPool(5 * 1024, 1024, true, metrics, time, metricGroup);
         ByteBuffer buffer = pool.allocate(1024, maxBlockTimeMs);
         CountDownLatch doDealloc = asyncDeallocate(pool, buffer);
         CountDownLatch allocation = asyncAllocate(pool, 5 * 1024);
@@ -139,7 +140,7 @@ public class BufferPoolTest {
      */
     @Test
     public void testBlockTimeout() throws Exception {
-        BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
+        BufferPool pool = new BufferPool(2, 1, true, metrics, time, metricGroup);
         pool.allocate(1, maxBlockTimeMs);
         try {
             pool.allocate(2, maxBlockTimeMs);
@@ -150,6 +151,27 @@ public class BufferPoolTest {
     }
 
     /**
+     * Test if BufferExhausted exception is thrown when there is not enough memory to allocate and non-blocking mode is enabled
+     *
+     * @throws Exception
+     */
+    @Test(expected = BufferExhaustedException.class)
+    public void testNonBlockingMode() throws Exception {
+        BufferPool pool = new BufferPool(2, 1, false, metrics, time, metricGroup);
+        pool.allocate(1, maxBlockTimeMs);
+        long start = time.milliseconds();
+        try {
+            pool.allocate(2, maxBlockTimeMs);
+            fail("The buffer allocated more memory than its maximum value 2");
+        } catch (BufferExhaustedException e) {
+            long now = time.milliseconds();
+            assertTrue("Allocation should not wait to throw BufferExhausted Exception in non-blocking mode", now < start + maxBlockTimeMs);
+            throw e;
+        }
+    }
+
+
+    /**
      * This test creates lots of threads that hammer on the pool
      */
     @Test
@@ -158,7 +180,7 @@ public class BufferPoolTest {
         final int iterations = 50000;
         final int poolableSize = 1024;
         final long totalMemory = numThreads / 2 * poolableSize;
-        final BufferPool pool = new BufferPool(totalMemory, poolableSize, metrics, time, metricGroup);
+        final BufferPool pool = new BufferPool(totalMemory, poolableSize, true, metrics, time, metricGroup);
         List<StressTestThread> threads = new ArrayList<StressTestThread>();
         for (int i = 0; i < numThreads; i++)
             threads.add(new StressTestThread(pool, iterations));
