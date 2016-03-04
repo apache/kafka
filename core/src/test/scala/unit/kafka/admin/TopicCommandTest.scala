@@ -16,6 +16,8 @@
  */
 package kafka.admin
 
+import java.util.Properties
+
 import kafka.common.TopicExistsException
 import org.junit.Assert._
 import org.junit.Test
@@ -23,9 +25,8 @@ import kafka.utils.Logging
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import kafka.server.ConfigType
-import kafka.admin.TopicCommand.TopicCommandOptions
+import kafka.admin.TopicCommand.{UnavailablePartitionsDescription, UnderReplicatedPartitionsDescription, PartitionsDescription, TopicCommandOptions}
 import kafka.utils.ZkUtils._
-import kafka.coordinator.GroupCoordinator
 import org.apache.kafka.common.internals.TopicConstants
 
 class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
@@ -187,5 +188,104 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
       tp.partition -> replicas
     }
     checkReplicaDistribution(assignment, rackInfo, rackInfo.size, alteredNumPartitions, replicationFactor)
+  }
+
+  def testDescribePartitions() {
+    val topic = "test-topic"
+    val partitions = List((0, Seq(10, 11, 12)),
+                          (1, Seq(11, 12, 10)),
+                          (2, Seq(12, 10, 11)))
+    val liveBrokers = Set(10, 12, 11)
+    val topicAndPartitionToLeaderAndIsr = Map((topic, 0) ->(Some(10), Seq(10, 12, 11)),
+                                              (topic, 1) ->(Some(11), Seq(11, 10, 12)),
+                                              (topic, 2) ->(Some(12), Seq(12, 11, 10)))
+    val partitionsDescription = new PartitionsDescription(topic, partitions, liveBrokers, topicAndPartitionToLeaderAndIsr)
+
+    val expected = "\tTopic: test-topic\tPartition: 0\tLeader: 10\tReplicas: 10,11,12\tIsr: 10,12,11" +
+                   "\tTopic: test-topic\tPartition: 1\tLeader: 11\tReplicas: 11,12,10\tIsr: 11,10,12" +
+                   "\tTopic: test-topic\tPartition: 2\tLeader: 12\tReplicas: 12,10,11\tIsr: 12,11,10"
+    assertEquals(expected, partitionsDescription.describeAndPrint())
+  }
+
+  @Test
+  def testDescribePartitionsWithUnavailablePartition() {
+    val topic = "test-topic"
+    val partitions = List((0, Seq(10, 11, 12)),
+                          (1, Seq(11, 12, 10)),
+                          (2, Seq(12, 10, 11)))
+    val liveBrokers = Set(12, 11)
+    val topicAndPartitionToLeaderAndIsr = Map((topic, 0) ->(Some(10), Seq(10, 12, 11)),
+                                              (topic, 1) ->(Some(11), Seq(11, 10, 12)),
+                                              (topic, 2) ->(None, Seq(12, 11, 10)))
+    val partitionsDescription = new PartitionsDescription(topic, partitions, liveBrokers, topicAndPartitionToLeaderAndIsr)
+
+    val expected = "\tTopic: test-topic\tPartition: 0\tLeader: 10\tReplicas: 10,11,12\tIsr: 10,12,11" +
+                   "\tTopic: test-topic\tPartition: 1\tLeader: 11\tReplicas: 11,12,10\tIsr: 11,10,12" +
+                   "\tTopic: test-topic\tPartition: 2\tLeader: none\tReplicas: 12,10,11\tIsr: 12,11,10"
+    assertEquals(expected, partitionsDescription.describeAndPrint())
+  }
+
+  @Test
+  def testDescribePartitionsWithUnderReplicatedPartition() {
+    val topic = "test-topic"
+    val partitions = List((0, Seq(10, 11, 12)),
+                          (1, Seq(11, 12, 10)),
+                          (2, Seq(12, 10, 11)))
+    val liveBrokers = Set(10, 12, 11)
+    val topicAndPartitionToLeaderAndIsr = Map((topic, 0) ->(Some(10), Seq(10, 12, 11)),
+                                              (topic, 1) ->(Some(11), Seq(11, 10, 12)),
+                                              (topic, 2) ->(Some(12), Seq(12, 11)))
+    val partitionsDescription = new PartitionsDescription(topic, partitions, liveBrokers, topicAndPartitionToLeaderAndIsr)
+
+    val expected = "\tTopic: test-topic\tPartition: 0\tLeader: 10\tReplicas: 10,11,12\tIsr: 10,12,11" +
+                   "\tTopic: test-topic\tPartition: 1\tLeader: 11\tReplicas: 11,12,10\tIsr: 11,10,12" +
+                   "\tTopic: test-topic\tPartition: 2\tLeader: 12\tReplicas: 12,10,11\tIsr: 12,11"
+    assertEquals(expected, partitionsDescription.describeAndPrint())
+  }
+
+  @Test
+  def testDescribeUnderReplicatedPartitions() {
+    val topic = "test-topic"
+    val partitions = List((0, Seq(10, 11, 12)),
+                          (1, Seq(11, 12, 10)),
+                          (2, Seq(12, 10, 11)))
+    val liveBrokers = Set(10, 12, 11)
+    val topicAndPartitionToLeaderAndIsr = Map((topic, 0) ->(Some(10), Seq(10, 12, 11)),
+                                              (topic, 1) ->(Some(11), Seq(11, 10)),
+                                              (topic, 2) ->(Some(12), Seq(12, 11, 10)))
+    val partitionsDescription = new UnderReplicatedPartitionsDescription(topic, partitions, liveBrokers, topicAndPartitionToLeaderAndIsr)
+
+    val expected = "\tTopic: test-topic\tPartition: 1\tLeader: 11\tReplicas: 11,12,10\tIsr: 11,10"
+    assertEquals(expected, partitionsDescription.describeAndPrint())
+  }
+
+  @Test
+  def testDescribeUnavailablePartitions() {
+    val topic = "test-topic"
+    val partitions = List((0, Seq(10, 11, 12)),
+                          (1, Seq(11, 12, 10)),
+                          (2, Seq(12, 10, 11)))
+    val liveBrokers = Set(12, 11)
+    val topicAndPartitionToLeaderAndIsr = Map((topic, 0) ->(Some(10), Seq(10, 12, 11)),
+                                              (topic, 1) ->(Some(11), Seq(11, 10, 12)),
+                                              (topic, 2) ->(None, Seq(12, 11, 10)))
+    val partitionsDescription = new UnavailablePartitionsDescription(topic, partitions, liveBrokers, topicAndPartitionToLeaderAndIsr)
+
+    val expected = "\tTopic: test-topic\tPartition: 0\tLeader: 10\tReplicas: 10,11,12\tIsr: 10,12,11" +
+                   "\tTopic: test-topic\tPartition: 2\tLeader: none\tReplicas: 12,10,11\tIsr: 12,11,10"
+    assertEquals(expected, partitionsDescription.describeAndPrint())
+  }
+
+  @Test
+  def testDescribeConfig() {
+    val topic = "test-topic"
+    val partitions = List((0, Seq(10, 11, 12)),
+                          (1, Seq(11, 12, 10)),
+                          (2, Seq(12, 10, 11)))
+    val configs: Properties = new Properties()
+    configs.put("some_prop", "some_val")
+    val configDescription = TopicCommand.describeAndPrintConfig(topic, partitions, configs)
+    val expected = "Topic:test-topic\tPartitionCount:3\tReplicationFactor:3\tConfigs:some_prop=some_val"
+    assertEquals(expected, configDescription)
   }
 }
