@@ -776,7 +776,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val connectionsMaxIdleMs = getLong(KafkaConfig.ConnectionsMaxIdleMsProp)
 
   /***************** rack configuration **************/
-  val rack = getString(KafkaConfig.RackProp)
+  val rack = Option(getString(KafkaConfig.RackProp))
 
   /** ********* Log Configuration ***********/
   val autoCreateTopicsEnable = getBoolean(KafkaConfig.AutoCreateTopicsEnableProp)
