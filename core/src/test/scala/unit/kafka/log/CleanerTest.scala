@@ -79,6 +79,31 @@ class CleanerTest extends JUnitSuite {
     val shouldRemain = keysInLog(log).filter(!keys.contains(_))
     assertEquals(shouldRemain, keysInLog(log))
   }
+
+  @Test
+  def testBrokerCompressionTypeIsHonored() {
+    val cleaner = makeCleaner(Int.MaxValue, brokerCompressionType = "gzip")
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1035: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+
+    val bytes1k: Array[Byte] = (0 until 1000).map(_.toByte).toArray
+    val messages = List(new Message(bytes1k, 0.toString.getBytes, Message.NoTimestamp, Message.MagicValue_V1))
+
+    log.append(new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = messages:_*))
+    while(log.numberOfSegments < 2)
+      log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
+
+    // pretend we have the following keys
+    val map = new FakeOffsetMap(Int.MaxValue)
+
+    // clean the log
+    cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, map, 0L)
+
+    assertEquals("Cleaner failed to honor Broker's compression type.", 426, log.logSegments.head.log.sizeInBytes())
+  }
   
   @Test
   def testCleaningWithDeletes() {
@@ -430,7 +455,7 @@ class CleanerTest extends JUnitSuite {
 
   def noOpCheckDone(topicAndPartition: TopicAndPartition) { /* do nothing */  }
 
-  def makeCleaner(capacity: Int, checkDone: (TopicAndPartition) => Unit = noOpCheckDone) =
+  def makeCleaner(capacity: Int, checkDone: (TopicAndPartition) => Unit = noOpCheckDone, brokerCompressionType: String = "uncompressed") =
     new Cleaner(id = 0, 
                 offsetMap = new FakeOffsetMap(capacity), 
                 ioBufferSize = 64*1024, 
@@ -439,7 +464,7 @@ class CleanerTest extends JUnitSuite {
                 throttler = throttler, 
                 time = time,
                 checkDone = checkDone,
-                brokerCompressionType = "uncompressed")
+                brokerCompressionType = brokerCompressionType)
   
   def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for((key, value) <- seq)

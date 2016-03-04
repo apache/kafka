@@ -430,7 +430,7 @@ private[log] class Cleaner(val id: Int,
         if (sourceCodec == NoCompressionCodec) {
           if (shouldRetainMessage(source, map, retainDeletes, entry)) {
             val convertedMessage = entry.message.toFormatVersion(messageFormatVersion)
-            if (targetCodec == NoCompressionCodec) {
+            if (targetCodec == NoCompressionCodec) { // same as sourceCodec
               ByteBufferMessageSet.writeMessage(writeBuffer, convertedMessage, entry.offset)
               stats.recopyMessage(size)
             } else {
