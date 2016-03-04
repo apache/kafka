@@ -95,6 +95,45 @@ public class ConfigDef {
      * @param name          the name of the config parameter
      * @param type          the type of the config
      * @param defaultValue  the default value to use if this config isn't present
+     * @param validator     the validator to use in checking the correctness of the config
+     * @param importance    the importance of this config
+     * @param documentation the documentation string for the config
+     * @param group         the group this config belongs to
+     * @param orderInGroup  the order of this config in the group
+     * @param width         the width of the config
+     * @param displayName   the name suitable for display
+     * @param dependents    the configurations that are dependents of this configuration
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
+                            String group, int orderInGroup, Width width, String displayName, List<String> dependents) {
+        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, null);
+    }
+
+    /**
+     * Define a new configuration
+     * @param name          the name of the config parameter
+     * @param type          the type of the config
+     * @param defaultValue  the default value to use if this config isn't present
+     * @param validator     the validator to use in checking the correctness of the config
+     * @param importance    the importance of this config
+     * @param documentation the documentation string for the config
+     * @param group         the group this config belongs to
+     * @param orderInGroup  the order of this config in the group
+     * @param width         the width of the config
+     * @param displayName   the name suitable for display
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
+                            String group, int orderInGroup, Width width, String displayName) {
+        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, new LinkedList<String>());
+    }
+
+    /**
+     * Define a new configuration with no special validation logic
+     * @param name          the name of the config parameter
+     * @param type          the type of the config
+     * @param defaultValue  the default value to use if this config isn't present
      * @param importance    the importance of this config
      * @param documentation the documentation string for the config
      * @param group         the group this config belongs to
@@ -106,8 +145,45 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
-                                      String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
+                            String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
         return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender);
+    }
+
+    /**
+     * Define a new configuration with no special validation logic
+     * @param name          the name of the config parameter
+     * @param type          the type of the config
+     * @param defaultValue  the default value to use if this config isn't present
+     * @param importance    the importance of this config
+     * @param documentation the documentation string for the config
+     * @param group         the group this config belongs to
+     * @param orderInGroup  the order of this config in the group
+     * @param width         the width of the config
+     * @param displayName   the name suitable for display
+     * @param dependents    the configurations that are dependents of this configuration
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
+                            String group, int orderInGroup, Width width, String displayName, List<String> dependents) {
+        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, dependents, null);
+    }
+
+    /**
+     * Define a new configuration with no special validation logic
+     * @param name          the name of the config parameter
+     * @param type          the type of the config
+     * @param defaultValue  the default value to use if this config isn't present
+     * @param importance    the importance of this config
+     * @param documentation the documentation string for the config
+     * @param group         the group this config belongs to
+     * @param orderInGroup  the order of this config in the group
+     * @param width         the width of the config
+     * @param displayName   the name suitable for display
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
+                            String group, int orderInGroup, Width width, String displayName) {
+        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, new LinkedList<String>());
     }
 
     /**
@@ -130,15 +206,40 @@ public class ConfigDef {
     }
 
     /**
-     * Define a new configuration
-     * @param name          The name of the config parameter
-     * @param type          The type of the config
-     * @param defaultValue  The default value to use if this config isn't present
-     * @param validator     A validator to use in checking the correctness of the config
-     * @param importance    The importance of this config: is this something you will likely need to change.
-     * @param documentation The documentation string for the config
+     * Define a new configuration with no default value and no special validation logic
+     * @param name          the name of the config parameter
+     * @param type          the type of the config
+     * @param importance    the importance of this config
+     * @param documentation the documentation string for the config
+     * @param group         the group this config belongs to
+     * @param orderInGroup  the order of this config in the group
+     * @param width         the width of the config
+     * @param displayName   the name suitable for display
+     * @param dependents    the configurations that are dependents of this configuration
      * @return This ConfigDef so you can chain calls
      */
+    public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
+                            Width width, String displayName, List<String> dependents) {
+        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, dependents, null);
+    }
+
+    /**
+     * Define a new configuration with no default value and no special validation logic
+     * @param name          the name of the config parameter
+     * @param type          the type of the config
+     * @param importance    the importance of this config
+     * @param documentation the documentation string for the config
+     * @param group         the group this config belongs to
+     * @param orderInGroup  the order of this config in the group
+     * @param width         the width of the config
+     * @param displayName   the name suitable for display
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
+                            Width width, String displayName) {
+        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, new LinkedList<String>());
+    }
+
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation) {
         if (configKeys.containsKey(name))
             throw new ConfigException("Configuration " + name + " is defined twice.");
