@@ -21,11 +21,10 @@ import java.util.Properties
 import kafka.admin.{RackAwareMode, AdminUtils, RackAwareTest}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.{ZkUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
 import scala.collection.Map
 
 class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwareTest {
@@ -37,34 +36,29 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
 
   def generateConfigs() =
     (0 until numServers) map { node =>
-      TestUtils.createBrokerConfig(node, zkConnect, false, rack = (node / 2).toString)
+      TestUtils.createBrokerConfig(node, zkConnect, enableControlledShutdown = false, rack = Some((node / 2).toString))
     } map (KafkaConfig.fromProps(_, overridingProps))
 
   private val topic = "topic"
 
   @Test
   def testAutoCreateTopic() {
-    var producer = TestUtils.createNewProducer(brokerList, retries = 5)
-
+    val producer = TestUtils.createNewProducer(brokerList, retries = 5)
     try {
       // Send a message to auto-create the topic
-      val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, "key".getBytes, "value".getBytes)
+      val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
       assertEquals("Should have offset 0", 0L, producer.send(record).get.offset)
 
       // double check that the topic is created with leader elected
       TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
-      val assignment = zkUtils.getReplicaAssignmentForTopics(Seq(topic))
-                              .map(p => p._1.partition -> p._2)
-      val brokerRackMap = AdminUtils.getBrokersAndRackInfo(zkUtils, RackAwareMode.Enforced)._2
-      val expectedMap = Map(0 -> "0", 1 -> "0", 2 -> "1", 3 -> "1");
+      val assignment = zkUtils.getReplicaAssignmentForTopics(Seq(topic)).map { case (topicPartition, replicas) =>
+        topicPartition.partition -> replicas
+      }
+      val (_, brokerRackMap) = AdminUtils.getBrokersAndRackInfo(zkUtils, RackAwareMode.Enforced)
+      val expectedMap = Map(0 -> "0", 1 -> "0", 2 -> "1", 3 -> "1")
       assertEquals(expectedMap, brokerRackMap)
       ensureRackAwareAndEvenDistribution(assignment, brokerRackMap, 4, 8, 2)
-    } finally {
-      if (producer != null) {
-        producer.close()
-        producer = null
-      }
-    }
+    } finally producer.close()
   }
 }
 

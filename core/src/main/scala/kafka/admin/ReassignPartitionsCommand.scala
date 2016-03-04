@@ -204,7 +204,7 @@ object ReassignPartitionsCommand extends Logging {
                       .withRequiredArg
                       .describedAs("brokerlist")
                       .ofType(classOf[String])
-    val disableRackAware = parser.accepts("disable-rack-aware", "if set will disable rack aware replica assignment")
+    val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
 
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "This command moves topic partitions between replicas.")

@@ -333,17 +333,13 @@ public class Struct {
             return false;
         for (int i = 0; i < this.values.length; i++) {
             Field f = this.schema.get(i);
-            Boolean result;
+            boolean result;
             if (f.type() instanceof ArrayOf) {
-                result = Arrays.equals((Object []) this.get(f), (Object []) other.get(f));
+                result = Arrays.equals((Object[]) this.get(f), (Object[]) other.get(f));
             } else {
                 Object thisField = this.get(f);
                 Object otherField = other.get(f);
-                if (thisField == null) {
-                    result = otherField == null;
-                } else {
-                    result = thisField.equals(otherField);
-                }
+                result = (thisField == null && otherField == null) || thisField.equals(otherField);
             }
             if (!result)
                 return false;

@@ -18,26 +18,23 @@
 package kafka.admin
 
 import kafka.common._
-import kafka.cluster.{BrokerEndPoint, Broker}
-
+import kafka.cluster.{Broker, BrokerEndPoint}
 import kafka.log.LogConfig
 import kafka.server.ConfigType
 import kafka.utils._
 import kafka.utils.ZkUtils._
-import kafka.api.{TopicMetadata, PartitionMetadata}
-
+import kafka.api.{PartitionMetadata, TopicMetadata}
 import java.util.Random
 import java.util.Properties
-import org.apache.kafka.common.errors.{ReplicaNotAvailableException, InvalidTopicException, LeaderNotAvailableException}
+
+import org.apache.kafka.common.errors.{InvalidTopicException, LeaderNotAvailableException, ReplicaNotAvailableException}
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 
-import scala.Predef._
 import scala.collection._
 import mutable.ListBuffer
 import scala.collection.mutable
 import collection.Map
 import collection.Set
-
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 
 object AdminUtils extends Logging {
@@ -360,7 +357,8 @@ object AdminUtils extends Logging {
   def topicExists(zkUtils: ZkUtils, topic: String): Boolean =
     zkUtils.zkClient.exists(getTopicPath(topic))
 
-  def getBrokersAndRackInfo(zkUtils: ZkUtils, rackAwareMode: RackAwareMode = RackAwareMode.Enforced, brokerList: Seq[Int] = Seq()) = {
+  def getBrokersAndRackInfo(zkUtils: ZkUtils, rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
+                            brokerList: Seq[Int] = Seq()): (Seq[Int], Map[Int, String]) = {
     val allBrokers = zkUtils.getAllBrokersInCluster()
     val brokers = if (brokerList.isEmpty) allBrokers else allBrokers.filter(b => brokerList.contains(b.id))
     val brokersWithRack = brokers.filter(_.rack.nonEmpty)

@@ -16,44 +16,44 @@
  */
 package kafka.admin
 
-import java.io.{FileOutputStream, OutputStreamWriter, BufferedWriter, File}
+import java.io.File
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, StandardOpenOption}
 
+import scala.collection.JavaConverters._
 import kafka.admin.ReassignPartitionsCommand.ReassignPartitionsCommandOptions
-import kafka.utils.{TestUtils, ZkUtils, Logging}
+import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.{After, Before, Test}
-import org.scalatest.junit.JUnit3Suite
 
 class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
-  var file: File = null;
+  var topicsToMoveFile: File = null
 
   @Before
   override def setUp(): Unit = {
     super.setUp()
-    file = createTmpFile()
+    topicsToMoveFile = createTopicsToMoveJsonFile()
   }
 
   @After
   override def tearDown(): Unit = {
+    if (topicsToMoveFile != null)
+      topicsToMoveFile.delete()
     super.tearDown()
-    if (file != null) {
-      file.delete()
-    }
   }
 
-  def createTmpFile(): File = {
-    val configFile = File.createTempFile("move", ".json");
-    val writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(configFile), "UTF-8"))
-    val content = "{\"topics\": [{\"topic\": \"foo\"}], \"version\":1}"
-    writer.write(content)
-    writer.close()
+  private def createTopicsToMoveJsonFile(): File = {
+    val configFile = File.createTempFile("move", ".json")
+    configFile.deleteOnExit()
+    val lines = Seq("""{"topics": [{"topic": "foo"}], "version":1}""")
+    Files.write(configFile.toPath, lines.asJava, StandardCharsets.UTF_8, StandardOpenOption.WRITE)
     configFile
   }
 
   @Test
   def testRackAwareReassign(): Unit = {
     val brokers = 0 to 5
-    val rackInfo: Map[Int, String] = Map(0 -> "rack1", 1 -> "rack2",2 -> "rack2",3 -> "rack1", 4 -> "rack3",5 -> "rack3")
+    val rackInfo = Map(0 -> "rack1", 1 -> "rack2",2 -> "rack2",3 -> "rack1", 4 -> "rack3", 5 -> "rack3")
     TestUtils.createBrokersInZk(zkUtils, brokers, rackInfo)
 
     // create a non rack aware assignment topic first
@@ -66,10 +66,11 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
 
     val generateOpts = new ReassignPartitionsCommandOptions(Array(
       "--broker-list", "0,1,2,3,4,5",
-      "--topics-to-move-json-file", file.getAbsolutePath
+      "--topics-to-move-json-file", topicsToMoveFile.getAbsolutePath
     ))
-    val assignment = ReassignPartitionsCommand.generateAssignment(zkUtils, generateOpts)
-      .map(p => p._1.partition -> p._2)
+    val assignment = ReassignPartitionsCommand.generateAssignment(zkUtils, generateOpts).map { case (topicPartition, replicas) =>
+      (topicPartition.partition, replicas)
+    }
     ensureRackAwareAndEvenDistribution(assignment, rackInfo, 6, 18, 3)
   }
 }

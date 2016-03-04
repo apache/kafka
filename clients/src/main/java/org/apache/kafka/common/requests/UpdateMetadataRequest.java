@@ -261,14 +261,11 @@ public class UpdateMetadataRequest extends AbstractRequest {
 
     @Override
     public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
-        switch (versionId) {
-            case 0:
-            case 1:
-                return new UpdateMetadataResponse(Errors.forException(e).code());
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.UPDATE_METADATA_KEY.id)));
-        }
+        if (versionId <= 2)
+            return new UpdateMetadataResponse(Errors.forException(e).code());
+        else
+            throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                    versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.UPDATE_METADATA_KEY.id)));
     }
 
     public int controllerId() {

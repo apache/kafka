@@ -326,8 +326,7 @@ object TopicCommand extends Logging {
     val ifNotExistsOpt = parser.accepts("if-not-exists",
                                         "if set when creating topics, the action will only execute if the topic does not already exist")
 
-    val disableRackAware = parser.accepts("disable-rack-aware",
-                                          "if set will disable rack aware replica assignment")
+    val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
     val options = parser.parse(args : _*)
 
     val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)

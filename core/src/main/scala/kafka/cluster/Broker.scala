@@ -38,31 +38,33 @@ object Broker {
     * @param brokerInfoString
     *
     * Version 1 JSON schema for a broker is:
-    * {"version":1,
-    *  "host":"localhost",
-    *  "port":9092
-    *  "jmx_port":9999,
-    *  "timestamp":"2233345666" }
+    * {
+    *   "version":1,
+    *   "host":"localhost",
+    *   "port":9092
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666"
+    * }
     *
     * Version 2 JSON schema for a broker is:
-    * {"version":2,
-    *  "host","localhost",
-    *  "port",9092
-    *  "jmx_port":9999,
-    *  "timestamp":"2233345666",
-    *  "endpoints": ["PLAINTEXT://host1:9092",
-    *                "SSL://host1:9093"]
+    * {
+    *   "version":2,
+    *   "host":"localhost",
+    *   "port":9092
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"]
     * }
     *
     * Version 3 (current) JSON schema for a broker is:
-    * {"version":3,
-    *  "host","localhost",
-    *  "port",9092
-    *  "jmx_port":9999,
-    *  "timestamp":"2233345666",
-    *  "endpoints": ["PLAINTEXT://host1:9092",
-    *                "SSL://host1:9093"],
-    *  "rack": "dc1"
+    * {
+    *   "version":3,
+    *   "host":"localhost",
+    *   "port":9092
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"],
+    *   "rack":"dc1"
     * }
     */
   def createBroker(id: Int, brokerInfoString: String): Broker = {
@@ -88,7 +90,7 @@ object Broker {
                 (ep.protocolType, ep)
               }.toMap
             }
-          val rack: Option[String] = brokerInfo.get("rack").asInstanceOf[Option[String]]
+          val rack = brokerInfo.get("rack").filter(_ != null).map(_.asInstanceOf[String])
           new Broker(id, endpoints, rack)
         case None =>
           throw new BrokerNotAvailableException(s"Broker id $id does not exist")
@@ -102,14 +104,15 @@ object Broker {
 
 case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint], rack: Option[String]) {
 
-  override def toString: String = id + " : " + endPoints.values.mkString("(",",",")") + ":" + rack.orNull
+  override def toString: String =
+    s"$id : ${endPoints.values.mkString("(",",",")")} : ${rack.orNull}"
 
   def this(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) = {
-    this(id, endPoints, Option.empty)
+    this(id, endPoints, None)
   }
 
   def this(id: Int, host: String, port: Int, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
-    this(id, Map(protocol -> EndPoint(host, port, protocol)), Option.empty)
+    this(id, Map(protocol -> EndPoint(host, port, protocol)), None)
   }
 
   def this(bep: BrokerEndPoint, protocol: SecurityProtocol) = {
@@ -121,7 +124,7 @@ case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint], rack: Opt
     endpoint match {
       case Some(endpoint) => new BrokerEndPoint(id, endpoint.host, endpoint.port)
       case None =>
-        throw new BrokerEndPointNotAvailableException("End point %s not found for broker %d".format(protocolType,id))
+        throw new BrokerEndPointNotAvailableException(s"End point with $protocolType not found for broker $id")
     }
   }
 
