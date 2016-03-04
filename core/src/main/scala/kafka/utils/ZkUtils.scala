@@ -18,31 +18,26 @@
 package kafka.utils
 
 import java.util.concurrent.CountDownLatch
+
+import kafka.admin._
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0, LeaderAndIsr}
 import kafka.cluster._
+import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndPartition}
 import kafka.consumer.{ConsumerThreadId, TopicCount}
-import kafka.server.{KafkaConfig, ConfigType}
-import org.I0Itec.zkclient.{ZkClient,ZkConnection}
-import org.I0Itec.zkclient.exception.{ZkException, ZkNodeExistsException, ZkNoNodeException,
-  ZkMarshallingError, ZkBadVersionException}
+import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
+import kafka.server.ConfigType
+import kafka.utils.ZkUtils._
+import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
+import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.zookeeper.ZooDefs
-import scala.collection._
-import kafka.api.{KAFKA_0_10_0_IV0, ApiVersion, LeaderAndIsr}
-import org.apache.zookeeper.data.{ACL, Stat}
-import kafka.admin._
-import kafka.common.{KafkaException, NoEpochForPartitionException}
-import kafka.controller.ReassignedPartitionsContext
-import kafka.controller.KafkaController
-import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.common.TopicAndPartition
-import kafka.utils.ZkUtils._
-import org.apache.zookeeper.AsyncCallback.{DataCallback,StringCallback}
-import org.apache.zookeeper.CreateMode
-import org.apache.zookeeper.KeeperException
+import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
-import org.apache.zookeeper.ZooKeeper
+import org.apache.zookeeper.data.{ACL, Stat}
+import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
+
+import scala.collection._
 
 object ZkUtils {
   val ConsumersPath = "/consumers"
@@ -259,11 +254,13 @@ class ZkUtils(val zkClient: ZkClient,
    * Register brokers with v3 json format (which includes multiple endpoints and rack).
    * This format also includes default endpoints for compatibility with older clients.
    *
-   * @param id
-   * @param host
-   * @param port
-   * @param advertisedEndpoints
-   * @param jmxPort
+   * @param id broker ID
+   * @param host broker host name
+   * @param port broker port
+   * @param advertisedEndpoints broker end points
+   * @param jmxPort jmx port
+   * @param rack broker rack
+   * @param apiVersion Kafka version the broker is running as
    */
   def registerBrokerInZk(id: Int,
                          host: String,
@@ -789,7 +786,6 @@ class ZkUtils(val zkClient: ZkClient,
       case e: ZkNoNodeException => {
         createParentPath(BrokerSequenceIdPath, acls)
         try {
-          import scala.collection.JavaConversions._
           zkClient.createPersistent(BrokerSequenceIdPath, "", acls)
           0
         } catch {
@@ -901,7 +897,6 @@ class ZKConfig(props: VerifiableProperties) {
 
 object ZkPath {
   @volatile private var isNamespacePresent: Boolean = false
-  import scala.collection.JavaConversions._
 
   def checkNamespace(client: ZkClient) {
     if(isNamespacePresent)

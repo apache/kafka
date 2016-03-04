@@ -16,23 +16,13 @@
  */
 package kafka.admin
 
-import java.util.Properties
-
-import junit.framework.Assert._
-import kafka.common.TopicAndPartition
-import kafka.utils.{ZkUtils, Logging}
-import kafka.zk.ZooKeeperTestHarness
-import org.I0Itec.zkclient.ZkClient
-import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
-import scala.collection.JavaConverters._
-
-import scala.collection.{mutable, Map, Seq}
+import scala.collection.{Map, Seq, mutable}
+import org.junit.Assert._
 
 trait RackAwareTest {
   def ensureRackAwareAndEvenDistribution(assignment: scala.collection.Map[Int, Seq[Int]], brokerRackMapping: Map[Int, String], numBrokers: Int,
-                                         numPartitions: Int, replicationFactor: Int, verifyRackAware: Boolean = false,
-                                         verifyLeaderDistribution: Boolean = false, verifyReplicasDistribution: Boolean = false): Unit = {
+                                         numPartitions: Int, replicationFactor: Int, verifyRackAware: Boolean = true,
+                                         verifyLeaderDistribution: Boolean = true, verifyReplicasDistribution: Boolean = true): Unit = {
     val distribution = getReplicaDistribution(assignment, brokerRackMapping)
     val leaderCount: Map[Int, Int] = distribution.brokerLeaderCount
     val partitionCount: Map[Int, Int] = distribution.brokerReplicasCount
@@ -52,11 +42,8 @@ trait RackAwareTest {
   }
 
   def getReplicaDistribution(assignment: scala.collection.Map[Int, Seq[Int]], brokerRackMapping: Map[Int, String]): ReplicaDistributions = {
-    // ensure leader distribution is even
     val leaderCount: mutable.Map[Int, Int] = mutable.Map()
-    // ensure total partitions distribution is even
     val partitionCount: mutable.Map[Int, Int] = mutable.Map()
-    // ensure replicas are assigned to unique racks
     val partitionRackMap: mutable.Map[Int, List[String]] = mutable.Map()
     assignment.foreach {
       case (partitionId, replicaList) => {

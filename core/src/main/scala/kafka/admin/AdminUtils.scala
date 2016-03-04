@@ -63,12 +63,12 @@ object AdminUtils extends Logging {
    * p3        p4        p0        p1        p2       (3nd replica)
    * p7        p8        p9        p5        p6       (3nd replica)
    *
-   * To create rack aware assignment, this API will first create an rack interlaced broker list. For example,
+   * To create rack aware assignment, this API will first create a rack alternated broker list. For example,
    * from this brokerID -> rack mapping:
    *
    * 0 -> "rack1", 1 -> "rack3", 2 -> "rack3", 3 -> "rack2", 4 -> "rack2", 5 -> "rack1"
    *
-   * The rack interlaced list will be
+   * The rack alternated list will be
    *
    * 0, 3, 1, 5, 4, 2
    *
@@ -88,9 +88,9 @@ object AdminUtils extends Logging {
    *
    * 6 -> 0,4,2 (instead of repeating 0,3,1 as partition 0)
    *
-   * The rack aware assignment always chooses leader of the partition using round robin on the rack interlaced broker list.
-   * When choosing followers, it will be biased towards brokers on racks that do not have
-   * any replica assignment, until every rack has a replica. Then the follower assignment will go back to round-robin on
+   * The rack aware assignment always chooses 1st replica of the partition using round robin on the rack alternated broker list.
+   * For rest of the replicas, it will be biased towards brokers on racks that do not have
+   * any replica assignment, until every rack has a replica. Then the assignment will go back to round-robin on
    * the broker list.
    *
    * As the result, if the number of replicas is equal to or greater than the number of racks, it will ensure that
@@ -184,7 +184,7 @@ object AdminUtils extends Logging {
   }
 
   /**
-    * Given broker and rack information, returns a list of brokers interlaced by the rack. Assume
+    * Given broker and rack information, returns a list of brokers alternated by the rack. Assume
     * this is the rack and its brokers:
     *
     * rack1: 0, 1, 2
@@ -200,7 +200,7 @@ object AdminUtils extends Logging {
     */
   private[admin] def getRackAlternatedBrokerList(brokerRackMap: Map[Int, String]): Seq[Int] = {
     val reverseMap = getInverseMap(brokerRackMap)
-    val brokerListsByRack = reverseMap.map { case(rack, list) => (rack, reverseMap(rack).toIterator) }
+    val brokerListsByRack = reverseMap.map { case(rack, list) => (rack, list.toIterator) }
     val racks = brokerListsByRack.keys.toArray.sorted
     var result: List[Int] = List()
     var rackIndex = 0
@@ -215,9 +215,9 @@ object AdminUtils extends Logging {
   }
 
   private[admin] def getInverseMap(brokerRackMap: Map[Int, String]): Map[String, List[Int]] = {
-    brokerRackMap.toList.map { case(k, v) => (v, k) }
-      .groupBy(_._1)
-      .map { case(k, v) => (k, v.map(_._2))}
+    brokerRackMap.toList.map { case(id, rack) => (rack, id) }
+      .groupBy { case(rack, id) => rack }
+      .map { case(rack, rackNodeTupleList) => (rack, rackNodeTupleList.map{case (rack, node) => node}.sorted)}
   }
  /**
   * Add partitions to existing topic with optional replica assignment

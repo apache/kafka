@@ -62,6 +62,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
             this.rack = rack;
         }
 
+        @Deprecated
         public Broker(int id, Map<SecurityProtocol, EndPoint> endPoints) {
             this(id, endPoints, null);
         }
@@ -123,7 +124,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
         for (BrokerEndPoint brokerEndPoint : brokerEndPoints) {
             Map<SecurityProtocol, EndPoint> endPoints = Collections.singletonMap(SecurityProtocol.PLAINTEXT,
                     new EndPoint(brokerEndPoint.host(), brokerEndPoint.port()));
-            brokers.add(new Broker(brokerEndPoint.id(), endPoints));
+            brokers.add(new Broker(brokerEndPoint.id(), endPoints, null));
         }
         return brokers;
     }
@@ -235,7 +236,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
                 int port = brokerData.getInt(PORT_KEY_NAME);
                 Map<SecurityProtocol, EndPoint> endPoints = new HashMap<>(1);
                 endPoints.put(SecurityProtocol.PLAINTEXT, new EndPoint(host, port));
-                liveBrokers.add(new Broker(brokerId, endPoints));
+                liveBrokers.add(new Broker(brokerId, endPoints, null));
             } else { // V1 or V2
                 Map<SecurityProtocol, EndPoint> endPoints = new HashMap<>();
                 for (Object endPointDataObj : brokerData.getArray(ENDPOINTS_KEY_NAME)) {

@@ -102,7 +102,7 @@ public class RequestResponseTest {
 
         checkSerialization(createUpdateMetadataRequest(0, null), 0);
         checkSerialization(createUpdateMetadataRequest(0, null).getErrorResponse(0, new UnknownServerException()), 0);
-        checkSerialization(createUpdateMetadataRequest(1, null), 1);
+        checkSerialization(createUpdateMetadataRequest(1, "rack1"), 1);
     }
 
     private void checkSerialization(AbstractRequestResponse req, Integer version) throws Exception {

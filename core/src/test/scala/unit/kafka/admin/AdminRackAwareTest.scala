@@ -16,15 +16,12 @@
  */
 package kafka.admin
 
-import junit.framework.Assert._
-import kafka.common.TopicAndPartition
-import kafka.utils.{TestUtils, ZkUtils, Logging}
+import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
-import org.I0Itec.zkclient.ZkClient
+import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
 
-import scala.collection.{mutable, Map, Seq}
+import scala.collection.{Map, Seq}
 
 class AdminRackAwareTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
@@ -68,14 +65,15 @@ class AdminRackAwareTest extends ZooKeeperTestHarness with Logging with RackAwar
     val brokerList = List(0, 1, 2, 3, 4, 5)
     val brokerRackMapping = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack3", 4 -> "rack3", 5 -> "rack1")
     val assignment: scala.collection.Map[Int, Seq[Int]] = AdminUtils.assignReplicasToBrokers(brokerList, 13, 3, 0, 0, brokerRackMapping)
-    ensureRackAwareAndEvenDistribution(assignment, brokerRackMapping, 6, 13, 3, verifyRackAware = true)
+    ensureRackAwareAndEvenDistribution(assignment, brokerRackMapping, 6, 13, 3, verifyLeaderDistribution = false, verifyReplicasDistribution = false)
   }
 
+  @Test
   def testAssignmentWithRackAwareWithUnEvenRacks() {
     val brokerList = List(0, 1, 2, 3, 4, 5)
     val brokerRackMapping = Map(0 -> "rack1", 1 -> "rack1", 2 -> "rack2", 3 -> "rack3", 4 -> "rack3", 5 -> "rack1")
     val assignment: scala.collection.Map[Int, Seq[Int]] = AdminUtils.assignReplicasToBrokers(brokerList, 12, 3, rackInfo = brokerRackMapping)
-    ensureRackAwareAndEvenDistribution(assignment, brokerRackMapping, 6, 12, 3, verifyRackAware = true, verifyLeaderDistribution = true)
+    ensureRackAwareAndEvenDistribution(assignment, brokerRackMapping, 6, 12, 3, verifyReplicasDistribution = false)
   }
 
 

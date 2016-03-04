@@ -98,27 +98,6 @@ object Broker {
         throw new KafkaException(s"Failed to parse the broker info from zookeeper: $brokerInfoString", t)
     }
   }
-
-  /**
-   *
-   * @param buffer Containing serialized broker.
-   *               Current serialization is:
-   *               id (int), number of endpoints (int), serialized endpoints
-   * @return broker object
-   */
-  def readFrom(buffer: ByteBuffer, expectRack: Boolean = true): Broker = {
-    val id = buffer.getInt
-    val numEndpoints = buffer.getInt
-
-    val endpoints = List.range(0, numEndpoints).map(i => EndPoint.readFrom(buffer))
-            .map(ep => ep.protocolType -> ep).toMap
-    if (expectRack) {
-      val rack = readShortString(buffer)
-      new Broker(id, endpoints, Option(rack))
-    } else {
-      new Broker(id, endpoints, Option.empty)
-    }
-  }
 }
 
 case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint], rack: Option[String]) {
@@ -135,27 +114,6 @@ case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint], rack: Opt
 
   def this(bep: BrokerEndPoint, protocol: SecurityProtocol) = {
     this(bep.id, bep.host, bep.port, protocol)
-  }
-
-  def writeTo(buffer: ByteBuffer, includeRack: Boolean = true) {
-    buffer.putInt(id)
-    buffer.putInt(endPoints.size)
-    for(endpoint <- endPoints.values) {
-      endpoint.writeTo(buffer)
-    }
-    if (includeRack) {
-      writeShortString(buffer, rack.orNull)
-    }
-  }
-
-  def sizeInBytes(includeRack: Boolean = true): Int =
-    4 + /* broker id*/
-    4 + /* number of endPoints */
-    endPoints.values.map(_.sizeInBytes).sum /* end points */ +
-      (if (includeRack) shortStringLength(rack.orNull) else 0)
-
-  def supportsChannel(protocolType: SecurityProtocol): Unit = {
-    endPoints.contains(protocolType)
   }
 
   def getBrokerEndPoint(protocolType: SecurityProtocol): BrokerEndPoint = {

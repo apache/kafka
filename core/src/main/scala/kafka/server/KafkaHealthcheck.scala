@@ -17,13 +17,14 @@
 
 package kafka.server
 
-import kafka.api.{KAFKA_0_10_0_IV0, ApiVersion}
+import java.net.InetAddress
+
+import kafka.api.ApiVersion
 import kafka.cluster.EndPoint
 import kafka.utils._
+import org.I0Itec.zkclient.IZkStateListener
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.zookeeper.Watcher.Event.KeeperState
-import org.I0Itec.zkclient.{IZkStateListener, ZkClient, ZkConnection}
-import java.net.InetAddress
 
 
 /**
