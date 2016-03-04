@@ -104,7 +104,8 @@ object Broker {
 
 case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint], rack: Option[String]) {
 
-  override def toString: String = id + " : " + endPoints.values.mkString("(",",",")") + ":" + rack.orNull
+  override def toString: String =
+    s"$id : ${endPoints.values.mkString("(",",",")")} : ${rack.orNull}"
 
   def this(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) = {
     this(id, endPoints, None)
