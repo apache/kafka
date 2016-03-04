@@ -189,10 +189,10 @@ object TopicCommand extends Logging {
 
   def describeTopic(zkUtils: ZkUtils, opts: TopicCommandOptions) {
     val topics = getTopics(zkUtils, opts)
-    val reportUnderReplicatedPartitions = if (opts.options.has(opts.reportUnderReplicatedPartitionsOpt)) true else false
-    val reportUnavailablePartitions = if (opts.options.has(opts.reportUnavailablePartitionsOpt)) true else false
-    val reportUnbalancedPartitions = if (opts.options.has(opts.reportUnbalancedPartitionsOpt)) true else false
-    val reportOverriddenConfigs = if (opts.options.has(opts.topicsWithOverridesOpt)) true else false
+    val reportUnderReplicatedPartitions = opts.options.has(opts.reportUnderReplicatedPartitionsOpt)
+    val reportUnavailablePartitions = opts.options.has(opts.reportUnavailablePartitionsOpt)
+    val reportUnbalancedPartitions = opts.options.has(opts.reportUnbalancedPartitionsOpt)
+    val reportOverriddenConfigs = opts.options.has(opts.topicsWithOverridesOpt)
     val liveBrokers = zkUtils.getAllBrokersInCluster().map(_.id).toSet
     for (topic <- topics) {
       zkUtils.getPartitionAssignmentForTopics(List(topic)).get(topic) match {
@@ -213,10 +213,7 @@ object TopicCommand extends Logging {
             for ((partitionId, assignedReplicas) <- sortedPartitions) {
               val inSyncReplicas = zkUtils.getInSyncReplicasForPartition(topic, partitionId)
               val leader = zkUtils.getLeaderForPartition(topic, partitionId)
-              if ((!reportUnderReplicatedPartitions && !reportUnavailablePartitions && !reportUnbalancedPartitions) ||
-                  (reportUnderReplicatedPartitions && inSyncReplicas.size < assignedReplicas.size) ||
-                  (reportUnavailablePartitions && (!leader.isDefined || !liveBrokers.contains(leader.get))) ||
-                  (reportUnbalancedPartitions && (leader.isDefined && (leader.get != assignedReplicas.head)))) {
+              if (shouldPrintDescription(reportUnderReplicatedPartitions, reportUnavailablePartitions, reportUnbalancedPartitions, liveBrokers, assignedReplicas, inSyncReplicas, leader)) {
                 print("\tTopic: " + topic)
                 print("\tPartition: " + partitionId)
                 print("\tLeader: " + (if(leader.isDefined) leader.get else "none"))
@@ -229,6 +226,18 @@ object TopicCommand extends Logging {
           println("Topic " + topic + " doesn't exist!")
       }
     }
+  }
+
+  private def shouldPrintDescription(reportUnderReplicatedPartitions: Boolean, reportUnavailablePartitions: Boolean, reportUnbalancedPartitions: Boolean,
+                             liveBrokers: Set[Int], assignedReplicas: Seq[Int], inSyncReplicas: Seq[Int], leader: Option[Int]): Boolean = {
+    // If not asked for any specific report
+    (!reportUnderReplicatedPartitions && !reportUnavailablePartitions && !reportUnbalancedPartitions) ||
+    // If asked for only under-replicated partitions description and the partition is under-replicated
+      (reportUnderReplicatedPartitions && inSyncReplicas.size < assignedReplicas.size) ||
+    // If asked for only unavailable partitions and the partition is unavailable
+      (reportUnavailablePartitions && (leader.isEmpty || !liveBrokers.contains(leader.get))) ||
+    // If asked for only unbalanced partitions and the partition is unbalanced
+      (reportUnbalancedPartitions && (leader.isDefined && (leader.get != assignedReplicas.head)))
   }
 
   def parseTopicConfigsToBeAdded(opts: TopicCommandOptions): Properties = {
