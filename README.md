@@ -114,6 +114,9 @@ Please note for this to work you should create/update `~/.gradle/gradle.properti
 ### Determining how transitive dependencies are added ###
     ./gradlew core:dependencies --configuration runtime
 
+### Determining if any dependencies could be updated ###
+    ./gradlew dependencyUpdates
+
 ### Running checkstyle on the java code ###
     ./gradlew checkstyleMain checkstyleTest
 

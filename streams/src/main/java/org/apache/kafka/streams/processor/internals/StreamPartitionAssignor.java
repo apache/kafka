@@ -188,6 +188,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         // ensure the co-partitioning topics within the group have the same number of partitions,
         // and enforce the number of partitions for those internal topics.
+        internalSourceTopicToTaskIds = new HashMap<>();
         Map<Integer, Set<String>> sourceTopicGroups = new HashMap<>();
         Map<Integer, Set<String>> internalSourceTopicGroups = new HashMap<>();
         for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
@@ -251,13 +252,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
             log.info("Completed validating internal source topics in partition assignor.");
         }
+        internalSourceTopicToTaskIds.clear();
 
         // get the tasks as partition groups from the partition grouper
         Map<TaskId, Set<TopicPartition>> partitionsForTask = streamThread.partitionGrouper.partitionGroups(sourceTopicGroups, metadata);
 
-        // add tasks to state topic subscribers
+        // add tasks to state change log topic subscribers
         stateChangelogTopicToTaskIds = new HashMap<>();
-        internalSourceTopicToTaskIds = new HashMap<>();
         for (TaskId task : partitionsForTask.keySet()) {
             for (String topicName : topicGroups.get(task.topicGroupId).stateChangelogTopics) {
                 Set<TaskId> tasks = stateChangelogTopicToTaskIds.get(topicName);

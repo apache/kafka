@@ -96,7 +96,7 @@ public class Worker {
         this.internalValueConverter.configure(config.originalsWithPrefix("internal.value.converter."), false);
 
         this.offsetBackingStore = offsetBackingStore;
-        this.offsetBackingStore.configure(config.originals());
+        this.offsetBackingStore.configure(config);
     }
 
     public void start() {

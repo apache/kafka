@@ -67,6 +67,24 @@ public class DistributedConfig extends WorkerConfig {
             " fails to catch up within worker.sync.timeout.ms, leave the Connect cluster for this long before rejoining.";
     public static final int WORKER_UNSYNC_BACKOFF_MS_DEFAULT = 5 * 60 * 1000;
 
+    /**
+     * <code>offset.storage.topic</code>
+     */
+    public static final String OFFSET_STORAGE_TOPIC_CONFIG = "offset.storage.topic";
+    private static final String OFFSET_STORAGE_TOPIC_CONFIG_DOC = "kafka topic to store connector offsets in";
+
+    /**
+     * <code>config.storage.topic</code>
+     */
+    public static final String CONFIG_TOPIC_CONFIG = "config.storage.topic";
+    private static final String CONFIG_TOPIC_CONFIG_DOC = "kafka topic to store configs";
+
+    /**
+     * <code>status.storage.topic</code>
+     */
+    public static final String STATUS_STORAGE_TOPIC_CONFIG = "status.storage.topic";
+    public static final String STATUS_STORAGE_TOPIC_CONFIG_DOC = "kafka topic to track connector and task status";
+
     static {
         CONFIG = baseConfigDef()
                 .define(GROUP_ID_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, GROUP_ID_DOC)
@@ -161,7 +179,19 @@ public class DistributedConfig extends WorkerConfig {
                         ConfigDef.Type.INT,
                         WORKER_UNSYNC_BACKOFF_MS_DEFAULT,
                         ConfigDef.Importance.MEDIUM,
-                        WORKER_UNSYNC_BACKOFF_MS_DOC);
+                        WORKER_UNSYNC_BACKOFF_MS_DOC)
+                .define(OFFSET_STORAGE_TOPIC_CONFIG,
+                        ConfigDef.Type.STRING,
+                        ConfigDef.Importance.HIGH,
+                        OFFSET_STORAGE_TOPIC_CONFIG_DOC)
+                .define(CONFIG_TOPIC_CONFIG,
+                        ConfigDef.Type.STRING,
+                        ConfigDef.Importance.HIGH,
+                        CONFIG_TOPIC_CONFIG_DOC)
+                .define(STATUS_STORAGE_TOPIC_CONFIG,
+                        ConfigDef.Type.STRING,
+                        ConfigDef.Importance.HIGH,
+                        STATUS_STORAGE_TOPIC_CONFIG_DOC);
     }
 
     public DistributedConfig(Map<String, String> props) {
