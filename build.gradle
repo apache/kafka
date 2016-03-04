@@ -549,7 +549,8 @@ project(':streams') {
     }
 
     javadoc {
-        include "**/org/apache/kafka/streams/*"
+        include "**/org/apache/kafka/streams/**"
+        exclude "**/internals/**"
     }
 
     tasks.create(name: "copyDependantLibs", type: Copy) {
