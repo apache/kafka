@@ -309,7 +309,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   def testHighConcurrencyModificationOfResourceAcls() {
     val commonResource = new Resource(Topic, "test")
 
-    val acls = (0 to 1000).map { i =>
+    val acls = (0 to 100).map { i =>
       val useri = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, i.toString)
       new Acl(useri, Allow, WildCardHost, Read)
     }
