@@ -17,7 +17,9 @@
 package kafka.security.auth
 
 import java.net.InetAddress
-import java.util.UUID
+import java.util
+import java.util.concurrent.{TimeUnit, CountDownLatch, Executors}
+import java.util.{Collections, UUID}
 
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.Acl.WildCardHost
@@ -25,7 +27,6 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -304,6 +305,43 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     TestUtils.waitAndVerifyAcls(Set(acl1, acl2), simpleAclAuthorizer2, commonResource)
   }
 
+  @Test
+  def testHighConcurrencyModificationOfResourceAcls() {
+    val commonResource = new Resource(Topic, "test")
+
+    val acls = (0 to 1000).map { i =>
+      val useri = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, i.toString)
+      new Acl(useri, Allow, WildCardHost, Read)
+    }
+
+    // Alternate authorizer, Remove all acls that end in 0
+    val runnables = acls.map { acl =>
+        new Runnable {
+          override def run(): Unit = {
+            val aclId = acl.principal.getName.toInt
+            if(aclId % 2 == 0) {
+              simpleAclAuthorizer.addAcls(Set(acl), commonResource)
+            } else {
+              simpleAclAuthorizer2.addAcls(Set(acl), commonResource)
+            }
+            if(aclId % 10 == 0) {
+              simpleAclAuthorizer2.removeAcls(Set(acl), commonResource)
+            }
+          }
+        }
+    }.toList
+
+    val expectedAcls = acls.filter { acl =>
+      val aclId = acl.principal.getName.toInt
+      aclId % 10 != 0
+    }.toSet
+
+    assertConcurrent("Should support many concurrent calls", runnables, 15)
+
+    TestUtils.waitAndVerifyAcls(expectedAcls, simpleAclAuthorizer, commonResource)
+    TestUtils.waitAndVerifyAcls(expectedAcls, simpleAclAuthorizer2, commonResource)
+  }
+
   private def changeAclAndVerify(originalAcls: Set[Acl], addedAcls: Set[Acl], removedAcls: Set[Acl], resource: Resource = resource): Set[Acl] = {
     var acls = originalAcls
 
@@ -320,5 +358,47 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     TestUtils.waitAndVerifyAcls(acls, simpleAclAuthorizer, resource)
 
     acls
+  }
+
+  /**
+    * https://github.com/junit-team/junit/wiki/Multithreaded-code-and-concurrency
+    *
+    * To use this you pass in a Collection of Runnables that are your arrange\act\assert test on the SUT,
+    * they all run at the same time in the assertConcurrent method; the chances of triggering a multithreading code error,
+    * and thereby failing some assertion are greatly increased.
+    */
+  private def assertConcurrent(message: String, runnables: List[Runnable], maxTimeoutSeconds: Int) {
+    val numThreads = runnables.size
+    val exceptions = Collections.synchronizedList(new util.ArrayList[Throwable]())
+    val threadPool = Executors.newFixedThreadPool(numThreads)
+    try {
+      val allExecutorThreadsReady = new CountDownLatch(numThreads)
+      val afterInitBlocker = new CountDownLatch(1)
+      val allDone = new CountDownLatch(numThreads)
+      for (submittedTestRunnable <- runnables) {
+        threadPool.submit(new Runnable() {
+          def run() {
+            allExecutorThreadsReady.countDown()
+            try {
+              afterInitBlocker.await()
+              submittedTestRunnable.run()
+            } catch {
+              case e: Throwable => exceptions.add(e)
+            } finally {
+              allDone.countDown()
+            }
+          }
+        })
+      }
+      // wait until all threads are ready
+      assertTrue("Timeout initializing threads! Perform long lasting initializations before passing runnables to assertConcurrent",
+        allExecutorThreadsReady.await(runnables.size * 10, TimeUnit.MILLISECONDS))
+      // start all test runners
+      afterInitBlocker.countDown()
+      assertTrue(message +" timeout! More than" + maxTimeoutSeconds + "seconds", allDone.await(maxTimeoutSeconds, TimeUnit.SECONDS))
+    } finally {
+      threadPool.shutdownNow()
+    }
+    assertTrue(message + "failed with exception(s)" + exceptions, exceptions.isEmpty())
   }
 }
