@@ -41,6 +41,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
         self.num_consumers = 1
 
     def perform_upgrade(self, from_kafka_version, to_message_format_version=None):
+        time.sleep(20)
         self.logger.info("First pass bounce - rolling upgrade")
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
