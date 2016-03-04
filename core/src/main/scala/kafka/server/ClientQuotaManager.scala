@@ -120,9 +120,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         val clientMetric = metrics.metrics().get(clientRateMetricName(clientId))
         throttleTimeMs = throttleTime(clientMetric, getQuotaMetricConfig(quota(clientId)))
         clientSensors.throttleTimeSensor.record(throttleTimeMs)
+        // If delayed, add the element to the delayQueue
         delayQueue.add(new ThrottledResponse(time, throttleTimeMs, callback))
         delayQueueSensor.record()
-        // If delayed, add the element to the delayQueue
         logger.debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
     }
     throttleTimeMs
@@ -189,9 +189,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     }
 
     /* If the sensor is null, try to create it else return the created sensor
-     * Also if quota sensor is null, the throttle time sensor must be null
+     * Either of the sensors can be null, hence null checks on both
      */
-    if (quotaSensor == null) {
+    if (quotaSensor == null || throttleTimeSensor == null) {
       /* Acquire a write lock because the sensor may not have been created and we only want one thread to create it.
        * Note that multiple threads may acquire the write lock if they all see a null sensor initially
        * In this case, the writer checks the sensor after acquiring the lock again.
@@ -204,7 +204,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         // ensure that we initialise `ClientSensors` with non-null parameters.
         quotaSensor = metrics.getSensor(quotaSensorName)
         throttleTimeSensor = metrics.getSensor(throttleTimeSensorName)
-        if (quotaSensor == null) {
+        if (throttleTimeSensor == null) {
           // create the throttle time sensor also. Use default metric config
           throttleTimeSensor = metrics.sensor(throttleTimeSensorName,
                                               null,
@@ -214,7 +214,10 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                                                 "Tracking average throttle-time per client",
                                                 "client-id",
                                                 clientId), new Avg())
+        }
 
+
+        if (quotaSensor == null) {
           quotaSensor = metrics.sensor(quotaSensorName,
                                        getQuotaMetricConfig(quota(clientId)),
                                        ClientQuotaManagerConfig.InactiveSensorExpirationTimeSeconds)
