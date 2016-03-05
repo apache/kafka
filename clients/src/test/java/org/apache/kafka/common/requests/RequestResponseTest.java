@@ -103,6 +103,7 @@ public class RequestResponseTest {
         checkSerialization(createUpdateMetadataRequest(0, null), 0);
         checkSerialization(createUpdateMetadataRequest(0, null).getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createUpdateMetadataRequest(1, null), 1);
+        checkSerialization(createUpdateMetadataRequest(1, "rack1"), 1);
         checkSerialization(createUpdateMetadataRequest(1, null).getErrorResponse(1, new UnknownServerException()), 1);
     }
 
@@ -401,9 +402,8 @@ public class RequestResponseTest {
             endPoints2.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1244));
             endPoints2.put(SecurityProtocol.SSL, new UpdateMetadataRequest.EndPoint("host2", 1234));
 
-            String rackToSerialize = (version >= 2) ? rack : null;
-            Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1, rackToSerialize),
-                    new UpdateMetadataRequest.Broker(1, endPoints2, rackToSerialize)
+            Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1, rack),
+                    new UpdateMetadataRequest.Broker(1, endPoints2, rack)
             ));
             return new UpdateMetadataRequest(version, 1, 10, partitionStates, liveBrokers);
         }

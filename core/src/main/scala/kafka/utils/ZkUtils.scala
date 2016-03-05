@@ -251,7 +251,12 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   /**
-   * Register brokers with v3 json format (which includes multiple endpoints and rack).
+   * Register brokers with v3 json format (which includes multiple endpoints and rack) if
+   * the apiVersion is 0.10.0.X or above. Register the broker with v2 json format otherwise.
+   * Due to KAFKA-3100, 0.9.0.0 broker and old clients will break if JSON version is above 2.
+   * We have to include v2 to make it possible for 0.9.0.0 clients to first migrate
+   * to 0.9.0.1 and then to 0.10.0.X, and for the broker to migrate from 0.9.0.0 to 0.10.0.X.
+   *
    * This format also includes default endpoints for compatibility with older clients.
    *
    * @param id broker ID

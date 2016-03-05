@@ -16,40 +16,11 @@
  */
 package kafka.admin
 
-import java.io.File
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, StandardOpenOption}
-
-import scala.collection.JavaConverters._
-import kafka.admin.ReassignPartitionsCommand.ReassignPartitionsCommandOptions
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
-import org.junit.{After, Before, Test}
+import org.junit.Test
 
 class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
-  var topicsToMoveFile: File = null
-
-  @Before
-  override def setUp(): Unit = {
-    super.setUp()
-    topicsToMoveFile = createTopicsToMoveJsonFile()
-  }
-
-  @After
-  override def tearDown(): Unit = {
-    if (topicsToMoveFile != null)
-      topicsToMoveFile.delete()
-    super.tearDown()
-  }
-
-  private def createTopicsToMoveJsonFile(): File = {
-    val configFile = File.createTempFile("move", ".json")
-    configFile.deleteOnExit()
-    val lines = Seq("""{"topics": [{"topic": "foo"}], "version":1}""")
-    Files.write(configFile.toPath, lines.asJava, StandardCharsets.UTF_8, StandardOpenOption.WRITE)
-    configFile
-  }
-
   @Test
   def testRackAwareReassign(): Unit = {
     val brokers = 0 to 5
@@ -64,11 +35,10 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
       "--topic", "foo"))
     kafka.admin.TopicCommand.createTopic(zkUtils, createOpts)
 
-    val generateOpts = new ReassignPartitionsCommandOptions(Array(
-      "--broker-list", "0,1,2,3,4,5",
-      "--topics-to-move-json-file", topicsToMoveFile.getAbsolutePath
-    ))
-    val assignment = ReassignPartitionsCommand.generateAssignment(zkUtils, generateOpts).map { case (topicPartition, replicas) =>
+    val topicJson = """{"topics": [{"topic": "foo"}], "version":1}"""
+    val (proposedAssignment, currentAssignment) = ReassignPartitionsCommand.generateAssignment(zkUtils, brokers, topicJson, false)
+
+    val assignment = proposedAssignment map { case (topicPartition, replicas) =>
       (topicPartition.partition, replicas)
     }
     ensureRackAwareAndEvenDistribution(assignment, rackInfo, 6, 18, 3)

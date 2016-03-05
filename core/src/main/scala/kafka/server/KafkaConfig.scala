@@ -388,7 +388,7 @@ object KafkaConfig {
   val MaxConnectionsPerIpOverridesDoc = "Per-ip or hostname overrides to the default maximum number of connections"
   val ConnectionsMaxIdleMsDoc = "Idle connections timeout: the server socket processor threads close the connections that idle more than this"
   /************* Rack Configuration **************/
-  val RackDoc = "Rack of the broker"
+  val RackDoc = "Rack of the broker. This will be used in replica assignment to enable rack aware assignment for fault tolerance. Example: \"RACK1\", \"us-east-1d\""
   /** ********* Log Configuration ***********/
   val NumPartitionsDoc = "The default number of log partitions per topic"
   val LogDirDoc = "The directory in which the log data is kept (supplemental for " + LogDirsProp + " property)"
