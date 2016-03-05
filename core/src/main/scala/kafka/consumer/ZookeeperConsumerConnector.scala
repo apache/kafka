@@ -308,7 +308,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   def commitOffsetToZooKeeper(topicPartition: TopicAndPartition, offset: Long) {
     if (checkpointedZkOffsets.get(topicPartition) != offset) {
       val topicDirs = new ZKGroupTopicDirs(config.groupId, topicPartition.topic)
-      zkUtils.updatePersistentPath(topicDirs.consumerOffsetDir + "/" + topicPartition.partition, offset.toString)
+      zkUtils.updateOffset(topicDirs.consumerOffsetDir + "/" + topicPartition.partition, offset.toString)
       checkpointedZkOffsets.put(topicPartition, offset)
       zkCommitMeter.mark()
     }
@@ -416,9 +416,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   private def fetchOffsetFromZooKeeper(topicPartition: TopicAndPartition) = {
     val dirs = new ZKGroupTopicDirs(config.groupId, topicPartition.topic)
-    val offsetString = zkUtils.readDataMaybeNull(dirs.consumerOffsetDir + "/" + topicPartition.partition)._1
-    offsetString match {
-      case Some(offsetStr) => (topicPartition, OffsetMetadataAndError(offsetStr.toLong))
+    val offset = zkUtils.getOffset(dirs.consumerOffsetDir + "/" + topicPartition.partition)
+    offset match {
+      case Some(offsetVal) => (topicPartition, OffsetMetadataAndError(offsetVal))
       case None => (topicPartition, OffsetMetadataAndError.NoOffset)
     }
   }

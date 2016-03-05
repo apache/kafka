@@ -76,7 +76,7 @@ object UpdateOffsetsInZK {
           val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
 
           println("updating partition " + partition + " with new offset: " + offset)
-          zkUtils.updatePersistentPath(topicDirs.consumerOffsetDir + "/" + partition, offset.toString)
+          zkUtils.updateOffset(topicDirs.consumerOffsetDir + "/" + partition, offset.toString)
           numParts += 1
         case None => throw new KafkaException("Broker information for broker id %d does not exist in ZK".format(broker))
       }

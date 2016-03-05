@@ -264,7 +264,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               else if (partitionData.metadata != null && partitionData.metadata.length > config.offsetMetadataMaxSize)
                 (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE.code)
               else {
-                zkUtils.updatePersistentPath(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}", partitionData.offset.toString)
+                zkUtils.updateOffset(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}", partitionData.offset.toString)
                 (topicPartition, Errors.NONE.code)
               }
             } catch {
@@ -774,10 +774,10 @@ class KafkaApis(val requestChannel: RequestChannel,
             if (!metadataCache.hasTopicMetadata(topicPartition.topic))
               (topicPartition, unknownTopicPartitionResponse)
             else {
-              val payloadOpt = zkUtils.readDataMaybeNull(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}")._1
-              payloadOpt match {
-                case Some(payload) =>
-                  (topicPartition, new OffsetFetchResponse.PartitionData(payload.toLong, "", Errors.NONE.code))
+              val payload = zkUtils.getOffset(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}")
+              payload match {
+                case Some(offsetVal) => 
+                  (topicPartition, new OffsetFetchResponse.PartitionData(offsetVal, "", Errors.NONE.code))
                 case None =>
                   (topicPartition, unknownTopicPartitionResponse)
               }

@@ -867,6 +867,17 @@ class ZkUtils(val zkClient: ZkClient,
       zkClient.close()
     }
   }
+  
+  def getOffset(path: String): Option[Long] = {
+    val offsetString = readDataMaybeNull(path)._1
+    offsetString match {
+      case Some(offsetStr) => Some(offsetStr.toLong)
+      case None => None
+    }
+  }
+
+  def updateOffset(path: String, offset: String) =
+    updatePersistentPath(path, offset)
 }
 
 private object ZKStringSerializer extends ZkSerializer {

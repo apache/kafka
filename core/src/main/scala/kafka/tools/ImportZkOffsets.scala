@@ -98,7 +98,7 @@ object ImportZkOffsets extends Logging {
       debug("updating [" + partition + "] with offset [" + offset + "]")
       
       try {
-        zkUtils.updatePersistentPath(partition, offset.toString)
+        zkUtils.updateOffset(partition, offset)
       } catch {
         case e: Throwable => e.printStackTrace()
       }
