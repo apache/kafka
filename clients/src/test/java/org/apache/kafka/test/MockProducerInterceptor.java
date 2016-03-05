@@ -32,6 +32,7 @@ public class MockProducerInterceptor implements ProducerInterceptor<String, Stri
     public static final AtomicInteger ONSEND_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_SUCCESS_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_ERROR_COUNT = new AtomicInteger(0);
+    public static final AtomicInteger ON_ERROR_WITH_METADATA_COUNT = new AtomicInteger(0);
     public static final String APPEND_STRING_PROP = "mock.interceptor.append";
     private String appendStr;
 
@@ -64,9 +65,12 @@ public class MockProducerInterceptor implements ProducerInterceptor<String, Stri
 
     @Override
     public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
-        if (exception != null)
+        if (exception != null) {
             ON_ERROR_COUNT.incrementAndGet();
-        else if (metadata != null)
+            if (metadata != null) {
+                ON_ERROR_WITH_METADATA_COUNT.incrementAndGet();
+            }
+        } else if (metadata != null)
             ON_SUCCESS_COUNT.incrementAndGet();
     }
 
@@ -81,5 +85,6 @@ public class MockProducerInterceptor implements ProducerInterceptor<String, Stri
         ONSEND_COUNT.set(0);
         ON_SUCCESS_COUNT.set(0);
         ON_ERROR_COUNT.set(0);
+        ON_ERROR_WITH_METADATA_COUNT.set(0);
     }
 }
