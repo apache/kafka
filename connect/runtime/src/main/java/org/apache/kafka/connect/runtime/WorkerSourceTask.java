@@ -207,9 +207,9 @@ class WorkerSourceTask extends WorkerTask {
                                     log.trace("Wrote record successfully: topic {} partition {} offset {}",
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
+                                    commitTaskRecord(record);
                                 }
                                 recordSent(producerRecord);
-                                commitTaskRecord(record);
                             }
                         });
                 lastSendFailed = false;
