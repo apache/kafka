@@ -106,7 +106,7 @@ object ReassignPartitionsCommand extends Logging {
 
     val groupedByTopic = currentAssignment.groupBy { case (tp, _) => tp.topic }
     val rackAwareMode = if (disableRackAware) RackAwareMode.Disabled else RackAwareMode.Enforced
-    val (_, brokerRack) = AdminUtils.getBrokersAndRackInfo(zkUtils, rackAwareMode, brokerListToReassign)
+    val (_, brokerRack) = AdminUtils.getBrokersAndRackInfo(zkUtils, rackAwareMode, Some(brokerListToReassign))
 
     val partitionsToBeReassigned = mutable.Map[TopicAndPartition, Seq[Int]]()
     groupedByTopic.foreach { case (topic, assignment) =>

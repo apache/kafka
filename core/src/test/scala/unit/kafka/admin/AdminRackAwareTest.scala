@@ -186,7 +186,7 @@ class AdminRackAwareTest extends ZooKeeperTestHarness with Logging with RackAwar
       AdminUtils.getBrokersAndRackInfo(zkUtils, RackAwareMode.Enforced)
     }
     val partialList = List(0, 1, 2, 3, 5)
-    val (brokerList2, brokerRack2) = AdminUtils.getBrokersAndRackInfo(zkUtils, RackAwareMode.Enforced, partialList)
+    val (brokerList2, brokerRack2) = AdminUtils.getBrokersAndRackInfo(zkUtils, RackAwareMode.Enforced, Some(partialList))
     assertEquals(partialList, brokerList2)
     assertEquals(rackInfo, brokerRack2)
     AdminUtils.createTopic(zkUtils, "foo", 3, 2, rackAwareMode = RackAwareMode.Safe)
