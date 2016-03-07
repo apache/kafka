@@ -24,6 +24,8 @@ This section will review the most common operations you will perform on your Kaf
 <h4><a id="basic_ops_add_topic" href="#basic_ops_add_topic">Adding and removing topics</a></h4>
 
 You have the option of either adding topics manually or having them be created automatically when data is first published to a non-existent topic. If topics are auto-created then you may want to tune the default <a href="#topic-config">topic configurations</a> used for auto-created topics.
+If automatic creation of topics is enabled, whenever a broker receives a request for unknown topic, it creates the topic. During this period when broker is creating the topic, any produce request sent to it can timeout and potentially lead to message loss. With proper configuration of retries and retry.backoff.ms, this can be avoided.
+
 <p>
 Topics are added and modified using the topic tool:
 <pre>
