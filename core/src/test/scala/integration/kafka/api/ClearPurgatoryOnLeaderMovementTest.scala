@@ -58,7 +58,7 @@ class ClearPurgatoryOnLeaderMovementTest extends KafkaServerTestHarness {
 
     // fetch the metadata.
     producer.partitionsFor(topic)
-    val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "key".getBytes, "value".getBytes))
+    val future = producer.send(new ProducerRecord(topic, "key".getBytes, "value".getBytes))
     // Wait 10 millisends to make sure the produce request has been sent. It is ugly but we don't have a way to
     // see if the producer has sent the produce request.
     Thread.sleep(10)
@@ -78,11 +78,11 @@ class ClearPurgatoryOnLeaderMovementTest extends KafkaServerTestHarness {
 
     def moveLeader(oldLeader: Int, newLeader: Int) {
       val tap = new TopicAndPartition(topic, partition)
-      new ReassignPartitionsCommand(zkUtils, Map({tap -> Seq(newLeader, oldLeader)})).reassignPartitions()
-      TestUtils.waitUntilTrue(() => zkUtils.getPartitionsBeingReassigned().isEmpty, "Failed to finish partition assgiment before timeout")
+      new ReassignPartitionsCommand(zkUtils, Map(tap -> Seq(newLeader, oldLeader))).reassignPartitions()
+      TestUtils.waitUntilTrue(() => zkUtils.getPartitionsBeingReassigned().isEmpty, "Failed to finish partition assignment before timeout.")
       PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkUtils, Set(tap))
       TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils = zkUtils, topic = topic, partition = partition, newLeaderOpt = Some(newLeader))
-      assertTrue(TestUtils.isLeaderLocalOnBroker(topic, 0, servers(newLeader)))
+      assertTrue(TestUtils.isLeaderLocalOnBroker(topic, partition, servers(newLeader)))
     }
   }
 
