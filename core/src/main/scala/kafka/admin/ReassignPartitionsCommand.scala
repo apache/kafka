@@ -91,7 +91,7 @@ object ReassignPartitionsCommand extends Logging {
     if (duplicateReassignments.nonEmpty)
       throw new AdminCommandFailedException("Broker list contains duplicate entries: %s".format(duplicateReassignments.mkString(",")))
     val topicsToMoveJsonString = Utils.readFileAsString(topicsToMoveJsonFile)
-    val disableRackAware = if (opts.options.has(opts.disableRackAware)) true else false
+    val disableRackAware = opts.options.has(opts.disableRackAware)
     val (proposedAssignments, currentAssignments) = generateAssignment(zkUtils, brokerListToReassign, topicsToMoveJsonString, disableRackAware)
     println("Current partition replica assignment\n\n%s".format(zkUtils.getPartitionReassignmentZkData(currentAssignments)))
     println("Proposed partition reassignment configuration\n\n%s".format(zkUtils.getPartitionReassignmentZkData(proposedAssignments)))
@@ -102,19 +102,23 @@ object ReassignPartitionsCommand extends Logging {
     val duplicateTopicsToReassign = CoreUtils.duplicates(topicsToReassign)
     if (duplicateTopicsToReassign.nonEmpty)
       throw new AdminCommandFailedException("List of topics to reassign contains duplicate entries: %s".format(duplicateTopicsToReassign.mkString(",")))
-    val topicPartitionsToReassign = zkUtils.getReplicaAssignmentForTopics(topicsToReassign)
+    val currentAssignment = zkUtils.getReplicaAssignmentForTopics(topicsToReassign)
 
-    var partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]] = new mutable.HashMap[TopicAndPartition, List[Int]]()
-    val groupedByTopic = topicPartitionsToReassign.groupBy(tp => tp._1.topic)
+    val groupedByTopic = currentAssignment.groupBy { case (tp, _) => tp.topic }
     val rackAwareMode = if (disableRackAware) RackAwareMode.Disabled else RackAwareMode.Enforced
-    val brokerRack = AdminUtils.getBrokersAndRackInfo(zkUtils, rackAwareMode, brokerListToReassign)._2
-    groupedByTopic.foreach { topicInfo =>
-      val assignedReplicas = AdminUtils.assignReplicasToBrokers(brokerListToReassign, topicInfo._2.size,
-        topicInfo._2.head._2.size, rackInfo = brokerRack)
-      partitionsToBeReassigned ++= assignedReplicas.map(replicaInfo => (TopicAndPartition(topicInfo._1, replicaInfo._1) -> replicaInfo._2))
+    val (_, brokerRack) = AdminUtils.getBrokersAndRackInfo(zkUtils, rackAwareMode, brokerListToReassign)
+
+    val partitionsToBeReassigned = mutable.Map[TopicAndPartition, Seq[Int]]()
+    groupedByTopic.foreach { case (topic, assignment) =>
+      val (_, replicas) = assignment.head
+      val assignedReplicas = AdminUtils.assignReplicasToBrokers(brokerListToReassign, assignment.size, replicas.size,
+        rackInfo = brokerRack)
+      partitionsToBeReassigned ++= assignedReplicas.map { case (partition, replicas) =>
+        (TopicAndPartition(topic, partition) -> replicas)
+      }
     }
-    val currentPartitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(partitionsToBeReassigned.map(_._1.topic).toSeq)
-    (partitionsToBeReassigned, currentPartitionReplicaAssignment)
+
+    (partitionsToBeReassigned, currentAssignment)
   }
 
   def executeAssignment(zkUtils: ZkUtils, opts: ReassignPartitionsCommandOptions) {
