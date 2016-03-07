@@ -188,10 +188,11 @@ public class ConfigDefTest {
         expected.put("d", configD);
 
         ConfigDef def = new ConfigDef()
-            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommnder())
-            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", Collections.<String>emptyList(), new IntegerRecommnder())
-            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", Collections.<String>emptyList(), new IntegerRecommnder())
-            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Collections.singletonList("b"), new IntegerRecommnder());
+            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
+            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
+            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
+            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false))
+            .end();
 
         Map<String, String> props = new HashMap<>();
         props.put("a", "1");
@@ -220,15 +221,28 @@ public class ConfigDefTest {
 
         List<String> aErrorMessages = a.errorMessages();
         List<String> bErrorMessages = b.errorMessages();
+        for (String msg: aErrorMessages) {
+            System.out.println(msg);
+        }
+
+        for (String msg: bErrorMessages) {
+            System.out.println(msg);
+        }
         assertEquals(aErrorMessages.size(), bErrorMessages.size());
     }
 
-    private static class IntegerRecommnder implements ConfigDef.Recommender {
+    private static class IntegerRecommender implements ConfigDef.Recommender {
+
+        private boolean hasParent;
+
+        public IntegerRecommender(boolean hasParent) {
+            this.hasParent = hasParent;
+        }
 
         @Override
-        public List<Object> validValues(String name, List<String> ancestors, Map<String, String> connectorConfigs) {
+        public List<Object> validValues(String name, Map<String, String> connectorConfigs) {
             List<Object> values = new LinkedList<>();
-            if (ancestors.isEmpty()) {
+            if (!hasParent) {
                 values.addAll(Arrays.asList(1, 2, 3));
             } else {
                 values.addAll(Arrays.asList(4, 5));
@@ -237,7 +251,7 @@ public class ConfigDefTest {
         }
 
         @Override
-        public boolean visible(String name, List<String> ancestors, Map<String, String> connectorConfigs) {
+        public boolean visible(String name, Map<String, String> connectorConfigs) {
             return true;
         }
     }

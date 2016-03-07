@@ -24,14 +24,19 @@ import java.util.List;
 
 public class ConfigInfos {
 
+    @JsonProperty("name")
     private final String name;
+
+    @JsonProperty("error_count")
     private final int errorCount;
+
+    @JsonProperty("configs")
     private final List<ConfigInfo> configs;
 
     @JsonCreator
     public ConfigInfos(@JsonProperty("name") String name,
-                       @JsonProperty("error-count") int errorCount,
-                       @JsonProperty("config") List<ConfigInfo> configs) {
+                       @JsonProperty("error_count") int errorCount,
+                       @JsonProperty("configs") List<ConfigInfo> configs) {
         this.name = name;
         this.errorCount = errorCount;
         this.configs = configs;
@@ -43,13 +48,13 @@ public class ConfigInfos {
         return name;
     }
 
-    @JsonProperty("error-count")
+    @JsonProperty("error_count")
     public int errorCount() {
         return errorCount;
     }
 
 
-    @JsonProperty("config")
+    @JsonProperty("configs")
     public List<ConfigInfo> values() {
         return configs;
     }

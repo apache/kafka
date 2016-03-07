@@ -65,6 +65,10 @@ public class ConnectorConfig extends AbstractConfig {
                 .define(TOPICS_CONFIG, Type.LIST, TOPICS_DEFAULT, Importance.HIGH, TOPICS_DOC);
     }
 
+    public static ConfigDef configDef() {
+        return config;
+    }
+
     public ConnectorConfig() {
         this(new HashMap<String, String>());
     }
