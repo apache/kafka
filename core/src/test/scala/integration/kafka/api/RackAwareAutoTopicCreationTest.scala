@@ -29,10 +29,11 @@ import scala.collection.Map
 
 class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwareTest {
   val numServers = 4
-
+  val numPartitions = 8
+  val replicationFactor = 2
   val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.NumPartitionsProp, 8.toString)
-  overridingProps.put(KafkaConfig.DefaultReplicationFactorProp, 2.toString)
+  overridingProps.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
+  overridingProps.put(KafkaConfig.DefaultReplicationFactorProp, replicationFactor.toString)
 
   def generateConfigs() =
     (0 until numServers) map { node =>
@@ -57,7 +58,7 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
       val (_, brokerRackMap) = AdminUtils.getBrokersAndRackInfo(zkUtils, RackAwareMode.Enforced)
       val expectedMap = Map(0 -> "0", 1 -> "0", 2 -> "1", 3 -> "1")
       assertEquals(expectedMap, brokerRackMap)
-      ensureRackAwareAndEvenDistribution(assignment, brokerRackMap, 4, 8, 2)
+      ensureRackAwareAndEvenDistribution(assignment, brokerRackMap, numServers, numPartitions, replicationFactor)
     } finally producer.close()
   }
 }

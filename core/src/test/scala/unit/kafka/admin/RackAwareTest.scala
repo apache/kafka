@@ -20,54 +20,53 @@ import scala.collection.{Map, Seq, mutable}
 import org.junit.Assert._
 
 trait RackAwareTest {
-  def ensureRackAwareAndEvenDistribution(assignment: scala.collection.Map[Int, Seq[Int]], brokerRackMapping: Map[Int, String], numBrokers: Int,
-                                         numPartitions: Int, replicationFactor: Int, verifyRackAware: Boolean = true,
-                                         verifyLeaderDistribution: Boolean = true, verifyReplicasDistribution: Boolean = true): Unit = {
+
+  def ensureRackAwareAndEvenDistribution(assignment: Map[Int, Seq[Int]],
+                                         brokerRackMapping: Map[Int, String],
+                                         numBrokers: Int,
+                                         numPartitions: Int,
+                                         replicationFactor: Int,
+                                         verifyRackAware: Boolean = true,
+                                         verifyLeaderDistribution: Boolean = true,
+                                         verifyReplicasDistribution: Boolean = true) {
     val distribution = getReplicaDistribution(assignment, brokerRackMapping)
-    val leaderCount: Map[Int, Int] = distribution.brokerLeaderCount
-    val partitionCount: Map[Int, Int] = distribution.brokerReplicasCount
-    val partitionRackMap: Map[Int, Seq[String]] = distribution.partitionRacks
-    val numReplicasPerBroker = numPartitions * replicationFactor / numBrokers
-    val leaderCountPerBroker = numPartitions / numBrokers
+
     if (verifyRackAware) {
+      val partitionRackMap = distribution.partitionRacks
       assertEquals(List.fill(numPartitions)(replicationFactor), partitionRackMap.values.toList.map(_.size))
-      assertEquals(List.fill(numPartitions)(replicationFactor), partitionRackMap.values.toList.map(_.toSet.size))
+      assertEquals(List.fill(numPartitions)(replicationFactor), partitionRackMap.values.toList.map(_.distinct.size))
     }
+
     if (verifyLeaderDistribution) {
+      val leaderCount = distribution.brokerLeaderCount
+      val leaderCountPerBroker = numPartitions / numBrokers
       assertEquals(List.fill(numBrokers)(leaderCountPerBroker), leaderCount.values.toList)
     }
+
     if (verifyReplicasDistribution) {
-      assertEquals(List.fill(numBrokers)(numReplicasPerBroker), partitionCount.values.toList)
+      val replicasCount = distribution.brokerReplicasCount
+      val numReplicasPerBroker = numPartitions * replicationFactor / numBrokers
+      assertEquals(List.fill(numBrokers)(numReplicasPerBroker), replicasCount.values.toList)
     }
+
   }
 
-  def getReplicaDistribution(assignment: scala.collection.Map[Int, Seq[Int]], brokerRackMapping: Map[Int, String]): ReplicaDistributions = {
-    val leaderCount: mutable.Map[Int, Int] = mutable.Map()
-    val partitionCount: mutable.Map[Int, Int] = mutable.Map()
-    val partitionRackMap: mutable.Map[Int, List[String]] = mutable.Map()
-    assignment.foreach {
-      case (partitionId, replicaList) => {
-        val leader = replicaList.head
-        leaderCount(leader) = leaderCount.getOrElse(leader, 0) + 1
-        for (brokerId <- replicaList) {
-          partitionCount(brokerId) = partitionCount.getOrElse(brokerId, 0) + 1
-          partitionRackMap(partitionId) =  brokerRackMapping(brokerId) :: partitionRackMap.getOrElse(partitionId, List())
-        }
+  def getReplicaDistribution(assignment: Map[Int, Seq[Int]], brokerRackMapping: Map[Int, String]): ReplicaDistributions = {
+    val leaderCount = mutable.Map[Int, Int]()
+    val partitionCount = mutable.Map[Int, Int]()
+    val partitionRackMap = mutable.Map[Int, List[String]]()
+    assignment.foreach { case (partitionId, replicaList) =>
+      val leader = replicaList.head
+      leaderCount(leader) = leaderCount.getOrElse(leader, 0) + 1
+      for (brokerId <- replicaList) {
+        partitionCount(brokerId) = partitionCount.getOrElse(brokerId, 0) + 1
+        val rack = brokerRackMapping.getOrElse(brokerId, sys.error(s"No mapping found for $brokerId in `brokerRackMapping`"))
+        partitionRackMap(partitionId) = rack :: partitionRackMap.getOrElse(partitionId, List())
       }
     }
     ReplicaDistributions(partitionRackMap, leaderCount, partitionCount)
   }
 
-  def ensureSameNumberOfBrokersInRack(brokerList: Seq[Int], brokerRackMap: Map[Int, String]): Unit = {
-    val subRackInfo = brokerRackMap.filterKeys(brokerList.contains(_))
-    if (brokerRackMap.size > 0 && subRackInfo.size != brokerList.size) {
-      throw new AdminOperationException("Incomplete broker-rack mapping supplied for broker list " + brokerList)
-    }
-    val reverseMap = AdminUtils.getInverseMap(subRackInfo)
-    if (reverseMap.values.map(_.size).toSet.size > 1) {
-      throw new AdminOperationException("The number of brokers are not the same for all racks: %s".format(reverseMap))
-    }
-  }
 }
 
 case class ReplicaDistributions(partitionRacks: Map[Int, Seq[String]], brokerLeaderCount: Map[Int, Int], brokerReplicasCount: Map[Int, Int])

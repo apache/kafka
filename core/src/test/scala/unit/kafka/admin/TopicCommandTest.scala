@@ -161,26 +161,31 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   @Test
   def testCreateAlterTopicWithRackAware() {
     val brokers = 0 to 5
-    val rackInfo: Map[Int, String] = Map(0 -> "rack1", 1 -> "rack2",2 -> "rack2",3 -> "rack1", 4 -> "rack3",5 -> "rack3")
+    val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3")
     TestUtils.createBrokersInZk(zkUtils, brokers, rackInfo)
 
+    val numPartitions = 18
+    val replicationFactor = 3
     val createOpts = new TopicCommandOptions(Array(
-      "--partitions", "18",
-      "--replication-factor", "3",
+      "--partitions", numPartitions.toString,
+      "--replication-factor", replicationFactor.toString,
       "--topic", "foo"))
     TopicCommand.createTopic(zkUtils, createOpts)
 
-    var assignment = zkUtils.getReplicaAssignmentForTopics(Seq("foo"))
-      .map(p => p._1.partition -> p._2)
-    ensureRackAwareAndEvenDistribution(assignment, rackInfo, 6, 18, 3)
+    var assignment = zkUtils.getReplicaAssignmentForTopics(Seq("foo")).map { case (tp, replicas) =>
+      tp.partition -> replicas
+    }
+    ensureRackAwareAndEvenDistribution(assignment, rackInfo, brokers.size, numPartitions, replicationFactor)
 
+    val alteredNumPartitions = 36
     // verify that adding partitions will also be rack aware
     val alterOpts = new TopicCommandOptions(Array(
-      "--partitions", "36",
+      "--partitions", alteredNumPartitions.toString,
       "--topic", "foo"))
     TopicCommand.alterTopic(zkUtils, alterOpts)
-    assignment = zkUtils.getReplicaAssignmentForTopics(Seq("foo"))
-      .map(p => p._1.partition -> p._2)
-    ensureRackAwareAndEvenDistribution(assignment, rackInfo, 6, 36, 3)
+    assignment = zkUtils.getReplicaAssignmentForTopics(Seq("foo")).map { case (tp, replicas) =>
+      tp.partition -> replicas
+    }
+    ensureRackAwareAndEvenDistribution(assignment, rackInfo, brokers.size, alteredNumPartitions, replicationFactor)
   }
 }
