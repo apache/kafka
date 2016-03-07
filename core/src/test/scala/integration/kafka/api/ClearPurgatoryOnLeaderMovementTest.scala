@@ -46,8 +46,7 @@ class ClearPurgatoryOnLeaderMovementTest extends KafkaServerTestHarness {
     overridingProps.put(KafkaConfig.ReplicaSocketTimeoutMsProp, "100000")
     overridingProps.put(KafkaConfig.ReplicaFetchMinBytesProp, "100000")
     overridingProps.put(KafkaConfig.ReplicaFetchWaitMaxMsProp, "100000")
-    TestUtils.createBrokerConfigs(numServers, zkConnect, false, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile).map(KafkaConfig.fromProps(_, overridingProps))
+    TestUtils.createBrokerConfigs(numServers, zkConnect).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
   @Test
