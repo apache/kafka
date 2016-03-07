@@ -800,6 +800,11 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
       logManager.truncateTo(partitionsToMakeFollower.map(partition => (new TopicAndPartition(partition), partition.getOrCreateReplica().highWatermark.messageOffset)).toMap)
+      partitionsToMakeFollower.foreach(partition => {
+        val topicPartitionOperationKey = new TopicPartitionOperationKey(partition.topic, partition.partitionId)
+        tryCompleteDelayedProduce(topicPartitionOperationKey)
+        tryCompleteDelayedFetch(topicPartitionOperationKey)
+      })
 
       partitionsToMakeFollower.foreach { partition =>
         stateChangeLogger.trace(("Broker %d truncated logs and checkpointed recovery boundaries for partition [%s,%d] as part of " +

@@ -89,7 +89,10 @@ class DelayedProduce(delayMs: Long,
         val partitionOpt = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
         val (hasEnough, errorCode) = partitionOpt match {
           case Some(partition) =>
-            partition.checkEnoughReplicasReachOffset(status.requiredOffset)
+            if (partition.leaderReplicaIfLocal().isEmpty)
+              (false, Errors.NOT_LEADER_FOR_PARTITION.code)
+            else
+              partition.checkEnoughReplicasReachOffset(status.requiredOffset)
           case None =>
             // Case A
             (false, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
