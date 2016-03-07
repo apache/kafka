@@ -644,11 +644,17 @@ public class Fetcher<K, V> {
             long timestamp = logEntry.record().timestamp();
             TimestampType timestampType = logEntry.record().timestampType();
             ByteBuffer keyBytes = logEntry.record().key();
-            K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), Utils.toArray(keyBytes));
+            byte[] keyByteArray = keyBytes == null ? null : Utils.toArray(keyBytes);
+            K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), keyByteArray);
             ByteBuffer valueBytes = logEntry.record().value();
-            V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), Utils.toArray(valueBytes));
+            byte[] valueByteArray = valueBytes == null ? null : Utils.toArray(valueBytes);
+            V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), valueByteArray);
 
-            return new ConsumerRecord<>(partition.topic(), partition.partition(), offset, timestamp, timestampType, key, value);
+            return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
+                                        timestamp, timestampType, logEntry.record().checksum(),
+                                        keyByteArray == null ? -1 : keyByteArray.length,
+                                        valueByteArray == null ? -1 : valueByteArray.length,
+                                        key, value);
         } catch (KafkaException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -760,18 +766,43 @@ public class Fetcher<K, V> {
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {
+            Map<String, String> metricTags = new HashMap<>();
+            metricTags.put("topic", topic.replace(".", "_"));
+
             // record bytes fetched
             String name = "topic." + topic + ".bytes-fetched";
             Sensor bytesFetched = this.metrics.getSensor(name);
-            if (bytesFetched == null)
+            if (bytesFetched == null) {
                 bytesFetched = this.metrics.sensor(name);
+                bytesFetched.add(this.metrics.metricName("fetch-size-avg",
+                        this.metricGrpName,
+                        "The average number of bytes fetched per request for topic " + topic,
+                        metricTags), new Avg());
+                bytesFetched.add(this.metrics.metricName("fetch-size-max",
+                        this.metricGrpName,
+                        "The maximum number of bytes fetched per request for topic " + topic,
+                        metricTags), new Max());
+                bytesFetched.add(this.metrics.metricName("bytes-consumed-rate",
+                        this.metricGrpName,
+                        "The average number of bytes consumed per second for topic " + topic,
+                        metricTags), new Rate());
+            }
             bytesFetched.record(bytes);
 
             // record records fetched
             name = "topic." + topic + ".records-fetched";
             Sensor recordsFetched = this.metrics.getSensor(name);
-            if (recordsFetched == null)
+            if (recordsFetched == null) {
                 recordsFetched = this.metrics.sensor(name);
+                recordsFetched.add(this.metrics.metricName("records-per-request-avg",
+                        this.metricGrpName,
+                        "The average number of records in each request for topic " + topic,
+                        metricTags), new Avg());
+                recordsFetched.add(this.metrics.metricName("records-consumed-rate",
+                        this.metricGrpName,
+                        "The average number of records consumed per second for topic " + topic,
+                        metricTags), new Rate());
+            }
             recordsFetched.record(records);
         }
     }

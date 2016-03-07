@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.examples.wordcount;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
@@ -64,7 +63,7 @@ public class WordCountProcessorJob {
 
                 @Override
                 public void process(String dummy, String line) {
-                    String words[] = line.toLowerCase().split(" ");
+                    String[] words = line.toLowerCase().split(" ");
 
                     for (String word : words) {
                         Integer oldValue = this.kvStore.get(word);
@@ -115,7 +114,7 @@ public class WordCountProcessorJob {
         props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(StreamsConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         TopologyBuilder builder = new TopologyBuilder();
 

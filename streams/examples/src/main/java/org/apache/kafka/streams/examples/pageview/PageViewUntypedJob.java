@@ -20,7 +20,6 @@ package org.apache.kafka.streams.examples.pageview;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -69,7 +68,7 @@ public class PageViewUntypedJob {
         props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(StreamsConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -93,15 +92,15 @@ public class PageViewUntypedJob {
 
         KStream<JsonNode, JsonNode> regionCount = views
                 .leftJoin(userRegions, new ValueJoiner<JsonNode, String, JsonNode>() {
-                            @Override
-                            public JsonNode apply(JsonNode view, String region) {
-                                ObjectNode jNode = JsonNodeFactory.instance.objectNode();
+                    @Override
+                    public JsonNode apply(JsonNode view, String region) {
+                        ObjectNode jNode = JsonNodeFactory.instance.objectNode();
 
-                                return jNode.put("user", view.get("user").textValue())
-                                        .put("page", view.get("page").textValue())
-                                        .put("region", region == null ? "UNKNOWN" : region);
-                            }
-                        })
+                        return jNode.put("user", view.get("user").textValue())
+                                .put("page", view.get("page").textValue())
+                                .put("region", region == null ? "UNKNOWN" : region);
+                    }
+                })
                 .map(new KeyValueMapper<String, JsonNode, KeyValue<String, JsonNode>>() {
                     @Override
                     public KeyValue<String, JsonNode> apply(String user, JsonNode viewRegion) {

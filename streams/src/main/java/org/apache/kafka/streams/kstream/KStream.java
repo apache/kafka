@@ -22,13 +22,11 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-
-// TODO: Javadoc needs to be updated
 /**
- * KStream is an abstraction of a stream of key-value pairs.
+ * KStream is an abstraction of an event stream in key-value pairs.
  *
- * @param <K> the type of keys
- * @param <V> the type of values
+ * @param <K> Type of keys
+ * @param <V> Type of values
  */
 public interface KStream<K, V> {
 

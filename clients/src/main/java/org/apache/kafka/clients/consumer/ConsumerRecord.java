@@ -24,6 +24,9 @@ public final class ConsumerRecord<K, V> {
     private final long offset;
     private final long timestamp;
     private final TimestampType timestampType;
+    private final long checksum;
+    private final int serializedKeySize;
+    private final int serializedValueSize;
     private final K key;
     private final V value;
 
@@ -43,6 +46,9 @@ public final class ConsumerRecord<K, V> {
                           long offset,
                           long timestamp,
                           TimestampType timestampType,
+                          long checksum,
+                          int serializedKeySize,
+                          int serializedValueSize,
                           K key,
                           V value) {
         if (topic == null)
@@ -52,6 +58,9 @@ public final class ConsumerRecord<K, V> {
         this.offset = offset;
         this.timestamp = timestamp;
         this.timestampType = timestampType;
+        this.checksum = checksum;
+        this.serializedKeySize = serializedKeySize;
+        this.serializedValueSize = serializedValueSize;
         this.key = key;
         this.value = value;
     }
@@ -105,9 +114,35 @@ public final class ConsumerRecord<K, V> {
         return timestampType;
     }
 
+    /**
+     * The checksum (CRC32) of the record.
+     */
+    public long checksum() {
+        return this.checksum;
+    }
+
+    /**
+     * The size of the serialized, uncompressed key in bytes. If key is null, the returned size
+     * is -1.
+     */
+    public int serializedKeySize() {
+        return this.serializedKeySize;
+    }
+
+    /**
+     * The size of the serialized, uncompressed value in bytes. If value is null, the
+     * returned size is -1.
+     */
+    public int serializedValueSize() {
+        return this.serializedValueSize;
+    }
+
     @Override
     public String toString() {
         return "ConsumerRecord(topic = " + topic() + ", partition = " + partition() + ", offset = " + offset()
-                + ", " + timestampType + " = " + timestamp + ", key = " + key + ", value = " + value + ")";
+               + ", " + timestampType + " = " + timestamp + ", checksum = " + checksum
+               + ", serialized key size = "  + serializedKeySize
+               + ", serialized value size = " + serializedValueSize
+               + ", key = " + key + ", value = " + value + ")";
     }
 }
