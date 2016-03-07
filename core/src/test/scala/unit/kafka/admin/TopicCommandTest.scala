@@ -180,7 +180,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val alteredNumPartitions = 36
     // verify that adding partitions will also be rack aware
     val alterOpts = new TopicCommandOptions(Array(
-      "--partitions", "36",
+      "--partitions", alteredNumPartitions.toString,
       "--topic", "foo"))
     TopicCommand.alterTopic(zkUtils, alterOpts)
     assignment = zkUtils.getReplicaAssignmentForTopics(Seq("foo")).map { case (tp, replicas) =>
