@@ -1059,7 +1059,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Seek to the first offset for each of the given partitions. This function evaluates lazily, seeking to the
-     * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
+     * first offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
+     * If no partition is provided, seek to the first offset for all of the currently assigned partitions.
      */
     public void seekToBeginning(TopicPartition... partitions) {
         acquire();
@@ -1078,6 +1079,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Seek to the last offset for each of the given partitions. This function evaluates lazily, seeking to the
      * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
+     * If no partition is provided, seek to the final offset for all of the currently assigned partitions.
      */
     public void seekToEnd(TopicPartition... partitions) {
         acquire();
