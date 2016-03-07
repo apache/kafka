@@ -78,14 +78,17 @@ object RequestChannel extends Logging {
     val header: RequestHeader =
       if (requestObj == null) {
         buffer.rewind
-        RequestHeader.parse(buffer)
+        try RequestHeader.parse(buffer)
+        catch {
+          case ex: Throwable =>
+            throw new InvalidRequestException(s"Error parsing request header. Our best guess of the apiKey is: $requestId", ex)
+        }
       } else
         null
     val body: AbstractRequest =
       if (requestObj == null)
-        try {
-          AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
-        } catch {
+        try AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
+        catch {
           case ex: Throwable =>
             throw new InvalidRequestException(s"Error getting request for apiKey: ${header.apiKey} and apiVersion: ${header.apiVersion}", ex)
         }
