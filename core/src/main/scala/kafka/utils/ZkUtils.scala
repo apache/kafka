@@ -254,8 +254,8 @@ class ZkUtils(val zkClient: ZkClient,
    * Register brokers with v3 json format (which includes multiple endpoints and rack) if
    * the apiVersion is 0.10.0.X or above. Register the broker with v2 json format otherwise.
    * Due to KAFKA-3100, 0.9.0.0 broker and old clients will break if JSON version is above 2.
-   * We have to include v2 to make it possible for 0.9.0.0 clients to first migrate
-   * to 0.9.0.1 and then to 0.10.0.X, and for the broker to migrate from 0.9.0.0 to 0.10.0.X.
+   * We include v2 to make it possible for the broker to migrate from 0.9.0.0 to 0.10.0.X without having to upgrade
+   * to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in any case).
    *
    * This format also includes default endpoints for compatibility with older clients.
    *
@@ -272,8 +272,8 @@ class ZkUtils(val zkClient: ZkClient,
                          port: Int,
                          advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint],
                          jmxPort: Int,
-                         rack: Option[String] = Option.empty,
-                         apiVersion: ApiVersion = ApiVersion.latestVersion) {
+                         rack: Option[String],
+                         apiVersion: ApiVersion) {
     val brokerIdPath = BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
 
@@ -281,14 +281,11 @@ class ZkUtils(val zkClient: ZkClient,
     var jsonMap = Map("version" -> version,
                       "host" -> host,
                       "port" -> port,
-                      "endpoints"->advertisedEndpoints.values.map(_.connectionString).toArray,
+                      "endpoints" -> advertisedEndpoints.values.map(_.connectionString).toArray,
                       "jmx_port" -> jmxPort,
                       "timestamp" -> timestamp
     )
-    rack match {
-      case Some(rack) if (version >= 3) => jsonMap += ("rack" -> rack)
-      case None =>
-    }
+    rack.foreach(rack => if (version >= 3) jsonMap += ("rack" -> rack))
 
     val brokerInfo = Json.encode(jsonMap)
     registerBrokerInZk(brokerIdPath, brokerInfo)
