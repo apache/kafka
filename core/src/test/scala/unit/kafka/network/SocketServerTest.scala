@@ -21,23 +21,25 @@ package kafka.network;
 import java.net._
 import javax.net.ssl._
 import java.io._
+import java.util.HashMap
+import java.util.Random
+import java.nio.ByteBuffer
 
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.NetworkSend
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.requests.{ProduceRequest, RequestHeader}
 import org.apache.kafka.common.utils.SystemTime
+
+import kafka.producer.SyncProducerConfig
+import kafka.server.KafkaConfig
+import kafka.utils.TestUtils
+
 import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
-import java.util.Random
-import kafka.producer.SyncProducerConfig
-import kafka.api.ProducerRequest
-import java.nio.ByteBuffer
-import kafka.common.TopicAndPartition
-import kafka.message.ByteBufferMessageSet
-import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
 
 import scala.collection.Map
 
@@ -56,10 +58,15 @@ class SocketServerTest extends JUnitSuite {
   val server = new SocketServer(config, metrics, new SystemTime)
   server.startup()
 
-  def sendRequest(socket: Socket, id: Short, request: Array[Byte]) {
+  def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None) {
     val outgoing = new DataOutputStream(socket.getOutputStream)
-    outgoing.writeInt(request.length + 2)
-    outgoing.writeShort(id)
+    id match {
+      case Some(id) =>
+        outgoing.writeInt(request.length + 2)
+        outgoing.writeShort(id)
+      case None =>
+        outgoing.writeInt(request.length)
+    }
     outgoing.write(request)
     outgoing.flush()
   }
@@ -75,9 +82,11 @@ class SocketServerTest extends JUnitSuite {
   /* A simple request handler that just echos back the response */
   def processRequest(channel: RequestChannel) {
     val request = channel.receiveRequest
-    val byteBuffer = ByteBuffer.allocate(request.requestObj.sizeInBytes)
-    request.requestObj.writeTo(byteBuffer)
+    val byteBuffer = ByteBuffer.allocate(request.header.sizeOf + request.body.sizeOf)
+    request.header.writeTo(byteBuffer)
+    request.body.writeTo(byteBuffer)
     byteBuffer.rewind()
+
     val send = new NetworkSend(request.connectionId, byteBuffer)
     channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
   }
@@ -92,14 +101,17 @@ class SocketServerTest extends JUnitSuite {
   }
 
   private def producerRequestBytes: Array[Byte] = {
+    val apiKey: Short = 0
     val correlationId = -1
     val clientId = SyncProducerConfig.DefaultClientId
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
     val ack = SyncProducerConfig.DefaultRequiredAcks
-    val emptyRequest =
-      new ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]())
 
-    val byteBuffer = ByteBuffer.allocate(emptyRequest.sizeInBytes)
+    val emptyHeader = new RequestHeader(apiKey, clientId, correlationId)
+    val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new HashMap[TopicPartition, ByteBuffer]())
+
+    val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf + emptyRequest.sizeOf)
+    emptyHeader.writeTo(byteBuffer)
     emptyRequest.writeTo(byteBuffer)
     byteBuffer.rewind()
     val serializedBytes = new Array[Byte](byteBuffer.remaining)
@@ -114,12 +126,12 @@ class SocketServerTest extends JUnitSuite {
     val serializedBytes = producerRequestBytes
 
     // Test PLAINTEXT socket
-    sendRequest(plainSocket, 0, serializedBytes)
+    sendRequest(plainSocket, serializedBytes)
     processRequest(server.requestChannel)
     assertEquals(serializedBytes.toSeq, receiveResponse(plainSocket).toSeq)
 
     // Test TRACE socket
-    sendRequest(traceSocket, 0, serializedBytes)
+    sendRequest(traceSocket, serializedBytes)
     processRequest(server.requestChannel)
     assertEquals(serializedBytes.toSeq, receiveResponse(traceSocket).toSeq)
   }
@@ -129,7 +141,7 @@ class SocketServerTest extends JUnitSuite {
     val tooManyBytes = new Array[Byte](server.config.socketRequestMaxBytes + 1)
     new Random().nextBytes(tooManyBytes)
     val socket = connect()
-    sendRequest(socket, 0, tooManyBytes)
+    sendRequest(socket, tooManyBytes, Some(0))
     try {
       receiveResponse(socket)
     } catch {
@@ -144,8 +156,8 @@ class SocketServerTest extends JUnitSuite {
     val traceSocket = connect(protocol = SecurityProtocol.TRACE)
     val bytes = new Array[Byte](40)
     // send a request first to make sure the connection has been picked up by the socket server
-    sendRequest(plainSocket, 0, bytes)
-    sendRequest(traceSocket, 0, bytes)
+    sendRequest(plainSocket, bytes, Some(0))
+    sendRequest(traceSocket, bytes, Some(0))
     processRequest(server.requestChannel)
 
     // make sure the sockets are open
@@ -157,14 +169,14 @@ class SocketServerTest extends JUnitSuite {
     // doing a subsequent send should throw an exception as the connection should be closed.
     // send a large chunk of bytes to trigger a socket flush
     try {
-      sendRequest(plainSocket, 0, largeChunkOfBytes)
+      sendRequest(plainSocket, largeChunkOfBytes, Some(0))
       fail("expected exception when writing to closed plain socket")
     } catch {
       case e: IOException => // expected
     }
 
     try {
-      sendRequest(traceSocket, 0, largeChunkOfBytes)
+      sendRequest(traceSocket, largeChunkOfBytes, Some(0))
       fail("expected exception when writing to closed trace socket")
     } catch {
       case e: IOException => // expected
@@ -188,7 +200,7 @@ class SocketServerTest extends JUnitSuite {
       "Failed to decrement connection count after close")
     val conn2 = connect()
     val serializedBytes = producerRequestBytes
-    sendRequest(conn2, 0, serializedBytes)
+    sendRequest(conn2, serializedBytes)
     val request = server.requestChannel.receiveRequest(2000)
     assertNotNull(request)
     conn2.close()
@@ -221,9 +233,9 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def testSslSocketServer(): Unit = {
     val trustStoreFile = File.createTempFile("truststore", ".jks")
-    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, enableSsl = true,
+    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
       trustStoreFile = Some(trustStoreFile))
-    overrideProps.put("listeners", "SSL://localhost:0")
+    overrideProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
 
     val serverMetrics = new Metrics
     val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime)
@@ -235,20 +247,22 @@ class SocketServerTest extends JUnitSuite {
       val sslSocket = socketFactory.createSocket("localhost", overrideServer.boundPort(SecurityProtocol.SSL)).asInstanceOf[SSLSocket]
       sslSocket.setNeedClientAuth(false)
 
+      val apiKey = ApiKeys.PRODUCE.id
       val correlationId = -1
       val clientId = SyncProducerConfig.DefaultClientId
       val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
       val ack = SyncProducerConfig.DefaultRequiredAcks
-      val emptyRequest =
-        new ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]())
+      val emptyHeader = new RequestHeader(apiKey, clientId, correlationId)
+      val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new HashMap[TopicPartition, ByteBuffer]())
 
-      val byteBuffer = ByteBuffer.allocate(emptyRequest.sizeInBytes)
+      val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf() + emptyRequest.sizeOf())
+      emptyHeader.writeTo(byteBuffer)
       emptyRequest.writeTo(byteBuffer)
       byteBuffer.rewind()
       val serializedBytes = new Array[Byte](byteBuffer.remaining)
       byteBuffer.get(serializedBytes)
 
-      sendRequest(sslSocket, 0, serializedBytes)
+      sendRequest(sslSocket, serializedBytes)
       processRequest(overrideServer.requestChannel)
       assertEquals(serializedBytes.toSeq, receiveResponse(sslSocket).toSeq)
       sslSocket.close()
@@ -262,7 +276,7 @@ class SocketServerTest extends JUnitSuite {
   def testSessionPrincipal(): Unit = {
     val socket = connect()
     val bytes = new Array[Byte](40)
-    sendRequest(socket, 0, bytes)
+    sendRequest(socket, bytes, Some(0))
     assertEquals(KafkaPrincipal.ANONYMOUS, server.requestChannel.receiveRequest().session.principal)
     socket.close()
   }

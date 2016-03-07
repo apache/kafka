@@ -17,6 +17,14 @@
 
 package org.apache.kafka.streams.kstream;
 
+/**
+ * The windowed key interface used in {@link KTable}, used for representing a windowed table result from windowed stream aggregations,
+ * i.e. {@link KStream#aggregateByKey(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serializer,
+ * org.apache.kafka.common.serialization.Serializer, org.apache.kafka.common.serialization.Deserializer,
+ * org.apache.kafka.common.serialization.Deserializer)}
+ *
+ * @param <T> Type of the key
+ */
 public class Windowed<T> {
 
     private T value;
@@ -39,5 +47,24 @@ public class Windowed<T> {
     @Override
     public String toString() {
         return "[" + value + "@" + window.start() + "]";
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this)
+            return true;
+
+        if (!(obj instanceof Windowed))
+            return false;
+
+        Windowed<?> that = (Windowed) obj;
+
+        return this.window.equals(that.window) && this.value.equals(that.value);
+    }
+
+    @Override
+    public int hashCode() {
+        long n = ((long) window.hashCode() << 32) | value.hashCode();
+        return (int) (n % 0xFFFFFFFFL);
     }
 }

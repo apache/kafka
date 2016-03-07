@@ -17,8 +17,10 @@
 
 package org.apache.kafka.streams.kstream;
 
+/**
+ * A value transformer supplier which can create one or more {@link ValueTransformer} instances.
+ */
 public interface ValueTransformerSupplier<V, R> {
 
     ValueTransformer<V, R> get();
-
 }

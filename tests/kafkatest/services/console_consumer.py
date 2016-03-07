@@ -26,16 +26,6 @@ import os
 import subprocess
 
 
-def is_int(msg):
-    """Default method used to check whether text pulled from console consumer is a message.
-
-    return int or None
-    """
-    try:
-        return int(msg)
-    except ValueError:
-        return None
-
 """
 0.8.2.1 ConsoleConsumer options
 
@@ -135,7 +125,6 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         self.messages_consumed = {idx: [] for idx in range(1, num_nodes + 1)}
         self.client_id = client_id
         self.print_key = print_key
-        self.log_values = True if version == TRUNK else False
         self.log_level = "TRACE"
 
     def prop_file(self, node):
@@ -192,7 +181,8 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         if self.print_key:
             cmd += " --property print.key=true"
 
-        if self.log_values:
+        # LoggingMessageFormatter was introduced in 0.9.0.0
+        if node.version > LATEST_0_8_2:
             cmd+=" --formatter kafka.tools.LoggingMessageFormatter"
 
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args

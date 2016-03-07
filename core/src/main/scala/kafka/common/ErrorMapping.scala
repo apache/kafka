@@ -62,6 +62,7 @@ object ErrorMapping {
   val TopicAuthorizationCode: Short = 29
   val GroupAuthorizationCode: Short = 30
   val ClusterAuthorizationCode: Short = 31
+  // 32: INVALID_TIMESTAMP
 
   private val exceptionToCode =
     Map[Class[Throwable], Short](

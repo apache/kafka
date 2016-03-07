@@ -17,11 +17,16 @@
 
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.streams.errors.TaskIdFormatException;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+/**
+ * The task id representation composed as topic group id plus the assigned partition id.
+ */
 public class TaskId implements Comparable<TaskId> {
 
     public final int topicGroupId;
@@ -38,7 +43,7 @@ public class TaskId implements Comparable<TaskId> {
 
     public static TaskId parse(String string) {
         int index = string.indexOf('_');
-        if (index <= 0 || index + 1 >= string.length()) throw new TaskIdFormatException();
+        if (index <= 0 || index + 1 >= string.length()) throw new TaskIdFormatException(string);
 
         try {
             int topicGroupId = Integer.parseInt(string.substring(0, index));
@@ -46,7 +51,7 @@ public class TaskId implements Comparable<TaskId> {
 
             return new TaskId(topicGroupId, partition);
         } catch (Exception e) {
-            throw new TaskIdFormatException();
+            throw new TaskIdFormatException(string);
         }
     }
 
@@ -70,6 +75,9 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public boolean equals(Object o) {
+        if (this == o)
+            return true;
+
         if (o instanceof TaskId) {
             TaskId other = (TaskId) o;
             return other.topicGroupId == this.topicGroupId && other.partition == this.partition;
@@ -92,8 +100,5 @@ public class TaskId implements Comparable<TaskId> {
                     (this.partition < other.partition ? -1 :
                         (this.partition > other.partition ? 1 :
                             0)));
-    }
-
-    public static class TaskIdFormatException extends RuntimeException {
     }
 }

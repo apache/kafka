@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -26,13 +27,17 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T> {
 
     private final String storeName;
-    private final Aggregator<K, V, T> aggregator;
+    private final Initializer<T> initializer;
+    private final Aggregator<K, V, T> add;
+    private final Aggregator<K, V, T> remove;
 
     private boolean sendOldValues = false;
 
-    KTableAggregate(String storeName, Aggregator<K, V, T> aggregator) {
+    public KTableAggregate(String storeName, Initializer<T> initializer, Aggregator<K, V, T> add, Aggregator<K, V, T> remove) {
         this.storeName = storeName;
-        this.aggregator = aggregator;
+        this.initializer = initializer;
+        this.add = add;
+        this.remove = remove;
     }
 
     @Override
@@ -62,18 +67,18 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             T oldAgg = store.get(key);
 
             if (oldAgg == null)
-                oldAgg = aggregator.initialValue();
+                oldAgg = initializer.apply();
 
             T newAgg = oldAgg;
 
             // first try to remove the old value
             if (value.oldValue != null) {
-                newAgg = aggregator.remove(key, value.oldValue, newAgg);
+                newAgg = remove.apply(key, value.oldValue, newAgg);
             }
 
             // then try to add the new new value
             if (value.newValue != null) {
-                newAgg = aggregator.add(key, value.newValue, newAgg);
+                newAgg = add.apply(key, value.newValue, newAgg);
             }
 
             // update the store with the new value

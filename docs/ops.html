@@ -62,11 +62,13 @@ And finally deleting a topic:
 Topic deletion option is disabled by default. To enable it set the server config
   <pre>delete.topic.enable=true</pre>
 <p>
-Kafka does not currently support reducing the number of partitions for a topic or changing the replication factor.
+Kafka does not currently support reducing the number of partitions for a topic.
+<p>
+Instructions for changing the replication factor of a topic can be found <a href="#basic_ops_increase_replication_factor">here</a>.
 
 <h4><a id="basic_ops_restarting" href="#basic_ops_restarting">Graceful shutdown</a></h4>
 
-The Kafka cluster will automatically detect any broker shutdown or failure and elect new leaders for the partitions on that machine. This will occur whether a server fails or it is brought down intentionally for maintenance or configuration changes. For the later cases Kafka supports a more graceful mechanism for stoping a server then just killing it.
+The Kafka cluster will automatically detect any broker shutdown or failure and elect new leaders for the partitions on that machine. This will occur whether a server fails or it is brought down intentionally for maintenance or configuration changes. For the latter cases Kafka supports a more graceful mechanism for stoping a server than just killing it.
 
 When a server is stopped gracefully it has two optimizations it will take advantage of:
 <ol>
@@ -116,14 +118,14 @@ Here is an example showing how to mirror a single topic (named <i>my-topic</i>) 
 </pre>
 Note that we specify the list of topics with the <code>--whitelist</code> option. This option allows any regular expression using <a href="http://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html">Java-style regular expressions</a>. So you could mirror two topics named <i>A</i> and <i>B</i> using <code>--whitelist 'A|B'</code>. Or you could mirror <i>all</i> topics using <code>--whitelist '*'</code>. Make sure to quote any regular expression to ensure the shell doesn't try to expand it as a file path. For convenience we allow the use of ',' instead of '|' to specify a list of topics.
 <p>
-Sometime it is easier to say what it is that you <i>don't</i> want. Instead of using <code>--whitelist</code> to say what you want to mirror you can use <code>--blacklist</code> to say what to exclude. This also takes a regular expression argument.
+Sometimes it is easier to say what it is that you <i>don't</i> want. Instead of using <code>--whitelist</code> to say what you want to mirror you can use <code>--blacklist</code> to say what to exclude. This also takes a regular expression argument. However, <code>--blacklist</code> is not supported when using <code>--new.consumer</code>.
 <p>
 Combining mirroring with the configuration <code>auto.create.topics.enable=true</code> makes it possible to have a replica cluster that will automatically create and replicate all data in a source cluster even as new topics are added.
 
 <h4><a id="basic_ops_consumer_lag" href="#basic_ops_consumer_lag">Checking consumer position</a></h4>
 Sometimes it's useful to see the position of your consumers. We have a tool that will show the position of all consumers in a consumer group as well as how far behind the end of the log they are. To run this tool on a consumer group named <i>my-group</i> consuming a topic named <i>my-topic</i> would look like this:
 <pre>
- &gt; bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker --zkconnect localhost:2181 --group test
+ &gt; bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker --zookeeper localhost:2181 --group test
 Group           Topic                          Pid Offset          logSize         Lag             Owner
 my-group        my-topic                       0   0               0               0               test_jkreps-mn-1394154511599-60744496-0
 my-group        my-topic                       1   0               0               0               test_jkreps-mn-1394154521217-1a0be913-0
@@ -146,9 +148,9 @@ The partition reassignment tool can run in 3 mutually exclusive modes -
 <h5><a id="basic_ops_automigrate" href="#basic_ops_automigrate">Automatically migrating data to new machines</a></h5>
 The partition reassignment tool can be used to move some topics off of the current set of brokers to the newly added brokers. This is typically useful while expanding an existing cluster since it is easier to move entire topics to the new set of brokers, than moving one partition at a time. When used to do this, the user should provide a list of topics that should be moved to the new set of brokers and a target list of new brokers. The tool then evenly distributes all partitions for the given list of topics across the new set of brokers. During this move, the replication factor of the topic is kept constant. Effectively the replicas for all partitions for the input list of topics are moved from the old set of brokers to the newly added brokers.
 <p>
-For instance, the following example will move all partitions for topics foo1,foo2 to the new set of brokers 5,6. At the end of this move, all partitions for topics foo1 and foo2 will <i>only</i> exist on brokers 5,6
+For instance, the following example will move all partitions for topics foo1,foo2 to the new set of brokers 5,6. At the end of this move, all partitions for topics foo1 and foo2 will <i>only</i> exist on brokers 5,6.
 <p>
-Since, the tool accepts the input list of topics as a json file, you first need to identify the topics you want to move and create the json file as follows-
+Since the tool accepts the input list of topics as a json file, you first need to identify the topics you want to move and create the json file as follows:
 <pre>
 > cat topics-to-move.json
 {"topics": [{"topic": "foo1"},
@@ -156,7 +158,7 @@ Since, the tool accepts the input list of topics as a json file, you first need 
  "version":1
 }
 </pre>
-Once the json file is ready, use the partition reassignment tool to generate a candidate assignment-
+Once the json file is ready, use the partition reassignment tool to generate a candidate assignment:
 <pre>
 > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --topics-to-move-json-file topics-to-move.json --broker-list "5,6" --generate
 Current partition replica assignment
@@ -182,7 +184,7 @@ Proposed partition reassignment configuration
 }
 </pre>
 <p>
-The tool generates a candidate assignment that will move all partitions from topics foo1,foo2 to brokers 5,6. Note, however, that at this point, the partition movement has not started, it merely tells you the current assignment and the proposed new assignment. The current assignment should be saved in case you want to rollback to it. The new assignment should be saved in a json file (e.g. expand-cluster-reassignment.json) to be input to the tool with the --execute option as follows-
+The tool generates a candidate assignment that will move all partitions from topics foo1,foo2 to brokers 5,6. Note, however, that at this point, the partition movement has not started, it merely tells you the current assignment and the proposed new assignment. The current assignment should be saved in case you want to rollback to it. The new assignment should be saved in a json file (e.g. expand-cluster-reassignment.json) to be input to the tool with the --execute option as follows:
 <pre>
 > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file expand-cluster-reassignment.json --execute
 Current partition replica assignment
@@ -208,7 +210,7 @@ Successfully started reassignment of partitions
 }
 </pre>
 <p>
-Finally, the --verify option can be used with the tool to check the status of the partition reassignment. Note that the same expand-cluster-reassignment.json (used with the --execute option) should be used with the --verify option
+Finally, the --verify option can be used with the tool to check the status of the partition reassignment. Note that the same expand-cluster-reassignment.json (used with the --execute option) should be used with the --verify option:
 <pre>
 > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file expand-cluster-reassignment.json --verify
 Status of partition reassignment:
@@ -223,14 +225,14 @@ Reassignment of partition [foo2,2] completed successfully
 <h5><a id="basic_ops_partitionassignment" href="#basic_ops_partitionassignment">Custom partition assignment and migration</a></h5>
 The partition reassignment tool can also be used to selectively move replicas of a partition to a specific set of brokers. When used in this manner, it is assumed that the user knows the reassignment plan and does not require the tool to generate a candidate reassignment, effectively skipping the --generate step and moving straight to the --execute step
 <p>
-For instance, the following example moves partition 0 of topic foo1 to brokers 5,6 and partition 1 of topic foo2 to brokers 2,3
+For instance, the following example moves partition 0 of topic foo1 to brokers 5,6 and partition 1 of topic foo2 to brokers 2,3:
 <p>
-The first step is to hand craft the custom reassignment plan in a json file-
+The first step is to hand craft the custom reassignment plan in a json file:
 <pre>
 > cat custom-reassignment.json
 {"version":1,"partitions":[{"topic":"foo1","partition":0,"replicas":[5,6]},{"topic":"foo2","partition":1,"replicas":[2,3]}]}
 </pre>
-Then, use the json file with the --execute option to start the reassignment process-
+Then, use the json file with the --execute option to start the reassignment process:
 <pre>
 > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file custom-reassignment.json --execute
 Current partition replica assignment
@@ -248,7 +250,7 @@ Successfully started reassignment of partitions
 }
 </pre>
 <p>
-The --verify option can be used with the tool to check the status of the partition reassignment. Note that the same expand-cluster-reassignment.json (used with the --execute option) should be used with the --verify option
+The --verify option can be used with the tool to check the status of the partition reassignment. Note that the same expand-cluster-reassignment.json (used with the --execute option) should be used with the --verify option:
 <pre>
 bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file custom-reassignment.json --verify
 Status of partition reassignment:
@@ -264,13 +266,13 @@ Increasing the replication factor of an existing partition is easy. Just specify
 <p>
 For instance, the following example increases the replication factor of partition 0 of topic foo from 1 to 3. Before increasing the replication factor, the partition's only replica existed on broker 5. As part of increasing the replication factor, we will add more replicas on brokers 6 and 7.
 <p>
-The first step is to hand craft the custom reassignment plan in a json file-
+The first step is to hand craft the custom reassignment plan in a json file:
 <pre>
 > cat increase-replication-factor.json
 {"version":1,
  "partitions":[{"topic":"foo","partition":0,"replicas":[5,6,7]}]}
 </pre>
-Then, use the json file with the --execute option to start the reassignment process-
+Then, use the json file with the --execute option to start the reassignment process:
 <pre>
 > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --execute
 Current partition replica assignment
@@ -284,13 +286,13 @@ Successfully started reassignment of partitions
  "partitions":[{"topic":"foo","partition":0,"replicas":[5,6,7]}]}
 </pre>
 <p>
-The --verify option can be used with the tool to check the status of the partition reassignment. Note that the same increase-replication-factor.json (used with the --execute option) should be used with the --verify option
+The --verify option can be used with the tool to check the status of the partition reassignment. Note that the same increase-replication-factor.json (used with the --execute option) should be used with the --verify option:
 <pre>
 bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --verify
 Status of partition reassignment:
 Reassignment of partition [foo,0] completed successfully
 </pre>
-You can also verify the increase in replication factor with the kafka-topics tool-
+You can also verify the increase in replication factor with the kafka-topics tool:
 <pre>
 > bin/kafka-topics.sh --zookeeper localhost:2181 --topic foo --describe
 Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
@@ -403,10 +405,12 @@ LinkedIn's tuning looks like this:
 </pre>
 
 For reference, here are the stats on one of LinkedIn's busiest clusters (at peak):
-        - 60 brokers
-        - 50k partitions (replication factor 2)
-        - 800k messages/sec in
-        - 300 MB/sec inbound, 1 GB/sec+ outbound
+<ul>
+    <li>60 brokers</li>
+    <li>50k partitions (replication factor 2)</li>
+    <li>800k messages/sec in</li>
+    <li>300 MB/sec inbound, 1 GB/sec+ outbound</li>
+</ul>
 
 The tuning looks fairly aggressive, but all of the brokers in that cluster have a 90% GC pause time of about 21ms, and they're doing less than 1 young GC per second.
 
@@ -415,7 +419,7 @@ We are using dual quad-core Intel Xeon machines with 24GB of memory.
 <p>
 You need sufficient memory to buffer active readers and writers. You can do a back-of-the-envelope estimate of memory needs by assuming you want to be able to buffer for 30 seconds and compute your memory need as write_throughput*30.
 <p>
-The disk throughput is important. We have 8x7200 rpm SATA drives. In general disk throughput is the performance bottleneck, and more disks is more better. Depending on how you configure flush behavior you may or may not benefit from more expensive disks (if you force flush often then higher RPM SAS drives may be better).
+The disk throughput is important. We have 8x7200 rpm SATA drives. In general disk throughput is the performance bottleneck, and more disks is better. Depending on how you configure flush behavior you may or may not benefit from more expensive disks (if you force flush often then higher RPM SAS drives may be better).
 
 <h4><a id="os" href="#os">OS</a></h4>
 Kafka should run well on any unix system and has been tested on Linux and Solaris.
@@ -440,7 +444,7 @@ RAID can potentially do better at balancing load between disks (although it does
 Another potential benefit of RAID is the ability to tolerate disk failures. However our experience has been that rebuilding the RAID array is so I/O intensive that it effectively disables the server, so this does not provide much real availability improvement.
 
 <h4><a id="appvsosflush" href="#appvsosflush">Application vs. OS Flush Management</a></h4>
-Kafka always immediately writes all data to the filesystem and supports the ability to configure the flush policy that controls when data is forced out of the OS cache and onto disk using the and flush. This flush policy can be controlled to force data to disk after a period of time or after a certain number of messages has been written. There are several choices in this configuration.
+Kafka always immediately writes all data to the filesystem and supports the ability to configure the flush policy that controls when data is forced out of the OS cache and onto disk using the flush. This flush policy can be controlled to force data to disk after a period of time or after a certain number of messages has been written. There are several choices in this configuration.
 <p>
 Kafka must eventually call fsync to know that data was flushed. When recovering from a crash for any log segment not known to be fsync'd Kafka will check the integrity of each message by checking its CRC and also rebuild the accompanying offset index file as part of the recovery process executed on startup.
 <p>
@@ -448,7 +452,7 @@ Note that durability in Kafka does not require syncing data to disk, as a failed
 <p>
 We recommend using the default flush settings which disable application fsync entirely. This means relying on the background flush done by the OS and Kafka's own background flush. This provides the best of all worlds for most uses: no knobs to tune, great throughput and latency, and full recovery guarantees. We generally feel that the guarantees provided by replication are stronger than sync to local disk, however the paranoid still may prefer having both and application level fsync policies are still supported.
 <p>
-The drawback of using application level flush settings are that this is less efficient in it's disk usage pattern (it gives the OS less leeway to re-order writes) and it can introduce latency as fsync in most Linux filesystems blocks writes to the file whereas the background flushing does much more granular page-level locking.
+The drawback of using application level flush settings is that it is less efficient in it's disk usage pattern (it gives the OS less leeway to re-order writes) and it can introduce latency as fsync in most Linux filesystems blocks writes to the file whereas the background flushing does much more granular page-level locking.
 <p>
 In general you don't need to do any low-level tuning of the filesystem, but in the next few sections we will go over some of this in case it is useful.
 
@@ -487,9 +491,9 @@ It is not necessary to tune these settings, however those wanting to optimize pe
 
 Kafka uses Yammer Metrics for metrics reporting in both the server and the client. This can be configured to report stats using pluggable stats reporters to hook up to your monitoring system.
 <p>
-The easiest way to see the available metrics to fire up jconsole and point it at a running kafka client or server; this will all browsing all metrics with JMX.
+The easiest way to see the available metrics is to fire up jconsole and point it at a running kafka client or server; this will allow browsing all metrics with JMX.
 <p>
-We pay particular we do graphing and alerting on the following metrics:
+We do graphing and alerting on the following metrics:
 <table class="data-table">
 <tbody><tr>
       <th>Description</th>
@@ -644,7 +648,7 @@ The following metrics are available on new producer instances.
     </tr>
       <tr>
       <td>waiting-threads</td>
-      <td>The number of user threads blocked waiting for buffer memory to enqueue their records</td>
+      <td>The number of user threads blocked waiting for buffer memory to enqueue their records.</td>
       <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
     </tr>
     <tr>
@@ -684,17 +688,17 @@ The following metrics are available on new producer instances.
     </tr>
     <tr>
       <td>record-queue-time-max</td>
-      <td>The maximum time in ms record batches spent in the record accumulator</td>
+      <td>The maximum time in ms record batches spent in the record accumulator.</td>
       <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
     </tr>
     <tr>
       <td>request-latency-avg</td>
-      <td>The average request latency in ms</td>
+      <td>The average request latency in ms.</td>
       <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
     </tr>
     <tr>
       <td>request-latency-max</td>
-      <td>The maximum request latency in ms</td>
+      <td>The maximum request latency in ms.</td>
       <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
     </tr>
     <tr>
@@ -709,22 +713,22 @@ The following metrics are available on new producer instances.
     </tr>
     <tr>
       <td>record-retry-rate</td>
-      <td>The average per-second number of retried record sends</td>
+      <td>The average per-second number of retried record sends.</td>
       <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
     </tr>
     <tr>
       <td>record-error-rate</td>
-      <td>The average per-second number of record sends that resulted in errors</td>
+      <td>The average per-second number of record sends that resulted in errors.</td>
       <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
     </tr>
     <tr>
       <td>record-size-max</td>
-      <td>The maximum record size</td>
+      <td>The maximum record size.</td>
       <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
     </tr>
     <tr>
       <td>record-size-avg</td>
-      <td>The average record size</td>
+      <td>The average record size.</td>
       <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
     </tr>
     <tr>
@@ -774,7 +778,7 @@ The following metrics are available on new producer instances.
     </tr>
     <tr>
       <td>incoming-byte-rate</td>
-      <td>Bytes/second read off all sockets</td>
+      <td>Bytes/second read off all sockets.</td>
       <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
     </tr>
     <tr>
@@ -784,7 +788,7 @@ The following metrics are available on new producer instances.
     </tr>
     <tr>
       <td>select-rate</td>
-      <td>Number of times the I/O layer checked for new I/O to perform per second</td>
+      <td>Number of times the I/O layer checked for new I/O to perform per second.</td>
       <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
     </tr>
     <tr>
@@ -804,7 +808,7 @@ The following metrics are available on new producer instances.
     </tr>
     <tr>
       <td>io-ratio</td>
-      <td>The fraction of time the I/O thread spent doing I/O</td>
+      <td>The fraction of time the I/O thread spent doing I/O.</td>
       <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
     </tr>
     <tr>
@@ -869,7 +873,7 @@ The following metrics are available on new producer instances.
     </tr>
     <tr>
       <td>record-retry-rate</td>
-      <td>The average per-second number of retried record sends for a topic</td>
+      <td>The average per-second number of retried record sends for a topic.</td>
       <td>kafka.producer:type=producer-topic-metrics,client-id=([-.\w]+),topic=([-.\w]+)</td>
     </tr>
     <tr>
@@ -889,9 +893,9 @@ The following metrics are available on new producer instances.
     </tr>
 </tbody></table>
 
-We recommend monitor GC time and other stats and various server stats such as CPU utilization, I/O service time, etc.
+We recommend monitoring GC time and other stats and various server stats such as CPU utilization, I/O service time, etc.
 
-On the client side, we recommend monitor the message/byte rate (global and per topic), request rate/size/time, and on the consumer side, max lag in messages among all partitions and min fetch request rate. For a consumer to keep up, max lag needs to be less than a threshold and min fetch rate needs to be larger than 0.
+On the client side, we recommend monitoring the message/byte rate (global and per topic), request rate/size/time, and on the consumer side, max lag in messages among all partitions and min fetch request rate. For a consumer to keep up, max lag needs to be less than a threshold and min fetch rate needs to be larger than 0.
 
 <h4><a id="basic_ops_audit" href="#basic_ops_audit">Audit</a></h4>
 The final alerting we do is on the correctness of the data delivery. We audit that every message that is sent is consumed by all consumers and measure the lag for this to occur. For important topics we alert if a certain completeness is not achieved in a certain time period. The details of this are discussed in KAFKA-260.

@@ -17,9 +17,70 @@
 
 <h3><a id="upgrade" href="#upgrade">1.5 Upgrading From Previous Versions</a></h3>
 
+<h4><a id="upgrade_10" href="#upgrade_10">Upgrading from 0.8.x or 0.9.x to 0.10.0.0</a></h4>
+0.10.0.0 has <a href="#upgrade_10_breaking">potential breaking changes</a> (please review before upgrading) and
+there may be a <a href="#upgrade_10_performance_impact">performance impact during the upgrade</a>. Because new protocols
+are introduced, it is important to upgrade your Kafka clusters before upgrading your clients.
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+    <li> Update server.properties file on all brokers and add the following property: inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2 or 0.9.0.0).
+         We recommend that users set message.format.version=CURRENT_KAFKA_VERSION as well to avoid a performance regression
+         during upgrade. See <a href="#upgrade_10_performance_impact">potential performance impact during upgrade</a> for the details.
+    </li>
+    <li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
+    <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.10.0.0. </li>
+    <li> Restart the brokers one by one for the new protocol version to take effect. </li>
+</ol>
+
+<p><b>Note:</b> If you are willing to accept downtime, you can simply take all the brokers down, update the code and start all of them. They will start with the new protocol by default.
+
+<p><b>Note:</b> Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
+
+<h5><a id="upgrade_10_performance_impact" href="#upgrade_10_performance_impact">Potential performance impact during upgrade to 0.10.0.0</a></h5>
+<p>
+    The message format in 0.10.0 includes a new timestamp field and uses relative offsets for compressed messages.
+    The on disk message format can be configured through message.format.version in the server.properties file.
+    The default on-disk message format is 0.10.0. If a consumer client is on a version before 0.10.0.0, it only understands
+    message formats before 0.10.0. In this case, the broker is able to convert messages from the 0.10.0 format to an earlier format
+    before sending the response to the consumer on an older version. However, the broker can't use zero-copy transfer in this case.
+
+    To avoid such message conversion before consumers are upgraded to 0.10.0.0, one can set the message format to
+    e.g. 0.9.0 when upgrading the broker to 0.10.0.0. This way, the broker can still use zero-copy transfer to send the
+    data to the old consumers. Once most consumers are upgraded, one can change the message format to 0.10.0 on the broker.
+</p>
+<p>
+    For clients that are upgraded to 0.10.0.0, there is no performance impact.
+</p>
+<p>
+    <b>Note:</b> By setting the message format version, one certifies that all existing messages are on or below that
+    message format version. Otherwise consumers before 0.10.0.0 might break. In particular, after the message format
+    is set to 0.10.0, one should not change it back to an earlier format as it may break consumers on versions before 0.10.0.0.
+</p>
+
+<h5><a id="upgrade_10_breaking" href="#upgrade_10_breaking">potential breaking changes in 0.10.0.0</a></h5>
+<ul>
+    <li> Starting from Kafka 0.10.0.0, the message format version in Kafka is represented as the Kafka version. For example, message format 0.9.0 refers to the highest message version supported by Kafka 0.9.0. </li>
+    <li> Message format 0.10.0 has been introduced and it is used by default. It includes a timestamp field in the messages and relative offsets are used for compressed messages. </li>
+    <li> ProduceRequest/Response v2 has been introduced and it is used by default to support message format 0.10.0 </li>
+    <li> FetchRequest/Response v2 has been introduced and it is used by default to support message format 0.10.0 </li>
+    <li> MessageFormatter interface was changed from <code>def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream)</code> to
+        <code>def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream)</code> </li>
+    <li> MessageReader interface was changed from <code>def readMessage(): KeyedMessage[Array[Byte], Array[Byte]]</code> to
+        <code>def readMessage(): ProducerRecord[Array[Byte], Array[Byte]]</code> </li>
+    </li>
+    <li> MessageFormatter's package was changed from <code>kafka.tools</code> to <code>kafka.common</code> </li>
+    <li> MessageReader's package was changed from <code>kafka.tools</code> to <code>kafka.common</code> </li>
+    <li> MirrorMakerMessageHandler no longer exposes the <code>handle(record: MessageAndMetadata[Array[Byte], Array[Byte]])</code> method as it was never called. </li>
+</ul>
+
 <h4><a id="upgrade_9" href="#upgrade_9">Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.9.0.0</a></h4>
 
-0.9.0.0 has <a href="#upgrade_9_breaking">potential breaking changes</a> (please review before upgrading) and an inter-broker protocol change from previous versions. For a rolling upgrade:
+0.9.0.0 has <a href="#upgrade_9_breaking">potential breaking changes</a> (please review before upgrading) and an inter-broker protocol change from previous versions. This means that upgraded brokers and clients may not be compatible with older versions. It is important that you upgrade your Kafka cluster before upgrading your clients. If you are using MirrorMaker downstream clusters should be upgraded first as well.
+
+<p><b>For a rolling upgrade:</b></p>
+
 <ol>
 	<li> Update server.properties file on all brokers and add the following property: inter.broker.protocol.version=0.8.2.X </li>
 	<li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
@@ -39,6 +100,7 @@
     <li> Broker IDs above 1000 are now reserved by default to automatically assigned broker IDs. If your cluster has existing broker IDs above that threshold make sure to increase the reserved.broker.max.id broker configuration property accordingly. </li>
     <li> Configuration parameter replica.lag.max.messages was removed. Partition leaders will no longer consider the number of lagging messages when deciding which replicas are in sync. </li>
     <li> Configuration parameter replica.lag.time.max.ms now refers not just to the time passed since last fetch request from replica, but also to time since the replica last caught up. Replicas that are still fetching messages from leaders but did not catch up to the latest messages in replica.lag.time.max.ms will be considered out of sync. </li>
+    <li> Compacted topics no longer accept messages without key and an exception is thrown by the producer if this is attempted. In 0.8.x, a message without key would cause the log compaction thread to subsequently complain and quit (and stop compacting all compacted topics). </li>
     <li> MirrorMaker no longer supports multiple target clusters. As a result it will only accept a single --consumer.config parameter. To mirror multiple source clusters, you will need at least one MirrorMaker instance per source cluster, each with its own consumer configuration. </li>
     <li> Tools packaged under <em>org.apache.kafka.clients.tools.*</em> have been moved to <em>org.apache.kafka.tools.*</em>. All included scripts will still function as usual, only custom code directly importing these classes will be affected. </li>
     <li> The default Kafka JVM performance options (KAFKA_JVM_PERFORMANCE_OPTS) have been changed in kafka-run-class.sh. </li>
@@ -51,8 +113,9 @@
 <h5><a id="upgrade_901_notable" href="#upgrade_901_notable">Notable changes in 0.9.0.1</a></h5>
 
 <ul>
-    <li> The new broker id generation feature can be disable by setting broker.id.generation.enable to false. </li>
+    <li> The new broker id generation feature can be disabled by setting broker.id.generation.enable to false. </li>
     <li> Configuration parameter log.cleaner.enable is now true by default. This means topics with a cleanup.policy=compact will now be compacted by default, and 128 MB of heap will be allocated to the cleaner process via log.cleaner.dedupe.buffer.size. You may want to review log.cleaner.dedupe.buffer.size and the other log.cleaner configuration values based on your usage of compacted topics. </li>
+    <li> Default value of configuration parameter fetch.min.bytes for the new consumer is now 1 by default. </li>
 </ul>
 
 <h5>Deprecations in 0.9.0.0</h5>

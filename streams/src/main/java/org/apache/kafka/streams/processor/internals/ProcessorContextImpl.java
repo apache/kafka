@@ -17,11 +17,11 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.StreamingConfig;
-import org.apache.kafka.streams.StreamingMetrics;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -38,7 +38,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
 
     private final TaskId id;
     private final StreamTask task;
-    private final StreamingMetrics metrics;
+    private final StreamsMetrics metrics;
     private final RecordCollector collector;
     private final ProcessorStateManager stateMgr;
 
@@ -52,10 +52,10 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     @SuppressWarnings("unchecked")
     public ProcessorContextImpl(TaskId id,
                                 StreamTask task,
-                                StreamingConfig config,
+                                StreamsConfig config,
                                 RecordCollector collector,
                                 ProcessorStateManager stateMgr,
-                                StreamingMetrics metrics) {
+                                StreamsMetrics metrics) {
         this.id = id;
         this.task = task;
         this.metrics = metrics;
@@ -74,12 +74,18 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         this.initialized = true;
     }
 
-    public TaskId id() {
+    public ProcessorStateManager getStateMgr() {
+        return stateMgr;
+    }
+
+    @Override
+    public TaskId taskId() {
         return id;
     }
 
-    public ProcessorStateManager getStateMgr() {
-        return stateMgr;
+    @Override
+    public String jobId() {
+        return task.jobId();
     }
 
     @Override
@@ -113,14 +119,14 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public StreamingMetrics metrics() {
+    public StreamsMetrics metrics() {
         return metrics;
     }
 
     @Override
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (initialized)
-            throw new KafkaException("Can only create state stores during initialization.");
+            throw new IllegalStateException("Can only create state stores during initialization.");
 
         stateMgr.register(store, loggingEnabled, stateRestoreCallback);
     }
@@ -130,10 +136,11 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         ProcessorNode node = task.node();
 
         if (node == null)
-            throw new KafkaException("accessing from an unknown node");
+            throw new TopologyBuilderException("Accessing from an unknown node");
 
-        if (!node.stateStores.contains(name))
-            throw new KafkaException("Processor " + node.name() + " has no access to StateStore " + name);
+        // TODO: restore this once we fix the ValueGetter initialiation issue
+        //if (!node.stateStores.contains(name))
+        //    throw new TopologyBuilderException("Processor " + node.name() + " has no access to StateStore " + name);
 
         return stateMgr.getStore(name);
     }
@@ -141,7 +148,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     @Override
     public String topic() {
         if (task.record() == null)
-            throw new IllegalStateException("this should not happen as topic() should only be called while a record is processed");
+            throw new IllegalStateException("This should not happen as topic() should only be called while a record is processed");
 
         return task.record().topic();
     }
@@ -149,7 +156,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     @Override
     public int partition() {
         if (task.record() == null)
-            throw new IllegalStateException("this should not happen as partition() should only be called while a record is processed");
+            throw new IllegalStateException("This should not happen as partition() should only be called while a record is processed");
 
         return task.record().partition();
     }
@@ -157,7 +164,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     @Override
     public long offset() {
         if (this.task.record() == null)
-            throw new IllegalStateException("this should not happen as offset() should only be called while a record is processed");
+            throw new IllegalStateException("This should not happen as offset() should only be called while a record is processed");
 
         return this.task.record().offset();
     }
@@ -165,7 +172,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     @Override
     public long timestamp() {
         if (task.record() == null)
-            throw new IllegalStateException("this should not happen as timestamp() should only be called while a record is processed");
+            throw new IllegalStateException("This should not happen as timestamp() should only be called while a record is processed");
 
         return task.record().timestamp;
     }

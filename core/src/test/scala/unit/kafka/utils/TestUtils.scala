@@ -122,11 +122,7 @@ object TestUtils extends Logging {
   /**
    * Create a temporary file
    */
-  def tempFile(): File = {
-    val f = File.createTempFile("kafka", ".tmp")
-    f.deleteOnExit()
-    f
-  }
+  def tempFile(): File = org.apache.kafka.test.TestUtils.tempFile()
 
   /**
    * Create a temporary file and return an open file channel for this file
@@ -286,8 +282,11 @@ object TestUtils extends Logging {
    * Wrap the message in a message set
    * @param payload The bytes of the message
    */
-  def singleMessageSet(payload: Array[Byte], codec: CompressionCodec = NoCompressionCodec, key: Array[Byte] = null) =
-    new ByteBufferMessageSet(compressionCodec = codec, messages = new Message(payload, key))
+  def singleMessageSet(payload: Array[Byte],
+                       codec: CompressionCodec = NoCompressionCodec,
+                       key: Array[Byte] = null,
+                       magicValue: Byte = Message.CurrentMagicValue) =
+    new ByteBufferMessageSet(compressionCodec = codec, messages = new Message(payload, key, Message.NoTimestamp, magicValue))
 
   /**
    * Generate an array of random bytes
@@ -443,7 +442,7 @@ object TestUtils extends Logging {
                               certAlias: String): Properties = {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
-      props.putAll(sslConfigs(mode, true, trustStoreFile, certAlias))
+      props.putAll(sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias))
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }

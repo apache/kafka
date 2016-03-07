@@ -19,9 +19,12 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * The unlimited window specifications.
+ */
 public class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
     private static final long DEFAULT_START_TIMESTAMP = 0L;
@@ -48,7 +51,13 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
     @Override
     public Map<Long, UnlimitedWindow> windowsFor(long timestamp) {
         // always return the single unlimited window
-        return Collections.singletonMap(start, new UnlimitedWindow(start));
+
+        // we cannot use Collections.singleMap since it does not support remove() call
+        Map<Long, UnlimitedWindow> windows = new HashMap<>();
+        windows.put(start, new UnlimitedWindow(start));
+
+
+        return windows;
     }
 
     @Override

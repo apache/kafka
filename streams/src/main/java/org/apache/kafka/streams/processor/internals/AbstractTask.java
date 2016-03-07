@@ -18,9 +18,10 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -36,6 +37,7 @@ import java.util.Set;
 
 public abstract class AbstractTask {
     protected final TaskId id;
+    protected final String jobId;
     protected final ProcessorTopology topology;
     protected final Consumer consumer;
     protected final ProcessorStateManager stateMgr;
@@ -48,32 +50,41 @@ public abstract class AbstractTask {
                            ProcessorTopology topology,
                            Consumer<byte[], byte[]> consumer,
                            Consumer<byte[], byte[]> restoreConsumer,
-                           StreamingConfig config,
+                           StreamsConfig config,
                            boolean isStandby) {
         this.id = id;
+        this.jobId = jobId;
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
 
         // create the processor state manager
         try {
-            File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), id.toString());
+            File jobStateDir = StreamThread.makeStateDir(jobId, config.getString(StreamsConfig.STATE_DIR_CONFIG));
+            File stateFile = new File(jobStateDir.getCanonicalPath(), id.toString());
             // if partitions is null, this is a standby task
             this.stateMgr = new ProcessorStateManager(jobId, id.partition, partitions, stateFile, restoreConsumer, isStandby);
         } catch (IOException e) {
-            throw new KafkaException("Error while creating the state manager", e);
+            throw new ProcessorStateException("Error while creating the state manager", e);
         }
     }
 
     protected void initializeStateStores() {
+        // set initial offset limits
+        initializeOffsetLimits();
+
         for (StateStoreSupplier stateStoreSupplier : this.topology.stateStoreSuppliers()) {
             StateStore store = stateStoreSupplier.get();
-            store.init(this.processorContext);
+            store.init(this.processorContext, store);
         }
     }
 
     public final TaskId id() {
         return id;
+    }
+
+    public final String jobId() {
+        return jobId;
     }
 
     public final Set<TopicPartition> partitions() {
@@ -94,12 +105,19 @@ public abstract class AbstractTask {
         try {
             stateMgr.close(recordCollectorOffsets());
         } catch (IOException e) {
-            throw new KafkaException("Error while closing the state manager in processor context", e);
+            throw new ProcessorStateException("Error while closing the state manager", e);
         }
     }
 
     protected Map<TopicPartition, Long> recordCollectorOffsets() {
         return Collections.emptyMap();
+    }
+
+    protected void initializeOffsetLimits() {
+        for (TopicPartition partition : partitions) {
+            OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
+            stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
+        }
     }
 
 }

@@ -17,10 +17,10 @@
 
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -46,8 +46,8 @@ import java.util.Set;
  * its child nodes. A {@link Processor processor} is a node in the graph that receives input messages from upstream nodes,
  * processes that message, and optionally forwarding new messages to one or all of its children. Finally, a {@link SinkNode sink}
  * is a node in the graph that receives messages from upstream nodes and writes them to a Kafka topic. This builder allows you
- * to construct an acyclic graph of these nodes, and the builder is then passed into a new {@link org.apache.kafka.streams.KafkaStreaming}
- * instance that will then {@link org.apache.kafka.streams.KafkaStreaming#start() begin consuming, processing, and producing messages}.
+ * to construct an acyclic graph of these nodes, and the builder is then passed into a new {@link org.apache.kafka.streams.KafkaStreams}
+ * instance that will then {@link org.apache.kafka.streams.KafkaStreams#start() begin consuming, processing, and producing messages}.
  */
 public class TopologyBuilder {
 
@@ -58,12 +58,11 @@ public class TopologyBuilder {
     private final Map<String, StateStoreFactory> stateFactories = new HashMap<>();
 
     private final Set<String> sourceTopicNames = new HashSet<>();
-
     private final Set<String> internalTopicNames = new HashSet<>();
-
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
     private final List<Set<String>> copartitionSourceGroups = new ArrayList<>();
-    private final HashMap<String, String[]> nodeToTopics = new HashMap<>();
+    private final HashMap<String, String[]> nodeToSourceTopics = new HashMap<>();
+    private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
     private Map<Integer, Set<String>> nodeGroups = null;
 
     private static class StateStoreFactory {
@@ -154,11 +153,13 @@ public class TopologyBuilder {
     }
 
     public static class TopicsInfo {
+        public Set<String> sinkTopics;
         public Set<String> sourceTopics;
         public Set<String> interSourceTopics;
         public Set<String> stateChangelogTopics;
 
-        public TopicsInfo(Set<String> sourceTopics, Set<String> interSourceTopics, Set<String> stateChangelogTopics) {
+        public TopicsInfo(Set<String> sinkTopics, Set<String> sourceTopics, Set<String> interSourceTopics, Set<String> stateChangelogTopics) {
+            this.sinkTopics = sinkTopics;
             this.sourceTopics = sourceTopics;
             this.interSourceTopics = interSourceTopics;
             this.stateChangelogTopics = stateChangelogTopics;
@@ -188,9 +189,9 @@ public class TopologyBuilder {
 
     /**
      * Add a new source that consumes the named topics and forwards the messages to child processor and/or sink nodes.
-     * The source will use the {@link org.apache.kafka.streams.StreamingConfig#KEY_DESERIALIZER_CLASS_CONFIG default key deserializer} and
-     * {@link org.apache.kafka.streams.StreamingConfig#VALUE_DESERIALIZER_CLASS_CONFIG default value deserializer} specified in the
-     * {@link org.apache.kafka.streams.StreamingConfig streaming configuration}.
+     * The source will use the {@link org.apache.kafka.streams.StreamsConfig#KEY_DESERIALIZER_CLASS_CONFIG default key deserializer} and
+     * {@link org.apache.kafka.streams.StreamsConfig#VALUE_DESERIALIZER_CLASS_CONFIG default value deserializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
      *
      * @param name the unique name of the source used to reference this node when
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
@@ -208,27 +209,27 @@ public class TopologyBuilder {
      * @param name the unique name of the source used to reference this node when
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param keyDeserializer the {@link Deserializer key deserializer} used when consuming messages; may be null if the source
-     * should use the {@link org.apache.kafka.streams.StreamingConfig#KEY_DESERIALIZER_CLASS_CONFIG default key deserializer} specified in the
-     * {@link org.apache.kafka.streams.StreamingConfig streaming configuration}
+     * should use the {@link org.apache.kafka.streams.StreamsConfig#KEY_DESERIALIZER_CLASS_CONFIG default key deserializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param valDeserializer the {@link Deserializer value deserializer} used when consuming messages; may be null if the source
-     * should use the {@link org.apache.kafka.streams.StreamingConfig#VALUE_DESERIALIZER_CLASS_CONFIG default value deserializer} specified in the
-     * {@link org.apache.kafka.streams.StreamingConfig streaming configuration}
+     * should use the {@link org.apache.kafka.streams.StreamsConfig#VALUE_DESERIALIZER_CLASS_CONFIG default value deserializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param topics the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
      */
     public final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
         if (nodeFactories.containsKey(name))
-            throw new TopologyException("Processor " + name + " is already added.");
+            throw new TopologyBuilderException("Processor " + name + " is already added.");
 
         for (String topic : topics) {
             if (sourceTopicNames.contains(topic))
-                throw new TopologyException("Topic " + topic + " has already been registered by another source.");
+                throw new TopologyBuilderException("Topic " + topic + " has already been registered by another source.");
 
             sourceTopicNames.add(topic);
         }
 
         nodeFactories.put(name, new SourceNodeFactory(name, topics, keyDeserializer, valDeserializer));
-        nodeToTopics.put(name, topics.clone());
+        nodeToSourceTopics.put(name, topics.clone());
         nodeGrouper.add(name);
 
         return this;
@@ -236,9 +237,9 @@ public class TopologyBuilder {
 
     /**
      * Add a new sink that forwards messages from upstream parent processor and/or source nodes to the named Kafka topic.
-     * The sink will use the {@link org.apache.kafka.streams.StreamingConfig#KEY_SERIALIZER_CLASS_CONFIG default key serializer} and
-     * {@link org.apache.kafka.streams.StreamingConfig#VALUE_SERIALIZER_CLASS_CONFIG default value serializer} specified in the
-     * {@link org.apache.kafka.streams.StreamingConfig streaming configuration}.
+     * The sink will use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERIALIZER_CLASS_CONFIG default key serializer} and
+     * {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERIALIZER_CLASS_CONFIG default value serializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
      *
      * @param name the unique name of the sink
      * @param topic the name of the Kafka topic to which this sink should write its messages
@@ -256,9 +257,9 @@ public class TopologyBuilder {
     /**
      * Add a new sink that forwards messages from upstream parent processor and/or source nodes to the named Kafka topic, using
      * the supplied partitioner.
-     * The sink will use the {@link StreamingConfig#KEY_SERIALIZER_CLASS_CONFIG default key serializer} and
-     * {@link StreamingConfig#VALUE_SERIALIZER_CLASS_CONFIG default value serializer} specified in the
-     * {@link StreamingConfig streaming configuration}.
+     * The sink will use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERIALIZER_CLASS_CONFIG default key serializer} and
+     * {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERIALIZER_CLASS_CONFIG default value serializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
      * <p>
      * The sink will also use the specified {@link StreamPartitioner} to determine how messages are distributed among
      * the named Kafka topic's partitions. Such control is often useful with topologies that use
@@ -293,11 +294,11 @@ public class TopologyBuilder {
      * @param name the unique name of the sink
      * @param topic the name of the Kafka topic to which this sink should write its messages
      * @param keySerializer the {@link Serializer key serializer} used when consuming messages; may be null if the sink
-     * should use the {@link org.apache.kafka.streams.StreamingConfig#KEY_SERIALIZER_CLASS_CONFIG default key serializer} specified in the
-     * {@link org.apache.kafka.streams.StreamingConfig streaming configuration}
+     * should use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERIALIZER_CLASS_CONFIG default key serializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param valSerializer the {@link Serializer value serializer} used when consuming messages; may be null if the sink
-     * should use the {@link org.apache.kafka.streams.StreamingConfig#VALUE_SERIALIZER_CLASS_CONFIG default value serializer} specified in the
-     * {@link org.apache.kafka.streams.StreamingConfig streaming configuration}
+     * should use the {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERIALIZER_CLASS_CONFIG default value serializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param parentNames the name of one or more source or processor nodes whose output message this sink should consume
      * and write to its topic
      * @return this builder instance so methods can be chained together; never null
@@ -316,11 +317,11 @@ public class TopologyBuilder {
      * @param name the unique name of the sink
      * @param topic the name of the Kafka topic to which this sink should write its messages
      * @param keySerializer the {@link Serializer key serializer} used when consuming messages; may be null if the sink
-     * should use the {@link StreamingConfig#KEY_SERIALIZER_CLASS_CONFIG default key serializer} specified in the
-     * {@link StreamingConfig streaming configuration}
+     * should use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERIALIZER_CLASS_CONFIG default key serializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param valSerializer the {@link Serializer value serializer} used when consuming messages; may be null if the sink
-     * should use the {@link StreamingConfig#VALUE_SERIALIZER_CLASS_CONFIG default value serializer} specified in the
-     * {@link StreamingConfig streaming configuration}
+     * should use the {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERIALIZER_CLASS_CONFIG default value serializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param partitioner the function that should be used to determine the partition for each message processed by the sink
      * @param parentNames the name of one or more source or processor nodes whose output message this sink should consume
      * and write to its topic
@@ -331,20 +332,21 @@ public class TopologyBuilder {
      */
     public final <K, V> TopologyBuilder addSink(String name, String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, StreamPartitioner<K, V> partitioner, String... parentNames) {
         if (nodeFactories.containsKey(name))
-            throw new TopologyException("Processor " + name + " is already added.");
+            throw new TopologyBuilderException("Processor " + name + " is already added.");
 
         if (parentNames != null) {
             for (String parent : parentNames) {
                 if (parent.equals(name)) {
-                    throw new TopologyException("Processor " + name + " cannot be a parent of itself.");
+                    throw new TopologyBuilderException("Processor " + name + " cannot be a parent of itself.");
                 }
                 if (!nodeFactories.containsKey(parent)) {
-                    throw new TopologyException("Parent processor " + parent + " is not added yet.");
+                    throw new TopologyBuilderException("Parent processor " + parent + " is not added yet.");
                 }
             }
         }
 
         nodeFactories.put(name, new SinkNodeFactory(name, parentNames, topic, keySerializer, valSerializer, partitioner));
+        nodeToSinkTopic.put(name, topic);
         nodeGrouper.add(name);
         nodeGrouper.unite(name, parentNames);
         return this;
@@ -361,15 +363,15 @@ public class TopologyBuilder {
      */
     public final TopologyBuilder addProcessor(String name, ProcessorSupplier supplier, String... parentNames) {
         if (nodeFactories.containsKey(name))
-            throw new TopologyException("Processor " + name + " is already added.");
+            throw new TopologyBuilderException("Processor " + name + " is already added.");
 
         if (parentNames != null) {
             for (String parent : parentNames) {
                 if (parent.equals(name)) {
-                    throw new TopologyException("Processor " + name + " cannot be a parent of itself.");
+                    throw new TopologyBuilderException("Processor " + name + " cannot be a parent of itself.");
                 }
                 if (!nodeFactories.containsKey(parent)) {
-                    throw new TopologyException("Parent processor " + parent + " is not added yet.");
+                    throw new TopologyBuilderException("Parent processor " + parent + " is not added yet.");
                 }
             }
         }
@@ -388,7 +390,7 @@ public class TopologyBuilder {
      */
     public final TopologyBuilder addStateStore(StateStoreSupplier supplier, boolean isInternal, String... processorNames) {
         if (stateFactories.containsKey(supplier.name())) {
-            throw new TopologyException("StateStore " + supplier.name() + " is already added.");
+            throw new TopologyBuilderException("StateStore " + supplier.name() + " is already added.");
         }
 
         stateFactories.put(supplier.name(), new StateStoreFactory(isInternal, supplier));
@@ -430,6 +432,32 @@ public class TopologyBuilder {
     }
 
     /**
+     * Connects a list of processors.
+     *
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
+     * @param processorNames the name of the processors
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public final TopologyBuilder connectProcessors(String... processorNames) {
+        if (processorNames.length < 2)
+            throw new TopologyBuilderException("At least two processors need to participate in the connection.");
+
+        for (String processorName : processorNames) {
+            if (!nodeFactories.containsKey(processorName))
+                throw new TopologyBuilderException("Processor " + processorName + " is not added yet.");
+
+        }
+
+        String firstProcessorName = processorNames[0];
+
+        nodeGrouper.unite(firstProcessorName, Arrays.copyOfRange(processorNames, 1, processorNames.length));
+
+        return this;
+    }
+
+    /**
      * Adds an internal topic
      *
      * @param topicName the name of the topic
@@ -443,9 +471,9 @@ public class TopologyBuilder {
 
     private void connectProcessorAndStateStore(String processorName, String stateStoreName) {
         if (!stateFactories.containsKey(stateStoreName))
-            throw new TopologyException("StateStore " + stateStoreName + " is not added yet.");
+            throw new TopologyBuilderException("StateStore " + stateStoreName + " is not added yet.");
         if (!nodeFactories.containsKey(processorName))
-            throw new TopologyException("Processor " + processorName + " is not added yet.");
+            throw new TopologyBuilderException("Processor " + processorName + " is not added yet.");
 
         StateStoreFactory stateStoreFactory = stateFactories.get(stateStoreName);
         Iterator<String> iter = stateStoreFactory.users.iterator();
@@ -459,7 +487,7 @@ public class TopologyBuilder {
         if (nodeFactory instanceof ProcessorNodeFactory) {
             ((ProcessorNodeFactory) nodeFactory).addStateStore(stateStoreName);
         } else {
-            throw new TopologyException("cannot connect a state store " + stateStoreName + " to a source node or a sink node.");
+            throw new TopologyBuilderException("cannot connect a state store " + stateStoreName + " to a source node or a sink node.");
         }
     }
 
@@ -476,12 +504,13 @@ public class TopologyBuilder {
             nodeGroups = makeNodeGroups();
 
         for (Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
+            Set<String> sinkTopics = new HashSet<>();
             Set<String> sourceTopics = new HashSet<>();
             Set<String> internalSourceTopics = new HashSet<>();
             Set<String> stateChangelogTopics = new HashSet<>();
             for (String node : entry.getValue()) {
                 // if the node is a source node, add to the source topics
-                String[] topics = nodeToTopics.get(node);
+                String[] topics = nodeToSourceTopics.get(node);
                 if (topics != null) {
                     sourceTopics.addAll(Arrays.asList(topics));
 
@@ -492,15 +521,23 @@ public class TopologyBuilder {
                     }
                 }
 
+                // if the node is a sink node, add to the sink topics
+                String topic = nodeToSinkTopic.get(node);
+                if (topic != null)
+                    sinkTopics.add(topic);
+
                 // if the node is connected to a state, add to the state topics
                 for (StateStoreFactory stateFactory : stateFactories.values()) {
 
+                    // we store the changelog topic here without the job id prefix
+                    // since it is within a single job and is only used for
                     if (stateFactory.isInternal && stateFactory.users.contains(node)) {
                         stateChangelogTopics.add(stateFactory.supplier.name() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX);
                     }
                 }
             }
             topicGroups.put(entry.getKey(), new TopicsInfo(
+                    Collections.unmodifiableSet(sinkTopics),
                     Collections.unmodifiableSet(sourceTopics),
                     Collections.unmodifiableSet(internalSourceTopics),
                     Collections.unmodifiableSet(stateChangelogTopics)));
@@ -528,7 +565,7 @@ public class TopologyBuilder {
         int nodeGroupId = 0;
 
         // Go through source nodes first. This makes the group id assignment easy to predict in tests
-        for (String nodeName : Utils.sorted(nodeToTopics.keySet())) {
+        for (String nodeName : Utils.sorted(nodeToSourceTopics.keySet())) {
             String root = nodeGrouper.root(nodeName);
             Set<String> nodeGroup = rootToNodeGroup.get(root);
             if (nodeGroup == null) {
@@ -541,7 +578,7 @@ public class TopologyBuilder {
 
         // Go through non-source nodes
         for (String nodeName : Utils.sorted(nodeFactories.keySet())) {
-            if (!nodeToTopics.containsKey(nodeName)) {
+            if (!nodeToSourceTopics.containsKey(nodeName)) {
                 String root = nodeGrouper.root(nodeName);
                 Set<String> nodeGroup = rootToNodeGroup.get(root);
                 if (nodeGroup == null) {
@@ -569,7 +606,7 @@ public class TopologyBuilder {
 
     /**
      * Returns the copartition groups.
-     * A copartition group is a group of topics that are required to be copartitioned.
+     * A copartition group is a group of source topics that are required to be copartitioned.
      *
      * @return groups of topic names
      */
@@ -578,7 +615,7 @@ public class TopologyBuilder {
         for (Set<String> nodeNames : copartitionSourceGroups) {
             Set<String> copartitionGroup = new HashSet<>();
             for (String node : nodeNames) {
-                String[] topics = nodeToTopics.get(node);
+                String[] topics = nodeToSourceTopics.get(node);
                 if (topics != null)
                     copartitionGroup.addAll(Arrays.asList(topics));
             }
@@ -589,9 +626,9 @@ public class TopologyBuilder {
 
     /**
      * Build the topology for the specified topic group. This is called automatically when passing this builder into the
-     * {@link org.apache.kafka.streams.KafkaStreaming#KafkaStreaming(TopologyBuilder, org.apache.kafka.streams.StreamingConfig)} constructor.
+     * {@link org.apache.kafka.streams.KafkaStreams#KafkaStreams(TopologyBuilder, org.apache.kafka.streams.StreamsConfig)} constructor.
      *
-     * @see org.apache.kafka.streams.KafkaStreaming#KafkaStreaming(TopologyBuilder, org.apache.kafka.streams.StreamingConfig)
+     * @see org.apache.kafka.streams.KafkaStreams#KafkaStreams(TopologyBuilder, org.apache.kafka.streams.StreamsConfig)
      */
     public ProcessorTopology build(Integer topicGroupId) {
         Set<String> nodeGroup;
@@ -611,38 +648,34 @@ public class TopologyBuilder {
         Map<String, SourceNode> topicSourceMap = new HashMap<>();
         Map<String, StateStoreSupplier> stateStoreMap = new HashMap<>();
 
-        try {
-            // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
-            for (NodeFactory factory : nodeFactories.values()) {
-                if (nodeGroup == null || nodeGroup.contains(factory.name)) {
-                    ProcessorNode node = factory.build();
-                    processorNodes.add(node);
-                    processorMap.put(node.name(), node);
+        // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
+        for (NodeFactory factory : nodeFactories.values()) {
+            if (nodeGroup == null || nodeGroup.contains(factory.name)) {
+                ProcessorNode node = factory.build();
+                processorNodes.add(node);
+                processorMap.put(node.name(), node);
 
-                    if (factory instanceof ProcessorNodeFactory) {
-                        for (String parent : ((ProcessorNodeFactory) factory).parents) {
-                            processorMap.get(parent).addChild(node);
-                        }
-                        for (String stateStoreName : ((ProcessorNodeFactory) factory).stateStoreNames) {
-                            if (!stateStoreMap.containsKey(stateStoreName)) {
-                                stateStoreMap.put(stateStoreName, stateFactories.get(stateStoreName).supplier);
-                            }
-                        }
-                    } else if (factory instanceof SourceNodeFactory) {
-                        for (String topic : ((SourceNodeFactory) factory).topics) {
-                            topicSourceMap.put(topic, (SourceNode) node);
-                        }
-                    } else if (factory instanceof SinkNodeFactory) {
-                        for (String parent : ((SinkNodeFactory) factory).parents) {
-                            processorMap.get(parent).addChild(node);
-                        }
-                    } else {
-                        throw new TopologyException("Unknown definition class: " + factory.getClass().getName());
+                if (factory instanceof ProcessorNodeFactory) {
+                    for (String parent : ((ProcessorNodeFactory) factory).parents) {
+                        processorMap.get(parent).addChild(node);
                     }
+                    for (String stateStoreName : ((ProcessorNodeFactory) factory).stateStoreNames) {
+                        if (!stateStoreMap.containsKey(stateStoreName)) {
+                            stateStoreMap.put(stateStoreName, stateFactories.get(stateStoreName).supplier);
+                        }
+                    }
+                } else if (factory instanceof SourceNodeFactory) {
+                    for (String topic : ((SourceNodeFactory) factory).topics) {
+                        topicSourceMap.put(topic, (SourceNode) node);
+                    }
+                } else if (factory instanceof SinkNodeFactory) {
+                    for (String parent : ((SinkNodeFactory) factory).parents) {
+                        processorMap.get(parent).addChild(node);
+                    }
+                } else {
+                    throw new TopologyBuilderException("Unknown definition class: " + factory.getClass().getName());
                 }
             }
-        } catch (Exception e) {
-            throw new KafkaException("ProcessorNode construction failed: this should not happen.");
         }
 
         return new ProcessorTopology(processorNodes, topicSourceMap, new ArrayList<>(stateStoreMap.values()));

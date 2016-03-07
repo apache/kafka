@@ -27,9 +27,13 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreSupplier;
+import org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 
 /**
- * Factory for creating key-value stores.
+ * Factory for creating state stores in Kafka Streams.
  */
 public class Stores {
 
@@ -73,10 +77,27 @@ public class Stores {
                             }
 
                             @Override
-                            public LocalDatabaseKeyValueFactory<K, V> localDatabase() {
-                                return new LocalDatabaseKeyValueFactory<K, V>() {
+                            public PersistentKeyValueFactory<K, V> persistent() {
+                                return new PersistentKeyValueFactory<K, V>() {
+                                    private int numSegments = 0;
+                                    private long retentionPeriod = 0L;
+                                    private boolean retainDuplicates = false;
+
+                                    @Override
+                                    public PersistentKeyValueFactory<K, V> windowed(long retentionPeriod, int numSegments, boolean retainDuplicates) {
+                                        this.numSegments = numSegments;
+                                        this.retentionPeriod = retentionPeriod;
+                                        this.retainDuplicates = retainDuplicates;
+
+                                        return this;
+                                    }
+
                                     @Override
                                     public StateStoreSupplier build() {
+                                        if (numSegments > 0) {
+                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, serdes, null);
+                                        }
+
                                         return new RocksDBKeyValueStoreSupplier<>(name, serdes, null);
                                     }
                                 };
@@ -234,7 +255,7 @@ public class Stores {
          *
          * @return the factory to create in-memory key-value stores; never null
          */
-        LocalDatabaseKeyValueFactory<K, V> localDatabase();
+        PersistentKeyValueFactory<K, V> persistent();
     }
 
     /**
@@ -267,7 +288,17 @@ public class Stores {
      * @param <K> the type of keys
      * @param <V> the type of values
      */
-    public static interface LocalDatabaseKeyValueFactory<K, V> {
+    public static interface PersistentKeyValueFactory<K, V> {
+
+        /**
+         * Set the persistent store as a windowed key-value store
+         *
+         * @param retentionPeriod the maximum period of time in milli-second to keep each window in this store
+         * @param numSegments the maximum number of segments for rolling the windowed store
+         * @param retainDuplicates whether or not to retain duplicate data within the window
+         */
+        PersistentKeyValueFactory<K, V> windowed(long retentionPeriod, int numSegments, boolean retainDuplicates);
+
         /**
          * Return the instance of StateStoreSupplier of new key-value store.
          * @return the key-value store; never null

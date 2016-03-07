@@ -18,12 +18,14 @@ import org.ajoberstar.grgit.Grgit
 buildscript {
   repositories {
     mavenCentral()
+    jcenter()
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
 
   dependencies {
-    // For Apache Rat plugin to ignore non-Git files, need ancient version for Java 6 compatibility
-    classpath group: 'org.ajoberstar', name: 'grgit', version: '0.2.3'
+    // For Apache Rat plugin to ignore non-Git files
+    classpath "org.ajoberstar:grgit:1.5.0"
+    classpath 'com.github.ben-manes:gradle-versions-plugin:0.12.0'
   }
 }
 
@@ -33,10 +35,28 @@ allprojects {
   repositories {
     mavenCentral()
   }
+
+  apply plugin: 'com.github.ben-manes.versions'
+
+  dependencyUpdates {
+    revision="release"
+    resolutionStrategy = {
+      componentSelection { rules ->
+        rules.all { ComponentSelection selection ->
+          boolean rejected = ['snap', 'alpha', 'beta', 'rc', 'cr', 'm'].any { qualifier ->
+            selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/
+          }
+          if (rejected) {
+            selection.reject('Release candidate')
+          }
+        }
+      }
+    }
+  }
 }
 
 ext {
-  gradleVersion = "2.10"
+  gradleVersion = "2.11"
   buildVersionFileName = "kafka-version.properties"
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
@@ -216,50 +236,50 @@ for ( sv in ['2_10', '2_11'] ) {
   String svInDot = sv.replaceAll( "_", ".")
 
   tasks.create(name: "jar_core_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:jar']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "test_core_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:test']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "srcJar_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:srcJar']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "docsJar_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:docsJar']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "install_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['install']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "releaseTarGz_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['releaseTarGz']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
   tasks.create(name: "uploadCoreArchives_${sv}", type: GradleBuild) {
-    buildFile = './build.gradle'
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
     tasks = ['core:uploadArchives']
-    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 }
 
 def connectPkgs = ['connect:api', 'connect:runtime', 'connect:json', 'connect:file']
-def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams'] + connectPkgs
+def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:examples'] + connectPkgs
 
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
 tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10', 'jar_core_2_11'] + pkgs.collect { it + ":jar" }) { }
@@ -373,6 +393,10 @@ project(':core') {
     from(project(':connect:json').configurations.runtime) { into("libs/") }
     from(project(':connect:file').jar) { into("libs/") }
     from(project(':connect:file').configurations.runtime) { into("libs/") }
+    from(project(':streams').jar) { into("libs/") }
+    from(project(':streams').configurations.runtime) { into("libs/") }
+    from(project(':streams:examples').jar) { into("libs/") }
+    from(project(':streams:examples').configurations.runtime) { into("libs/") }
   }
 
   jar {
@@ -514,6 +538,7 @@ project(':streams') {
 
     dependencies {
         compile project(':clients')
+        compile project(':connect:json')  // this dependency should be removed after we unify data API
         compile libs.slf4jlog4j
         compile libs.rocksDBJni
         compile libs.zkclient // this dependency should be removed after KIP-4
@@ -524,7 +549,8 @@ project(':streams') {
     }
 
     javadoc {
-        include "**/org/apache/kafka/streams/*"
+        include "**/org/apache/kafka/streams/**"
+        exclude "**/internals/**"
     }
 
     tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -540,6 +566,34 @@ project(':streams') {
     jar {
         dependsOn 'copyDependantLibs'
     }
+
+    systemTestLibs {
+        dependsOn testJar
+    }
+}
+
+project(':streams:examples') {
+  archivesBaseName = "kafka-streams-examples"
+
+  dependencies {
+    compile project(':streams')
+    compile project(':connect:json')  // this dependency should be removed after we unify data API
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtime) {
+      exclude('kafka-streams*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+  }
+
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
 }
 
 project(':log4j-appender') {

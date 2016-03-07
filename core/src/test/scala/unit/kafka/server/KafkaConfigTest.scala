@@ -20,7 +20,7 @@ package kafka.server
 import java.util.Properties
 
 import junit.framework.Assert._
-import kafka.api.{ApiVersion, KAFKA_082}
+import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.ConfigException
@@ -235,6 +235,16 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testCaseInsensitiveListenerProtocol() {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.put(KafkaConfig.ListenersProp, "plaintext://localhost:9091,SsL://localhost:9092")
+
+    assert(isValidKafkaConfig(props))
+  }
+
+  @Test
   def testListenerDefaults() {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
@@ -271,17 +281,21 @@ class KafkaConfigTest {
     val conf = KafkaConfig.fromProps(props)
     assertEquals(ApiVersion.latestVersion, conf.interBrokerProtocolVersion)
 
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp,"0.8.2.0")
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2.0")
+    // We need to set the message format version to make the configuration valid.
+    props.put(KafkaConfig.MessageFormatVersionProp, "0.8.2.0")
     val conf2 = KafkaConfig.fromProps(props)
-    assertEquals(KAFKA_082, conf2.interBrokerProtocolVersion)
+    assertEquals(KAFKA_0_8_2, conf2.interBrokerProtocolVersion)
 
     // check that 0.8.2.0 is the same as 0.8.2.1
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp,"0.8.2.1")
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2.1")
+    // We need to set the message format version to make the configuration valid
+    props.put(KafkaConfig.MessageFormatVersionProp, "0.8.2.1")
     val conf3 = KafkaConfig.fromProps(props)
-    assertEquals(KAFKA_082, conf3.interBrokerProtocolVersion)
+    assertEquals(KAFKA_0_8_2, conf3.interBrokerProtocolVersion)
 
     //check that latest is newer than 0.8.2
-    assert(ApiVersion.latestVersion.onOrAfter(conf3.interBrokerProtocolVersion))
+    assert(ApiVersion.latestVersion >= conf3.interBrokerProtocolVersion)
   }
 
   private def isValidKafkaConfig(props: Properties): Boolean = {
@@ -383,6 +397,34 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testInvalidInterBrokerSecurityProtocol() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
+    props.put(KafkaConfig.InterBrokerSecurityProtocolProp, SecurityProtocol.PLAINTEXT.toString)
+    intercept[IllegalArgumentException] {
+      KafkaConfig.fromProps(props)
+    }
+  }
+
+  @Test
+  def testEqualAdvertisedListenersProtocol() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+    KafkaConfig.fromProps(props)
+  }
+
+  @Test
+  def testInvalidAdvertisedListenersProtocol() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.ListenersProp, "TRACE://localhost:9091,SSL://localhost:9093")
+    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092")
+    intercept[IllegalArgumentException] {
+      KafkaConfig.fromProps(props)
+    }
+  }
+
+  @Test
   def testFromPropsInvalid() {
     def getBaseProperties(): Properties = {
       val validRequiredProperties = new Properties()
@@ -422,7 +464,7 @@ class KafkaConfigTest {
         case KafkaConfig.NumPartitionsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.LogDirsProp => // ignore string
         case KafkaConfig.LogDirProp => // ignore string
-        case KafkaConfig.LogSegmentBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", Message.MinHeaderSize - 1)
+        case KafkaConfig.LogSegmentBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", Message.MinMessageOverhead - 1)
 
         case KafkaConfig.LogRollTimeMillisProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.LogRollTimeHoursProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")

@@ -24,5 +24,4 @@ public interface KTableProcessorSupplier<K, V, T> extends ProcessorSupplier<K, C
     KTableValueGetterSupplier<K, T> view();
 
     void enableSendingOldValues();
-
 }

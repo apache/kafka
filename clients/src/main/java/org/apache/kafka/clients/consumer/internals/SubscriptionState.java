@@ -200,6 +200,18 @@ public class SubscriptionState {
         return this.subscription;
     }
 
+    public Set<TopicPartition> pausedPartitions() {
+        HashSet<TopicPartition> paused = new HashSet<>();
+        for (Map.Entry<TopicPartition, TopicPartitionState> entry : assignment.entrySet()) {
+            final TopicPartition tp = entry.getKey();
+            final TopicPartitionState state = entry.getValue();
+            if (state.paused) {
+                paused.add(tp);
+            }
+        }
+        return paused;
+    }
+
     /**
      * Get the subscription for the group. For the leader, this will include the union of the
      * subscriptions of all group members. For followers, it is just that member's subscription.
