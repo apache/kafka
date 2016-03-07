@@ -81,7 +81,7 @@ object RequestChannel extends Logging {
         try RequestHeader.parse(buffer)
         catch {
           case ex: Throwable =>
-            throw new InvalidRequestException(s"Error parsing request header for apiKey: $requestId", ex)
+            throw new InvalidRequestException(s"Error parsing request header. Our best guess of the apiKey is: $requestId", ex)
         }
       } else
         null
