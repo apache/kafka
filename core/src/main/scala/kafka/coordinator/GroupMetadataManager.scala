@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.types.Type.INT32
 import org.apache.kafka.common.protocol.types.Type.INT64
 import org.apache.kafka.common.protocol.types.Type.BYTES
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -243,10 +244,10 @@ class GroupMetadataManager(val brokerId: Int,
   def prepareStoreOffsets(groupId: String,
                           consumerId: String,
                           generationId: Int,
-                          offsetMetadata: immutable.Map[TopicAndPartition, OffsetAndMetadata],
-                          responseCallback: immutable.Map[TopicAndPartition, Short] => Unit): DelayedStore = {
+                          offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
+                          responseCallback: immutable.Map[TopicPartition, Short] => Unit): DelayedStore = {
     // first filter out partitions with offset metadata size exceeding limit
-    val filteredOffsetMetadata = offsetMetadata.filter { case (topicAndPartition, offsetAndMetadata) =>
+    val filteredOffsetMetadata = offsetMetadata.filter { case (topicPartition, offsetAndMetadata) =>
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
     }
 
@@ -319,26 +320,26 @@ class GroupMetadataManager(val brokerId: Int,
    * The most important guarantee that this API provides is that it should never return a stale offset. i.e., it either
    * returns the current offset or it begins to sync the cache from the log (and returns an error code).
    */
-  def getOffsets(group: String, topicPartitions: Seq[TopicAndPartition]): Map[TopicAndPartition, OffsetMetadataAndError] = {
+  def getOffsets(group: String, topicPartitions: Seq[TopicPartition]): Map[TopicPartition, OffsetFetchResponse.PartitionData] = {
     trace("Getting offsets %s for group %s.".format(topicPartitions, group))
 
     if (isGroupLocal(group)) {
       if (topicPartitions.isEmpty) {
         // Return offsets for all partitions owned by this consumer group. (this only applies to consumers that commit offsets to Kafka.)
         offsetsCache.filter(_._1.group == group).map { case(groupTopicPartition, offsetAndMetadata) =>
-          (groupTopicPartition.topicPartition, OffsetMetadataAndError(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE.code))
+          (groupTopicPartition.topicPartition, new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE.code))
         }.toMap
       } else {
-        topicPartitions.map { topicAndPartition =>
-          val groupTopicPartition = GroupTopicPartition(group, topicAndPartition)
+        topicPartitions.map { topicPartition =>
+          val groupTopicPartition = GroupTopicPartition(group, topicPartition)
           (groupTopicPartition.topicPartition, getOffset(groupTopicPartition))
         }.toMap
       }
     } else {
       debug("Could not fetch offsets for group %s (not offset coordinator).".format(group))
-      topicPartitions.map { topicAndPartition =>
-        val groupTopicPartition = GroupTopicPartition(group, topicAndPartition)
-        (groupTopicPartition.topicPartition, OffsetMetadataAndError.NotCoordinatorForGroup)
+      topicPartitions.map { topicPartition =>
+        val groupTopicPartition = GroupTopicPartition(group, topicPartition)
+        (groupTopicPartition.topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NOT_COORDINATOR_FOR_GROUP.code))
       }.toMap
     }
   }
@@ -517,12 +518,12 @@ class GroupMetadataManager(val brokerId: Int,
    * @param key The requested group-topic-partition
    * @return If the key is present, return the offset and metadata; otherwise return None
    */
-  private def getOffset(key: GroupTopicPartition) = {
+  private def getOffset(key: GroupTopicPartition): OffsetFetchResponse.PartitionData = {
     val offsetAndMetadata = offsetsCache.get(key)
     if (offsetAndMetadata == null)
-      OffsetMetadataAndError.NoOffset
+      new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE.code)
     else
-      OffsetMetadataAndError(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE.code)
+      new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE.code)
   }
 
   /**
@@ -872,7 +873,7 @@ object GroupMetadataManager {
       val topic = key.get(OFFSET_KEY_TOPIC_FIELD).asInstanceOf[String]
       val partition = key.get(OFFSET_KEY_PARTITION_FIELD).asInstanceOf[Int]
 
-      OffsetKey(version, GroupTopicPartition(group, TopicAndPartition(topic, partition)))
+      OffsetKey(version, GroupTopicPartition(group, new TopicPartition(topic, partition)))
 
     } else if (version == CURRENT_GROUP_KEY_SCHEMA_VERSION) {
       // version 2 refers to offset
@@ -1009,10 +1010,10 @@ object GroupMetadataManager {
 
 }
 
-case class GroupTopicPartition(group: String, topicPartition: TopicAndPartition) {
+case class GroupTopicPartition(group: String, topicPartition: TopicPartition) {
 
   def this(group: String, topic: String, partition: Int) =
-    this(group, new TopicAndPartition(topic, partition))
+    this(group, new TopicPartition(topic, partition))
 
   override def toString =
     "[%s,%s,%d]".format(group, topicPartition.topic, topicPartition.partition)

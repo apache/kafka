@@ -107,7 +107,7 @@ object ConsumerGroupCommand {
     }
 
     protected def printDescribeHeader() {
-      println("GROUP, TOPIC, PARTITION, CURRENT OFFSET, LOG END OFFSET, LAG, OWNER")
+      println("%-30s %-30s %-10s %-15s %-15s %-15s %s".format("GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "LAG", "OWNER"))
     }
 
     private def describePartition(group: String,
@@ -117,8 +117,7 @@ object ConsumerGroupCommand {
                                   ownerOpt: Option[String]) {
       def print(logEndOffset: Option[Long]): Unit = {
         val lag = offsetOpt.filter(_ != -1).flatMap(offset => logEndOffset.map(_ - offset))
-        println(Seq(group, topic, partition, offsetOpt.getOrElse("unknown"), logEndOffset.getOrElse("unknown"),
-          lag.getOrElse("unknown"), ownerOpt.getOrElse("none")).mkString(", "))
+        println("%-30s %-30s %-10s %-15s %-15s %-15s %s".format(group, topic, partition, offsetOpt.getOrElse("unknown"), logEndOffset.getOrElse("unknown"), lag.getOrElse("unknown"), ownerOpt.getOrElse("none")))
       }
       getLogEndOffset(topic, partition) match {
         case LogEndOffsetResult.LogEndOffset(logEndOffset) => print(Some(logEndOffset))

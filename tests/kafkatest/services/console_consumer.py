@@ -17,7 +17,7 @@ from ducktape.utils.util import wait_until
 from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
+from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, LATEST_0_9
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.security_config import SecurityConfig
 
@@ -181,8 +181,8 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         if self.print_key:
             cmd += " --property print.key=true"
 
-        # LoggingMessageFormatter was introduced in 0.9.0.0
-        if node.version > LATEST_0_8_2:
+        # LoggingMessageFormatter was introduced after 0.9
+        if node.version > LATEST_0_9:
             cmd+=" --formatter kafka.tools.LoggingMessageFormatter"
 
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args

@@ -19,13 +19,13 @@ package kafka.server
 
 import java.util.Properties
 
-import junit.framework.Assert._
 import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.junit.{Assert, Test}
+import org.junit.Assert._
+import org.junit.Test
 import org.scalatest.Assertions.intercept
 
 class KafkaConfigTest {
@@ -583,21 +583,21 @@ class KafkaConfigTest {
     defaults.put(KafkaConfig.OffsetsTopicCompressionCodecProp, SnappyCompressionCodec.codec.toString)
 
     val config = KafkaConfig.fromProps(defaults)
-    Assert.assertEquals("127.0.0.1:2181", config.zkConnect)
-    Assert.assertEquals(1234, config.zkConnectionTimeoutMs)
-    Assert.assertEquals(false, config.brokerIdGenerationEnable)
-    Assert.assertEquals(1, config.maxReservedBrokerId)
-    Assert.assertEquals(1, config.brokerId)
-    Assert.assertEquals("127.0.0.1", config.hostName)
-    Assert.assertEquals(1122, config.advertisedPort)
-    Assert.assertEquals("127.0.0.1", config.advertisedHostName)
-    Assert.assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
-    Assert.assertEquals(List("/tmp1", "/tmp2"), config.logDirs)
-    Assert.assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)
-    Assert.assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)
-    Assert.assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
-    Assert.assertEquals(123L, config.logFlushIntervalMs)
-    Assert.assertEquals(SnappyCompressionCodec, config.offsetsTopicCompressionCodec)
+    assertEquals("127.0.0.1:2181", config.zkConnect)
+    assertEquals(1234, config.zkConnectionTimeoutMs)
+    assertEquals(false, config.brokerIdGenerationEnable)
+    assertEquals(1, config.maxReservedBrokerId)
+    assertEquals(1, config.brokerId)
+    assertEquals("127.0.0.1", config.hostName)
+    assertEquals(1122, config.advertisedPort)
+    assertEquals("127.0.0.1", config.advertisedHostName)
+    assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
+    assertEquals(List("/tmp1", "/tmp2"), config.logDirs)
+    assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)
+    assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)
+    assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
+    assertEquals(123L, config.logFlushIntervalMs)
+    assertEquals(SnappyCompressionCodec, config.offsetsTopicCompressionCodec)
   }
 
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*) {

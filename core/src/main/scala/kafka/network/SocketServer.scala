@@ -425,13 +425,13 @@ private[kafka] class Processor(val id: Int,
               channel.socketAddress)
             val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session, buffer = receive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
             requestChannel.sendRequest(req)
+            selector.mute(receive.source)
           } catch {
             case e @ (_: InvalidRequestException | _: SchemaException) =>
               // note that even though we got an exception, we can assume that receive.source is valid. Issues with constructing a valid receive object were handled earlier
               error("Closing socket for " + receive.source + " because of error", e)
               close(selector, receive.source)
           }
-          selector.mute(receive.source)
         }
 
         selector.completedSends.asScala.foreach { send =>
