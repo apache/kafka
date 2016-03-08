@@ -43,11 +43,13 @@ object AdminUtils extends Logging {
   val EntityConfigChangeZnodePrefix = "config_change_"
 
   /**
-   * There are 2 goals of replica assignment:
+   * There are 3 goals of replica assignment:
+   *
    * 1. Spread the replicas evenly among brokers.
    * 2. For partitions assigned to a particular broker, their other replicas are spread over the other brokers.
+   * 3. If all brokers have rack information, assign the replicas for each partition to different racks if possible
    *
-   * To achieve this goal, we:
+   * To achieve this goal for replica assignment without considering racks, we:
    * 1. Assign the first replica of each partition by round-robin, starting from a random position in the broker list.
    * 2. Assign the remaining replicas of each partition with an increasing shift.
    *
