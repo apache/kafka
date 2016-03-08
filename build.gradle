@@ -18,12 +18,14 @@ import org.ajoberstar.grgit.Grgit
 buildscript {
   repositories {
     mavenCentral()
+    jcenter()
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
 
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar:grgit:1.5.0"
+    classpath 'com.github.ben-manes:gradle-versions-plugin:0.12.0'
   }
 }
 
@@ -32,6 +34,24 @@ allprojects {
   apply plugin: 'eclipse'
   repositories {
     mavenCentral()
+  }
+
+  apply plugin: 'com.github.ben-manes.versions'
+
+  dependencyUpdates {
+    revision="release"
+    resolutionStrategy = {
+      componentSelection { rules ->
+        rules.all { ComponentSelection selection ->
+          boolean rejected = ['snap', 'alpha', 'beta', 'rc', 'cr', 'm'].any { qualifier ->
+            selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/
+          }
+          if (rejected) {
+            selection.reject('Release candidate')
+          }
+        }
+      }
+    }
   }
 }
 
@@ -374,7 +394,9 @@ project(':core') {
     from(project(':connect:file').jar) { into("libs/") }
     from(project(':connect:file').configurations.runtime) { into("libs/") }
     from(project(':streams').jar) { into("libs/") }
+    from(project(':streams').configurations.runtime) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
+    from(project(':streams:examples').configurations.runtime) { into("libs/") }
   }
 
   jar {
@@ -527,7 +549,8 @@ project(':streams') {
     }
 
     javadoc {
-        include "**/org/apache/kafka/streams/*"
+        include "**/org/apache/kafka/streams/**"
+        exclude "**/internals/**"
     }
 
     tasks.create(name: "copyDependantLibs", type: Copy) {

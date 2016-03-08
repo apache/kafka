@@ -204,7 +204,7 @@ public class TopologyBuilder {
 
     /**
      * Add a new source that consumes the named topics and forwards the messages to child processor and/or sink nodes.
-     * The sink will use the specified key and value deserializers.
+     * The source will use the specified key and value deserializers.
      *
      * @param name the unique name of the source used to reference this node when
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
@@ -284,12 +284,6 @@ public class TopologyBuilder {
     /**
      * Add a new sink that forwards messages from upstream parent processor and/or source nodes to the named Kafka topic.
      * The sink will use the specified key and value serializers.
-     * <p>
-     * The sink will also use the specified {@link StreamPartitioner} to determine how messages are distributed among
-     * the named Kafka topic's partitions. Such control is often useful with topologies that use
-     * {@link #addStateStore(StateStoreSupplier, String...) state stores}
-     * in its processors. In most other cases, however, a partitioner need not be specified and Kafka will automatically distribute
-     * messages among partitions using Kafka's default partitioning logic.
      *
      * @param name the unique name of the sink
      * @param topic the name of the Kafka topic to which this sink should write its messages

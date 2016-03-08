@@ -18,7 +18,6 @@ package kafka.server
 
 import java.util.Collections
 
-import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertEquals, assertTrue}
@@ -44,8 +43,8 @@ class ClientQuotaManagerTest {
     val clientMetrics = new ClientQuotaManager(config, newMetrics, "producer", time)
 
     // Case 1: Update the quota. Assert that the new quota value is returned
-    clientMetrics.updateQuota("p1", new Quota(2000, true));
-    clientMetrics.updateQuota("p2", new Quota(4000, true));
+    clientMetrics.updateQuota("p1", new Quota(2000, true))
+    clientMetrics.updateQuota("p2", new Quota(4000, true))
 
     try {
       assertEquals("Default producer quota should be 500", new Quota(500, true), clientMetrics.quota("random-client-id"))
@@ -58,14 +57,14 @@ class ClientQuotaManagerTest {
 
       // Case 2: Change quota again. The quota should be updated within KafkaMetrics as well since the sensor was created.
       // p1 should not longer be throttled after the quota change
-      clientMetrics.updateQuota("p1", new Quota(3000, true));
+      clientMetrics.updateQuota("p1", new Quota(3000, true))
       assertEquals("Should return the newly overridden value (3000)", new Quota(3000, true), clientMetrics.quota("p1"))
 
       throttleTimeMs = clientMetrics.recordAndMaybeThrottle("p1", 0, this.callback)
       assertEquals(s"throttleTimeMs should be 0. was $throttleTimeMs", 0, throttleTimeMs)
 
       // Case 3: Change quota back to default. Should be throttled again
-      clientMetrics.updateQuota("p1", new Quota(500, true));
+      clientMetrics.updateQuota("p1", new Quota(500, true))
       assertEquals("Should return the default value (500)", new Quota(500, true), clientMetrics.quota("p1"))
 
       throttleTimeMs = clientMetrics.recordAndMaybeThrottle("p1", 0, this.callback)
@@ -118,6 +117,49 @@ class ClientQuotaManagerTest {
 
       assertEquals("Should be unthrottled since bursty sample has rolled over",
                    0, clientMetrics.recordAndMaybeThrottle("unknown", 0, callback))
+    } finally {
+      clientMetrics.shutdown()
+    }
+  }
+
+  @Test
+  def testExpireThrottleTimeSensor() {
+    val metrics = newMetrics
+    val clientMetrics = new ClientQuotaManager(config, metrics, "producer", time)
+    try {
+      clientMetrics.recordAndMaybeThrottle("client1", 100, callback)
+      // remove the throttle time sensor
+      metrics.removeSensor("producerThrottleTime-client1")
+      // should not throw an exception even if the throttle time sensor does not exist.
+      val throttleTime = clientMetrics.recordAndMaybeThrottle("client1", 10000, callback)
+      assertTrue("Should be throttled", throttleTime > 0)
+      // the sensor should get recreated
+      val throttleTimeSensor = metrics.getSensor("producerThrottleTime-client1")
+      assertTrue("Throttle time sensor should exist", throttleTimeSensor != null)
+    } finally {
+      clientMetrics.shutdown()
+    }
+  }
+
+  @Test
+  def testExpireQuotaSensors() {
+    val metrics = newMetrics
+    val clientMetrics = new ClientQuotaManager(config, metrics, "producer", time)
+    try {
+      clientMetrics.recordAndMaybeThrottle("client1", 100, callback)
+      // remove all the sensors
+      metrics.removeSensor("producerThrottleTime-client1")
+      metrics.removeSensor("producer-client1")
+      // should not throw an exception
+      val throttleTime = clientMetrics.recordAndMaybeThrottle("client1", 10000, callback)
+      assertTrue("Should be throttled", throttleTime > 0)
+
+      // all the sensors should get recreated
+      val throttleTimeSensor = metrics.getSensor("producerThrottleTime-client1")
+      assertTrue("Throttle time sensor should exist", throttleTimeSensor != null)
+
+      val byteRateSensor = metrics.getSensor("producer-client1")
+      assertTrue("Byte rate sensor should exist", byteRateSensor != null)
     } finally {
       clientMetrics.shutdown()
     }
