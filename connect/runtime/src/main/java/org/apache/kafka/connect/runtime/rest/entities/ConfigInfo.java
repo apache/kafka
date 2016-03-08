@@ -27,18 +27,18 @@ public class ConfigInfo {
 
     @JsonCreator
     public ConfigInfo(
-        @JsonProperty("config_key") ConfigKeyInfo configKey,
-        @JsonProperty("config_value") ConfigValueInfo configValue) {
+        @JsonProperty("definition") ConfigKeyInfo configKey,
+        @JsonProperty("value") ConfigValueInfo configValue) {
         this.configKey = configKey;
         this.configValue = configValue;
     }
 
-    @JsonProperty("config_key")
+    @JsonProperty("definition")
     public ConfigKeyInfo configKey() {
         return configKey;
     }
 
-    @JsonProperty("config_value")
+    @JsonProperty("value")
     public ConfigValueInfo configValue() {
         return configValue;
     }

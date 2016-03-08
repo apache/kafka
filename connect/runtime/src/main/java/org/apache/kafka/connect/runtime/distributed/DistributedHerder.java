@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.runtime.distributed;
 
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
@@ -114,7 +113,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private final ExecutorService forwardRequestExecutor;
 
-    private Map<String, ConfigDef> configs = new HashMap<>();
     private Map<String, Connector> tempConnectors = new HashMap<>();
 
     public DistributedHerder(DistributedConfig config,

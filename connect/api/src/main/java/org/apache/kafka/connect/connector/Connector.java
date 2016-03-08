@@ -18,9 +18,11 @@
 package org.apache.kafka.connect.connector;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -45,7 +47,8 @@ import java.util.Map;
 public abstract class Connector {
 
     protected ConnectorContext context;
-    protected static ConfigDef configDef = new ConfigDef();
+    protected ConfigDef configDef = defineConfig();
+    protected List<String> groups = defineGroup();
 
     /**
      * Get the version of this connector.
@@ -125,22 +128,24 @@ public abstract class Connector {
      */
     public abstract void stop();
 
-
-    /**
-     *
-     * @return
-     */
-    public ConfigDef configDef() {
-        return configDef;
-    }
-
     /**
      * Validate the connector configuration values against configuration definitions.
      * @param connectorConfigs the provided configuration values
      * @return List of Config, each Config contains the updated configuration information given
      * the current configuration values.
      */
-    public List<ConfigValue> validate(Map<String, String> connectorConfigs) {
-       return configDef.validate(connectorConfigs);
+    public Config validate(Map<String, String> connectorConfigs) {
+        List<ConfigValue> configValues =  configDef.validate(connectorConfigs);
+        return new Config(configDef, groups, configValues);
+    }
+
+    /**
+     * Define the configuration for the connector.
+     * @return The ConfigDef for this connector.
+     */
+    protected abstract ConfigDef defineConfig();
+
+    protected List<String> defineGroup() {
+        return new LinkedList<>();
     }
 }

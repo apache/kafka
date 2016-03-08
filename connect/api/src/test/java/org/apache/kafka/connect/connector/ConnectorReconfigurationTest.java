@@ -17,7 +17,7 @@
 
 package org.apache.kafka.connect.connector;
 
-import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Test;
 
@@ -44,6 +44,7 @@ public class ConnectorReconfigurationTest {
     }
 
     private static class TestConnector extends Connector {
+
         private boolean stopException;
         private int order = 0;
         public int stopOrder = -1;
@@ -81,9 +82,8 @@ public class ConnectorReconfigurationTest {
         }
 
         @Override
-        public List<ConfigValue> validate(Map<String, String> connectorConfigs) {
-            return null;
+        public ConfigDef defineConfig() {
+            return new ConfigDef();
         }
     }
-
 }

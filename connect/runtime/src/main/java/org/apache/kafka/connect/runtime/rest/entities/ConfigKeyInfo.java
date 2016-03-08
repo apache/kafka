@@ -83,7 +83,7 @@ public class ConfigKeyInfo {
         return group;
     }
 
-    @JsonProperty("order_in_group")
+    @JsonProperty("order")
     public int orderInGroup() {
         return orderInGroup;
     }

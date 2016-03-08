@@ -57,6 +57,7 @@ public class ConfigDef {
     private static final Logger log = LoggerFactory.getLogger(ConfigDef.class);
 
     private final Map<String, ConfigKey> configKeys = new HashMap<>();
+    private String undefinedConfigKey;
 
     /**
      * Returns unmodifiable set of properties names defined in this {@linkplain ConfigDef}
@@ -339,15 +340,6 @@ public class ConfigDef {
         return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation);
     }
 
-
-    /**
-     * Mark the end of the configuration definition.
-     */
-    public ConfigDef end() {
-        ensureDependentsDefined();
-        return this;
-    }
-
     /**
      * Add standard SSL client configuration options.
      * @return this
@@ -377,43 +369,69 @@ public class ConfigDef {
      * the appropriate type (int, string, etc)
      */
     public Map<String, Object> parse(Map<?, ?> props) {
+        return parse(props, true);
+    }
+
+    /**
+     * Parse and validate configs against this configuration definition. The input is a map of configs. It is expected
+     * that the keys of the map are strings, but the values can either be strings or they may already be of the
+     * appropriate type (int, string, etc). This will work equally well with either java.util.Properties instances or a
+     * programmatically constructed map.
+     *
+     * @param props The configs to parse and validate
+     * @param checkRequired Whether to throw a config exception in case that we don't provide a value for a required config
+     * @return Parsed and validated configs. The key will be the config name and the value will be the value parsed into
+     * the appropriate type (int, string, etc)
+     */
+    public Map<String, Object> parse(Map<?, ?> props, boolean checkRequired) {
+        ensureDependentsDefined();
         /* parse all known keys */
         Map<String, Object> values = new HashMap<>();
         for (ConfigKey key : configKeys.values()) {
-            Object value;
+            Object value = null;
             // props map contains setting - assign ConfigKey value
-            if (props.containsKey(key.name))
+            if (props.containsKey(key.name)) {
                 value = parseType(key.name, props.get(key.name), key.type);
-            // props map doesn't contain setting, the key is required because no default value specified - its an error
-            else if (key.defaultValue == NO_DEFAULT_VALUE)
-                throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
-            // otherwise assign setting its default value
-            else
+                // props map doesn't contain setting, the key is required because no default value specified - its an error
+            } else if (key.defaultValue == NO_DEFAULT_VALUE) {
+                if (checkRequired) {
+                    throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
+                }
+            } else {
+                // otherwise assign setting its default value
                 value = key.defaultValue;
-            if (key.validator != null)
+            }
+            if (value != null && key.validator != null) {
                 key.validator.ensureValid(key.name, value);
-            values.put(key.name, value);
+            }
+            // only put the value that actually parsed.
+            if (value != null) {
+                values.put(key.name, value);
+            }
         }
         return values;
     }
 
-
     /**
      * Validate the provided connector configuration values with the configuration definition
-     * @param connectorConfigs the provided connector configuration values
+     * @param props the provided configuration values
      * @return List of Config, each Config contains the updated configuration information given
      * the current configuration values.
      */
-    public List<ConfigValue> validate(Map<String, String> connectorConfigs) {
+    public List<ConfigValue> validate(Map<String, String> props) {
         List<String> configsWithNoParent = getConfigsWithNoParent();
         Map<String, ConfigValue> configValues = new HashMap<>();
-
         for (String name: configKeys.keySet()) {
             configValues.put(name, new ConfigValue(name));
         }
-
+        try {
+            ensureDependentsDefined();
+        } catch (ConfigException e) {
+            configValues.put(undefinedConfigKey, new ConfigValue(undefinedConfigKey));
+        }
+        
         for (String name: configsWithNoParent) {
-            validate(name, connectorConfigs, configValues);
+            validate(name, props, configValues);
         }
         return new LinkedList<>(configValues.values());
     }
@@ -424,6 +442,7 @@ public class ConfigDef {
             List<String> dependents = configKey.dependents;
             for (String dependent: dependents) {
                 if (!configKeys.containsKey(dependent)) {
+                    undefinedConfigKey = dependent;
                     throw new ConfigException(dependent + " is  an dependent of " + configName + ". However, it is not defined.");
                 }
             }
@@ -440,7 +459,7 @@ public class ConfigDef {
         }
 
         List<String> configsWithNoParent = new LinkedList<>();
-        for(String config: configs) {
+        for (String config: configs) {
             if (!configsWithParent.contains(config)) {
                 configsWithNoParent.add(config);
             }
@@ -448,13 +467,13 @@ public class ConfigDef {
         return configsWithNoParent;
     }
 
-    private void validate(String name, Map<String, String> connectorConfigs, Map<String, ConfigValue> configs) {
+    private void validate(String name, Map<String, String> props, Map<String, ConfigValue> configs) {
         ConfigKey key = configKeys.get(name);
         ConfigValue config = configs.get(name);
 
         Object value;
-        if (connectorConfigs.containsKey(key.name)) {
-            value = parseType(key.name, connectorConfigs.get(key.name), key.type);
+        if (props.containsKey(key.name)) {
+            value = parseType(key.name, props.get(key.name), key.type);
         } else if (key.defaultValue == NO_DEFAULT_VALUE) {
             config.addErrorMessage("Missing required configuration \"" + key.name + "\" which has no default value.");
             value = null;
@@ -474,7 +493,7 @@ public class ConfigDef {
         List<Object> recommendedValues;
         if (key.recommender != null) {
             try {
-                recommendedValues = key.recommender.validValues(name, connectorConfigs);
+                recommendedValues = key.recommender.validValues(name, props);
                 List<Object> originalRecommendedValues = config.recommendedValues();
 
                 if (!originalRecommendedValues.isEmpty()) {
@@ -491,7 +510,7 @@ public class ConfigDef {
                 if (value != null && !recommendedValues.isEmpty() && !recommendedValues.contains(value)) {
                     config.addErrorMessage("Invalid value for configuration " + key.name);
                 }
-                config.visible(key.recommender.visible(name, connectorConfigs));
+                config.visible(key.recommender.visible(name, props));
             } catch (ConfigException e) {
                 config.addErrorMessage(e.getMessage());
             }
@@ -499,7 +518,7 @@ public class ConfigDef {
 
         configs.put(name, config);
         for (String dependent: key.dependents) {
-            validate(dependent, connectorConfigs, configs);
+            validate(dependent, props, configs);
         }
     }
 
@@ -622,8 +641,8 @@ public class ConfigDef {
      * Recommender interface
      */
     public interface Recommender {
-        List<Object> validValues(String name, Map<String, String> connectorConfigs);
-        boolean visible(String name, Map<String, String> connectorConfigs);
+        List<Object> validValues(String name, Map<String, String> props);
+        boolean visible(String name, Map<String, String> props);
     }
 
     /**
@@ -750,13 +769,14 @@ public class ConfigDef {
     public String toHtmlTable() {
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
-        b.append("<table>\n");
+        b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>\n");
         b.append("<th>Name</th>\n");
+        b.append("<th>Description</th>\n");
         b.append("<th>Type</th>\n");
         b.append("<th>Default</th>\n");
+        b.append("<th>Valid Values</th>\n");
         b.append("<th>Importance</th>\n");
-        b.append("<th>Description</th>\n");
         b.append("</tr>\n");
         for (ConfigKey def : configs) {
             b.append("<tr>\n");
@@ -793,7 +813,7 @@ public class ConfigDef {
             b.append("``");
             b.append(def.name);
             b.append("``\n");
-            for(String docLine : def.documentation.split("\n")) {
+            for (String docLine : def.documentation.split("\n")) {
                 if (docLine.length() == 0) {
                     continue;
                 }
@@ -840,9 +860,8 @@ public class ConfigDef {
 
                 // then sort by importance
                 int cmp = k1.importance.compareTo(k2.importance);
-                if (cmp == 0)
-                // then sort in alphabetical order
-                {
+                if (cmp == 0) {
+                    // then sort in alphabetical order
                     return k1.name.compareTo(k2.name);
                 } else {
                     return cmp;

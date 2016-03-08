@@ -30,27 +30,15 @@ public class ConfigValue {
     private boolean visible;
 
     public ConfigValue(String name) {
-        this(name, null);
-    }
-
-    public ConfigValue(String name, Object value) {
-        this(name, value, new LinkedList<Object>());
-    }
-
-    public ConfigValue(String name, Object value, List<Object> recommendedValues) {
-        this(name, value, recommendedValues, new LinkedList<String>());
+        this(name, null, new LinkedList<Object>(), new LinkedList<String>());
     }
 
     public ConfigValue(String name, Object value, List<Object> recommendedValues, List<String> errorMessages) {
-        this(name, value, recommendedValues, errorMessages, true);
-    }
-
-    public ConfigValue(String name, Object value, List<Object> recommendedValues, List<String> errorMessages, boolean visible) {
         this.name = name;
         this.value = value;
         this.recommendedValues = recommendedValues;
         this.errorMessages = errorMessages;
-        this.visible = visible;
+        this.visible = false;
     }
 
     public String name() {
@@ -97,11 +85,12 @@ public class ConfigValue {
         return Objects.equals(name, that.name) &&
                Objects.equals(value, that.value) &&
                Objects.equals(recommendedValues, that.recommendedValues) &&
-               Objects.equals(errorMessages, that.errorMessages);
+               Objects.equals(errorMessages, that.errorMessages) &&
+               Objects.equals(visible, that.visible);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, value, recommendedValues, errorMessages);
+        return Objects.hash(name, value, recommendedValues, errorMessages, visible);
     }
 }

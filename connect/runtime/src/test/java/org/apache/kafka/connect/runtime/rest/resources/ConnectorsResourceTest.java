@@ -19,6 +19,8 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 
+import org.apache.kafka.common.config.Config;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigValue;
@@ -114,7 +116,7 @@ public class ConnectorsResourceTest {
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
 
-        CONFIG_INFOS = new ConfigInfos("test", 0, configs);
+        CONFIG_INFOS = new ConfigInfos("test", 0, Collections.<String>emptyList(), configs);
     }
 
 
@@ -300,12 +302,7 @@ public class ConnectorsResourceTest {
     public void testValidateConfig() throws Throwable {
         herder.validateConfigs(EasyMock.eq(WorkerTestConnector.class.getName()), EasyMock.eq(props));
 
-        PowerMock.expectLastCall().andAnswer(new IAnswer<ConfigInfos>() {
-            @Override
-            public ConfigInfos answer() throws Throwable {
-               return CONFIG_INFOS;
-            }
-        });
+        PowerMock.expectLastCall().andReturn(CONFIG_INFOS);
 
         PowerMock.replayAll();
 
@@ -424,12 +421,6 @@ public class ConnectorsResourceTest {
         public static final String TEST_STRING_CONFIG = "test.string.config";
         public static final String TEST_INT_CONFIG = "test.int.config";
 
-        static {
-            configDef
-                .define(TEST_STRING_CONFIG, Type.STRING, Importance.HIGH, "Test configuration for string type.")
-                .define(TEST_INT_CONFIG, Type.INT, Importance.MEDIUM, "Test configuration for integer type.");
-        }
-
         @Override
         public String version() {
             return "1.0";
@@ -456,15 +447,26 @@ public class ConnectorsResourceTest {
         }
 
         @Override
-        public List<ConfigValue> validate(Map<String, String> connectorConfigs) {
+        public ConfigDef defineConfig() {
+            if (this.configDef != null) {
+                return this.configDef;
+            } else {
+                return new ConfigDef()
+                    .define(TEST_STRING_CONFIG, Type.STRING, Importance.HIGH, "Test configuration for string type.")
+                    .define(TEST_INT_CONFIG, Type.INT, Importance.MEDIUM, "Test configuration for integer type.");
+            }
+        }
+
+        @Override
+        public Config validate(Map<String, String> connectorConfigs) {
             List<ConfigValue> values = new LinkedList<>();
 
             String stringConfig = connectorConfigs.get(TEST_STRING_CONFIG);
-            ConfigValue configValue = new ConfigValue(TEST_STRING_CONFIG, stringConfig, Collections.<Object>emptyList());
+            ConfigValue configValue = new ConfigValue(TEST_STRING_CONFIG, stringConfig, Collections.<Object>emptyList(), Collections.<String>emptyList());
             values.add(configValue);
 
             String intConfig = connectorConfigs.get(TEST_INT_CONFIG);
-            configValue = new ConfigValue(TEST_INT_CONFIG, intConfig, Collections.<Object>emptyList());
+            configValue = new ConfigValue(TEST_INT_CONFIG, intConfig, Collections.<Object>emptyList(), Collections.<String>emptyList());
             try {
                 Integer.parseInt(intConfig);
             } catch (NumberFormatException e) {
@@ -472,7 +474,7 @@ public class ConnectorsResourceTest {
             } finally {
                 values.add(configValue);
             }
-            return values;
+            return new Config(configDef, Collections.<String>emptyList(), values);
         }
     }
 }

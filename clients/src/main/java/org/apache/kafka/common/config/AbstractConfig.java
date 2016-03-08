@@ -12,6 +12,13 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -19,13 +26,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A convenient base class for configurations to extend.
@@ -46,16 +46,21 @@ public class AbstractConfig {
     private final Map<String, Object> values;
 
     @SuppressWarnings("unchecked")
-    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, Boolean doLog) {
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog, boolean checkRequired) {
         /* check that all the keys are really strings */
         for (Object key : originals.keySet())
             if (!(key instanceof String))
                 throw new ConfigException(key.toString(), originals.get(key), "Key must be a string.");
         this.originals = (Map<String, ?>) originals;
-        this.values = definition.parse(this.originals);
+        this.values = definition.parse(this.originals, checkRequired);
         this.used = Collections.synchronizedSet(new HashSet<String>());
         if (doLog)
             logAll();
+    }
+
+    @SuppressWarnings("unchecked")
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
+       this(definition, originals, doLog, true);
     }
 
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {

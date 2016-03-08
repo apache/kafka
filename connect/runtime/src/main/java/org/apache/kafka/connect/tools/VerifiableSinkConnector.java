@@ -17,7 +17,7 @@
 
 package org.apache.kafka.connect.tools;
 
-import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -64,7 +64,7 @@ public class VerifiableSinkConnector extends SourceConnector {
     }
 
     @Override
-    public List<ConfigValue> validate(Map<String, String> connectorConfigs) {
-        return null;
+    public ConfigDef defineConfig() {
+        return new ConfigDef();
     }
 }

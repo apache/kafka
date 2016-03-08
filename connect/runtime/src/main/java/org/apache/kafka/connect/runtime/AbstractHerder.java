@@ -16,6 +16,7 @@
  **/
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigValue;
@@ -167,7 +168,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     public ConfigInfos validateConfigs(String connType, Map<String, String> connectorConfig) {
         ConfigDef connectorConfigDef = ConnectorConfig.configDef();
         List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(connectorConfig);
-        ConfigInfos result = generateResult(connType, connectorConfigDef.configKeys(), connectorConfigValues);
+        ConfigInfos result = generateResult(connType, connectorConfigDef.configKeys(), connectorConfigValues, Collections.<String>emptyList());
 
         if (result.errorCount() != 0) {
             return result;
@@ -177,21 +178,32 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
         Connector connector = getConnector(connType, connName);
 
-        Map<String, ConfigKey> configKeys = connector.configDef().configKeys();
-        List<ConfigValue> configValues = connector.validate(connectorConfig);
-        configKeys.putAll(connectorConfigDef.configKeys());
+        Config config = connector.validate(connectorConfig);
+
+        Map<String, ConfigKey> configKeys = config.configDef().configKeys();
+        List<ConfigValue> configValues = config.configValues();
+
+        Map<String, ConfigKey> resultConfigKeys = new HashMap<>(configKeys);
+        resultConfigKeys.putAll(connectorConfigDef.configKeys());
         configValues.addAll(connectorConfigValues);
 
-        return generateResult(connType, configKeys, configValues);
+        List<String> groups = config.groups();
+
+        return generateResult(connType, configKeys, configValues, groups);
     }
 
-    private ConfigInfos generateResult(String connType, Map<String, ConfigKey> configKeys, List<ConfigValue> configValues) {
+    private ConfigInfos generateResult(String connType, Map<String, ConfigKey> configKeys, List<ConfigValue> configValues, List<String> groups) {
         int errorCount = 0;
         List<ConfigInfo> configInfoList = new LinkedList<>();
 
         Map<String, ConfigValue> configValueMap = new HashMap<>();
         for (ConfigValue configValue: configValues) {
-            configValueMap.put(configValue.name(), configValue);
+            String configName = configValue.name();
+            configValueMap.put(configName, configValue);
+            if (!configKeys.containsKey(configName)) {
+                configValue.addErrorMessage("Configuration is not defined: " + configName);
+                configInfoList.add(new ConfigInfo(null, convertConfigValue(configValue)));
+            }
         }
 
         for (String configName: configKeys.keySet()) {
@@ -204,7 +216,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             }
             configInfoList.add(new ConfigInfo(configKeyInfo, configValueInfo));
         }
-        return new ConfigInfos(connType, errorCount, configInfoList);
+        return new ConfigInfos(connType, errorCount, groups, configInfoList);
     }
 
     private ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
@@ -225,17 +237,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigValueInfo(configValue.name(), configValue.value(), configValue.recommendedValues(), configValue.errorMessages(), configValue.visible());
     }
 
-
-    private String trace(Throwable t) {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        t.printStackTrace(new PrintStream(output));
-        try {
-            return output.toString("UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            return null;
-        }
-    }
-
     private Connector getConnector(String connType, String connName) {
         if (tempConnectors.containsKey(connName)) {
             return tempConnectors.get(connName);
@@ -246,4 +247,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         }
     }
 
+    private String trace(Throwable t) {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(output));
+        try {
+            return output.toString("UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            return null;
+        }
+    }
 }

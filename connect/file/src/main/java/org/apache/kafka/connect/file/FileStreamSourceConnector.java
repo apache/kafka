@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -39,12 +40,6 @@ public class FileStreamSourceConnector extends SourceConnector {
 
     private String filename;
     private String topic;
-
-    static {
-        configDef
-            .define(FILE_CONFIG, Type.STRING, Importance.HIGH, "Source filename.")
-            .define(TOPIC_CONFIG, Type.STRING, Importance.HIGH, "The topic to publish data to");
-    }
 
     @Override
     public String version() {
@@ -81,5 +76,16 @@ public class FileStreamSourceConnector extends SourceConnector {
     @Override
     public void stop() {
         // Nothing to do since FileStreamSourceConnector has no background monitoring.
+    }
+
+    @Override
+    public ConfigDef defineConfig() {
+        if (this.configDef != null) {
+            return this.configDef;
+        } else {
+            return new ConfigDef()
+                .define(FILE_CONFIG, Type.STRING, Importance.HIGH, "Source filename.")
+                .define(TOPIC_CONFIG, Type.STRING, Importance.HIGH, "The topic to publish data to");
+        }
     }
 }

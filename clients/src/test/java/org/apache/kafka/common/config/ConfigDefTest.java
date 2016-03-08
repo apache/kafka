@@ -191,8 +191,7 @@ public class ConfigDefTest {
             .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
             .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
             .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
-            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false))
-            .end();
+            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false));
 
         Map<String, String> props = new HashMap<>();
         props.put("a", "1");
@@ -240,7 +239,7 @@ public class ConfigDefTest {
         }
 
         @Override
-        public List<Object> validValues(String name, Map<String, String> connectorConfigs) {
+        public List<Object> validValues(String name, Map<String, String> props) {
             List<Object> values = new LinkedList<>();
             if (!hasParent) {
                 values.addAll(Arrays.asList(1, 2, 3));
@@ -251,7 +250,7 @@ public class ConfigDefTest {
         }
 
         @Override
-        public boolean visible(String name, Map<String, String> connectorConfigs) {
+        public boolean visible(String name, Map<String, String> props) {
             return true;
         }
     }
