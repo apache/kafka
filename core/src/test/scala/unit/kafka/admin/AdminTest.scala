@@ -63,7 +63,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
         9 -> List(4, 1, 2))
 
     val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerList, 10, 3, 0)
-    assertEquals(expectedAssignment.toList, actualAssignment.toList)
+    assertEquals(expectedAssignment, actualAssignment)
   }
 
   @Test

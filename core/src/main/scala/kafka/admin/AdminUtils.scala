@@ -127,14 +127,14 @@ object AdminUtils extends Logging {
   private def assignReplicasToBrokersRackUnaware(nPartitions: Int,
                                                  replicationFactor: Int,
                                                  brokerList: Seq[Int],
-                                                 fixedStartIndex: Int = -1,
-                                                 startPartitionId: Int = -1): Map[Int, Seq[Int]] = {
+                                                 fixedStartIndex: Int,
+                                                 startPartitionId: Int): Map[Int, Seq[Int]] = {
     val ret = mutable.Map[Int, Seq[Int]]()
     val brokerArray = brokerList.toArray
     val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerArray.length)
     var currentPartitionId = math.max(0, startPartitionId)
     var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerArray.length)
-    for (i <- 0 until nPartitions) {
+    for (_ <- 0 until nPartitions) {
       if (currentPartitionId > 0 && (currentPartitionId % brokerArray.length == 0))
         nextReplicaShift += 1
       val firstReplicaIndex = (currentPartitionId + startIndex) % brokerArray.length
@@ -144,21 +144,21 @@ object AdminUtils extends Logging {
       ret.put(currentPartitionId, replicaBuffer)
       currentPartitionId += 1
     }
-    ret.toMap
+    ret
   }
 
   private def assignReplicasToBrokersRackAware(nPartitions: Int,
                                                replicationFactor: Int,
                                                brokerRackMap: Map[Int, String],
-                                               fixedStartIndex: Int = -1,
-                                               startPartitionId: Int = -1): Map[Int, Seq[Int]] = {
+                                               fixedStartIndex: Int,
+                                               startPartitionId: Int): Map[Int, Seq[Int]] = {
     val numRacks = brokerRackMap.values.toSet.size
     val arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap)
     val ret = mutable.Map[Int, Seq[Int]]()
     val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(arrangedBrokerList.size)
     var currentPartitionId = math.max(0, startPartitionId)
     var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(arrangedBrokerList.size)
-    for (i <- 0 until nPartitions) {
+    for (_ <- 0 until nPartitions) {
       if (currentPartitionId > 0 && (currentPartitionId % arrangedBrokerList.size == 0))
         nextReplicaShift += 1
       val firstReplicaIndex = (currentPartitionId + startIndex) % arrangedBrokerList.size
@@ -183,7 +183,7 @@ object AdminUtils extends Logging {
       ret.put(currentPartitionId, replicaBuffer)
       currentPartitionId += 1
     }
-    ret.toMap
+    ret
   }
 
   /**
