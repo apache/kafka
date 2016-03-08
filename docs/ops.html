@@ -131,6 +131,35 @@ my-group        my-topic                       0   0               0            
 my-group        my-topic                       1   0               0               0               test_jkreps-mn-1394154521217-1a0be913-0
 </pre>
 
+
+Note, however, after 0.9.0, the kafka.tools.ConsumerOffsetChecker tool is deprecated and you should use the kafka.admin.ConsumerGroupCommand (or the bin/kafka-consumer-groups.sh script) to manage consumer groups, including consumers created with the <a href="https://cwiki.apache.org/confluence/display/KAFKA/Consumer+Client+Re-Design">new consumer-groups API</a>.
+
+<h4><a id="basic_ops_consumer_group" href="#basic_ops_consumer_group">Managing Consumer Groups</a></h4>
+
+With the ConumserGroupCommand tool, we can list, delete, or describe consumer groups. For example, to list all consumer groups across all topics:
+
+<pre>
+ &gt; bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --list
+
+test-consumer-group
+</pre>
+
+To view offsets as in the previous example with the ConsumerOffsetChecker, we "describe" the consumer group like this:
+
+<pre>
+ &gt; bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --describe --group test-consumer-group
+
+GROUP                          TOPIC                          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             OWNER
+test-consumer-group            test-foo                       0          1               3               2               test-consumer-group_postamac.local-1456198719410-29ccd54f-0
+</pre>
+
+
+When youre using the <a href="https://cwiki.apache.org/confluence/display/KAFKA/Consumer+Client+Re-Design">new consumer-groups API</a> where the broker handles coordination of partition handling and rebalance, you can manage the groups with the "--new-consumer" flags:
+
+<pre>
+ &gt; bin/kafka-consumer-groups.sh --new-consumer --bootstrap-server broker1:9092 --list
+</pre>
+
 <h4><a id="basic_ops_cluster_expansion" href="#basic_ops_cluster_expansion">Expanding your cluster</a></h4>
 
 Adding servers to a Kafka cluster is easy, just assign them a unique broker id and start up Kafka on your new servers. However these new servers will not automatically be assigned any data partitions, so unless partitions are moved to them they won't be doing any work until new topics are created. So usually when you add machines to your cluster you will want to migrate some existing data to these machines.
