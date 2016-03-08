@@ -47,8 +47,8 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
 
   this.logIdent = "[Kafka Metadata Cache on broker %d] ".format(brokerId)
 
-  private def getAliveEndpoints(brokers: Iterable[Int], protocol: SecurityProtocol): List[Node] = {
-    brokers.flatMap(aliveBrokers.get).toSeq.map(_.getNode(protocol)).toList
+  private def getAliveEndpoints(brokers: Iterable[Int], protocol: SecurityProtocol): Seq[Node] = {
+    brokers.toSeq.flatMap(aliveBrokers.get).map(_.getNode(protocol))
   }
 
   private def getPartitionMetadata(topic: String, protocol: SecurityProtocol): Option[Iterable[MetadataResponse.PartitionMetadata]] = {
@@ -57,34 +57,36 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
         val topicPartition = TopicAndPartition(topic, partitionId)
 
         val leaderAndIsr = partitionState.leaderIsrAndControllerEpoch.leaderAndIsr
-        val leader = aliveBrokers.get(leaderAndIsr.leader).map(_.getNode(protocol))
+        val maybeLeader = aliveBrokers.get(leaderAndIsr.leader).map(_.getNode(protocol))
 
         val replicas = partitionState.allReplicas
         val replicaInfo = getAliveEndpoints(replicas, protocol)
 
-        if (leader.isEmpty) {
-          debug("Error while fetching metadata for %s: leader not available".format(topicPartition))
-          new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, partitionId, Node.noNode(),
-            replicaInfo.asJava, java.util.Collections.emptyList())
-        } else {
-          val isr = leaderAndIsr.isr
-          val isrInfo = getAliveEndpoints(isr, protocol)
+        maybeLeader match {
+          case None =>
+            debug("Error while fetching metadata for %s: leader not available".format(topicPartition))
+            new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, partitionId, Node.noNode(),
+              replicaInfo.asJava, java.util.Collections.emptyList())
 
-          if (replicaInfo.size < replicas.size) {
-            debug("Error while fetching metadata for %s: replica information not available for following brokers %s"
-              .format(topicPartition, replicas.filterNot(replicaInfo.map(_.id).contains(_)).mkString(",")))
+          case Some(leader) =>
+            val isr = leaderAndIsr.isr
+            val isrInfo = getAliveEndpoints(isr, protocol)
 
-            new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, partitionId, leader.get,
-              replicaInfo.asJava, isrInfo.asJava)
-          } else if (isrInfo.size < isr.size) {
-            debug("Error while fetching metadata for %s: in sync replica information not available for following brokers %s"
-              .format(topicPartition, isr.filterNot(isrInfo.map(_.id).contains(_)).mkString(",")))
-            new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, partitionId, leader.get,
-              replicaInfo.asJava, isrInfo.asJava)
-          } else {
-            new MetadataResponse.PartitionMetadata(Errors.NONE, partitionId, leader.get, replicaInfo.asJava,
-              isrInfo.asJava)
-          }
+            if (replicaInfo.size < replicas.size) {
+              debug("Error while fetching metadata for %s: replica information not available for following brokers %s"
+                .format(topicPartition, replicas.filterNot(replicaInfo.map(_.id).contains).mkString(",")))
+
+              new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, partitionId, leader,
+                replicaInfo.asJava, isrInfo.asJava)
+            } else if (isrInfo.size < isr.size) {
+              debug("Error while fetching metadata for %s: in sync replica information not available for following brokers %s"
+                .format(topicPartition, isr.filterNot(isrInfo.map(_.id).contains).mkString(",")))
+              new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, partitionId, leader,
+                replicaInfo.asJava, isrInfo.asJava)
+            } else {
+              new MetadataResponse.PartitionMetadata(Errors.NONE, partitionId, leader, replicaInfo.asJava,
+                isrInfo.asJava)
+            }
         }
       }
     }
@@ -93,11 +95,11 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
   def getTopicMetadata(topics: Set[String], protocol: SecurityProtocol): Seq[MetadataResponse.TopicMetadata] = {
     inReadLock(partitionMetadataLock) {
       val topicsRequested = if (topics.isEmpty) cache.keySet else topics
-      topicsRequested.flatMap { topic =>
+      topicsRequested.toSeq.flatMap { topic =>
         getPartitionMetadata(topic, protocol).map { partitionMetadata =>
           new MetadataResponse.TopicMetadata(Errors.NONE, topic, partitionMetadata.toBuffer.asJava)
         }
-      }.toSeq
+      }
     }
   }
 

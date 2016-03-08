@@ -135,21 +135,13 @@ case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) {
   }
 
   def getNode(protocolType: SecurityProtocol): Node = {
-    val endpoint = endPoints.get(protocolType)
-    endpoint match {
-      case Some(endpoint) => new Node(id, endpoint.host, endpoint.port)
-      case None =>
-        throw new BrokerEndPointNotAvailableException("End point %s not found for broker %d".format(protocolType,id))
-    }
+    val endpoint = endPoints.getOrElse(protocolType, throw new BrokerEndPointNotAvailableException("End point %s not found for broker %d".format(protocolType,id)))
+    new Node(id, endpoint.host, endpoint.port)
   }
 
   def getBrokerEndPoint(protocolType: SecurityProtocol): BrokerEndPoint = {
-    val endpoint = endPoints.get(protocolType)
-    endpoint match {
-      case Some(endpoint) => new BrokerEndPoint(id, endpoint.host, endpoint.port)
-      case None =>
-        throw new BrokerEndPointNotAvailableException("End point %s not found for broker %d".format(protocolType,id))
-    }
+    val endpoint = endPoints.getOrElse(protocolType, throw new BrokerEndPointNotAvailableException("End point %s not found for broker %d".format(protocolType,id)))
+    new BrokerEndPoint(id, endpoint.host, endpoint.port)
   }
 
 }

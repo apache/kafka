@@ -30,9 +30,7 @@ import scala.collection.JavaConverters._
 
 class MetadataCacheTest {
 
-  private def asSet[T](elems: T*): util.Set[T] = {
-    new util.HashSet(elems.asJava)
-  }
+  private def asSet[T](elems: T*): util.Set[T] = new util.HashSet(elems.asJava)
 
   @Test
   def getTopicMetadataNonExistingTopics() {
@@ -68,19 +66,19 @@ class MetadataCacheTest {
     assertEquals(1, topicMetadatas.size)
 
     val topicMetadata = topicMetadatas.head
-    assertEquals(Errors.NONE, topicMetadata.error())
-    assertEquals(topic, topicMetadata.topic())
+    assertEquals(Errors.NONE, topicMetadata.error)
+    assertEquals(topic, topicMetadata.topic)
 
-    val partitionMetadatas = topicMetadata.partitionMetadata().asScala.sortBy(_.partition())
+    val partitionMetadatas = topicMetadata.partitionMetadata.asScala.sortBy(_.partition)
     assertEquals(3, partitionMetadatas.size)
 
     for (i <- 0 to 2) {
       val partitionMetadata = partitionMetadatas(i)
-      assertEquals(Errors.NONE, partitionMetadata.error())
-      assertEquals(i, partitionMetadata.partition())
-      assertEquals(i, partitionMetadata.leader().id())
-      assertEquals(List(i), partitionMetadata.isr().asScala.map(_.id()))
-      assertEquals(List(i), partitionMetadata.replicas().asScala.map(_.id()))
+      assertEquals(Errors.NONE, partitionMetadata.error)
+      assertEquals(i, partitionMetadata.partition)
+      assertEquals(i, partitionMetadata.leader.id)
+      assertEquals(List(i), partitionMetadata.isr.asScala.map(_.id))
+      assertEquals(List(i), partitionMetadata.replicas.asScala.map(_.id))
     }
   }
 
@@ -107,17 +105,17 @@ class MetadataCacheTest {
     assertEquals(1, topicMetadatas.size)
 
     val topicMetadata = topicMetadatas.head
-    assertEquals(Errors.NONE, topicMetadata.error())
+    assertEquals(Errors.NONE, topicMetadata.error)
 
-    val partitionMetadatas = topicMetadata.partitionMetadata()
+    val partitionMetadatas = topicMetadata.partitionMetadata
     assertEquals(1, partitionMetadatas.size)
 
     val partitionMetadata = partitionMetadatas.get(0)
-    assertEquals(0, partitionMetadata.partition())
-    assertEquals(Errors.LEADER_NOT_AVAILABLE, partitionMetadata.error())
-    assertTrue(partitionMetadata.isr().isEmpty)
-    assertEquals(1, partitionMetadata.replicas().size())
-    assertEquals(0, partitionMetadata.replicas().get(0).id())
+    assertEquals(0, partitionMetadata.partition)
+    assertEquals(Errors.LEADER_NOT_AVAILABLE, partitionMetadata.error)
+    assertTrue(partitionMetadata.isr.isEmpty)
+    assertEquals(1, partitionMetadata.replicas.size)
+    assertEquals(0, partitionMetadata.replicas.get(0).id)
   }
 
   @Test
@@ -134,8 +132,8 @@ class MetadataCacheTest {
     // replica 1 is not available
     val leader = 0
     val leaderEpoch = 0
-    val replicas: util.Set[java.lang.Integer] = asSet(0, 1)
-    val isr: util.List[java.lang.Integer] = asList(0)
+    val replicas = asSet[Integer](0, 1)
+    val isr = asList[Integer](0)
 
     val partitionStates = Map(
       new TopicPartition(topic, 0) -> new PartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas))
@@ -147,16 +145,16 @@ class MetadataCacheTest {
     assertEquals(1, topicMetadatas.size)
 
     val topicMetadata = topicMetadatas.head
-    assertEquals(Errors.NONE, topicMetadata.error())
+    assertEquals(Errors.NONE, topicMetadata.error)
 
-    val partitionMetadatas = topicMetadata.partitionMetadata()
+    val partitionMetadatas = topicMetadata.partitionMetadata
     assertEquals(1, partitionMetadatas.size)
 
     val partitionMetadata = partitionMetadatas.get(0)
-    assertEquals(0, partitionMetadata.partition())
-    assertEquals(Errors.REPLICA_NOT_AVAILABLE, partitionMetadata.error())
-    assertEquals(Set(0), partitionMetadata.replicas().asScala.map(_.id()).toSet)
-    assertEquals(Set(0), partitionMetadata.isr().asScala.map(_.id()).toSet)
+    assertEquals(0, partitionMetadata.partition)
+    assertEquals(Errors.REPLICA_NOT_AVAILABLE, partitionMetadata.error)
+    assertEquals(Set(0), partitionMetadata.replicas.asScala.map(_.id).toSet)
+    assertEquals(Set(0), partitionMetadata.isr.asScala.map(_.id).toSet)
   }
 
   @Test
@@ -173,8 +171,8 @@ class MetadataCacheTest {
     // replica 1 is not available
     val leader = 0
     val leaderEpoch = 0
-    val replicas: util.Set[java.lang.Integer] = asSet(0)
-    val isr: util.List[java.lang.Integer] = asList(0, 1)
+    val replicas = asSet[Integer](0)
+    val isr = asList[Integer](0, 1)
 
     val partitionStates = Map(
       new TopicPartition(topic, 0) -> new PartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas))
@@ -186,17 +184,16 @@ class MetadataCacheTest {
     assertEquals(1, topicMetadatas.size)
 
     val topicMetadata = topicMetadatas.head
-    assertEquals(Errors.NONE, topicMetadata.error())
+    assertEquals(Errors.NONE, topicMetadata.error)
 
-    val partitionMetadatas = topicMetadata.partitionMetadata()
+    val partitionMetadatas = topicMetadata.partitionMetadata
     assertEquals(1, partitionMetadatas.size)
 
     val partitionMetadata = partitionMetadatas.get(0)
-    assertEquals(0, partitionMetadata.partition())
-    assertEquals(Errors.REPLICA_NOT_AVAILABLE, partitionMetadata.error())
-    assertEquals(Set(0), partitionMetadata.replicas().asScala.map(_.id()).toSet)
-    assertEquals(Set(0), partitionMetadata.isr().asScala.map(_.id()).toSet)
+    assertEquals(0, partitionMetadata.partition)
+    assertEquals(Errors.REPLICA_NOT_AVAILABLE, partitionMetadata.error)
+    assertEquals(Set(0), partitionMetadata.replicas.asScala.map(_.id).toSet)
+    assertEquals(Set(0), partitionMetadata.isr.asScala.map(_.id).toSet)
   }
-
 
 }

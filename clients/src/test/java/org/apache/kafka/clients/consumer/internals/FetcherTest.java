@@ -562,7 +562,8 @@ public class FetcherTest {
         if (error == Errors.NONE) {
             for (PartitionInfo partitionInfo : cluster.partitionsForTopic(topic)) {
                 partitionsMetadata.add(new MetadataResponse.PartitionMetadata(
-                        Errors.NONE, partitionInfo.partition(),
+                        Errors.NONE,
+                        partitionInfo.partition(),
                         partitionInfo.leader(),
                         Arrays.asList(partitionInfo.replicas()),
                         Arrays.asList(partitionInfo.inSyncReplicas())));

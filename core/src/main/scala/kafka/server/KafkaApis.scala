@@ -17,8 +17,6 @@
 
 package kafka.server
 
-
-
 import java.nio.ByteBuffer
 import java.lang.{Long => JLong, Short => JShort}
 import java.util.Properties
@@ -361,7 +359,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               topicPartition -> Errors.forCode(status.errorCode).exceptionName
             }.mkString(", ")
             info(
-              s"Closing connection due to errorCode during produce request with correlation id ${request.header.correlationId} " +
+              s"Closing connection due to error during produce request with correlation id ${request.header.correlationId} " +
                 s"from client id ${request.header.clientId} with ack=0\n" +
                 s"Topic and partition to exceptions: $exceptionsSummary"
             )
@@ -627,7 +625,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                           properties: Properties = new Properties()): MetadataResponse.TopicMetadata = {
     try {
       AdminUtils.createTopic(zkUtils, topic, numPartitions, replicationFactor, properties)
-      info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
+      info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
         .format(topic, numPartitions, replicationFactor))
       new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, java.util.Collections.emptyList())
     } catch {
@@ -651,10 +649,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def getOrCreateGroupMetadataTopic(securityProtocol: SecurityProtocol): MetadataResponse.TopicMetadata = {
     val topicMetadata = metadataCache.getTopicMetadata(Set(GroupCoordinator.GroupMetadataTopicName), securityProtocol)
-    if (topicMetadata.nonEmpty)
-      topicMetadata.head
-    else
-      createGroupMetadataTopic()
+    topicMetadata.headOption.getOrElse(createGroupMetadataTopic())
   }
 
   private def getTopicMetadata(topics: Set[String], securityProtocol: SecurityProtocol): Seq[MetadataResponse.TopicMetadata] = {
@@ -695,8 +690,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (authorizedTopics.nonEmpty) {
       val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
       if (config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
-        authorizer.foreach {
-          az => if (!az.authorize(request.session, Create, Resource.ClusterResource)) {
+        authorizer.foreach { az =>
+          if (!az.authorize(request.session, Create, Resource.ClusterResource)) {
             authorizedTopics --= nonExistingTopics
             unauthorizedTopics ++= nonExistingTopics
           }
@@ -719,8 +714,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val responseHeader = new ResponseHeader(request.header.correlationId)
     val responseBody = new MetadataResponse(
-      brokers.map(_.getNode(request.securityProtocol)).toList.asJava,
-      (topicMetadata ++ unauthorizedTopicMetadata).toList.asJava
+      brokers.map(_.getNode(request.securityProtocol)).asJava,
+      (topicMetadata ++ unauthorizedTopicMetadata).asJava
     )
     requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
   }
@@ -798,8 +793,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       // get metadata (and create the topic if necessary)
       val offsetsTopicMetadata = getOrCreateGroupMetadataTopic(request.securityProtocol)
 
-      val responseBody = if (offsetsTopicMetadata.error() != Errors.NONE) {
-        new GroupCoordinatorResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code, Node.noNode())
+      val responseBody = if (offsetsTopicMetadata.error != Errors.NONE) {
+        new GroupCoordinatorResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code, Node.noNode)
       } else {
         val coordinatorEndpoint = offsetsTopicMetadata.partitionMetadata().asScala
           .find(_.partition == partition)
@@ -809,7 +804,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           case Some(endpoint) if !endpoint.isEmpty =>
             new GroupCoordinatorResponse(Errors.NONE.code, endpoint)
           case _ =>
-            new GroupCoordinatorResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code, Node.noNode())
+            new GroupCoordinatorResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code, Node.noNode)
         }
       }
 

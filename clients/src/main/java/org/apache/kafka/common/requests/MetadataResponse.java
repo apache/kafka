@@ -34,7 +34,7 @@ public class MetadataResponse extends AbstractRequestResponse {
 
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.METADATA.id);
     private static final String BROKERS_KEY_NAME = "brokers";
-    private static final String TOPIC_METATDATA_KEY_NAME = "topic_metadata";
+    private static final String TOPIC_METADATA_KEY_NAME = "topic_metadata";
 
     // broker level field names
     private static final String NODE_ID_KEY_NAME = "node_id";
@@ -93,7 +93,7 @@ public class MetadataResponse extends AbstractRequestResponse {
 
         List<Struct> topicMetadataArray = new ArrayList<>(topicMetadata.size());
         for (TopicMetadata metadata : topicMetadata) {
-            Struct topicData = struct.instance(TOPIC_METATDATA_KEY_NAME);
+            Struct topicData = struct.instance(TOPIC_METADATA_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, metadata.topic);
             topicData.set(TOPIC_ERROR_CODE_KEY_NAME, metadata.error.code());
 
@@ -117,7 +117,7 @@ public class MetadataResponse extends AbstractRequestResponse {
             topicData.set(PARTITION_METADATA_KEY_NAME, partitionMetadataArray.toArray());
             topicMetadataArray.add(topicData);
         }
-        struct.set(TOPIC_METATDATA_KEY_NAME, topicMetadataArray.toArray());
+        struct.set(TOPIC_METADATA_KEY_NAME, topicMetadataArray.toArray());
     }
 
     public MetadataResponse(Struct struct) {
@@ -134,7 +134,7 @@ public class MetadataResponse extends AbstractRequestResponse {
         }
 
         List<TopicMetadata> topicMetadata = new ArrayList<>();
-        Object[] topicInfos = (Object[]) struct.get(TOPIC_METATDATA_KEY_NAME);
+        Object[] topicInfos = (Object[]) struct.get(TOPIC_METADATA_KEY_NAME);
         for (int i = 0; i < topicInfos.length; i++) {
             Struct topicInfo = (Struct) topicInfos[i];
             Errors topicError = Errors.forCode(topicInfo.getShort(TOPIC_ERROR_CODE_KEY_NAME));

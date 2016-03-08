@@ -21,10 +21,7 @@ import kafka.cluster.BrokerEndPoint
 import java.nio.ByteBuffer
 import kafka.api.ApiUtils._
 import kafka.utils.Logging
-import kafka.common._
-import org.apache.kafka.common.Node
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.MetadataResponse
 
 object TopicMetadata {
 
