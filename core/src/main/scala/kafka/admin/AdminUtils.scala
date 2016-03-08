@@ -97,31 +97,29 @@ object AdminUtils extends Logging {
    * situation where the number of replicas is the same as the number of racks and each rack has the same number of
    * brokers, it guarantees that the replica distribution is even across brokers and racks.
    *
-   * @param rackInfo Map from broker ID to its rack (zone). If empty, no rack aware assignment will be used.
    * @return a Map from partition id to replica ids
    * @throws AdminOperationException If rack information is supplied but it is incomplete, or if it is not possible to
    *                                 assign each replica to a unique rack.
    *
    */
-  def assignReplicasToBrokers(brokerList: Seq[Int],
+  def assignReplicasToBrokers(brokerMetadatas: Seq[BrokerMetadata],
                               nPartitions: Int,
                               replicationFactor: Int,
                               fixedStartIndex: Int = -1,
-                              startPartitionId: Int = -1,
-                              rackInfo: Map[Int, String] = Map()): Map[Int, Seq[Int]] = {
+                              startPartitionId: Int = -1): Map[Int, Seq[Int]] = {
     if (nPartitions <= 0)
       throw new AdminOperationException("number of partitions must be larger than 0")
     if (replicationFactor <= 0)
       throw new AdminOperationException("replication factor must be larger than 0")
-    if (replicationFactor > brokerList.size)
-      throw new AdminOperationException(s"replication factor: $replicationFactor larger than available brokers: ${brokerList.size}")
-    if (rackInfo.isEmpty)
-      assignReplicasToBrokersRackUnaware(nPartitions, replicationFactor, brokerList, fixedStartIndex, startPartitionId)
+    if (replicationFactor > brokerMetadatas.size)
+      throw new AdminOperationException(s"replication factor: $replicationFactor larger than available brokers: ${brokerMetadatas.size}")
+    if (brokerMetadatas.forall(_.rack.isEmpty))
+      assignReplicasToBrokersRackUnaware(nPartitions, replicationFactor, brokerMetadatas.map(_.id), fixedStartIndex,
+        startPartitionId)
     else {
-      val brokerRackMap = rackInfo.filterKeys(brokerList.contains).toMap
-      if (brokerRackMap.size < brokerList.size)
+      if (brokerMetadatas.exists(_.rack.isEmpty))
         throw new AdminOperationException("Not all brokers have rack information for replica rack aware assignment")
-      assignReplicasToBrokersRackAware(nPartitions, replicationFactor, brokerRackMap, fixedStartIndex,
+      assignReplicasToBrokersRackAware(nPartitions, replicationFactor, brokerMetadatas, fixedStartIndex,
         startPartitionId)
     }
   }
@@ -151,9 +149,12 @@ object AdminUtils extends Logging {
 
   private def assignReplicasToBrokersRackAware(nPartitions: Int,
                                                replicationFactor: Int,
-                                               brokerRackMap: Map[Int, String],
+                                               brokerMetadatas: Seq[BrokerMetadata],
                                                fixedStartIndex: Int,
                                                startPartitionId: Int): Map[Int, Seq[Int]] = {
+    val brokerRackMap = brokerMetadatas.collect { case BrokerMetadata(id, Some(rack)) =>
+      id -> rack
+    }.toMap
     val numRacks = brokerRackMap.values.toSet.size
     val arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap)
     val ret = mutable.Map[Int, Seq[Int]]()
@@ -252,15 +253,16 @@ object AdminUtils extends Logging {
       throw new AdminOperationException("The number of partitions for a topic can only be increased")
 
     // create the new partition replication list
-    val (brokerList, brokerRackMap) = getBrokersAndRackInfo(zkUtils, rackAwareMode)
+    val brokerMetadatas = getBrokerMetadatas(zkUtils, rackAwareMode)
     val newPartitionReplicaList =
       if (replicaAssignmentStr == null || replicaAssignmentStr == "") {
-        val startIndex = math.max(0, brokerList.indexWhere(_ >= existingReplicaListForPartitionZero.head))
-        AdminUtils.assignReplicasToBrokers(brokerList, partitionsToAdd, existingReplicaListForPartitionZero.size,
-          startIndex, existingPartitionsReplicaList.size, rackInfo = brokerRackMap)
+        val startIndex = math.max(0, brokerMetadatas.indexWhere(_.id >= existingReplicaListForPartitionZero.head))
+        AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitionsToAdd, existingReplicaListForPartitionZero.size,
+          startIndex, existingPartitionsReplicaList.size)
       }
       else
-        getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet, existingPartitionsReplicaList.size, checkBrokerAvailable)
+        getManualReplicaAssignment(replicaAssignmentStr, brokerMetadatas.map(_.id).toSet,
+          existingPartitionsReplicaList.size, checkBrokerAvailable)
 
     // check if manual assignment has the right replication factor
     val unmatchedRepFactorList = newPartitionReplicaList.values.filter(p => (p.size != existingReplicaListForPartitionZero.size))
@@ -364,8 +366,8 @@ object AdminUtils extends Logging {
   def topicExists(zkUtils: ZkUtils, topic: String): Boolean =
     zkUtils.zkClient.exists(getTopicPath(topic))
 
-  def getBrokersAndRackInfo(zkUtils: ZkUtils, rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
-                            brokerList: Option[Seq[Int]] = None): (Seq[Int], Map[Int, String]) = {
+  def getBrokerMetadatas(zkUtils: ZkUtils, rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
+                        brokerList: Option[Seq[Int]] = None): Seq[BrokerMetadata] = {
     val allBrokers = zkUtils.getAllBrokersInCluster()
     val brokers = brokerList.map(brokerIds => allBrokers.filter(b => brokerIds.contains(b.id))).getOrElse(allBrokers)
     val brokersWithRack = brokers.filter(_.rack.nonEmpty)
@@ -373,12 +375,13 @@ object AdminUtils extends Logging {
       throw new AdminOperationException("Not all brokers have rack information. Add --disable-rack-aware in command line" +
         " to make replica assignment without rack information.")
     }
-    val brokerRackMap: Map[Int, String] = rackAwareMode match {
-      case RackAwareMode.Disabled => Map()
-      case RackAwareMode.Safe if (brokersWithRack.size < brokers.size) => Map()
-      case _ => brokersWithRack.map(broker => (broker.id -> broker.rack.get)).toMap
+    val brokerMetadatas = rackAwareMode match {
+      case RackAwareMode.Disabled => brokers.map(broker => BrokerMetadata(broker.id, None))
+      case RackAwareMode.Safe if brokersWithRack.size < brokers.size =>
+        brokers.map(broker => BrokerMetadata(broker.id, None))
+      case _ => brokers.map(broker => BrokerMetadata(broker.id, broker.rack))
     }
-    (brokers.map(_.id).sorted, brokerRackMap)
+    brokerMetadatas.sortBy(_.id)
   }
 
   def createTopic(zkUtils: ZkUtils,
@@ -387,8 +390,8 @@ object AdminUtils extends Logging {
                   replicationFactor: Int,
                   topicConfig: Properties = new Properties,
                   rackAwareMode: RackAwareMode = RackAwareMode.Enforced) {
-    val (brokerList, brokerRackMap) = getBrokersAndRackInfo(zkUtils, rackAwareMode)
-    val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, partitions, replicationFactor, rackInfo = brokerRackMap)
+    val brokerMetadatas = getBrokerMetadatas(zkUtils, rackAwareMode)
+    val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitions, replicationFactor)
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, replicaAssignment, topicConfig)
   }
 

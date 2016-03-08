@@ -37,16 +37,16 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testReplicaAssignment() {
-    val brokerList = List(0, 1, 2, 3, 4)
+    val brokerMetadatas = (0 to 4).map(new BrokerMetadata(_, None))
 
     // test 0 replication factor
     intercept[AdminOperationException] {
-      AdminUtils.assignReplicasToBrokers(brokerList, 10, 0)
+      AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 0)
     }
 
     // test wrong replication factor
     intercept[AdminOperationException] {
-      AdminUtils.assignReplicasToBrokers(brokerList, 10, 6)
+      AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 6)
     }
 
     // correct assignment
@@ -62,7 +62,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
         8 -> List(3, 0, 1),
         9 -> List(4, 1, 2))
 
-    val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerList, 10, 3, 0)
+    val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 3, 0)
     assertEquals(expectedAssignment, actualAssignment)
   }
 

@@ -160,9 +160,8 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
   @Test
   def testCreateAlterTopicWithRackAware() {
-    val brokers = 0 to 5
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3")
-    TestUtils.createBrokersInZk(zkUtils, brokers, rackInfo)
+    TestUtils.createBrokersInZk(toBrokerMetadata(rackInfo), zkUtils)
 
     val numPartitions = 18
     val replicationFactor = 3
@@ -175,7 +174,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     var assignment = zkUtils.getReplicaAssignmentForTopics(Seq("foo")).map { case (tp, replicas) =>
       tp.partition -> replicas
     }
-    ensureRackAwareAndEvenDistribution(assignment, rackInfo, brokers.size, numPartitions, replicationFactor)
+    ensureRackAwareAndEvenDistribution(assignment, rackInfo, rackInfo.size, numPartitions, replicationFactor)
 
     val alteredNumPartitions = 36
     // verify that adding partitions will also be rack aware
@@ -186,6 +185,6 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     assignment = zkUtils.getReplicaAssignmentForTopics(Seq("foo")).map { case (tp, replicas) =>
       tp.partition -> replicas
     }
-    ensureRackAwareAndEvenDistribution(assignment, rackInfo, brokers.size, alteredNumPartitions, replicationFactor)
+    ensureRackAwareAndEvenDistribution(assignment, rackInfo, rackInfo.size, alteredNumPartitions, replicationFactor)
   }
 }
