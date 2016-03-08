@@ -49,7 +49,7 @@ From KafkaConfig.scala
 
   /** ********* General Configuration ***********/
   val MaxReservedBrokerIdProp = "reserved.broker.max.id"
-  val MessageMaxBytesProp = "message.max.bytes"
+  val MessageMaxBytesProp = "log.message.max.bytes"
   val NumIoThreadsProp = "num.io.threads"
   val BackgroundThreadsProp = "background.threads"
   val QueuedMaxRequestsProp = "queued.max.requests"
