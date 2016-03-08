@@ -15,7 +15,6 @@ package org.apache.kafka.clients.producer.internals;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
@@ -335,7 +334,7 @@ public class RecordAccumulatorTest {
         // Test ready without muted partition
         accum.unmutePartition(tp1);
         result = accum.ready(cluster, time.milliseconds());
-        assertNotEquals("The batch should be ready", 0, result.readyNodes.size());
+        assertTrue("The batch should be ready", result.readyNodes.size() > 0);
 
         // Test drain with muted partition
         accum.mutePartition(tp1);
@@ -345,6 +344,6 @@ public class RecordAccumulatorTest {
         // Test drain without muted partition.
         accum.unmutePartition(tp1);
         drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
-        assertNotEquals("No batch should have been drained.", 0, drained.get(node1.id()).size());
+        assertTrue("The batch should have been drained.", drained.get(node1.id()).size() > 0);
     }
 }

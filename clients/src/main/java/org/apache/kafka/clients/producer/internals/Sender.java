@@ -67,8 +67,8 @@ public class Sender implements Runnable {
     /* the metadata for the client */
     private final Metadata metadata;
 
-    /* the flag indicating whether the producer should send messages in order or not. */
-    private final boolean sendInOrder;
+    /* the flag indicating whether the producer should guarantee the message order on the broker or not. */
+    private final boolean guaranteeMessageOrder;
 
     /* the maximum request size to attempt to send to the server */
     private final int maxRequestSize;
@@ -100,7 +100,7 @@ public class Sender implements Runnable {
     public Sender(KafkaClient client,
                   Metadata metadata,
                   RecordAccumulator accumulator,
-                  boolean sendInOrder,
+                  boolean guaranteeMessageOrder,
                   int maxRequestSize,
                   short acks,
                   int retries,
@@ -111,7 +111,7 @@ public class Sender implements Runnable {
         this.client = client;
         this.accumulator = accumulator;
         this.metadata = metadata;
-        this.sendInOrder = sendInOrder;
+        this.guaranteeMessageOrder = guaranteeMessageOrder;
         this.maxRequestSize = maxRequestSize;
         this.running = true;
         this.acks = acks;
@@ -194,7 +194,7 @@ public class Sender implements Runnable {
                                                                          result.readyNodes,
                                                                          this.maxRequestSize,
                                                                          now);
-        if (sendInOrder) {
+        if (guaranteeMessageOrder) {
             // Mute all the partitions drained
             for (List<RecordBatch> batchList : batches.values()) {
                 for (RecordBatch batch : batchList)
@@ -317,7 +317,7 @@ public class Sender implements Runnable {
         if (error.exception() instanceof InvalidMetadataException)
             metadata.requestUpdate();
         // Unmute the completed partition.
-        if (sendInOrder)
+        if (guaranteeMessageOrder)
             this.accumulator.unmutePartition(batch.topicPartition);
     }
 
