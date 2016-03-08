@@ -260,7 +260,8 @@ object KafkaConfig {
   val MessageFormatVersionProp = "log.message.format.version"
   val NumRecoveryThreadsPerDataDirProp = "num.recovery.threads.per.data.dir"
   val AutoCreateTopicsEnableProp = "auto.create.topics.enable"
-  val MinInSyncReplicasProp = "min.insync.replicas"
+  val DeprecatedMinInSyncReplicasProp = "min.insync.replicas"
+  val MinInSyncReplicasProp = "log.min.insync.replicas"
   val MessageTimestampTypeProp = "log.message.timestamp.type"
   val MessageTimestampDifferenceMaxMsProp = "log.message.timestamp.difference.max.ms"
   /** ********* Replication configuration ***********/
@@ -280,7 +281,8 @@ object KafkaConfig {
   val AutoLeaderRebalanceEnableProp = "auto.leader.rebalance.enable"
   val LeaderImbalancePerBrokerPercentageProp = "leader.imbalance.per.broker.percentage"
   val LeaderImbalanceCheckIntervalSecondsProp = "leader.imbalance.check.interval.seconds"
-  val UncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
+  val DeprecatedUncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
+  val UncleanLeaderElectionEnableProp = "log.unclean.leader.election.enable"
   val InterBrokerSecurityProtocolProp = "security.inter.broker.protocol"
   val InterBrokerProtocolVersionProp = "inter.broker.protocol.version"
   /** ********* Controlled shutdown configuration ***********/
@@ -308,7 +310,8 @@ object KafkaConfig {
   val QuotaWindowSizeSecondsProp = "quota.window.size.seconds"
 
   val DeleteTopicEnableProp = "delete.topic.enable"
-  val CompressionTypeProp = "compression.type"
+  val DeprecatedCompressionTypeProp = "compression.type"
+  val CompressionTypeProp = "log.compression.type"
 
   /** ********* Kafka Metrics Configuration ***********/
   val MetricSampleWindowMsProp = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG
@@ -426,6 +429,7 @@ object KafkaConfig {
   val LogPreAllocateEnableDoc = LogConfig.PreAllocateEnableDoc
   val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server"
+  val DeprecatedMinInSyncReplicasDoc = s"${LogConfig.MinInSyncReplicasDoc} This config will be deprecated - use $MinInSyncReplicasProp instead."
   val MinInSyncReplicasDoc = LogConfig.MinInSyncReplicasDoc
   val MessageFormatVersionDoc = LogConfig.MessageFormatVersionDoc
   val MessageTimestampTypeDoc = LogConfig.MessageTimestampTypeDoc
@@ -451,6 +455,7 @@ object KafkaConfig {
   val AutoLeaderRebalanceEnableDoc = "Enables auto leader balancing. A background thread checks and triggers leader balance if required at regular intervals"
   val LeaderImbalancePerBrokerPercentageDoc = "The ratio of leader imbalance allowed per broker. The controller would trigger a leader balance if it goes above this value per broker. The value is specified in percentage."
   val LeaderImbalanceCheckIntervalSecondsDoc = "The frequency with which the partition rebalance check is triggered by the controller"
+  val DeprecatedUncleanLeaderElectionEnableDoc = s"${LogConfig.UncleanLeaderElectionEnableDoc} This config will be deprecated - use $UncleanLeaderElectionEnableProp instead."
   val UncleanLeaderElectionEnableDoc = LogConfig.UncleanLeaderElectionEnableDoc
   val InterBrokerSecurityProtocolDoc = "Security protocol used to communicate between brokers. Valid values are: " +
     s"${SecurityProtocol.nonTestingValues.asScala.toSeq.map(_.name).mkString(", ")}."
@@ -487,6 +492,7 @@ object KafkaConfig {
   val QuotaWindowSizeSecondsDoc = "The time span of each sample"
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
+  val DeprecatedCompressionTypeDoc = s"${LogConfig.CompressionTypeDoc} This config will be deprecated - use $CompressionTypeDoc instead."
   val CompressionTypeDoc = LogConfig.CompressionTypeDoc
 
   /** ********* Kafka Metrics Configuration ***********/
@@ -602,6 +608,7 @@ object KafkaConfig {
       .define(LogPreAllocateProp, BOOLEAN, Defaults.LogPreAllocateEnable, MEDIUM, LogPreAllocateEnableDoc)
       .define(NumRecoveryThreadsPerDataDirProp, INT, Defaults.NumRecoveryThreadsPerDataDir, atLeast(1), HIGH, NumRecoveryThreadsPerDataDirDoc)
       .define(AutoCreateTopicsEnableProp, BOOLEAN, Defaults.AutoCreateTopicsEnable, HIGH, AutoCreateTopicsEnableDoc)
+      .define(DeprecatedMinInSyncReplicasProp, INT, null, HIGH, DeprecatedMinInSyncReplicasDoc)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), HIGH, MinInSyncReplicasDoc)
       .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, MEDIUM, MessageFormatVersionDoc)
       .define(MessageTimestampTypeProp, STRING, Defaults.MessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM, MessageTimestampTypeDoc)
@@ -624,6 +631,7 @@ object KafkaConfig {
       .define(AutoLeaderRebalanceEnableProp, BOOLEAN, Defaults.AutoLeaderRebalanceEnable, HIGH, AutoLeaderRebalanceEnableDoc)
       .define(LeaderImbalancePerBrokerPercentageProp, INT, Defaults.LeaderImbalancePerBrokerPercentage, HIGH, LeaderImbalancePerBrokerPercentageDoc)
       .define(LeaderImbalanceCheckIntervalSecondsProp, LONG, Defaults.LeaderImbalanceCheckIntervalSeconds, HIGH, LeaderImbalanceCheckIntervalSecondsDoc)
+      .define(DeprecatedUncleanLeaderElectionEnableProp, BOOLEAN, null, HIGH, UncleanLeaderElectionEnableDoc)
       .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable, HIGH, UncleanLeaderElectionEnableDoc)
       .define(InterBrokerSecurityProtocolProp, STRING, Defaults.InterBrokerSecurityProtocol, MEDIUM, InterBrokerSecurityProtocolDoc)
       .define(InterBrokerProtocolVersionProp, STRING, Defaults.InterBrokerProtocolVersion, MEDIUM, InterBrokerProtocolVersionDoc)
@@ -649,6 +657,7 @@ object KafkaConfig {
       .define(OffsetCommitTimeoutMsProp, INT, Defaults.OffsetCommitTimeoutMs, atLeast(1), HIGH, OffsetCommitTimeoutMsDoc)
       .define(OffsetCommitRequiredAcksProp, SHORT, Defaults.OffsetCommitRequiredAcks, HIGH, OffsetCommitRequiredAcksDoc)
       .define(DeleteTopicEnableProp, BOOLEAN, Defaults.DeleteTopicEnable, HIGH, DeleteTopicEnableDoc)
+      .define(DeprecatedCompressionTypeProp, STRING, null, HIGH, DeprecatedCompressionTypeDoc)
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, HIGH, CompressionTypeDoc)
 
       /** ********* Kafka Metrics Configuration ***********/
@@ -794,7 +803,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val logRollTimeJitterMillis: java.lang.Long = Option(getLong(KafkaConfig.LogRollTimeJitterMillisProp)).getOrElse(60 * 60 * 1000L * getInt(KafkaConfig.LogRollTimeJitterHoursProp))
   val logFlushIntervalMs: java.lang.Long = Option(getLong(KafkaConfig.LogFlushIntervalMsProp)).getOrElse(getLong(KafkaConfig.LogFlushSchedulerIntervalMsProp))
   val logRetentionTimeMillis = getLogRetentionTimeMillis
-  val minInSyncReplicas = getInt(KafkaConfig.MinInSyncReplicasProp)
+  val minInSyncReplicas = Option(getInt(KafkaConfig.DeprecatedMinInSyncReplicasProp)).getOrElse(getInt(KafkaConfig.MinInSyncReplicasProp))
   val logPreAllocateEnable: java.lang.Boolean = getBoolean(KafkaConfig.LogPreAllocateProp)
   // We keep the user-provided String as `ApiVersion.apply` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
@@ -820,7 +829,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val autoLeaderRebalanceEnable = getBoolean(KafkaConfig.AutoLeaderRebalanceEnableProp)
   val leaderImbalancePerBrokerPercentage = getInt(KafkaConfig.LeaderImbalancePerBrokerPercentageProp)
   val leaderImbalanceCheckIntervalSeconds = getLong(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp)
-  val uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(KafkaConfig.UncleanLeaderElectionEnableProp)
+  val uncleanLeaderElectionEnable: java.lang.Boolean = Boolean.box(Option(getBoolean(KafkaConfig.DeprecatedUncleanLeaderElectionEnableProp))
+    .getOrElse(getBoolean(KafkaConfig.UncleanLeaderElectionEnableProp)))
   val interBrokerSecurityProtocol = SecurityProtocol.forName(getString(KafkaConfig.InterBrokerSecurityProtocolProp))
   // We keep the user-provided String as `ApiVersion.apply` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
@@ -883,7 +893,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val quotaWindowSizeSeconds = getInt(KafkaConfig.QuotaWindowSizeSecondsProp)
 
   val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
-  val compressionType = getString(KafkaConfig.CompressionTypeProp)
+  val compressionType = Option(getString(KafkaConfig.DeprecatedCompressionTypeDoc)).getOrElse(getString(KafkaConfig.CompressionTypeProp))
 
   val listeners = getListeners
   val advertisedListeners = getAdvertisedListeners
