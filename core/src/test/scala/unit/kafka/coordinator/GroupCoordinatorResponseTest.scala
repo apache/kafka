@@ -48,8 +48,8 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   type SyncGroupCallback = (Array[Byte], Short) => Unit
   type HeartbeatCallbackParams = Short
   type HeartbeatCallback = Short => Unit
-  type CommitOffsetCallbackParams = Map[TopicAndPartition, Short]
-  type CommitOffsetCallback = Map[TopicAndPartition, Short] => Unit
+  type CommitOffsetCallbackParams = Map[TopicPartition, Short]
+  type CommitOffsetCallback = Map[TopicPartition, Short] => Unit
   type LeaveGroupCallbackParams = Short
   type LeaveGroupCallback = Short => Unit
 
@@ -574,7 +574,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testCommitOffsetFromUnknownGroup() {
     val generationId = 1
-    val tp = new TopicAndPartition("topic", 0)
+    val tp = new TopicPartition("topic", 0)
     val offset = OffsetAndMetadata(0)
 
     val commitOffsetResult = commitOffsets(groupId, memberId, generationId, immutable.Map(tp -> offset))
@@ -583,7 +583,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
   @Test
   def testCommitOffsetWithDefaultGeneration() {
-    val tp = new TopicAndPartition("topic", 0)
+    val tp = new TopicPartition("topic", 0)
     val offset = OffsetAndMetadata(0)
 
     val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
@@ -594,7 +594,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testCommitOffsetInAwaitingSync() {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
-    val tp = new TopicAndPartition("topic", 0)
+    val tp = new TopicPartition("topic", 0)
     val offset = OffsetAndMetadata(0)
 
     val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols)
@@ -900,7 +900,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   private def commitOffsets(groupId: String,
                             consumerId: String,
                             generationId: Int,
-                            offsets: immutable.Map[TopicAndPartition, OffsetAndMetadata]): CommitOffsetCallbackParams = {
+                            offsets: immutable.Map[TopicPartition, OffsetAndMetadata]): CommitOffsetCallbackParams = {
     val (responseFuture, responseCallback) = setupCommitOffsetsCallback
 
     val capturedArgument: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
