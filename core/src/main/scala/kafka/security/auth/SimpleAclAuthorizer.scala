@@ -27,6 +27,7 @@ import kafka.utils._
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.zookeeper.KeeperException
 import scala.collection.JavaConverters._
 import org.apache.log4j.Logger
 
@@ -261,17 +262,18 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       val newAcls = getNewAcls(currentVersionedAcls.acls)
       val data = Json.encode(Acl.toJsonCompatibleMap(newAcls))
       try {
-        val (updateSucceeded, updateVersion) = zkUtils.conditionalUpdatePersistentPathIfExists(path, data, currentVersionedAcls.version)
+        val (updateSucceeded, updateVersion) =
+          if(!newAcls.isEmpty) {
+           zkUtils.conditionalUpdatePersistentPathIfExists(path, data, currentVersionedAcls.version)
+          } else {
+            trace(s"Deleting path for $resource because it had no acls remaining")
+            (deletePath(path, currentVersionedAcls.version), 0)
+          }
         if(!updateSucceeded) {
           trace(s"Failed to update acls for $resource. Used version ${currentVersionedAcls.version}. Reading data and retrying update.")
           currentVersionedAcls = getAclsFromZk(resource);
-        } else {
-          if(newAcls.isEmpty) {
-            trace(s"Deleting path for $resource because it had no acls remaining")
-            zkUtils.deletePath(path) // It would be safest to use the versioned request, but this zkClient doesn't support it
-          }
-          newVersionedAcls = VersionedAcls(newAcls, updateVersion)
         }
+        newVersionedAcls = VersionedAcls(newAcls, updateVersion)
         writeComplete = updateSucceeded
       } catch {
         case e: ZkNoNodeException =>
@@ -297,6 +299,16 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       debug(s"Updated acls for $resource, no change was made")
       updateCache(resource, newVersionedAcls) // Even if no change, update the version
       false
+    }
+  }
+
+  private def deletePath(path: String, expectedVersion: Int): Boolean = {
+    try {
+      zkUtils.zkConnection.getZookeeper.delete(path, expectedVersion) // Workaround until zkClient supports versioned deletes
+      true
+    } catch {
+      case e: KeeperException.NoNodeException => true // This path was already deleted
+      case e: KeeperException.BadVersionException => false
     }
   }
 
