@@ -136,8 +136,8 @@ class LogCleaner(val config: CleanerConfig,
   /**
    * Truncate cleaner offset checkpoint for the given partition if its checkpointed offset is larger than the given offset
    */
-  def truncateCheckpoint(dataDir: File, topicAndPartition: TopicAndPartition, offset: Long) {
-    cleanerManager.truncateCheckpoint(dataDir, topicAndPartition, offset)
+  def maybeTruncateCheckpoint(dataDir: File, topicAndPartition: TopicAndPartition, offset: Long) {
+    cleanerManager.maybeTruncateCheckpoint(dataDir, topicAndPartition, offset)
   }
 
   /**

@@ -210,7 +210,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     }
   }
 
-  def truncateCheckpoint(dataDir: File, topicAndPartition: TopicAndPartition, offset: Long) {
+  def maybeTruncateCheckpoint(dataDir: File, topicAndPartition: TopicAndPartition, offset: Long) {
     inLock(lock) {
       if (logs.get(topicAndPartition).config.compact) {
         val checkpoint = checkpoints(dataDir)
