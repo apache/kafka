@@ -18,25 +18,26 @@
 package kafka.server
 
 
-import kafka.api.SerializationTestUtils
-import kafka.message.{Message, ByteBufferMessageSet}
-import kafka.utils.{ZkUtils, MockScheduler, MockTime, TestUtils}
-import org.apache.kafka.common.requests.ProduceRequest
-
-import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
+import kafka.cluster.Broker
+import kafka.message.{ByteBufferMessageSet, Message}
+import kafka.utils.{MockScheduler, MockTime, TestUtils, ZkUtils}
+import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.LeaderAndIsrRequest
+import org.apache.kafka.common.requests.LeaderAndIsrRequest.PartitionState
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
+import org.apache.kafka.common.{BrokerEndPoint, TopicPartition}
 import org.easymock.EasyMock
-import org.I0Itec.zkclient.ZkClient
+import org.junit.Assert.{assertTrue, assertEquals}
 import org.junit.Test
 
+import scala.collection.JavaConversions._
 import scala.collection.Map
-import scala.collection.JavaConverters._
 
 class ReplicaManagerTest {
 
@@ -117,5 +118,61 @@ class ReplicaManagerTest {
     }
 
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+  }
+
+  @Test
+  def testClearPurgatoryOnBecomingFollower() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
+    val config = KafkaConfig.fromProps(props)
+    val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val zkUtils = ZkUtils(zkClient, false)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
+    val time: MockTime = new MockTime()
+    val jTime = new JMockTime
+    val metrics = new Metrics
+    val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
+      new AtomicBoolean(false))
+
+    try {
+      var callbackFired = false
+      def callback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
+        assertEquals("Should give NotLeaderForPartitionException", Errors.NOT_LEADER_FOR_PARTITION.code, responseStatus.values.head.errorCode)
+        callbackFired = true
+      }
+
+      val aliveBrokers = Seq(new Broker(0, "host0", 0), new Broker(1, "host1", 1))
+      val metadataCache = EasyMock.createMock(classOf[MetadataCache])
+      EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
+      EasyMock.replay(metadataCache)
+
+      val partition = rm.getOrCreatePartition(topic, 0)
+      partition.getOrCreateReplica(0)
+      // Make this replica the leader.
+      val leaderAndIsrRequest1 = new LeaderAndIsrRequest(0, 0,
+        mapAsJavaMap(collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, seqAsJavaList(Seq(0, 1)), 0, setAsJavaSet(Set(0, 1))))),
+        setAsJavaSet(Set(new BrokerEndPoint(0, "host1", 0), new BrokerEndPoint(1, "host2", 1))))
+      rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, metadataCache, (_, _) => {})
+      rm.getLeaderReplicaIfLocal(topic, 0)
+
+      // Append a message.
+      rm.appendMessages(
+        timeout = 1000,
+        requiredAcks = -1,
+        internalTopicsAllowed = false,
+        messagesPerPartition = Map(new TopicPartition(topic, 0) -> new ByteBufferMessageSet(new Message("first message".getBytes))),
+        responseCallback = callback)
+
+      // Make this replica the follower
+      val leaderAndIsrRequest2 = new LeaderAndIsrRequest(0, 0,
+        mapAsJavaMap(collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 1, 1, seqAsJavaList(Seq(0, 1)), 1, setAsJavaSet(Set(0, 1))))),
+        setAsJavaSet(Set(new BrokerEndPoint(0, "host1", 0), new BrokerEndPoint(1, "host2", 1))))
+      rm.becomeLeaderOrFollower(1, leaderAndIsrRequest2, metadataCache, (_, _) => {})
+
+      assertTrue(callbackFired)
+    } finally {
+      rm.shutdown(false)
+      metrics.close()
+    }
   }
 }
