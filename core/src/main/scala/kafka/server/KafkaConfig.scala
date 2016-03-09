@@ -101,6 +101,8 @@ object Defaults {
   val MinInSyncReplicas = 1
   val MessageTimestampType = "CreateTime"
   val MessageTimestampDifferenceMaxMs = Long.MaxValue
+  val LogRecoveryThreads = 1
+  val LogRecoveryMaxIntervalMs = Long.MaxValue
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMs = RequestTimeoutMs
@@ -255,6 +257,8 @@ object KafkaConfig {
   val LogFlushIntervalMsProp = "log.flush.interval.ms"
   val LogFlushOffsetCheckpointIntervalMsProp = "log.flush.offset.checkpoint.interval.ms"
   val LogPreAllocateProp = "log.preallocate"
+  val LogRecoveryThreads = "log.recovery.threads"
+  val LogRecoveryMaxIntervalMs = "log.recovery.max.interval.ms"
   val MessageFormatVersionProp = "message.format.version"
   val NumRecoveryThreadsPerDataDirProp = "num.recovery.threads.per.data.dir"
   val AutoCreateTopicsEnableProp = "auto.create.topics.enable"
@@ -421,6 +425,9 @@ object KafkaConfig {
   val LogFlushIntervalMsDoc = "The maximum time in ms that a message in any topic is kept in memory before flushed to disk. If not set, the value in " + LogFlushSchedulerIntervalMsProp + " is used"
   val LogFlushOffsetCheckpointIntervalMsDoc = "The frequency with which we update the persistent record of the last flush which acts as the log recovery point"
   val LogPreAllocateEnableDoc = "Should pre allocate file when create new segment? If you are using Kafka on Windows, you probably need to set it to true."
+  val LogRecoveryThreadsDoc = "The no of threads needed to recover the unflushed log segments when not shutdown in a controlled way"
+  val LogRecoveryMaxIntervalMsDoc = "The max time in ms to wait before stopping the recovery of logs when controlled shutdown is not enabled"
+
   val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server"
   val MinInSyncReplicasDoc = "define the minimum number of replicas in ISR needed to satisfy a produce request with acks=all (or -1)"
@@ -604,6 +611,8 @@ object KafkaConfig {
       .define(LogFlushIntervalMsProp, LONG, null, HIGH, LogFlushIntervalMsDoc)
       .define(LogFlushOffsetCheckpointIntervalMsProp, INT, Defaults.LogFlushOffsetCheckpointIntervalMs, atLeast(0), HIGH, LogFlushOffsetCheckpointIntervalMsDoc)
       .define(LogPreAllocateProp, BOOLEAN, Defaults.LogPreAllocateEnable, MEDIUM, LogPreAllocateEnableDoc)
+      .define(LogRecoveryThreads, INT, Defaults.LogRecoveryThreads, atLeast(1), MEDIUM, LogRecoveryThreadsDoc)
+      .define(LogRecoveryMaxIntervalMs, INT, Defaults.LogRecoveryMaxIntervalMs, atLeast(1000), MEDIUM, LogRecoveryMaxIntervalMsDoc)
       .define(NumRecoveryThreadsPerDataDirProp, INT, Defaults.NumRecoveryThreadsPerDataDir, atLeast(1), HIGH, NumRecoveryThreadsPerDataDirDoc)
       .define(AutoCreateTopicsEnableProp, BOOLEAN, Defaults.AutoCreateTopicsEnable, HIGH, AutoCreateTopicsEnableDoc)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), HIGH, MinInSyncReplicasDoc)

@@ -23,7 +23,7 @@ import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{BrokerTopicStats, FetchDataInfo, LogOffsetMetadata}
 import java.io.{File, IOException}
-import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
+import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.text.NumberFormat
 
@@ -39,7 +39,8 @@ object LogAppendInfo {
 
 /**
  * Struct to hold various quantities we compute about each message set before appending to the log
- * @param firstOffset The first offset in the message set
+  *
+  * @param firstOffset The first offset in the message set
  * @param lastOffset The last offset in the message set
  * @param timestamp The log append time (if used) of the message set, otherwise Message.NoTimestamp
  * @param sourceCodec The source codec used in the message set (send by the producer)
@@ -258,23 +259,54 @@ class Log(val dir: File,
     }
 
     // okay we need to actually recovery this log
+    val recoveryThreads = config.getInt(LogConfig.LogRecoveryThreads)
+    val maxRecoveryTimeMs = config.getLong(LogConfig.LogRecoveryMaxIntervalMs)
+    val pool = Executors.newFixedThreadPool(recoveryThreads)
+    val logRecoveryFutures: List[Future] = List()
+
     val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
     while(unflushed.hasNext) {
-      val curr = unflushed.next
-      info("Recovering unflushed segment %d in log %s.".format(curr.baseOffset, name))
+      val logRecoveryThread = new UnFlushedLogRecoveryRunnable(unflushed.next, unflushed)
+      logRecoveryFutures :+ pool.submit(logRecoveryThread)
+    }
+
+    if(!pool.awaitTermination(maxRecoveryTimeMs, TimeUnit.MILLISECONDS)) {
+      val msg = "Recovery threads interrupted as time limit %s exceeded".format(maxRecoveryTimeMs)
+      logAndThrowRecoveryFailedException(msg)
+    }
+
+    val logRecoveryFailedFutures: List[Future] = List()
+    for (logRecoveryFuture <- logRecoveryFutures if Option(logRecoveryFuture.get()).isDefined) {
+      logRecoveryFailedFutures :+ logRecoveryFuture
+    }
+
+    if(logRecoveryFailedFutures.nonEmpty) {
+      val msg = "Log recovery failed for %d log segments".format(logRecoveryFailedFutures.size)
+      logAndThrowRecoveryFailedException(msg)
+    }
+  }
+
+  def logAndThrowRecoveryFailedException(msg: String): Nothing = {
+    error(msg)
+    throw new LogRecoveryFailedException(msg)
+  }
+
+  class UnFlushedLogRecoveryRunnable(logSegment: LogSegment, unflushed: Iterator[LogSegment]) extends Runnable {
+    override def run(): Unit = {
+      info("Recovering unflushed segment %d in log %s.".format(logSegment.baseOffset, name))
       val truncatedBytes =
         try {
-          curr.recover(config.maxMessageSize)
+          logSegment.recover(config.maxMessageSize)
         } catch {
           case e: InvalidOffsetException =>
-            val startOffset = curr.baseOffset
+            val startOffset = logSegment.baseOffset
             warn("Found invalid offset during recovery for log " + dir.getName +". Deleting the corrupt segment and " +
                  "creating an empty one with starting offset " + startOffset)
-            curr.truncateTo(startOffset)
+            logSegment.truncateTo(startOffset)
         }
       if(truncatedBytes > 0) {
         // we had an invalid message, delete all remaining log
-        warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(curr.baseOffset, name, curr.nextOffset))
+        warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(logSegment.baseOffset, name, logSegment.nextOffset))
         unflushed.foreach(deleteSegment)
       }
     }
@@ -310,9 +342,7 @@ class Log(val dir: File,
    *
    * @param messages The message set to append
    * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
-   *
    * @throws KafkaStorageException If the append fails due to an I/O error.
-   *
    * @return Information about the appended messages including the first and last offset.
    */
   def append(messages: ByteBufferMessageSet, assignOffsets: Boolean = true): LogAppendInfo = {
@@ -463,6 +493,7 @@ class Log(val dir: File,
 
   /**
    * Trim any invalid bytes from the end of this message set (if there are any)
+ *
    * @param messages The message set to trim
    * @param info The general information of the message set
    * @return A trimmed message set. This may be the same as what was passed in or it may not.
@@ -487,7 +518,6 @@ class Log(val dir: File,
    * @param startOffset The offset to begin reading at
    * @param maxLength The maximum number of bytes to read
    * @param maxOffset -The offset to read up to, exclusive. (i.e. the first offset NOT included in the resulting message set).
-   *
    * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the base offset of the first segment.
    * @return The fetch data information including fetch starting offset metadata and messages read
    */
@@ -558,6 +588,7 @@ class Log(val dir: File,
   /**
    * Delete any log segments matching the given predicate function,
    * starting with the oldest segment and moving forward until a segment doesn't match.
+ *
    * @param predicate A function that takes in a single log segment and returns true iff it is deletable
    * @return The number of segments deleted
    */
@@ -633,6 +664,7 @@ class Log(val dir: File,
   /**
    * Roll the log over to a new active segment starting with the current logEndOffset.
    * This will trim the index to the exact size of the number of entries it currently contains.
+ *
    * @return The newly rolled segment
    */
   def roll(): LogSegment = {
@@ -689,6 +721,7 @@ class Log(val dir: File,
 
   /**
    * Flush log segments for all offsets up to offset-1
+ *
    * @param offset The offset to flush up to (non-inclusive); the new recovery point
    */
   def flush(offset: Long) : Unit = {
@@ -720,6 +753,7 @@ class Log(val dir: File,
 
   /**
    * Truncate this log so that it ends with the greatest offset < targetOffset.
+ *
    * @param targetOffset The offset to truncate to, an upper bound on all offsets in the log after truncation is complete.
    */
   private[log] def truncateTo(targetOffset: Long) {
@@ -745,6 +779,7 @@ class Log(val dir: File,
 
   /**
    *  Delete all data in the log and start at the new offset
+ *
    *  @param newOffset The new offset to start the log with
    */
   private[log] def truncateFullyAndStartAt(newOffset: Long) {
@@ -823,6 +858,7 @@ class Log(val dir: File,
 
   /**
    * Perform an asynchronous delete on the given file if it exists (otherwise do nothing)
+ *
    * @throws KafkaStorageException if the file can't be renamed and still exists
    */
   private def asyncDeleteSegment(segment: LogSegment) {
@@ -890,6 +926,7 @@ class Log(val dir: File,
   }
   /**
    * Add the given segment to the segments in this log. If this segment replaces an existing segment, delete it.
+ *
    * @param segment The segment to add
    */
   def addSegment(segment: LogSegment) = this.segments.put(segment.baseOffset, segment)
@@ -924,6 +961,7 @@ object Log {
   /**
    * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros
    * so that ls sorts the files numerically.
+ *
    * @param offset The offset to use in the file name
    * @return The filename
    */
@@ -937,6 +975,7 @@ object Log {
 
   /**
    * Construct a log file name in the given dir with the given base offset
+ *
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    */
@@ -945,6 +984,7 @@ object Log {
 
   /**
    * Construct an index file name in the given dir using the given base offset
+ *
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    */
