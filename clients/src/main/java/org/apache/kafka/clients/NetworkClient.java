@@ -614,10 +614,12 @@ public class NetworkClient implements KafkaClient {
 
             if (canSendRequest(nodeConnectionId)) {
                 Set<String> topics = metadata.needMetadataForAllTopics() ? new HashSet<String>() : metadata.topics();
-                this.metadataFetchInProgress = true;
-                ClientRequest metadataRequest = request(now, nodeConnectionId, topics);
-                log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
-                doSend(metadataRequest, now);
+                if (metadata.needMetadataForAllTopics() || !topics.isEmpty()) {
+                    this.metadataFetchInProgress = true;
+                    ClientRequest metadataRequest = request(now, nodeConnectionId, topics);
+                    log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
+                    doSend(metadataRequest, now);
+                }
             } else if (connectionStates.canConnect(nodeConnectionId, now)) {
                 // we don't have a connection to this node right now, make one
                 log.debug("Initialize connection to node {} for sending metadata request", node.id());

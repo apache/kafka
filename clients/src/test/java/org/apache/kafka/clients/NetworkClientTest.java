@@ -204,6 +204,16 @@ public class NetworkClientTest {
 
         assertEquals(reconnectBackoffMsTest, delay);
     }
+
+    @Test
+    public void testNoUpdateMetadataWithNoTopics() {
+        awaitReady(client, node);
+
+        metadata.requestUpdate();
+        List<ClientResponse> responses = client.poll(0, time.milliseconds());
+        assertTrue(responses.isEmpty());
+        assertEquals(0, client.inFlightRequestCount());
+    }
     
     private static class TestCallbackHandler implements RequestCompletionHandler {
         public boolean executed = false;
