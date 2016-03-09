@@ -69,7 +69,7 @@ public final class Metadata {
         this.version = 0;
         this.cluster = Cluster.empty();
         this.needUpdate = false;
-        this.topics = new HashSet<String>();
+        this.topics = new HashSet<>();
         this.listeners = new ArrayList<>();
         this.needMetadataForAllTopics = false;
     }
@@ -141,7 +141,7 @@ public final class Metadata {
      * Get the list of topics we are currently maintaining metadata for
      */
     public synchronized Set<String> topics() {
-        return new HashSet<String>(this.topics);
+        return new HashSet<>(this.topics);
     }
 
     /**
