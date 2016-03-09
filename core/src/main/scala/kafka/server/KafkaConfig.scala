@@ -357,7 +357,7 @@ object KafkaConfig {
   val BrokerIdDoc = "The broker id for this server. If unset, a unique broker id will be generated." +
   "To avoid conflicts between zookeeper generated broker id's and user configured broker id's, generated broker ids" +
   "start from " + MaxReservedBrokerIdProp + " + 1."
-  val DeprecatedMessageMaxBytesDoc = s"${LogConfig.MaxMessageSizeDoc} This config will be deprecated - use $MessageMaxBytesProp instead."
+  val DeprecatedMessageMaxBytesDoc = s"${LogConfig.MaxMessageSizeDoc} This config will be deprecated in a future release - use $MessageMaxBytesProp instead."
   val MessageMaxBytesDoc = LogConfig.MaxMessageSizeDoc
   val NumNetworkThreadsDoc = "the number of network threads that the server uses for handling network requests"
   val NumIoThreadsDoc = "The number of io threads that the server uses for carrying out network requests"
@@ -429,7 +429,7 @@ object KafkaConfig {
   val LogPreAllocateEnableDoc = LogConfig.PreAllocateEnableDoc
   val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server"
-  val DeprecatedMinInSyncReplicasDoc = s"${LogConfig.MinInSyncReplicasDoc} This config will be deprecated - use $MinInSyncReplicasProp instead."
+  val DeprecatedMinInSyncReplicasDoc = s"${LogConfig.MinInSyncReplicasDoc} This config will be deprecated in a future release - use $MinInSyncReplicasProp instead."
   val MinInSyncReplicasDoc = LogConfig.MinInSyncReplicasDoc
   val MessageFormatVersionDoc = LogConfig.MessageFormatVersionDoc
   val MessageTimestampTypeDoc = LogConfig.MessageTimestampTypeDoc
@@ -455,7 +455,7 @@ object KafkaConfig {
   val AutoLeaderRebalanceEnableDoc = "Enables auto leader balancing. A background thread checks and triggers leader balance if required at regular intervals"
   val LeaderImbalancePerBrokerPercentageDoc = "The ratio of leader imbalance allowed per broker. The controller would trigger a leader balance if it goes above this value per broker. The value is specified in percentage."
   val LeaderImbalanceCheckIntervalSecondsDoc = "The frequency with which the partition rebalance check is triggered by the controller"
-  val DeprecatedUncleanLeaderElectionEnableDoc = s"${LogConfig.UncleanLeaderElectionEnableDoc} This config will be deprecated - use $UncleanLeaderElectionEnableProp instead."
+  val DeprecatedUncleanLeaderElectionEnableDoc = s"${LogConfig.UncleanLeaderElectionEnableDoc} This config will be deprecated in a future release - use $UncleanLeaderElectionEnableProp instead."
   val UncleanLeaderElectionEnableDoc = LogConfig.UncleanLeaderElectionEnableDoc
   val InterBrokerSecurityProtocolDoc = "Security protocol used to communicate between brokers. Valid values are: " +
     s"${SecurityProtocol.nonTestingValues.asScala.toSeq.map(_.name).mkString(", ")}."
@@ -492,7 +492,7 @@ object KafkaConfig {
   val QuotaWindowSizeSecondsDoc = "The time span of each sample"
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
-  val DeprecatedCompressionTypeDoc = s"${LogConfig.CompressionTypeDoc} This config will be deprecated - use $CompressionTypeDoc instead."
+  val DeprecatedCompressionTypeDoc = s"${LogConfig.CompressionTypeDoc} This config will be deprecated in a future release - use $CompressionTypeDoc instead."
   val CompressionTypeDoc = LogConfig.CompressionTypeDoc
 
   /** ********* Kafka Metrics Configuration ***********/
