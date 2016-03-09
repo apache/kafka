@@ -48,7 +48,7 @@ import org.apache.kafka.common.utils.Utils;
  */
 public class ConfigDef {
 
-    private static final Object NO_DEFAULT_VALUE = new String("");
+    public static final Object NO_DEFAULT_VALUE = new String("");
 
     private final Map<String, ConfigKey> configKeys = new HashMap<String, ConfigKey>();
 
@@ -360,7 +360,7 @@ public class ConfigDef {
             this.defaultValue = defaultValue;
             this.validator = validator;
             this.importance = importance;
-            if (this.validator != null)
+            if (this.validator != null && this.hasDefault())
                 this.validator.ensureValid(name, defaultValue);
             this.documentation = documentation;
         }
