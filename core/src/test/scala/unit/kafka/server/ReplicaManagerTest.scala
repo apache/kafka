@@ -33,10 +33,10 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.apache.kafka.common.{BrokerEndPoint, TopicPartition}
 import org.easymock.EasyMock
-import org.junit.Assert.{assertTrue, assertEquals}
+import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.Test
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.Map
 
 class ReplicaManagerTest {
@@ -50,7 +50,7 @@ class ReplicaManagerTest {
     val zkClient = EasyMock.createMock(classOf[ZkClient])
     val zkUtils = ZkUtils(zkClient, false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val time: MockTime = new MockTime()
+    val time = new MockTime()
     val jTime = new JMockTime
     val metrics = new Metrics
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
@@ -74,7 +74,7 @@ class ReplicaManagerTest {
     val zkClient = EasyMock.createMock(classOf[ZkClient])
     val zkUtils = ZkUtils(zkClient, false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val time: MockTime = new MockTime()
+    val time = new MockTime()
     val jTime = new JMockTime
     val metrics = new Metrics
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
@@ -97,7 +97,7 @@ class ReplicaManagerTest {
     val zkClient = EasyMock.createMock(classOf[ZkClient])
     val zkUtils = ZkUtils(zkClient, false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val time: MockTime = new MockTime()
+    val time = new MockTime()
     val jTime = new JMockTime
     val metrics = new Metrics
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
@@ -128,7 +128,7 @@ class ReplicaManagerTest {
     val zkClient = EasyMock.createMock(classOf[ZkClient])
     val zkUtils = ZkUtils(zkClient, false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val time: MockTime = new MockTime()
+    val time = new MockTime()
     val jTime = new JMockTime
     val metrics = new Metrics
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
@@ -150,8 +150,9 @@ class ReplicaManagerTest {
       partition.getOrCreateReplica(0)
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest(0, 0,
-        mapAsJavaMap(collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, seqAsJavaList(Seq(0, 1)), 0, setAsJavaSet(Set(0, 1))))),
-        setAsJavaSet(Set(new BrokerEndPoint(0, "host1", 0), new BrokerEndPoint(1, "host2", 1))))
+        collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, Seq(0, 1).asJava.asInstanceOf[java.util.List[Integer]],
+          0, Set(0, 1).asJava.asInstanceOf[java.util.Set[Integer]])).asJava,
+        Set(new BrokerEndPoint(0, "host1", 0), new BrokerEndPoint(1, "host2", 1)).asJava)
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, metadataCache, (_, _) => {})
       rm.getLeaderReplicaIfLocal(topic, 0)
 
@@ -165,8 +166,9 @@ class ReplicaManagerTest {
 
       // Make this replica the follower
       val leaderAndIsrRequest2 = new LeaderAndIsrRequest(0, 0,
-        mapAsJavaMap(collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 1, 1, seqAsJavaList(Seq(0, 1)), 1, setAsJavaSet(Set(0, 1))))),
-        setAsJavaSet(Set(new BrokerEndPoint(0, "host1", 0), new BrokerEndPoint(1, "host2", 1))))
+        collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 1, 1, Seq(0, 1).asJava.asInstanceOf[java.util.List[Integer]],
+          0, Set(0, 1).asJava.asInstanceOf[java.util.Set[Integer]])).asJava,
+        Set(new BrokerEndPoint(0, "host1", 0), new BrokerEndPoint(1, "host2", 1)).asJava)
       rm.becomeLeaderOrFollower(1, leaderAndIsrRequest2, metadataCache, (_, _) => {})
 
       assertTrue(callbackFired)
