@@ -559,7 +559,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             "rebalanced and assigned the partitions to another member. This most likely means that " +
                             "the consumer has taken longer than the configured session.timeout.ms to handle a batch " +
                             "of messages returned from poll(). You can address this either by increasing the session " +
-                            "timeout or by reducing the maximum size of batches returned in poll() by with " +
+                            "timeout or by reducing the maximum size of batches returned in poll() with " +
                             "max.poll.records."));
                     return;
                 } else {
