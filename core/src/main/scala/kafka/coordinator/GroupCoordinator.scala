@@ -725,9 +725,6 @@ object GroupCoordinator {
   val EmptyGroup = GroupSummary(NoState, NoProtocolType, NoProtocol, NoMembers)
   val DeadGroup = GroupSummary(Dead.toString, NoProtocolType, NoProtocol, NoMembers)
 
-  // TODO: we store both group metadata and offset data here despite the topic name being offsets only
-  val GroupMetadataTopicName = "__consumer_offsets"
-
   def apply(config: KafkaConfig,
             zkUtils: ZkUtils,
             replicaManager: ReplicaManager,

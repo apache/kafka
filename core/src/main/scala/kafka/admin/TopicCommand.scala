@@ -18,7 +18,6 @@
 package kafka.admin
 
 import java.util.Properties
-
 import joptsimple._
 import kafka.common.{AdminCommandFailedException, Topic, TopicExistsException}
 import kafka.consumer.{ConsumerConfig, Whitelist}
@@ -30,9 +29,9 @@ import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
-
 import scala.collection.JavaConversions._
 import scala.collection._
+import org.apache.kafka.common.internals.Topics
 
 
 object TopicCommand extends Logging {
@@ -138,7 +137,7 @@ object TopicCommand extends Logging {
       }
 
       if(opts.options.has(opts.partitionsOpt)) {
-        if (topic == GroupCoordinator.GroupMetadataTopicName) {
+        if (topic == Topics.GROUP_METADATA_TOPIC_NAME) {
           throw new IllegalArgumentException("The number of partitions for the offsets topic cannot be changed.")
         }
         println("WARNING: If partitions are increased for a topic that has a key, the partition " +
@@ -171,7 +170,7 @@ object TopicCommand extends Logging {
     }
     topics.foreach { topic =>
       try {
-        if (Topic.InternalTopics.contains(topic)) {
+        if (Topics.INTERNAL_TOPICS.contains(topic)) {
           throw new AdminOperationException("Topic %s is a kafka internal topic and is not allowed to be marked for deletion.".format(topic))
         } else {
           zkUtils.createPersistentPath(getDeleteTopicPath(topic))
