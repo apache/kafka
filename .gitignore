@@ -40,5 +40,6 @@ tests/.ducktape
 
 docs/producer_config.html
 docs/consumer_config.html
+docs/topic_config.html
 docs/kafka_config.html
 docs/connect_config.html

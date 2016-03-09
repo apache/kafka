@@ -360,13 +360,19 @@ project(':core') {
     standardOutput = new File("$rootDir/docs/consumer_config.html").newOutputStream()
   }
 
+  tasks.create(name: "genTopicConfigDocs", dependsOn:jar, type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'kafka.log.LogConfig'
+    standardOutput = new File("$rootDir/docs/topic_config.html").newOutputStream()
+  }
+
   tasks.create(name: "genKafkaConfigDocs", dependsOn:jar, type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'kafka.server.KafkaConfig'
     standardOutput = new File("$rootDir/docs/kafka_config.html").newOutputStream()
   }
 
-  task siteDocsTar(dependsOn: ['genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs', ':connect:runtime:genConnectConfigDocs'], type: Tar) {
+  task siteDocsTar(dependsOn: ['genProducerConfigDocs', 'genConsumerConfigDocs', 'genTopicConfigDocs', 'genKafkaConfigDocs', ':connect:runtime:genConnectConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("../docs")
