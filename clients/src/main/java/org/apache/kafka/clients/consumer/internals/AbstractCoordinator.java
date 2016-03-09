@@ -216,7 +216,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 continue;
             }
 
-            RequestFuture<ByteBuffer> future = performGroupJoin();
+            RequestFuture<ByteBuffer> future = sendJoinGroupRequest();
             client.poll(future);
 
             if (future.succeeded()) {
@@ -299,12 +299,12 @@ public abstract class AbstractCoordinator implements Closeable {
      * elected leader by the coordinator.
      * @return A request future which wraps the assignment returned from the group leader
      */
-    private RequestFuture<ByteBuffer> performGroupJoin() {
+    private RequestFuture<ByteBuffer> sendJoinGroupRequest() {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
 
         // send a join group request to the coordinator
-        log.debug("(Re-)joining group {}", groupId);
+        log.info("(Re-)joining group {}", groupId);
         JoinGroupRequest request = new JoinGroupRequest(
                 groupId,
                 this.sessionTimeoutMs,
@@ -313,7 +313,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 metadata());
 
         // create the request for the coordinator
-        log.debug("Issuing request ({}: {}) to coordinator {}", ApiKeys.JOIN_GROUP, request, this.coordinator.id());
+        log.debug("Sending JoinGroup ({}) to coordinator {}", request, this.coordinator.id());
         return client.send(coordinator, ApiKeys.JOIN_GROUP, request)
                 .compose(new JoinGroupResponseHandler());
     }
@@ -349,30 +349,27 @@ public abstract class AbstractCoordinator implements Closeable {
             } else if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
                 // reset the member id and retry immediately
                 AbstractCoordinator.this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
-                log.info("Attempt to join group {} failed due to unknown member id, resetting and retrying.",
-                        groupId);
+                log.debug("Attempt to join group {} failed due to unknown member id, resetting and retrying.", groupId);
                 future.raise(Errors.UNKNOWN_MEMBER_ID);
             } else if (errorCode == Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code()
                     || errorCode == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
                 // re-discover the coordinator and retry with backoff
                 coordinatorDead();
-                log.info("Attempt to join group {} failed due to obsolete coordinator information, retrying.",
-                    groupId);
+                log.debug("Attempt to join group {} failed due to obsolete coordinator information, retrying.", groupId);
                 future.raise(Errors.forCode(errorCode));
             } else if (errorCode == Errors.INCONSISTENT_GROUP_PROTOCOL.code()
                     || errorCode == Errors.INVALID_SESSION_TIMEOUT.code()
                     || errorCode == Errors.INVALID_GROUP_ID.code()) {
                 // log the error and re-throw the exception
                 Errors error = Errors.forCode(errorCode);
-                log.error("Attempt to join group {} failed due to: {}",
-                        groupId, error.exception().getMessage());
+                log.error("Attempt to join group {} failed due to fatal error: {}", groupId, error.message());
                 future.raise(error);
             } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
                 future.raise(new GroupAuthorizationException(groupId));
             } else {
                 // unexpected error, throw the exception
                 future.raise(new KafkaException("Unexpected error in join group response: "
-                        + Errors.forCode(joinResponse.errorCode()).exception().getMessage()));
+                        + Errors.forCode(joinResponse.errorCode()).message()));
             }
         }
     }
@@ -381,7 +378,7 @@ public abstract class AbstractCoordinator implements Closeable {
         // send follower's sync group with an empty assignment
         SyncGroupRequest request = new SyncGroupRequest(groupId, generation,
                 memberId, Collections.<String, ByteBuffer>emptyMap());
-        log.debug("Issuing follower SyncGroup ({}: {}) to coordinator {}", ApiKeys.SYNC_GROUP, request, this.coordinator.id());
+        log.debug("Sending follower SyncGroup ({}) to coordinator {}", request, this.coordinator.id());
         return sendSyncGroupRequest(request);
     }
 
@@ -392,7 +389,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     joinResponse.members());
 
             SyncGroupRequest request = new SyncGroupRequest(groupId, generation, memberId, groupAssignment);
-            log.debug("Issuing leader SyncGroup ({}: {}) to coordinator {}", ApiKeys.SYNC_GROUP, request, this.coordinator.id());
+            log.debug("Sending leader SyncGroup ({}) to coordinator {}", request, this.coordinator.id());
             return sendSyncGroupRequest(request);
         } catch (RuntimeException e) {
             return RequestFuture.failure(e);
@@ -418,6 +415,7 @@ public abstract class AbstractCoordinator implements Closeable {
                            RequestFuture<ByteBuffer> future) {
             Errors error = Errors.forCode(syncResponse.errorCode());
             if (error == Errors.NONE) {
+                log.info("Successfully joined group {} with generation {}", groupId, generation);
                 log.debug("Received successful sync group response for group {}: {}", groupId, syncResponse.toStruct());
                 sensors.syncLatency.record(response.requestLatencyMs());
                 future.complete(syncResponse.memberAssignment());
@@ -426,20 +424,20 @@ public abstract class AbstractCoordinator implements Closeable {
                 if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(new GroupAuthorizationException(groupId));
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
-                    log.info("SyncGroup for group {} failed due to coordinator rebalance, rejoining the group", groupId);
+                    log.debug("SyncGroup for group {} failed due to coordinator rebalance, rejoining the group", groupId);
                     future.raise(error);
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
                         || error == Errors.ILLEGAL_GENERATION) {
-                    log.info("SyncGroup for group {} failed due to {}, rejoining the group", groupId, error);
+                    log.debug("SyncGroup for group {} failed due to {}, rejoining the group", groupId, error);
                     AbstractCoordinator.this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
                     future.raise(error);
                 } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
                         || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
-                    log.info("SyncGroup for group {} failed due to {}, will find new coordinator and rejoin", groupId, error);
+                    log.debug("SyncGroup for group {} failed due to {}, will find new coordinator and rejoin", groupId, error);
                     coordinatorDead();
                     future.raise(error);
                 } else {
-                    future.raise(new KafkaException("Unexpected error from SyncGroup: " + error.exception().getMessage()));
+                    future.raise(new KafkaException("Unexpected error from SyncGroup: " + error.message()));
                 }
             }
         }
@@ -473,7 +471,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private void handleGroupMetadataResponse(ClientResponse resp, RequestFuture<Void> future) {
-        log.debug("Group metadata response {}", resp);
+        log.debug("Received group metadata response {}", resp);
 
         if (!coordinatorUnknown()) {
             // We already found the coordinator, so ignore the request
@@ -524,7 +522,7 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     protected void coordinatorDead() {
         if (this.coordinator != null) {
-            log.info("Marking the coordinator {} dead.", this.coordinator.id());
+            log.info("Marking the coordinator {} dead. Find the new coordinator and retry.", this.coordinator.id());
             this.coordinator = null;
         }
     }
@@ -566,7 +564,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
             @Override
             public void onFailure(RuntimeException e) {
-                log.info("LeaveGroup request failed with error", e);
+                log.debug("LeaveGroup request failed with error", e);
             }
         });
 
@@ -614,19 +612,19 @@ public abstract class AbstractCoordinator implements Closeable {
                 future.complete(null);
             } else if (errorCode == Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code()
                     || errorCode == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
-                log.info("Attempt to heart beat failed since coordinator is either not started or not valid, marking it as dead.");
+                log.debug("Attempt to heart beat failed since coordinator is either not started or not valid, marking it as dead.");
                 coordinatorDead();
                 future.raise(Errors.forCode(errorCode));
             } else if (errorCode == Errors.REBALANCE_IN_PROGRESS.code()) {
-                log.info("Attempt to heart beat failed since the group is rebalancing, try to re-join group.");
+                log.debug("Attempt to heart beat failed since the group is rebalancing, try to re-join group.");
                 AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.REBALANCE_IN_PROGRESS);
             } else if (errorCode == Errors.ILLEGAL_GENERATION.code()) {
-                log.info("Attempt to heart beat failed since generation id is not legal, try to re-join group.");
+                log.debug("Attempt to heart beat failed since generation id is not legal, try to re-join group.");
                 AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.ILLEGAL_GENERATION);
             } else if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
-                log.info("Attempt to heart beat failed since member id is not valid, reset it and try to re-join group.");
+                log.debug("Attempt to heart beat failed since member id is not valid, reset it and try to re-join group.");
                 memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
                 AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.UNKNOWN_MEMBER_ID);
@@ -634,7 +632,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 future.raise(new GroupAuthorizationException(groupId));
             } else {
                 future.raise(new KafkaException("Unexpected errorCode in heartbeat response: "
-                        + Errors.forCode(errorCode).exception().getMessage()));
+                        + Errors.forCode(errorCode).message()));
             }
         }
     }

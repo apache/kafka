@@ -447,7 +447,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 throw e;
             } catch (Exception e) {
                 // consistent with async auto-commit failures, we do not propagate the exception
-                log.warn("Auto offset commit failed: ", e.getMessage());
+                log.warn("Auto offset commit failed: {}", e.getMessage());
             }
         }
     }
@@ -525,7 +525,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         // update the local cache only if the partition is still assigned
                         subscriptions.committed(tp, offsetAndMetadata);
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                    log.error("Unauthorized to commit for group {}", groupId);
+                    log.error("Unauthorized to commit offsets for group {}", groupId);
                     future.raise(new GroupAuthorizationException(groupId));
                     return;
                 } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
@@ -533,18 +533,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 } else if (error == Errors.OFFSET_METADATA_TOO_LARGE
                         || error == Errors.INVALID_COMMIT_OFFSET_SIZE) {
                     // raise the error to the user
-                    log.info("Offset commit for group {} failed on partition {} due to {}, will retry", groupId, tp, error);
+                    log.debug("Offset commit for group {} failed on partition {}: {}", groupId, tp, error.message());
                     future.raise(error);
                     return;
                 } else if (error == Errors.GROUP_LOAD_IN_PROGRESS) {
                     // just retry
-                    log.info("Offset commit for group {} failed due to {}, will retry", groupId, error);
+                    log.debug("Offset commit for group {} failed due to {}, will retry", groupId, error);
                     future.raise(error);
                     return;
                 } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
                         || error == Errors.NOT_COORDINATOR_FOR_GROUP
                         || error == Errors.REQUEST_TIMED_OUT) {
-                    log.info("Offset commit for group {} failed due to {}, will find new coordinator and retry", groupId, error);
+                    log.debug("Offset commit for group {} failed due to {}, which indicates that the coordinator" +
+                            "is not available, will find new coordinator and retry", groupId, error);
                     coordinatorDead();
                     future.raise(error);
                     return;
@@ -552,13 +553,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         || error == Errors.ILLEGAL_GENERATION
                         || error == Errors.REBALANCE_IN_PROGRESS) {
                     // need to re-join group
-                    log.error("Error {} occurred while committing offsets for group {}", error, groupId);
+                    log.info("Offset commit for group {} failed due to {}, will find new coordinator and retry", groupId, error);
                     subscriptions.needReassignment();
-                    future.raise(new CommitFailedException("Commit cannot be completed due to group rebalance"));
+                    future.raise(new CommitFailedException("Commit cannot be completed since the group has already " +
+                            "rebalanced and assigned the partitions to another member. This most likely means that " +
+                            "the consumer has taken longer than the configured session.timeout.ms to handle a batch " +
+                            "of messages returned from poll(). You can address this either by increasing the session " +
+                            "timeout or by reducing the maximum size of batches returned in poll() by with " +
+                            "max.poll.records."));
                     return;
                 } else {
-                    log.error("Error committing partition {} at offset {}: {}", tp, offset, error.exception().getMessage());
-                    future.raise(new KafkaException("Unexpected error in commit: " + error.exception().getMessage()));
+                    log.error("Error committing partition {} at offset {}: {}", tp, offset, error.message());
+                    future.raise(new KafkaException("Unexpected error in commit: " + error.message()));
                     return;
                 }
             }
@@ -607,8 +613,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 OffsetFetchResponse.PartitionData data = entry.getValue();
                 if (data.hasError()) {
                     log.debug("Error fetching offset for topic-partition {}: {}", tp, Errors.forCode(data.errorCode)
-                            .exception()
-                            .getMessage());
+                            .message());
                     if (data.errorCode == Errors.GROUP_LOAD_IN_PROGRESS.code()) {
                         // just retry
                         future.raise(Errors.GROUP_LOAD_IN_PROGRESS);
@@ -623,7 +628,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         future.raise(Errors.forCode(data.errorCode));
                     } else {
                         future.raise(new KafkaException("Unexpected error in fetch offset response: "
-                                + Errors.forCode(data.errorCode).exception().getMessage()));
+                                + Errors.forCode(data.errorCode).message()));
                     }
                     return;
                 } else if (data.offset >= 0) {
