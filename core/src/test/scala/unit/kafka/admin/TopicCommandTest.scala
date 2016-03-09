@@ -26,6 +26,7 @@ import kafka.server.ConfigType
 import kafka.admin.TopicCommand.TopicCommandOptions
 import kafka.utils.ZkUtils._
 import kafka.coordinator.GroupCoordinator
+import org.apache.kafka.common.CommonDefs
 
 class TopicCommandTest extends ZooKeeperTestHarness with Logging {
 
@@ -86,12 +87,12 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging {
     // create the offset topic
     val createOffsetTopicOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
       "--replication-factor", "1",
-      "--topic", GroupCoordinator.GroupMetadataTopicName))
+      "--topic", CommonDefs.GROUP_METADATA_TOPIC_NAME))
     TopicCommand.createTopic(zkUtils, createOffsetTopicOpts)
 
-    // try to delete the GroupCoordinator.GroupMetadataTopicName and make sure it doesn't
-    val deleteOffsetTopicOpts = new TopicCommandOptions(Array("--topic", GroupCoordinator.GroupMetadataTopicName))
-    val deleteOffsetTopicPath = getDeleteTopicPath(GroupCoordinator.GroupMetadataTopicName)
+    // try to delete the CommonDefs.GROUP_METADATA_TOPIC_NAME and make sure it doesn't
+    val deleteOffsetTopicOpts = new TopicCommandOptions(Array("--topic", CommonDefs.GROUP_METADATA_TOPIC_NAME))
+    val deleteOffsetTopicPath = getDeleteTopicPath(CommonDefs.GROUP_METADATA_TOPIC_NAME)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkUtils.zkClient.exists(deleteOffsetTopicPath))
     intercept[AdminOperationException] {
         TopicCommand.deleteTopic(zkUtils, deleteOffsetTopicOpts)
