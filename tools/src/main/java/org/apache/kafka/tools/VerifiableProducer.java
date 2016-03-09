@@ -74,13 +74,18 @@ public class VerifiableProducer {
     // Hook to trigger producing thread to stop sending messages
     private boolean stopProducing = false;
 
+    // Prefix (plus a dot separator) added to every value produced by verifiable producer
+    // if null, then values are produced without a prefix
+    private Integer valuePrefix;
+
     public VerifiableProducer(
-            Properties producerProps, String topic, int throughput, int maxMessages) {
+            Properties producerProps, String topic, int throughput, int maxMessages, Integer valuePrefix) {
 
         this.topic = topic;
         this.throughput = throughput;
         this.maxMessages = maxMessages;
         this.producer = new KafkaProducer<String, String>(producerProps);
+        this.valuePrefix = valuePrefix;
     }
 
     /** Get the command-line argument parser. */
@@ -138,6 +143,14 @@ public class VerifiableProducer {
                 .metavar("CONFIG_FILE")
                 .help("Producer config properties file.");
 
+        parser.addArgument("--value-prefix")
+            .action(store())
+            .required(false)
+            .type(Integer.class)
+            .metavar("VALUE-PREFIX")
+            .dest("valuePrefix")
+            .help("If specified, each produced value will have this prefix with a dot separator");
+
         return parser;
     }
     
@@ -176,6 +189,7 @@ public class VerifiableProducer {
             String topic = res.getString("topic");
             int throughput = res.getInt("throughput");
             String configFile = res.getString("producer.config");
+            Integer valuePrefix = res.getInt("valuePrefix");
 
             Properties producerProps = new Properties();
             producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
@@ -194,7 +208,7 @@ public class VerifiableProducer {
                 }
             }
 
-            producer = new VerifiableProducer(producerProps, topic, throughput, maxMessages);
+            producer = new VerifiableProducer(producerProps, topic, throughput, maxMessages, valuePrefix);
         } catch (ArgumentParserException e) {
             if (args.length == 0) {
                 parser.printHelp();
@@ -220,6 +234,14 @@ public class VerifiableProducer {
                 System.out.println(errorString(e, key, value, System.currentTimeMillis()));
             }
         }
+    }
+
+    /** Returns a string to publish: ether 'valuePrefix'.'val' or 'val' **/
+    public String getValue(long val) {
+        if (this.valuePrefix != null) {
+            return String.format("%d.%d", this.valuePrefix.intValue(), val);
+        }
+        return String.format("%d", val);
     }
 
     /** Close the producer to flush any remaining messages. */
@@ -337,7 +359,8 @@ public class VerifiableProducer {
                 break;
             }
             long sendStartMs = System.currentTimeMillis();
-            producer.send(null, String.format("%d", i));
+
+            producer.send(null, producer.getValue(i));
 
             if (throttler.shouldThrottle(i, sendStartMs)) {
                 throttler.throttle();

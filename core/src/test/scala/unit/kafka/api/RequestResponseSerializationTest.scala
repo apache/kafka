@@ -287,4 +287,5 @@ class RequestResponseSerializationTest extends JUnitSuite {
     // new response should have 4 bytes more than the old response since delayTime is an INT32
     assertEquals(oldClientResponse.sizeInBytes + 4, newClientResponse.sizeInBytes)
   }
+
 }

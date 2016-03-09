@@ -33,7 +33,12 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
+/**
+ * Configuration for Kafka Streams. Documentation for these configurations can be found in the <a
+ * href="http://kafka.apache.org/documentation.html#streamsconfigs">Kafka documentation</a>
+ */
 public class StreamsConfig extends AbstractConfig {
 
     private static final ConfigDef CONFIG;
@@ -70,10 +75,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String STATE_CLEANUP_DELAY_MS_CONFIG = "state.cleanup.delay.ms";
     private static final String STATE_CLEANUP_DELAY_MS_DOC = "The amount of time in milliseconds to wait before deleting state when a partition has migrated.";
 
-    /** <code>total.records.to.process</code> */
-    public static final String TOTAL_RECORDS_TO_PROCESS = "total.records.to.process";
-    private static final String TOTAL_RECORDS_TO_DOC = "Exit after processing this many records.";
-
     /** <code>timestamp.extractor</code> */
     public static final String TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "timestamp.extractor";
     private static final String TIMESTAMP_EXTRACTOR_CLASS_DOC = "Timestamp extractor class that implements the <code>TimestampExtractor</code> interface.";
@@ -85,6 +86,10 @@ public class StreamsConfig extends AbstractConfig {
     /** <code>job.id</code> */
     public static final String JOB_ID_CONFIG = "job.id";
     public static final String JOB_ID_DOC = "An id string to identify for the stream job. It is used as 1) the default client-id prefix, 2) the group-id for membership management, 3) the changelog topic prefix.";
+
+    /** <code>replication.factor</code> */
+    public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
+    public static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the job.";
 
     /** <code>key.serializer</code> */
     public static final String KEY_SERIALIZER_CLASS_CONFIG = ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -113,6 +118,9 @@ public class StreamsConfig extends AbstractConfig {
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
+    /** <code>auto.offset.reset</code> */
+    public static final String AUTO_OFFSET_RESET_CONFIG = ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+
     private static final String WALLCLOCK_TIMESTAMP_EXTRACTOR = "org.apache.kafka.streams.processor.internals.WallclockTimestampExtractor";
 
     static {
@@ -139,6 +147,11 @@ public class StreamsConfig extends AbstractConfig {
                                         "/tmp/kafka-streams",
                                         Importance.MEDIUM,
                                         STATE_DIR_DOC)
+                                .define(REPLICATION_FACTOR_CONFIG,
+                                        Type.INT,
+                                        1,
+                                        Importance.MEDIUM,
+                                        REPLICATION_FACTOR_DOC)
                                 .define(KEY_SERIALIZER_CLASS_CONFIG,        // required with no default value
                                         Type.CLASS,
                                         Importance.HIGH,
@@ -195,11 +208,12 @@ public class StreamsConfig extends AbstractConfig {
                                         60000,
                                         Importance.LOW,
                                         STATE_CLEANUP_DELAY_MS_DOC)
-                                .define(TOTAL_RECORDS_TO_PROCESS,
-                                        Type.LONG,
-                                        -1L,
-                                        Importance.LOW,
-                                        TOTAL_RECORDS_TO_DOC)
+                                .define(AUTO_OFFSET_RESET_CONFIG,
+                                        Type.STRING,
+                                        "latest",
+                                        in("latest", "earliest", "none"),
+                                        Importance.MEDIUM,
+                                        ConsumerConfig.AUTO_OFFSET_RESET_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         "",
@@ -258,10 +272,9 @@ public class StreamsConfig extends AbstractConfig {
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         // remove properties that are not required for consumers
+        removeStreamsSpecificConfigs(props);
         props.remove(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG);
         props.remove(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG);
-        props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
-        props.remove(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
         return props;
     }
@@ -273,13 +286,23 @@ public class StreamsConfig extends AbstractConfig {
         props.put(ProducerConfig.LINGER_MS_CONFIG, "100");
 
         // remove properties that are not required for producers
+        removeStreamsSpecificConfigs(props);
         props.remove(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG);
         props.remove(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
-        props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        props.remove(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
 
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
 
         return props;
+    }
+
+    private void removeStreamsSpecificConfigs(Map<String, Object> props) {
+        props.remove(StreamsConfig.JOB_ID_CONFIG);
+        props.remove(StreamsConfig.STATE_DIR_CONFIG);
+        props.remove(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        props.remove(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
+        props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        props.remove(InternalConfig.STREAM_THREAD_INSTANCE);
     }
 
     public Serializer keySerializer() {

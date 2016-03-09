@@ -18,11 +18,14 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.EasyMock;
+import org.easymock.IAnswer;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 
+import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.partialMockBuilder;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
@@ -33,22 +36,32 @@ public class WorkerTaskTest {
 
     @Test
     public void standardStartup() {
+        ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
+
+        TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
+
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
-                .withConstructor(ConnectorTaskId.class)
-                .withArgs(new ConnectorTaskId("foo", 0))
+                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class)
+                .withArgs(taskId, statusListener)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
                 .createStrictMock();
 
         workerTask.initialize(EMPTY_TASK_PROPS);
-        EasyMock.expectLastCall();
+        expectLastCall();
 
         workerTask.execute();
-        EasyMock.expectLastCall();
+        expectLastCall();
+
+        statusListener.onStartup(taskId);
+        expectLastCall();
 
         workerTask.close();
-        EasyMock.expectLastCall();
+        expectLastCall();
+
+        statusListener.onShutdown(taskId);
+        expectLastCall();
 
         replay(workerTask);
 
@@ -62,9 +75,13 @@ public class WorkerTaskTest {
 
     @Test
     public void stopBeforeStarting() {
+        ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
+
+        TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
+
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
-                .withConstructor(ConnectorTaskId.class)
-                .withArgs(new ConnectorTaskId("foo", 0))
+                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class)
+                .withArgs(taskId, statusListener)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
@@ -88,5 +105,62 @@ public class WorkerTaskTest {
         verify(workerTask);
     }
 
+    @Test
+    public void cancelBeforeStopping() throws Exception {
+        ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
+
+        TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
+
+        WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
+                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class)
+                .withArgs(taskId, statusListener)
+                .addMockedMethod("initialize")
+                .addMockedMethod("execute")
+                .addMockedMethod("close")
+                .createStrictMock();
+
+        final CountDownLatch stopped = new CountDownLatch(1);
+        final Thread thread = new Thread() {
+            @Override
+            public void run() {
+                try {
+                    stopped.await();
+                } catch (Exception e) {
+                }
+            }
+        };
+
+        workerTask.initialize(EMPTY_TASK_PROPS);
+        EasyMock.expectLastCall();
+
+        workerTask.execute();
+        expectLastCall().andAnswer(new IAnswer<Void>() {
+            @Override
+            public Void answer() throws Throwable {
+                thread.start();
+                return null;
+            }
+        });
+
+        statusListener.onStartup(taskId);
+        expectLastCall();
+
+        workerTask.close();
+        expectLastCall();
+
+        // there should be no call to onShutdown()
+
+        replay(workerTask);
+
+        workerTask.initialize(EMPTY_TASK_PROPS);
+        workerTask.run();
+
+        workerTask.stop();
+        workerTask.cancel();
+        stopped.countDown();
+        thread.join();
+
+        verify(workerTask);
+    }
 
 }

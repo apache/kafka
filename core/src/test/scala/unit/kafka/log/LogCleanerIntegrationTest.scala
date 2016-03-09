@@ -99,7 +99,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
       if (entry.message.compressionCodec == NoCompressionCodec)
         Stream.cons(entry, Stream.empty).iterator
       else
-        ByteBufferMessageSet.deepIterator(entry.message)
+        ByteBufferMessageSet.deepIterator(entry)
     }) yield {
       val key = TestUtils.readString(messageAndOffset.message.key).toInt
       val value = TestUtils.readString(messageAndOffset.message.payload).toInt

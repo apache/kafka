@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -26,7 +27,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
@@ -43,7 +43,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -55,7 +54,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.channels.FileLock;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -96,7 +94,6 @@ public class StreamThread extends Thread {
     private final long pollTimeMs;
     private final long cleanTimeMs;
     private final long commitTimeMs;
-    private final long totalRecordsToProcess;
     private final StreamsMetricsImpl sensors;
 
     private StreamPartitionAssignor partitionAssignor = null;
@@ -138,14 +135,15 @@ public class StreamThread extends Thread {
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             try {
                 commitAll();
-                // TODO: right now upon partition revocation, we always remove all the tasks;
-                // this behavior can be optimized to only remove affected tasks in the future
-                removeStreamTasks();
-                removeStandbyTasks();
                 lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
+            } finally {
+                // TODO: right now upon partition revocation, we always remove all the tasks;
+                // this behavior can be optimized to only remove affected tasks in the future
+                removeStreamTasks();
+                removeStandbyTasks();
             }
         }
     };
@@ -200,7 +198,6 @@ public class StreamThread extends Thread {
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.cleanTimeMs = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
-        this.totalRecordsToProcess = config.getLong(StreamsConfig.TOTAL_RECORDS_TO_PROCESS);
 
         this.lastClean = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommit = time.milliseconds();
@@ -217,22 +214,25 @@ public class StreamThread extends Thread {
     }
 
     private Producer<byte[], byte[]> createProducer() {
-        log.info("Creating producer client for stream thread [" + this.getName() + "]");
-        return new KafkaProducer<>(config.getProducerConfigs(this.clientId),
+        String threadName = this.getName();
+        log.info("Creating producer client for stream thread [" + threadName + "]");
+        return new KafkaProducer<>(config.getProducerConfigs(this.clientId + "-" + threadName),
                 new ByteArraySerializer(),
                 new ByteArraySerializer());
     }
 
     private Consumer<byte[], byte[]> createConsumer() {
-        log.info("Creating consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getConsumerConfigs(this, this.jobId, this.clientId),
+        String threadName = this.getName();
+        log.info("Creating consumer client for stream thread [" + threadName + "]");
+        return new KafkaConsumer<>(config.getConsumerConfigs(this, this.jobId, this.clientId + "-" + threadName),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
 
     private Consumer<byte[], byte[]> createRestoreConsumer() {
-        log.info("Creating restore consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(this.clientId),
+        String threadName = this.getName();
+        log.info("Creating restore consumer client for stream thread [" + threadName + "]");
+        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(this.clientId + "-" + threadName),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
@@ -273,11 +273,15 @@ public class StreamThread extends Thread {
     private void shutdown() {
         log.info("Shutting down stream thread [" + this.getName() + "]");
 
+        // Exceptions should not prevent this call from going through all shutdown steps
         try {
             commitAll();
         } catch (Throwable e) {
             // already logged in commitAll()
         }
+
+        // Close standby tasks before closing the restore consumer since closing standby tasks uses the restore consumer.
+        removeStandbyTasks();
 
         // We need to first close the underlying clients before closing the state
         // manager, for example we need to make sure producer's message sends
@@ -299,13 +303,7 @@ public class StreamThread extends Thread {
             log.error("Failed to close restore consumer in thread [" + this.getName() + "]: ", e);
         }
 
-        // Exceptions should not prevent this call from going through all shutdown steps
-        try {
-            removeStreamTasks();
-            removeStandbyTasks();
-        } catch (Throwable e) {
-            // already logged in removeStreamTasks() and removeStandbyTasks()
-        }
+        removeStreamTasks();
 
         log.info("Stream thread shutdown complete [" + this.getName() + "]");
     }
@@ -314,8 +312,6 @@ public class StreamThread extends Thread {
         int totalNumBuffered = 0;
         long lastPoll = 0L;
         boolean requiresPoll = true;
-
-        ensureCopartitioning(builder.copartitionGroups());
 
         consumer.subscribe(new ArrayList<>(sourceTopics), rebalanceListener);
 
@@ -425,11 +421,6 @@ public class StreamThread extends Thread {
             return false;
         }
 
-        if (totalRecordsToProcess >= 0 && recordsProcessed >= totalRecordsToProcess) {
-            log.debug("Shutting down as we've reached the user configured limit of {} records to process.", totalRecordsToProcess);
-            return false;
-        }
-
         return true;
     }
 
@@ -489,7 +480,11 @@ public class StreamThread extends Thread {
     private void commitOne(AbstractTask task, long now) {
         try {
             task.commit();
+        } catch (CommitFailedException e) {
+            // commit failed. Just log it.
+            log.warn("Failed to commit " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
         } catch (KafkaException e) {
+            // commit failed due to an unexpected exception. Log it and rethrow the exception.
             log.error("Failed to commit " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
             throw e;
         }
@@ -627,15 +622,19 @@ public class StreamThread extends Thread {
     }
 
     private void removeStreamTasks() {
-        for (StreamTask task : activeTasks.values()) {
-            closeOne(task);
+        try {
+            for (StreamTask task : activeTasks.values()) {
+                closeOne(task);
+            }
+            prevTasks.clear();
+            prevTasks.addAll(activeTasks.keySet());
+
+            activeTasks.clear();
+            activeTasksByPartition.clear();
+
+        } catch (Exception e) {
+            log.error("Failed to remove stream tasks in thread [" + this.getName() + "]: ", e);
         }
-
-        prevTasks.clear();
-        prevTasks.addAll(activeTasks.keySet());
-
-        activeTasks.clear();
-        activeTasksByPartition.clear();
     }
 
     private void closeOne(AbstractTask task) {
@@ -644,7 +643,6 @@ public class StreamThread extends Thread {
             task.close();
         } catch (StreamsException e) {
             log.error("Failed to close a " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
-            throw e;
         }
         sensors.taskDestructionSensor.record();
     }
@@ -701,39 +699,19 @@ public class StreamThread extends Thread {
 
 
     private void removeStandbyTasks() {
-        for (StandbyTask task : standbyTasks.values()) {
-            closeOne(task);
-        }
-        // un-assign the change log partitions
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
-
-        standbyTasks.clear();
-        standbyTasksByPartition.clear();
-        standbyRecords.clear();
-    }
-
-    private void ensureCopartitioning(Collection<Set<String>> copartitionGroups) {
-        for (Set<String> copartitionGroup : copartitionGroups) {
-            ensureCopartitioning(copartitionGroup);
-        }
-    }
-
-    private void ensureCopartitioning(Set<String> copartitionGroup) {
-        int numPartitions = -1;
-
-        for (String topic : copartitionGroup) {
-            List<PartitionInfo> infos = consumer.partitionsFor(topic);
-
-            if (infos == null)
-                throw new TopologyBuilderException("Topic not found: " + topic);
-
-            if (numPartitions == -1) {
-                numPartitions = infos.size();
-            } else if (numPartitions != infos.size()) {
-                String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
-                Arrays.sort(topics);
-                throw new TopologyBuilderException("Topics not copartitioned: [" + Utils.mkString(Arrays.asList(topics), ",") + "]");
+        try {
+            for (StandbyTask task : standbyTasks.values()) {
+                closeOne(task);
             }
+            standbyTasks.clear();
+            standbyTasksByPartition.clear();
+            standbyRecords.clear();
+
+            // un-assign the change log partitions
+            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+
+        } catch (Exception e) {
+            log.error("Failed to remove standby tasks in thread [" + this.getName() + "]: ", e);
         }
     }
 

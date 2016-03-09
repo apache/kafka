@@ -21,13 +21,11 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 
-// TODO: Javadoc needs to be updated.
 /**
- * KTable is an abstraction of a change log stream.
+ * KTable is an abstraction of a change log stream from a primary-keyed table.
  *
- *
- * @param <K> the type of keys
- * @param <V> the type of values
+ * @param <K> Type of primary keys
+ * @param <V> Type of value changes
  */
 public interface KTable<K, V> {
 
@@ -190,15 +188,15 @@ public interface KTable<K, V> {
      * @param selector the KeyValue mapper that select the aggregate key
      * @param name the name of the resulted table
      * @param <K1>   the key type of the aggregated table
-     * @param <V1>   the value type of the aggregated table
      * @return the instance of KTable
      */
-    <K1, V1> KTable<K1, Long> count(KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                    Serializer<K1> keySerializer,
-                                    Serializer<V1> valueSerializer,
-                                    Serializer<Long> aggValueSerializer,
-                                    Deserializer<K1> keyDeserializer,
-                                    Deserializer<V1> valueDeserializer,
-                                    Deserializer<Long> aggValueDeserializer,
-                                    String name);
+    <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector,
+                                Serializer<K1> keySerializer,
+                                Serializer<V> valueSerializer,
+                                Serializer<Long> aggValueSerializer,
+                                Deserializer<K1> keyDeserializer,
+                                Deserializer<V> valueDeserializer,
+                                Deserializer<Long> aggValueDeserializer,
+                                String name);
+
 }

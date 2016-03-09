@@ -18,7 +18,7 @@
 
 import joptsimple.{OptionSpec, OptionSet, OptionParser}
 import scala.collection.Set
- import java.util.Properties
+import java.util.Properties
 
  /**
  * Helper functions for dealing with command line utilities

@@ -82,7 +82,7 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>auto.offset.reset</code>
      */
     public static final String AUTO_OFFSET_RESET_CONFIG = "auto.offset.reset";
-    private static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server (e.g. because that data has been deleted): <ul><li>earliest: automatically reset the offset to the earliest offset<li>latest: automatically reset the offset to the latest offset</li><li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li><li>anything else: throw exception to the consumer.</li></ul>";
+    public static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server (e.g. because that data has been deleted): <ul><li>earliest: automatically reset the offset to the earliest offset<li>latest: automatically reset the offset to the latest offset</li><li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li><li>anything else: throw exception to the consumer.</li></ul>";
 
     /**
      * <code>fetch.min.bytes</code>
@@ -167,6 +167,10 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String INTERCEPTOR_CLASSES_DOC = "A list of classes to use as interceptors. "
                                                         + "Implementing the <code>ConsumerInterceptor</code> interface allows you to intercept (and possibly mutate) records "
                                                         + "received by the consumer. By default, there are no interceptors.";
+
+    /** <code>max.poll.records</code> */
+    public static final String MAX_POLL_RECORDS_CONFIG = "max.poll.records";
+    private static final String MAX_POLL_RECORDS_DOC = "The maximum number of records returned in a single call to poll().";
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
@@ -306,6 +310,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         null,
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
+                                .define(MAX_POLL_RECORDS_CONFIG,
+                                        Type.INT,
+                                        Integer.MAX_VALUE,
+                                        atLeast(1),
+                                        Importance.MEDIUM,
+                                        MAX_POLL_RECORDS_DOC)
 
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,

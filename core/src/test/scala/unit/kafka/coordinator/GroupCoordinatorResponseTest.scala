@@ -17,12 +17,14 @@
 
 package kafka.coordinator
 
+import org.apache.kafka.common.record.Record
 import org.junit.Assert._
 
 import kafka.common.{OffsetAndMetadata, TopicAndPartition}
-import kafka.message.MessageSet
+import kafka.message.{Message, MessageSet}
 import kafka.server.{ReplicaManager, KafkaConfig}
 import kafka.utils._
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{OffsetCommitRequest, JoinGroupRequest}
@@ -46,8 +48,8 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   type SyncGroupCallback = (Array[Byte], Short) => Unit
   type HeartbeatCallbackParams = Short
   type HeartbeatCallback = Short => Unit
-  type CommitOffsetCallbackParams = Map[TopicAndPartition, Short]
-  type CommitOffsetCallback = Map[TopicAndPartition, Short] => Unit
+  type CommitOffsetCallbackParams = Map[TopicPartition, Short]
+  type CommitOffsetCallback = Map[TopicPartition, Short] => Unit
   type LeaveGroupCallbackParams = Short
   type LeaveGroupCallback = Short => Unit
 
@@ -87,7 +89,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     EasyMock.expect(zkUtils.getPartitionAssignmentForTopics(Seq(GroupCoordinator.GroupMetadataTopicName))).andReturn(ret)
     EasyMock.replay(zkUtils)
 
-    groupCoordinator = GroupCoordinator.create(KafkaConfig.fromProps(props), zkUtils, replicaManager)
+    groupCoordinator = GroupCoordinator(KafkaConfig.fromProps(props), zkUtils, replicaManager, new SystemTime)
     groupCoordinator.startup()
 
     // add the partition into the owned partition list
@@ -572,7 +574,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testCommitOffsetFromUnknownGroup() {
     val generationId = 1
-    val tp = new TopicAndPartition("topic", 0)
+    val tp = new TopicPartition("topic", 0)
     val offset = OffsetAndMetadata(0)
 
     val commitOffsetResult = commitOffsets(groupId, memberId, generationId, immutable.Map(tp -> offset))
@@ -581,7 +583,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
   @Test
   def testCommitOffsetWithDefaultGeneration() {
-    val tp = new TopicAndPartition("topic", 0)
+    val tp = new TopicPartition("topic", 0)
     val offset = OffsetAndMetadata(0)
 
     val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
@@ -592,7 +594,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testCommitOffsetInAwaitingSync() {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
-    val tp = new TopicAndPartition("topic", 0)
+    val tp = new TopicPartition("topic", 0)
     val offset = OffsetAndMetadata(0)
 
     val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols)
@@ -833,9 +835,10 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
       EasyMock.capture(capturedArgument))).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
         Map(new TopicPartition(GroupCoordinator.GroupMetadataTopicName, groupPartitionId) ->
-          new PartitionResponse(Errors.NONE.code, 0L)
+          new PartitionResponse(Errors.NONE.code, 0L, Record.NO_TIMESTAMP)
         )
       )})
+    EasyMock.expect(replicaManager.getMessageFormatVersion(EasyMock.anyObject())).andReturn(Some(Message.MagicValue_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
     groupCoordinator.handleSyncGroup(groupId, generation, leaderId, assignment, responseCallback)
@@ -897,7 +900,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   private def commitOffsets(groupId: String,
                             consumerId: String,
                             generationId: Int,
-                            offsets: immutable.Map[TopicAndPartition, OffsetAndMetadata]): CommitOffsetCallbackParams = {
+                            offsets: immutable.Map[TopicPartition, OffsetAndMetadata]): CommitOffsetCallbackParams = {
     val (responseFuture, responseCallback) = setupCommitOffsetsCallback
 
     val capturedArgument: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
@@ -909,9 +912,10 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
       EasyMock.capture(capturedArgument))).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
         Map(new TopicPartition(GroupCoordinator.GroupMetadataTopicName, groupPartitionId) ->
-          new PartitionResponse(Errors.NONE.code, 0L)
+          new PartitionResponse(Errors.NONE.code, 0L, Record.NO_TIMESTAMP)
         )
       )})
+    EasyMock.expect(replicaManager.getMessageFormatVersion(EasyMock.anyObject())).andReturn(Some(Message.MagicValue_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
     groupCoordinator.handleCommitOffsets(groupId, consumerId, generationId, offsets, responseCallback)
@@ -922,6 +926,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val (responseFuture, responseCallback) = setupHeartbeatCallback
 
     EasyMock.expect(replicaManager.getPartition(GroupCoordinator.GroupMetadataTopicName, groupPartitionId)).andReturn(None)
+    EasyMock.expect(replicaManager.getMessageFormatVersion(EasyMock.anyObject())).andReturn(Some(Message.MagicValue_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
     groupCoordinator.handleLeaveGroup(groupId, consumerId, responseCallback)

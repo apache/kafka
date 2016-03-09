@@ -27,7 +27,7 @@ import kafka.common._
 import kafka.controller.KafkaController
 import kafka.coordinator.{GroupCoordinator, JoinGroupResult}
 import kafka.log._
-import kafka.message.{ByteBufferMessageSet, MessageSet}
+import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
 import kafka.network._
 import kafka.network.RequestChannel.{Session, Response}
 import kafka.security.auth.{Authorizer, ClusterAction, Group, Create, Describe, Operation, Read, Resource, Topic, Write}
@@ -35,11 +35,12 @@ import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{InvalidTopicException, NotLeaderForPartitionException, UnknownTopicOrPartitionException,
 ClusterAuthorizationException}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{ProtoUtils, ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse,
 DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse,
 LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse,
-StopReplicaRequest, StopReplicaResponse, ProduceRequest, ProduceResponse, UpdateMetadataRequest, UpdateMetadataResponse}
+StopReplicaRequest, StopReplicaResponse, ProduceRequest, ProduceResponse, UpdateMetadataRequest, UpdateMetadataResponse,
+OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Node}
@@ -209,107 +210,108 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Handle an offset commit request
    */
   def handleOffsetCommitRequest(request: RequestChannel.Request) {
-    val offsetCommitRequest = request.requestObj.asInstanceOf[OffsetCommitRequest]
+    val header = request.header
+    val offsetCommitRequest = request.body.asInstanceOf[OffsetCommitRequest]
 
-    // reject the request immediately if not authorized to the group
+    // reject the request if not authorized to the group
     if (!authorize(request.session, Read, new Resource(Group, offsetCommitRequest.groupId))) {
-      val errors = offsetCommitRequest.requestInfo.mapValues(_ => Errors.GROUP_AUTHORIZATION_FAILED.code)
-      val response = OffsetCommitResponse(errors, offsetCommitRequest.correlationId)
-      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, response)))
-      return
-    }
-
-    // filter non-exist topics
-    val invalidRequestsInfo = offsetCommitRequest.requestInfo.filter { case (topicAndPartition, offsetMetadata) =>
-      !metadataCache.contains(topicAndPartition.topic)
-    }
-    val filteredRequestInfo = (offsetCommitRequest.requestInfo -- invalidRequestsInfo.keys)
-
-    val (authorizedRequestInfo, unauthorizedRequestInfo) =  filteredRequestInfo.partition {
-      case (topicAndPartition, offsetMetadata) =>
-        authorize(request.session, Read, new Resource(Topic, topicAndPartition.topic))
-    }
-
-    // the callback for sending an offset commit response
-    def sendResponseCallback(commitStatus: immutable.Map[TopicAndPartition, Short]) {
-      val mergedCommitStatus = commitStatus ++ unauthorizedRequestInfo.mapValues(_ => Errors.TOPIC_AUTHORIZATION_FAILED.code)
-
-      mergedCommitStatus.foreach { case (topicAndPartition, errorCode) =>
-        if (errorCode != Errors.NONE.code) {
-          debug("Offset commit request with correlation id %d from client %s on partition %s failed due to %s"
-            .format(offsetCommitRequest.correlationId, offsetCommitRequest.clientId,
-              topicAndPartition, Errors.forCode(errorCode).exceptionName))
-        }
-      }
-      val combinedCommitStatus = mergedCommitStatus ++ invalidRequestsInfo.map(_._1 -> Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-      val response = OffsetCommitResponse(combinedCommitStatus, offsetCommitRequest.correlationId)
-      requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
-    }
-
-    if (authorizedRequestInfo.isEmpty)
-      sendResponseCallback(Map.empty)
-    else if (offsetCommitRequest.versionId == 0) {
-      // for version 0 always store offsets to ZK
-      val responseInfo = authorizedRequestInfo.map {
-        case (topicAndPartition, metaAndError) => {
-          val topicDirs = new ZKGroupTopicDirs(offsetCommitRequest.groupId, topicAndPartition.topic)
-          try {
-            if (metadataCache.getTopicMetadata(Set(topicAndPartition.topic), request.securityProtocol).size <= 0) {
-              (topicAndPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-            } else if (metaAndError.metadata != null && metaAndError.metadata.length > config.offsetMetadataMaxSize) {
-              (topicAndPartition, Errors.OFFSET_METADATA_TOO_LARGE.code)
-            } else {
-              zkUtils.updatePersistentPath(topicDirs.consumerOffsetDir + "/" +
-                topicAndPartition.partition, metaAndError.offset.toString)
-              (topicAndPartition, Errors.NONE.code)
-            }
-          } catch {
-            case e: Throwable => (topicAndPartition, Errors.forException(e).code)
-          }
-        }
-      }
-
-      sendResponseCallback(responseInfo)
+      val errorCode = new JShort(Errors.GROUP_AUTHORIZATION_FAILED.code)
+      val results = offsetCommitRequest.offsetData.keySet.asScala.map { topicPartition =>
+        (topicPartition, errorCode)
+      }.toMap
+      val responseHeader = new ResponseHeader(header.correlationId)
+      val responseBody = new OffsetCommitResponse(results.asJava)
+      requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     } else {
-      // for version 1 and beyond store offsets in offset manager
+      // filter non-existent topics
+      val invalidRequestsInfo = offsetCommitRequest.offsetData.asScala.filter { case (topicPartition, _) =>
+        !metadataCache.contains(topicPartition.topic)
+      }
+      val filteredRequestInfo = offsetCommitRequest.offsetData.asScala.toMap -- invalidRequestsInfo.keys
 
-      // compute the retention time based on the request version:
-      // if it is v1 or not specified by user, we can use the default retention
-      val offsetRetention =
-        if (offsetCommitRequest.versionId <= 1 ||
-          offsetCommitRequest.retentionMs == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME) {
-          coordinator.offsetConfig.offsetsRetentionMs
-        } else {
-          offsetCommitRequest.retentionMs
+      val (authorizedRequestInfo, unauthorizedRequestInfo) =  filteredRequestInfo.partition {
+        case (topicPartition, offsetMetadata) => authorize(request.session, Read, new Resource(Topic, topicPartition.topic))
+      }
+
+      // the callback for sending an offset commit response
+      def sendResponseCallback(commitStatus: immutable.Map[TopicPartition, Short]) {
+        val mergedCommitStatus = commitStatus ++ unauthorizedRequestInfo.mapValues(_ => Errors.TOPIC_AUTHORIZATION_FAILED.code)
+
+        mergedCommitStatus.foreach { case (topicPartition, errorCode) =>
+          if (errorCode != Errors.NONE.code) {
+            debug(s"Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +
+              s"on partition $topicPartition failed due to ${Errors.forCode(errorCode).exceptionName}")
+          }
+        }
+        val combinedCommitStatus = mergedCommitStatus.mapValues(new JShort(_)) ++ invalidRequestsInfo.map(_._1 -> new JShort(Errors.UNKNOWN_TOPIC_OR_PARTITION.code))
+
+        val responseHeader = new ResponseHeader(header.correlationId)
+        val responseBody =  new OffsetCommitResponse(combinedCommitStatus.asJava)
+        requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
+      }
+
+      if (authorizedRequestInfo.isEmpty)
+        sendResponseCallback(Map.empty)
+      else if (header.apiVersion == 0) {
+        // for version 0 always store offsets to ZK
+        val responseInfo = authorizedRequestInfo.map {
+          case (topicPartition, partitionData) =>
+            val topicDirs = new ZKGroupTopicDirs(offsetCommitRequest.groupId, topicPartition.topic)
+            try {
+              if (metadataCache.getTopicMetadata(Set(topicPartition.topic), request.securityProtocol).size <= 0)
+                (topicPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+              else if (partitionData.metadata != null && partitionData.metadata.length > config.offsetMetadataMaxSize)
+                (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE.code)
+              else {
+                zkUtils.updatePersistentPath(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}", partitionData.offset.toString)
+                (topicPartition, Errors.NONE.code)
+              }
+            } catch {
+              case e: Throwable => (topicPartition, Errors.forException(e).code)
+            }
+        }
+        sendResponseCallback(responseInfo)
+      } else {
+        // for version 1 and beyond store offsets in offset manager
+
+        // compute the retention time based on the request version:
+        // if it is v1 or not specified by user, we can use the default retention
+        val offsetRetention =
+          if (header.apiVersion <= 1 ||
+            offsetCommitRequest.retentionTime == OffsetCommitRequest.DEFAULT_RETENTION_TIME)
+            coordinator.offsetConfig.offsetsRetentionMs
+          else
+            offsetCommitRequest.retentionTime
+
+        // commit timestamp is always set to now.
+        // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
+        // expire timestamp is computed differently for v1 and v2.
+        //   - If v1 and no explicit commit timestamp is provided we use default expiration timestamp.
+        //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
+        //   - If v2 we use the default expiration timestamp
+        val currentTimestamp = SystemTime.milliseconds
+        val defaultExpireTimestamp = offsetRetention + currentTimestamp
+        val partitionData = authorizedRequestInfo.mapValues { partitionData =>
+          new OffsetAndMetadata(
+            offsetMetadata = OffsetMetadata(partitionData.offset, partitionData.metadata),
+            commitTimestamp = currentTimestamp,
+            expireTimestamp = {
+              if (partitionData.timestamp == OffsetCommitRequest.DEFAULT_TIMESTAMP)
+                defaultExpireTimestamp
+              else
+                offsetRetention + partitionData.timestamp
+            }
+          )
         }
 
-      // commit timestamp is always set to now.
-      // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
-      // expire timestamp is computed differently for v1 and v2.
-      //   - If v1 and no explicit commit timestamp is provided we use default expiration timestamp.
-      //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
-      //   - If v2 we use the default expiration timestamp
-      val currentTimestamp = SystemTime.milliseconds
-      val defaultExpireTimestamp = offsetRetention + currentTimestamp
-      val offsetData = authorizedRequestInfo.mapValues(offsetAndMetadata =>
-        offsetAndMetadata.copy(
-          commitTimestamp = currentTimestamp,
-          expireTimestamp = {
-            if (offsetAndMetadata.commitTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP)
-              defaultExpireTimestamp
-            else
-              offsetRetention + offsetAndMetadata.commitTimestamp
-          }
-        )
-      )
-
-      // call coordinator to handle commit offset
-      coordinator.handleCommitOffsets(
-        offsetCommitRequest.groupId,
-        offsetCommitRequest.memberId,
-        offsetCommitRequest.groupGenerationId,
-        offsetData,
-        sendResponseCallback)
+        // call coordinator to handle commit offset
+        coordinator.handleCommitOffsets(
+          offsetCommitRequest.groupId,
+          offsetCommitRequest.memberId,
+          offsetCommitRequest.generationId,
+          partitionData,
+          sendResponseCallback)
+      }
     }
   }
 
@@ -330,7 +332,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
 
-      val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ => new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1))
+      val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ =>
+        new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, Message.NoTimestamp))
 
       var errorInResponse = false
 
@@ -367,11 +370,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           val respHeader = new ResponseHeader(request.header.correlationId)
           val respBody = request.header.apiVersion match {
             case 0 => new ProduceResponse(mergedResponseStatus.asJava)
-            case 1 => new ProduceResponse(mergedResponseStatus.asJava, delayTimeMs)
+            case version@ (1 | 2) => new ProduceResponse(mergedResponseStatus.asJava, delayTimeMs, version)
             // This case shouldn't happen unless a new version of ProducerRequest is added without
             // updating this part of the code to handle it properly.
-            case _ => throw new IllegalArgumentException("Version %d of ProducerRequest is not handled. Code must be updated."
-              .format(request.header.apiVersion))
+            case version => throw new IllegalArgumentException(s"Version `$version` of ProduceRequest is not handled. Code must be updated.")
           }
 
           requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, respBody)))
@@ -422,25 +424,51 @@ class KafkaApis(val requestChannel: RequestChannel,
       case (topicAndPartition, _) => authorize(request.session, Read, new Resource(Topic, topicAndPartition.topic))
     }
 
-    val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => FetchResponsePartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, MessageSet.Empty))
+    val unauthorizedPartitionData = unauthorizedRequestInfo.mapValues { _ =>
+      FetchResponsePartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, MessageSet.Empty)
+    }
 
     // the callback for sending a fetch response
     def sendResponseCallback(responsePartitionData: Map[TopicAndPartition, FetchResponsePartitionData]) {
-      val mergedResponseStatus = responsePartitionData ++ unauthorizedResponseStatus
 
-      mergedResponseStatus.foreach { case (topicAndPartition, data) =>
-        if (data.error != Errors.NONE.code) {
-          debug("Fetch request with correlation id %d from client %s on partition %s failed due to %s"
-            .format(fetchRequest.correlationId, fetchRequest.clientId,
-            topicAndPartition, Errors.forCode(data.error).exceptionName))
-        }
+      val convertedPartitionData =
+        // Need to down-convert message when consumer only takes magic value 0.
+        if (fetchRequest.versionId <= 1) {
+          responsePartitionData.map { case (tp, data) =>
+
+            // We only do down-conversion when:
+            // 1. The message format version configured for the topic is using magic value > 0, and
+            // 2. The message set contains message whose magic > 0
+            // This is to reduce the message format conversion as much as possible. The conversion will only occur
+            // when new message format is used for the topic and we see an old request.
+            // Please note that if the message format is changed from a higher version back to lower version this
+            // test might break because some messages in new message format can be delivered to consumers before 0.10.0.0
+            // without format down conversion.
+            val convertedData = if (replicaManager.getMessageFormatVersion(tp).exists(_ > Message.MagicValue_V0) &&
+              !data.messages.isMagicValueInAllWrapperMessages(Message.MagicValue_V0)) {
+              trace(s"Down converting message to V0 for fetch request from ${fetchRequest.clientId}")
+              new FetchResponsePartitionData(data.error, data.hw, data.messages.asInstanceOf[FileMessageSet].toMessageFormat(Message.MagicValue_V0))
+            } else data
+
+            tp -> convertedData
+          }
+        } else responsePartitionData
+
+      val mergedPartitionData = convertedPartitionData ++ unauthorizedPartitionData
+
+      mergedPartitionData.foreach { case (topicAndPartition, data) =>
+        if (data.error != Errors.NONE.code)
+          debug(s"Fetch request with correlation id ${fetchRequest.correlationId} from client ${fetchRequest.clientId} " +
+            s"on partition $topicAndPartition failed due to ${Errors.forCode(data.error).exceptionName}")
         // record the bytes out metrics only when the response is being sent
         BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesOutRate.mark(data.messages.sizeInBytes)
         BrokerTopicStats.getBrokerAllTopicsStats().bytesOutRate.mark(data.messages.sizeInBytes)
       }
 
       def fetchResponseCallback(delayTimeMs: Int) {
-        val response = FetchResponse(fetchRequest.correlationId, mergedResponseStatus, fetchRequest.versionId, delayTimeMs)
+        trace(s"Sending fetch response to client ${fetchRequest.clientId} of " +
+          s"${convertedPartitionData.values.map(_.messages.sizeInBytes).sum} bytes")
+        val response = FetchResponse(fetchRequest.correlationId, mergedPartitionData, fetchRequest.versionId, delayTimeMs)
         requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
       }
 
@@ -453,10 +481,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchResponseCallback(0)
       } else {
         quotaManagers(ApiKeys.FETCH.id).recordAndMaybeThrottle(fetchRequest.clientId,
-                                                                   FetchResponse.responseSize(responsePartitionData
-                                                                                                      .groupBy(_._1.topic),
-                                                                                              fetchRequest.versionId),
-                                                                   fetchResponseCallback)
+                                                               FetchResponse.responseSize(mergedPartitionData.groupBy(_._1.topic),
+                                                                                          fetchRequest.versionId),
+                                                               fetchResponseCallback)
       }
     }
 
@@ -674,61 +701,61 @@ class KafkaApis(val requestChannel: RequestChannel,
   /*
    * Handle an offset fetch request
    */
-
   def handleOffsetFetchRequest(request: RequestChannel.Request) {
-    val offsetFetchRequest = request.requestObj.asInstanceOf[OffsetFetchRequest]
+    val header = request.header
+    val offsetFetchRequest = request.body.asInstanceOf[OffsetFetchRequest]
 
-    // reject the request immediately if not authorized to the group
+    val responseHeader = new ResponseHeader(header.correlationId)
+    val offsetFetchResponse =
+    // reject the request if not authorized to the group
     if (!authorize(request.session, Read, new Resource(Group, offsetFetchRequest.groupId))) {
-      val authorizationError = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, Errors.GROUP_AUTHORIZATION_FAILED.code)
-      val response = OffsetFetchResponse(offsetFetchRequest.requestInfo.map{ _ -> authorizationError}.toMap)
-      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, response)))
-      return
-    }
-
-    val (authorizedTopicPartitions, unauthorizedTopicPartitions) = offsetFetchRequest.requestInfo.partition { topicAndPartition =>
-      authorize(request.session, Describe, new Resource(Topic, topicAndPartition.topic))
-    }
-
-    val authorizationError = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, Errors.TOPIC_AUTHORIZATION_FAILED.code)
-    val unauthorizedStatus = unauthorizedTopicPartitions.map(topicAndPartition => (topicAndPartition, authorizationError)).toMap
-
-    val response = if (offsetFetchRequest.versionId == 0) {
-      // version 0 reads offsets from ZK
-      val responseInfo = authorizedTopicPartitions.map( topicAndPartition => {
-        val topicDirs = new ZKGroupTopicDirs(offsetFetchRequest.groupId, topicAndPartition.topic)
-        try {
-          if (metadataCache.getTopicMetadata(Set(topicAndPartition.topic), request.securityProtocol).size <= 0) {
-            (topicAndPartition, OffsetMetadataAndError.UnknownTopicOrPartition)
-          } else {
-            val payloadOpt = zkUtils.readDataMaybeNull(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1
-            payloadOpt match {
-              case Some(payload) => (topicAndPartition, OffsetMetadataAndError(payload.toLong))
-              case None => (topicAndPartition, OffsetMetadataAndError.UnknownTopicOrPartition)
-            }
-          }
-        } catch {
-          case e: Throwable =>
-            (topicAndPartition, OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata,
-              Errors.forException(e).code))
-        }
-      })
-
-      OffsetFetchResponse(collection.immutable.Map(responseInfo: _*) ++ unauthorizedStatus, offsetFetchRequest.correlationId)
+      val unauthorizedGroupResponse = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.GROUP_AUTHORIZATION_FAILED.code)
+      val results = offsetFetchRequest.partitions.asScala.map { topicPartition => (topicPartition, unauthorizedGroupResponse)}.toMap
+      new OffsetFetchResponse(results.asJava)
     } else {
-      // version 1 reads offsets from Kafka;
-      val offsets = coordinator.handleFetchOffsets(offsetFetchRequest.groupId, authorizedTopicPartitions).toMap
+      val (authorizedTopicPartitions, unauthorizedTopicPartitions) = offsetFetchRequest.partitions.asScala.partition { topicPartition =>
+        authorize(request.session, Describe, new Resource(Topic, topicPartition.topic))
+      }
+      val unauthorizedTopicResponse = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.TOPIC_AUTHORIZATION_FAILED.code)
+      val unauthorizedStatus = unauthorizedTopicPartitions.map(topicPartition => (topicPartition, unauthorizedTopicResponse)).toMap
+      val unknownTopicPartitionResponse = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
 
-      // Note that we do not need to filter the partitions in the
-      // metadata cache as the topic partitions will be filtered
-      // in coordinator's offset manager through the offset cache
-      OffsetFetchResponse(offsets ++ unauthorizedStatus, offsetFetchRequest.correlationId)
+      if (header.apiVersion == 0) {
+        // version 0 reads offsets from ZK
+        val responseInfo = authorizedTopicPartitions.map { topicPartition =>
+          val topicDirs = new ZKGroupTopicDirs(offsetFetchRequest.groupId, topicPartition.topic)
+          try {
+            if (metadataCache.getTopicMetadata(Set(topicPartition.topic), request.securityProtocol).isEmpty)
+              (topicPartition, unknownTopicPartitionResponse)
+            else {
+              val payloadOpt = zkUtils.readDataMaybeNull(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}")._1
+              payloadOpt match {
+                case Some(payload) =>
+                  (topicPartition, new OffsetFetchResponse.PartitionData(payload.toLong, "", Errors.NONE.code))
+                case None =>
+                  (topicPartition, unknownTopicPartitionResponse)
+              }
+            }
+          } catch {
+            case e: Throwable =>
+              (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "",
+                Errors.forException(e).code))
+          }
+        }.toMap
+        new OffsetFetchResponse((responseInfo ++ unauthorizedStatus).asJava)
+      } else {
+        // version 1 reads offsets from Kafka;
+        val offsets = coordinator.handleFetchOffsets(offsetFetchRequest.groupId, authorizedTopicPartitions).toMap
+
+        // Note that we do not need to filter the partitions in the
+        // metadata cache as the topic partitions will be filtered
+        // in coordinator's offset manager through the offset cache
+        new OffsetFetchResponse((offsets ++ unauthorizedStatus).asJava)
+      }
     }
 
-    trace("Sending offset fetch response %s for correlation id %d to client %s."
-          .format(response, offsetFetchRequest.correlationId, offsetFetchRequest.clientId))
-
-    requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
+    trace(s"Sending offset fetch response $offsetFetchResponse for correlation id ${header.correlationId} to client ${header.clientId}.")
+    requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, responseHeader, offsetFetchResponse)))
   }
 
   def handleGroupCoordinatorRequest(request: RequestChannel.Request) {

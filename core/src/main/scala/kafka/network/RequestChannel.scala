@@ -64,9 +64,7 @@ object RequestChannel extends Logging {
     private val keyToNameAndDeserializerMap: Map[Short, (ByteBuffer) => RequestOrResponse]=
       Map(ApiKeys.FETCH.id -> FetchRequest.readFrom,
         ApiKeys.METADATA.id -> TopicMetadataRequest.readFrom,
-        ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ControlledShutdownRequest.readFrom,
-        ApiKeys.OFFSET_COMMIT.id -> OffsetCommitRequest.readFrom,
-        ApiKeys.OFFSET_FETCH.id -> OffsetFetchRequest.readFrom
+        ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ControlledShutdownRequest.readFrom
       )
 
     // TODO: this will be removed once we migrated to client-side format
@@ -78,14 +76,17 @@ object RequestChannel extends Logging {
     val header: RequestHeader =
       if (requestObj == null) {
         buffer.rewind
-        RequestHeader.parse(buffer)
+        try RequestHeader.parse(buffer)
+        catch {
+          case ex: Throwable =>
+            throw new InvalidRequestException(s"Error parsing request header. Our best guess of the apiKey is: $requestId", ex)
+        }
       } else
         null
     val body: AbstractRequest =
       if (requestObj == null)
-        try {
-          AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
-        } catch {
+        try AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
+        catch {
           case ex: Throwable =>
             throw new InvalidRequestException(s"Error getting request for apiKey: ${header.apiKey} and apiVersion: ${header.apiVersion}", ex)
         }

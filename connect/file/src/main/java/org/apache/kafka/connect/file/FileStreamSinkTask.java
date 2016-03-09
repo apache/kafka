@@ -84,7 +84,7 @@ public class FileStreamSinkTask extends SinkTask {
 
     @Override
     public void stop() {
-        if (outputStream != System.out)
+        if (outputStream != null && outputStream != System.out)
             outputStream.close();
     }
 

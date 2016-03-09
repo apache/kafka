@@ -173,9 +173,22 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       }
 
       CommandLineUtils.checkRequiredArgs(parser, options, consumerConfigOpt, producerConfigOpt)
-      if (List(whitelistOpt, blacklistOpt).count(options.has) != 1) {
-        println("Exactly one of whitelist or blacklist is required.")
-        System.exit(1)
+
+      val useNewConsumer = options.has(useNewConsumerOpt)
+      if (useNewConsumer) {
+        if (options.has(blacklistOpt)) {
+          error("blacklist can not be used when using new consumer in mirror maker. Use whitelist instead.")
+          System.exit(1)
+        }
+        if (!options.has(whitelistOpt)) {
+          error("whitelist must be specified when using new consumer in mirror maker.")
+          System.exit(1)
+        }
+      } else {
+        if (List(whitelistOpt, blacklistOpt).count(options.has) != 1) {
+          error("Exactly one of whitelist or blacklist is required.")
+          System.exit(1)
+        }
       }
 
       abortOnSendFailure = options.valueOf(abortOnSendFailureOpt).toBoolean
@@ -199,8 +212,6 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       producerProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
       producerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
       producer = new MirrorMakerProducer(producerProps)
-
-      val useNewConsumer = options.has(useNewConsumerOpt)
 
       // Create consumers
       val mirrorMakerConsumers = if (!useNewConsumer) {
@@ -414,14 +425,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         info("Flushing producer.")
         producer.flush()
         info("Committing consumer offsets.")
-        try {
-          commitOffsets(mirrorMakerConsumer)
-        } catch {
-          case e: WakeupException => // just ignore
-        }
+        CoreUtils.swallow(commitOffsets(mirrorMakerConsumer))
         info("Shutting down consumer connectors.")
-        // we do not need to call consumer.close() since the consumer has already been interrupted
-        mirrorMakerConsumer.cleanup()
+        CoreUtils.swallow(mirrorMakerConsumer.stop())
+        CoreUtils.swallow(mirrorMakerConsumer.cleanup())
         shutdownLatch.countDown()
         info("Mirror maker thread stopped")
         // if it exits accidentally, stop the entire mirror maker
@@ -485,7 +492,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     override def receive() : BaseConsumerRecord = {
       val messageAndMetadata = iter.next()
-      BaseConsumerRecord(messageAndMetadata.topic, messageAndMetadata.partition, messageAndMetadata.offset, messageAndMetadata.key, messageAndMetadata.message)
+      BaseConsumerRecord(messageAndMetadata.topic,
+                         messageAndMetadata.partition,
+                         messageAndMetadata.offset,
+                         messageAndMetadata.timestamp,
+                         messageAndMetadata.timestampType,
+                         messageAndMetadata.key,
+                         messageAndMetadata.message)
     }
 
     override def stop() {
@@ -541,7 +554,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
       offsets.put(tp, record.offset + 1)
 
-      BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)
+      BaseConsumerRecord(record.topic,
+                         record.partition,
+                         record.offset,
+                         record.timestamp,
+                         record.timestampType,
+                         record.key,
+                         record.value)
     }
 
     override def stop() {
@@ -549,7 +568,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     override def cleanup() {
-      ClientUtils.swallow(consumer.close())
+      consumer.close()
     }
 
     override def commit() {

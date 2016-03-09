@@ -53,24 +53,23 @@ class LogConfigTest {
 
   @Test
   def testFromPropsInvalid() {
-    LogConfig.configNames().foreach((name) => {
-      name match {
-        case LogConfig.UncleanLeaderElectionEnableProp  => return
-        case LogConfig.RetentionBytesProp => assertPropertyInvalid(name, "not_a_number")
-        case LogConfig.RetentionMsProp => assertPropertyInvalid(name, "not_a_number" )
-        case LogConfig.CleanupPolicyProp => assertPropertyInvalid(name, "true", "foobar");
-        case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
-        case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
-        case positiveIntProperty => assertPropertyInvalid(name, "not_a_number", "-1")
-      }
+    LogConfig.configNames.foreach(name => name match {
+      case LogConfig.UncleanLeaderElectionEnableProp => assertPropertyInvalid(name, "not a boolean")
+      case LogConfig.RetentionBytesProp => assertPropertyInvalid(name, "not_a_number")
+      case LogConfig.RetentionMsProp => assertPropertyInvalid(name, "not_a_number" )
+      case LogConfig.CleanupPolicyProp => assertPropertyInvalid(name, "true", "foobar");
+      case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
+      case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
+      case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
+      case positiveIntProperty => assertPropertyInvalid(name, "not_a_number", "-1")
     })
-   }
+  }
 
   private def assertPropertyInvalid(name: String, values: AnyRef*) {
     values.foreach((value) => {
       val props = new Properties
       props.setProperty(name, value.toString)
-      intercept[ConfigException] {
+      intercept[Exception] {
         LogConfig(props)
       }
     })

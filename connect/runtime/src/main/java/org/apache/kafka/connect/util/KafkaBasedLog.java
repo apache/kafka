@@ -99,8 +99,11 @@ public class KafkaBasedLog<K, V> {
      * @param consumedCallback callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
      * @param time Time interface
      */
-    public KafkaBasedLog(String topic, Map<String, Object> producerConfigs, Map<String, Object> consumerConfigs,
-                         Callback<ConsumerRecord<K, V>> consumedCallback, Time time) {
+    public KafkaBasedLog(String topic,
+                         Map<String, Object> producerConfigs,
+                         Map<String, Object> consumerConfigs,
+                         Callback<ConsumerRecord<K, V>> consumedCallback,
+                         Time time) {
         this.topic = topic;
         this.producerConfigs = producerConfigs;
         this.consumerConfigs = consumerConfigs;
@@ -140,9 +143,9 @@ public class KafkaBasedLog<K, V> {
         thread = new WorkThread();
         thread.start();
 
-        log.info("Finished reading KafakBasedLog for topic " + topic);
+        log.info("Finished reading KafkaBasedLog for topic " + topic);
 
-        log.info("Started KafakBasedLog for topic " + topic);
+        log.info("Started KafkaBasedLog for topic " + topic);
     }
 
     public void stop() {
@@ -198,6 +201,13 @@ public class KafkaBasedLog<K, V> {
     }
 
     /**
+     * Flush the underlying producer to ensure that all pending writes have been sent.
+     */
+    public void flush() {
+        producer.flush();
+    }
+
+    /**
      * Same as {@link #readToEnd(Callback)} but provides a {@link Future} instead of using a callback.
      * @return the future associated with the operation
      */
@@ -219,12 +229,18 @@ public class KafkaBasedLog<K, V> {
     private Producer<K, V> createProducer() {
         // Always require producer acks to all to ensure durable writes
         producerConfigs.put(ProducerConfig.ACKS_CONFIG, "all");
+
+        // Don't allow more than one in-flight request to prevent reordering on retry (if enabled)
+        producerConfigs.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1);
         return new KafkaProducer<>(producerConfigs);
     }
 
     private Consumer<K, V> createConsumer() {
         // Always force reset to the beginning of the log since this class wants to consume all available log data
         consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        // Turn off autocommit since we always want to consume the full log
+        consumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         return new KafkaConsumer<>(consumerConfigs);
     }
 

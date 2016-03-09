@@ -151,6 +151,19 @@ public class ConfigDefTest {
         assertEquals(Password.HIDDEN, vals.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).toString());
     }
 
+    @Test
+    public void testNullDefaultWithValidator() {
+        final String key = "enum_test";
+
+        ConfigDef def = new ConfigDef();
+        def.define(key, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ValidString.in("ONE", "TWO", "THREE"), Importance.HIGH, "docs");
+
+        Properties props = new Properties();
+        props.put(key, "ONE");
+        Map<String, Object> vals = def.parse(props);
+        assertEquals("ONE", vals.get(key));
+    }
+
     private void testValidators(Type type, Validator validator, Object defaultVal, Object[] okValues, Object[] badValues) {
         ConfigDef def = new ConfigDef().define("name", type, defaultVal, validator, Importance.HIGH, "docs");
 

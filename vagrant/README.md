@@ -79,8 +79,12 @@ might want to override:
   hosts. Hostnames are always set in the /etc/hosts in the VMs, so this is only
   necessary if you want to address them conveniently from the host for tasks
   that aren't provided by Vagrant.
+* `enable_jmx` - Whether to enable JMX ports on 800x and 900x for Zookeeper and the Brokers respectively where `x` is the nodes of each respectively. For example, the zk1 machine would have JMX exposed on 8001, ZK2 would be on 8002, etc. 
+* `num_workers` - Generic workers that get the code (from this project), but don't start any services (no brokers, no zookeepers, etc). Useful for starting clients. Each worker will have an IP address of `192.168.50.10x` where `x` starts at `1` and increments for each worker. 
 * `num_zookeepers` - Size of zookeeper cluster
 * `num_brokers` - Number of broker instances to run
+* `ram_megabytes` - The size of each virtual machine's RAM; default to `1200MB`
+
 
 
 ## Using Other Providers ##
