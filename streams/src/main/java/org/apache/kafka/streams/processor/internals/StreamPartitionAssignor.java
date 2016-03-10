@@ -456,7 +456,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         return standbyTasks;
     }
 
-    public void setInternalTopicManager (InternalTopicManager internalTopicManager) {
+    public void setInternalTopicManager(InternalTopicManager internalTopicManager) {
         this.internalTopicManager = internalTopicManager;
     }
 }
