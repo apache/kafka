@@ -21,7 +21,9 @@ package kafka.server
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
+import kafka.api.{FetchResponsePartitionData, PartitionFetchInfo}
 import kafka.cluster.Broker
+import kafka.common.TopicAndPartition
 import kafka.message.{ByteBufferMessageSet, Message}
 import kafka.utils.{MockScheduler, MockTime, TestUtils, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
@@ -48,7 +50,7 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
-    val zkUtils = ZkUtils(zkClient, false)
+    val zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time = new MockTime()
     val jTime = new JMockTime
@@ -85,7 +87,7 @@ class ReplicaManagerTest {
       rm.checkpointHighWatermarks()
     } finally {
       // shutdown the replica manager upon test completion
-      rm.shutdown(false)
+      rm.shutdown(checkpointHW = false)
       metrics.close()
     }
   }
@@ -113,7 +115,7 @@ class ReplicaManagerTest {
         messagesPerPartition = Map(new TopicPartition("test1", 0) -> new ByteBufferMessageSet(new Message("first message".getBytes))),
         responseCallback = callback)
     } finally {
-      rm.shutdown(false)
+      rm.shutdown(checkpointHW = false)
       metrics.close()
     }
 
@@ -126,7 +128,7 @@ class ReplicaManagerTest {
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
-    val zkUtils = ZkUtils(zkClient, false)
+    val zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time = new MockTime()
     val jTime = new JMockTime
@@ -135,10 +137,16 @@ class ReplicaManagerTest {
       new AtomicBoolean(false))
 
     try {
-      var callbackFired = false
-      def callback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
+      var produceCallbackFired = false
+      def produceCallback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
         assertEquals("Should give NotLeaderForPartitionException", Errors.NOT_LEADER_FOR_PARTITION.code, responseStatus.values.head.errorCode)
-        callbackFired = true
+        produceCallbackFired = true
+      }
+
+      var fetchCallbackFired = false
+      def fetchCallback(responseStatus: Map[TopicAndPartition, FetchResponsePartitionData]) = {
+        assertEquals("Should give NotLeaderForPartitionException", Errors.NOT_LEADER_FOR_PARTITION.code, responseStatus.values.head.error)
+        fetchCallbackFired = true
       }
 
       val aliveBrokers = Seq(new Broker(0, "host0", 0), new Broker(1, "host1", 1))
@@ -146,12 +154,14 @@ class ReplicaManagerTest {
       EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
       EasyMock.replay(metadataCache)
 
+      val brokerList : java.util.List[Integer] = Seq[Integer](0, 1).asJava
+      val brokerSet : java.util.Set[Integer] = Set[Integer](0, 1).asJava
+
       val partition = rm.getOrCreatePartition(topic, 0)
       partition.getOrCreateReplica(0)
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest(0, 0,
-        collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, Seq(0, 1).asJava.asInstanceOf[java.util.List[Integer]],
-          0, Set(0, 1).asJava.asInstanceOf[java.util.Set[Integer]])).asJava,
+        collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerSet)).asJava,
         Set(new BrokerEndPoint(0, "host1", 0), new BrokerEndPoint(1, "host2", 1)).asJava)
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, metadataCache, (_, _) => {})
       rm.getLeaderReplicaIfLocal(topic, 0)
@@ -162,18 +172,26 @@ class ReplicaManagerTest {
         requiredAcks = -1,
         internalTopicsAllowed = false,
         messagesPerPartition = Map(new TopicPartition(topic, 0) -> new ByteBufferMessageSet(new Message("first message".getBytes))),
-        responseCallback = callback)
+        responseCallback = produceCallback)
+
+      // Fetch some messages
+      rm.fetchMessages(
+        timeout = 1000,
+        replicaId = -1,
+        fetchMinBytes = 100000,
+        fetchInfo = collection.immutable.Map(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(0, 100000)),
+        responseCallback = fetchCallback)
 
       // Make this replica the follower
       val leaderAndIsrRequest2 = new LeaderAndIsrRequest(0, 0,
-        collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 1, 1, Seq(0, 1).asJava.asInstanceOf[java.util.List[Integer]],
-          0, Set(0, 1).asJava.asInstanceOf[java.util.Set[Integer]])).asJava,
+        collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 1, 1, brokerList, 0, brokerSet)).asJava,
         Set(new BrokerEndPoint(0, "host1", 0), new BrokerEndPoint(1, "host2", 1)).asJava)
       rm.becomeLeaderOrFollower(1, leaderAndIsrRequest2, metadataCache, (_, _) => {})
 
-      assertTrue(callbackFired)
+      assertTrue(produceCallbackFired)
+      assertTrue(fetchCallbackFired)
     } finally {
-      rm.shutdown(false)
+      rm.shutdown(checkpointHW = false)
       metrics.close()
     }
   }
