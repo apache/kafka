@@ -71,7 +71,6 @@ class QuotasTest extends KafkaServerTestHarness {
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.ACKS_CONFIG, "0")
-    producerProps.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "false")
     producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, producerBufferSize.toString)
     producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, producerId1)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
