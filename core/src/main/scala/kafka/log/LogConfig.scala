@@ -115,9 +115,9 @@ object LogConfig {
   val MinInSyncReplicasProp = "min.insync.replicas"
   val CompressionTypeProp = "compression.type"
   val PreAllocateEnableProp = "preallocate"
-  val MessageFormatVersionProp = KafkaConfig.MessageFormatVersionProp
-  val MessageTimestampTypeProp = KafkaConfig.MessageTimestampTypeProp
-  val MessageTimestampDifferenceMaxMsProp = KafkaConfig.MessageTimestampDifferenceMaxMsProp
+  val MessageFormatVersionProp = "message.format.version"
+  val MessageTimestampTypeProp = "message.timestamp.type"
+  val MessageTimestampDifferenceMaxMsProp = "message.timestamp.difference.max.ms"
 
   val SegmentSizeDoc = "This configuration controls the segment file size for the log. Retention and cleaning is" +
     " always done a file at a time so a larger segment size means fewer files but less granular control over retention."
@@ -192,24 +192,29 @@ object LogConfig {
 
     private final val serverDefaultConfigNames = mutable.Map[String, String]()
 
+    private def recordServerDefaultConfig(name: String, serverDefaultConfigName: String) {
+      require(serverDefaultConfigName.startsWith("log."), s"Server default configuration $serverDefaultConfigName (for log config $name) is not prefixed with log.")
+      serverDefaultConfigNames.put(name, serverDefaultConfigName)
+    }
+
     def define(name: String, defType: ConfigDef.Type, defaultValue: Object, validator: ConfigDef.Validator,
                importance: ConfigDef.Importance, doc: String, serverDefaultConfigName: String) = {
       super.define(name, defType, defaultValue, validator, importance, doc)
-      serverDefaultConfigNames.put(name, serverDefaultConfigName)
+      recordServerDefaultConfig(name, serverDefaultConfigName)
       this
     }
 
     def define(name: String, defType: ConfigDef.Type, defaultValue: Object, importance: ConfigDef.Importance,
                documentation: String, serverDefaultConfigName: String) = {
       super.define(name, defType, defaultValue, importance, documentation)
-      serverDefaultConfigNames.put(name, serverDefaultConfigName)
+      recordServerDefaultConfig(name, serverDefaultConfigName)
       this
     }
 
     def define(name: String, defType: ConfigDef.Type, importance: ConfigDef.Importance, documentation: String,
                serverDefaultConfigName: String) = {
       super.define(name, defType, importance, documentation)
-      serverDefaultConfigNames.put(name, serverDefaultConfigName)
+      recordServerDefaultConfig(name, serverDefaultConfigName)
       this
     }
 

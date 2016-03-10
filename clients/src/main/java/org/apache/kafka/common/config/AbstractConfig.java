@@ -94,7 +94,7 @@ public class AbstractConfig {
         return (List<String>) get(key);
     }
 
-    public boolean getBoolean(String key) {
+    public Boolean getBoolean(String key) {
         return (Boolean) get(key);
     }
 

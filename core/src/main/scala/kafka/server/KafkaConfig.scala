@@ -829,8 +829,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val autoLeaderRebalanceEnable = getBoolean(KafkaConfig.AutoLeaderRebalanceEnableProp)
   val leaderImbalancePerBrokerPercentage = getInt(KafkaConfig.LeaderImbalancePerBrokerPercentageProp)
   val leaderImbalanceCheckIntervalSeconds = getLong(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp)
-  val uncleanLeaderElectionEnable: java.lang.Boolean = Boolean.box(Option(getBoolean(KafkaConfig.DeprecatedUncleanLeaderElectionEnableProp))
-    .getOrElse(getBoolean(KafkaConfig.UncleanLeaderElectionEnableProp)))
+  val uncleanLeaderElectionEnable: java.lang.Boolean = Option(getBoolean(KafkaConfig.DeprecatedUncleanLeaderElectionEnableProp))
+    .getOrElse(getBoolean(KafkaConfig.UncleanLeaderElectionEnableProp))
   val interBrokerSecurityProtocol = SecurityProtocol.forName(getString(KafkaConfig.InterBrokerSecurityProtocolProp))
   // We keep the user-provided String as `ApiVersion.apply` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
@@ -893,7 +893,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val quotaWindowSizeSeconds = getInt(KafkaConfig.QuotaWindowSizeSecondsProp)
 
   val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
-  val compressionType = Option(getString(KafkaConfig.DeprecatedCompressionTypeDoc)).getOrElse(getString(KafkaConfig.CompressionTypeProp))
+  val compressionType = Option(getString(KafkaConfig.DeprecatedCompressionTypeProp)).getOrElse(getString(KafkaConfig.CompressionTypeProp))
 
   val listeners = getListeners
   val advertisedListeners = getAdvertisedListeners
