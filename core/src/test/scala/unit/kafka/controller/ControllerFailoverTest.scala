@@ -27,7 +27,6 @@ import kafka.utils._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.SystemTime
 import org.apache.log4j.{Level, Logger}
-import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.mutable
