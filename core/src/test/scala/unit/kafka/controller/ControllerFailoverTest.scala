@@ -20,15 +20,14 @@ package kafka.controller
 import java.util.Properties
 import java.util.concurrent.LinkedBlockingQueue
 
-import kafka.api.RequestOrResponse
 import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.requests.{AbstractRequestResponse, AbstractRequest}
 import org.apache.kafka.common.utils.SystemTime
 import org.apache.log4j.{Level, Logger}
+import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.mutable

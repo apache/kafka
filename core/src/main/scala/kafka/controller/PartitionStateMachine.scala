@@ -67,7 +67,9 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     // set started flag
     hasStarted.set(true)
     // try to move partitions to online state
-    triggerOnlinePartitionStateChange()
+    inLock(controllerContext.controllerLock) {
+      triggerOnlinePartitionStateChange()
+    }
 
     info("Started partition state machine with initial state -> " + partitionState.toString())
   }
