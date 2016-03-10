@@ -18,13 +18,12 @@
 package kafka.log
 
 import java.io._
-import java.nio.file.{StandardCopyOption, Files, Paths, Path}
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
 
 import kafka.utils._
 
 import scala.collection._
-import kafka.common.{KafkaException, TopicAndPartition}
+import kafka.common.{KafkaStorageException, KafkaException, TopicAndPartition}
 import kafka.server.{BrokerState, OffsetCheckpoint, RecoveringFromUncleanShutdown}
 import java.util.concurrent.{ExecutionException, ExecutorService, Executors, Future}
 
@@ -56,7 +55,7 @@ class LogManager(val logDirs: Array[File],
 
   private val logCreationOrDeletionLock = new Object
   private val logs = new Pool[TopicAndPartition, Log]()
-  private val logsToBeDeleted = mutable.ListBuffer.empty[Log]
+  private val logsToBeDeleted = new LinkedBlockingQueue[Log]()
 
   createAndValidateLogDirs(logDirs)
   private val dirLocks = lockLogDirs(logDirs)
@@ -154,7 +153,7 @@ class LogManager(val logDirs: Array[File],
 
           val current = new Log(logDir, config, logRecoveryPoint, scheduler, time)
           if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
-            this.logsToBeDeleted += current
+            this.logsToBeDeleted.add(current)
           } else {
             val previous = this.logs.put(topicPartition, current)
             if (previous != null) {
@@ -210,7 +209,7 @@ class LogManager(val logDirs: Array[File],
                          delay = InitialTaskDelayMs,
                          period = flushCheckpointMs,
                          TimeUnit.MILLISECONDS)
-      scheduler.schedule("kafka-delete-topic",
+      scheduler.schedule("kafka-delete-logs",
                          deleteLogs,
                          delay = InitialTaskDelayMs,
                          period = defaultConfig.fileDeleteDelayMs,
@@ -390,24 +389,20 @@ class LogManager(val logDirs: Array[File],
    *  Delete logs marked for deletion.
    */
   private def deleteLogs(): Unit = {
-    val logsBeingDeleted = mutable.ListBuffer.empty[Log]
-    logsToBeDeleted synchronized {
-      logsBeingDeleted.appendAll(logsToBeDeleted)
-      logsToBeDeleted.clear()
-    }
-    for (log <- logsBeingDeleted) {
-      val removedLog: Log = log
+    while (!logsToBeDeleted.isEmpty) {
+      val log = logsToBeDeleted.take()
+      val removedLog = log
       if (removedLog != null) {
         removedLog.delete()
         info("Deleted log for partition [%s,%d] in %s."
-                     .format(log.topicAndPartition.topic,
-                             log.topicAndPartition.partition,
-                             removedLog.dir.getAbsolutePath))
+          .format(log.topicAndPartition.topic,
+            log.topicAndPartition.partition,
+            removedLog.dir.getAbsolutePath))
       }
     }
   }
 
-  def markLogForDeletion(topicAndPartition: TopicAndPartition) {
+  def asyncDelete(topicAndPartition: TopicAndPartition) {
     var removedLog: Log = null
     logCreationOrDeletionLock synchronized {
       removedLog = logs.remove(topicAndPartition)
@@ -418,7 +413,7 @@ class LogManager(val logDirs: Array[File],
         cleaner.abortCleaning(topicAndPartition)
         cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
-      // renaming the directory to topic-partition.unique-Id.delete
+      // renaming the directory to topic-partition.uniqueId-delete
       val dirName = StringBuilder.newBuilder
       dirName.append(removedLog.name)
       dirName.append(".")
@@ -436,11 +431,11 @@ class LogManager(val logDirs: Array[File],
           logSegment.index.file = new File(renamed, logSegment.index.file.getName)
         }
 
-        logsToBeDeleted synchronized {
-          logsToBeDeleted += removedLog
-        }
+        logsToBeDeleted.add(removedLog)
+        info("Log for partition [%s,%d] is renamed to %s and is scheduled for deletion"
+          .format(removedLog.topicAndPartition.topic, removedLog.topicAndPartition.partition, removedLog.dir.getAbsolutePath))
       } else {
-        throw new KafkaException("Failed to rename log directory from " + removedLog.dir.getAbsolutePath + " to " + renamed.getAbsolutePath)
+        throw new KafkaStorageException("Failed to rename log directory from " + removedLog.dir.getAbsolutePath + " to " + renamed.getAbsolutePath)
       }
     }
   }

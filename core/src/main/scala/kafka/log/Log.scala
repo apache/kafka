@@ -98,7 +98,9 @@ class Log(@volatile var dir: File,
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
-  loadSegments()
+  if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
+    loadSegments()
+  }
 
   /* Calculate the offset of the next message */
   @volatile var nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset, activeSegment.size.toInt)
@@ -240,11 +242,9 @@ class Log(@volatile var dir: File,
                                      initFileSize = this.initFileSize(),
                                      preallocate = config.preallocate))
     } else {
-      if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
         recoverLog()
         // reset the index size of the currently active log segment to allow more entries
         activeSegment.index.resize(config.maxIndexSize)
-      }
     }
 
   }
@@ -925,7 +925,7 @@ object Log {
   val CleanShutdownFile = ".kafka_cleanshutdown"
 
   /** a directory that is scheduled to be deleted */
-  val DeleteDirSuffix = ".delete"
+  val DeleteDirSuffix = "-delete"
 
   /**
    * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros
@@ -966,10 +966,10 @@ object Log {
     if (name == null || name.isEmpty || !name.contains('-')) {
       throwException(dir)
     }
-    val index = name.lastIndexOf('-')
+    val index = name.indexOf('-')
     val topic: String = name.substring(0, index)
     val partition = if(name.endsWith(DeleteDirSuffix)) {
-      val partitionIndex = name.indexOf(".")
+      val partitionIndex = name.lastIndexOf("-")
       name.substring(index + 1, partitionIndex)
     } else {
       name.substring(index + 1)
