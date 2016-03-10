@@ -214,7 +214,9 @@ object LogConfig {
     private final val serverDefaultConfigNames = mutable.Map[String, String]()
 
     private def recordServerDefaultConfig(name: String, serverDefaultConfigName: String) {
-      require(serverDefaultConfigName.startsWith("log."), s"Server default configuration $serverDefaultConfigName (for log config $name) is not prefixed with log.")
+      val expected = s"log.$name"
+      require(serverDefaultConfigName == expected,
+        s"Server default configuration $serverDefaultConfigName (for log config $name) should be $expected.")
       serverDefaultConfigNames.put(name, serverDefaultConfigName)
     }
 
