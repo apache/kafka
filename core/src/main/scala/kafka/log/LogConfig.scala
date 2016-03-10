@@ -64,7 +64,8 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val segmentMs = getLong(LogConfig.SegmentMsProp)
   val segmentJitterMs = Option(getLong(LogConfig.DeprecatedSegmentJitterMsProp))
     .getOrElse(getLong(LogConfig.SegmentJitterMsProp))
-  val maxIndexSize = getInt(LogConfig.SegmentIndexBytesProp)
+  val maxIndexSize = Option(getInt(LogConfig.DeprecatedSegmentIndexBytesProp))
+    .getOrElse(getInt(LogConfig.SegmentIndexBytesProp))
   val flushInterval = getLong(LogConfig.FlushMessagesProp)
   val flushMs = Option(getLong(LogConfig.DeprecatedFlushMsProp)).getOrElse(getLong(LogConfig.FlushMsProp))
   val retentionSize = getLong(LogConfig.RetentionBytesProp)
@@ -107,7 +108,8 @@ object LogConfig {
   val SegmentHoursProp = "roll.hours"
   val DeprecatedSegmentJitterMsProp = "segment.jitter.ms"
   val SegmentJitterMsProp = "roll.jitter.ms"
-  val SegmentIndexBytesProp = "segment.index.bytes"
+  val DeprecatedSegmentIndexBytesProp = "segment.index.bytes"
+  val SegmentIndexBytesProp = "index.size.max.bytes"
   val DeprecatedFlushMessagesProp = "flush.messages"
   val FlushMessagesProp = "flush.interval.messages"
   val DeprecatedFlushMsProp = "flush.ms"
@@ -159,6 +161,7 @@ object LogConfig {
   val MaxIndexSizeDoc = "This configuration controls the size of the index that maps offsets to file positions. We" +
     " preallocate this index file and shrink it only after log rolls. You generally should not need to change this" +
     " setting."
+  val DeprecatedMaxIndexSizeDoc = s"${ConfigDef.deprecatesDoc(SegmentIndexBytesProp)} $MaxIndexSizeDoc"
   val MaxMessageSizeDoc = "This is largest message size Kafka will allow to be appended. Note that if you increase" +
     " this size you must also increase your consumer's fetch size so they can fetch messages this large."
   val IndexIntervalDoc = "This setting controls how frequently Kafka adds an index entry to it's offset index. The" +
@@ -271,6 +274,8 @@ object LogConfig {
         KafkaConfig.LogRollTimeJitterMillisProp)
       .define(SegmentJitterMsProp, LONG, Long.box(Defaults.SegmentJitterMs), atLeast(0), MEDIUM, SegmentJitterMsDoc,
         KafkaConfig.LogRollTimeJitterMillisProp)
+      .define(DeprecatedSegmentIndexBytesProp, INT, null, MEDIUM, DeprecatedMaxIndexSizeDoc,
+        KafkaConfig.LogIndexSizeMaxBytesProp)
       .define(SegmentIndexBytesProp, INT, Int.box(Defaults.MaxIndexSize), atLeast(0), MEDIUM, MaxIndexSizeDoc,
         KafkaConfig.LogIndexSizeMaxBytesProp)
       .define(DeprecatedFlushMessagesProp, LONG, null, MEDIUM, DeprecatedFlushIntervalDoc,
