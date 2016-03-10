@@ -66,7 +66,7 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
     .getOrElse(getLong(LogConfig.SegmentJitterMsProp))
   val maxIndexSize = getInt(LogConfig.SegmentIndexBytesProp)
   val flushInterval = getLong(LogConfig.FlushMessagesProp)
-  val flushMs = getLong(LogConfig.FlushMsProp)
+  val flushMs = Option(getLong(LogConfig.DeprecatedFlushMsProp)).getOrElse(getLong(LogConfig.FlushMsProp))
   val retentionSize = getLong(LogConfig.RetentionBytesProp)
   val retentionMs = getLong(LogConfig.RetentionMsProp)
   val maxMessageSize = getInt(LogConfig.MaxMessageBytesProp)
@@ -107,8 +107,10 @@ object LogConfig {
   val DeprecatedSegmentJitterMsProp = "segment.jitter.ms"
   val SegmentJitterMsProp = "roll.jitter.ms"
   val SegmentIndexBytesProp = "segment.index.bytes"
-  val FlushMessagesProp = "flush.messages"
-  val FlushMsProp = "flush.ms"
+  val DeprecatedFlushMessagesProp = "flush.messages"
+  val FlushMessagesProp = "flush.interval.messages"
+  val DeprecatedFlushMsProp = "flush.ms"
+  val FlushMsProp = "flush.interval.ms"
   val RetentionBytesProp = "retention.bytes"
   val RetentionMsProp = "retention.ms"
   val MaxMessageBytesProp = "max.message.bytes"
@@ -140,10 +142,12 @@ object LogConfig {
     " after every five messages. In general we recommend you not set this and use replication for durability and" +
     " allow the operating system's background flush capabilities as it is more efficient. This setting can be" +
     " overridden on a per-topic basis (see <a href=\"#topic-config\">the per-topic configuration section</a>)."
+  val DeprecatedFlushIntervalDoc = s"${ConfigDef.deprecatesDoc(FlushMessagesProp)} $FlushIntervalDoc"
   val FlushMsDoc = "This setting allows specifying a time interval at which we will force an fsync of data written to" +
     " the log. For example if this was set to 1000 we would fsync after 1000 ms had passed. In general we recommend" +
     " you not set this and use replication for durability and allow the operating system's background flush" +
     " capabilities as it is more efficient."
+  val DeprecatedFlushMsDoc = s"${ConfigDef.deprecatesDoc(FlushMsProp)} $FlushMsDoc"
   val RetentionSizeDoc = "This configuration controls the maximum size a log can grow to before we will discard old" +
     " log segments to free up space if we are using the \"delete\" retention policy. By default there is no size" +
     " limit only a time limit."
@@ -266,8 +270,11 @@ object LogConfig {
         KafkaConfig.LogRollTimeJitterMillisProp)
       .define(SegmentIndexBytesProp, INT, Int.box(Defaults.MaxIndexSize), atLeast(0), MEDIUM, MaxIndexSizeDoc,
         KafkaConfig.LogIndexSizeMaxBytesProp)
+      .define(DeprecatedFlushMessagesProp, LONG, null, MEDIUM, DeprecatedFlushIntervalDoc,
+        KafkaConfig.LogFlushIntervalMessagesProp)
       .define(FlushMessagesProp, LONG, Long.box(Defaults.FlushInterval), atLeast(0), MEDIUM, FlushIntervalDoc,
         KafkaConfig.LogFlushIntervalMessagesProp)
+      .define(DeprecatedFlushMsProp, LONG, null, MEDIUM, DeprecatedFlushMsDoc, KafkaConfig.LogFlushIntervalMsProp)
       .define(FlushMsProp, LONG, Long.box(Defaults.FlushMs), atLeast(0), MEDIUM, FlushMsDoc,
         KafkaConfig.LogFlushIntervalMsProp)
       // can be negative. See kafka.log.LogManager.cleanupSegmentsToMaintainSize

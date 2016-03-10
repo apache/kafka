@@ -64,6 +64,8 @@ class LogConfigTest {
       case LogConfig.DeprecatedSegmentJitterMsProp => // validated by replacing config
       case LogConfig.DeprecatedMinCleanableDirtyRatioProp => // validated by replacing config
       case LogConfig.DeprecatedSegmentMsProp => // validated by replacing config
+      case LogConfig.DeprecatedFlushMsProp => // validated by replacing config
+      case LogConfig.DeprecatedFlushMessagesProp => // validated by replacing config
       case positiveIntProperty => assertPropertyInvalid(name, "not_a_number", "-1")
     })
   }
