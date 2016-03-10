@@ -72,7 +72,8 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val retentionMs = getLong(LogConfig.RetentionMsProp)
   val maxMessageSize = getInt(LogConfig.MaxMessageBytesProp)
   val indexInterval = getInt(LogConfig.IndexIntervalBytesProp)
-  val fileDeleteDelayMs = getLong(LogConfig.FileDeleteDelayMsProp)
+  val fileDeleteDelayMs = Option(getLong(LogConfig.DeprecatedFileDeleteDelayMsProp))
+    .getOrElse(getLong(LogConfig.FileDeleteDelayMsProp))
   val deleteRetentionMs = Option(getLong(LogConfig.DeprecatedDeleteRetentionMsProp))
     .getOrElse(getLong(LogConfig.DeleteRetentionMsProp))
   val minCleanableRatio = Option(getDouble(LogConfig.DeprecatedMinCleanableDirtyRatioProp))
@@ -120,7 +121,8 @@ object LogConfig {
   val IndexIntervalBytesProp = "index.interval.bytes"
   val DeprecatedDeleteRetentionMsProp = "delete.retention.ms"
   val DeleteRetentionMsProp = "cleaner.delete.retention.ms"
-  val FileDeleteDelayMsProp = "file.delete.delay.ms"
+  val DeprecatedFileDeleteDelayMsProp = "file.delete.delay.ms"
+  val FileDeleteDelayMsProp = "segment.delete.delay.ms"
   val DeprecatedMinCleanableDirtyRatioProp = "min.cleanable.dirty.ratio"
   val MinCleanableDirtyRatioProp = "cleaner.min.cleanable.ratio"
   val CleanupPolicyProp = "cleanup.policy"
@@ -168,6 +170,7 @@ object LogConfig {
     " default setting ensures that we index a message roughly every 4096 bytes. More indexing allows reads to jump" +
     " closer to the exact position in the log but makes the index larger. You probably don't need to change this."
   val FileDeleteDelayMsDoc = "The time to wait before deleting a file from the filesystem"
+  val DeprecatedFileDeleteDelayMsDoc = s"${ConfigDef.deprecatesDoc(FileDeleteDelayMsProp)} $FileDeleteDelayMsDoc"
   val DeleteRetentionMsDoc = "The amount of time to retain delete tombstone markers for <a href=\"#compaction\">log" +
     " compacted</a> topics. This setting also gives a bound on the time in which a consumer must complete a read if" +
     " they begin from offset 0 to ensure that they get a valid snapshot of the final stage (otherwise delete" +
@@ -299,6 +302,8 @@ object LogConfig {
         KafkaConfig.LogCleanerDeleteRetentionMsProp)
       .define(DeleteRetentionMsProp, LONG, Long.box(Defaults.DeleteRetentionMs), atLeast(0), MEDIUM,
         DeleteRetentionMsDoc, KafkaConfig.LogCleanerDeleteRetentionMsProp)
+      .define(DeprecatedFileDeleteDelayMsProp, LONG, null, MEDIUM, DeprecatedFileDeleteDelayMsDoc,
+        KafkaConfig.LogDeleteDelayMsProp)
       .define(FileDeleteDelayMsProp, LONG, Long.box(Defaults.FileDeleteDelayMs), atLeast(0), MEDIUM, FileDeleteDelayMsDoc,
         KafkaConfig.LogDeleteDelayMsProp)
       .define(DeprecatedMinCleanableDirtyRatioProp, DOUBLE, null, MEDIUM, DeprecatedMinCleanableRatioDoc,

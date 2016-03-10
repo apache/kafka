@@ -68,6 +68,7 @@ class LogConfigTest {
       case LogConfig.DeprecatedFlushMessagesProp => // validated by replacing config
       case LogConfig.DeprecatedDeleteRetentionMsProp => // validated by replacing config
       case LogConfig.DeprecatedSegmentIndexBytesProp => // validated by replacing config
+      case LogConfig.DeprecatedFileDeleteDelayMsProp => // validated by replacing config
       case positiveIntProperty => assertPropertyInvalid(name, "not_a_number", "-1")
     })
   }
