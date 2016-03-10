@@ -61,8 +61,9 @@ class LogConfigTest {
       case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
       case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
       case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
-      case LogConfig.DeprecatedSegmentJitterMsProp => assertPropertyInvalid(name, "not_a_number")
-      case LogConfig.DeprecatedMinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number")
+      case LogConfig.DeprecatedSegmentJitterMsProp => // validated by replacing config
+      case LogConfig.DeprecatedMinCleanableDirtyRatioProp => // validated by replacing config
+      case LogConfig.DeprecatedSegmentMsProp => // validated by replacing config
       case positiveIntProperty => assertPropertyInvalid(name, "not_a_number", "-1")
     })
   }

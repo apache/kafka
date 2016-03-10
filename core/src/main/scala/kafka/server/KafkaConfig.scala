@@ -396,7 +396,7 @@ object KafkaConfig {
   val LogDirDoc = "The directory in which the log data is kept (supplemental for " + LogDirsProp + " property)"
   val LogDirsDoc = "The directories in which the log data is kept. If not set, the value in " + LogDirProp + " is used"
   val LogSegmentBytesDoc = LogConfig.SegmentSizeDoc
-  val LogRollTimeMillisDoc = s"${LogConfig.SegmentMsDoc} If not set, the value in $LogRollTimeHoursProp is used"
+  val LogRollTimeMillisDoc = LogConfig.SegmentMsDoc
   val LogRollTimeHoursDoc = "The maximum time before a new log segment is rolled out (in hours), secondary to " + LogRollTimeMillisProp + " property"
 
   val LogRollTimeJitterMillisDoc = s"${LogConfig.SegmentJitterMsDoc} If not set, the value in $LogRollTimeJitterHoursProp is used"

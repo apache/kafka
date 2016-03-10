@@ -33,6 +33,7 @@ import scala.collection.mutable
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
   val SegmentMs = kafka.server.Defaults.LogRollHours * 60 * 60 * 1000L
+  val SegmentHours = kafka.server.Defaults.LogRollHours
   val SegmentJitterMs = kafka.server.Defaults.LogRollJitterHours * 60 * 60 * 1000L
   val FlushInterval = kafka.server.Defaults.LogFlushIntervalMessages
   val FlushMs = kafka.server.Defaults.LogFlushSchedulerIntervalMs
@@ -100,7 +101,9 @@ object LogConfig {
   val Compact = "compact"
 
   val SegmentBytesProp = "segment.bytes"
-  val SegmentMsProp = "segment.ms"
+  val DeprecatedSegmentMsProp = "segment.ms"
+  val SegmentMsProp = "roll.ms"
+  val SegmentHoursProp = "roll.hours"
   val DeprecatedSegmentJitterMsProp = "segment.jitter.ms"
   val SegmentJitterMsProp = "roll.jitter.ms"
   val SegmentIndexBytesProp = "segment.index.bytes"
@@ -125,8 +128,10 @@ object LogConfig {
 
   val SegmentSizeDoc = "This configuration controls the segment file size for the log. Retention and cleaning is" +
     " always done a file at a time so a larger segment size means fewer files but less granular control over retention."
-  val SegmentMsDoc = "This configuration controls the period of time after which Kafka will force the log to roll" +
+  val SegmentHoursDoc = "This configuration controls the period of time after which Kafka will force the log to roll" +
     " even if the segment file isn't full to ensure that retention can delete or compact old data."
+  val SegmentMsDoc = s"$SegmentHoursDoc If not set, the value in $SegmentHoursProp is used."
+  val DeprecatedSegmentMsDoc = s"${ConfigDef.deprecatesDoc(SegmentMsProp)} $SegmentMsDoc"
   val SegmentJitterMsDoc = "The maximum random jitter subtracted from the scheduled segment roll time to avoid" +
     " thundering herds of segment rolling."
   val DeprecatedSegmentJitterMsDoc = s"${ConfigDef.deprecatesDoc(SegmentJitterMsProp)} $SegmentJitterMsDoc"
@@ -250,7 +255,10 @@ object LogConfig {
     new LogConfigDef()
       .define(SegmentBytesProp, INT, Int.box(Defaults.SegmentSize), atLeast(Message.MinMessageOverhead), MEDIUM,
         SegmentSizeDoc, KafkaConfig.LogSegmentBytesProp)
+      .define(DeprecatedSegmentMsProp, LONG, null, MEDIUM, DeprecatedSegmentMsDoc, KafkaConfig.LogRollTimeMillisProp)
       .define(SegmentMsProp, LONG, Long.box(Defaults.SegmentMs), atLeast(0), MEDIUM, SegmentMsDoc,
+        KafkaConfig.LogRollTimeMillisProp)
+      .define(SegmentHoursProp, LONG, Long.box(Defaults.SegmentHours), atLeast(0), MEDIUM, SegmentHoursDoc,
         KafkaConfig.LogRollTimeHoursProp)
       .define(DeprecatedSegmentJitterMsProp, LONG, null, MEDIUM, DeprecatedSegmentJitterMsDoc,
         KafkaConfig.LogRollTimeJitterMillisProp)
