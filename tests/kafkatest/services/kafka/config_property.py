@@ -40,7 +40,7 @@ AUTO_CREATE_TOPICS_ENABLE = "auto.create.topics.enable"
 ZOOKEEPER_CONNECT = "zookeeper.connect"
 ZOOKEEPER_CONNECTION_TIMEOUT_MS = "zookeeper.connection.timeout.ms"
 INTER_BROKER_PROTOCOL_VERSION = "inter.broker.protocol.version"
-MESSAGE_FORMAT_VERSION = "message.format.version"
+MESSAGE_FORMAT_VERSION = "log.message.format.version"
 
 
 

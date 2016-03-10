@@ -95,12 +95,12 @@ object Defaults {
   val LogFlushOffsetCheckpointIntervalMs = 60000
   val LogPreAllocateEnable = false
   // lazy val as `InterBrokerProtocolVersion` is defined later
-  lazy val MessageFormatVersion = InterBrokerProtocolVersion
+  lazy val LogMessageFormatVersion = InterBrokerProtocolVersion
+  val LogMessageTimestampType = "CreateTime"
+  val LogMessageTimestampDifferenceMaxMs = Long.MaxValue
   val NumRecoveryThreadsPerDataDir = 1
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
-  val MessageTimestampType = "CreateTime"
-  val MessageTimestampDifferenceMaxMs = Long.MaxValue
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMs = RequestTimeoutMs
@@ -255,12 +255,12 @@ object KafkaConfig {
   val LogFlushIntervalMsProp = "log.flush.interval.ms"
   val LogFlushOffsetCheckpointIntervalMsProp = "log.flush.offset.checkpoint.interval.ms"
   val LogPreAllocateProp = "log.preallocate"
-  val MessageFormatVersionProp = "message.format.version"
+  val LogMessageFormatVersionProp = "log.message.format.version"
+  val LogMessageTimestampTypeProp = "log.message.timestamp.type"
+  val LogMessageTimestampDifferenceMaxMsProp = "log.message.timestamp.difference.max.ms"
   val NumRecoveryThreadsPerDataDirProp = "num.recovery.threads.per.data.dir"
   val AutoCreateTopicsEnableProp = "auto.create.topics.enable"
   val MinInSyncReplicasProp = "min.insync.replicas"
-  val MessageTimestampTypeProp = "message.timestamp.type"
-  val MessageTimestampDifferenceMaxMsProp = "message.timestamp.difference.max.ms"
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsProp = "controller.socket.timeout.ms"
   val DefaultReplicationFactorProp = "default.replication.factor"
@@ -607,9 +607,9 @@ object KafkaConfig {
       .define(NumRecoveryThreadsPerDataDirProp, INT, Defaults.NumRecoveryThreadsPerDataDir, atLeast(1), HIGH, NumRecoveryThreadsPerDataDirDoc)
       .define(AutoCreateTopicsEnableProp, BOOLEAN, Defaults.AutoCreateTopicsEnable, HIGH, AutoCreateTopicsEnableDoc)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), HIGH, MinInSyncReplicasDoc)
-      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, MEDIUM, MessageFormatVersionDoc)
-      .define(MessageTimestampTypeProp, STRING, Defaults.MessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM, MessageTimestampTypeDoc)
-      .define(MessageTimestampDifferenceMaxMsProp, LONG, Defaults.MessageTimestampDifferenceMaxMs, atLeast(0), MEDIUM, MessageTimestampDifferenceMaxMsDoc)
+      .define(LogMessageFormatVersionProp, STRING, Defaults.LogMessageFormatVersion, MEDIUM, MessageFormatVersionDoc)
+      .define(LogMessageTimestampTypeProp, STRING, Defaults.LogMessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM, MessageTimestampTypeDoc)
+      .define(LogMessageTimestampDifferenceMaxMsProp, LONG, Defaults.LogMessageTimestampDifferenceMaxMs, atLeast(0), MEDIUM, MessageTimestampDifferenceMaxMsDoc)
 
       /** ********* Replication configuration ***********/
       .define(ControllerSocketTimeoutMsProp, INT, Defaults.ControllerSocketTimeoutMs, MEDIUM, ControllerSocketTimeoutMsDoc)
@@ -802,10 +802,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val logPreAllocateEnable: java.lang.Boolean = getBoolean(KafkaConfig.LogPreAllocateProp)
   // We keep the user-provided String as `ApiVersion.apply` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
-  val messageFormatVersionString = getString(KafkaConfig.MessageFormatVersionProp)
-  val messageFormatVersion = ApiVersion(messageFormatVersionString)
-  val messageTimestampType = TimestampType.forName(getString(KafkaConfig.MessageTimestampTypeProp))
-  val messageTimestampDifferenceMaxMs = getLong(KafkaConfig.MessageTimestampDifferenceMaxMsProp)
+  val logMessageFormatVersionString = getString(KafkaConfig.LogMessageFormatVersionProp)
+  val logMessageFormatVersion = ApiVersion(logMessageFormatVersionString)
+  val logMessageTimestampType = TimestampType.forName(getString(KafkaConfig.LogMessageTimestampTypeProp))
+  val logMessageTimestampDifferenceMaxMs = getLong(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
 
   /** ********* Replication configuration ***********/
   val controllerSocketTimeoutMs: Int = getInt(KafkaConfig.ControllerSocketTimeoutMsProp)
@@ -986,7 +986,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
       s"${KafkaConfig.AdvertisedListenersProp} protocols must be equal to or a subset of ${KafkaConfig.ListenersProp} protocols. " +
       s"Found ${advertisedListeners.keySet}. The valid options based on currently configured protocols are ${listeners.keySet}"
     )
-    require(interBrokerProtocolVersion >= messageFormatVersion,
-      s"message.format.version $messageFormatVersionString cannot be used when inter.broker.protocol.version is set to $interBrokerProtocolVersionString")
+    require(interBrokerProtocolVersion >= logMessageFormatVersion,
+      s"log.message.format.version $logMessageFormatVersionString cannot be used when inter.broker.protocol.version is set to $interBrokerProtocolVersionString")
   }
 }
