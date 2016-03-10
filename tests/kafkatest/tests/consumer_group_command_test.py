@@ -80,7 +80,7 @@ class ConsumerGroupCommandTest(Test):
             command_config_file = self.COMMAND_CONFIG_FILE
 
         if group:
-            wait_until(lambda: ("%s, topic-consumer-group-command, 0," % group) in self.kafka.describe_consumer_group(group=group, node=kafka_node, new_consumer=enable_new_consumer, command_config=command_config_file), timeout_sec=10,
+            wait_until(lambda: ("%s            topic-consumer-group-command   0" % group) in self.kafka.describe_consumer_group(group=group, node=kafka_node, new_consumer=enable_new_consumer, command_config=command_config_file), timeout_sec=10,
                        err_msg="Timed out waiting to list expected consumer groups.")
         else:
             wait_until(lambda: "test-consumer-group" in self.kafka.list_consumer_groups(node=kafka_node, new_consumer=enable_new_consumer, command_config=command_config_file), timeout_sec=10,
