@@ -61,6 +61,7 @@ class LogConfigTest {
       case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
       case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
       case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
+      case LogConfig.DeprecatedSegmentJitterMsProp => assertPropertyInvalid(name, "not_a_number")
       case positiveIntProperty => assertPropertyInvalid(name, "not_a_number", "-1")
     })
   }

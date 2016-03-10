@@ -371,6 +371,10 @@ public class ConfigDef {
 
     }
 
+    public static String deprecatesDoc(String replacingConfig) {
+        return String.format("<i>This config will be deprecated in a future release - use %s instead.</i>", replacingConfig);
+    }
+
     public String toHtmlTable() {
         // sort first required fields, then by importance, then name
         List<ConfigDef.ConfigKey> configs = new ArrayList<ConfigDef.ConfigKey>(this.configKeys.values());
