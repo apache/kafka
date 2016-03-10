@@ -21,6 +21,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 
 import kafka.network.RequestChannel.Session
+import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
@@ -61,6 +62,8 @@ object SimpleAclAuthorizer {
 
   //prefix of all the change notification sequence node.
   val AclChangedPrefix = "acl_changes_"
+
+  private case class VersionedAcls(acls: Set[Acl], zkVersion: Int)
 }
 
 class SimpleAclAuthorizer extends Authorizer with Logging {
@@ -70,7 +73,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   private var zkUtils: ZkUtils = null
   private var aclChangeListener: ZkNodeChangeNotificationListener = null
 
-  private case class VersionedAcls(acls: Set[Acl], zkVersion: Int)
   private val aclCache = new scala.collection.mutable.HashMap[Resource, VersionedAcls]
   private val lock = new ReentrantReadWriteLock()
 
@@ -175,7 +177,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   override def removeAcls(aclsTobeRemoved: Set[Acl], resource: Resource): Boolean = {
     inWriteLock(lock) {
       updateResourceAcls(resource) { currentAcls =>
-        currentAcls.diff(aclsTobeRemoved)
+        currentAcls -- aclsTobeRemoved
       }
     }
   }
@@ -241,22 +243,24 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   /**
-    * Safely updates the resources acls by ensureing reads and writes respect the expected zookeeper version.
-    * Continues to retry until it succesfully updates.
+    * Safely updates the resources ACLs by ensuring reads and writes respect the expected zookeeper version.
+    * Continues to retry until it succesfully updates zookeeper.
     *
-    * @param resource the resource to change acls for
-    * @param getNewAcls function to transform existing acls to new acls
+    * Returns a boolean indicating if the content of the ACLs was actually changed.
+    *
+    * @param resource the resource to change ACLs for
+    * @param getNewAcls function to transform existing acls to new ACLs
     * @return boolean indicating if a change was made
     */
   private def updateResourceAcls(resource: Resource)(getNewAcls: Set[Acl] => Set[Acl]): Boolean = {
     val path = toResourcePath(resource)
 
     var currentVersionedAcls =
-      if(aclCache.contains(resource))
+      if (aclCache.contains(resource))
         getAclsFromCache(resource)
       else
         getAclsFromZk(resource)
-    var newVersionedAcls = currentVersionedAcls
+    var newVersionedAcls: VersionedAcls = null
     var writeComplete = false
     while (!writeComplete) {
       val newAcls = getNewAcls(currentVersionedAcls.acls)
@@ -266,11 +270,11 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
           if (!newAcls.isEmpty) {
            zkUtils.conditionalUpdatePersistentPathIfExists(path, data, currentVersionedAcls.zkVersion)
           } else {
-            trace(s"Deleting path for $resource because it had no acls remaining")
+            trace(s"Deleting path for $resource because it had no ACLs remaining")
             (deletePath(path, currentVersionedAcls.zkVersion), 0)
           }
-        if(!updateSucceeded) {
-          trace(s"Failed to update acls for $resource. Used version ${currentVersionedAcls.zkVersion}. Reading data and retrying update.")
+        if (!updateSucceeded) {
+          trace(s"Failed to update ACLs for $resource. Used version ${currentVersionedAcls.zkVersion}. Reading data and retrying update.")
           currentVersionedAcls = getAclsFromZk(resource);
         }
         newVersionedAcls = VersionedAcls(newAcls, updateVersion)
@@ -291,12 +295,12 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
 
     if (newVersionedAcls.acls != currentVersionedAcls.acls) {
-      debug(s"Updated acls for $resource to ${newVersionedAcls.acls} with version ${newVersionedAcls.zkVersion}")
+      debug(s"Updated ACLs for $resource to ${newVersionedAcls.acls} with version ${newVersionedAcls.zkVersion}")
       updateCache(resource, newVersionedAcls)
       updateAclChangedFlag(resource)
       true
     } else {
-      debug(s"Updated acls for $resource, no change was made")
+      debug(s"Updated ACLs for $resource, no change was made")
       updateCache(resource, newVersionedAcls) // Even if no change, update the version
       false
     }
@@ -313,7 +317,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def getAclsFromCache(resource: Resource): VersionedAcls = {
-    aclCache.getOrElse(resource, throw new IllegalArgumentException(s"Acls do not exist in the cache for resource $resource"))
+    aclCache.getOrElse(resource, throw new IllegalArgumentException(s"ACLs do not exist in the cache for resource $resource"))
   }
 
   private def getAclsFromZk(resource: Resource): VersionedAcls = {

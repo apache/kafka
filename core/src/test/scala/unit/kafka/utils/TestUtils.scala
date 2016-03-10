@@ -21,8 +21,9 @@ import java.io._
 import java.nio._
 import java.nio.file.Files
 import java.nio.channels._
-import java.util.Random
-import java.util.Properties
+import java.util
+import java.util.concurrent.{TimeUnit, CountDownLatch, Executors}
+import java.util.{Collections, Random, Properties}
 import java.security.cert.X509Certificate
 import javax.net.ssl.X509TrustManager
 import charset.Charset
@@ -801,7 +802,7 @@ object TestUtils extends Logging {
   }
 
   def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long = 5000L): Unit = {
-    TestUtils.waitUntilTrue(() => 
+    TestUtils.waitUntilTrue(() =>
       servers.exists { server =>
         server.replicaManager.getPartition(topic, partition).exists(_.leaderReplicaIfLocal().isDefined)
       },
@@ -1041,6 +1042,53 @@ object TestUtils extends Logging {
   def waitAndVerifyAcls(expected: Set[Acl], authorizer: Authorizer, resource: Resource) = {
     TestUtils.waitUntilTrue(() => authorizer.getAcls(resource) == expected,
       s"expected acls $expected but got ${authorizer.getAcls(resource)}", waitTime = 10000)
+  }
+
+  /**
+    * https://github.com/junit-team/junit/wiki/Multithreaded-code-and-concurrency
+    *
+    * To use this you pass in a Collection of Runnables that are your arrange\act\assert test on the SUT,
+    * they all run at the same time in the assertConcurrent method; the chances of triggering a multithreading code error,
+    * and thereby failing some assertion are greatly increased.
+    */
+  def assertConcurrent(message: String, functions: Seq[() => Any], timeoutMs: Int) {
+    val runnables = functions.map { f =>
+      new Runnable {
+        override def run(): Unit = f()
+      }
+    }
+    val numThreads = runnables.size
+    val exceptions = Collections.synchronizedList(new util.ArrayList[Throwable]())
+    val threadPool = Executors.newFixedThreadPool(numThreads)
+    try {
+      val allExecutorThreadsReady = new CountDownLatch(numThreads)
+      val afterInitBlocker = new CountDownLatch(1)
+      val allDone = new CountDownLatch(numThreads)
+      for (submittedTestRunnable <- runnables) {
+        threadPool.submit(new Runnable() {
+          def run() {
+            allExecutorThreadsReady.countDown()
+            try {
+              afterInitBlocker.await()
+              submittedTestRunnable.run()
+            } catch {
+              case e: Throwable => exceptions.add(e)
+            } finally {
+              allDone.countDown()
+            }
+          }
+        })
+      }
+      // wait until all threads are ready
+      assertTrue("Timeout initializing threads! Perform long lasting initializations before passing runnables to assertConcurrent",
+        allExecutorThreadsReady.await(runnables.size * 10, TimeUnit.MILLISECONDS))
+      // start all test runners
+      afterInitBlocker.countDown()
+      assertTrue(message +" timeout! More than" + timeoutMs + "milliseconds", allDone.await(timeoutMs, TimeUnit.MILLISECONDS))
+    } finally {
+      threadPool.shutdownNow()
+    }
+    assertTrue(message + "failed with exception(s)" + exceptions, exceptions.isEmpty())
   }
 
 }
