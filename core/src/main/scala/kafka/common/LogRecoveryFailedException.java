@@ -18,4 +18,23 @@
 package kafka.common;
 
 public class LogRecoveryFailedException extends RuntimeException {
+    public LogRecoveryFailedException() {
+        super();
+    }
+
+    public LogRecoveryFailedException(String message) {
+        super(message);
+    }
+
+    public LogRecoveryFailedException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public LogRecoveryFailedException(Throwable cause) {
+        super(cause);
+    }
+
+    protected LogRecoveryFailedException(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
+        super(message, cause, enableSuppression, writableStackTrace);
+    }
 }

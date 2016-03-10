@@ -262,7 +262,7 @@ class Log(val dir: File,
     val recoveryThreads = config.getInt(LogConfig.LogRecoveryThreads)
     val maxRecoveryTimeMs = config.getLong(LogConfig.LogRecoveryMaxIntervalMs)
     val pool = Executors.newFixedThreadPool(recoveryThreads)
-    val logRecoveryFutures: List[Future] = List()
+    val logRecoveryFutures: List[Future[_]] = List()
 
     val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
     while(unflushed.hasNext) {
@@ -275,7 +275,7 @@ class Log(val dir: File,
       logAndThrowRecoveryFailedException(msg)
     }
 
-    val logRecoveryFailedFutures: List[Future] = List()
+    val logRecoveryFailedFutures: List[Future[_]] = List()
     for (logRecoveryFuture <- logRecoveryFutures if Option(logRecoveryFuture.get()).isDefined) {
       logRecoveryFailedFutures :+ logRecoveryFuture
     }

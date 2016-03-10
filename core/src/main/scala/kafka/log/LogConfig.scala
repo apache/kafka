@@ -81,7 +81,7 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp).longValue
   val logRecoveryThreads = getInt(LogConfig.LogRecoveryThreads)
-  val logRecoveryMaxIntervalMs = getInt(LogConfig.LogRecoveryMaxIntervalMs)
+  val logRecoveryMaxIntervalMs = getLong(LogConfig.LogRecoveryMaxIntervalMs)
 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
@@ -184,7 +184,7 @@ object LogConfig {
       .define(MessageTimestampTypeProp, STRING, Defaults.MessageTimestampType, MEDIUM, MessageTimestampTypeDoc)
       .define(MessageTimestampDifferenceMaxMsProp, LONG, Defaults.MessageTimestampDifferenceMaxMs, atLeast(0), MEDIUM, MessageTimestampDifferenceMaxMsDoc)
       .define(LogRecoveryThreads, INT, Defaults.LogRecoveryThreads, atLeast(1), MEDIUM, LogRecoveryThreadsDoc)
-      .define(LogRecoveryMaxIntervalMs, INT, Defaults.LogRecoveryMaxIntervalMs, atLeast(1000), MEDIUM, LogRecoveryMaxIntervalMsDoc)
+      .define(LogRecoveryMaxIntervalMs, LONG, Defaults.LogRecoveryMaxIntervalMs, atLeast(1000), MEDIUM, LogRecoveryMaxIntervalMsDoc)
   }
 
   def apply(): LogConfig = LogConfig(new Properties())
