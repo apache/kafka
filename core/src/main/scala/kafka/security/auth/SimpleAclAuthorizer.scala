@@ -265,32 +265,20 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     while (!writeComplete) {
       val newAcls = getNewAcls(currentVersionedAcls.acls)
       val data = Json.encode(Acl.toJsonCompatibleMap(newAcls))
-      try {
-        val (updateSucceeded, updateVersion) =
-          if (!newAcls.isEmpty) {
-           zkUtils.conditionalUpdatePersistentPathIfExists(path, data, currentVersionedAcls.zkVersion)
-          } else {
-            trace(s"Deleting path for $resource because it had no ACLs remaining")
-            (deletePath(path, currentVersionedAcls.zkVersion), 0)
-          }
-        if (!updateSucceeded) {
-          trace(s"Failed to update ACLs for $resource. Used version ${currentVersionedAcls.zkVersion}. Reading data and retrying update.")
-          currentVersionedAcls = getAclsFromZk(resource);
+      val (updateSucceeded, updateVersion) =
+        if (!newAcls.isEmpty) {
+         updatePath(path, data, currentVersionedAcls.zkVersion)
+        } else {
+          trace(s"Deleting path for $resource because it had no ACLs remaining")
+          (deletePath(path, currentVersionedAcls.zkVersion), 0)
         }
+
+      if (!updateSucceeded) {
+        trace(s"Failed to update ACLs for $resource. Used version ${currentVersionedAcls.zkVersion}. Reading data and retrying update.")
+        currentVersionedAcls = getAclsFromZk(resource);
+      } else {
         newVersionedAcls = VersionedAcls(newAcls, updateVersion)
         writeComplete = updateSucceeded
-      } catch {
-        case e: ZkNoNodeException =>
-          try {
-            debug(s"Node for $resource does not exist, attempting to create it.")
-            zkUtils.createPersistentPath(path, data)
-            newVersionedAcls = VersionedAcls(newAcls, 0)
-            writeComplete = true
-          } catch {
-            case e: ZkNodeExistsException =>
-              debug(s"Failed to create node for $resource because it already exists. Reading data and retrying update.")
-              currentVersionedAcls = getAclsFromZk(resource);
-          }
       }
     }
 
@@ -303,6 +291,27 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       debug(s"Updated ACLs for $resource, no change was made")
       updateCache(resource, newVersionedAcls) // Even if no change, update the version
       false
+    }
+  }
+
+  /**
+    * Updates a zookeeper path with an expected version. If the topic does not exist, it will create it.
+    * Returns if the update was successful and the new version.
+    */
+  private def updatePath(path: String, data: String, expectedVersion: Int): (Boolean, Int) = {
+    try {
+      zkUtils.conditionalUpdatePersistentPathIfExists(path, data, expectedVersion)
+    } catch {
+      case e: ZkNoNodeException =>
+        try {
+          debug(s"Node $path does not exist, attempting to create it.")
+          zkUtils.createPersistentPath(path, data)
+          (true, 0)
+        } catch {
+          case e: ZkNodeExistsException =>
+            debug(s"Failed to create node for $path because it already exists.")
+            (false, 0)
+        }
     }
   }
 
