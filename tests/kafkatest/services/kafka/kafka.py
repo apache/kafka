@@ -509,3 +509,19 @@ class KafkaService(JmxMixin, Service):
             output += line
         self.logger.debug(output)
         return output
+
+    def get_simple_consumer_shell(self, topic, partition=0):
+        node = self.nodes[0]
+
+        cmd = "/opt/%s/bin/" % kafka_dir(node)
+        cmd += "kafka-run-class.sh kafka.tools.SimpleConsumerShell"
+        cmd += " --topic %s --broker-list %s --partition %s --no-wait-at-logend" % (topic, self.bootstrap_servers(self.security_protocol), partition)
+
+        cmd += " 2>> /mnt/get_simple_consumer_shell.log | tee -a /mnt/get_simple_consumer_shell.log &"
+        output = ""
+        self.logger.debug(cmd)
+        for line in node.account.ssh_capture(cmd):
+            output += line
+        self.logger.debug(output)
+        self.logger.info("Num lines in output: %s" % output.count("\n"))
+        return output
