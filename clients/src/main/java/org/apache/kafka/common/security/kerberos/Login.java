@@ -286,11 +286,12 @@ public class Login {
     private synchronized LoginContext login(final String loginContextName) throws LoginException {
         String jaasConfigFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM);
         if (jaasConfigFile == null) {
-            throw new IllegalArgumentException("You must pass " + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + " in secure mode.");
+            log.debug("System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is not set, using default JAAS configuration.");
         }
         AppConfigurationEntry[] configEntries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
         if (configEntries == null) {
-            String errorMessage = "Could not find a '" + loginContextName + "' entry in `" + jaasConfigFile + "`.";
+            String errorMessage = "Could not find a '" + loginContextName + "' entry in the JAAS configuration. System property '" +
+                JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is " + (jaasConfigFile == null ? "not set" : jaasConfigFile);
             throw new IllegalArgumentException(errorMessage);
         }
 
