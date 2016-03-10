@@ -95,9 +95,6 @@ object LogConfig {
 
   def main(args: Array[String]) {
     println(configDef.toHtmlTable)
-    println("<p>The following table provides the equivalent default server configuration properties. A given server" +
-      " default config value only applies to a topic if it does not have an explicit topic config override.</p>")
-    println(configDef.serverDefaultConfigNamesToHtmlTable())
   }
 
   val Delete = "delete"
@@ -240,22 +237,6 @@ object LogConfig {
       super.define(name, defType, importance, documentation)
       recordServerDefaultConfig(name, serverDefaultConfigName)
       this
-    }
-
-    def serverDefaultConfigNamesToHtmlTable() = {
-      val sb = new StringBuilder
-      sb.append("<table class=\"data-table\"><tbody>\n")
-      sb.append("<tr>\n")
-      sb.append("<th>Topic config name</th>\n")
-      sb.append("<th>Server default config name</th>\n")
-      sb.append("</tr>\n")
-      serverDefaultConfigNames.foreach { case(logConfig, serverConfig) =>
-        sb.append("<tr>\n")
-        sb.append(s"<td>$logConfig</td><td>$serverConfig</td>\n")
-        sb.append("</tr>\n")
-      }
-      sb.append("</tbody></table>")
-      sb.toString()
     }
   }
 

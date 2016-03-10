@@ -51,7 +51,7 @@ To remove an override you can do
     --delete-config max.message.bytes</b>
 </pre>
 
-The following are the topic-level configurations. The equivalent server defaults for each property is provided in the subsequent table.
+The following are the topic-level configurations. Each <i>non-deprecated</i> topic configuration has an equivalent server default configuration which is the topic configuration prefixed with <code>"log"</code>. So for example, the server default of the <code>unclean.leader.election.enable</code> topic configuration is <code>log.unclean.leader.election.enable</code>.
 <!--#include virtual="topic_config.html" -->
 
 <h3><a id="producerconfigs" href="#producerconfigs">3.2 Producer Configs</a></h3>
