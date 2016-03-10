@@ -501,12 +501,12 @@ public class Fetcher<K, V> {
             future.complete(offset);
         } else if (errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()
                 || errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
-            log.warn("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
+            log.debug("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
                     topicPartition);
             future.raise(Errors.forCode(errorCode));
         } else {
-            log.error("Attempt to fetch offsets for partition {} failed due to: {}",
-                    topicPartition, Errors.forCode(errorCode).exception().getMessage());
+            log.warn("Attempt to fetch offsets for partition {} failed due to: {}",
+                    topicPartition, Errors.forCode(errorCode).message());
             future.raise(new StaleMetadataException());
         }
     }
