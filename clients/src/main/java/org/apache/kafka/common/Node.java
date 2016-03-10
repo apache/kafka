@@ -96,7 +96,7 @@ public class Node {
 
     @Override
     public String toString() {
-        return "Node(" + id + ", " + host + ", " + port + ")";
+        return host + ":" + port + " (id: " + idString + ")";
     }
 
 }
