@@ -13,9 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark import ignore
+
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
-from ducktape.utils.util import wait_until
 import time
 
 class StreamsBounceTest(KafkaTest):
@@ -40,6 +41,7 @@ class StreamsBounceTest(KafkaTest):
         self.driver = StreamsSmokeTestDriverService(test_context, self.kafka)
         self.processor1 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
 
+    @ignore
     def test_bounce(self):
         """
         Start a smoke test client, then abort (kill -9) and restart it a few times.

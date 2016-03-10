@@ -60,10 +60,10 @@ The release file can be found inside `./core/build/distributions/`.
 ### Cleaning the build ###
     ./gradlew clean
 
-### Running a task on a particular version of Scala (either 2.10.6 or 2.11.7) ###
+### Running a task on a particular version of Scala (either 2.10.6 or 2.11.8) ###
 *Note that if building the jars with a version other than 2.10, you need to set the `SCALA_BINARY_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
-You can pass either the major version (eg 2.11) or the full version (eg 2.11.7):
+You can pass either the major version (eg 2.11) or the full version (eg 2.11.8):
 
     ./gradlew -PscalaVersion=2.11 jar
     ./gradlew -PscalaVersion=2.11 test
