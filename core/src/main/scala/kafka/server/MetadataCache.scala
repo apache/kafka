@@ -39,7 +39,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
  */
 private[server] class MetadataCache(brokerId: Int) extends Logging {
   private val stateChangeLogger = KafkaController.stateChangeLogger
-  private val cache = new mutable.HashMap[String, mutable.Map[Int, PartitionStateInfo]]()
+  private val cache = mutable.Map[String, mutable.Map[Int, PartitionStateInfo]]()
   private var aliveBrokers = Map[Int, Broker]()
   private val partitionMetadataLock = new ReentrantReadWriteLock()
 
@@ -126,8 +126,8 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
   }
 
   private def addOrUpdatePartitionInfo(topic: String,
-                               partitionId: Int,
-                               stateInfo: PartitionStateInfo) {
+                                       partitionId: Int,
+                                       stateInfo: PartitionStateInfo) {
     inWriteLock(partitionMetadataLock) {
       cache.get(topic) match {
         case Some(infos) => infos.put(partitionId, stateInfo)
