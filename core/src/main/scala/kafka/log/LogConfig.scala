@@ -72,7 +72,8 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val indexInterval = getInt(LogConfig.IndexIntervalBytesProp)
   val fileDeleteDelayMs = getLong(LogConfig.FileDeleteDelayMsProp)
   val deleteRetentionMs = getLong(LogConfig.DeleteRetentionMsProp)
-  val minCleanableRatio = getDouble(LogConfig.MinCleanableDirtyRatioProp)
+  val minCleanableRatio = Option(getDouble(LogConfig.DeprecatedMinCleanableDirtyRatioProp))
+    .getOrElse(getDouble(LogConfig.MinCleanableDirtyRatioProp))
   val compact = getString(LogConfig.CleanupPolicyProp).toLowerCase != LogConfig.Delete
   val uncleanLeaderElectionEnable = getBoolean(LogConfig.UncleanLeaderElectionEnableProp)
   val minInSyncReplicas = getInt(LogConfig.MinInSyncReplicasProp)
@@ -111,7 +112,8 @@ object LogConfig {
   val IndexIntervalBytesProp = "index.interval.bytes"
   val DeleteRetentionMsProp = "delete.retention.ms"
   val FileDeleteDelayMsProp = "file.delete.delay.ms"
-  val MinCleanableDirtyRatioProp = "min.cleanable.dirty.ratio"
+  val DeprecatedMinCleanableDirtyRatioProp = "min.cleanable.dirty.ratio"
+  val MinCleanableDirtyRatioProp = "cleaner.min.cleanable.ratio"
   val CleanupPolicyProp = "cleanup.policy"
   val UncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
   val MinInSyncReplicasProp = "min.insync.replicas"
@@ -127,7 +129,7 @@ object LogConfig {
     " even if the segment file isn't full to ensure that retention can delete or compact old data."
   val SegmentJitterMsDoc = "The maximum random jitter subtracted from the scheduled segment roll time to avoid" +
     " thundering herds of segment rolling."
-  val DeprecatedSegmentJitterMsDoc = s"$SegmentJitterMsDoc  ${ConfigDef.deprecatesDoc(SegmentJitterMsProp)}"
+  val DeprecatedSegmentJitterMsDoc = s"${ConfigDef.deprecatesDoc(SegmentJitterMsProp)} $SegmentJitterMsDoc"
   val FlushIntervalDoc = "This setting allows specifying an interval at which we will force an fsync of data written" +
     " to the log. For example if this was set to 1 we would fsync after every message; if it were 5 we would fsync" +
     " after every five messages. In general we recommend you not set this and use replication for durability and" +
@@ -161,6 +163,7 @@ object LogConfig {
     " where more than 50% of the log has been compacted. This ratio bounds the maximum space wasted in the log by" +
     " duplicates (at 50% at most 50% of the log could be duplicates). A higher ratio will mean fewer, more efficient" +
     " cleanings but will mean more wasted space in the log."
+  val DeprecatedMinCleanableRatioDoc = s"${ConfigDef.deprecatesDoc(MinCleanableDirtyRatioProp)} $MinCleanableRatioDoc"
   val CompactDoc = "A string that is either \"delete\" or \"compact\". This string designates the retention policy to" +
     " use on old log segments. The default policy (\"delete\") will discard old segments when their retention time or" +
     " size limit has been reached. The \"compact\" setting will enable <a href=\"#compaction\">log compaction</a> on" +
@@ -273,6 +276,8 @@ object LogConfig {
         DeleteRetentionMsDoc, KafkaConfig.LogCleanerDeleteRetentionMsProp)
       .define(FileDeleteDelayMsProp, LONG, Long.box(Defaults.FileDeleteDelayMs), atLeast(0), MEDIUM, FileDeleteDelayMsDoc,
         KafkaConfig.LogDeleteDelayMsProp)
+      .define(DeprecatedMinCleanableDirtyRatioProp, DOUBLE, null, MEDIUM, DeprecatedMinCleanableRatioDoc,
+        KafkaConfig.LogCleanerMinCleanRatioProp)
       .define(MinCleanableDirtyRatioProp, DOUBLE, Double.box(Defaults.MinCleanableDirtyRatio), between(0, 1), MEDIUM,
         MinCleanableRatioDoc, KafkaConfig.LogCleanerMinCleanRatioProp)
       .define(CleanupPolicyProp, STRING, Defaults.Compact, in(Compact, Delete), MEDIUM, CompactDoc,
