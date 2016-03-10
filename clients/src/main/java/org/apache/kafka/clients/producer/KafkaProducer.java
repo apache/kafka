@@ -202,7 +202,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
              keySerializer, valueSerializer);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     private KafkaProducer(ProducerConfig config, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         try {
             log.trace("Starting the Kafka producer");
