@@ -23,6 +23,11 @@ import java.io.Serializable;
  */
 public final class TopicPartition implements Serializable {
 
+    /**
+     * Partition value for topic-partition without partition assigned
+     */
+    public static final int NO_PARTITION = -1;
+
     private int hash = 0;
     private final int partition;
     private final String topic;
