@@ -56,6 +56,8 @@ ext {
     mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
     mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
     mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+
+    generatedDocsDir = new File("${project.rootDir}/docs/generated")
 }
 
 apply from: file('wrapper.gradle')
@@ -303,25 +305,51 @@ project(':core') {
     into "$buildDir/dependant-libs-${scalaVersion}"
   }
 
-  tasks.create(name: "genProducerConfigDocs", dependsOn:jar, type: JavaExec) {
+  task genProtocolErrorDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.common.protocol.Errors'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "protocol_errors.html").newOutputStream()
+  }
+
+  task genProtocolApiKeyDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.common.protocol.ApiKeys'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "protocol_api_keys.html").newOutputStream()
+  }
+
+  task genProtocolMessageDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.common.protocol.Protocol'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "protocol_messages.html").newOutputStream()
+  }
+
+  task genProducerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.clients.producer.ProducerConfig'
-    standardOutput = new File('docs/producer_config.html').newOutputStream()
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "producer_config.html").newOutputStream()
   }
 
-  tasks.create(name: "genConsumerConfigDocs", dependsOn:jar, type: JavaExec) {
+  task genConsumerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.clients.consumer.ConsumerConfig'
-    standardOutput = new File('docs/consumer_config.html').newOutputStream()
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "consumer_config.html").newOutputStream()
   }
 
-  tasks.create(name: "genKafkaConfigDocs", dependsOn:jar, type: JavaExec) {
+  task genKafkaConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'kafka.server.KafkaConfig'
-    standardOutput = new File('docs/kafka_config.html').newOutputStream()
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "kafka_config.html").newOutputStream()
   }
 
-  task siteDocsTar(dependsOn: ['genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs', ':connect:runtime:genConnectConfigDocs'], type: Tar) {
+  task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
+                               'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
+                               ':connect:runtime:genConnectConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("../docs")
@@ -764,10 +792,11 @@ project(':connect:runtime') {
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
-  tasks.create(name: "genConnectConfigDocs", dependsOn:jar, type: JavaExec) {
+  task genConnectConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
-    standardOutput = new File('docs/connect_config.html').newOutputStream()
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "connect_config.html").newOutputStream()
   }
 }
 
