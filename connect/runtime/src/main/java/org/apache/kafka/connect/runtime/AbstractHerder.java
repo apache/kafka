@@ -174,9 +174,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             return result;
         }
 
-        ConnectorConfig connConfig = new ConnectorConfig(connectorConfig);
-        String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
-        Connector connector = getConnector(connType, connName);
+        Connector connector = getConnector(connType);
 
         Config config = connector.validate(connectorConfig);
 
@@ -189,7 +187,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         List<String> groups = config.groups();
 
-        return generateResult(connType, configKeys, configValues, groups);
+        return generateResult(connType, resultConfigKeys, configValues, groups);
     }
 
     private ConfigInfos generateResult(String connType, Map<String, ConfigKey> configKeys, List<ConfigValue> configValues, List<String> groups) {
@@ -237,12 +235,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigValueInfo(configValue.name(), configValue.value(), configValue.recommendedValues(), configValue.errorMessages(), configValue.visible());
     }
 
-    private Connector getConnector(String connType, String connName) {
-        if (tempConnectors.containsKey(connName)) {
-            return tempConnectors.get(connName);
+    private Connector getConnector(String connType) {
+        if (tempConnectors.containsKey(connType)) {
+            return tempConnectors.get(connType);
         } else {
             Connector connector = worker.getConnector(connType);
-            tempConnectors.put(connName, connector);
+            tempConnectors.put(connType, connector);
             return connector;
         }
     }

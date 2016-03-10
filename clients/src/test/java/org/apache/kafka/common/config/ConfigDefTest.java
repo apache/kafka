@@ -171,6 +171,31 @@ public class ConfigDefTest {
     }
 
     @Test
+    public void testParseNoCheckRequired() {
+        ConfigDef def = new ConfigDef()
+            .define("a", Type.INT, Importance.HIGH, "docs")
+            .define("b", Type.INT, Importance.HIGH, "docs");
+
+        Map<String, String> props = new HashMap<>();
+        props.put("a", "1");
+
+        Map<String, Object> parsed = def.parse(props, false);
+        assertEquals(1, (int) parsed.get("a"));
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testCannotParse() {
+        ConfigDef def = new ConfigDef()
+            .define("a", Type.INT, Importance.HIGH, "docs")
+            .define("b", Type.INT, Importance.HIGH, "docs");
+
+        Map<String, String> props = new HashMap<>();
+        props.put("b", "non_integer");
+        def.parse(props, false);
+    }
+
+
+    @Test
     public void testValidate() {
         Map<String, ConfigValue> expected = new HashMap<>();
         String errorMessageB = "Missing required configuration \"b\" which has no default value.";
@@ -220,13 +245,6 @@ public class ConfigDefTest {
 
         List<String> aErrorMessages = a.errorMessages();
         List<String> bErrorMessages = b.errorMessages();
-        for (String msg: aErrorMessages) {
-            System.out.println(msg);
-        }
-
-        for (String msg: bErrorMessages) {
-            System.out.println(msg);
-        }
         assertEquals(aErrorMessages.size(), bErrorMessages.size());
     }
 

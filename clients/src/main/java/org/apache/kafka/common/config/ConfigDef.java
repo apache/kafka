@@ -14,8 +14,6 @@ package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,8 +51,8 @@ import java.util.Set;
  */
 public class ConfigDef {
 
+
     public static final Object NO_DEFAULT_VALUE = new String("");
-    private static final Logger log = LoggerFactory.getLogger(ConfigDef.class);
 
     private final Map<String, ConfigKey> configKeys = new HashMap<>();
     private String undefinedConfigKey;
@@ -379,7 +377,8 @@ public class ConfigDef {
      * programmatically constructed map.
      *
      * @param props The configs to parse and validate
-     * @param checkRequired Whether to throw a config exception in case that we don't provide a value for a required config
+     * @param checkRequired Whether to throw a config exception in case that we don't provide a value for a config without
+     * a default value.
      * @return Parsed and validated configs. The key will be the config name and the value will be the value parsed into
      * the appropriate type (int, string, etc)
      */
@@ -404,10 +403,7 @@ public class ConfigDef {
             if (value != null && key.validator != null) {
                 key.validator.ensureValid(key.name, value);
             }
-            // only put the value that actually parsed.
-            if (value != null) {
-                values.put(key.name, value);
-            }
+            values.put(key.name, value);
         }
         return values;
     }

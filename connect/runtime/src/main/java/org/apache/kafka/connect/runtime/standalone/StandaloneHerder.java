@@ -218,11 +218,6 @@ public class StandaloneHerder extends AbstractHerder {
             state.configOriginals = connectorProps;
             state.config = connConfig;
         }
-
-        if (tempConnectors.containsKey(connName)) {
-            tempConnectors.remove(connName);
-        }
-
         return connName;
     }
 

@@ -703,10 +703,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
         ConnectorContext ctx = new HerderConnectorContext(DistributedHerder.this, connName);
         worker.startConnector(connConfig, ctx, this);
-
-        if (tempConnectors.containsKey(connName)) {
-            tempConnectors.remove(connName);
-        }
         // Immediately request configuration since this could be a brand new connector. However, also only update those
         // task configs if they are actually different from the existing ones to avoid unnecessary updates when this is
         // just restoring an existing connector.

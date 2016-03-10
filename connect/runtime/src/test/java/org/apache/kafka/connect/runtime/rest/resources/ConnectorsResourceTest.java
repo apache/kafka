@@ -19,13 +19,6 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 
-import org.apache.kafka.common.config.Config;
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigDef.Importance;
-import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.config.ConfigValue;
-import org.apache.kafka.connect.connector.Connector;
-import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -33,10 +26,6 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.rest.RestServer;
-import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
-import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
-import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
-import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -60,7 +49,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -95,30 +83,6 @@ public class ConnectorsResourceTest {
         TASK_INFOS.add(new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 0), TASK_CONFIGS.get(0)));
         TASK_INFOS.add(new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 1), TASK_CONFIGS.get(1)));
     }
-
-    private static Map<String, String> props = new HashMap<>();
-    static {
-        props.put("test.string.config", "testString");
-        props.put("test.int.config", "10");
-    }
-
-    private static ConfigInfos CONFIG_INFOS;
-    static {
-        List<ConfigInfo> configs = new LinkedList<>();
-
-        ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", "", "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", new LinkedList<String>());
-        ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", Collections.<Object>emptyList(), Collections.<String>emptyList(), true);
-        ConfigInfo configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
-        configs.add(configInfo);
-
-        configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", "", "MEDIUM", "Test configuration for integer type.", null, -1, "NONE", "test.int.config", new LinkedList<String>());
-        configValueInfo = new ConfigValueInfo("test.int.config", "10", Collections.<Object>emptyList(), Collections.<String>emptyList(), true);
-        configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
-        configs.add(configInfo);
-
-        CONFIG_INFOS = new ConfigInfos("test", 0, Collections.<String>emptyList(), configs);
-    }
-
 
     @Mock
     private Herder herder;
@@ -298,20 +262,6 @@ public class ConnectorsResourceTest {
         PowerMock.verifyAll();
     }
 
-    @Test
-    public void testValidateConfig() throws Throwable {
-        herder.validateConfigs(EasyMock.eq(WorkerTestConnector.class.getName()), EasyMock.eq(props));
-
-        PowerMock.expectLastCall().andReturn(CONFIG_INFOS);
-
-        PowerMock.replayAll();
-
-        ConfigInfos configInfos = connectorsResource.validateConfigs(WorkerTestConnector.class.getName(), props);
-        assertEquals(CONFIG_INFOS, configInfos);
-
-        PowerMock.verifyAll();
-    }
-
     @Test(expected = NotFoundException.class)
     public void testGetConnectorConfigConnectorNotFound() throws Throwable {
         final Capture<Callback<Map<String, String>>> cb = Capture.newInstance();
@@ -413,68 +363,5 @@ public class ConnectorsResourceTest {
 
     private  <T> void expectAndCallbackNotLeaderException(final Capture<Callback<T>> cb) {
         expectAndCallbackException(cb, new NotLeaderException("not leader test", LEADER_URL));
-    }
-
-    /* Name here needs to be unique as we are testing the aliasing mechanism */
-    public static class WorkerTestConnector extends Connector {
-
-        public static final String TEST_STRING_CONFIG = "test.string.config";
-        public static final String TEST_INT_CONFIG = "test.int.config";
-
-        @Override
-        public String version() {
-            return "1.0";
-        }
-
-        @Override
-        public void start(Map<String, String> props) {
-
-        }
-
-        @Override
-        public Class<? extends Task> taskClass() {
-            return null;
-        }
-
-        @Override
-        public List<Map<String, String>> taskConfigs(int maxTasks) {
-            return null;
-        }
-
-        @Override
-        public void stop() {
-
-        }
-
-        @Override
-        public ConfigDef defineConfig() {
-            if (this.configDef != null) {
-                return this.configDef;
-            } else {
-                return new ConfigDef()
-                    .define(TEST_STRING_CONFIG, Type.STRING, Importance.HIGH, "Test configuration for string type.")
-                    .define(TEST_INT_CONFIG, Type.INT, Importance.MEDIUM, "Test configuration for integer type.");
-            }
-        }
-
-        @Override
-        public Config validate(Map<String, String> connectorConfigs) {
-            List<ConfigValue> values = new LinkedList<>();
-
-            String stringConfig = connectorConfigs.get(TEST_STRING_CONFIG);
-            ConfigValue configValue = new ConfigValue(TEST_STRING_CONFIG, stringConfig, Collections.<Object>emptyList(), Collections.<String>emptyList());
-            values.add(configValue);
-
-            String intConfig = connectorConfigs.get(TEST_INT_CONFIG);
-            configValue = new ConfigValue(TEST_INT_CONFIG, intConfig, Collections.<Object>emptyList(), Collections.<String>emptyList());
-            try {
-                Integer.parseInt(intConfig);
-            } catch (NumberFormatException e) {
-                configValue.addErrorMessage("Not a valid integer.");
-            } finally {
-                values.add(configValue);
-            }
-            return new Config(configDef, Collections.<String>emptyList(), values);
-        }
     }
 }
