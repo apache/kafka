@@ -130,6 +130,16 @@ object LogConfig {
   val MessageFormatVersionProp = "message.format.version"
   val MessageTimestampTypeProp = "message.timestamp.type"
   val MessageTimestampDifferenceMaxMsProp = "message.timestamp.difference.max.ms"
+  val DeprecatedProps = Set(
+    DeprecatedDeleteRetentionMsProp,
+    DeprecatedFileDeleteDelayMsProp,
+    DeprecatedFlushMessagesProp,
+    DeprecatedFlushMessagesProp,
+    DeprecatedFlushMsProp,
+    DeprecatedMinCleanableDirtyRatioProp,
+    DeprecatedSegmentIndexBytesProp,
+    DeprecatedSegmentJitterMsProp,
+    DeprecatedSegmentMsProp)
 
   val SegmentSizeDoc = "This configuration controls the segment file size for the log. Retention and cleaning is" +
     " always done a file at a time so a larger segment size means fewer files but less granular control over retention."
@@ -215,8 +225,9 @@ object LogConfig {
 
     private def recordServerDefaultConfig(name: String, serverDefaultConfigName: String) {
       val expected = s"log.$name"
-      require(serverDefaultConfigName == expected,
-        s"Server default configuration $serverDefaultConfigName (for log config $name) should be $expected.")
+      if (!DeprecatedProps.contains(name))
+        require(serverDefaultConfigName == expected,
+          s"Server default configuration $serverDefaultConfigName (for log config $name) should be $expected.")
       serverDefaultConfigNames.put(name, serverDefaultConfigName)
     }
 
