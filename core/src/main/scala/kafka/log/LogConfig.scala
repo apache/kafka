@@ -72,7 +72,8 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val maxMessageSize = getInt(LogConfig.MaxMessageBytesProp)
   val indexInterval = getInt(LogConfig.IndexIntervalBytesProp)
   val fileDeleteDelayMs = getLong(LogConfig.FileDeleteDelayMsProp)
-  val deleteRetentionMs = getLong(LogConfig.DeleteRetentionMsProp)
+  val deleteRetentionMs = Option(getLong(LogConfig.DeprecatedDeleteRetentionMsProp))
+    .getOrElse(getLong(LogConfig.DeleteRetentionMsProp))
   val minCleanableRatio = Option(getDouble(LogConfig.DeprecatedMinCleanableDirtyRatioProp))
     .getOrElse(getDouble(LogConfig.MinCleanableDirtyRatioProp))
   val compact = getString(LogConfig.CleanupPolicyProp).toLowerCase != LogConfig.Delete
@@ -115,7 +116,8 @@ object LogConfig {
   val RetentionMsProp = "retention.ms"
   val MaxMessageBytesProp = "max.message.bytes"
   val IndexIntervalBytesProp = "index.interval.bytes"
-  val DeleteRetentionMsProp = "delete.retention.ms"
+  val DeprecatedDeleteRetentionMsProp = "delete.retention.ms"
+  val DeleteRetentionMsProp = "cleaner.delete.retention.ms"
   val FileDeleteDelayMsProp = "file.delete.delay.ms"
   val DeprecatedMinCleanableDirtyRatioProp = "min.cleanable.dirty.ratio"
   val MinCleanableDirtyRatioProp = "cleaner.min.cleanable.ratio"
@@ -167,6 +169,7 @@ object LogConfig {
     " compacted</a> topics. This setting also gives a bound on the time in which a consumer must complete a read if" +
     " they begin from offset 0 to ensure that they get a valid snapshot of the final stage (otherwise delete" +
     " tombstones may be collected before they complete their scan). Only applicable for logs that are being compacted."
+  val DeprecatedDeleteRetentionMsDoc = s"${ConfigDef.deprecatesDoc(DeleteRetentionMsProp)} $DeleteRetentionMsDoc"
   val MinCleanableRatioDoc = "This configuration controls how frequently the log compactor will attempt to clean the" +
     " log (assuming <a href=\"#compaction\">log compaction</a> is enabled). By default we will avoid cleaning a log" +
     " where more than 50% of the log has been compacted. This ratio bounds the maximum space wasted in the log by" +
@@ -287,6 +290,8 @@ object LogConfig {
         KafkaConfig.MessageMaxBytesProp)
       .define(IndexIntervalBytesProp, INT, Int.box(Defaults.IndexInterval), atLeast(0), MEDIUM, IndexIntervalDoc,
         KafkaConfig.LogIndexIntervalBytesProp)
+      .define(DeprecatedDeleteRetentionMsProp, LONG, null, MEDIUM, DeprecatedDeleteRetentionMsDoc,
+        KafkaConfig.LogCleanerDeleteRetentionMsProp)
       .define(DeleteRetentionMsProp, LONG, Long.box(Defaults.DeleteRetentionMs), atLeast(0), MEDIUM,
         DeleteRetentionMsDoc, KafkaConfig.LogCleanerDeleteRetentionMsProp)
       .define(FileDeleteDelayMsProp, LONG, Long.box(Defaults.FileDeleteDelayMs), atLeast(0), MEDIUM, FileDeleteDelayMsDoc,
