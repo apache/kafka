@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 /**
  * This class contains all the client-server errors--those errors that must be sent from the server to the client. These
  * are thus part of the protocol. The names can be changed but the error code cannot.
- * 
+ *
  * Do not add exceptions that occur only on the client or only on the server here.
  */
 public enum Errors {
@@ -158,5 +158,38 @@ public enum Errors {
     public static Errors forException(Throwable t) {
         Errors error = classToError.get(t.getClass());
         return error == null ? UNKNOWN : error;
+    }
+
+    private static String toHtml() {
+        final StringBuilder b = new StringBuilder();
+        b.append("<table class=\"data-table\"><tbody>\n");
+        b.append("<tr>");
+        b.append("<th>Error</th>\n");
+        b.append("<th>Code</th>\n");
+        b.append("<th>Retriable</th>\n");
+        b.append("<th>Description</th>\n");
+        b.append("</tr>\n");
+        for (Errors error : Errors.values()) {
+            b.append("<tr>");
+            b.append("<td>");
+            b.append(error.name());
+            b.append("</td>");
+            b.append("<td>");
+            b.append(error.code());
+            b.append("</td>");
+            b.append("<td>");
+            b.append(error.exception() != null && error.exception() instanceof RetriableException ? "True" : "False");
+            b.append("</td>");
+            b.append("<td>");
+            b.append(error.exception() != null ? error.exception().getMessage() : "");
+            b.append("</td>");
+            b.append("</tr>\n");
+        }
+        b.append("</table>\n");
+        return b.toString();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(toHtml());
     }
 }

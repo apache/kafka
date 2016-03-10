@@ -37,7 +37,5 @@ results
 tests/results
 .ducktape
 tests/.ducktape
-docs/producer_config.html
-docs/consumer_config.html
-docs/kafka_config.html
-docs/connect_config.html
+
+docs/generated/
