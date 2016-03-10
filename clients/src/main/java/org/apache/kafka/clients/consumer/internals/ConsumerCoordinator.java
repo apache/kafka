@@ -613,7 +613,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 OffsetFetchResponse.PartitionData data = entry.getValue();
                 if (data.hasError()) {
                     Errors error = Errors.forCode(data.errorCode);
-                    log.debug("Group {} failed to fetch offset for topic-partition {}: {}", groupId, tp, error.message());
+                    log.debug("Group {} failed to fetch offset for partition {}: {}", groupId, tp, error.message());
 
                     if (error == Errors.GROUP_LOAD_IN_PROGRESS) {
                         // just retry

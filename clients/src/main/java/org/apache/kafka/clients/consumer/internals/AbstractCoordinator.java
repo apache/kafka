@@ -413,7 +413,6 @@ public abstract class AbstractCoordinator implements Closeable {
             Errors error = Errors.forCode(syncResponse.errorCode());
             if (error == Errors.NONE) {
                 log.info("Successfully joined group {} with generation {}", groupId, generation);
-                log.debug("Received successful sync group response for group {}: {}", groupId, syncResponse.toStruct());
                 sensors.syncLatency.record(response.requestLatencyMs());
                 future.complete(syncResponse.memberAssignment());
             } else {
@@ -631,7 +630,7 @@ public abstract class AbstractCoordinator implements Closeable {
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(new GroupAuthorizationException(groupId));
             } else {
-                future.raise(new KafkaException("Unexpected errorCode in heartbeat response: " + error.message()));
+                future.raise(new KafkaException("Unexpected error in heartbeat response: " + error.message()));
             }
         }
     }
