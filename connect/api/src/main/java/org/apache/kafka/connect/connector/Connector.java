@@ -22,7 +22,6 @@ import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -47,8 +46,7 @@ import java.util.Map;
 public abstract class Connector {
 
     protected ConnectorContext context;
-    protected ConfigDef configDef = defineConfig();
-    protected List<String> groups = defineGroup();
+    protected ConfigDef configDef;
 
     /**
      * Get the version of this connector.
@@ -135,6 +133,8 @@ public abstract class Connector {
      * the current configuration values.
      */
     public Config validate(Map<String, String> connectorConfigs) {
+        ConfigDef configDef = defineConfig();
+        List<String> groups = configDef.groups();
         List<ConfigValue> configValues =  configDef.validate(connectorConfigs);
         return new Config(configDef, groups, configValues);
     }
@@ -144,8 +144,4 @@ public abstract class Connector {
      * @return The ConfigDef for this connector.
      */
     protected abstract ConfigDef defineConfig();
-
-    protected List<String> defineGroup() {
-        return new LinkedList<>();
-    }
 }

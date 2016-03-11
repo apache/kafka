@@ -51,11 +51,10 @@ import java.util.Set;
  */
 public class ConfigDef {
 
-
     public static final Object NO_DEFAULT_VALUE = new String("");
 
     private final Map<String, ConfigKey> configKeys = new HashMap<>();
-    private String undefinedConfigKey;
+    private final List<String> groups = new LinkedList<>();
 
     /**
      * Returns unmodifiable set of properties names defined in this {@linkplain ConfigDef}
@@ -86,6 +85,9 @@ public class ConfigDef {
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
         if (configKeys.containsKey(name)) {
             throw new ConfigException("Configuration " + name + " is defined twice.");
+        }
+        if (group != null && !groups.contains(group)) {
+            groups.add(group);
         }
         Object parsedDefault = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
         configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender));
@@ -339,6 +341,22 @@ public class ConfigDef {
     }
 
     /**
+     * Get the configuration keys
+     * @return a map containing all configuration keys
+     */
+    public Map<String, ConfigKey> configKeys() {
+        return configKeys;
+    }
+
+    /**
+     * Get the groups for the configuration
+     * @return a list of group names
+     */
+    public List<String> groups() {
+        return groups;
+    }
+
+    /**
      * Add standard SSL client configuration options.
      * @return this
      */
@@ -383,8 +401,13 @@ public class ConfigDef {
      * the appropriate type (int, string, etc)
      */
     public Map<String, Object> parse(Map<?, ?> props, boolean checkRequired) {
-        ensureDependentsDefined();
-        /* parse all known keys */
+        // Check all configurations are defined
+        List<String> undefinedConfigKeys = ensureDependentsDefined();
+        if (!undefinedConfigKeys.isEmpty()) {
+            String joined = Utils.join(undefinedConfigKeys, ",");
+            throw new ConfigException("Some configurations in are referred in the dependents, but not defined: " + joined);
+        }
+        // parse all known keys
         Map<String, Object> values = new HashMap<>();
         for (ConfigKey key : configKeys.values()) {
             Object value = null;
@@ -420,9 +443,9 @@ public class ConfigDef {
         for (String name: configKeys.keySet()) {
             configValues.put(name, new ConfigValue(name));
         }
-        try {
-            ensureDependentsDefined();
-        } catch (ConfigException e) {
+
+        List<String> undefinedConfigKeys = ensureDependentsDefined();
+        for(String undefinedConfigKey: undefinedConfigKeys) {
             configValues.put(undefinedConfigKey, new ConfigValue(undefinedConfigKey));
         }
         
@@ -432,17 +455,18 @@ public class ConfigDef {
         return new LinkedList<>(configValues.values());
     }
 
-    private void ensureDependentsDefined() {
+    private List<String> ensureDependentsDefined() {
+        Set<String> undefinedConfigKeys = new HashSet<>();
         for (String configName: configKeys.keySet()) {
             ConfigKey configKey = configKeys.get(configName);
             List<String> dependents = configKey.dependents;
             for (String dependent: dependents) {
                 if (!configKeys.containsKey(dependent)) {
-                    undefinedConfigKey = dependent;
-                    throw new ConfigException(dependent + " is  an dependent of " + configName + ". However, it is not defined.");
+                    undefinedConfigKeys.add(dependent);
                 }
             }
         }
+        return new LinkedList<>(undefinedConfigKeys);
     }
 
     private List<String> getConfigsWithNoParent() {
@@ -758,10 +782,6 @@ public class ConfigDef {
         }
     }
 
-    public Map<String, ConfigKey> configKeys() {
-        return configKeys;
-    }
-
     public String toHtmlTable() {
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
@@ -780,20 +800,31 @@ public class ConfigDef {
             b.append(def.name);
             b.append("</td>");
             b.append("<td>");
+            b.append(def.documentation);
+            b.append("</td>");
+            b.append("<td>");
             b.append(def.type.toString().toLowerCase());
             b.append("</td>");
             b.append("<td>");
-            b.append(def.defaultValue == null ? "" : def.defaultValue);
+            if (def.hasDefault()) {
+                if (def.defaultValue == null)
+                    b.append("null");
+                else if (def.type == Type.STRING && def.defaultValue.toString().isEmpty())
+                    b.append("\"\"");
+                else
+                    b.append(def.defaultValue);
+            } else
+                b.append("");
+            b.append("</td>");
+            b.append("<td>");
+            b.append(def.validator != null ? def.validator.toString() : "");
             b.append("</td>");
             b.append("<td>");
             b.append(def.importance.toString().toLowerCase());
             b.append("</td>");
-            b.append("<td>");
-            b.append(def.documentation);
-            b.append("</td>");
             b.append("</tr>\n");
         }
-        b.append("</table>");
+        b.append("</tbody></table>");
         return b.toString();
     }
 

@@ -194,6 +194,17 @@ public class ConfigDefTest {
         def.parse(props, false);
     }
 
+    @Test
+    public void testGroupInference() {
+        List<String> expected = Arrays.asList("group1", "group2");
+        ConfigDef def = new ConfigDef()
+            .define("a", Type.INT, Importance.HIGH, "docs", "group1", 1, Width.SHORT, "a")
+            .define("b", Type.INT, Importance.HIGH, "docs", "group2", 1, Width.SHORT, "b")
+            .define("c", Type.INT, Importance.HIGH, "docs", "group1", 2, Width.SHORT, "c");
+
+        List<String> groups = def.groups();
+        assertEquals(expected, groups);
+    }
 
     @Test
     public void testValidate() {
