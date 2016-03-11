@@ -43,7 +43,7 @@ class VerifiableProducer(BackgroundThreadService):
         }
 
     def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
-                 message_validator=is_int, compression_types=None, version=TRUNK):
+                 message_validator=is_int, compression_types=None, version=TRUNK, acks=None):
         """
         :param max_messages is a number of messages to be produced per producer
         :param message_validator checks for an expected format of messages produced. There are
@@ -71,6 +71,7 @@ class VerifiableProducer(BackgroundThreadService):
         self.acked_values = []
         self.not_acked_values = []
         self.produced_count = {}
+        self.acks = acks
 
 
     @property
@@ -96,6 +97,9 @@ class VerifiableProducer(BackgroundThreadService):
 
         # Create and upload config file
         producer_prop_file = self.prop_file(node)
+        if self.acks is not None:
+            self.logger.info("VerifiableProducer (index = %d) will use acks = %s", idx, self.acks)
+            producer_prop_file += "\nacks=%s\n" % self.acks
         self.logger.info("verifiable_producer.properties:")
         self.logger.info(producer_prop_file)
         node.account.create_file(VerifiableProducer.CONFIG_FILE, producer_prop_file)
