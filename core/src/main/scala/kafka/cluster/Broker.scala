@@ -104,7 +104,7 @@ object Broker {
   }
 }
 
-case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) {
+case class Broker(id: Int, endPoints: collection.Map[SecurityProtocol, EndPoint]) {
 
   override def toString: String = id + " : " + endPoints.values.mkString("(",",",")")
 
