@@ -543,7 +543,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/*"
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/serialization/*"
-    include "**/org/apache/kafka/common/config/ConfigDef.java"
+    include "**/org/apache/kafka/common/config/*"
   }
 }
 

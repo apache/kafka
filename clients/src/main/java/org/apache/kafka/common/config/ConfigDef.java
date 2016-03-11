@@ -28,25 +28,41 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * This class is used for specifying the set of expected configurations, their type, their defaults, their
- * documentation, and any special validation logic used for checking the correctness of the values the user provides.
+ * This class is used for specifying the set of expected configurations. For each configuration, you can specify
+ * the name, the type, the default value, the documentation, the group information, the order in the group,
+ * the width of the configuration value and the name suitable for display in the UI.
+ *
+ * You can provide special validation logic used for single configuration validation by overriding {@link Validator}.
+ *
+ * Moreover, you can specify the dependents of a configuration. The valid values and visibility of a configuration
+ * may change according to the values of other configurations. You can override {@link Recommender} to get valid
+ * values and set visibility of a configuration given the current configuration values.
+ *
  * <p/>
- * Usage of this class looks something like this:
+ * To use the class:
  * <p/>
  * <pre>
  * ConfigDef defs = new ConfigDef();
- * defs.define(&quot;config_name&quot;, Type.STRING, &quot;default string value&quot;, &quot;This configuration is used for blah blah blah.&quot;);
- * defs.define(&quot;another_config_name&quot;, Type.INT, 42, Range.atLeast(0), &quot;More documentation on this config&quot;);
  *
- * Properties props = new Properties();
- * props.setProperty(&quot;config_name&quot;, &quot;some value&quot;);
+ * defs.define(&quot;config_with_default&quot;, Type.STRING, &quot;default string value&quot;, &quot;Configuration with default value.&quot;);
+ * defs.define(&quot;config_with_validator&quot;, Type.INT, 42, Range.atLeast(0), &quot;Configuration with user provided validator.&quot;);
+ * defs.define(&quot;config_with_dependents&quot;, Type.INT, &quot;Configuration with dependents.&quot;, &quot;group&quot;, 1, &quot;Config With Dependents&quot;, Arrays.asList(&quot;config_with_default;&quot;,&quot;config_with_validator&quot;));
+ *
+ * Map&lt;String, String&gt; props = new HashMap&lt;&gt();
+ * props.put(&quot;config_with_default&quot;, &quot;some value&quot;);
+ * props.put(&quot;config_with_dependents&quot;, &quot;some other value&quot;);
+ * // will return &quot;some value&quot;
  * Map&lt;String, Object&gt; configs = defs.parse(props);
+ * String someConfig = (String) configs.get(&quot;config_with_default&quot;);
+ * // will return default value of 42
+ * int anotherConfig = (Integer) configs.get(&quot;config_with_validator&quot;);
  *
- * String someConfig = (String) configs.get(&quot;config_name&quot;); // will return &quot;some value&quot;
- * int anotherConfig = (Integer) configs.get(&quot;another_config_name&quot;); // will return default value of 42
+ * To validate the full configuration, use:
+ * List&lt;Config&gt; configs = def.validate(props);
+ * The {@link Config} contains updated configuration information given the current configuration values.
  * </pre>
  * <p/>
- * This class can be used stand-alone or in combination with {@link AbstractConfig} which provides some additional
+ * This class can be used standalone or in combination with {@link AbstractConfig} which provides some additional
  * functionality for accessing configs.
  */
 public class ConfigDef {
@@ -78,7 +94,7 @@ public class ConfigDef {
      * @param width         the width of the config
      * @param displayName   the name suitable for display
      * @param dependents    the configurations that are dependents of this configuration
-     * @param recommender   the recommnder provides valid values given the parent configuration values
+     * @param recommender   the recommender provides valid values given the parent configuration values
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
@@ -126,7 +142,7 @@ public class ConfigDef {
      * @param orderInGroup  the order of this config in the group
      * @param width         the width of the config
      * @param displayName   the name suitable for display
-     * @param recommender   the recommnder provides valid values given the parent configuration values
+     * @param recommender   the recommender provides valid values given the parent configuration values
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
@@ -165,7 +181,7 @@ public class ConfigDef {
      * @param width         the width of the config
      * @param displayName   the name suitable for display
      * @param dependents    the configurations that are dependents of this configuration
-     * @param recommender   the recommnder provides valid values given the parent configuration values
+     * @param recommender   the recommender provides valid values given the parent configuration values
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
@@ -203,7 +219,7 @@ public class ConfigDef {
      * @param orderInGroup  the order of this config in the group
      * @param width         the width of the config
      * @param displayName   the name suitable for display
-     * @param recommender   the recommnder provides valid values given the parent configuration values
+     * @param recommender   the recommender provides valid values given the parent configuration values
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
@@ -240,7 +256,7 @@ public class ConfigDef {
      * @param width         the width of the config
      * @param displayName   the name suitable for display
      * @param dependents    the configurations that are dependents of this configuration
-     * @param recommender   the recommnder provides valid values given the parent configuration value
+     * @param recommender   the recommender provides valid values given the parent configuration value
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
@@ -276,7 +292,7 @@ public class ConfigDef {
      * @param orderInGroup  the order of this config in the group
      * @param width         the width of the config
      * @param displayName   the name suitable for display
-     * @param recommender   the recommnder provides valid values given the parent configuration value
+     * @param recommender   the recommender provides valid values given the parent configuration value
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
@@ -380,9 +396,9 @@ public class ConfigDef {
      * appropriate type (int, string, etc). This will work equally well with either java.util.Properties instances or a
      * programmatically constructed map.
      *
-     * @param props The configs to parse and validate
+     * @param props The configs to parse and validate.
      * @return Parsed and validated configs. The key will be the config name and the value will be the value parsed into
-     * the appropriate type (int, string, etc)
+     * the appropriate type (int, string, etc).
      */
     public Map<String, Object> parse(Map<?, ?> props) {
         return parse(props, true);
@@ -394,11 +410,15 @@ public class ConfigDef {
      * appropriate type (int, string, etc). This will work equally well with either java.util.Properties instances or a
      * programmatically constructed map.
      *
-     * @param props The configs to parse and validate
-     * @param checkRequired Whether to throw a config exception in case that we don't provide a value for a config without
+     * An {@link ConfigException} is not thrown in case that checkRequired is set to false. This is useful for interactive
+     * configuration validation where values of some required configurations may not be available.
+     *
+     * @param props The configs to parse and validate.
+     * @param checkRequired Whether to throw ConfigException in case that we don't provide a value for a config without
      * a default value.
-     * @return Parsed and validated configs. The key will be the config name and the value will be the value parsed into
-     * the appropriate type (int, string, etc)
+     * @return Partially parsed and validated configs. The key will be the config name and the value will be the value parsed
+     * into the appropriate type (int, string, etc). The values not provided in the configs will not be available in the
+     * parsed map.
      */
     public Map<String, Object> parse(Map<?, ?> props, boolean checkRequired) {
         // Check all configurations are defined
@@ -423,7 +443,7 @@ public class ConfigDef {
                 // otherwise assign setting its default value
                 value = key.defaultValue;
             }
-            if (value != null && key.validator != null) {
+            if (key.validator != null) {
                 key.validator.ensureValid(key.name, value);
             }
             values.put(key.name, value);
@@ -432,8 +452,8 @@ public class ConfigDef {
     }
 
     /**
-     * Validate the provided connector configuration values with the configuration definition
-     * @param props the provided configuration values
+     * Validate the current configuration values with the configuration definition.
+     * @param props the current configuration values
      * @return List of Config, each Config contains the updated configuration information given
      * the current configuration values.
      */
@@ -544,7 +564,6 @@ public class ConfigDef {
 
     /**
      * Parse a value according to its expected type.
-     *
      * @param name  The config name
      * @param value The config value
      * @param type  The expected type
@@ -649,27 +668,56 @@ public class ConfigDef {
         BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD
     }
 
+    /**
+     * The importance level for a configuration
+     */
     public enum Importance {
         HIGH, MEDIUM, LOW
     }
 
+    /**
+     * The width of a configuration value
+     */
     public enum Width {
         NONE, SHORT, MEDIUM, LONG
     }
 
     /**
-     * Recommender interface
+     * This is used by the {@link #validate(Map)} to get valid values for a configuration given the current
+     * configuration values in order to perform full configuration validation and visibility modification.
+     * In case that there are dependencies between configurations, the valid values and visibility
+     * for a configuration may change given the values of other configurations.
      */
     public interface Recommender {
+
+        /**
+         * The valid values for the configuration given the current configuration values.
+         * @param name The name of the configuration
+         * @param props The name of the configuration
+         * @return The list of valid values. To function properly, the returned objects should have the type
+         * defined for the configuration using the recommender.
+         */
         List<Object> validValues(String name, Map<String, String> props);
+
+        /**
+         * Set the visibility of the configuration given the current configuration values.
+         * @param name The name of the configuration
+         * @param props The name of the configuration
+         * @return The visibility of the configuration
+         */
         boolean visible(String name, Map<String, String> props);
     }
 
     /**
-     * Validation logic the user may provide
+     * Validation logic the user may provide to perform single configuration validation.
      */
     public interface Validator {
-        void ensureValid(String name, Object o);
+        /**
+         * Perform single configuration validation.
+         * @param name The name of the configuration
+         * @param value The value of the configuration
+         */
+        void ensureValid(String name, Object value);
     }
 
     /**
