@@ -55,6 +55,7 @@ import org.apache.kafka.common.network.Mode
 
 import scala.collection.Map
 import scala.collection.JavaConversions._
+import org.apache.kafka.common.config.SaslConfigs
 
 /**
  * Utility functions to help with testing
@@ -213,6 +214,8 @@ object TestUtils extends Logging {
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
       props.putAll(sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId"))
+    if (protocolAndPorts.exists { case (protocol, _) => usesSaslTransportLayer(protocol) })
+      props.put(KafkaConfig.SaslKerberosServiceNameProp, "kafka")
 
     interBrokerSecurityProtocol.foreach { protocol =>
       props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
@@ -443,6 +446,8 @@ object TestUtils extends Logging {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
       props.putAll(sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias))
+    if (usesSaslTransportLayer(securityProtocol))
+      props.put(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, "kafka")
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }
@@ -497,6 +502,11 @@ object TestUtils extends Logging {
 
   private def usesSslTransportLayer(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
     case SecurityProtocol.SSL | SecurityProtocol.SASL_SSL => true
+    case _ => false
+  }
+
+  private def usesSaslTransportLayer(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
+    case SecurityProtocol.SASL_PLAINTEXT | SecurityProtocol.SASL_SSL => true
     case _ => false
   }
 
