@@ -19,13 +19,14 @@ package kafka.common
 
 import util.matching.Regex
 import kafka.coordinator.GroupCoordinator
+import org.apache.kafka.common.CommonDefs
 
 object Topic {
   val legalChars = "[a-zA-Z0-9\\._\\-]"
   private val maxNameLength = 255
   private val rgx = new Regex(legalChars + "+")
 
-  val InternalTopics = Set(GroupCoordinator.GroupMetadataTopicName)
+  val InternalTopics = Set(CommonDefs.GROUP_METADATA_TOPIC_NAME)
 
   def validate(topic: String) {
     if (topic.length <= 0)

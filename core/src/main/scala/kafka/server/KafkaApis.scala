@@ -19,7 +19,6 @@ package kafka.server
 
 import java.nio.ByteBuffer
 import java.lang.{Long => JLong, Short => JShort}
-
 import kafka.admin.AdminUtils
 import kafka.api._
 import kafka.cluster.Partition
@@ -44,9 +43,9 @@ OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchRespon
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Node}
-
 import scala.collection._
 import scala.collection.JavaConverters._
+import org.apache.kafka.common.CommonDefs
 
 /**
  * Logic to handle the various Kafka requests
@@ -128,11 +127,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         // this callback is invoked under the replica state change lock to ensure proper order of
         // leadership changes
         updatedLeaders.foreach { partition =>
-          if (partition.topic == GroupCoordinator.GroupMetadataTopicName)
+          if (partition.topic == CommonDefs.GROUP_METADATA_TOPIC_NAME)
             coordinator.handleGroupImmigration(partition.partitionId)
         }
         updatedFollowers.foreach { partition =>
-          if (partition.topic == GroupCoordinator.GroupMetadataTopicName)
+          if (partition.topic == CommonDefs.GROUP_METADATA_TOPIC_NAME)
             coordinator.handleGroupEmigration(partition.partitionId)
         }
       }
@@ -623,9 +622,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (topics.size > 0 && topicResponses.size != topics.size) {
       val nonExistentTopics = topics -- topicResponses.map(_.topic).toSet
       val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
-        if (topic == GroupCoordinator.GroupMetadataTopicName || config.autoCreateTopicsEnable) {
+        if (topic == CommonDefs.GROUP_METADATA_TOPIC_NAME || config.autoCreateTopicsEnable) {
           try {
-            if (topic == GroupCoordinator.GroupMetadataTopicName) {
+            if (topic == CommonDefs.GROUP_METADATA_TOPIC_NAME) {
               val aliveBrokers = metadataCache.getAliveBrokers
               val offsetsTopicReplicationFactor =
                 if (aliveBrokers.length > 0)
@@ -769,7 +768,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val partition = coordinator.partitionFor(groupCoordinatorRequest.groupId)
 
       // get metadata (and create the topic if necessary)
-      val offsetsTopicMetadata = getTopicMetadata(Set(GroupCoordinator.GroupMetadataTopicName), request.securityProtocol).head
+      val offsetsTopicMetadata = getTopicMetadata(Set(CommonDefs.GROUP_METADATA_TOPIC_NAME), request.securityProtocol).head
       val coordinatorEndpoint = offsetsTopicMetadata.partitionsMetadata.find(_.partitionId == partition).flatMap {
         partitionMetadata => partitionMetadata.leader
       }

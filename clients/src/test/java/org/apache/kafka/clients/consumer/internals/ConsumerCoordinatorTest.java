@@ -914,7 +914,8 @@ public class ConsumerCoordinatorTest {
                 defaultOffsetCommitCallback,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
-                null);
+                null,
+                false);
     }
 
     private Struct consumerMetadataResponse(Node node, short error) {
