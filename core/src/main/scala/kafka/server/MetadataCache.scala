@@ -137,23 +137,14 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
                                        partitionId: Int,
                                        stateInfo: PartitionStateInfo) {
     inWriteLock(partitionMetadataLock) {
-      cache.get(topic) match {
-        case Some(infos) => infos.put(partitionId, stateInfo)
-        case None => {
-          val newInfos: mutable.Map[Int, PartitionStateInfo] = new mutable.HashMap[Int, PartitionStateInfo]
-          cache.put(topic, newInfos)
-          newInfos.put(partitionId, stateInfo)
-        }
-      }
+      val infos = cache.getOrElseUpdate(topic, mutable.Map())
+      infos(partitionId) = stateInfo
     }
   }
 
   def getPartitionInfo(topic: String, partitionId: Int): Option[PartitionStateInfo] = {
     inReadLock(partitionMetadataLock) {
-      cache.get(topic) match {
-        case Some(partitionInfos) => partitionInfos.get(partitionId)
-        case None => None
-      }
+      cache.get(topic).flatMap(_.get(partitionId))
     }
   }
 
@@ -203,16 +194,12 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  private def removePartitionInfo(topic: String, partitionId: Int) = {
-    cache.get(topic) match {
-      case Some(infos) => {
-        infos.remove(partitionId)
-        if(infos.isEmpty) {
-          cache.remove(topic)
-        }
-        true
-      }
-      case None => false
-    }
+  private def removePartitionInfo(topic: String, partitionId: Int): Boolean = {
+    cache.get(topic).map { infos =>
+      infos.remove(partitionId)
+      if (infos.isEmpty) cache.remove(topic)
+      true
+    }.getOrElse(false)
   }
+
 }
