@@ -19,6 +19,7 @@ package org.apache.kafka.test;
 import static java.util.Arrays.asList;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -51,7 +52,7 @@ public class TestUtils {
     public static Cluster clusterWith(int nodes, String topic, int partitions) {
         Node[] ns = new Node[nodes];
         for (int i = 0; i < nodes; i++)
-            ns[i] = new Node(0, "localhost", 1969);
+            ns[i] = new Node(i, "localhost", 1969);
         List<PartitionInfo> parts = new ArrayList<PartitionInfo>();
         for (int i = 0; i < partitions; i++)
             parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
@@ -80,6 +81,16 @@ public class TestUtils {
         for (int i = 0; i < len; i++)
             b.append(LETTERS_AND_DIGITS.charAt(SEEDED_RANDOM.nextInt(LETTERS_AND_DIGITS.length())));
         return b.toString();
+    }
+
+    /**
+     * Creates an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
+     * suffix to generate its name.
+     */
+    public static File tempFile() throws IOException {
+        File file = File.createTempFile("kafka", ".tmp");
+        file.deleteOnExit();
+        return file;
     }
 
 }

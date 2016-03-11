@@ -22,11 +22,10 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 
 /**
- * KTable is an abstraction of a change log stream.
+ * KTable is an abstraction of a change log stream from a primary-keyed table.
  *
- *
- * @param <K> the type of keys
- * @param <V> the type of values
+ * @param <K> Type of primary keys
+ * @param <V> Type of value changes
  */
 public interface KTable<K, V> {
 
@@ -162,14 +161,18 @@ public interface KTable<K, V> {
     /**
      * Aggregate values of this table by the selected key.
      *
-     * @param aggregator the class of Aggregator
+     * @param initializer the class of Initializer
+     * @param add the class of Aggregator
+     * @param remove the class of Aggregator
      * @param selector the KeyValue mapper that select the aggregate key
      * @param name the name of the resulted table
      * @param <K1>   the key type of the aggregated table
      * @param <V1>   the value type of the aggregated table
      * @return the instance of KTable
      */
-    <K1, V1, T> KTable<K1, T> aggregate(Aggregator<K1, V1, T> aggregator,
+    <K1, V1, T> KTable<K1, T> aggregate(Initializer<T> initializer,
+                                        Aggregator<K1, V1, T> add,
+                                        Aggregator<K1, V1, T> remove,
                                         KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
                                         Serializer<K1> keySerializer,
                                         Serializer<V1> valueSerializer,
@@ -178,4 +181,22 @@ public interface KTable<K, V> {
                                         Deserializer<V1> valueDeserializer,
                                         Deserializer<T> aggValueDeserializer,
                                         String name);
+
+    /**
+     * Count number of records of this table by the selected key.
+     *
+     * @param selector the KeyValue mapper that select the aggregate key
+     * @param name the name of the resulted table
+     * @param <K1>   the key type of the aggregated table
+     * @return the instance of KTable
+     */
+    <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector,
+                                Serializer<K1> keySerializer,
+                                Serializer<V> valueSerializer,
+                                Serializer<Long> aggValueSerializer,
+                                Deserializer<K1> keyDeserializer,
+                                Deserializer<V> valueDeserializer,
+                                Deserializer<Long> aggValueDeserializer,
+                                String name);
+
 }

@@ -19,6 +19,12 @@ package org.apache.kafka.common.protocol;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.Type;
+
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.INT16;
@@ -26,6 +32,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 import static org.apache.kafka.common.protocol.types.Type.INT8;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
+import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 
 public class Protocol {
 
@@ -35,8 +42,9 @@ public class Protocol {
                                                                      INT32,
                                                                      "A user-supplied integer value that will be passed back with the response"),
                                                            new Field("client_id",
-                                                                     STRING,
-                                                                     "A user specified identifier for the client making the request."));
+                                                                     NULLABLE_STRING,
+                                                                     "A user specified identifier for the client making the request.",
+                                                                     ""));
 
     public static final Schema RESPONSE_HEADER = new Schema(new Field("correlation_id",
                                                                       INT32,
@@ -108,7 +116,17 @@ public class Protocol {
                                                                                                                                       INT16),
                                                                                                                             new Field("base_offset",
                                                                                                                                       INT64))))))));
+    /**
+     * The body of PRODUCE_REQUEST_V1 is the same as PRODUCE_REQUEST_V0.
+     * The version number is bumped up to indicate that the client supports quota throttle time field in the response.
+     */
     public static final Schema PRODUCE_REQUEST_V1 = PRODUCE_REQUEST_V0;
+    /**
+     * The body of PRODUCE_REQUEST_V2 is the same as PRODUCE_REQUEST_V1.
+     * The version number is bumped up to indicate that message format V1 is used which has relative offset and
+     * timestamp.
+     */
+    public static final Schema PRODUCE_REQUEST_V2 = PRODUCE_REQUEST_V1;
 
     public static final Schema PRODUCE_RESPONSE_V1 = new Schema(new Field("responses",
                                                                           new ArrayOf(new Schema(new Field("topic", STRING),
@@ -124,9 +142,33 @@ public class Protocol {
                                                                           "Duration in milliseconds for which the request was throttled" +
                                                                               " due to quota violation. (Zero if the request did not violate any quota.)",
                                                                           0));
-
-    public static final Schema[] PRODUCE_REQUEST = new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1};
-    public static final Schema[] PRODUCE_RESPONSE = new Schema[] {PRODUCE_RESPONSE_V0, PRODUCE_RESPONSE_V1};
+    /**
+     * PRODUCE_RESPONSE_V2 added a timestamp field in the per partition response status.
+     * The timestamp is log append time if the topic is configured to use log append time. Or it is NoTimestamp when create
+     * time is used for the topic.
+     */
+    public static final Schema PRODUCE_RESPONSE_V2 = new Schema(new Field("responses",
+                                                                new ArrayOf(new Schema(new Field("topic", STRING),
+                                                                                       new Field("partition_responses",
+                                                                                       new ArrayOf(new Schema(new Field("partition",
+                                                                                                                        INT32),
+                                                                                                              new Field("error_code",
+                                                                                                                        INT16),
+                                                                                                              new Field("base_offset",
+                                                                                                                        INT64),
+                                                                                                              new Field("timestamp",
+                                                                                                                        INT64,
+                                                                                                                        "The timestamp returned by broker after appending the messages. " +
+                                                                                                                            "If CreateTime is used for the topic, the timestamp will be -1. " +
+                                                                                                                            "If LogAppendTime is used for the topic, the timestamp will be " +
+                                                                                                                            "the broker local time when the messages are appended."))))))),
+                                                                new Field("throttle_time_ms",
+                                                                          INT32,
+                                                                          "Duration in milliseconds for which the request was throttled" +
+                                                                              " due to quota violation. (Zero if the request did not violate any quota.)",
+                                                                          0));
+    public static final Schema[] PRODUCE_REQUEST = new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2};
+    public static final Schema[] PRODUCE_RESPONSE = new Schema[] {PRODUCE_RESPONSE_V0, PRODUCE_RESPONSE_V1, PRODUCE_RESPONSE_V2};
 
     /* Offset commit api */
     public static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
@@ -362,6 +404,10 @@ public class Protocol {
     // The V1 Fetch Request body is the same as V0.
     // Only the version number is incremented to indicate a newer client
     public static final Schema FETCH_REQUEST_V1 = FETCH_REQUEST_V0;
+    // The V2 Fetch Request body is the same as V1.
+    // Only the version number is incremented to indicate the client support message format V1 which uses
+    // relative offset and has timestamp.
+    public static final Schema FETCH_REQUEST_V2 = FETCH_REQUEST_V1;
     public static final Schema FETCH_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
                                                                                   INT32,
                                                                                   "Topic partition id."),
@@ -384,9 +430,13 @@ public class Protocol {
                                                                         0),
                                                               new Field("responses",
                                                                       new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
+    // Even though fetch response v2 has the same protocol as v1, the record set in the response is different. In v1,
+    // record set only includes messages of v0 (magic byte 0). In v2, record set can include messages of v0 and v1
+    // (magic byte 0 and 1). For details, see ByteBufferMessageSet.
+    public static final Schema FETCH_RESPONSE_V2 = FETCH_RESPONSE_V1;
 
-    public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1};
-    public static final Schema[] FETCH_RESPONSE = new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1};
+    public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2};
+    public static final Schema[] FETCH_RESPONSE = new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2};
 
     /* List groups api */
     public static final Schema LIST_GROUPS_REQUEST_V0 = new Schema();
@@ -704,6 +754,166 @@ public class Protocol {
             if (REQUESTS[api.id].length != RESPONSES[api.id].length)
                 throw new IllegalStateException(REQUESTS[api.id].length + " request versions for api " + api.name
                         + " but " + RESPONSES[api.id].length + " response versions.");
+    }
+
+    private static String indentString(int size) {
+        StringBuilder b = new StringBuilder(size);
+        for (int i = 0; i < size; i++)
+            b.append(" ");
+        return b.toString();
+    }
+
+    private static void schemaToBnfHtml(Schema schema, StringBuilder b, int indentSize) {
+        final String indentStr = indentString(indentSize);
+        final Map<String, Type> subTypes = new LinkedHashMap<>();
+
+        // Top level fields
+        for (Field field: schema.fields()) {
+            if (field.type instanceof ArrayOf) {
+                b.append("[");
+                b.append(field.name);
+                b.append("] ");
+                Type innerType = ((ArrayOf) field.type).type();
+                if (innerType instanceof Schema && !subTypes.containsKey(field.name))
+                    subTypes.put(field.name, (Schema) innerType);
+            } else if (field.type instanceof Schema) {
+                b.append(field.name);
+                b.append(" ");
+                if (!subTypes.containsKey(field.name))
+                    subTypes.put(field.name, (Schema) field.type);
+            } else {
+                b.append(field.name);
+                b.append(" ");
+                if (!subTypes.containsKey(field.name))
+                    subTypes.put(field.name, field.type);
+            }
+        }
+        b.append("\n");
+
+        // Sub Types/Schemas
+        for (Map.Entry<String, Type> entry: subTypes.entrySet()) {
+            if (entry.getValue() instanceof Schema) {
+                // Complex Schema Type
+                b.append(indentStr);
+                b.append(entry.getKey());
+                b.append(" => ");
+                schemaToBnfHtml((Schema) entry.getValue(), b, indentSize + 2);
+            } else {
+                // Standard Field Type
+                b.append(indentStr);
+                b.append(entry.getKey());
+                b.append(" => ");
+                b.append(entry.getValue());
+                b.append("\n");
+            }
+        }
+    }
+
+    private static void populateSchemaFields(Schema schema, Set<Field> fields) {
+        for (Field field: schema.fields()) {
+            fields.add(field);
+            if (field.type instanceof ArrayOf) {
+                Type innerType = ((ArrayOf) field.type).type();
+                if (innerType instanceof Schema)
+                    populateSchemaFields((Schema) innerType, fields);
+            } else if (field.type instanceof Schema)
+                populateSchemaFields((Schema) field.type, fields);
+        }
+    }
+
+    private static void schemaToFieldTableHtml(Schema schema, StringBuilder b) {
+        Set<Field> fields = new LinkedHashSet<>();
+        populateSchemaFields(schema, fields);
+
+        b.append("<table class=\"data-table\"><tbody>\n");
+        b.append("<tr>");
+        b.append("<th>Field</th>\n");
+        b.append("<th>Description</th>\n");
+        b.append("</tr>");
+        for (Field field : fields) {
+            b.append("<tr>\n");
+            b.append("<td>");
+            b.append(field.name);
+            b.append("</td>");
+            b.append("<td>");
+            b.append(field.doc);
+            b.append("</td>");
+            b.append("</tr>\n");
+        }
+        b.append("</table>\n");
+    }
+
+    public static String toHtml() {
+        final StringBuilder b = new StringBuilder();
+        b.append("<h5>Headers:</h5>\n");
+
+        b.append("<pre>");
+        b.append("Request Header => ");
+        schemaToBnfHtml(REQUEST_HEADER, b, 2);
+        b.append("</pre>\n");
+        schemaToFieldTableHtml(REQUEST_HEADER, b);
+
+        b.append("<pre>");
+        b.append("Response Header => ");
+        schemaToBnfHtml(RESPONSE_HEADER, b, 2);
+        b.append("</pre>\n");
+        schemaToFieldTableHtml(RESPONSE_HEADER, b);
+
+        for (ApiKeys key : ApiKeys.values()) {
+            // Key
+            b.append("<h5>");
+            b.append(key.name);
+            b.append(" API (Key: ");
+            b.append(key.id);
+            b.append("):</h5>\n\n");
+            // Requests
+            b.append("<b>Requests:</b><br>\n");
+            Schema[] requests = REQUESTS[key.id];
+            for (int i = 0; i < requests.length; i++) {
+                Schema schema = requests[i];
+                // Schema
+                if (schema != null) {
+                    b.append("<p>");
+                    // Version header
+                    b.append("<pre>");
+                    b.append(key.name);
+                    b.append(" Request (Version: ");
+                    b.append(i);
+                    b.append(") => ");
+                    schemaToBnfHtml(requests[i], b, 2);
+                    b.append("</pre>");
+                    schemaToFieldTableHtml(requests[i], b);
+                }
+                b.append("</p>\n");
+            }
+
+            // Responses
+            b.append("<b>Responses:</b><br>\n");
+            Schema[] responses = RESPONSES[key.id];
+            for (int i = 0; i < responses.length; i++) {
+                Schema schema = responses[i];
+                // Schema
+                if (schema != null) {
+                    b.append("<p>");
+                    // Version header
+                    b.append("<pre>");
+                    b.append(key.name);
+                    b.append(" Response (Version: ");
+                    b.append(i);
+                    b.append(") => ");
+                    schemaToBnfHtml(responses[i], b, 2);
+                    b.append("</pre>");
+                    schemaToFieldTableHtml(responses[i], b);
+                }
+                b.append("</p>\n");
+            }
+        }
+
+        return b.toString();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(toHtml());
     }
 
 }

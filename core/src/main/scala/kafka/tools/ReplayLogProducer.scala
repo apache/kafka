@@ -139,8 +139,8 @@ object ReplayLogProducer extends Logging {
             stream
         for (messageAndMetadata <- iter) {
           try {
-            val response = producer.send(new ProducerRecord[Array[Byte],Array[Byte]](config.outputTopic,
-                                            messageAndMetadata.key(), messageAndMetadata.message()))
+            val response = producer.send(new ProducerRecord[Array[Byte],Array[Byte]](config.outputTopic, null,
+                                            messageAndMetadata.timestamp, messageAndMetadata.key(), messageAndMetadata.message()))
             if(config.isSync) {
               response.get()
             }

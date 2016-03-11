@@ -29,6 +29,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
+import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -59,6 +60,7 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 
 /**
  * A Kafka client that publishes records to the Kafka cluster.
@@ -147,6 +149,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerConfig producerConfig;
     private final long maxBlockTimeMs;
     private final int requestTimeoutMs;
+    private final ProducerInterceptors<K, V> interceptors;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -284,6 +287,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.sender = new Sender(client,
                     this.metadata,
                     this.accumulator,
+                    config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION) == 1,
                     config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
                     (short) parseAcks(config.getString(ProducerConfig.ACKS_CONFIG)),
                     config.getInt(ProducerConfig.RETRIES_CONFIG),
@@ -313,6 +317,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 config.ignore(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
                 this.valueSerializer = valueSerializer;
             }
+
+            // load interceptors and make sure they get clientId
+            userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
+            List<ProducerInterceptor<K, V>> interceptorList = (List) (new ProducerConfig(userProvidedConfigs)).getConfiguredInstances(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                    ProducerInterceptor.class);
+            this.interceptors = interceptorList.isEmpty() ? null : new ProducerInterceptors<>(interceptorList);
+
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
             log.debug("Kafka producer started");
@@ -349,8 +360,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * records waiting to be sent. This allows sending many records in parallel without blocking to wait for the
      * response after each one.
      * <p>
-     * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to and the offset
-     * it was assigned.
+     * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to, the offset
+     * it was assigned and the timestamp of the record. If
+     * {@link org.apache.kafka.common.record.TimestampType#CREATE_TIME CreateTime} is used by the topic, the timestamp
+     * will be the user provided timestamp or the record send time if the user did not specify a timestamp for the
+     * record. If {@link org.apache.kafka.common.record.TimestampType#LOG_APPEND_TIME LogAppendTime} is used for the
+     * topic, the timestamp will be the Kafka broker local time when the message is appended.
      * <p>
      * Since the send call is asynchronous it returns a {@link java.util.concurrent.Future Future} for the
      * {@link RecordMetadata} that will be assigned to this record. Invoking {@link java.util.concurrent.Future#get()
@@ -410,6 +425,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
+        // intercept the record, which can be potentially modified; this method does not throw exceptions
+        ProducerRecord<K, V> interceptedRecord = this.interceptors == null ? record : this.interceptors.onSend(record);
+        // producer callback will make sure to call both 'callback' and interceptor callback
+        Callback interceptCallback = this.interceptors == null ? callback : new InterceptorCallback<>(callback, this.interceptors);
+        return doSend(interceptedRecord, interceptCallback);
+    }
+
+    /**
+     * Implementation of asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>.
+     * See {@link #send(ProducerRecord, Callback)} for details.
+     */
+    private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
         try {
             // first make sure the metadata for the topic is available
             long waitedOnMetadataMs = waitOnMetadata(record.topic(), this.maxBlockTimeMs);
@@ -434,8 +461,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(serializedKey, serializedValue);
             ensureValidRecordSize(serializedSize);
             TopicPartition tp = new TopicPartition(record.topic(), partition);
+            long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
-            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, serializedKey, serializedValue, callback, remainingWaitMs);
+            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey, serializedValue, callback, remainingWaitMs);
             if (result.batchIsFull || result.newBatchCreated) {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
@@ -452,13 +480,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             return new FutureFailure(e);
         } catch (InterruptedException e) {
             this.errors.record();
+            if (this.interceptors != null)
+                this.interceptors.onAcknowledgement(null, e);
             throw new InterruptException(e);
         } catch (BufferExhaustedException e) {
             this.errors.record();
             this.metrics.sensor("buffer-exhausted-records").record();
+            if (this.interceptors != null)
+                this.interceptors.onAcknowledgement(null, e);
             throw e;
         } catch (KafkaException e) {
             this.errors.record();
+            if (this.interceptors != null)
+                this.interceptors.onAcknowledgement(null, e);
+            throw e;
+        } catch (Exception e) {
+            // we notify interceptor about all exceptions, since onSend is called before anything else in this method
+            if (this.interceptors != null)
+                this.interceptors.onAcknowledgement(null, e);
             throw e;
         }
     }
@@ -650,6 +689,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
         }
 
+        ClientUtils.closeQuietly(interceptors, "producer interceptors", firstException);
         ClientUtils.closeQuietly(metrics, "producer metrics", firstException);
         ClientUtils.closeQuietly(keySerializer, "producer keySerializer", firstException);
         ClientUtils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
@@ -716,4 +756,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     }
 
+    /**
+     * A callback called when producer request is complete. It in turn calls user-supplied callback (if given) and
+     * notifies producer interceptors about the request completion.
+     */
+    private static class InterceptorCallback<K, V> implements Callback {
+        private final Callback userCallback;
+        private final ProducerInterceptors<K, V> interceptors;
+
+        public InterceptorCallback(Callback userCallback, ProducerInterceptors<K, V> interceptors) {
+            this.userCallback = userCallback;
+            this.interceptors = interceptors;
+        }
+
+        public void onCompletion(RecordMetadata metadata, Exception exception) {
+            if (this.interceptors != null)
+                this.interceptors.onAcknowledgement(metadata, exception);
+            if (this.userCallback != null)
+                this.userCallback.onCompletion(metadata, exception);
+        }
+    }
 }

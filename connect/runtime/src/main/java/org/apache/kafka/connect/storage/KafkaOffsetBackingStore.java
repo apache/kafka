@@ -21,8 +21,12 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConvertingFutureCallback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
@@ -51,30 +55,27 @@ import java.util.concurrent.TimeoutException;
 public class KafkaOffsetBackingStore implements OffsetBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaOffsetBackingStore.class);
 
-    public final static String OFFSET_STORAGE_TOPIC_CONFIG = "offset.storage.topic";
-
     private KafkaBasedLog<byte[], byte[]> offsetLog;
     private HashMap<ByteBuffer, ByteBuffer> data;
 
     @Override
-    public void configure(Map<String, ?> configs) {
-        String topic = (String) configs.get(OFFSET_STORAGE_TOPIC_CONFIG);
-        if (topic == null)
-            throw new ConnectException("Offset storage topic must be specified");
+    public void configure(WorkerConfig config) {
+        String topic = config.getString(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG);
+        if (topic.equals(""))
+            throw new ConfigException("Offset storage topic must be specified");
 
         data = new HashMap<>();
 
         Map<String, Object> producerProps = new HashMap<>();
-        producerProps.putAll(configs);
-        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
+        producerProps.putAll(config.originals());
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
 
         Map<String, Object> consumerProps = new HashMap<>();
-        consumerProps.putAll(configs);
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        consumerProps.putAll(config.originals());
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
         offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback);
     }

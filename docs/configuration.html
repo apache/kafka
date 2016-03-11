@@ -28,7 +28,7 @@ The essential configurations are the following:
 
 Topic-level configurations and defaults are discussed in more detail <a href="#topic-config">below</a>.
 
-<!--#include virtual="kafka_config.html" -->
+<!--#include virtual="generated/kafka_config.html" -->
 
 <p>More details about broker configuration can be found in the scala class <code>kafka.server.KafkaConfig</code>.</p>
 
@@ -150,7 +150,7 @@ The following are the topic-level configurations. The server's default configura
 <h3><a id="producerconfigs" href="#producerconfigs">3.2 Producer Configs</a></h3>
 
 Below is the configuration of the Java producer:
-<!--#include virtual="producer_config.html" -->
+<!--#include virtual="generated/producer_config.html" -->
 
 <p>
     For those interested in the legacy Scala producer configs, information can be found <a href="http://kafka.apache.org/082/documentation.html#producerconfigs">
@@ -247,7 +247,8 @@ The essential old consumer configurations are the following:
     <tr>
       <td>rebalance.backoff.ms</td>
       <td>2000</td>
-      <td>Backoff time between retries during rebalance.</td>
+      <td>Backoff time between retries during rebalance. If not set explicitly, the value in zookeeper.sync.time.ms is used.
+      </td>
     </tr>
     <tr>
       <td>refresh.leader.backoff.ms</td>
@@ -329,7 +330,7 @@ The essential old consumer configurations are the following:
 
 <h4><a id="newconsumerconfigs" href="#newconsumerconfigs">3.3.2 New Consumer Configs</a></h4>
 Since 0.9.0.0 we have been working on a replacement for our existing simple and high-level consumers. The code is considered beta quality. Below is the configuration for the new consumer:
-<!--#include virtual="consumer_config.html" -->
+<!--#include virtual="generated/consumer_config.html" -->
 
 <h3><a id="connectconfigs" href="#connectconfigs">3.4 Kafka Connect Configs</a></h3>
-<!--#include virtual="connect_config.html" -->
+<!--#include virtual="generated/connect_config.html" -->

@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidRequiredAcksException;
 import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
+import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
@@ -47,6 +48,7 @@ import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -125,7 +127,9 @@ public enum Errors {
     GROUP_AUTHORIZATION_FAILED(30,
             new GroupAuthorizationException("Group authorization failed.")),
     CLUSTER_AUTHORIZATION_FAILED(31,
-            new ClusterAuthorizationException("Cluster authorization failed."));
+            new ClusterAuthorizationException("Cluster authorization failed.")),
+    INVALID_TIMESTAMP(32,
+            new InvalidTimestampException("The timestamp of the message is out of acceptable range."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
@@ -179,6 +183,16 @@ public enum Errors {
     }
 
     /**
+     * Get a friendly description of the error (if one is available).
+     * @return the error message
+     */
+    public String message() {
+        if (exception != null)
+            return exception.getMessage();
+        return toString();
+    }
+
+    /**
      * Throw the exception if there is one
      */
     public static Errors forCode(short code) {
@@ -192,10 +206,50 @@ public enum Errors {
     }
 
     /**
-     * Return the error instance associated with this exception (or UNKNOWN if there is none)
+     * Return the error instance associated with this exception or any of its superclasses (or UNKNOWN if there is none).
+     * If there are multiple matches in the class hierarchy, the first match starting from the bottom is used.
      */
     public static Errors forException(Throwable t) {
-        Errors error = classToError.get(t.getClass());
-        return error == null ? UNKNOWN : error;
+        Class clazz = t.getClass();
+        while (clazz != null) {
+            Errors error = classToError.get(clazz);
+            if (error != null)
+                return error;
+            clazz = clazz.getSuperclass();
+        }
+        return UNKNOWN;
+    }
+
+    private static String toHtml() {
+        final StringBuilder b = new StringBuilder();
+        b.append("<table class=\"data-table\"><tbody>\n");
+        b.append("<tr>");
+        b.append("<th>Error</th>\n");
+        b.append("<th>Code</th>\n");
+        b.append("<th>Retriable</th>\n");
+        b.append("<th>Description</th>\n");
+        b.append("</tr>\n");
+        for (Errors error : Errors.values()) {
+            b.append("<tr>");
+            b.append("<td>");
+            b.append(error.name());
+            b.append("</td>");
+            b.append("<td>");
+            b.append(error.code());
+            b.append("</td>");
+            b.append("<td>");
+            b.append(error.exception() != null && error.exception() instanceof RetriableException ? "True" : "False");
+            b.append("</td>");
+            b.append("<td>");
+            b.append(error.exception() != null ? error.exception().getMessage() : "");
+            b.append("</td>");
+            b.append("</tr>\n");
+        }
+        b.append("</table>\n");
+        return b.toString();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(toHtml());
     }
 }

@@ -59,7 +59,8 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>batch.size</code> */
     public static final String BATCH_SIZE_CONFIG = "batch.size";
-    private static final String BATCH_SIZE_DOC = "The producer will attempt to batch records together into fewer requests whenever multiple records are being sent" + " to the same partition. This helps performance on both the client and the server. This configuration controls the "
+    private static final String BATCH_SIZE_DOC = "The producer will attempt to batch records together into fewer requests whenever multiple records are being sent"
+                                                 + " to the same partition. This helps performance on both the client and the server. This configuration controls the "
                                                  + "default batch size in bytes. "
                                                  + "<p>"
                                                  + "No attempt will be made to batch records larger than this size. "
@@ -69,15 +70,6 @@ public class ProducerConfig extends AbstractConfig {
                                                  + "A small batch size will make batching less common and may reduce throughput (a batch size of zero will disable "
                                                  + "batching entirely). A very large batch size may use memory a bit more wastefully as we will always allocate a "
                                                  + "buffer of the specified batch size in anticipation of additional records.";
-
-    /** <code>buffer.memory</code> */
-    public static final String BUFFER_MEMORY_CONFIG = "buffer.memory";
-    private static final String BUFFER_MEMORY_DOC = "The total bytes of memory the producer can use to buffer records waiting to be sent to the server. If records are " + "sent faster than they can be delivered to the server the producer will either block or throw an exception based "
-                                                    + "on the preference specified by <code>block.on.buffer.full</code>. "
-                                                    + "<p>"
-                                                    + "This setting should correspond roughly to the total memory the producer will use, but is not a hard bound since "
-                                                    + "not all memory the producer uses is used for buffering. Some additional memory will be used for compression (if "
-                                                    + "compression is enabled) as well as for maintaining in-flight requests.";
 
     /** <code>acks</code> */
     public static final String ACKS_CONFIG = "acks";
@@ -103,20 +95,22 @@ public class ProducerConfig extends AbstractConfig {
      */
     @Deprecated
     public static final String TIMEOUT_CONFIG = "timeout.ms";
-    private static final String TIMEOUT_DOC = "The configuration controls the maximum amount of time the server will wait for acknowledgments from followers to " + "meet the acknowledgment requirements the producer has specified with the <code>acks</code> configuration. If the "
+    private static final String TIMEOUT_DOC = "The configuration controls the maximum amount of time the server will wait for acknowledgments from followers to "
+                                              + "meet the acknowledgment requirements the producer has specified with the <code>acks</code> configuration. If the "
                                               + "requested number of acknowledgments are not met when the timeout elapses an error will be returned. This timeout "
                                               + "is measured on the server side and does not include the network latency of the request.";
 
     /** <code>linger.ms</code> */
     public static final String LINGER_MS_CONFIG = "linger.ms";
-    private static final String LINGER_MS_DOC = "The producer groups together any records that arrive in between request transmissions into a single batched request. " + "Normally this occurs only under load when records arrive faster than they can be sent out. However in some circumstances the client may want to "
+    private static final String LINGER_MS_DOC = "The producer groups together any records that arrive in between request transmissions into a single batched request. "
+                                                + "Normally this occurs only under load when records arrive faster than they can be sent out. However in some circumstances the client may want to "
                                                 + "reduce the number of requests even under moderate load. This setting accomplishes this by adding a small amount "
                                                 + "of artificial delay&mdash;that is, rather than immediately sending out a record the producer will wait for up to "
                                                 + "the given delay to allow other records to be sent so that the sends can be batched together. This can be thought "
                                                 + "of as analogous to Nagle's algorithm in TCP. This setting gives the upper bound on the delay for batching: once "
-                                                + "we get <code>batch.size</code> worth of records for a partition it will be sent immediately regardless of this "
+                                                + "we get <code>" + BATCH_SIZE_CONFIG + "</code> worth of records for a partition it will be sent immediately regardless of this "
                                                 + "setting, however if we have fewer than this many bytes accumulated for this partition we will 'linger' for the "
-                                                + "specified time waiting for more records to show up. This setting defaults to 0 (i.e. no delay). Setting <code>linger.ms=5</code>, "
+                                                + "specified time waiting for more records to show up. This setting defaults to 0 (i.e. no delay). Setting <code>" + LINGER_MS_CONFIG + "=5</code>, "
                                                 + "for example, would have the effect of reducing the number of requests sent but would add up to 5ms of latency to records sent in the absense of load.";
 
     /** <code>client.id</code> */
@@ -130,11 +124,18 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>max.request.size</code> */
     public static final String MAX_REQUEST_SIZE_CONFIG = "max.request.size";
-    private static final String MAX_REQUEST_SIZE_DOC = "The maximum size of a request in bytes. This is also effectively a cap on the maximum record size. Note that the server " + "has its own cap on record size which may be different from this. This setting will limit the number of record "
+    private static final String MAX_REQUEST_SIZE_DOC = "The maximum size of a request in bytes. This is also effectively a cap on the maximum record size. Note that the server "
+                                                       + "has its own cap on record size which may be different from this. This setting will limit the number of record "
                                                        + "batches the producer will send in a single request to avoid sending huge requests.";
 
     /** <code>reconnect.backoff.ms</code> */
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
+
+    /** <code>max.block.ms</code> */
+    public static final String MAX_BLOCK_MS_CONFIG = "max.block.ms";
+    private static final String MAX_BLOCK_MS_DOC = "The configuration controls how long <code>KafkaProducer.send()</code> and <code>KafkaProducer.partitionsFor()</code> will block."
+                                                    + "These methods can be blocked either because the buffer is full or metadata unavailable."
+                                                    + "Blocking in the user-supplied serializers or partitioner will not be counted against this timeout.";
 
     /** <code>block.on.buffer.full</code> */
     /**
@@ -142,12 +143,28 @@ public class ProducerConfig extends AbstractConfig {
      */
     @Deprecated
     public static final String BLOCK_ON_BUFFER_FULL_CONFIG = "block.on.buffer.full";
-    private static final String BLOCK_ON_BUFFER_FULL_DOC = "When our memory buffer is exhausted we must either stop accepting new records (block) or throw errors. By default " + "this setting is true and we block, however in some scenarios blocking is not desirable and it is better to "
-                                                           + "immediately give an error. Setting this to <code>false</code> will accomplish that: the producer will throw a BufferExhaustedException if a record is sent and the buffer space is full.";
+    private static final String BLOCK_ON_BUFFER_FULL_DOC = "When our memory buffer is exhausted we must either stop accepting new records (block) or throw errors. "
+                                                           + "By default this setting is false and the producer will throw a BufferExhaustedException if a record is sent and the buffer space is full. "
+                                                           + "However in some scenarios getting an error is not desirable and it is better to block. Setting this to <code>true</code> will accomplish that."
+                                                           + "<em>If this property is set to true, parameter <code>" + METADATA_FETCH_TIMEOUT_CONFIG + "</code> is not longer honored.</em>"
+                                                           + "<p>"
+                                                           + "This parameter is deprecated and will be removed in a future release. "
+                                                           + "Parameter <code>" + MAX_BLOCK_MS_CONFIG + "</code> should be used instead.";
+
+    /** <code>buffer.memory</code> */
+    public static final String BUFFER_MEMORY_CONFIG = "buffer.memory";
+    private static final String BUFFER_MEMORY_DOC = "The total bytes of memory the producer can use to buffer records waiting to be sent to the server. If records are "
+                                                    + "sent faster than they can be delivered to the server the producer will either block or throw an exception based "
+                                                    + "on the preference specified by <code>" + BLOCK_ON_BUFFER_FULL_CONFIG + "</code>. "
+                                                    + "<p>"
+                                                    + "This setting should correspond roughly to the total memory the producer will use, but is not a hard bound since "
+                                                    + "not all memory the producer uses is used for buffering. Some additional memory will be used for compression (if "
+                                                    + "compression is enabled) as well as for maintaining in-flight requests.";
 
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = "retries";
-    private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error." + " Note that this retry is no different than if the client resent the record upon receiving the "
+    private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
+                                              + " Note that this retry is no different than if the client resent the record upon receiving the "
                                               + "error. Allowing retries will potentially change the ordering of records because if two records are "
                                               + "sent to a single partition, and the first fails and is retried but the second succeeds, then the second record "
                                               + "may appear first.";
@@ -157,7 +174,8 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>compression.type</code> */
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
-    private static final String COMPRESSION_TYPE_DOC = "The compression type for all data generated by the producer. The default is none (i.e. no compression). Valid " + " values are <code>none</code>, <code>gzip</code>, <code>snappy</code>, or <code>lz4</code>. "
+    private static final String COMPRESSION_TYPE_DOC = "The compression type for all data generated by the producer. The default is none (i.e. no compression). Valid "
+                                                       + " values are <code>none</code>, <code>gzip</code>, <code>snappy</code>, or <code>lz4</code>. "
                                                        + "Compression is of full batches of data, so the efficacy of batching will also impact the compression ratio (more batching means better compression).";
 
     /** <code>metrics.sample.window.ms</code> */
@@ -190,15 +208,15 @@ public class ProducerConfig extends AbstractConfig {
     public static final String PARTITIONER_CLASS_CONFIG = "partitioner.class";
     private static final String PARTITIONER_CLASS_DOC = "Partitioner class that implements the <code>Partitioner</code> interface.";
 
-    /** <code>max.block.ms</code> */
-    public static final String MAX_BLOCK_MS_CONFIG = "max.block.ms";
-    private static final String MAX_BLOCK_MS_DOC = "The configuration controls how long {@link KafkaProducer#send()} and {@link KafkaProducer#partitionsFor} will block."
-                                                    + "These methods can be blocked either because the buffer is full or metadata unavailable."
-                                                    + "Blocking in the user-supplied serializers or partitioner will not be counted against this timeout.";
-
     /** <code>request.timeout.ms</code> */
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
     private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
+
+    /** <code>interceptor.classes</code> */
+    public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
+    public static final String INTERCEPTOR_CLASSES_DOC = "A list of classes to use as interceptors. "
+                                                        + "Implementing the <code>ProducerInterceptor</code> interface allows you to intercept (and possibly mutate) the records "
+                                                        + "received by the producer before they are published to the Kafka cluster. By default, there are no interceptors.";
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
@@ -277,6 +295,11 @@ public class ProducerConfig extends AbstractConfig {
                                         Type.CLASS,
                                         DefaultPartitioner.class.getName(),
                                         Importance.MEDIUM, PARTITIONER_CLASS_DOC)
+                                .define(INTERCEPTOR_CLASSES_CONFIG,
+                                        Type.LIST,
+                                        null,
+                                        Importance.LOW,
+                                        INTERCEPTOR_CLASSES_DOC)
 
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,

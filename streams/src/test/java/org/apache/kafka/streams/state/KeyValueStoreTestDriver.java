@@ -219,7 +219,6 @@ public class KeyValueStoreTestDriver<K, V> {
         return new KeyValueStoreTestDriver<K, V>(serdes);
     }
 
-    private final Serdes<K, V> serdes;
     private final Map<K, V> flushedEntries = new HashMap<>();
     private final Set<K> flushedRemovals = new HashSet<>();
     private final List<KeyValue<K, V>> restorableEntries = new LinkedList<>();
@@ -238,22 +237,40 @@ public class KeyValueStoreTestDriver<K, V> {
     private final RecordCollector recordCollector;
     private File stateDir = null;
 
-    protected KeyValueStoreTestDriver(Serdes<K, V> serdes) {
-        this.serdes = serdes;
+    protected KeyValueStoreTestDriver(final Serdes<K, V> serdes) {
         ByteArraySerializer rawSerializer = new ByteArraySerializer();
-        Producer<byte[], byte[]> producer = new MockProducer<byte[], byte[]>(true, rawSerializer, rawSerializer);
+        Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
+
         this.recordCollector = new RecordCollector(producer) {
+            @SuppressWarnings("unchecked")
             @Override
             public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                recordFlushed(record.key(), record.value());
+                // for byte arrays we need to wrap it for comparison
+
+                K key;
+                if (record.key() instanceof byte[]) {
+                    key = serdes.keyFrom((byte[]) record.key());
+                } else {
+                    key = (K) record.key();
+                }
+
+                V value;
+                if (record.key() instanceof byte[]) {
+                    value = serdes.valueFrom((byte[]) record.value());
+                } else {
+                    value = (V) record.value();
+                }
+
+                recordFlushed(key, value);
             }
             @Override
             public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer,
                                     StreamPartitioner<K1, V1> partitioner) {
-                recordFlushed(record.key(), record.value());
+                // ignore partitioner
+                send(record, keySerializer, valueSerializer);
             }
         };
-        this.stateDir = StateUtils.tempDir();
+        this.stateDir = StateTestUtils.tempDir();
         this.stateDir.mkdirs();
 
         Properties props = new Properties();
@@ -267,7 +284,7 @@ public class KeyValueStoreTestDriver<K, V> {
         this.context = new MockProcessorContext(null, this.stateDir, serdes.keySerializer(), serdes.keyDeserializer(), serdes.valueSerializer(),
                 serdes.valueDeserializer(), recordCollector) {
             @Override
-            public TaskId id() {
+            public TaskId taskId() {
                 return new TaskId(0, 1);
             }
 
@@ -279,7 +296,7 @@ public class KeyValueStoreTestDriver<K, V> {
             @Override
             public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback func) {
                 storeMap.put(store.name(), store);
-                restoreEntries(func);
+                restoreEntries(func, serdes);
             }
 
             @Override
@@ -299,21 +316,19 @@ public class KeyValueStoreTestDriver<K, V> {
         };
     }
 
-    @SuppressWarnings("unchecked")
-    protected <K1, V1> void recordFlushed(K1 key, V1 value) {
-        K k = (K) key;
+    protected void recordFlushed(K key, V value) {
         if (value == null) {
             // This is a removal ...
-            flushedRemovals.add(k);
-            flushedEntries.remove(k);
+            flushedRemovals.add(key);
+            flushedEntries.remove(key);
         } else {
             // This is a normal add
-            flushedEntries.put(k, (V) value);
-            flushedRemovals.remove(k);
+            flushedEntries.put(key, value);
+            flushedRemovals.remove(key);
         }
     }
 
-    private void restoreEntries(StateRestoreCallback func) {
+    private void restoreEntries(StateRestoreCallback func, Serdes<K, V> serdes) {
         for (KeyValue<K, V> entry : restorableEntries) {
             if (entry != null) {
                 byte[] rawKey = serdes.rawKey(entry.key);
@@ -437,6 +452,13 @@ public class KeyValueStoreTestDriver<K, V> {
      */
     public boolean flushedEntryRemoved(K key) {
         return flushedRemovals.contains(key);
+    }
+
+    /**
+     * Return number of removed entry
+     */
+    public int numFlushedEntryRemoved() {
+        return flushedRemovals.size();
     }
 
     /**

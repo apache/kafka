@@ -23,12 +23,21 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * A partition grouper that generates partition groups given the list of topic-partitions.
+ *
+ * This grouper also acts as the stream task creation function along with partition distribution
+ * such that each generated partition group is assigned with a distinct {@link TaskId};
+ * the created task ids will then be assigned to Kafka Streams instances that host the stream job.
+ */
 public interface PartitionGrouper {
 
     /**
-     * Returns a map of task ids to groups of partitions.
+     * Returns a map of task ids to groups of partitions. A partition group forms a task, thus, partitions that are
+     * expected to be processed together must be in the same group. DefaultPartitionGrouper implements this
+     * interface. See {@link DefaultPartitionGrouper} for more information.
      *
-     * @param topicGroups The subscribed topic groups
+     * @param topicGroups The map from the {@link TopologyBuilder#topicGroups() topic group} id to topics
      * @param metadata Metadata of the consuming cluster
      * @return a map of task ids to groups of partitions
      */

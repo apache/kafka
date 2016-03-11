@@ -21,11 +21,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.common.{OffsetAndMetadata, OffsetMetadataAndError, TopicAndPartition}
 import kafka.log.LogConfig
-import kafka.message.{Message, UncompressedCodec}
+import kafka.message.UncompressedCodec
 import kafka.server._
 import kafka.utils._
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.JoinGroupRequest
+import org.apache.kafka.common.requests.{OffsetFetchResponse, JoinGroupRequest}
 
 import scala.collection.{Map, Seq, immutable}
 
@@ -48,7 +50,8 @@ case class JoinGroupResult(members: Map[String, Array[Byte]],
 class GroupCoordinator(val brokerId: Int,
                        val groupConfig: GroupConfig,
                        val offsetConfig: OffsetConfig,
-                       val groupManager: GroupMetadataManager) extends Logging {
+                       val groupManager: GroupMetadataManager,
+                       time: Time) extends Logging {
   type JoinCallback = JoinGroupResult => Unit
   type SyncCallback = (Array[Byte], Short) => Unit
 
@@ -58,13 +61,6 @@ class GroupCoordinator(val brokerId: Int,
 
   private var heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat] = null
   private var joinPurgatory: DelayedOperationPurgatory[DelayedJoin] = null
-
-  def this(brokerId: Int,
-           groupConfig: GroupConfig,
-           offsetConfig: OffsetConfig,
-           replicaManager: ReplicaManager,
-           zkUtils: ZkUtils) = this(brokerId, groupConfig, offsetConfig,
-    new GroupMetadataManager(brokerId, offsetConfig, replicaManager, zkUtils))
 
   def offsetsTopicConfigs: Properties = {
     val props = new Properties
@@ -386,8 +382,8 @@ class GroupCoordinator(val brokerId: Int,
   def handleCommitOffsets(groupId: String,
                           memberId: String,
                           generationId: Int,
-                          offsetMetadata: immutable.Map[TopicAndPartition, OffsetAndMetadata],
-                          responseCallback: immutable.Map[TopicAndPartition, Short] => Unit) {
+                          offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
+                          responseCallback: immutable.Map[TopicPartition, Short] => Unit) {
     var delayedOffsetStore: Option[DelayedStore] = None
 
     if (!isActive.get) {
@@ -430,13 +426,16 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def handleFetchOffsets(groupId: String,
-                         partitions: Seq[TopicAndPartition]): Map[TopicAndPartition, OffsetMetadataAndError] = {
+                         partitions: Seq[TopicPartition]): Map[TopicPartition, OffsetFetchResponse.PartitionData] = {
     if (!isActive.get) {
-      partitions.map {case topicAndPartition => (topicAndPartition, OffsetMetadataAndError.GroupCoordinatorNotAvailable)}.toMap
+      partitions.map { case topicPartition =>
+        (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code))}.toMap
     } else if (!isCoordinatorForGroup(groupId)) {
-      partitions.map {case topicAndPartition => (topicAndPartition, OffsetMetadataAndError.NotCoordinatorForGroup)}.toMap
+      partitions.map { case topicPartition =>
+        (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NOT_COORDINATOR_FOR_GROUP.code))}.toMap
     } else if (isCoordinatorLoadingInProgress(groupId)) {
-      partitions.map {case topicAndPartition => (topicAndPartition, OffsetMetadataAndError.GroupLoading)}.toMap
+      partitions.map { case topicPartition =>
+        (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.GROUP_LOAD_IN_PROGRESS.code))}.toMap
     } else {
       // return offsets blindly regardless the current group state since the group may be using
       // Kafka commit storage without automatic group management
@@ -563,7 +562,7 @@ class GroupCoordinator(val brokerId: Int,
    */
   private def completeAndScheduleNextHeartbeatExpiration(group: GroupMetadata, member: MemberMetadata) {
     // complete current heartbeat expectation
-    member.latestHeartbeat = SystemTime.milliseconds
+    member.latestHeartbeat = time.milliseconds()
     val memberKey = MemberKey(member.groupId, member.memberId)
     heartbeatPurgatory.checkAndComplete(memberKey)
 
@@ -729,9 +728,10 @@ object GroupCoordinator {
   // TODO: we store both group metadata and offset data here despite the topic name being offsets only
   val GroupMetadataTopicName = "__consumer_offsets"
 
-  def create(config: KafkaConfig,
-             zkUtils: ZkUtils,
-             replicaManager: ReplicaManager): GroupCoordinator = {
+  def apply(config: KafkaConfig,
+            zkUtils: ZkUtils,
+            replicaManager: ReplicaManager,
+            time: Time): GroupCoordinator = {
     val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
       offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
@@ -743,22 +743,8 @@ object GroupCoordinator {
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, replicaManager, zkUtils)
+    val groupManager = new GroupMetadataManager(config.brokerId, offsetConfig, replicaManager, zkUtils, time)
+    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupManager, time)
   }
 
-  def create(config: KafkaConfig,
-             groupManager: GroupMetadataManager): GroupCoordinator = {
-    val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
-      loadBufferSize = config.offsetsLoadBufferSize,
-      offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
-      offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
-      offsetsTopicNumPartitions = config.offsetsTopicPartitions,
-      offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-      offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
-      offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
-    val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
-      groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
-
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupManager)
-  }
 }

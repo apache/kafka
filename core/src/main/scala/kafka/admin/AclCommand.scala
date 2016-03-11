@@ -59,11 +59,13 @@ object AclCommand {
   }
 
   def withAuthorizer(opts: AclCommandOptions)(f: Authorizer => Unit) {
-    var authorizerProperties = Map.empty[String, Any]
-    if (opts.options.has(opts.authorizerPropertiesOpt)) {
-      val props = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala.map(_.split("="))
-      props.foreach(pair => authorizerProperties += (pair(0).trim -> pair(1).trim))
-    }
+    val authorizerProperties =
+      if (opts.options.has(opts.authorizerPropertiesOpt)) {
+        val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
+        CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
+      } else {
+        Map.empty[String, Any]
+      }
 
     val authorizerClass = opts.options.valueOf(opts.authorizerOpt)
     val authZ = CoreUtils.createObject[Authorizer](authorizerClass)
@@ -113,10 +115,9 @@ object AclCommand {
     withAuthorizer(opts) { authorizer =>
       val resources = getResource(opts, dieIfNoResourceFound = false)
 
-      val resourceToAcls = if (resources.isEmpty)
-        authorizer.getAcls()
-      else
-        resources.map(resource => (resource -> authorizer.getAcls(resource)))
+      val resourceToAcls: Iterable[(Resource, Set[Acl])] =
+        if (resources.isEmpty) authorizer.getAcls()
+        else resources.map(resource => (resource -> authorizer.getAcls(resource)))
 
       for ((resource, acls) <- resourceToAcls)
         println(s"Current ACLs for resource `${resource}`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
@@ -291,7 +292,8 @@ object AclCommand {
       .defaultsTo(All.name)
 
     val allowPrincipalsOpt = parser.accepts("allow-principal", "principal is in principalType:name format." +
-      " User:* is the wild card indicating all users.")
+      " Note that principalType must be supported by the Authorizer being used." +
+      " For example, User:* is the wild card indicating all users.")
       .withRequiredArg
       .describedAs("allow-principal")
       .ofType(classOf[String])
@@ -299,6 +301,7 @@ object AclCommand {
     val denyPrincipalsOpt = parser.accepts("deny-principal", "principal is in principalType:name format. " +
       "By default anyone not added through --allow-principal is denied access. " +
       "You only need to use this option as negation to already allowed set. " +
+      "Note that principalType must be supported by the Authorizer being used. " +
       "For example if you wanted to allow access to all users in the system but not test-user you can define an ACL that " +
       "allows access to User:* and specify --deny-principal=User:test@EXAMPLE.COM. " +
       "AND PLEASE REMEMBER DENY RULES TAKES PRECEDENCE OVER ALLOW RULES.")

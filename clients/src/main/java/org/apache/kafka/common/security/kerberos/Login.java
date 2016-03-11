@@ -151,7 +151,7 @@ public class Login {
                         nextRefresh = getRefreshTime(tgt);
                         long expiry = tgt.getEndTime().getTime();
                         Date expiryDate = new Date(expiry);
-                        if (isUsingTicketCache && tgt.getRenewTill() != null && tgt.getRenewTill().getTime() >= expiry) {
+                        if (isUsingTicketCache && tgt.getRenewTill() != null && tgt.getRenewTill().getTime() < expiry) {
                             log.error("The TGT cannot be renewed beyond the next expiry date: {}." +
                                     "This process will not be able to authenticate new SASL connections after that " +
                                     "time (for example, it will not be able to authenticate a new connection with a Kafka " +
@@ -286,11 +286,12 @@ public class Login {
     private synchronized LoginContext login(final String loginContextName) throws LoginException {
         String jaasConfigFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM);
         if (jaasConfigFile == null) {
-            throw new IllegalArgumentException("You must pass " + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + " in secure mode.");
+            log.debug("System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is not set, using default JAAS configuration.");
         }
         AppConfigurationEntry[] configEntries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
         if (configEntries == null) {
-            String errorMessage = "Could not find a '" + loginContextName + "' entry in `" + jaasConfigFile + "`.";
+            String errorMessage = "Could not find a '" + loginContextName + "' entry in the JAAS configuration. System property '" +
+                JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is " + (jaasConfigFile == null ? "not set" : jaasConfigFile);
             throw new IllegalArgumentException(errorMessage);
         }
 

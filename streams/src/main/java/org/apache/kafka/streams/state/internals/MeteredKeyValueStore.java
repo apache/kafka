@@ -17,29 +17,33 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Serdes;
 
 import java.util.List;
 
+/**
+ * Metered KeyValueStore wrapper is used for recording operation metrics, and hence its
+ * inner KeyValueStore implementation do not need to provide its own metrics collecting functionality.
+ *
+ * @param <K>
+ * @param <V>
+ */
 public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     protected final KeyValueStore<K, V> inner;
-    protected final StoreChangeLogger.ValueGetter getter;
-    protected final Serdes<K, V> serialization;
     protected final String metricScope;
     protected final Time time;
 
     private Sensor putTime;
+    private Sensor putIfAbsentTime;
     private Sensor getTime;
     private Sensor deleteTime;
     private Sensor putAllTime;
@@ -49,25 +53,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private Sensor restoreTime;
     private StreamsMetrics metrics;
 
-    private boolean loggingEnabled = true;
-    private StoreChangeLogger<K, V> changeLogger = null;
-
     // always wrap the store with the metered store
-    public MeteredKeyValueStore(final KeyValueStore<K, V> inner, Serdes<K, V> serialization, String metricScope, Time time) {
+    public MeteredKeyValueStore(final KeyValueStore<K, V> inner, String metricScope, Time time) {
         this.inner = inner;
-        this.getter = new StoreChangeLogger.ValueGetter<K, V>() {
-            public V get(K key) {
-                return inner.get(key);
-            }
-        };
-        this.serialization = serialization;
         this.metricScope = metricScope;
         this.time = time != null ? time : new SystemTime();
-    }
-
-    public MeteredKeyValueStore<K, V> disableLogging() {
-        loggingEnabled = false;
-        return this;
     }
 
     @Override
@@ -76,10 +66,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void init(ProcessorContext context) {
+    public void init(ProcessorContext context, StateStore root) {
         final String name = name();
         this.metrics = context.metrics();
         this.putTime = this.metrics.addLatencySensor(metricScope, name, "put");
+        this.putIfAbsentTime = this.metrics.addLatencySensor(metricScope, name, "put-if-absent");
         this.getTime = this.metrics.addLatencySensor(metricScope, name, "get");
         this.deleteTime = this.metrics.addLatencySensor(metricScope, name, "delete");
         this.putAllTime = this.metrics.addLatencySensor(metricScope, name, "put-all");
@@ -88,23 +79,10 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush");
         this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore");
 
-        serialization.init(context);
-        this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(name, context, serialization) : null;
-
         // register and possibly restore the state from the logs
         long startNs = time.nanoseconds();
-        inner.init(context);
         try {
-            final Deserializer<K> keyDeserializer = serialization.keyDeserializer();
-            final Deserializer<V> valDeserializer = serialization.valueDeserializer();
-
-            context.register(this, loggingEnabled, new StateRestoreCallback() {
-                @Override
-                public void restore(byte[] key, byte[] value) {
-                    inner.put(keyDeserializer.deserialize(name, key),
-                            valDeserializer.deserialize(name, value));
-                }
-            });
+            inner.init(context, root);
         } finally {
             this.metrics.recordLatency(this.restoreTime, startNs, time.nanoseconds());
         }
@@ -130,13 +108,18 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         long startNs = time.nanoseconds();
         try {
             this.inner.put(key, value);
-
-            if (loggingEnabled) {
-                changeLogger.add(key);
-                changeLogger.maybeLogChange(this.getter);
-            }
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
+        }
+    }
+
+    @Override
+    public V putIfAbsent(K key, V value) {
+        long startNs = time.nanoseconds();
+        try {
+            return this.inner.putIfAbsent(key, value);
+        } finally {
+            this.metrics.recordLatency(this.putIfAbsentTime, startNs, time.nanoseconds());
         }
     }
 
@@ -145,14 +128,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         long startNs = time.nanoseconds();
         try {
             this.inner.putAll(entries);
-
-            if (loggingEnabled) {
-                for (KeyValue<K, V> entry : entries) {
-                    K key = entry.key;
-                    changeLogger.add(key);
-                }
-                changeLogger.maybeLogChange(this.getter);
-            }
         } finally {
             this.metrics.recordLatency(this.putAllTime, startNs, time.nanoseconds());
         }
@@ -164,24 +139,9 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         try {
             V value = this.inner.delete(key);
 
-            removed(key);
-
             return value;
         } finally {
             this.metrics.recordLatency(this.deleteTime, startNs, time.nanoseconds());
-        }
-    }
-
-    /**
-     * Called when the underlying {@link #inner} {@link KeyValueStore} removes an entry in response to a call from this
-     * store.
-     *
-     * @param key the key for the entry that the inner store removed
-     */
-    protected void removed(K key) {
-        if (loggingEnabled) {
-            changeLogger.delete(key);
-            changeLogger.maybeLogChange(this.getter);
         }
     }
 
@@ -205,9 +165,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         long startNs = time.nanoseconds();
         try {
             this.inner.flush();
-
-            if (loggingEnabled)
-                changeLogger.logChange(this.getter);
         } finally {
             this.metrics.recordLatency(this.flushTime, startNs, time.nanoseconds());
         }
@@ -248,7 +205,5 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
                 metrics.recordLatency(this.sensor, this.startNs, time.nanoseconds());
             }
         }
-
     }
-
 }

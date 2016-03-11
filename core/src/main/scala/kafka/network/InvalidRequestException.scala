@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,8 +17,8 @@
 
 package kafka.network
 
-class InvalidRequestException(val message: String) extends RuntimeException(message) {
-  
-  def this() = this("")
-  
+class InvalidRequestException(val message: String, cause: Throwable) extends RuntimeException(message, cause) {
+
+  def this() = this("", null)
+  def this(message: String) = this(message, null)
 }

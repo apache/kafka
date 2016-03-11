@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -38,38 +39,44 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Kafka Streams allows for performing continuous computation on input coming from one or more input topics and
  * sends output to zero or more output topics.
  * <p>
- * This processing is defined by using the {@link TopologyBuilder} class or its superclass KStreamBuilder to specify
- * the transformation.
- * The {@link KafkaStreams} instance will be responsible for the lifecycle of these processors. It will instantiate and
- * start one or more of these processors to process the Kafka partitions assigned to this particular instance.
+ * The computational logic can be specified either by using the {@link TopologyBuilder} class to define the a DAG topology of
+ * {@link org.apache.kafka.streams.processor.Processor}s or by using the {@link org.apache.kafka.streams.kstream.KStreamBuilder}
+ * class which provides the high-level {@link org.apache.kafka.streams.kstream.KStream} DSL to define the transformation.
+ *
+ * The {@link KafkaStreams} class manages the lifecycle of a Kafka Streams instance. One stream instance can contain one or
+ * more threads specified in the configs for the processing work.
  * <p>
- * This {@link KafkaStreams} instance will co-ordinate with any other instances (whether in this same process, on other processes
- * on this machine, or on remote machines). These processes will divide up the work so that all partitions are being
- * consumed. If instances are added or die, the corresponding {@link StreamThread} instances will be shutdown or
- * started in the appropriate processes to balance processing load.
+ * A {@link KafkaStreams} instance can co-ordinate with any other instances with the same job ID (whether in this same process, on other processes
+ * on this machine, or on remote machines) as a single (possibly distributed) stream processing client. These instances will divide up the work
+ * based on the assignment of the input topic partitions so that all partitions are being
+ * consumed. If instances are added or failed, all instances will rebelance the partition assignment among themselves
+ * to balance processing load.
  * <p>
  * Internally the {@link KafkaStreams} instance contains a normal {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}
  * and {@link org.apache.kafka.clients.consumer.KafkaConsumer KafkaConsumer} instance that is used for reading input and writing output.
  * <p>
+ *
  * A simple example might look like this:
  * <pre>
  *    Map&lt;String, Object&gt; props = new HashMap&lt;&gt;();
- *    props.put("bootstrap.servers", "localhost:4242");
- *    props.put("key.deserializer", StringDeserializer.class);
- *    props.put("value.deserializer", StringDeserializer.class);
- *    props.put("key.serializer", StringSerializer.class);
- *    props.put("value.serializer", IntegerSerializer.class);
- *    props.put("timestamp.extractor", MyTimestampExtractor.class);
+ *    props.put(StreamsConfig.JOB_ID_CONFIG, "my-job");
+ *    props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+ *    props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+ *    props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+ *    props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+ *    props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
  *    StreamsConfig config = new StreamsConfig(props);
  *
  *    KStreamBuilder builder = new KStreamBuilder();
- *    builder.from("topic1").mapValue(value -&gt; value.length()).to("topic2");
+ *    builder.from("my-input-topic").mapValue(value -&gt; value.length().toString()).to("my-output-topic");
  *
  *    KafkaStreams streams = new KafkaStreams(builder, config);
  *    streams.start();
  * </pre>
  *
  */
+
+@InterfaceStability.Unstable
 public class KafkaStreams {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaStreams.class);
@@ -94,6 +101,12 @@ public class KafkaStreams {
         this(builder, new StreamsConfig(props));
     }
 
+    /**
+     * Construct the stream instance.
+     *
+     * @param builder The processor topology builder specifying the computational logic
+     * @param config The stream configs
+     */
     public KafkaStreams(TopologyBuilder builder, StreamsConfig config) {
         // create the metrics
         Time time = new SystemTime();
@@ -124,7 +137,7 @@ public class KafkaStreams {
     }
 
     /**
-     * Start the stream process by starting all its threads
+     * Start the stream instance by starting all its threads.
      */
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
@@ -142,8 +155,8 @@ public class KafkaStreams {
     }
 
     /**
-     * Shutdown this stream process by signaling the threads to stop,
-     * wait for them to join and clean up the process instance.
+     * Shutdown this stream instance by signaling all the threads to stop,
+     * and then wait for them to join.
      */
     public synchronized void close() {
         log.debug("Stopping Kafka Stream process");
@@ -168,4 +181,15 @@ public class KafkaStreams {
             throw new IllegalStateException("This process has not started yet.");
         }
     }
+
+    /**
+     * Sets the handler invoked when a stream thread abruptly terminates due to an uncaught exception.
+     *
+     * @param eh the object to use as this thread's uncaught exception handler. If null then this thread has no explicit handler.
+     */
+    public void setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler eh) {
+        for (StreamThread thread : threads)
+            thread.setUncaughtExceptionHandler(eh);
+    }
+
 }

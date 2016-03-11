@@ -24,6 +24,9 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+/**
+ * The task id representation composed as topic group id plus the assigned partition id.
+ */
 public class TaskId implements Comparable<TaskId> {
 
     public final int topicGroupId;
@@ -72,6 +75,9 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public boolean equals(Object o) {
+        if (this == o)
+            return true;
+
         if (o instanceof TaskId) {
             TaskId other = (TaskId) o;
             return other.topicGroupId == this.topicGroupId && other.partition == this.partition;

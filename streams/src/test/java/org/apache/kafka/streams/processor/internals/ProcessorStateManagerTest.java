@@ -25,6 +25,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -83,7 +84,8 @@ public class ProcessorStateManagerTest {
         // buffer a record (we cannot use addRecord because we need to add records before assigning a partition)
         public void bufferRecord(ConsumerRecord<Integer, Integer> record) {
             recordBuffer.add(
-                new ConsumerRecord<>(record.topic(), record.partition(), record.offset(),
+                new ConsumerRecord<>(record.topic(), record.partition(), record.offset(), 0L,
+                    TimestampType.CREATE_TIME, 0L, 0, 0,
                     serializer.serialize(record.topic(), record.key()),
                     serializer.serialize(record.topic(), record.value())));
             endOffset = record.offset();
@@ -267,7 +269,7 @@ public class ProcessorStateManagerTest {
                     int key = i * 10;
                     expectedKeys.add(key);
                     restoreConsumer.bufferRecord(
-                            new ConsumerRecord<>(persistentStoreTopicName, 2, offset, key, 0)
+                            new ConsumerRecord<>(persistentStoreTopicName, 2, 0L, offset, TimestampType.CREATE_TIME, 0L, 0, 0, key, 0)
                     );
                 }
 
@@ -320,7 +322,7 @@ public class ProcessorStateManagerTest {
                     int key = i;
                     expectedKeys.add(i);
                     restoreConsumer.bufferRecord(
-                            new ConsumerRecord<>(nonPersistentStoreTopicName, 2, offset, key, 0)
+                            new ConsumerRecord<>(nonPersistentStoreTopicName, 2, 0L, offset, TimestampType.CREATE_TIME, 0L, 0, 0, key, 0)
                     );
                 }
 

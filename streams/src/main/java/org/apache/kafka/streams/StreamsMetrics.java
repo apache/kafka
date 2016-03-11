@@ -19,6 +19,9 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.metrics.Sensor;
 
+/**
+ * The Kafka Streams metrics interface for adding metric sensors and collecting metric values.
+ */
 public interface StreamsMetrics {
 
     Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags);

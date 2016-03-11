@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.security.auth
+package kafka.security.auth
 
 import kafka.common.KafkaException
-import kafka.security.auth.{Allow, PermissionType}
 import org.junit.{Test, Assert}
 import org.scalatest.junit.JUnitSuite
 

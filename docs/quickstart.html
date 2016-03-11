@@ -104,12 +104,12 @@ Now edit these new files and set the following properties:
 
 config/server-1.properties:
     broker.id=1
-    port=9093
+    listeners=PLAINTEXT://:9093
     log.dir=/tmp/kafka-logs-1
 
 config/server-2.properties:
     broker.id=2
-    port=9094
+    listeners=PLAINTEXT://:9094
     log.dir=/tmp/kafka-logs-2
 </pre>
 The <code>broker.id</code> property is the unique and permanent name of each node in the cluster. We have to override the port and log directory only because we are running these all on the same machine and we want to keep the brokers from all trying to register on the same port or overwrite each others data.
@@ -200,7 +200,7 @@ Kafka Connect is a tool included with Kafka that imports and exports data to Kaf
 how to run Kafka Connect with simple connectors that import data from a file to a Kafka topic and export data from a
 Kafka topic to a file.
 
-First, we’ll start by creating some seed data to test with:
+First, we'll start by creating some seed data to test with:
 
 <pre>
 &gt; <b>echo -e "foo\nbar" > test.txt</b>

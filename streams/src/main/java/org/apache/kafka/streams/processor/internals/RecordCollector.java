@@ -56,7 +56,7 @@ public class RecordCollector {
                 TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
                 offsets.put(tp, metadata.offset());
             } else {
-                log.error("Error sending record: ", exception);
+                log.error("Error sending record: " + metadata, exception);
             }
         }
     };
@@ -75,8 +75,8 @@ public class RecordCollector {
                             StreamPartitioner<K, V> partitioner) {
         byte[] keyBytes = keySerializer.serialize(record.topic(), record.key());
         byte[] valBytes = valueSerializer.serialize(record.topic(), record.value());
-        Integer partition = null;
-        if (partitioner != null) {
+        Integer partition = record.partition();
+        if (partition == null && partitioner != null) {
             List<PartitionInfo> partitions = this.producer.partitionsFor(record.topic());
             if (partitions != null)
                 partition = partitioner.partition(record.key(), record.value(), partitions.size());

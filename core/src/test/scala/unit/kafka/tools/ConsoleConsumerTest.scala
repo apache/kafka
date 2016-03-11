@@ -15,12 +15,12 @@
  * limitations under the License.
  */
 
-package unit.kafka.tools
+package kafka.tools
 
 import java.io.FileOutputStream
 
+import kafka.common.MessageFormatter
 import kafka.consumer.{BaseConsumer, BaseConsumerRecord}
-import kafka.tools.{ConsoleConsumer, MessageFormatter}
 import kafka.utils.TestUtils
 import org.easymock.EasyMock
 import org.junit.Assert._
@@ -36,11 +36,11 @@ class ConsoleConsumerTest extends JUnitSuite {
     val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
 
     //Stubs
-    val record = new BaseConsumerRecord("foo", 1, 1, Array[Byte](), Array[Byte]())
+    val record = new BaseConsumerRecord(topic = "foo", partition = 1, offset = 1, key = Array[Byte](), value = Array[Byte]())
 
     //Expectations
     val messageLimit: Int = 10
-    EasyMock.expect(formatter.writeTo(EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject())).times(messageLimit)
+    EasyMock.expect(formatter.writeTo(EasyMock.anyObject(), EasyMock.anyObject())).times(messageLimit)
     EasyMock.expect(consumer.receive()).andReturn(record).times(messageLimit)
 
     EasyMock.replay(consumer)

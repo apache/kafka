@@ -50,10 +50,8 @@ import scala.collection.JavaConverters._
   * brokers, but first it initializes a ZooKeeper server and client, which happens
   * in ZooKeeperTestHarness.
   *
-  * To start brokers when the security protocol is SASL_SSL, we need to set a cluster
-  * ACL, which happens optionally in KafkaServerTestHarness. If the security protocol
-  * is SSL or PLAINTEXT, then the ACL isn't set. The remaining ACLs to enable access
-  * to producers and consumers are set here. To set ACLs, we use AclCommand directly.
+  * To start brokers we need to set a cluster ACL, which happens optionally in KafkaServerTestHarness.
+  * The remaining ACLs to enable access to producers and consumers are set here. To set ACLs, we use AclCommand directly.
   *
   * Finally, we rely on SaslSetup to bootstrap and setup Kerberos. We don't use
   * SaslTestHarness here directly because it extends ZooKeeperTestHarness, and we
@@ -63,13 +61,12 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1
   override val consumerCount = 2
   override val serverCount = 3
-  override val setClusterAcl = Some(() =>
-    { AclCommand.main(clusterAclArgs)
-      servers.foreach( s =>
-        TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, clusterResource)
-      )
-    } : Unit
-  )
+  override val setClusterAcl = Some { () =>
+    AclCommand.main(clusterAclArgs)
+    servers.foreach(s =>
+      TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, clusterResource)
+    )
+  }
   val numRecords = 1
   val group = "group"
   val topic = "e2etopic"
@@ -183,7 +180,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     //Consume records
     debug("Finished sending and starting to consume records")
     consumers.head.assign(List(tp).asJava)
-    consumeRecords(this.consumers.head)
+    consumeRecords(this.consumers.head, numRecords)
     debug("Finished consuming")
   }
 
@@ -221,7 +218,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     //Consume records
     debug("Finished sending and starting to consume records")
     consumers.head.assign(List(tp).asJava)
-    try{
+    try {
       consumeRecords(this.consumers.head)
       fail("Topic authorization exception expected")
     } catch {
@@ -245,7 +242,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     //Consume records
     debug("Finished sending and starting to consume records")
     consumers.head.assign(List(tp).asJava)
-    try{
+    try {
       consumeRecords(this.consumers.head)
       fail("Topic authorization exception expected")
     } catch {

@@ -22,6 +22,7 @@ import static org.junit.Assert.assertTrue;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -50,14 +51,14 @@ public class RecordQueueTest {
 
         // add three 3 out-of-order records with timestamp 2, 1, 3
         List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
-            new ConsumerRecord<>("topic", 1, 2, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 1, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 3, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 3, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
 
         queue.addRawRecords(list1, timestampExtractor);
 
         assertEquals(3, queue.size());
-        assertEquals(TimestampTracker.NOT_KNOWN, queue.timestamp());
+        assertEquals(1L, queue.timestamp());
 
         // poll the first record, now with 1, 3
         assertEquals(2L, queue.poll().timestamp);
@@ -72,9 +73,9 @@ public class RecordQueueTest {
         // add three 3 out-of-order records with timestamp 4, 1, 2
         // now with 3, 4, 1, 2
         List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
-            new ConsumerRecord<>("topic", 1, 4, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 1, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 2, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
 
         queue.addRawRecords(list2, timestampExtractor);
 
@@ -99,14 +100,14 @@ public class RecordQueueTest {
 
         // add three more records with 4, 5, 6
         List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
-            new ConsumerRecord<>("topic", 1, 4, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 5, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 6, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 5, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 6, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
 
         queue.addRawRecords(list3, timestampExtractor);
 
         assertEquals(3, queue.size());
-        assertEquals(3L, queue.timestamp());
+        assertEquals(4L, queue.timestamp());
 
         // poll one record again, the timestamp should advance now
         assertEquals(4L, queue.poll().timestamp);

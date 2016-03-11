@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -107,15 +108,15 @@ public class StreamTaskTest {
             StreamTask task = new StreamTask(new TaskId(0, 0), "jobId", partitions, topology, consumer, producer, restoreStateConsumer, config, null);
 
             task.addRecords(partition1, records(
-                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, recordKey, recordValue),
-                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, recordKey, recordValue),
-                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 30, recordKey, recordValue)
+                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 30, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
             ));
 
             task.addRecords(partition2, records(
-                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 25, recordKey, recordValue),
-                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 35, recordKey, recordValue),
-                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, recordKey, recordValue)
+                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 25, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 35, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
             ));
 
             assertEquals(5, task.process());
@@ -123,8 +124,8 @@ public class StreamTaskTest {
             assertEquals(0, source2.numReceived);
 
             assertEquals(4, task.process());
-            assertEquals(1, source1.numReceived);
-            assertEquals(1, source2.numReceived);
+            assertEquals(2, source1.numReceived);
+            assertEquals(0, source2.numReceived);
 
             assertEquals(3, task.process());
             assertEquals(2, source1.numReceived);
@@ -158,15 +159,15 @@ public class StreamTaskTest {
             StreamTask task = new StreamTask(new TaskId(1, 1), "jobId", partitions, topology, consumer, producer, restoreStateConsumer, config, null);
 
             task.addRecords(partition1, records(
-                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, recordKey, recordValue),
-                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, recordKey, recordValue)
+                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
             ));
 
             task.addRecords(partition2, records(
-                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 35, recordKey, recordValue),
-                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, recordKey, recordValue),
-                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 55, recordKey, recordValue),
-                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 65, recordKey, recordValue)
+                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 35, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 55, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                    new ConsumerRecord<>(partition2.topic(), partition2.partition(), 65, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
             ));
 
             assertEquals(5, task.process());
@@ -177,9 +178,9 @@ public class StreamTaskTest {
             assertTrue(consumer.paused().contains(partition2));
 
             task.addRecords(partition1, records(
-                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 30, recordKey, recordValue),
-                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 40, recordKey, recordValue),
-                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 50, recordKey, recordValue)
+                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 30, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 40, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                    new ConsumerRecord<>(partition1.topic(), partition1.partition(), 50, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
             ));
 
             assertEquals(2, consumer.paused().size());
@@ -187,14 +188,21 @@ public class StreamTaskTest {
             assertTrue(consumer.paused().contains(partition2));
 
             assertEquals(7, task.process());
-            assertEquals(1, source1.numReceived);
-            assertEquals(1, source2.numReceived);
+            assertEquals(2, source1.numReceived);
+            assertEquals(0, source2.numReceived);
 
             assertEquals(1, consumer.paused().size());
-            assertTrue(consumer.paused().contains(partition1));
+            assertTrue(consumer.paused().contains(partition2));
 
             assertEquals(6, task.process());
-            assertEquals(2, source1.numReceived);
+            assertEquals(3, source1.numReceived);
+            assertEquals(0, source2.numReceived);
+
+            assertEquals(1, consumer.paused().size());
+            assertTrue(consumer.paused().contains(partition2));
+
+            assertEquals(5, task.process());
+            assertEquals(3, source1.numReceived);
             assertEquals(1, source2.numReceived);
 
             assertEquals(0, consumer.paused().size());

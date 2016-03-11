@@ -29,7 +29,7 @@ public interface WorkerRebalanceListener {
      * Invoked when a new assignment is created by joining the Connect worker group. This is invoked for both successful
      * and unsuccessful assignments.
      */
-    void onAssigned(ConnectProtocol.Assignment assignment);
+    void onAssigned(ConnectProtocol.Assignment assignment, int generation);
 
     /**
      * Invoked when a rebalance operation starts, revoking ownership for the set of connectors and tasks.

@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -64,16 +63,13 @@ public class StandbyTask extends AbstractTask {
         super(id, jobId, partitions, topology, consumer, restoreConsumer, config, true);
 
         // initialize the topology with its own context
-        this.processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
+        this.processorContext = new StandbyContextImpl(id, jobId, config, stateMgr, metrics);
 
         initializeStateStores();
 
         ((StandbyContextImpl) this.processorContext).initialized();
 
         this.checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointedOffsets());
-
-        // set initial offset limits
-        initializeOffsetLimits();
     }
 
     public Map<TopicPartition, Long> checkpointedOffsets() {
@@ -98,12 +94,4 @@ public class StandbyTask extends AbstractTask {
         // reinitialize offset limits
         initializeOffsetLimits();
     }
-
-    protected void initializeOffsetLimits() {
-        for (TopicPartition partition : partitions) {
-            OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
-            stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
-        }
-    }
-
 }
