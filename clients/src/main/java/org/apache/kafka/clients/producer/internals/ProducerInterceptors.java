@@ -112,7 +112,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
                     TopicPartition interceptTopicPartition = tp;
                     if (interceptTopicPartition == null) {
                         interceptTopicPartition = new TopicPartition(record.topic(),
-                                                                     record.partition() == null ? TopicPartition.NO_PARTITION : record.partition());
+                                                                     record.partition() == null ? RecordMetadata.NO_PARTITION : record.partition());
                     }
                     interceptor.onAcknowledgement(new RecordMetadata(interceptTopicPartition, -1, -1, Record.NO_TIMESTAMP, -1, -1, -1),
                                                   exception);

@@ -79,7 +79,7 @@ public interface ProducerInterceptor<K, V> extends Configurable {
      * @param metadata The metadata for the record that was sent (i.e. the partition and offset).
      *                 If an error occurred, metadata will contain only valid topic and maybe
      *                 partition. If partition is not given in ProducerRecord and an error occurs
-     *                 before partition gets assigned, then partition will be set to TopicPartition.NO_PARTITION.
+     *                 before partition gets assigned, then partition will be set to RecordMetadata.NO_PARTITION.
      *                 The metadata may be null if the client passed null record to
      *                 {@link org.apache.kafka.clients.producer.KafkaProducer#send(ProducerRecord)}.
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
