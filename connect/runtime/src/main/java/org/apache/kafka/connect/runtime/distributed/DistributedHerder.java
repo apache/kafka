@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -112,8 +111,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private volatile int generation;
 
     private final ExecutorService forwardRequestExecutor;
-
-    private Map<String, Connector> tempConnectors = new HashMap<>();
 
     public DistributedHerder(DistributedConfig config,
                              Time time,
