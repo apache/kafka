@@ -134,8 +134,8 @@ object TestUtils extends Logging {
   /**
    * Create a kafka server instance with appropriate test settings
    * USING THIS IS A SIGN YOU ARE NOT WRITING A REAL UNIT TEST
-    *
-    * @param config The configuration of the server
+   *
+   * @param config The configuration of the server
    */
   def createServer(config: KafkaConfig, time: Time = SystemTime): KafkaServer = {
     val server = new KafkaServer(config, time)
@@ -145,7 +145,7 @@ object TestUtils extends Logging {
 
   /**
    * Create a test config for the provided parameters.
-    *
+   *
    * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
    */
   def createBrokerConfigs(numConfigs: Int,
@@ -283,8 +283,8 @@ object TestUtils extends Logging {
 
   /**
    * Wrap the message in a message set
-    *
-    * @param payload The bytes of the message
+   *
+   * @param payload The bytes of the message
    */
   def singleMessageSet(payload: Array[Byte],
                        codec: CompressionCodec = NoCompressionCodec,
@@ -294,8 +294,8 @@ object TestUtils extends Logging {
 
   /**
    * Generate an array of random bytes
-    *
-    * @param numBytes The size of the array
+   *
+   * @param numBytes The size of the array
    */
   def randomBytes(numBytes: Int): Array[Byte] = {
     val bytes = new Array[Byte](numBytes)
@@ -305,8 +305,8 @@ object TestUtils extends Logging {
 
   /**
    * Generate a random string of letters and digits of the given length
-    *
-    * @param len The length of the string
+   *
+   * @param len The length of the string
    * @return The random string
    */
   def randomString(len: Int): String = {
@@ -674,8 +674,8 @@ object TestUtils extends Logging {
    *  If neither oldLeaderOpt nor newLeaderOpt is defined, wait until the leader of a partition is elected.
    *  If oldLeaderOpt is defined, it waits until the new leader is different from the old leader.
    *  If newLeaderOpt is defined, it waits until the new leader becomes the expected new leader.
-    *
-    * @return The new leader or assertion failure if timeout is reached.
+   *
+   * @return The new leader or assertion failure if timeout is reached.
    */
   def waitUntilLeaderIsElectedOrChanged(zkUtils: ZkUtils, topic: String, partition: Int, timeoutMs: Long = 5000L,
                                         oldLeaderOpt: Option[Int] = None, newLeaderOpt: Option[Int] = None): Option[Int] = {
@@ -782,8 +782,8 @@ object TestUtils extends Logging {
   /**
    * Wait until a valid leader is propagated to the metadata cache in each broker.
    * It assumes that the leader propagated to each broker is the same.
-    *
-    * @param servers The list of servers that the metadata should reach to
+   *
+   * @param servers The list of servers that the metadata should reach to
    * @param topic The topic name
    * @param partition The partition Id
    * @param timeout The amount of time waiting on this condition before assert to fail
@@ -944,12 +944,12 @@ object TestUtils extends Logging {
 
   /**
    * Consume all messages (or a specific number of messages)
-    *
-    * @param topicMessageStreams the Topic Message Streams
+   *
+   * @param topicMessageStreams the Topic Message Streams
    * @param nMessagesPerThread an optional field to specify the exact number of messages to be returned.
    *                           ConsumerTimeoutException will be thrown if there are no messages to be consumed.
    *                           If not specified, then all available messages will be consumed, and no exception is thrown.
-    * @return the list of messages consumed.
+   * @return the list of messages consumed.
    */
   def getMessages(topicMessageStreams: Map[String, List[KafkaStream[String, String]]],
                      nMessagesPerThread: Int = -1): List[String] = {
@@ -1008,8 +1008,8 @@ object TestUtils extends Logging {
 
   /**
    * Translate the given buffer into a string
-    *
-    * @param buffer The buffer to translate
+   *
+   * @param buffer The buffer to translate
    * @param encoding The encoding to use in translating bytes to characters
    */
   def readString(buffer: ByteBuffer, encoding: String = Charset.defaultCharset.toString): String = {
