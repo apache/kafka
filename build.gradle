@@ -230,7 +230,7 @@ subprojects {
       "-deprecation",
       "-unchecked",
       "-encoding", "utf8",
-      "-target:jvm-1.7",
+      "-target:jvm-${sourceCompatibility}".toString(),
       "-Xlog-reflective-calls",
       "-feature",
       "-language:postfixOps",
