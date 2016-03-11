@@ -76,8 +76,9 @@ public class FileStreamSinkConnector extends SinkConnector {
         if (this.configDef != null) {
             return this.configDef;
         } else {
-            return new ConfigDef()
+            configDef = new ConfigDef()
                 .define(FILE_CONFIG, Type.STRING, Importance.HIGH, "Destination filename.");
+            return configDef;
         }
     }
 }

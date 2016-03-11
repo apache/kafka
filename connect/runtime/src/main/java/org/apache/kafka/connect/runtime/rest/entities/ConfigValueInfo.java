@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
+import java.util.Objects;
 
 public class ConfigValueInfo {
     private String name;
@@ -67,4 +68,39 @@ public class ConfigValueInfo {
     public boolean visible() {
         return visible;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ConfigValueInfo that = (ConfigValueInfo) o;
+        return Objects.equals(name, that.name) &&
+               Objects.equals(value, that.value) &&
+               Objects.equals(recommendedValues, that.recommendedValues) &&
+               Objects.equals(errors, that.errors) &&
+               Objects.equals(visible, that.visible);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, value, recommendedValues, errors, visible);
+    }
+
+    @Override
+    public String toString() {
+        StringBuffer sb = new StringBuffer();
+        sb.append("[")
+            .append(name)
+            .append(",")
+            .append(value)
+            .append(",")
+            .append(recommendedValues)
+            .append(",")
+            .append(errors)
+            .append(",")
+            .append(visible)
+            .append("]");
+        return sb.toString();
+    }
+
 }

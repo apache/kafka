@@ -83,9 +83,10 @@ public class FileStreamSourceConnector extends SourceConnector {
         if (this.configDef != null) {
             return this.configDef;
         } else {
-            return new ConfigDef()
+            configDef = new ConfigDef()
                 .define(FILE_CONFIG, Type.STRING, Importance.HIGH, "Source filename.")
                 .define(TOPIC_CONFIG, Type.STRING, Importance.HIGH, "The topic to publish data to");
+            return configDef;
         }
     }
 }

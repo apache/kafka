@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
+import java.util.Objects;
 
 public class ConfigInfos {
 
@@ -65,5 +66,21 @@ public class ConfigInfos {
     @JsonProperty("configs")
     public List<ConfigInfo> values() {
         return configs;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ConfigInfos that = (ConfigInfos) o;
+        return Objects.equals(name, that.name) &&
+               Objects.equals(errorCount, that.errorCount) &&
+               Objects.equals(groups, that.groups) &&
+               Objects.equals(configs, that.configs);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, errorCount, groups, configs);
     }
 }

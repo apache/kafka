@@ -29,8 +29,6 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -67,7 +65,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public abstract class AbstractHerder implements Herder, TaskStatus.Listener, ConnectorStatus.Listener {
 
-    private static final Logger log = LoggerFactory.getLogger(AbstractHerder.class);
     protected final Worker worker;
     protected final StatusBackingStore statusBackingStore;
     private final String workerId;
@@ -190,7 +187,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return generateResult(connType, resultConfigKeys, configValues, groups);
     }
 
-    private ConfigInfos generateResult(String connType, Map<String, ConfigKey> configKeys, List<ConfigValue> configValues, List<String> groups) {
+    // public for testing
+    public static ConfigInfos generateResult(String connType, Map<String, ConfigKey> configKeys, List<ConfigValue> configValues, List<String> groups) {
         int errorCount = 0;
         List<ConfigInfo> configInfoList = new LinkedList<>();
 
@@ -217,7 +215,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigInfos(connType, errorCount, groups, configInfoList);
     }
 
-    private ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
+    private static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
         String name = configKey.name;
         String type = configKey.type.name();
         Object defaultValue = configKey.defaultValue;
@@ -231,7 +229,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigKeyInfo(name, type, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents);
     }
 
-    private ConfigValueInfo convertConfigValue(ConfigValue configValue) {
+    private static ConfigValueInfo convertConfigValue(ConfigValue configValue) {
+        LinkedList<String> recommends = new LinkedList<>();
+        for (Object o: configValue.recommendedValues()) {
+            recommends.add(o.toString());
+        }
         return new ConfigValueInfo(configValue.name(), configValue.value(), configValue.recommendedValues(), configValue.errorMessages(), configValue.visible());
     }
 

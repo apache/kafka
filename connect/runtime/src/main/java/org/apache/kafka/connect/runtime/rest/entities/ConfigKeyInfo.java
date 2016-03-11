@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
+import java.util.Objects;
 
 public class ConfigKeyInfo {
 
@@ -106,5 +107,54 @@ public class ConfigKeyInfo {
     @JsonProperty
     public List<String> dependents() {
         return dependents;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ConfigKeyInfo that = (ConfigKeyInfo) o;
+        return Objects.equals(name, that.name) &&
+               Objects.equals(type, that.type) &&
+               Objects.equals(defaultValue, that.defaultValue) &&
+               Objects.equals(importance, that.importance) &&
+               Objects.equals(documentation, that.documentation) &&
+               Objects.equals(group, that.group) &&
+               Objects.equals(orderInGroup, that.orderInGroup) &&
+               Objects.equals(width, that.width) &&
+               Objects.equals(displayName, that.displayName) &&
+               Objects.equals(dependents, that.dependents);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, type, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents);
+    }
+
+    @Override
+    public String toString() {
+        StringBuffer sb = new StringBuffer();
+        sb.append("[")
+            .append(name)
+            .append(",")
+            .append(type)
+            .append(",")
+            .append(defaultValue)
+            .append(",")
+            .append(importance)
+            .append(",")
+            .append(documentation)
+            .append(",")
+            .append(group)
+            .append(",")
+            .append(orderInGroup)
+            .append(",")
+            .append(width)
+            .append(",")
+            .append(displayName)
+            .append(",")
+            .append(dependents)
+            .append("]");
+        return sb.toString();
     }
 }

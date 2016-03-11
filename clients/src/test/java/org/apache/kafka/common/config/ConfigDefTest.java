@@ -237,26 +237,8 @@ public class ConfigDefTest {
         for (ConfigValue config : configs) {
             String name = config.name();
             ConfigValue expectedConfig = expected.get(name);
-            verifyConfigValues(expectedConfig, config);
+            assertEquals(expectedConfig, config);
         }
-    }
-
-    private void verifyConfigValues(ConfigValue a, ConfigValue b) {
-        assertEquals(a.name(), b.name());
-
-        if (a.value() != null && b.value() != null) {
-            int aValue = (int) a.value();
-            int bValue = (int) b.value();
-            assertEquals(aValue, bValue);
-        }
-
-        List<Object> aRecommendedValues = a.recommendedValues();
-        List<Object> bRecommendedValues = b.recommendedValues();
-        assertEquals(aRecommendedValues.size(), bRecommendedValues.size());
-
-        List<String> aErrorMessages = a.errorMessages();
-        List<String> bErrorMessages = b.errorMessages();
-        assertEquals(aErrorMessages.size(), bErrorMessages.size());
     }
 
     private static class IntegerRecommender implements ConfigDef.Recommender {

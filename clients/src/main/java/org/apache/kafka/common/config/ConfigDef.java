@@ -445,7 +445,7 @@ public class ConfigDef {
         }
 
         List<String> undefinedConfigKeys = ensureDependentsDefined();
-        for(String undefinedConfigKey: undefinedConfigKeys) {
+        for (String undefinedConfigKey: undefinedConfigKeys) {
             configValues.put(undefinedConfigKey, new ConfigValue(undefinedConfigKey));
         }
         

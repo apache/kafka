@@ -21,9 +21,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
@@ -31,6 +31,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.easymock.EasyMock;
+import org.easymock.IAnswer;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -73,7 +74,7 @@ public class ConnectorPluginsResourceTest {
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
 
-        CONFIG_INFOS = new ConfigInfos("test", 0, Collections.<String>emptyList(), configs);
+        CONFIG_INFOS = new ConfigInfos(WorkerTestConnector.class.getName(), 0, Collections.<String>emptyList(), configs);
     }
 
     @Mock
@@ -91,7 +92,13 @@ public class ConnectorPluginsResourceTest {
     public void testValidateConfig() throws Throwable {
         herder.validateConfigs(EasyMock.eq(WorkerTestConnector.class.getName()), EasyMock.eq(props));
 
-        PowerMock.expectLastCall().andReturn(CONFIG_INFOS);
+        PowerMock.expectLastCall().andAnswer(new IAnswer<ConfigInfos>() {
+            @Override
+            public ConfigInfos answer() {
+                Config config = new WorkerTestConnector().validate(props);
+                return AbstractHerder.generateResult(WorkerTestConnector.class.getName(), config.configDef().configKeys(), config.configValues(), config.groups());
+            }
+        });
 
         PowerMock.replayAll();
 
@@ -137,30 +144,11 @@ public class ConnectorPluginsResourceTest {
             if (this.configDef != null) {
                 return this.configDef;
             } else {
-                return new ConfigDef()
+                configDef = new ConfigDef()
                     .define(TEST_STRING_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Test configuration for string type.")
                     .define(TEST_INT_CONFIG, ConfigDef.Type.INT, ConfigDef.Importance.MEDIUM, "Test configuration for integer type.");
+                return configDef;
             }
-        }
-
-        @Override
-        public Config validate(Map<String, String> connectorConfigs) {
-            List<ConfigValue> values = new LinkedList<>();
-
-            String stringConfig = connectorConfigs.get(TEST_STRING_CONFIG);
-            ConfigValue configValue = new ConfigValue(TEST_STRING_CONFIG, stringConfig, Collections.<Object>emptyList(), Collections.<String>emptyList());
-            values.add(configValue);
-
-            String intConfig = connectorConfigs.get(TEST_INT_CONFIG);
-            configValue = new ConfigValue(TEST_INT_CONFIG, intConfig, Collections.<Object>emptyList(), Collections.<String>emptyList());
-            try {
-                Integer.parseInt(intConfig);
-            } catch (NumberFormatException e) {
-                configValue.addErrorMessage("Not a valid integer.");
-            } finally {
-                values.add(configValue);
-            }
-            return new Config(configDef, Collections.<String>emptyList(), values);
         }
     }
 }

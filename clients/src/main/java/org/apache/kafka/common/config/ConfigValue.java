@@ -38,7 +38,7 @@ public class ConfigValue {
         this.value = value;
         this.recommendedValues = recommendedValues;
         this.errorMessages = errorMessages;
-        this.visible = false;
+        this.visible = true;
     }
 
     public String name() {
