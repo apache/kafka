@@ -67,6 +67,13 @@ trait RackAwareTest {
     ReplicaDistributions(partitionRackMap, leaderCount, partitionCount)
   }
 
+  def toBrokerMetadata(rackMap: Map[Int, String], brokersWithoutRack: Seq[Int] = Seq.empty): Seq[BrokerMetadata] =
+    rackMap.toSeq.map { case (brokerId, rack) =>
+      BrokerMetadata(brokerId, Some(rack))
+    } ++ brokersWithoutRack.map { brokerId =>
+      BrokerMetadata(brokerId, None)
+    }.sortBy(_.id)
+
 }
 
 case class ReplicaDistributions(partitionRacks: Map[Int, Seq[String]], brokerLeaderCount: Map[Int, Int], brokerReplicasCount: Map[Int, Int])

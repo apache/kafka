@@ -110,10 +110,10 @@ public final class Cluster {
      * @return A cluster for these hosts/ports
      */
     public static Cluster bootstrap(List<InetSocketAddress> addresses) {
-        List<Node> nodes = new ArrayList<Node>();
+        List<Node> nodes = new ArrayList<>();
         int nodeId = -1;
         for (InetSocketAddress address : addresses)
-            nodes.add(new Node(nodeId--, address.getHostName(), address.getPort()));
+            nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
         return new Cluster(nodes, new ArrayList<PartitionInfo>(0), Collections.<String>emptySet());
     }
 

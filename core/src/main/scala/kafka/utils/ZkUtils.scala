@@ -270,7 +270,7 @@ class ZkUtils(val zkClient: ZkClient,
   def registerBrokerInZk(id: Int,
                          host: String,
                          port: Int,
-                         advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint],
+                         advertisedEndpoints: collection.Map[SecurityProtocol, EndPoint],
                          jmxPort: Int,
                          rack: Option[String],
                          apiVersion: ApiVersion) {

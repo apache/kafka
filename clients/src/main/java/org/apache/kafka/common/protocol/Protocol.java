@@ -19,6 +19,12 @@ package org.apache.kafka.common.protocol;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.Type;
+
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.INT16;
@@ -766,6 +772,166 @@ public class Protocol {
             if (REQUESTS[api.id].length != RESPONSES[api.id].length)
                 throw new IllegalStateException(REQUESTS[api.id].length + " request versions for api " + api.name
                         + " but " + RESPONSES[api.id].length + " response versions.");
+    }
+
+    private static String indentString(int size) {
+        StringBuilder b = new StringBuilder(size);
+        for (int i = 0; i < size; i++)
+            b.append(" ");
+        return b.toString();
+    }
+
+    private static void schemaToBnfHtml(Schema schema, StringBuilder b, int indentSize) {
+        final String indentStr = indentString(indentSize);
+        final Map<String, Type> subTypes = new LinkedHashMap<>();
+
+        // Top level fields
+        for (Field field: schema.fields()) {
+            if (field.type instanceof ArrayOf) {
+                b.append("[");
+                b.append(field.name);
+                b.append("] ");
+                Type innerType = ((ArrayOf) field.type).type();
+                if (innerType instanceof Schema && !subTypes.containsKey(field.name))
+                    subTypes.put(field.name, (Schema) innerType);
+            } else if (field.type instanceof Schema) {
+                b.append(field.name);
+                b.append(" ");
+                if (!subTypes.containsKey(field.name))
+                    subTypes.put(field.name, (Schema) field.type);
+            } else {
+                b.append(field.name);
+                b.append(" ");
+                if (!subTypes.containsKey(field.name))
+                    subTypes.put(field.name, field.type);
+            }
+        }
+        b.append("\n");
+
+        // Sub Types/Schemas
+        for (Map.Entry<String, Type> entry: subTypes.entrySet()) {
+            if (entry.getValue() instanceof Schema) {
+                // Complex Schema Type
+                b.append(indentStr);
+                b.append(entry.getKey());
+                b.append(" => ");
+                schemaToBnfHtml((Schema) entry.getValue(), b, indentSize + 2);
+            } else {
+                // Standard Field Type
+                b.append(indentStr);
+                b.append(entry.getKey());
+                b.append(" => ");
+                b.append(entry.getValue());
+                b.append("\n");
+            }
+        }
+    }
+
+    private static void populateSchemaFields(Schema schema, Set<Field> fields) {
+        for (Field field: schema.fields()) {
+            fields.add(field);
+            if (field.type instanceof ArrayOf) {
+                Type innerType = ((ArrayOf) field.type).type();
+                if (innerType instanceof Schema)
+                    populateSchemaFields((Schema) innerType, fields);
+            } else if (field.type instanceof Schema)
+                populateSchemaFields((Schema) field.type, fields);
+        }
+    }
+
+    private static void schemaToFieldTableHtml(Schema schema, StringBuilder b) {
+        Set<Field> fields = new LinkedHashSet<>();
+        populateSchemaFields(schema, fields);
+
+        b.append("<table class=\"data-table\"><tbody>\n");
+        b.append("<tr>");
+        b.append("<th>Field</th>\n");
+        b.append("<th>Description</th>\n");
+        b.append("</tr>");
+        for (Field field : fields) {
+            b.append("<tr>\n");
+            b.append("<td>");
+            b.append(field.name);
+            b.append("</td>");
+            b.append("<td>");
+            b.append(field.doc);
+            b.append("</td>");
+            b.append("</tr>\n");
+        }
+        b.append("</table>\n");
+    }
+
+    public static String toHtml() {
+        final StringBuilder b = new StringBuilder();
+        b.append("<h5>Headers:</h5>\n");
+
+        b.append("<pre>");
+        b.append("Request Header => ");
+        schemaToBnfHtml(REQUEST_HEADER, b, 2);
+        b.append("</pre>\n");
+        schemaToFieldTableHtml(REQUEST_HEADER, b);
+
+        b.append("<pre>");
+        b.append("Response Header => ");
+        schemaToBnfHtml(RESPONSE_HEADER, b, 2);
+        b.append("</pre>\n");
+        schemaToFieldTableHtml(RESPONSE_HEADER, b);
+
+        for (ApiKeys key : ApiKeys.values()) {
+            // Key
+            b.append("<h5>");
+            b.append(key.name);
+            b.append(" API (Key: ");
+            b.append(key.id);
+            b.append("):</h5>\n\n");
+            // Requests
+            b.append("<b>Requests:</b><br>\n");
+            Schema[] requests = REQUESTS[key.id];
+            for (int i = 0; i < requests.length; i++) {
+                Schema schema = requests[i];
+                // Schema
+                if (schema != null) {
+                    b.append("<p>");
+                    // Version header
+                    b.append("<pre>");
+                    b.append(key.name);
+                    b.append(" Request (Version: ");
+                    b.append(i);
+                    b.append(") => ");
+                    schemaToBnfHtml(requests[i], b, 2);
+                    b.append("</pre>");
+                    schemaToFieldTableHtml(requests[i], b);
+                }
+                b.append("</p>\n");
+            }
+
+            // Responses
+            b.append("<b>Responses:</b><br>\n");
+            Schema[] responses = RESPONSES[key.id];
+            for (int i = 0; i < responses.length; i++) {
+                Schema schema = responses[i];
+                // Schema
+                if (schema != null) {
+                    b.append("<p>");
+                    // Version header
+                    b.append("<pre>");
+                    b.append(key.name);
+                    b.append(" Response (Version: ");
+                    b.append(i);
+                    b.append(") => ");
+                    schemaToBnfHtml(responses[i], b, 2);
+                    b.append("</pre>");
+                    schemaToFieldTableHtml(responses[i], b);
+                }
+                b.append("</p>\n");
+            }
+        }
+
+        return b.toString();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(toHtml());
     }
 
 }

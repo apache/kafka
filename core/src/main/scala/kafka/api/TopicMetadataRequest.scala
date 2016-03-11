@@ -30,22 +30,6 @@ import scala.collection.mutable.ListBuffer
 object TopicMetadataRequest extends Logging {
   val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
-
-  /**
-   * TopicMetadataRequest has the following format -
-   * number of topics (4 bytes) list of topics (2 bytes + topic.length per topic) detailedMetadata (2 bytes) timestamp (8 bytes) count (4 bytes)
-   */
-
-  def readFrom(buffer: ByteBuffer): TopicMetadataRequest = {
-    val versionId = buffer.getShort
-    val correlationId = buffer.getInt
-    val clientId = readShortString(buffer)
-    val numTopics = readIntInRange(buffer, "number of topics", (0, Int.MaxValue))
-    val topics = new ListBuffer[String]()
-    for(i <- 0 until numTopics)
-      topics += readShortString(buffer)
-    new TopicMetadataRequest(versionId, correlationId, clientId, topics.toList)
-  }
 }
 
 case class TopicMetadataRequest(versionId: Short,
