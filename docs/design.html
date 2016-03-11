@@ -100,7 +100,7 @@ In some cases the bottleneck is actually not CPU or disk but network bandwidth. 
 <p>
 Kafka supports this by allowing recursive message sets. A batch of messages can be clumped together compressed and sent to the server in this form. This batch of messages will be written in compressed form and will remain compressed in the log and will only be decompressed by the consumer.
 <p>
-Kafka supports GZIP and Snappy compression protocols. More details on compression can be found <a href="https://cwiki.apache.org/confluence/display/KAFKA/Compression">here</a>.
+Kafka supports GZIP, Snappy and LZ4 compression protocols. More details on compression can be found <a href="https://cwiki.apache.org/confluence/display/KAFKA/Compression">here</a>.
 
 <h3><a id="theproducer" href="#theproducer">4.4 The Producer</a></h3>
 

@@ -53,6 +53,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -441,8 +442,7 @@ public class FetcherTest {
     @Test
     public void testGetAllTopics() {
         // sending response before request, as getTopicMetadata is a blocking call
-        client.prepareResponse(
-            new MetadataResponse(cluster, Collections.<String, Errors>emptyMap()).toStruct());
+        client.prepareResponse(newMetadataResponse(topicName, Errors.NONE).toStruct());
 
         Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopicMetadata(5000L);
 
@@ -453,7 +453,7 @@ public class FetcherTest {
     public void testGetAllTopicsDisconnect() {
         // first try gets a disconnect, next succeeds
         client.prepareResponse(null, true);
-        client.prepareResponse(new MetadataResponse(cluster, Collections.<String, Errors>emptyMap()).toStruct());
+        client.prepareResponse(newMetadataResponse(topicName, Errors.NONE).toStruct());
         Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopicMetadata(5000L);
         assertEquals(cluster.topics().size(), allTopics.size());
     }
@@ -466,8 +466,7 @@ public class FetcherTest {
 
     @Test
     public void testGetAllTopicsUnauthorized() {
-        client.prepareResponse(new MetadataResponse(cluster,
-                Collections.singletonMap(topicName, Errors.TOPIC_AUTHORIZATION_FAILED)).toStruct());
+        client.prepareResponse(newMetadataResponse(topicName, Errors.TOPIC_AUTHORIZATION_FAILED).toStruct());
         try {
             fetcher.getAllTopicMetadata(10L);
             fail();
@@ -478,17 +477,13 @@ public class FetcherTest {
 
     @Test(expected = InvalidTopicException.class)
     public void testGetTopicMetadataInvalidTopic() {
-        client.prepareResponse(new MetadataResponse(cluster,
-                Collections.singletonMap(topicName, Errors.INVALID_TOPIC_EXCEPTION)).toStruct());
+        client.prepareResponse(newMetadataResponse(topicName, Errors.INVALID_TOPIC_EXCEPTION).toStruct());
         fetcher.getTopicMetadata(Collections.singletonList(topicName), 5000L);
     }
 
     @Test
     public void testGetTopicMetadataUnknownTopic() {
-        Cluster emptyCluster = new Cluster(this.cluster.nodes(), Collections.<PartitionInfo>emptyList(),
-                Collections.<String>emptySet());
-        client.prepareResponse(new MetadataResponse(emptyCluster,
-                Collections.singletonMap(topicName, Errors.UNKNOWN_TOPIC_OR_PARTITION)).toStruct());
+        client.prepareResponse(newMetadataResponse(topicName, Errors.UNKNOWN_TOPIC_OR_PARTITION).toStruct());
 
         Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(Collections.singletonList(topicName), 5000L);
         assertNull(topicMetadata.get(topicName));
@@ -496,12 +491,9 @@ public class FetcherTest {
 
     @Test
     public void testGetTopicMetadataLeaderNotAvailable() {
-        Cluster emptyCluster = new Cluster(this.cluster.nodes(), Collections.<PartitionInfo>emptyList(),
-                Collections.<String>emptySet());
-        client.prepareResponse(new MetadataResponse(emptyCluster,
-                Collections.singletonMap(topicName, Errors.LEADER_NOT_AVAILABLE)).toStruct());
-        client.prepareResponse(new MetadataResponse(this.cluster,
-                Collections.<String, Errors>emptyMap()).toStruct());
+        client.prepareResponse(newMetadataResponse(topicName, Errors.LEADER_NOT_AVAILABLE).toStruct());
+        client.prepareResponse(newMetadataResponse(topicName, Errors.NONE).toStruct());
+
         Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(Collections.singletonList(topicName), 5000L);
         assertTrue(topicMetadata.containsKey(topicName));
     }
@@ -563,6 +555,23 @@ public class FetcherTest {
     private Struct fetchResponse(ByteBuffer buffer, short error, long hw, int throttleTime) {
         FetchResponse response = new FetchResponse(Collections.singletonMap(tp, new FetchResponse.PartitionData(error, hw, buffer)), throttleTime);
         return response.toStruct();
+    }
+
+    private MetadataResponse newMetadataResponse(String topic, Errors error) {
+        List<MetadataResponse.PartitionMetadata> partitionsMetadata = new ArrayList<>();
+        if (error == Errors.NONE) {
+            for (PartitionInfo partitionInfo : cluster.partitionsForTopic(topic)) {
+                partitionsMetadata.add(new MetadataResponse.PartitionMetadata(
+                        Errors.NONE,
+                        partitionInfo.partition(),
+                        partitionInfo.leader(),
+                        Arrays.asList(partitionInfo.replicas()),
+                        Arrays.asList(partitionInfo.inSyncReplicas())));
+            }
+        }
+
+        MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topic, partitionsMetadata);
+        return new MetadataResponse(cluster.nodes(), Arrays.asList(topicMetadata));
     }
 
     private Fetcher<byte[], byte[]> createFetcher(int maxPollRecords,

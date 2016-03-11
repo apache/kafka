@@ -47,7 +47,7 @@ versions += [
 
 // Add Scala version
 def defaultScala210Version = '2.10.6'
-def defaultScala211Version = '2.11.7'
+def defaultScala211Version = '2.11.8'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.10') {
     versions["scala"] = defaultScala210Version
