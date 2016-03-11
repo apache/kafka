@@ -22,7 +22,7 @@ import java.nio._
 import java.nio.file.Files
 import java.nio.channels._
 import java.util
-import java.util.concurrent.{TimeUnit, CountDownLatch, Executors}
+import java.util.concurrent.{Callable, TimeUnit, Executors}
 import java.util.{Collections, Random, Properties}
 import java.security.cert.X509Certificate
 import javax.net.ssl.X509TrustManager
@@ -56,6 +56,7 @@ import org.apache.kafka.common.network.Mode
 
 import scala.collection.Map
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 /**
  * Utility functions to help with testing
@@ -133,7 +134,8 @@ object TestUtils extends Logging {
   /**
    * Create a kafka server instance with appropriate test settings
    * USING THIS IS A SIGN YOU ARE NOT WRITING A REAL UNIT TEST
-   * @param config The configuration of the server
+    *
+    * @param config The configuration of the server
    */
   def createServer(config: KafkaConfig, time: Time = SystemTime): KafkaServer = {
     val server = new KafkaServer(config, time)
@@ -281,7 +283,8 @@ object TestUtils extends Logging {
 
   /**
    * Wrap the message in a message set
-   * @param payload The bytes of the message
+    *
+    * @param payload The bytes of the message
    */
   def singleMessageSet(payload: Array[Byte],
                        codec: CompressionCodec = NoCompressionCodec,
@@ -291,7 +294,8 @@ object TestUtils extends Logging {
 
   /**
    * Generate an array of random bytes
-   * @param numBytes The size of the array
+    *
+    * @param numBytes The size of the array
    */
   def randomBytes(numBytes: Int): Array[Byte] = {
     val bytes = new Array[Byte](numBytes)
@@ -301,7 +305,8 @@ object TestUtils extends Logging {
 
   /**
    * Generate a random string of letters and digits of the given length
-   * @param len The length of the string
+    *
+    * @param len The length of the string
    * @return The random string
    */
   def randomString(len: Int): String = {
@@ -669,7 +674,8 @@ object TestUtils extends Logging {
    *  If neither oldLeaderOpt nor newLeaderOpt is defined, wait until the leader of a partition is elected.
    *  If oldLeaderOpt is defined, it waits until the new leader is different from the old leader.
    *  If newLeaderOpt is defined, it waits until the new leader becomes the expected new leader.
-   * @return The new leader or assertion failure if timeout is reached.
+    *
+    * @return The new leader or assertion failure if timeout is reached.
    */
   def waitUntilLeaderIsElectedOrChanged(zkUtils: ZkUtils, topic: String, partition: Int, timeoutMs: Long = 5000L,
                                         oldLeaderOpt: Option[Int] = None, newLeaderOpt: Option[Int] = None): Option[Int] = {
@@ -776,7 +782,8 @@ object TestUtils extends Logging {
   /**
    * Wait until a valid leader is propagated to the metadata cache in each broker.
    * It assumes that the leader propagated to each broker is the same.
-   * @param servers The list of servers that the metadata should reach to
+    *
+    * @param servers The list of servers that the metadata should reach to
    * @param topic The topic name
    * @param partition The partition Id
    * @param timeout The amount of time waiting on this condition before assert to fail
@@ -937,13 +944,12 @@ object TestUtils extends Logging {
 
   /**
    * Consume all messages (or a specific number of messages)
-   * @param topicMessageStreams the Topic Message Streams
+    *
+    * @param topicMessageStreams the Topic Message Streams
    * @param nMessagesPerThread an optional field to specify the exact number of messages to be returned.
    *                           ConsumerTimeoutException will be thrown if there are no messages to be consumed.
    *                           If not specified, then all available messages will be consumed, and no exception is thrown.
-   *
-   *
-   * @return the list of messages consumed.
+    * @return the list of messages consumed.
    */
   def getMessages(topicMessageStreams: Map[String, List[KafkaStream[String, String]]],
                      nMessagesPerThread: Int = -1): List[String] = {
@@ -1002,7 +1008,8 @@ object TestUtils extends Logging {
 
   /**
    * Translate the given buffer into a string
-   * @param buffer The buffer to translate
+    *
+    * @param buffer The buffer to translate
    * @param encoding The encoding to use in translating bytes to characters
    */
   def readString(buffer: ByteBuffer, encoding: String = Charset.defaultCharset.toString): String = {
@@ -1045,50 +1052,34 @@ object TestUtils extends Logging {
   }
 
   /**
-    * https://github.com/junit-team/junit/wiki/Multithreaded-code-and-concurrency
-    *
-    * To use this you pass in a Collection of Runnables that are your arrange\act\assert test on the SUT,
+    * To use this you pass in a sequnce of functions that are your arrange\act\assert test on the SUT,
     * they all run at the same time in the assertConcurrent method; the chances of triggering a multithreading code error,
     * and thereby failing some assertion are greatly increased.
     */
   def assertConcurrent(message: String, functions: Seq[() => Any], timeoutMs: Int) {
-    val runnables = functions.map { f =>
-      new Runnable {
-        override def run(): Unit = f()
-      }
-    }
-    val numThreads = runnables.size
-    val exceptions = Collections.synchronizedList(new util.ArrayList[Throwable]())
+    val numThreads = functions.size
     val threadPool = Executors.newFixedThreadPool(numThreads)
+    val exceptions = Collections.synchronizedList(new util.ArrayList[Throwable]())
     try {
-      val allExecutorThreadsReady = new CountDownLatch(numThreads)
-      val afterInitBlocker = new CountDownLatch(1)
-      val allDone = new CountDownLatch(numThreads)
-      for (submittedTestRunnable <- runnables) {
-        threadPool.submit(new Runnable() {
-          def run() {
-            allExecutorThreadsReady.countDown()
+      val runnables = functions.map { function =>
+        new Callable[Unit] {
+          override def call(): Unit = {
             try {
-              afterInitBlocker.await()
-              submittedTestRunnable.run()
+              function()
             } catch {
               case e: Throwable => exceptions.add(e)
-            } finally {
-              allDone.countDown()
             }
           }
-        })
-      }
-      // wait until all threads are ready
-      assertTrue("Timeout initializing threads! Perform long lasting initializations before passing runnables to assertConcurrent",
-        allExecutorThreadsReady.await(runnables.size * 10, TimeUnit.MILLISECONDS))
-      // start all test runners
-      afterInitBlocker.countDown()
-      assertTrue(message +" timeout! More than" + timeoutMs + "milliseconds", allDone.await(timeoutMs, TimeUnit.MILLISECONDS))
+        }
+      }.asJavaCollection
+      threadPool.invokeAll(runnables, timeoutMs, TimeUnit.MILLISECONDS)
+    } catch {
+      case ie: InterruptedException => fail(s"$message. Timed out! The Concurrent functions took more than $timeoutMs milliseconds")
+      case e => exceptions.add(e)
     } finally {
       threadPool.shutdownNow()
     }
-    assertTrue(message + "failed with exception(s)" + exceptions, exceptions.isEmpty())
+    assertTrue(s"$message failed with exception(s) $exceptions", exceptions.isEmpty())
   }
 
 }
