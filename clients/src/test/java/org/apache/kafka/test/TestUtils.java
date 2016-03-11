@@ -52,7 +52,7 @@ public class TestUtils {
     public static Cluster clusterWith(int nodes, String topic, int partitions) {
         Node[] ns = new Node[nodes];
         for (int i = 0; i < nodes; i++)
-            ns[i] = new Node(0, "localhost", 1969);
+            ns[i] = new Node(i, "localhost", 1969);
         List<PartitionInfo> parts = new ArrayList<PartitionInfo>();
         for (int i = 0; i < partitions; i++)
             parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));

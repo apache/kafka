@@ -19,8 +19,9 @@ from ducktape.utils.util import wait_until
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.console_consumer import ConsoleConsumer, is_int
+from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
+from kafkatest.utils import is_int
 import random
 
 class ReassignPartitionsTest(ProduceConsumeValidateTest):
@@ -106,4 +107,4 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, new_consumer=new_consumer, consumer_timeout_ms=60000, message_validator=is_int)
         self.kafka.start()
         
-        self.run_produce_consume_validate(core_test_action=self.reassign_partitions(bounce_brokers))
+        self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(bounce_brokers))

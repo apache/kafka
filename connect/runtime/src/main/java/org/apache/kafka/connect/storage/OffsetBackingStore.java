@@ -17,7 +17,7 @@
 
 package org.apache.kafka.connect.storage;
 
-import org.apache.kafka.common.Configurable;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
 
 import java.nio.ByteBuffer;
@@ -38,7 +38,7 @@ import java.util.concurrent.Future;
  * connector so that the shared namespace does not result in conflicting keys.
  * </p>
  */
-public interface OffsetBackingStore extends Configurable {
+public interface OffsetBackingStore {
 
     /**
      * Start this offset store.
@@ -69,4 +69,10 @@ public interface OffsetBackingStore extends Configurable {
      */
     public Future<Void> set(Map<ByteBuffer, ByteBuffer> values,
                             Callback<Void> callback);
+
+    /**
+     * Configure class with the given key-value pairs
+     * @param config can be DistributedConfig or StandaloneConfig
+     */
+    public void configure(WorkerConfig config);
 }

@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -31,10 +32,11 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.ConnectorStatus;
 import org.apache.kafka.connect.runtime.TaskStatus;
+import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
@@ -76,8 +78,6 @@ import java.util.Set;
 public class KafkaStatusBackingStore implements StatusBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaStatusBackingStore.class);
 
-    public static final String STATUS_TOPIC_CONFIG = "status.storage.topic";
-
     private static final String TASK_STATUS_PREFIX = "status-task-";
     private static final String CONNECTOR_STATUS_PREFIX = "status-connector-";
 
@@ -117,19 +117,19 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
     }
 
     @Override
-    public void configure(Map<String, ?> configs) {
-        if (configs.get(STATUS_TOPIC_CONFIG) == null)
-            throw new ConnectException("Must specify topic for connector status.");
-        this.topic = (String) configs.get(STATUS_TOPIC_CONFIG);
+    public void configure(WorkerConfig config) {
+        this.topic = config.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG);
+        if (topic.equals(""))
+            throw new ConfigException("Must specify topic for connector status.");
 
         Map<String, Object> producerProps = new HashMap<>();
-        producerProps.putAll(configs);
+        producerProps.putAll(config.originals());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // we handle retries in this class
 
         Map<String, Object> consumerProps = new HashMap<>();
-        consumerProps.putAll(configs);
+        consumerProps.putAll(config.originals());
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
@@ -213,7 +213,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             public void onCompletion(RecordMetadata metadata, Exception exception) {
                 if (exception != null) {
                     if (exception instanceof RetriableException) {
-                        synchronized (this) {
+                        synchronized (KafkaStatusBackingStore.this) {
                             if (entry.isDeleted()
                                     || status.generation() != generation
                                     || (safeWrite && !entry.canWrite(status, sequence)))

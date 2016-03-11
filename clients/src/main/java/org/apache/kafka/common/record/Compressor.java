@@ -201,16 +201,24 @@ public class Compressor {
         }
     }
 
-    public void putRecord(long timestamp, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
+    /**
+     * @return CRC of the record
+     */
+    public long putRecord(long timestamp, byte[] key, byte[] value, CompressionType type,
+                          int valueOffset, int valueSize) {
         // put a record as un-compressed into the underlying stream
         long crc = Record.computeChecksum(timestamp, key, value, type, valueOffset, valueSize);
         byte attributes = Record.computeAttributes(type);
         putRecord(crc, attributes, timestamp, key, value, valueOffset, valueSize);
-
+        return crc;
     }
 
-    public void putRecord(long timestamp, byte[] key, byte[] value) {
-        putRecord(timestamp, key, value, CompressionType.NONE, 0, -1);
+    /**
+     * Put a record as uncompressed into the underlying stream
+     * @return CRC of the record
+     */
+    public long putRecord(long timestamp, byte[] key, byte[] value) {
+        return putRecord(timestamp, key, value, CompressionType.NONE, 0, -1);
     }
 
     private void putRecord(final long crc, final byte attributes, final long timestamp, final byte[] key, final byte[] value, final int valueOffset, final int valueSize) {

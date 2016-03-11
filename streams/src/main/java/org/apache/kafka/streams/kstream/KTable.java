@@ -21,13 +21,11 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 
-// TODO: Javadoc needs to be updated.
 /**
- * KTable is an abstraction of a change log stream.
+ * KTable is an abstraction of a change log stream from a primary-keyed table.
  *
- *
- * @param <K> the type of keys
- * @param <V> the type of values
+ * @param <K> Type of primary keys
+ * @param <V> Type of value changes
  */
 public interface KTable<K, V> {
 

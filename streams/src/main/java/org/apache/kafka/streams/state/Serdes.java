@@ -27,6 +27,12 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
+/**
+ * Factory for creating serializers / deserializers for state stores in Kafka Streams.
+ *
+ * @param <K> key type of serdes
+ * @param <V> value type of serdes
+ */
 public final class Serdes<K, V> {
 
     public static <K, V> Serdes<K, V> withBuiltinTypes(String topic, Class<K> keyClass, Class<V> valueClass) {
