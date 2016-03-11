@@ -17,21 +17,21 @@
 
 package kafka.server
 
-import kafka.cluster.{EndPoint, Broker}
-import kafka.common.TopicAndPartition
-
-import kafka.api._
-import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch}
-import org.apache.kafka.common.Node
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
-import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
-import org.apache.kafka.common.requests.UpdateMetadataRequest.PartitionState
-import scala.collection.{mutable, Seq, Set}
-import scala.collection.JavaConverters._
-import kafka.utils.Logging
-import kafka.utils.CoreUtils._
-
+import java.util.EnumMap
 import java.util.concurrent.locks.ReentrantReadWriteLock
+
+import scala.collection.{Seq, Set, mutable}
+import scala.collection.JavaConverters._
+import kafka.cluster.{Broker, EndPoint}
+import kafka.api._
+import kafka.common.TopicAndPartition
+import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch}
+import kafka.utils.CoreUtils._
+import kafka.utils.Logging
+import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.requests.UpdateMetadataRequest.PartitionState
+import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
 
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
@@ -40,14 +40,22 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 private[server] class MetadataCache(brokerId: Int) extends Logging {
   private val stateChangeLogger = KafkaController.stateChangeLogger
   private val cache = mutable.Map[String, mutable.Map[Int, PartitionStateInfo]]()
-  private var aliveBrokers = Map[Int, Broker]()
+  private val aliveBrokers = mutable.Map[Int, Broker]()
+  private val aliveNodes = mutable.Map[Int, collection.Map[SecurityProtocol, Node]]()
   private val partitionMetadataLock = new ReentrantReadWriteLock()
 
   this.logIdent = "[Kafka Metadata Cache on broker %d] ".format(brokerId)
 
   private def getAliveEndpoints(brokers: Iterable[Int], protocol: SecurityProtocol): Seq[Node] = {
-    brokers.toSeq.flatMap(aliveBrokers.get(_).map(_.getNode(protocol)))
+    val result = new mutable.ArrayBuffer[Node](math.min(aliveBrokers.size, brokers.size))
+    brokers.foreach { brokerId =>
+      getAliveEndpoint(brokerId, protocol).foreach(result +=)
+    }
+    result
   }
+
+  private def getAliveEndpoint(brokerId: Int, protocol: SecurityProtocol): Option[Node] =
+    aliveNodes.get(brokerId).flatMap(_.get(protocol))
 
   private def getPartitionMetadata(topic: String, protocol: SecurityProtocol): Option[Iterable[MetadataResponse.PartitionMetadata]] = {
     cache.get(topic).map { partitions =>
@@ -55,7 +63,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
         val topicPartition = TopicAndPartition(topic, partitionId)
 
         val leaderAndIsr = partitionState.leaderIsrAndControllerEpoch.leaderAndIsr
-        val maybeLeader = aliveBrokers.get(leaderAndIsr.leader).map(_.getNode(protocol))
+        val maybeLeader = getAliveEndpoint(leaderAndIsr.leader, protocol)
 
         val replicas = partitionState.allReplicas
         val replicaInfo = getAliveEndpoints(replicas, protocol)
@@ -129,34 +137,31 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
                                        partitionId: Int,
                                        stateInfo: PartitionStateInfo) {
     inWriteLock(partitionMetadataLock) {
-      cache.get(topic) match {
-        case Some(infos) => infos.put(partitionId, stateInfo)
-        case None => {
-          val newInfos: mutable.Map[Int, PartitionStateInfo] = new mutable.HashMap[Int, PartitionStateInfo]
-          cache.put(topic, newInfos)
-          newInfos.put(partitionId, stateInfo)
-        }
-      }
+      val infos = cache.getOrElseUpdate(topic, mutable.Map())
+      infos(partitionId) = stateInfo
     }
   }
 
   def getPartitionInfo(topic: String, partitionId: Int): Option[PartitionStateInfo] = {
     inReadLock(partitionMetadataLock) {
-      cache.get(topic) match {
-        case Some(partitionInfos) => partitionInfos.get(partitionId)
-        case None => None
-      }
+      cache.get(topic).flatMap(_.get(partitionId))
     }
   }
 
   def updateCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest) {
     inWriteLock(partitionMetadataLock) {
-      aliveBrokers = updateMetadataRequest.liveBrokers.asScala.map { broker =>
-        val endPoints = broker.endPoints.asScala.map { case (protocol, ep) =>
-          (protocol, EndPoint(ep.host, ep.port, protocol))
-        }.toMap
-        (broker.id, Broker(broker.id, endPoints))
-      }.toMap
+      aliveNodes.clear()
+      aliveBrokers.clear()
+      updateMetadataRequest.liveBrokers.asScala.foreach { broker =>
+        val nodes = new EnumMap[SecurityProtocol, Node](classOf[SecurityProtocol])
+        val endPoints = new EnumMap[SecurityProtocol, EndPoint](classOf[SecurityProtocol])
+        broker.endPoints.asScala.foreach { case (protocol, ep) =>
+          endPoints.put(protocol, EndPoint(ep.host, ep.port, protocol))
+          nodes.put(protocol, new Node(broker.id, ep.host, ep.port))
+        }
+        aliveBrokers(broker.id) = Broker(broker.id, endPoints.asScala)
+        aliveNodes(broker.id) = nodes.asScala
+      }
 
       updateMetadataRequest.partitionStates.asScala.foreach { case (tp, info) =>
         if (info.leader == LeaderAndIsr.LeaderDuringDelete) {
@@ -189,16 +194,12 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  private def removePartitionInfo(topic: String, partitionId: Int) = {
-    cache.get(topic) match {
-      case Some(infos) => {
-        infos.remove(partitionId)
-        if(infos.isEmpty) {
-          cache.remove(topic)
-        }
-        true
-      }
-      case None => false
-    }
+  private def removePartitionInfo(topic: String, partitionId: Int): Boolean = {
+    cache.get(topic).map { infos =>
+      infos.remove(partitionId)
+      if (infos.isEmpty) cache.remove(topic)
+      true
+    }.getOrElse(false)
   }
+
 }
