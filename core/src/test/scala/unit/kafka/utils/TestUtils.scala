@@ -1052,34 +1052,43 @@ object TestUtils extends Logging {
   }
 
   /**
-    * To use this you pass in a sequnce of functions that are your arrange\act\assert test on the SUT,
-    * they all run at the same time in the assertConcurrent method; the chances of triggering a multithreading code error,
+    * To use this you pass in a sequence of functions that are your arrange/act/assert test on the SUT.
+    * They all run at the same time in the assertConcurrent method; the chances of triggering a multithreading code error,
     * and thereby failing some assertion are greatly increased.
     */
   def assertConcurrent(message: String, functions: Seq[() => Any], timeoutMs: Int) {
+
+    def failWithTimeout() {
+      fail(s"$message. Timed out, the concurrent functions took more than $timeoutMs milliseconds")
+    }
+
     val numThreads = functions.size
     val threadPool = Executors.newFixedThreadPool(numThreads)
-    val exceptions = Collections.synchronizedList(new util.ArrayList[Throwable]())
+    val exceptions = ArrayBuffer[Throwable]()
     try {
       val runnables = functions.map { function =>
         new Callable[Unit] {
-          override def call(): Unit = {
-            try {
-              function()
-            } catch {
-              case e: Throwable => exceptions.add(e)
-            }
-          }
+          override def call(): Unit = function()
         }
-      }.asJavaCollection
-      threadPool.invokeAll(runnables, timeoutMs, TimeUnit.MILLISECONDS)
+      }.asJava
+      val futures = threadPool.invokeAll(runnables, timeoutMs, TimeUnit.MILLISECONDS).asScala
+      futures.foreach { future =>
+        if (future.isCancelled)
+          failWithTimeout()
+        else
+          try future.get()
+          catch { case e: Exception =>
+            exceptions += e
+          }
+      }
     } catch {
-      case ie: InterruptedException => fail(s"$message. Timed out! The Concurrent functions took more than $timeoutMs milliseconds")
-      case e => exceptions.add(e)
+      case ie: InterruptedException => failWithTimeout()
+      case e => exceptions += e
     } finally {
       threadPool.shutdownNow()
     }
-    assertTrue(s"$message failed with exception(s) $exceptions", exceptions.isEmpty())
+    assertTrue(s"$message failed with exception(s) $exceptions", exceptions.isEmpty)
+
   }
 
 }
