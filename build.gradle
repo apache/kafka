@@ -749,6 +749,7 @@ project(':connect:runtime') {
     compile libs.jerseyContainerServlet
     compile libs.jettyServer
     compile libs.jettyServlet
+    compile libs.jettyServlets
     compile libs.reflections
 
     testCompile project(':clients').sourceSets.test.output
