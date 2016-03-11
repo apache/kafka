@@ -431,7 +431,7 @@ public class NetworkClient implements KafkaClient {
     private void handleCompletedReceives(List<ClientResponse> responses, long now) {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
-            ClientRequest req = inFlightRequests.completeNext(source);
+            ClientRequest req = inFlightRequests.earliestSent(source);
             ResponseHeader header = ResponseHeader.parse(receive.payload());
             // Always expect the response version id to be the same as the request version id
             short apiKey = req.request().header().apiKey();
@@ -440,6 +440,7 @@ public class NetworkClient implements KafkaClient {
             correlate(req.request().header(), header);
             if (!metadataUpdater.maybeHandleCompletedReceive(req, now, body))
                 responses.add(new ClientResponse(req, now, false, body));
+            inFlightRequests.completeNext(source);
         }
     }
 
