@@ -64,7 +64,7 @@ class ClientCompatibilityTest(Test):
             self.producer.kill_node(node, clean_shutdown=False)
 
         self.logger.info("Grepping producer log for expected error type")
-        node.account.ssh("egrep -m 1 %s %s" % ("\"org\.apache\.kafka\.common\.protocol\.types\.SchemaException.*throttle_time_ms.*: java\.nio\.BufferUnderflowException\"", self.producer.LOG_FILE), allow_fail=False)
+        node.account.ssh("egrep -m 1 %s %s" % ("\"org\.apache\.kafka\.common\.protocol\.types\.SchemaException.*: java\.nio\.BufferUnderflowException\"", self.producer.LOG_FILE), allow_fail=False)
 
     def test_consumer_back_compatibility(self):
         """Run the scala 0.8.X consumer against an 0.9.X cluster.
