@@ -458,7 +458,6 @@ public class ConfigDef {
      * the current configuration values.
      */
     public List<ConfigValue> validate(Map<String, String> props) {
-        List<String> configsWithNoParent = getConfigsWithNoParent();
         Map<String, ConfigValue> configValues = new HashMap<>();
         for (String name: configKeys.keySet()) {
             configValues.put(name, new ConfigValue(name));
@@ -466,9 +465,13 @@ public class ConfigDef {
 
         List<String> undefinedConfigKeys = ensureDependentsDefined();
         for (String undefinedConfigKey: undefinedConfigKeys) {
-            configValues.put(undefinedConfigKey, new ConfigValue(undefinedConfigKey));
+            ConfigValue undefinedConfigValue = new ConfigValue(undefinedConfigKey);
+            undefinedConfigValue.addErrorMessage(undefinedConfigKey + " is referred in the dependents, but not defined.");
+            undefinedConfigValue.visible(false);
+            configValues.put(undefinedConfigKey, undefinedConfigValue);
         }
-        
+
+        List<String> configsWithNoParent = getConfigsWithNoParent();
         for (String name: configsWithNoParent) {
             validate(name, props, configValues);
         }
@@ -508,15 +511,21 @@ public class ConfigDef {
     }
 
     private void validate(String name, Map<String, String> props, Map<String, ConfigValue> configs) {
+        if (!configKeys.containsKey(name)) {
+            return;
+        }
         ConfigKey key = configKeys.get(name);
         ConfigValue config = configs.get(name);
 
-        Object value;
+        Object value = null;
         if (props.containsKey(key.name)) {
-            value = parseType(key.name, props.get(key.name), key.type);
+            try {
+                value = parseType(key.name, props.get(key.name), key.type);
+            } catch (ConfigException e) {
+                config.addErrorMessage(e.getMessage());
+            }
         } else if (key.defaultValue == NO_DEFAULT_VALUE) {
             config.addErrorMessage("Missing required configuration \"" + key.name + "\" which has no default value.");
-            value = null;
         } else {
             value = key.defaultValue;
         }

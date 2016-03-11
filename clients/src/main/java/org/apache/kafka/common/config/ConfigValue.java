@@ -93,4 +93,21 @@ public class ConfigValue {
     public int hashCode() {
         return Objects.hash(name, value, recommendedValues, errorMessages, visible);
     }
+
+    @Override
+    public String toString() {
+        StringBuffer sb = new StringBuffer();
+        sb.append("[")
+            .append(name)
+            .append(",")
+            .append(value)
+            .append(",")
+            .append(recommendedValues)
+            .append(",")
+            .append(errorMessages)
+            .append(",")
+            .append(visible)
+            .append("]");
+        return sb.toString();
+    }
 }

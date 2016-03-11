@@ -241,6 +241,59 @@ public class ConfigDefTest {
         }
     }
 
+    @Test
+    public void testValidateMissingConfigKey() {
+        Map<String, ConfigValue> expected = new HashMap<>();
+        String errorMessageB = "Missing required configuration \"b\" which has no default value.";
+        String errorMessageC = "Missing required configuration \"c\" which has no default value.";
+        String errorMessageD = "d is referred in the dependents, but not defined.";
+
+        ConfigValue configA = new ConfigValue("a", 1, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
+        ConfigValue configB = new ConfigValue("b", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageB));
+        ConfigValue configC = new ConfigValue("c", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageC));
+        ConfigValue configD = new ConfigValue("d", null, Collections.emptyList(), Arrays.asList(errorMessageD));
+        configD.visible(false);
+
+        expected.put("a", configA);
+        expected.put("b", configB);
+        expected.put("c", configC);
+        expected.put("d", configD);
+
+        ConfigDef def = new ConfigDef()
+            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c", "d"), new IntegerRecommender(false))
+            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
+            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true));
+
+        Map<String, String> props = new HashMap<>();
+        props.put("a", "1");
+
+        List<ConfigValue> configs = def.validate(props);
+        for (ConfigValue config: configs) {
+            String name = config.name();
+            ConfigValue expectedConfig = expected.get(name);
+            assertEquals(expectedConfig, config);
+        }
+    }
+
+    @Test
+    public void testValidateCannotParse() {
+        Map<String, ConfigValue> expected = new HashMap<>();
+        String errorMessageB = "Invalid value non_integer for configuration a: Not a number of type INT";
+        ConfigValue configA = new ConfigValue("a", null, Collections.emptyList(), Arrays.asList(errorMessageB));
+        expected.put("a", configA);
+
+        ConfigDef def = new ConfigDef().define("a", Type.INT, Importance.HIGH, "docs");
+        Map<String, String> props = new HashMap<>();
+        props.put("a", "non_integer");
+
+        List<ConfigValue> configs = def.validate(props);
+        for (ConfigValue config: configs) {
+            String name = config.name();
+            ConfigValue expectedConfig = expected.get(name);
+            assertEquals(expectedConfig, config);
+        }
+    }
+
     private static class IntegerRecommender implements ConfigDef.Recommender {
 
         private boolean hasParent;
