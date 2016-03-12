@@ -66,7 +66,7 @@ class AdminRackAwareTest extends ZooKeeperTestHarness with Logging with RackAwar
   }
 
   @Test
-  def testAssignmentWithRackAwareWithNotEnoughPartitions() {
+  def testAssignmentWithRackAwareWithUnevenReplicas() {
     val brokerList = 0 to 5
     val brokerRackMapping = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack3", 4 -> "rack3", 5 -> "rack1")
     val numPartitions = 13
@@ -87,16 +87,6 @@ class AdminRackAwareTest extends ZooKeeperTestHarness with Logging with RackAwar
       verifyReplicasDistribution = false)
   }
 
-
-  @Test
-  def testAssignmentWithRackAwareWith12Partitions() {
-    val brokerList = 0 to 5
-    val brokerRackMapping = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack3", 4 -> "rack3", 5 -> "rack1")
-    val numPartitions = 12
-    val replicationFactor = 3
-    val assignment = AdminUtils.assignReplicasToBrokers(brokerList, numPartitions, replicationFactor, rackInfo = brokerRackMapping)
-    ensureRackAwareAndEvenDistribution(assignment, brokerRackMapping, brokerList.size, numPartitions, replicationFactor)
-  }
 
   @Test
   def testAssignmentWith2ReplicasRackAware() {
@@ -190,6 +180,18 @@ class AdminRackAwareTest extends ZooKeeperTestHarness with Logging with RackAwar
       assertEquals(1, distribution.partitionRacks(partition).toSet.size)
     for (broker <- brokerList)
       assertEquals(1, distribution.brokerLeaderCount(broker))
+  }
+
+  @Test
+  def testSkipBrokerWithReplicaAlreadyAssigned() {
+    val brokerRackMapping = Map(0 -> "a", 1 -> "b", 2 -> "c", 3 -> "a", 4 -> "a")
+    val brokerList = 0 to 4
+    val numPartitions = 6
+    val replicationFactor = 4
+    val assignment = AdminUtils.assignReplicasToBrokers(brokerList, numPartitions, replicationFactor,
+      fixedStartIndex = rackInfo = brokerRackMapping)
+
+
   }
 
   @Test

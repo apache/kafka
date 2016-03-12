@@ -156,6 +156,7 @@ object AdminUtils extends Logging {
                                                startPartitionId: Int): Map[Int, Seq[Int]] = {
     val numRacks = brokerRackMap.values.toSet.size
     val arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap)
+    val numBrokers = arrangedBrokerList.size
     val ret = mutable.Map[Int, Seq[Int]]()
     val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(arrangedBrokerList.size)
     var currentPartitionId = math.max(0, startPartitionId)
@@ -167,16 +168,22 @@ object AdminUtils extends Logging {
       val leader = arrangedBrokerList(firstReplicaIndex)
       val replicaBuffer = mutable.ArrayBuffer(leader)
       val racksWithReplicas = mutable.Set(brokerRackMap(leader))
+      val brokersWithReplicas = mutable.Set(leader)
       var k = 0
       for (_ <- 0 until replicationFactor - 1) {
         var done = false
         while (!done) {
           val broker = arrangedBrokerList(replicaIndex(firstReplicaIndex, nextReplicaShift * numRacks, k, arrangedBrokerList.size))
           val rack = brokerRackMap(broker)
-          // unless every rack has a replica, try to find the broker on the rack without any replica assigned
-          if (!racksWithReplicas.contains(rack) || racksWithReplicas.size == numRacks) {
+          // Skip this broker if
+          // 1. there is already a broker in the same rack that has assigned a replica AND there is one or more racks
+          //    that do not have any replica, or
+          // 2. the broker has already assigned a replica AND there is one or more brokers that do not have replica assigned
+          if ((!racksWithReplicas.contains(rack) || racksWithReplicas.size == numRacks)
+              && (!brokersWithReplicas.contains(broker) || brokersWithReplicas.size == numBrokers)) {
             replicaBuffer += broker
             racksWithReplicas += rack
+            brokersWithReplicas += broker
             done = true
           }
           k += 1
@@ -449,7 +456,8 @@ object AdminUtils extends Logging {
 
   /**
    * Update the config for a client and create a change notification so the change will propagate to other brokers
-   * @param zkUtils Zookeeper utilities used to write the config to ZK
+    *
+    * @param zkUtils Zookeeper utilities used to write the config to ZK
    * @param clientId: The clientId for which configs are being changed
    * @param configs: The final set of configs that will be applied to the topic. If any new configs need to be added or
    *                 existing configs need to be deleted, it should be done prior to invoking this API
@@ -461,7 +469,8 @@ object AdminUtils extends Logging {
 
   /**
    * Update the config for an existing topic and create a change notification so the change will propagate to other brokers
-   * @param zkUtils Zookeeper utilities used to write the config to ZK
+    *
+    * @param zkUtils Zookeeper utilities used to write the config to ZK
    * @param topic: The topic for which configs are being changed
    * @param configs: The final set of configs that will be applied to the topic. If any new configs need to be added or
    *                 existing configs need to be deleted, it should be done prior to invoking this API
