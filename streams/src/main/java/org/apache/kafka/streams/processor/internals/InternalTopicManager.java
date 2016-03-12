@@ -73,6 +73,11 @@ public class InternalTopicManager {
         }
     }
 
+    public InternalTopicManager() {
+        this.zkClient = null;
+        this.replicationFactor = 0;
+    }
+
     public InternalTopicManager(String zkConnect, int replicationFactor) {
         this.zkClient = new ZkClient(zkConnect, 30 * 1000, 30 * 1000, new ZKStringSerializer());
         this.replicationFactor = replicationFactor;
@@ -125,7 +130,7 @@ public class InternalTopicManager {
     }
 
     @SuppressWarnings("unchecked")
-    public Map<Integer, List<Integer>> getTopicMetadata(String topic) {
+    private Map<Integer, List<Integer>> getTopicMetadata(String topic) {
         String data = zkClient.readData(ZK_TOPIC_PATH + "/" + topic, true);
 
         if (data == null) return null;
@@ -147,7 +152,7 @@ public class InternalTopicManager {
         }
     }
 
-    public void createTopic(String topic, int numPartitions, int replicationFactor) throws ZkNodeExistsException {
+    private void createTopic(String topic, int numPartitions, int replicationFactor) throws ZkNodeExistsException {
         log.debug("Creating topic {} with {} partitions from ZK in partition assignor.", topic, numPartitions);
 
         List<Integer> brokers = getBrokers();
@@ -183,13 +188,13 @@ public class InternalTopicManager {
         }
     }
 
-    public void deleteTopic(String topic) throws ZkNodeExistsException {
+    private void deleteTopic(String topic) throws ZkNodeExistsException {
         log.debug("Deleting topic {} from ZK in partition assignor.", topic);
 
         zkClient.createPersistent(ZK_DELETE_TOPIC_PATH + "/" + topic, "", ZooDefs.Ids.OPEN_ACL_UNSAFE);
     }
 
-    public void addPartitions(String topic, int numPartitions, int replicationFactor, Map<Integer, List<Integer>> existingAssignment) {
+    private void addPartitions(String topic, int numPartitions, int replicationFactor, Map<Integer, List<Integer>> existingAssignment) {
         log.debug("Adding {} partitions topic {} from ZK with existing partitions assigned as {} in partition assignor.", topic, numPartitions, existingAssignment);
 
         List<Integer> brokers = getBrokers();

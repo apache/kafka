@@ -21,14 +21,18 @@ import org.junit.Assert._
 
 trait RackAwareTest {
 
-  def ensureRackAwareAndEvenDistribution(assignment: Map[Int, Seq[Int]],
-                                         brokerRackMapping: Map[Int, String],
-                                         numBrokers: Int,
-                                         numPartitions: Int,
-                                         replicationFactor: Int,
-                                         verifyRackAware: Boolean = true,
-                                         verifyLeaderDistribution: Boolean = true,
-                                         verifyReplicasDistribution: Boolean = true) {
+  def checkReplicaDistribution(assignment: Map[Int, Seq[Int]],
+                               brokerRackMapping: Map[Int, String],
+                               numBrokers: Int,
+                               numPartitions: Int,
+                               replicationFactor: Int,
+                               verifyRackAware: Boolean = true,
+                               verifyLeaderDistribution: Boolean = true,
+                               verifyReplicasDistribution: Boolean = true) {
+    // always verify that no broker will be assigned for more than one replica
+    for ((_, brokerList) <- assignment) {
+      assertEquals(brokerList.toSet.size, brokerList.size)
+    }
     val distribution = getReplicaDistribution(assignment, brokerRackMapping)
 
     if (verifyRackAware) {
@@ -48,7 +52,6 @@ trait RackAwareTest {
       val numReplicasPerBroker = numPartitions * replicationFactor / numBrokers
       assertEquals(List.fill(numBrokers)(numReplicasPerBroker), replicasCount.values.toList)
     }
-
   }
 
   def getReplicaDistribution(assignment: Map[Int, Seq[Int]], brokerRackMapping: Map[Int, String]): ReplicaDistributions = {
@@ -66,6 +69,13 @@ trait RackAwareTest {
     }
     ReplicaDistributions(partitionRackMap, leaderCount, partitionCount)
   }
+
+  def toBrokerMetadata(rackMap: Map[Int, String], brokersWithoutRack: Seq[Int] = Seq.empty): Seq[BrokerMetadata] =
+    rackMap.toSeq.map { case (brokerId, rack) =>
+      BrokerMetadata(brokerId, Some(rack))
+    } ++ brokersWithoutRack.map { brokerId =>
+      BrokerMetadata(brokerId, None)
+    }.sortBy(_.id)
 
 }
 

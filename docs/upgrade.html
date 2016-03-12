@@ -22,9 +22,10 @@
 there may be a <a href="#upgrade_10_performance_impact">performance impact during the upgrade</a>. Because new protocols
 are introduced, it is important to upgrade your Kafka clusters before upgrading your clients.
 <p/>
-<b>Notes to client with version 0.9.0.0: </b>Due to a bug introduced in 0.9.0.0,
-clients with ZooKeeper dependency may not be able to work with 0.10.0.0 broker. Therefore, 0.9.0.0 clients should
-upgrade to 0.9.0.1 <b>before</b> brokers upgrading to 0.10.0.0. This step is not necessary for 0.8.2.X or 0.9.0.1 clients.
+<b>Notes to clients with version 0.9.0.0: </b>Due to a bug introduced in 0.9.0.0,
+clients that depend on ZooKeeper (old Scala high-level Consumer and MirrorMaker if used with the old consumer) will not
+work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9.0.1 <b>before</b> brokers are upgraded to
+0.10.0.x. This step is not necessary for 0.8.X or 0.9.0.1 clients.
 
 <p><b>For a rolling upgrade:</b></p>
 

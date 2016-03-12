@@ -55,10 +55,10 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
       val assignment = zkUtils.getReplicaAssignmentForTopics(Seq(topic)).map { case (topicPartition, replicas) =>
         topicPartition.partition -> replicas
       }
-      val (_, brokerRackMap) = AdminUtils.getBrokersAndRackInfo(zkUtils, RackAwareMode.Enforced)
+      val brokerMetadatas = AdminUtils.getBrokerMetadatas(zkUtils, RackAwareMode.Enforced)
       val expectedMap = Map(0 -> "0", 1 -> "0", 2 -> "1", 3 -> "1")
-      assertEquals(expectedMap, brokerRackMap)
-      ensureRackAwareAndEvenDistribution(assignment, brokerRackMap, numServers, numPartitions, replicationFactor)
+      assertEquals(expectedMap, brokerMetadatas.map(b => b.id -> b.rack.get).toMap)
+      checkReplicaDistribution(assignment, expectedMap, numServers, numPartitions, replicationFactor)
     } finally producer.close()
   }
 }

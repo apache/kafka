@@ -27,29 +27,27 @@ import java.security.cert.X509Certificate
 import javax.net.ssl.X509TrustManager
 import charset.Charset
 
-import kafka.security.auth.{Resource, Authorizer, Acl}
+import kafka.security.auth.{Acl, Authorizer, Resource}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.test.TestSslUtils
 
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-
 import kafka.server._
 import kafka.producer._
 import kafka.message._
 import kafka.api._
-import kafka.cluster.Broker
-import kafka.consumer.{ConsumerTimeoutException, KafkaStream, ConsumerConfig}
-import kafka.serializer.{StringEncoder, DefaultEncoder, Encoder}
+import kafka.cluster.{Broker, EndPoint}
+import kafka.consumer.{ConsumerConfig, ConsumerTimeoutException, KafkaStream}
+import kafka.serializer.{DefaultEncoder, Encoder, StringEncoder}
 import kafka.common.TopicAndPartition
 import kafka.admin.AdminUtils
 import kafka.producer.ProducerConfig
 import kafka.log._
 import kafka.utils.ZkUtils._
-
 import org.junit.Assert._
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.consumer.{RangeAssignor, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.network.Mode
 
@@ -593,10 +591,16 @@ object TestUtils extends Logging {
     }
   }
 
-  def createBrokersInZk(zkUtils: ZkUtils, ids: Seq[Int], brokerRack: Map[Int, String] = Map()): Seq[Broker] = {
-    val brokers = ids.map(id => new Broker(id, "localhost", 6667, SecurityProtocol.PLAINTEXT))
+  def createBrokersInZk(zkUtils: ZkUtils, ids: Seq[Int]): Seq[Broker] =
+    createBrokersInZk(ids.map(kafka.admin.BrokerMetadata(_, None)), zkUtils)
+
+  def createBrokersInZk(brokerMetadatas: Seq[kafka.admin.BrokerMetadata], zkUtils: ZkUtils): Seq[Broker] = {
+    val brokers = brokerMetadatas.map { b =>
+      val protocol = SecurityProtocol.PLAINTEXT
+      Broker(b.id, Map(protocol -> EndPoint("localhost", 6667, protocol)).toMap, b.rack)
+    }
     brokers.foreach(b => zkUtils.registerBrokerInZk(b.id, "localhost", 6667, b.endPoints, jmxPort = -1,
-      rack = brokerRack.get(b.id), ApiVersion.latestVersion))
+      rack = b.rack, ApiVersion.latestVersion))
     brokers
   }
 
