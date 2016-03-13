@@ -217,20 +217,28 @@ public final class RecordAccumulator {
         int count = 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
             Deque<RecordBatch> dq = entry.getValue();
-            synchronized (dq) {
-                // iterate over the batches and expire them if they have stayed in accumulator for more than requestTimeOut
-                Iterator<RecordBatch> batchIterator = dq.iterator();
-                while (batchIterator.hasNext()) {
-                    RecordBatch batch = batchIterator.next();
-                    // check if the batch is expired
-                    if (batch.maybeExpire(requestTimeout, now, this.lingerMs)) {
-                        expiredBatches.add(batch);
-                        count++;
-                        batchIterator.remove();
-                        deallocate(batch);
-                    } else {
-                        if (!batch.inRetry()) {
-                            break;
+            // Only expire a batch if its metadata is not available.
+            if (cluster.leaderFor(entry.getKey()) == null) {
+                synchronized (dq) {
+                    // iterate over the batches and expire them if they have stayed in accumulator for more than requestTimeOut
+                    RecordBatch lastBatch = dq.peekLast();
+                    Iterator<RecordBatch> batchIterator = dq.iterator();
+                    while (batchIterator.hasNext()) {
+                        RecordBatch batch = batchIterator.next();
+                        // We have to close the previous batches in the deque before expiration check, otherwise those
+                        // batches may never be considered as full.
+                        if (batch != lastBatch)
+                            batch.records.close();
+                        // check if the batch is expired
+                        if (batch.maybeExpire(requestTimeout, retryBackoffMs, now, this.lingerMs)) {
+                            expiredBatches.add(batch);
+                            count++;
+                            batchIterator.remove();
+                            deallocate(batch);
+                        } else {
+                            if (!batch.inRetry()) {
+                                break;
+                            }
                         }
                     }
                 }
