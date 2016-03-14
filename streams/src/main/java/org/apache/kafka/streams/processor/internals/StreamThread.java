@@ -173,7 +173,7 @@ public class StreamThread extends Thread {
         this.jobId = jobId;
         this.config = config;
         this.builder = builder;
-        this.sourceTopics = builder.sourceTopics();
+        this.sourceTopics = builder.sourceTopics(jobId);
         this.clientId = clientId;
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
@@ -580,7 +580,7 @@ public class StreamThread extends Thread {
     protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitions) {
         sensors.taskCreationSensor.record();
 
-        ProcessorTopology topology = builder.build(id.topicGroupId);
+        ProcessorTopology topology = builder.build(jobId, id.topicGroupId);
 
         return new StreamTask(id, jobId, partitions, topology, consumer, producer, restoreConsumer, config, sensors);
     }
@@ -650,7 +650,7 @@ public class StreamThread extends Thread {
     protected StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
         sensors.taskCreationSensor.record();
 
-        ProcessorTopology topology = builder.build(id.topicGroupId);
+        ProcessorTopology topology = builder.build(jobId, id.topicGroupId);
 
         if (!topology.stateStoreSuppliers().isEmpty()) {
             return new StandbyTask(id, jobId, partitions, topology, consumer, restoreConsumer, config, sensors);
