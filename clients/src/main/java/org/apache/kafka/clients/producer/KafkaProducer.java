@@ -119,8 +119,8 @@ import org.slf4j.LoggerFactory;
  * <p>
  * The <code>buffer.memory</code> controls the total amount of memory available to the producer for buffering. If records
  * are sent faster than they can be transmitted to the server then this buffer space will be exhausted. When the buffer space is
- * exhausted additional send calls will block. For uses where you want to avoid any blocking you can set <code>block.on.buffer.full=false</code> which
- * will cause the send call to result in an exception.
+ * exhausted additional send calls will block. The threshold for time to block is determined by <code>max.block.ms</code> after which it throws
+ * a TimeoutException.
  * <p>
  * The <code>key.serializer</code> and <code>value.serializer</code> instruct how to turn the key and value objects the user provides with
  * their <code>ProducerRecord</code> into bytes. You can use the included {@link org.apache.kafka.common.serialization.ByteArraySerializer} or
