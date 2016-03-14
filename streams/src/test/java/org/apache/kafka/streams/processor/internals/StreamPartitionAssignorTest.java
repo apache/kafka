@@ -521,7 +521,7 @@ public class StreamPartitionAssignorTest {
         builder.addSink("sink1", "topicX", "processor1");
         builder.addSource("source2", "topicX");
         builder.addProcessor("processor2", new MockProcessorSupplier(), "source2");
-        List<String> topics = Utils.mkList("topic1", "topicX");
+        List<String> topics = Utils.mkList("topic1", "test-topicX");
         Set<TaskId> allTasks = Utils.mkSet(task0, task1, task2);
 
         UUID uuid1 = UUID.randomUUID();
@@ -543,9 +543,7 @@ public class StreamPartitionAssignorTest {
         Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
 
         // check prepared internal topics
-        // TODO: we need to change it to 1 after fixing the prefix
-        assertEquals(2, internalTopicManager.readyTopics.size());
-        assertEquals(allTasks.size(), (long) internalTopicManager.readyTopics.get("topicX"));
+        assertEquals(1, internalTopicManager.readyTopics.size());
         assertEquals(allTasks.size(), (long) internalTopicManager.readyTopics.get("test-topicX"));
     }
 
