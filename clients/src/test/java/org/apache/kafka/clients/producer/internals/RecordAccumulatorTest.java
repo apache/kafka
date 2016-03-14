@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -300,6 +301,8 @@ public class RecordAccumulatorTest {
         long retryBackoffMs = 100L;
         long lingerMs = 3000L;
         int requestTimeout = 60;
+        Metadata metadata = new Metadata();
+        metadata.update(cluster, time.milliseconds());
 
         RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time);
         int appends = 1024 / msgSize;
@@ -314,20 +317,22 @@ public class RecordAccumulatorTest {
         Set<Node> readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
         assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
         // Advance the clock to expire the batch.
-        time.sleep(2000L);
-        List<RecordBatch> expiredBatches = accum.abortExpiredBatches(requestTimeout, cluster, time.milliseconds());
+        time.sleep(requestTimeout + 1);
+        List<RecordBatch> expiredBatches = accum.abortExpiredBatches(requestTimeout, metadata, time.milliseconds());
         assertEquals("The batch should not be expired when metadata is still available", 0, expiredBatches.size());
         Cluster emptyCluster = new Cluster(new ArrayList<Node>(), new ArrayList<PartitionInfo>(), Collections.<String>emptySet());
-        expiredBatches = accum.abortExpiredBatches(60, emptyCluster, time.milliseconds());
+        Metadata emptyMetadata = new Metadata();
+        emptyMetadata.update(emptyCluster, time.milliseconds());
+        expiredBatches = accum.abortExpiredBatches(60, emptyMetadata, time.milliseconds());
         assertEquals("The batch should be expired when metadata is missing", 1, expiredBatches.size());
         assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
         // Advance the clock to make batch ready due to linger.ms
-        time.sleep(2000L);
+        time.sleep(lingerMs);
         assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
-        // Advance the clock to make the batch expire
-        expiredBatches = accum.abortExpiredBatches(requestTimeout, cluster, time.milliseconds());
+        time.sleep(requestTimeout + 1);
+        expiredBatches = accum.abortExpiredBatches(requestTimeout, metadata, time.milliseconds());
         assertEquals("The batch should not be expired when metadata is still available", 0, expiredBatches.size());
-        expiredBatches = accum.abortExpiredBatches(requestTimeout, emptyCluster, time.milliseconds());
+        expiredBatches = accum.abortExpiredBatches(requestTimeout, emptyMetadata, time.milliseconds());
         assertEquals("The batch should be expired when metadata is missing", 1, expiredBatches.size());
         assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
 
@@ -343,12 +348,12 @@ public class RecordAccumulatorTest {
         accum.reenqueue(drained.get(node1.id()).get(0), time.milliseconds());
         // test expiration.
         time.sleep(requestTimeout + retryBackoffMs);
-        expiredBatches = accum.abortExpiredBatches(requestTimeout, emptyCluster, time.milliseconds());
+        expiredBatches = accum.abortExpiredBatches(requestTimeout, emptyMetadata, time.milliseconds());
         assertEquals("The batch should not be expired.", 0, expiredBatches.size());
         time.sleep(1L);
-        expiredBatches = accum.abortExpiredBatches(requestTimeout, cluster, time.milliseconds());
+        expiredBatches = accum.abortExpiredBatches(requestTimeout, metadata, time.milliseconds());
         assertEquals("The batch should not be expired when metadata is still available", 0, expiredBatches.size());
-        expiredBatches = accum.abortExpiredBatches(requestTimeout, emptyCluster, time.milliseconds());
+        expiredBatches = accum.abortExpiredBatches(requestTimeout, emptyMetadata, time.milliseconds());
         assertEquals("The batch should be expired.", 1, expiredBatches.size());
 
     }

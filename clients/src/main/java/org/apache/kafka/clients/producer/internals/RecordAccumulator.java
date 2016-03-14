@@ -13,6 +13,8 @@
 package org.apache.kafka.clients.producer.internals;
 
 import java.util.Iterator;
+
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
@@ -212,13 +214,19 @@ public final class RecordAccumulator {
      * Abort the batches that have been sitting in RecordAccumulator for more than the configured requestTimeout
      * due to metadata being unavailable
      */
-    public List<RecordBatch> abortExpiredBatches(int requestTimeout, Cluster cluster, long now) {
+    public List<RecordBatch> abortExpiredBatches(int requestTimeout, Metadata metadata, long now) {
         List<RecordBatch> expiredBatches = new ArrayList<RecordBatch>();
         int count = 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
             Deque<RecordBatch> dq = entry.getValue();
             // Only expire a batch if its metadata is not available.
-            if (cluster.leaderFor(entry.getKey()) == null) {
+            Cluster cluster = metadata.fetch();
+            // Check if the metadata might be old.
+            boolean maybeStaleMetadata = metadata.lastRefresh() > metadata.lastSuccessfulUpdate();
+            // We will check all the batches if metadata might be old, this is to avoid the case that no batches will
+            // be timeout out when all the brokers are done and producer keeps the stale metadata without timing out
+            // the batches.
+            if (maybeStaleMetadata || cluster.leaderFor(entry.getKey()) == null) {
                 synchronized (dq) {
                     // iterate over the batches and expire them if they have stayed in accumulator for more than requestTimeOut
                     RecordBatch lastBatch = dq.peekLast();
