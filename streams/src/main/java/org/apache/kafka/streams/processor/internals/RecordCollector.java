@@ -37,12 +37,12 @@ public class RecordCollector {
     /**
      * A supplier of a {@link RecordCollector} instance.
      */
-    public static interface Supplier {
+    public interface Supplier {
         /**
          * Get the record collector.
          * @return the record collector
          */
-        public RecordCollector recordCollector();
+        RecordCollector recordCollector();
     }
 
     private static final Logger log = LoggerFactory.getLogger(RecordCollector.class);
