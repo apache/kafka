@@ -23,7 +23,7 @@ import org.junit.Test
 
 import scala.collection.{Map, Seq}
 
-class AdminRackAwareTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
+class AdminRackAwareTest extends RackAwareTest with Logging {
 
   @Test
   def testGetRackAlternatedBrokerListAndAssignReplicasToBrokers() {
@@ -193,36 +193,4 @@ class AdminRackAwareTest extends ZooKeeperTestHarness with Logging with RackAwar
     checkReplicaDistribution(assignment, rackInfo, 5, 6, 4,
       verifyRackAware = false, verifyLeaderDistribution = false, verifyReplicasDistribution = false)
   }
-
-  @Test
-  def testGetBrokerMetadatas() {
-    // broker 4 has no rack information
-    val brokerList = 0 to 5
-    val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 5 -> "rack3")
-    val brokerMetadatas = toBrokerMetadata(rackInfo, brokersWithoutRack = brokerList.filterNot(rackInfo.keySet))
-    TestUtils.createBrokersInZk(brokerMetadatas, zkUtils)
-
-    val processedMetadatas1 = AdminUtils.getBrokerMetadatas(zkUtils, RackAwareMode.Disabled)
-    assertEquals(brokerList, processedMetadatas1.map(_.id))
-    assertEquals(List.fill(brokerList.size)(None), processedMetadatas1.map(_.rack))
-
-    val processedMetadatas2 = AdminUtils.getBrokerMetadatas(zkUtils, RackAwareMode.Safe)
-    assertEquals(brokerList, processedMetadatas2.map(_.id))
-    assertEquals(List.fill(brokerList.size)(None), processedMetadatas2.map(_.rack))
-
-    intercept[AdminOperationException] {
-      AdminUtils.getBrokerMetadatas(zkUtils, RackAwareMode.Enforced)
-    }
-
-    val partialList = List(0, 1, 2, 3, 5)
-    val processedMetadatas3 = AdminUtils.getBrokerMetadatas(zkUtils, RackAwareMode.Enforced, Some(partialList))
-    assertEquals(partialList, processedMetadatas3.map(_.id))
-    assertEquals(partialList.map(rackInfo), processedMetadatas3.flatMap(_.rack))
-
-    val numPartitions = 3
-    AdminUtils.createTopic(zkUtils, "foo", numPartitions, 2, rackAwareMode = RackAwareMode.Safe)
-    val assignment = zkUtils.getReplicaAssignmentForTopics(Seq("foo"))
-    assertEquals(numPartitions, assignment.size)
-  }
-
 }

@@ -461,8 +461,8 @@ object AdminUtils extends Logging {
 
   /**
    * Update the config for a client and create a change notification so the change will propagate to other brokers
-    *
-    * @param zkUtils Zookeeper utilities used to write the config to ZK
+   *
+   * @param zkUtils Zookeeper utilities used to write the config to ZK
    * @param clientId: The clientId for which configs are being changed
    * @param configs: The final set of configs that will be applied to the topic. If any new configs need to be added or
    *                 existing configs need to be deleted, it should be done prior to invoking this API
@@ -474,8 +474,8 @@ object AdminUtils extends Logging {
 
   /**
    * Update the config for an existing topic and create a change notification so the change will propagate to other brokers
-    *
-    * @param zkUtils Zookeeper utilities used to write the config to ZK
+   *
+   * @param zkUtils Zookeeper utilities used to write the config to ZK
    * @param topic: The topic for which configs are being changed
    * @param configs: The final set of configs that will be applied to the topic. If any new configs need to be added or
    *                 existing configs need to be deleted, it should be done prior to invoking this API
