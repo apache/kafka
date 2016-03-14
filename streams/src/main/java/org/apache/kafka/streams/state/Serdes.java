@@ -62,14 +62,31 @@ public final class Serdes<K, V> {
     }
 
     private final String topic;
-    private Serializer<K> keySerializer;
-    private Serializer<V> valueSerializer;
-    private Deserializer<K> keyDeserializer;
-    private Deserializer<V> valueDeserializer;
+    private final Serializer<K> keySerializer;
+    private final Serializer<V> valueSerializer;
+    private final Deserializer<K> keyDeserializer;
+    private final Deserializer<V> valueDeserializer;
 
     /**
      * Create a context for serialization using the specified serializers and deserializers which
      * <em>must</em> match the key and value types used as parameters for this object.
+     *
+     * @param keySerializer the serializer for keys; may be null
+     * @param keyDeserializer the deserializer for keys; may be null
+     * @param valueSerializer the serializer for values; may be null
+     * @param valueDeserializer the deserializer for values; may be null
+     */
+    @SuppressWarnings("unchecked")
+    public Serdes(Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
+                  Serializer<V> valueSerializer, Deserializer<V> valueDeserializer) {
+        this(null, keySerializer, keyDeserializer, valueSerializer, valueDeserializer);
+    }
+
+    /**
+     * Create a context for serialization using the specified serializers and deserializers which
+     * <em>must</em> match the key and value types used as parameters for this object; the additional topic
+     * is given to bind this serde factory to, so that future calls for serialize / deserialize do not
+     * need to provide the topic name any more.
      *
      * @param topic the name of the topic
      * @param keySerializer the serializer for keys; may be null
@@ -123,6 +140,14 @@ public final class Serdes<K, V> {
     }
 
     public V valueFrom(byte[] rawValue) {
+        return valueDeserializer.deserialize(topic, rawValue);
+    }
+
+    public K keyFrom(byte[] rawKey, String topic) {
+        return keyDeserializer.deserialize(topic, rawKey);
+    }
+
+    public V valueFrom(byte[] rawValue, String topic) {
         return valueDeserializer.deserialize(topic, rawValue);
     }
 
