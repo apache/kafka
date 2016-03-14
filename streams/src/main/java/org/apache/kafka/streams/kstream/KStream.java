@@ -335,12 +335,23 @@ public interface KStream<K, V> {
 
     /**
      * Count number of messages of this stream by key without a window basis, and hence
+     * return a ever updating counting table.
+     * This method uses {@link org.apache.kafka.common.serialization.LongSerializer LongSerializer}
+     * and {@link org.apache.kafka.common.serialization.LongDeserializer LongDeserializer} for serialization of counts.
+     */
+    KTable<K, Long> countByKey(Serializer<K> keySerializer,
+                               Deserializer<K> keyDeserializer,
+                               String name);
+
+    /**
+     * Count number of messages of this stream by key without a window basis, and hence
      * return a ever updating counting table
      *
      */
     KTable<K, Long> countByKey(Serializer<K> keySerializer,
-                               Serializer<Long> aggValueSerializer,
+                               Serializer<Long> countSerializer,
                                Deserializer<K> keyDeserializer,
-                               Deserializer<Long> aggValueDeserializer,
+                               Deserializer<Long> countDeserializer,
                                String name);
+
 }

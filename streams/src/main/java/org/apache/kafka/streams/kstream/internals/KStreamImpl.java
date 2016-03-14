@@ -18,6 +18,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -520,11 +522,24 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public     KTable<K, Long> countByKey(Serializer<K> keySerializer,
-                                          Serializer<Long> aggValueSerializer,
-                                          Deserializer<K> keyDeserializer,
-                                          Deserializer<Long> aggValueDeserializer,
-                                          String name) {
+    public KTable<K, Long> countByKey(Serializer<K> keySerializer,
+                                      Deserializer<K> keyDeserializer,
+                                      String name) {
+        return countByKey(
+                keySerializer,
+                new LongSerializer(),
+                keyDeserializer,
+                new LongDeserializer(),
+                name
+        );
+    }
+
+    @Override
+    public KTable<K, Long> countByKey(Serializer<K> keySerializer,
+                                      Serializer<Long> aggValueSerializer,
+                                      Deserializer<K> keyDeserializer,
+                                      Deserializer<Long> aggValueDeserializer,
+                                      String name) {
 
         return this.aggregateByKey(
                 new Initializer<Long>() {
