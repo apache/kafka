@@ -18,12 +18,19 @@
  */
 package kafka.tools
 
+import java.util
+import java.util.Properties
+
+import kafka.cluster.BrokerEndPoint
 import kafka.consumer._
 import joptsimple._
 import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest}
 import kafka.common.TopicAndPartition
 import kafka.client.ClientUtils
 import kafka.utils.{ToolsUtils, CommandLineUtils}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
+import org.apache.kafka.common.PartitionInfo
+import org.apache.kafka.common.utils.Utils
 
 
 object GetOffsetShell {
@@ -57,11 +64,16 @@ object GetOffsetShell {
                            .describedAs("ms")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1000)
-                           
-   if(args.length == 0)
+    val useOldProducerOpt = parser.accepts("old-producer", "Use the old producer implementation.")
+    val producerConfigOpt = parser.accepts("producer.config", s"Producer config properties file.")
+      .withRequiredArg
+      .describedAs("config file")
+      .ofType(classOf[String])
+
+    if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "An interactive shell for getting consumer offsets.")
 
-    val options = parser.parse(args : _*)
+    val options = parser.parse(args: _*)
 
     CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt, timeOpt)
 
@@ -70,39 +82,78 @@ object GetOffsetShell {
     ToolsUtils.validatePortOrDie(parser, brokerList)
     val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
     val topic = options.valueOf(topicOpt)
-    var partitionList = options.valueOf(partitionOpt)
-    var time = options.valueOf(timeOpt).longValue
+    val partitionList = options.valueOf(partitionOpt)
+    val time = options.valueOf(timeOpt).longValue
     val nOffsets = options.valueOf(nOffsetsOpt).intValue
     val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue()
 
-    val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), metadataTargetBrokers, clientId, maxWaitMs).topicsMetadata
-    if(topicsMetadata.size != 1 || !topicsMetadata(0).topic.equals(topic)) {
+    def noTopicMetadataError {
       System.err.println(("Error: no valid topic metadata for topic: %s, " + " probably the topic does not exist, run ").format(topic) +
-        "kafka-list-topic.sh to verify")
+        "kafka-topics.sh --list to verify that topic exists.")
       System.exit(1)
     }
-    val partitions =
-      if(partitionList == "") {
-        topicsMetadata.head.partitionsMetadata.map(_.partitionId)
-      } else {
-        partitionList.split(",").map(_.toInt).toSeq
-      }
-    partitions.foreach { partitionId =>
-      val partitionMetadataOpt = topicsMetadata.head.partitionsMetadata.find(_.partitionId == partitionId)
-      partitionMetadataOpt match {
-        case Some(metadata) =>
-          metadata.leader match {
-            case Some(leader) =>
-              val consumer = new SimpleConsumer(leader.host, leader.port, 10000, 100000, clientId)
-              val topicAndPartition = TopicAndPartition(topic, partitionId)
-              val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(time, nOffsets)))
-              val offsets = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets
 
-              println("%s:%d:%s".format(topic, partitionId, offsets.mkString(",")))
-            case None => System.err.println("Error: partition %d does not have a leader. Skip getting offsets".format(partitionId))
-          }
-        case None => System.err.println("Error: partition %d does not exist".format(partitionId))
+    if (!options.has(useOldProducerOpt)) {
+      val producerConfigFile = options.valueOf(producerConfigOpt)
+      val producer = new KafkaProducer[Array[Byte], Array[Byte]](getNewProducerProps(clientId, brokerList, maxWaitMs.toString, producerConfigFile))
+      val partitions = producer.partitionsFor(topic)
+      if (partitions.isEmpty)
+        noTopicMetadataError
+      val iter = partitions.iterator()
+      while (iter.hasNext) {
+        val partition = iter.next()
+        if (partition.leader() != null)
+          printOffsets(clientId, topic, time, nOffsets, partition.partition(), partition.leader().host(), partition.leader().port())
+        else
+          System.err.println("Error: partition %d does not have a leader. Skip getting offsets".format(partition.partition()))
+      }
+    } else {
+      val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), metadataTargetBrokers, clientId, maxWaitMs).topicsMetadata
+      if (topicsMetadata.size != 1 || !topicsMetadata(0).topic.equals(topic))
+        noTopicMetadataError
+      val partitions =
+        if (partitionList == "") {
+          topicsMetadata.head.partitionsMetadata.map(_.partitionId)
+        } else {
+          partitionList.split(",").map(_.toInt).toSeq
+        }
+      partitions.foreach { partitionId =>
+        val partitionMetadataOpt = topicsMetadata.head.partitionsMetadata.find(_.partitionId == partitionId)
+        partitionMetadataOpt match {
+          case Some(metadata) =>
+            metadata.leader match {
+              case Some(leader) =>
+                printOffsets(clientId, topic, time, nOffsets, partitionId, leader.host, leader.port)
+              case None => System.err.println("Error: partition %d does not have a leader. Skip getting offsets".format(partitionId))
+            }
+          case None => System.err.println("Error: partition %d does not exist".format(partitionId))
+        }
       }
     }
+  }
+
+
+  def printOffsets(clientId: String, topic: String, time: Long, nOffsets: Int, partitionId: Int, leaderHost: String, leaderPort: Int): Unit = {
+    val consumer = new SimpleConsumer(leaderHost, leaderPort, 10000, 100000, clientId)
+    val topicAndPartition = TopicAndPartition(topic, partitionId)
+    val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(time, nOffsets)))
+    val offsets = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets
+
+    println("%s:%d:%s".format(topic, partitionId, offsets.mkString(",")))
+  }
+
+  def getNewProducerProps(clientId: String, brokerList: String, requestTimeoutMs: String, configFile: String): Properties = {
+    val props =
+      if (configFile != null)
+        Utils.loadProps(configFile)
+      else new Properties
+
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs)
+    props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId)
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+
+    props
   }
 }
