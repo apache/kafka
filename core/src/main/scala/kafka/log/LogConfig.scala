@@ -137,9 +137,9 @@ object LogConfig {
     "standard compression codecs ('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to " +
     "no compression; and 'producer' which means retain the original compression codec set by the producer."
   val PreAllocateEnableDoc ="Should pre allocate file when create new segment?"
-  val MessageFormatVersionDoc = KafkaConfig.MessageFormatVersionDoc
-  val MessageTimestampTypeDoc = KafkaConfig.MessageTimestampTypeDoc
-  val MessageTimestampDifferenceMaxMsDoc = KafkaConfig.MessageTimestampDifferenceMaxMsDoc
+  val MessageFormatVersionDoc = KafkaConfig.LogMessageFormatVersionDoc
+  val MessageTimestampTypeDoc = KafkaConfig.LogMessageTimestampTypeDoc
+  val MessageTimestampDifferenceMaxMsDoc = KafkaConfig.LogMessageTimestampDifferenceMaxMsDoc
 
   private val configDef = {
     import org.apache.kafka.common.config.ConfigDef.Importance._
