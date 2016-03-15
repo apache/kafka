@@ -91,7 +91,9 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         TASK_PROPS.put(SinkConnector.TOPICS_CONFIG, TOPIC);
     }
 
+
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
+    private TargetState initialState = TargetState.STARTED;
     private Time time;
     @Mock private SinkTask sinkTask;
     private Capture<WorkerSinkTaskContext> sinkTaskContext = EasyMock.newCapture();
@@ -104,6 +106,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     @Mock private TaskStatus.Listener statusListener;
 
     private long recordsReturned;
+
 
     @SuppressWarnings("unchecked")
     @Override
@@ -121,7 +124,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, workerConfig, keyConverter, valueConverter, time);
+                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, time);
 
         recordsReturned = 0;
     }

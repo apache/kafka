@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
@@ -88,6 +89,7 @@ public class WorkerSinkTaskTest {
 
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
+    private TargetState initialState = TargetState.STARTED;
     private Time time;
     private WorkerSinkTask workerTask;
     @Mock
@@ -120,9 +122,85 @@ public class WorkerSinkTaskTest {
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, workerConfig, keyConverter, valueConverter, time);
+                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, time);
 
         recordsReturned = 0;
+    }
+
+    @Test
+    public void testStartPaused() throws Exception {
+        workerTask = PowerMock.createPartialMock(
+                WorkerSinkTask.class, new String[]{"createConsumer"},
+                taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, keyConverter, valueConverter, time);
+
+        expectInitializeTask();
+        expectPollInitialAssignment();
+
+        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2)));
+        consumer.pause(TOPIC_PARTITION);
+        PowerMock.expectLastCall();
+        consumer.pause(TOPIC_PARTITION2);
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_PROPS);
+        workerTask.initializeAndStart();
+        workerTask.poll(Long.MAX_VALUE);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testPause() throws Exception {
+        expectInitializeTask();
+        expectPollInitialAssignment();
+
+        expectConsumerPoll(1);
+        expectConvertMessages(1);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+
+        // Pause
+        expectConsumerWakeup();
+        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2)));
+        consumer.pause(TOPIC_PARTITION);
+        PowerMock.expectLastCall();
+        consumer.pause(TOPIC_PARTITION2);
+        PowerMock.expectLastCall();
+
+        // No records returned
+        expectConsumerPoll(0);
+        sinkTask.put(Collections.<SinkRecord>emptyList());
+        EasyMock.expectLastCall();
+
+        // And unpause
+        expectConsumerWakeup();
+        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2)));
+        consumer.resume(TOPIC_PARTITION);
+        PowerMock.expectLastCall();
+        consumer.resume(TOPIC_PARTITION2);
+        PowerMock.expectLastCall();
+
+        expectConsumerPoll(1);
+        expectConvertMessages(1);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_PROPS);
+        workerTask.initializeAndStart();
+        workerTask.poll(Long.MAX_VALUE); // initial assignment
+        workerTask.poll(Long.MAX_VALUE); // fetch some data
+        workerTask.transitionTo(TargetState.PAUSED);
+        workerTask.poll(Long.MAX_VALUE); // wakeup
+        workerTask.poll(Long.MAX_VALUE); // now paused
+        workerTask.transitionTo(TargetState.STARTED);
+        workerTask.poll(Long.MAX_VALUE); // wakeup
+        workerTask.poll(Long.MAX_VALUE); // now unpaused
+
+        PowerMock.verifyAll();
     }
 
     @Test
@@ -285,6 +363,12 @@ public class WorkerSinkTaskTest {
 
         sinkTask.put(Collections.<SinkRecord>emptyList());
         EasyMock.expectLastCall();
+    }
+
+    private void expectConsumerWakeup() {
+        consumer.wakeup();
+        EasyMock.expectLastCall();
+        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andThrow(new WakeupException());
     }
 
     private void expectConsumerPoll(final int numMessages) {

@@ -41,8 +41,8 @@ public class WorkerTaskTest {
         TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
 
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
-                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class)
-                .withArgs(taskId, statusListener)
+                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class, TargetState.class)
+                .withArgs(taskId, statusListener, TargetState.STARTED)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
@@ -80,8 +80,8 @@ public class WorkerTaskTest {
         TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
 
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
-                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class)
-                .withArgs(taskId, statusListener)
+                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class, TargetState.class)
+                .withArgs(taskId, statusListener, TargetState.STARTED)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
@@ -112,8 +112,8 @@ public class WorkerTaskTest {
         TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
 
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
-                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class)
-                .withArgs(taskId, statusListener)
+                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class, TargetState.class)
+                .withArgs(taskId, statusListener, TargetState.STARTED)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")

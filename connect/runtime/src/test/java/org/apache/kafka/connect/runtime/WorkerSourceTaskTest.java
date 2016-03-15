@@ -58,6 +58,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -115,8 +116,94 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private void createWorkerTask() {
-        workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, keyConverter, valueConverter, producer,
-                offsetReader, offsetWriter, config, new SystemTime());
+        createWorkerTask(TargetState.STARTED);
+    }
+
+    private void createWorkerTask(TargetState initialState) {
+        workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter,
+                valueConverter, producer, offsetReader, offsetWriter, config, new SystemTime());
+    }
+
+    @Test
+    public void testStartPaused() throws Exception {
+        final CountDownLatch startupLatch = new CountDownLatch(1);
+
+        createWorkerTask(TargetState.PAUSED);
+
+        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
+        EasyMock.expectLastCall();
+        sourceTask.start(EMPTY_TASK_PROPS);
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @Override
+            public Void answer() throws Throwable {
+                startupLatch.countDown();
+                return null;
+            }
+        });
+        statusListener.onPause(taskId);
+        EasyMock.expectLastCall();
+
+        // we shouldn't get any calls to poll()
+
+        sourceTask.stop();
+        EasyMock.expectLastCall();
+        expectOffsetFlush(true);
+
+        statusListener.onShutdown(taskId);
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(EMPTY_TASK_PROPS);
+        executor.submit(workerTask);
+        assertTrue(startupLatch.await(5, TimeUnit.SECONDS));
+        workerTask.stop();
+        assertTrue(workerTask.awaitStop(1000));
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testPause() throws Exception {
+        createWorkerTask();
+
+        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
+        EasyMock.expectLastCall();
+        sourceTask.start(EMPTY_TASK_PROPS);
+        EasyMock.expectLastCall();
+        statusListener.onStartup(taskId);
+        EasyMock.expectLastCall();
+
+        AtomicInteger count = new AtomicInteger(0);
+        CountDownLatch pollLatch = expectPolls(10, count);
+        // In this test, we don't flush, so nothing goes any further than the offset writer
+
+        statusListener.onPause(taskId);
+        EasyMock.expectLastCall();
+
+        sourceTask.stop();
+        EasyMock.expectLastCall();
+        expectOffsetFlush(true);
+
+        statusListener.onShutdown(taskId);
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(EMPTY_TASK_PROPS);
+        executor.submit(workerTask);
+        awaitPolls(pollLatch);
+
+        workerTask.transitionTo(TargetState.PAUSED);
+
+        int priorCount = count.get();
+        Thread.sleep(100);
+        assertEquals(priorCount, count.get());
+
+        workerTask.stop();
+        assertTrue(workerTask.awaitStop(1000));
+
+        PowerMock.verifyAll();
     }
 
     @Test
@@ -348,8 +435,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    private CountDownLatch expectPolls(int count) throws InterruptedException {
-        final CountDownLatch latch = new CountDownLatch(count);
+    private CountDownLatch expectPolls(int minimum, final AtomicInteger count) throws InterruptedException {
+        final CountDownLatch latch = new CountDownLatch(minimum);
         // Note that we stub these to allow any number of calls because the thread will continue to
         // run. The count passed in + latch returned just makes sure we get *at least* that number of
         // calls
@@ -357,6 +444,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                 .andStubAnswer(new IAnswer<List<SourceRecord>>() {
                     @Override
                     public List<SourceRecord> answer() throws Throwable {
+                        count.incrementAndGet();
                         latch.countDown();
                         return RECORDS;
                     }
@@ -364,6 +452,10 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // Fallout of the poll() call
         expectSendRecordAnyTimes();
         return latch;
+    }
+
+    private CountDownLatch expectPolls(int count) throws InterruptedException {
+        return expectPolls(count, new AtomicInteger());
     }
 
     @SuppressWarnings("unchecked")
@@ -446,8 +538,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             convertValueExpect.andReturn(SERIALIZED_RECORD);
     }
 
-    private void awaitPolls(CountDownLatch latch) throws InterruptedException {
-        latch.await(1000, TimeUnit.MILLISECONDS);
+    private boolean awaitPolls(CountDownLatch latch) throws InterruptedException {
+        return latch.await(1000, TimeUnit.MILLISECONDS);
     }
 
     @SuppressWarnings("unchecked")

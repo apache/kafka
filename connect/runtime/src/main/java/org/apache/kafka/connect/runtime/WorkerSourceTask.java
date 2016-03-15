@@ -24,6 +24,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -50,6 +51,7 @@ class WorkerSourceTask extends WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSourceTask.class);
 
     private static final long SEND_FAILED_BACKOFF_MS = 100;
+    private static final long PAUSE_BACKOFF_MS = 100;
 
     private final WorkerConfig workerConfig;
     private final SourceTask task;
@@ -76,7 +78,8 @@ class WorkerSourceTask extends WorkerTask {
 
     public WorkerSourceTask(ConnectorTaskId id,
                             SourceTask task,
-                            TaskStatus.Listener lifecycleListener,
+                            TaskStatus.Listener statusListener,
+                            TargetState initialState,
                             Converter keyConverter,
                             Converter valueConverter,
                             KafkaProducer<byte[], byte[]> producer,
@@ -84,7 +87,7 @@ class WorkerSourceTask extends WorkerTask {
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
                             Time time) {
-        super(id, lifecycleListener);
+        super(id, statusListener, initialState);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -139,6 +142,11 @@ class WorkerSourceTask extends WorkerTask {
             }
 
             while (!isStopping()) {
+                if (isPaused()) {
+                    Utils.sleep(PAUSE_BACKOFF_MS);
+                    continue;
+                }
+
                 if (toSend == null) {
                     log.debug("Nothing to send to Kafka. Polling source for additional records");
                     toSend = task.poll();

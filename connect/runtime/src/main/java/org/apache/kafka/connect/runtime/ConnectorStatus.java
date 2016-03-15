@@ -16,6 +16,7 @@
  **/
 package org.apache.kafka.connect.runtime;
 
+
 public class ConnectorStatus extends AbstractStatus<String> {
 
     public ConnectorStatus(String connector, State state, String msg, String workerUrl, int generation) {
@@ -35,12 +36,20 @@ public class ConnectorStatus extends AbstractStatus<String> {
         void onShutdown(String connector);
 
         /**
-         * Invoked from the Connector using {@link org.apache.kafka.connect.connector.ConnectorContext#raiseError(Exception)}.
+         * Invoked from the Connector using {@link org.apache.kafka.connect.connector.ConnectorContext#raiseError(Exception)}
+         * or if either {@link org.apache.kafka.connect.connector.Connector#start(java.util.Map)} or
+         * {@link org.apache.kafka.connect.connector.Connector#stop()} throw an exception.
          * Note that no shutdown event will follow after the task has been failed.
          * @param connector The connector name
          * @param cause Error raised from the connector.
          */
         void onFailure(String connector, Throwable cause);
+
+        /**
+         * Invoked when the connector is paused through the REST API
+         * @param connector The connector name
+         */
+        void onPause(String connector);
 
         /**
          * Invoked after successful startup of the connector.

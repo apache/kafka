@@ -17,10 +17,12 @@
 
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,24 +31,32 @@ import java.util.Set;
  * An immutable snapshot of the configuration state of connectors and tasks in a Kafka Connect cluster.
  */
 public class ClusterConfigState {
-    public static final ClusterConfigState EMPTY = new ClusterConfigState(-1, Collections.<String, Integer>emptyMap(),
-            Collections.<String, Map<String, String>>emptyMap(), Collections.<ConnectorTaskId, Map<String, String>>emptyMap(),
+    public static final long NO_OFFSET = -1;
+    public static final ClusterConfigState EMPTY = new ClusterConfigState(
+            NO_OFFSET,
+            Collections.<String, Integer>emptyMap(),
+            Collections.<String, Map<String, String>>emptyMap(),
+            Collections.<String, TargetState>emptyMap(),
+            Collections.<ConnectorTaskId, Map<String, String>>emptyMap(),
             Collections.<String>emptySet());
 
     private final long offset;
     private final Map<String, Integer> connectorTaskCounts;
     private final Map<String, Map<String, String>> connectorConfigs;
+    private final Map<String, TargetState> connectorTargetStates;
     private final Map<ConnectorTaskId, Map<String, String>> taskConfigs;
     private final Set<String> inconsistentConnectors;
 
     public ClusterConfigState(long offset,
                               Map<String, Integer> connectorTaskCounts,
                               Map<String, Map<String, String>> connectorConfigs,
+                              Map<String, TargetState> connectorTargetStates,
                               Map<ConnectorTaskId, Map<String, String>> taskConfigs,
                               Set<String> inconsistentConnectors) {
         this.offset = offset;
         this.connectorTaskCounts = connectorTaskCounts;
         this.connectorConfigs = connectorConfigs;
+        this.connectorTargetStates = connectorTargetStates;
         this.taskConfigs = taskConfigs;
         this.inconsistentConnectors = inconsistentConnectors;
     }
@@ -58,6 +68,15 @@ public class ClusterConfigState {
      */
     public long offset() {
         return offset;
+    }
+
+    /**
+     * Check whether a connect has configuration for a connector.
+     * @param connector name of the connector
+     * @return true if this state contains configuration for the connector, false otherwise
+     */
+    public boolean contains(String connector) {
+        return connectorConfigs.containsKey(connector);
     }
 
     /**
@@ -77,12 +96,35 @@ public class ClusterConfigState {
     }
 
     /**
+     * Get the target state of the connector
+     * @param connector name of the connector
+     * @return the target state
+     */
+    public TargetState targetState(String connector) {
+        return connectorTargetStates.get(connector);
+    }
+
+    /**
      * Get the configuration for a task.
      * @param task id of the task
      * @return a map containing configuration parameters
      */
     public Map<String, String> taskConfig(ConnectorTaskId task) {
         return taskConfigs.get(task);
+    }
+
+    /**
+     * Get all task configs for a connector.
+     * @param connector name of the connector
+     * @return a map from the task id to its configuration
+     */
+    public Map<ConnectorTaskId, Map<String, String>> allTaskConfigs(String connector) {
+        Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
+        for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : this.taskConfigs.entrySet()) {
+            if (taskConfigEntry.getKey().connector().equals(connector))
+                taskConfigs.put(taskConfigEntry.getKey(), taskConfigEntry.getValue());
+        }
+        return taskConfigs;
     }
 
     /**

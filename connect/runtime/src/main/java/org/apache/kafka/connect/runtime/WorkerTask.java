@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Handles processing for an individual task. This interface only provides the basic methods
@@ -39,15 +40,19 @@ abstract class WorkerTask implements Runnable {
     private final AtomicBoolean running;
     private final AtomicBoolean cancelled;
     private final CountDownLatch shutdownLatch;
-    private final TaskStatus.Listener lifecycleListener;
+    private final TaskStatus.Listener statusListener;
+    private final AtomicReference<TargetState> targetState;
 
-    public WorkerTask(ConnectorTaskId id, TaskStatus.Listener lifecycleListener) {
+    public WorkerTask(ConnectorTaskId id,
+                      TaskStatus.Listener statusListener,
+                      TargetState initialState) {
         this.id = id;
         this.stopping = new AtomicBoolean(false);
         this.running = new AtomicBoolean(false);
         this.cancelled = new AtomicBoolean(false);
         this.shutdownLatch = new CountDownLatch(1);
-        this.lifecycleListener = lifecycleListener;
+        this.statusListener = statusListener;
+        this.targetState = new AtomicReference<>(initialState);
     }
 
     public ConnectorTaskId id() {
@@ -122,7 +127,11 @@ abstract class WorkerTask implements Runnable {
             if (stopping.get())
                 return;
 
-            lifecycleListener.onStartup(id);
+            if (targetState.get() == TargetState.PAUSED)
+                statusListener.onPause(id);
+            else
+                statusListener.onStartup(id);
+
             execute();
         } catch (Throwable t) {
             log.error("Task {} threw an uncaught and unrecoverable exception", id, t);
@@ -138,16 +147,31 @@ abstract class WorkerTask implements Runnable {
         try {
             doRun();
             if (!cancelled.get())
-                lifecycleListener.onShutdown(id);
+                statusListener.onShutdown(id);
         } catch (Throwable t) {
             if (!cancelled.get())
-                lifecycleListener.onFailure(id, t);
+                statusListener.onFailure(id, t);
 
             if (t instanceof Error)
                 throw t;
         } finally {
             running.set(false);
             shutdownLatch.countDown();
+        }
+    }
+
+    public boolean isPaused() {
+        return this.targetState.get() == TargetState.PAUSED;
+    }
+
+    public void transitionTo(TargetState state) {
+        TargetState oldState = this.targetState.getAndSet(state);
+        if (state != oldState && running.get()) {
+            // FIXME: this is racy
+            if (state == TargetState.PAUSED)
+                statusListener.onPause(id);
+            else if (state == TargetState.STARTED)
+                statusListener.onResume(id);
         }
     }
 

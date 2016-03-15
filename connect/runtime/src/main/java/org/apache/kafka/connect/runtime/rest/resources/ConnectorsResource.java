@@ -149,6 +149,18 @@ public class ConnectorsResource {
         completeOrForwardRequest(cb, "/connectors/" + connector + "/restart", "POST", null, forward);
     }
 
+    @POST
+    @Path("/{connector}/pause")
+    public void pauseConnector(@PathParam("connector") String connector) {
+        herder.pauseConnector(connector);
+    }
+
+    @POST
+    @Path("/{connector}/resume")
+    public void resumeConnector(@PathParam("connector") String connector) {
+        herder.resumeConnector(connector);
+    }
+
     @GET
     @Path("/{connector}/tasks")
     public List<TaskInfo> getTaskConfigs(final @PathParam("connector") String connector,
