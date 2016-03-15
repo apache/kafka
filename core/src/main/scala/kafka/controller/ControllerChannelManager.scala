@@ -16,24 +16,25 @@
 */
 package kafka.controller
 
-import kafka.api.{LeaderAndIsr, KAFKA_0_9_0, PartitionStateInfo}
-import kafka.utils._
-import org.apache.kafka.clients.{ClientResponse, ClientRequest, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.{BrokerEndPoint, TopicPartition, Node}
-import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, Selector, NetworkReceive, Mode}
-import org.apache.kafka.common.protocol.{SecurityProtocol, ApiKeys}
-import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.Time
-import collection.mutable.HashMap
+import java.net.SocketTimeoutException
+import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
+
+import kafka.api._
 import kafka.cluster.Broker
-import java.net.{SocketTimeoutException}
-import java.util.concurrent.{LinkedBlockingQueue, BlockingQueue}
-import kafka.server.KafkaConfig
-import collection.mutable
 import kafka.common.{KafkaException, TopicAndPartition}
-import collection.Set
-import collection.JavaConverters._
+import kafka.server.KafkaConfig
+import kafka.utils._
+import org.apache.kafka.clients.{ClientRequest, ClientResponse, ManualMetadataUpdater, NetworkClient}
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.requests.{UpdateMetadataRequest, _}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{BrokerEndPoint, Node, TopicPartition}
+
+import scala.collection.JavaConverters._
+import scala.collection.{Set, mutable}
+import scala.collection.mutable.HashMap
 
 class ControllerChannelManager(controllerContext: ControllerContext, config: KafkaConfig, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None) extends Logging {
   protected val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
@@ -380,7 +381,9 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
           topicPartition -> partitionState
         }
 
-        val version = if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) (1: Short) else (0: Short)
+        val version = if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV0) 2: Short
+                      else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1: Short
+                      else 0: Short
 
         val updateMetadataRequest =
           if (version == 0) {
@@ -395,9 +398,9 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
               val endPoints = broker.endPoints.map { case (securityProtocol, endPoint) =>
                 securityProtocol -> new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port)
               }
-              new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava)
+              new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
             }
-            new UpdateMetadataRequest(controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava)
+            new UpdateMetadataRequest(version, controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava)
           }
 
         controller.sendRequest(broker, ApiKeys.UPDATE_METADATA_KEY, Some(version), updateMetadataRequest, null)
