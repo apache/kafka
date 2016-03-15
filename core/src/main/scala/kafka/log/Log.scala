@@ -328,11 +328,11 @@ class Log(val dir: File,
     try {
       // they are valid, insert them in the log
       lock synchronized {
-        appendInfo.firstOffset = nextOffsetMetadata.messageOffset
 
         if (assignOffsets) {
           // assign offsets to the message set
           val offset = new LongRef(nextOffsetMetadata.messageOffset)
+          appendInfo.firstOffset = offset.value
           val now = time.milliseconds
           val (validatedMessages, messageSizesMaybeChanged) = try {
             validMessages.validateMessagesAndAssignOffsets(offset,

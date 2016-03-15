@@ -62,6 +62,7 @@ import static org.junit.Assert.fail;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(KafkaConfigStorage.class)
 @PowerMockIgnore("javax.management.*")
+@SuppressWarnings("unchecked")
 public class KafkaConfigStorageTest {
     private static final String TOPIC = "connect-configs";
     private static final Map<String, String> DEFAULT_CONFIG_STORAGE_PROPS = new HashMap<>();

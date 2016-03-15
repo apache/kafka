@@ -31,7 +31,7 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
 
 <ol>
     <li> Update server.properties file on all brokers and add the following property: inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2 or 0.9.0.0).
-         We recommend that users set message.format.version=CURRENT_KAFKA_VERSION as well to avoid a performance regression
+         We recommend that users set log.message.format.version=CURRENT_KAFKA_VERSION as well to avoid a performance regression
          during upgrade. See <a href="#upgrade_10_performance_impact">potential performance impact during upgrade</a> for the details.
     </li>
     <li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
@@ -46,7 +46,7 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
 <h5><a id="upgrade_10_performance_impact" href="#upgrade_10_performance_impact">Potential performance impact during upgrade to 0.10.0.0</a></h5>
 <p>
     The message format in 0.10.0 includes a new timestamp field and uses relative offsets for compressed messages.
-    The on disk message format can be configured through message.format.version in the server.properties file.
+    The on disk message format can be configured through log.message.format.version in the server.properties file.
     The default on-disk message format is 0.10.0. If a consumer client is on a version before 0.10.0.0, it only understands
     message formats before 0.10.0. In this case, the broker is able to convert messages from the 0.10.0 format to an earlier format
     before sending the response to the consumer on an older version. However, the broker can't use zero-copy transfer in this case.

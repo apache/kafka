@@ -365,6 +365,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         return latch;
     }
 
+    @SuppressWarnings("unchecked")
     private void expectSendRecordSyncFailure(Throwable error) throws InterruptedException {
         expectConvertKeyValue(false);
 

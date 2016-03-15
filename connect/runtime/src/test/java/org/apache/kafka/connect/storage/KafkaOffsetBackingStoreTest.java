@@ -59,6 +59,7 @@ import static org.junit.Assert.fail;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(KafkaOffsetBackingStore.class)
 @PowerMockIgnore("javax.management.*")
+@SuppressWarnings("unchecked")
 public class KafkaOffsetBackingStoreTest {
     private static final String TOPIC = "connect-offsets";
     private static final Map<String, String> DEFAULT_PROPS = new HashMap<>();

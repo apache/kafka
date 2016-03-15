@@ -47,9 +47,9 @@ object Defaults {
   val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
   val CompressionType = kafka.server.Defaults.CompressionType
   val PreAllocateEnable = kafka.server.Defaults.LogPreAllocateEnable
-  val MessageFormatVersion = kafka.server.Defaults.MessageFormatVersion
-  val MessageTimestampType = kafka.server.Defaults.MessageTimestampType
-  val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.MessageTimestampDifferenceMaxMs
+  val MessageFormatVersion = kafka.server.Defaults.LogMessageFormatVersion
+  val MessageTimestampType = kafka.server.Defaults.LogMessageTimestampType
+  val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs
 }
 
 case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
@@ -110,9 +110,9 @@ object LogConfig {
   val MinInSyncReplicasProp = "min.insync.replicas"
   val CompressionTypeProp = "compression.type"
   val PreAllocateEnableProp = "preallocate"
-  val MessageFormatVersionProp = KafkaConfig.MessageFormatVersionProp
-  val MessageTimestampTypeProp = KafkaConfig.MessageTimestampTypeProp
-  val MessageTimestampDifferenceMaxMsProp = KafkaConfig.MessageTimestampDifferenceMaxMsProp
+  val MessageFormatVersionProp = "message.format.version"
+  val MessageTimestampTypeProp = "message.timestamp.type"
+  val MessageTimestampDifferenceMaxMsProp = "message.timestamp.difference.max.ms"
 
   val SegmentSizeDoc = "The hard maximum for the size of a segment file in the log"
   val SegmentMsDoc = "The soft maximum on the amount of time before a new log segment is rolled"
