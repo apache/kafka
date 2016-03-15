@@ -492,15 +492,16 @@ class KafkaService(JmxMixin, Service):
         self.logger.info("Controller's ID: %d" % (controller_idx))
         return self.get_node(controller_idx)
 
-    def get_offset_shell(self, topic, partitions, max_wait_ms, offsets, time):
+    def get_offset_shell(self, topic, partitions, max_wait_ms, offsets, time, use_old_producer):
         node = self.nodes[0]
 
         cmd = "/opt/%s/bin/" % kafka_dir(node)
         cmd += "kafka-run-class.sh kafka.tools.GetOffsetShell"
         cmd += " --topic %s --broker-list %s --max-wait-ms %s --offsets %s --time %s" % (topic, self.bootstrap_servers(self.security_protocol), max_wait_ms, offsets, time)
-
         if partitions:
             cmd += '  --partitions %s' % partitions
+        if use_old_producer:
+            cmd += '  --old-producer'
 
         cmd += " 2>> /mnt/get_offset_shell.log | tee -a /mnt/get_offset_shell.log &"
         output = ""
