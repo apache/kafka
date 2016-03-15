@@ -184,8 +184,6 @@ public interface KTable<K, V> {
 
     /**
      * Count number of records of this table by the selected key.
-     * This method uses {@link org.apache.kafka.common.serialization.LongSerializer LongSerializer}
-     * and {@link org.apache.kafka.common.serialization.LongDeserializer LongDeserializer} for serialization of counts
      *
      * @param selector the KeyValue mapper that select the aggregate key
      * @param name the name of the resulted table
@@ -197,23 +195,6 @@ public interface KTable<K, V> {
                                 Serializer<V> valueSerializer,
                                 Deserializer<K1> keyDeserializer,
                                 Deserializer<V> valueDeserializer,
-                                String name);
-
-    /**
-     * Count number of records of this table by the selected key.
-     *
-     * @param selector the KeyValue mapper that select the aggregate key
-     * @param name the name of the resulted table
-     * @param <K1>   the key type of the aggregated table
-     * @return the instance of KTable
-     */
-    <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector,
-                                Serializer<K1> keySerializer,
-                                Serializer<V> valueSerializer,
-                                Serializer<Long> countSerializer,
-                                Deserializer<K1> keyDeserializer,
-                                Deserializer<V> valueDeserializer,
-                                Deserializer<Long> countDeserializer,
                                 String name);
 
 }

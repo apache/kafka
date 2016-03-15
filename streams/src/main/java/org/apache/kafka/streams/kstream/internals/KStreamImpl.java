@@ -93,6 +93,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
 
+    private static final LongSerializer LONG_SERIALIZER = new LongSerializer();
+    private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
 
     public KStreamImpl(KStreamBuilder topology, String name, Set<String> sourceNodes) {
         super(topology, name, sourceNodes);
@@ -503,9 +505,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
                                                                    Serializer<K> keySerializer,
-                                                                   Serializer<Long> aggValueSerializer,
-                                                                   Deserializer<K> keyDeserializer,
-                                                                   Deserializer<Long> aggValueDeserializer) {
+                                                                   Deserializer<K> keyDeserializer) {
         return this.aggregateByKey(
                 new Initializer<Long>() {
                     @Override
@@ -518,29 +518,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                     public Long apply(K aggKey, V value, Long aggregate) {
                         return aggregate + 1L;
                     }
-                }, windows, keySerializer, aggValueSerializer, keyDeserializer, aggValueDeserializer);
+                }, windows, keySerializer, LONG_SERIALIZER, keyDeserializer, LONG_DESERIALIZER);
     }
 
     @Override
     public KTable<K, Long> countByKey(Serializer<K> keySerializer,
                                       Deserializer<K> keyDeserializer,
                                       String name) {
-        return countByKey(
-                keySerializer,
-                new LongSerializer(),
-                keyDeserializer,
-                new LongDeserializer(),
-                name
-        );
-    }
-
-    @Override
-    public KTable<K, Long> countByKey(Serializer<K> keySerializer,
-                                      Serializer<Long> aggValueSerializer,
-                                      Deserializer<K> keyDeserializer,
-                                      Deserializer<Long> aggValueDeserializer,
-                                      String name) {
-
         return this.aggregateByKey(
                 new Initializer<Long>() {
                     @Override
@@ -553,6 +537,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                     public Long apply(K aggKey, V value, Long aggregate) {
                         return aggregate + 1L;
                     }
-                }, keySerializer, aggValueSerializer, keyDeserializer, aggValueDeserializer, name);
+                }, keySerializer, LONG_SERIALIZER, keyDeserializer, LONG_DESERIALIZER, name);
     }
 }

@@ -77,6 +77,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
 
+    private static final LongSerializer LONG_SERIALIZER = new LongSerializer();
+    private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
 
     public final ProcessorSupplier<?, ?> processorSupplier;
 
@@ -307,28 +309,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                        Deserializer<K1> keyDeserializer,
                                        Deserializer<V> valueDeserializer,
                                        String name) {
-
-        return count(
-                selector,
-                keySerializer,
-                valueSerializer,
-                new LongSerializer(),
-                keyDeserializer,
-                valueDeserializer,
-                new LongDeserializer(),
-                name);
-    }
-
-    @Override
-    public <K1> KTable<K1, Long> count(final KeyValueMapper<K, V, K1> selector,
-                                       Serializer<K1> keySerializer,
-                                       Serializer<V> valueSerializer,
-                                       Serializer<Long> countSerializer,
-                                       Deserializer<K1> keyDeserializer,
-                                       Deserializer<V> valueDeserializer,
-                                       Deserializer<Long> countDeserializer,
-                                       String name) {
-
         return this.aggregate(
                 new Initializer<Long>() {
                     @Override
@@ -352,7 +332,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                         return new KeyValue<>(selector.apply(key, value), value);
                     }
                 },
-                keySerializer, valueSerializer, countSerializer, keyDeserializer, valueDeserializer, countDeserializer, name);
+                keySerializer, valueSerializer, LONG_SERIALIZER, keyDeserializer, valueDeserializer, LONG_DESERIALIZER, name);
     }
 
     @Override
