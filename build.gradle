@@ -103,6 +103,12 @@ subprojects {
 
   sourceCompatibility = 1.7
 
+  compileJava {
+    options.encoding = 'UTF-8'
+    // Add unchecked once we drop support for Java 7 as @SuppressWarnings("unchecked") is too buggy in Java 7
+    options.compilerArgs << "-Xlint:deprecation"
+  }
+
   if (JavaVersion.current().isJava8Compatible()) {
     tasks.withType(Javadoc) {
         // disable the crazy super-strict doclint tool in Java 8
@@ -219,6 +225,18 @@ subprojects {
 
   tasks.withType(ScalaCompile) {
     scalaCompileOptions.useAnt = false
+
+    scalaCompileOptions.additionalParameters = [
+      "-deprecation",
+      "-unchecked",
+      "-encoding", "utf8",
+      "-target:jvm-${sourceCompatibility}".toString(),
+      "-Xlog-reflective-calls",
+      "-feature",
+      "-language:postfixOps",
+      "-language:implicitConversions",
+      "-language:existentials"
+    ]
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'

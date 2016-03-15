@@ -370,6 +370,7 @@ public class RequestResponseTest {
         return new LeaderAndIsrResponse(Errors.NONE.code(), responses);
     }
 
+    @SuppressWarnings("deprecation")
     private AbstractRequest createUpdateMetadataRequest(int version) {
         Map<TopicPartition, UpdateMetadataRequest.PartitionState> partitionStates = new HashMap<>();
         List<Integer> isr = Arrays.asList(1, 2);
