@@ -71,6 +71,7 @@ public class ConfigDef {
 
     private final Map<String, ConfigKey> configKeys = new HashMap<>();
     private final List<String> groups = new LinkedList<>();
+    private Set<String> configsWithNoParent;
 
     /**
      * Returns unmodifiable set of properties names defined in this {@linkplain ConfigDef}
@@ -401,28 +402,8 @@ public class ConfigDef {
      * the appropriate type (int, string, etc).
      */
     public Map<String, Object> parse(Map<?, ?> props) {
-        return parse(props, true);
-    }
-
-    /**
-     * Parse and validate configs against this configuration definition. The input is a map of configs. It is expected
-     * that the keys of the map are strings, but the values can either be strings or they may already be of the
-     * appropriate type (int, string, etc). This will work equally well with either java.util.Properties instances or a
-     * programmatically constructed map.
-     *
-     * An {@link ConfigException} is not thrown in case that checkRequired is set to false. This is useful for interactive
-     * configuration validation where values of some required configurations may not be available.
-     *
-     * @param props The configs to parse and validate.
-     * @param checkRequired Whether to throw ConfigException in case that we don't provide a value for a config without
-     * a default value.
-     * @return Partially parsed and validated configs. The key will be the config name and the value will be the value parsed
-     * into the appropriate type (int, string, etc). The values not provided in the configs will not be available in the
-     * parsed map.
-     */
-    public Map<String, Object> parse(Map<?, ?> props, boolean checkRequired) {
         // Check all configurations are defined
-        List<String> undefinedConfigKeys = ensureDependentsDefined();
+        List<String> undefinedConfigKeys = undefinedDependentConfigs();
         if (!undefinedConfigKeys.isEmpty()) {
             String joined = Utils.join(undefinedConfigKeys, ",");
             throw new ConfigException("Some configurations in are referred in the dependents, but not defined: " + joined);
@@ -430,15 +411,13 @@ public class ConfigDef {
         // parse all known keys
         Map<String, Object> values = new HashMap<>();
         for (ConfigKey key : configKeys.values()) {
-            Object value = null;
+            Object value;
             // props map contains setting - assign ConfigKey value
             if (props.containsKey(key.name)) {
                 value = parseType(key.name, props.get(key.name), key.type);
                 // props map doesn't contain setting, the key is required because no default value specified - its an error
             } else if (key.defaultValue == NO_DEFAULT_VALUE) {
-                if (checkRequired) {
-                    throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
-                }
+                throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
             } else {
                 // otherwise assign setting its default value
                 value = key.defaultValue;
@@ -463,7 +442,7 @@ public class ConfigDef {
             configValues.put(name, new ConfigValue(name));
         }
 
-        List<String> undefinedConfigKeys = ensureDependentsDefined();
+        List<String> undefinedConfigKeys = undefinedDependentConfigs();
         for (String undefinedConfigKey: undefinedConfigKeys) {
             ConfigValue undefinedConfigValue = new ConfigValue(undefinedConfigKey);
             undefinedConfigValue.addErrorMessage(undefinedConfigKey + " is referred in the dependents, but not defined.");
@@ -471,14 +450,30 @@ public class ConfigDef {
             configValues.put(undefinedConfigKey, undefinedConfigValue);
         }
 
-        List<String> configsWithNoParent = getConfigsWithNoParent();
+        Map<String, Object> parsed = parseForValidate(props, configValues);
+        return validate(parsed, configValues);
+    }
+
+    // Testing
+    Map<String, Object> parseForValidate(Map<String, String> props, Map<String, ConfigValue> configValues) {
+        Map<String, Object> parsed = new HashMap<>();
+        Set<String> configsWithNoParent = getConfigsWithNoParent();
         for (String name: configsWithNoParent) {
-            validate(name, props, configValues);
+            parseForValidate(name, props, parsed, configValues);
+        }
+        return parsed;
+    }
+
+
+    private List<ConfigValue> validate(Map<String, Object> parsed, Map<String, ConfigValue> configValues) {
+        Set<String> configsWithNoParent = getConfigsWithNoParent();
+        for (String name: configsWithNoParent) {
+            validate(name, parsed, configValues);
         }
         return new LinkedList<>(configValues.values());
     }
 
-    private List<String> ensureDependentsDefined() {
+    private List<String> undefinedDependentConfigs() {
         Set<String> undefinedConfigKeys = new HashSet<>();
         for (String configName: configKeys.keySet()) {
             ConfigKey configKey = configKeys.get(configName);
@@ -492,8 +487,10 @@ public class ConfigDef {
         return new LinkedList<>(undefinedConfigKeys);
     }
 
-    private List<String> getConfigsWithNoParent() {
-        Set<String> configs = configKeys.keySet();
+    private Set<String> getConfigsWithNoParent() {
+        if (this.configsWithNoParent != null) {
+            return this.configsWithNoParent;
+        }
         Set<String> configsWithParent = new HashSet<>();
 
         for (ConfigKey configKey: configKeys.values()) {
@@ -501,16 +498,13 @@ public class ConfigDef {
             configsWithParent.addAll(dependents);
         }
 
-        List<String> configsWithNoParent = new LinkedList<>();
-        for (String config: configs) {
-            if (!configsWithParent.contains(config)) {
-                configsWithNoParent.add(config);
-            }
-        }
-        return configsWithNoParent;
+        Set<String> configs = new HashSet<>(configKeys.keySet());
+        configs.removeAll(configsWithParent);
+        this.configsWithNoParent = configs;
+        return configs;
     }
 
-    private void validate(String name, Map<String, String> props, Map<String, ConfigValue> configs) {
+    private void parseForValidate(String name, Map<String, String> props, Map<String, Object> parsed, Map<String, ConfigValue> configs) {
         if (!configKeys.containsKey(name)) {
             return;
         }
@@ -538,11 +532,23 @@ public class ConfigDef {
             }
         }
         config.value(value);
+        parsed.put(name, value);
+        for (String dependent: key.dependents) {
+            parseForValidate(dependent, props, parsed, configs);
+        }
+    }
 
+    private void validate(String name, Map<String, Object> parsed, Map<String, ConfigValue> configs) {
+        if (!configKeys.containsKey(name)) {
+            return;
+        }
+        ConfigKey key = configKeys.get(name);
+        ConfigValue config = configs.get(name);
+        Object value = parsed.get(name);
         List<Object> recommendedValues;
         if (key.recommender != null) {
             try {
-                recommendedValues = key.recommender.validValues(name, props);
+                recommendedValues = key.recommender.validValues(name, parsed);
                 List<Object> originalRecommendedValues = config.recommendedValues();
 
                 if (!originalRecommendedValues.isEmpty()) {
@@ -559,7 +565,7 @@ public class ConfigDef {
                 if (value != null && !recommendedValues.isEmpty() && !recommendedValues.contains(value)) {
                     config.addErrorMessage("Invalid value for configuration " + key.name);
                 }
-                config.visible(key.recommender.visible(name, props));
+                config.visible(key.recommender.visible(name, parsed));
             } catch (ConfigException e) {
                 config.addErrorMessage(e.getMessage());
             }
@@ -567,7 +573,7 @@ public class ConfigDef {
 
         configs.put(name, config);
         for (String dependent: key.dependents) {
-            validate(dependent, props, configs);
+            validate(dependent, parsed, configs);
         }
     }
 
@@ -702,19 +708,19 @@ public class ConfigDef {
         /**
          * The valid values for the configuration given the current configuration values.
          * @param name The name of the configuration
-         * @param props The name of the configuration
+         * @param parsedConfig The parsed configuration values
          * @return The list of valid values. To function properly, the returned objects should have the type
          * defined for the configuration using the recommender.
          */
-        List<Object> validValues(String name, Map<String, String> props);
+        List<Object> validValues(String name, Map<String, Object> parsedConfig);
 
         /**
          * Set the visibility of the configuration given the current configuration values.
          * @param name The name of the configuration
-         * @param props The name of the configuration
+         * @param parsedConfig The parsed configuration values
          * @return The visibility of the configuration
          */
-        boolean visible(String name, Map<String, String> props);
+        boolean visible(String name, Map<String, Object> parsedConfig);
     }
 
     /**

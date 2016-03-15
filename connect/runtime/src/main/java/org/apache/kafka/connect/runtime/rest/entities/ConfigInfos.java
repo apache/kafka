@@ -83,4 +83,20 @@ public class ConfigInfos {
     public int hashCode() {
         return Objects.hash(name, errorCount, groups, configs);
     }
+
+    @Override
+    public String toString() {
+        StringBuffer sb = new StringBuffer();
+        sb.append("[")
+            .append(name)
+            .append(",")
+            .append(errorCount)
+            .append(",")
+            .append(groups)
+            .append(",")
+            .append(configs)
+            .append("]");
+        return sb.toString();
+    }
+
 }

@@ -133,15 +133,14 @@ public abstract class Connector {
      * the current configuration values.
      */
     public Config validate(Map<String, String> connectorConfigs) {
-        ConfigDef configDef = defineConfig();
-        List<String> groups = configDef.groups();
-        List<ConfigValue> configValues =  configDef.validate(connectorConfigs);
-        return new Config(configDef, groups, configValues);
+        ConfigDef configDef = config();
+        List<ConfigValue> configValues = configDef.validate(connectorConfigs);
+        return new Config(configValues);
     }
 
     /**
      * Define the configuration for the connector.
      * @return The ConfigDef for this connector.
      */
-    protected abstract ConfigDef defineConfig();
+    public abstract ConfigDef config();
 }

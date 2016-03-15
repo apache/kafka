@@ -60,7 +60,7 @@ public class ConnectorPluginsResourceTest {
         props.put("test.int.config", "10");
     }
 
-    private static final ConfigInfos CONFIG_INFOS;
+    private static ConfigInfos CONFIG_INFOS;
     static {
         List<ConfigInfo> configs = new LinkedList<>();
 
@@ -70,11 +70,11 @@ public class ConnectorPluginsResourceTest {
         configs.add(configInfo);
 
         configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", "", "MEDIUM", "Test configuration for integer type.", null, -1, "NONE", "test.int.config", new LinkedList<String>());
-        configValueInfo = new ConfigValueInfo("test.int.config", "10", Collections.<Object>emptyList(), Collections.<String>emptyList(), true);
+        configValueInfo = new ConfigValueInfo("test.int.config", 10, Collections.<Object>emptyList(), Collections.<String>emptyList(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
 
-        CONFIG_INFOS = new ConfigInfos(WorkerTestConnector.class.getName(), 0, Collections.<String>emptyList(), configs);
+        CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), 0, Collections.<String>emptyList(), configs);
     }
 
     @Mock
@@ -90,26 +90,28 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testValidateConfig() throws Throwable {
-        herder.validateConfigs(EasyMock.eq(WorkerTestConnector.class.getName()), EasyMock.eq(props));
+        herder.validateConfigs(EasyMock.eq(ConnectorPluginsResourceTestConnector.class.getName()), EasyMock.eq(props));
 
         PowerMock.expectLastCall().andAnswer(new IAnswer<ConfigInfos>() {
             @Override
             public ConfigInfos answer() {
-                Config config = new WorkerTestConnector().validate(props);
-                return AbstractHerder.generateResult(WorkerTestConnector.class.getName(), config.configDef().configKeys(), config.configValues(), config.groups());
+                Config config = new ConnectorPluginsResourceTestConnector().validate(props);
+                Connector connector = new ConnectorPluginsResourceTestConnector();
+                ConfigDef configDef = connector.config();
+                return AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), configDef.configKeys(), config.configValues(), configDef.groups());
             }
         });
 
         PowerMock.replayAll();
 
-        ConfigInfos configInfos = connectorPluginsResource.validateConfigs(WorkerTestConnector.class.getName(), props);
+        ConfigInfos configInfos = connectorPluginsResource.validateConfigs(ConnectorPluginsResourceTestConnector.class.getName(), props);
         assertEquals(CONFIG_INFOS, configInfos);
 
         PowerMock.verifyAll();
     }
 
     /* Name here needs to be unique as we are testing the aliasing mechanism */
-    public static class WorkerTestConnector extends Connector {
+    public static class ConnectorPluginsResourceTestConnector extends Connector {
 
         public static final String TEST_STRING_CONFIG = "test.string.config";
         public static final String TEST_INT_CONFIG = "test.int.config";
@@ -140,7 +142,7 @@ public class ConnectorPluginsResourceTest {
         }
 
         @Override
-        public ConfigDef defineConfig() {
+        public ConfigDef config() {
             if (this.configDef != null) {
                 return this.configDef;
             } else {

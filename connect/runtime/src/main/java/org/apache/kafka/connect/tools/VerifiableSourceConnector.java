@@ -64,7 +64,7 @@ public class VerifiableSourceConnector extends SourceConnector {
     }
 
     @Override
-    public ConfigDef defineConfig() {
+    public ConfigDef config() {
         return new ConfigDef();
     }
 }

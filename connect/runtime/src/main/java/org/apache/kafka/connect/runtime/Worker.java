@@ -188,7 +188,7 @@ public class Worker {
         WorkerConnector workerConnector = connectors.get(connName);
         return SinkConnector.class.isAssignableFrom(workerConnector.delegate.getClass());
     }
-    
+
     public Connector getConnector(String connType) {
         Class<? extends Connector> connectorClass = getConnectorClass(connType);
         return instantiateConnector(connectorClass);

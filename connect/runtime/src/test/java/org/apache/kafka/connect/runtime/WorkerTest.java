@@ -158,7 +158,7 @@ public class WorkerTest extends ThreadedTest {
         props.put(ConnectorConfig.TOPICS_CONFIG, "foo,bar");
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
-        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "WorkerTestConnector");
+        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "ConnectorPluginsResourceTestConnector");
 
         connector.initialize(ctx);
         EasyMock.expectLastCall();
@@ -495,12 +495,13 @@ public class WorkerTest extends ThreadedTest {
         }
 
         @Override
-        public ConfigDef defineConfig() {
+        public ConfigDef config() {
             if (this.configDef != null) {
                 return this.configDef;
             }
-            return new ConfigDef()
+            this.configDef = new ConfigDef()
                 .define("configName", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Test configName.");
+            return this.configDef;
         }
     }
 

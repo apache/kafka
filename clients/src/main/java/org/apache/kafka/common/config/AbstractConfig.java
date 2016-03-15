@@ -46,25 +46,26 @@ public class AbstractConfig {
     private final Map<String, Object> values;
 
     @SuppressWarnings("unchecked")
-    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog, boolean checkRequired) {
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
         /* check that all the keys are really strings */
         for (Object key : originals.keySet())
             if (!(key instanceof String))
                 throw new ConfigException(key.toString(), originals.get(key), "Key must be a string.");
         this.originals = (Map<String, ?>) originals;
-        this.values = definition.parse(this.originals, checkRequired);
+        this.values = definition.parse(this.originals);
         this.used = Collections.synchronizedSet(new HashSet<String>());
         if (doLog)
             logAll();
     }
 
-    @SuppressWarnings("unchecked")
-    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
-       this(definition, originals, doLog, true);
-    }
-
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
         this(definition, originals, true);
+    }
+
+    public AbstractConfig(Map<String, Object> parsedConfig) {
+        this.values = parsedConfig;
+        this.originals = new HashMap<>();
+        this.used = Collections.synchronizedSet(new HashSet<String>());
     }
 
     protected Object get(String key) {
@@ -99,7 +100,7 @@ public class AbstractConfig {
         return (List<String>) get(key);
     }
 
-    public boolean getBoolean(String key) {
+    public Boolean getBoolean(String key) {
         return (Boolean) get(key);
     }
 
@@ -130,7 +131,7 @@ public class AbstractConfig {
     /**
      * Get all the original settings, ensuring that all values are of type String.
      * @return the original settings
-     * @throw ClassCastException if any of the values are not strings
+     * @throws ClassCastException if any of the values are not strings
      */
     public Map<String, String> originalsStrings() {
         Map<String, String> copy = new RecordingMap<>();

@@ -174,15 +174,15 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Connector connector = getConnector(connType);
 
         Config config = connector.validate(connectorConfig);
-
-        Map<String, ConfigKey> configKeys = config.configDef().configKeys();
+        ConfigDef configDef = connector.config();
+        Map<String, ConfigKey> configKeys = configDef.configKeys();
         List<ConfigValue> configValues = config.configValues();
 
         Map<String, ConfigKey> resultConfigKeys = new HashMap<>(configKeys);
         resultConfigKeys.putAll(connectorConfigDef.configKeys());
         configValues.addAll(connectorConfigValues);
 
-        List<String> groups = config.groups();
+        List<String> groups = configDef.groups();
 
         return generateResult(connType, resultConfigKeys, configValues, groups);
     }
@@ -230,10 +230,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     private static ConfigValueInfo convertConfigValue(ConfigValue configValue) {
-        LinkedList<String> recommends = new LinkedList<>();
-        for (Object o: configValue.recommendedValues()) {
-            recommends.add(o.toString());
-        }
         return new ConfigValueInfo(configValue.name(), configValue.value(), configValue.recommendedValues(), configValue.errorMessages(), configValue.visible());
     }
 

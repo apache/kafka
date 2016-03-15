@@ -15,22 +15,10 @@ package org.apache.kafka.common.config;
 import java.util.List;
 
 public class Config {
-    private ConfigDef configDef;
-    private List<String> groups;
     private List<ConfigValue> configValues;
 
-    public Config(ConfigDef configDef, List<String> groups, List<ConfigValue> configValues) {
-        this.configDef = configDef;
-        this.groups = groups;
+    public Config(List<ConfigValue> configValues) {
         this.configValues = configValues;
-    }
-
-    public ConfigDef configDef() {
-        return configDef;
-    }
-
-    public List<String> groups() {
-        return groups;
     }
 
     public List<ConfigValue> configValues() {

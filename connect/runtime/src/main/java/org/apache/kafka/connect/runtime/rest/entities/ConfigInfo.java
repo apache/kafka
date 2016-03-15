@@ -58,4 +58,9 @@ public class ConfigInfo {
     public int hashCode() {
         return Objects.hash(configKey, configValue);
     }
+
+    @Override
+    public String toString() {
+        return "[" + configKey.toString() + "," + configValue.toString() + "]";
+    }
 }

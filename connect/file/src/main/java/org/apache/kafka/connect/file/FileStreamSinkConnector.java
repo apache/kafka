@@ -72,7 +72,7 @@ public class FileStreamSinkConnector extends SinkConnector {
     }
 
     @Override
-    public ConfigDef defineConfig() {
+    public ConfigDef config() {
         if (this.configDef != null) {
             return this.configDef;
         } else {

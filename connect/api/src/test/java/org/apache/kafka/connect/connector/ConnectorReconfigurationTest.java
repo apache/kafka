@@ -82,7 +82,7 @@ public class ConnectorReconfigurationTest {
         }
 
         @Override
-        public ConfigDef defineConfig() {
+        public ConfigDef config() {
             return new ConfigDef();
         }
     }

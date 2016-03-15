@@ -171,39 +171,64 @@ public class ConfigDefTest {
     }
 
     @Test
-    public void testParseNoCheckRequired() {
-        ConfigDef def = new ConfigDef()
-            .define("a", Type.INT, Importance.HIGH, "docs")
-            .define("b", Type.INT, Importance.HIGH, "docs");
-
-        Map<String, String> props = new HashMap<>();
-        props.put("a", "1");
-
-        Map<String, Object> parsed = def.parse(props, false);
-        assertEquals(1, (int) parsed.get("a"));
-    }
-
-    @Test(expected = ConfigException.class)
-    public void testCannotParse() {
-        ConfigDef def = new ConfigDef()
-            .define("a", Type.INT, Importance.HIGH, "docs")
-            .define("b", Type.INT, Importance.HIGH, "docs");
-
-        Map<String, String> props = new HashMap<>();
-        props.put("b", "non_integer");
-        def.parse(props, false);
-    }
-
-    @Test
     public void testGroupInference() {
-        List<String> expected = Arrays.asList("group1", "group2");
-        ConfigDef def = new ConfigDef()
+        List<String> expected1 = Arrays.asList("group1", "group2");
+        ConfigDef def1 = new ConfigDef()
             .define("a", Type.INT, Importance.HIGH, "docs", "group1", 1, Width.SHORT, "a")
             .define("b", Type.INT, Importance.HIGH, "docs", "group2", 1, Width.SHORT, "b")
             .define("c", Type.INT, Importance.HIGH, "docs", "group1", 2, Width.SHORT, "c");
 
-        List<String> groups = def.groups();
-        assertEquals(expected, groups);
+        assertEquals(expected1, def1.groups());
+
+        List<String> expected2 = Arrays.asList("group2", "group1");
+        ConfigDef def2 = new ConfigDef()
+            .define("a", Type.INT, Importance.HIGH, "docs", "group2", 1, Width.SHORT, "a")
+            .define("b", Type.INT, Importance.HIGH, "docs", "group2", 2, Width.SHORT, "b")
+            .define("c", Type.INT, Importance.HIGH, "docs", "group1", 2, Width.SHORT, "c");
+
+        assertEquals(expected2, def2.groups());
+    }
+
+    @Test
+    public void testParseForValidate() {
+        Map<String, Object> expectedParsed = new HashMap<>();
+        expectedParsed.put("a", 1);
+        expectedParsed.put("b", null);
+        expectedParsed.put("c", null);
+        expectedParsed.put("d", 10);
+
+        Map<String, ConfigValue> expected = new HashMap<>();
+        String errorMessageB = "Missing required configuration \"b\" which has no default value.";
+        String errorMessageC = "Missing required configuration \"c\" which has no default value.";
+        ConfigValue configA = new ConfigValue("a", 1, Collections.<Object>emptyList(), Collections.<String>emptyList());
+        ConfigValue configB = new ConfigValue("b", null, Collections.<Object>emptyList(), Arrays.asList(errorMessageB, errorMessageB));
+        ConfigValue configC = new ConfigValue("c", null, Collections.<Object>emptyList(), Arrays.asList(errorMessageC));
+        ConfigValue configD = new ConfigValue("d", 10, Collections.<Object>emptyList(), Collections.<String>emptyList());
+        expected.put("a", configA);
+        expected.put("b", configB);
+        expected.put("c", configC);
+        expected.put("d", configD);
+
+        ConfigDef def = new ConfigDef()
+            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
+            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
+            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
+            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false));
+
+        Map<String, String> props = new HashMap<>();
+        props.put("a", "1");
+        props.put("d", "10");
+
+        Map<String, ConfigValue> configValues = new HashMap<>();
+
+        for (String name: def.configKeys().keySet()) {
+            configValues.put(name, new ConfigValue(name));
+        }
+
+        Map<String, Object> parsed = def.parseForValidate(props, configValues);
+
+        assertEquals(expectedParsed, parsed);
+        assertEquals(expected, configValues);
     }
 
     @Test
@@ -303,7 +328,7 @@ public class ConfigDefTest {
         }
 
         @Override
-        public List<Object> validValues(String name, Map<String, String> props) {
+        public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
             List<Object> values = new LinkedList<>();
             if (!hasParent) {
                 values.addAll(Arrays.asList(1, 2, 3));
@@ -314,7 +339,7 @@ public class ConfigDefTest {
         }
 
         @Override
-        public boolean visible(String name, Map<String, String> props) {
+        public boolean visible(String name, Map<String, Object> parsedConfig) {
             return true;
         }
     }
