@@ -31,6 +31,7 @@ import java.util.concurrent.atomic._
 import kafka.api.{TopicMetadata, ProducerRequest}
 import org.apache.kafka.common.utils.Utils
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 class DefaultEventHandler[K,V](config: ProducerConfig,
                                private val partitioner: Partitioner,
                                private val encoder: Encoder[V],
