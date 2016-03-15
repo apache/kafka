@@ -53,7 +53,7 @@ public class KStreamTestDriver {
                              File stateDir,
                              Serializer<?> keySerializer, Deserializer<?> keyDeserializer,
                              Serializer<?> valSerializer, Deserializer<?> valDeserializer) {
-        this.topology = builder.build(null);
+        this.topology = builder.build("X", null);
         this.stateDir = stateDir;
         this.context = new MockProcessorContext(this, stateDir, keySerializer, keyDeserializer, valSerializer, valDeserializer, new MockRecordCollector());
 
@@ -127,7 +127,7 @@ public class KStreamTestDriver {
         public MockRecordCollector() {
             super(null);
         }
-        
+
         @Override
         public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer,
                                 StreamPartitioner<K, V> partitioner) {

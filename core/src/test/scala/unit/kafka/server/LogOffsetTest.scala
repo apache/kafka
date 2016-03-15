@@ -18,21 +18,20 @@
 package kafka.server
 
 import java.io.File
-import kafka.utils._
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.TopicPartition
-import org.junit.Assert._
-import java.util.{Random, Properties}
-import kafka.consumer.SimpleConsumer
-import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
-import kafka.zk.ZooKeeperTestHarness
+import java.util.{Properties, Random}
+
 import kafka.admin.AdminUtils
-import kafka.api.{ApiVersion, PartitionOffsetRequestInfo, FetchRequestBuilder, OffsetRequest}
-import kafka.utils.TestUtils._
+import kafka.api.{FetchRequestBuilder, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.common.TopicAndPartition
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
+import kafka.consumer.SimpleConsumer
+import kafka.message.{ByteBufferMessageSet, Message, NoCompressionCodec}
+import kafka.utils.TestUtils._
+import kafka.utils._
+import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.Errors
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
 class LogOffsetTest extends ZooKeeperTestHarness {
   val random = new Random() 
@@ -206,7 +205,6 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     props.put("log.retention.check.interval.ms", (5*1000*60).toString)
     props.put("log.segment.bytes", logSize.toString)
     props.put("zookeeper.connect", zkConnect.toString)
-    props.put("message.format.version", "0.10.0")
     props
   }
 

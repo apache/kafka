@@ -85,7 +85,7 @@ public class TopologyBuilder {
             this.name = name;
         }
 
-        public abstract ProcessorNode build();
+        public abstract ProcessorNode build(String jobId);
     }
 
     private static class ProcessorNodeFactory extends NodeFactory {
@@ -105,7 +105,7 @@ public class TopologyBuilder {
 
         @SuppressWarnings("unchecked")
         @Override
-        public ProcessorNode build() {
+        public ProcessorNode build(String jobId) {
             return new ProcessorNode(name, supplier.get(), stateStoreNames);
         }
     }
@@ -124,12 +124,12 @@ public class TopologyBuilder {
 
         @SuppressWarnings("unchecked")
         @Override
-        public ProcessorNode build() {
+        public ProcessorNode build(String jobId) {
             return new SourceNode(name, keyDeserializer, valDeserializer);
         }
     }
 
-    private static class SinkNodeFactory extends NodeFactory {
+    private class SinkNodeFactory extends NodeFactory {
         public final String[] parents;
         public final String topic;
         private Serializer keySerializer;
@@ -147,8 +147,13 @@ public class TopologyBuilder {
 
         @SuppressWarnings("unchecked")
         @Override
-        public ProcessorNode build() {
-            return new SinkNode(name, topic, keySerializer, valSerializer, partitioner);
+        public ProcessorNode build(String jobId) {
+            if (internalTopicNames.contains(topic)) {
+                // prefix the job id to the internal topic name
+                return new SinkNode(name, jobId + "-" + topic, keySerializer, valSerializer, partitioner);
+            } else {
+                return new SinkNode(name, topic, keySerializer, valSerializer, partitioner);
+            }
         }
     }
 
@@ -491,7 +496,7 @@ public class TopologyBuilder {
      *
      * @return groups of topic names
      */
-    public Map<Integer, TopicsInfo> topicGroups() {
+    public Map<Integer, TopicsInfo> topicGroups(String jobId) {
         Map<Integer, TopicsInfo> topicGroups = new HashMap<>();
 
         if (nodeGroups == null)
@@ -506,27 +511,35 @@ public class TopologyBuilder {
                 // if the node is a source node, add to the source topics
                 String[] topics = nodeToSourceTopics.get(node);
                 if (topics != null) {
-                    sourceTopics.addAll(Arrays.asList(topics));
-
                     // if some of the topics are internal, add them to the internal topics
                     for (String topic : topics) {
-                        if (this.internalTopicNames.contains(topic))
-                            internalSourceTopics.add(topic);
+                        if (this.internalTopicNames.contains(topic)) {
+                            // prefix the job id to the internal topic name
+                            String internalTopic = jobId + "-" + topic;
+                            internalSourceTopics.add(internalTopic);
+                            sourceTopics.add(internalTopic);
+                        } else {
+                            sourceTopics.add(topic);
+                        }
                     }
                 }
 
                 // if the node is a sink node, add to the sink topics
                 String topic = nodeToSinkTopic.get(node);
-                if (topic != null)
-                    sinkTopics.add(topic);
+                if (topic != null) {
+                    if (internalTopicNames.contains(topic)) {
+                        // prefix the job id to the change log topic name
+                        sinkTopics.add(jobId + "-" + topic);
+                    } else {
+                        sinkTopics.add(topic);
+                    }
+                }
 
                 // if the node is connected to a state, add to the state topics
                 for (StateStoreFactory stateFactory : stateFactories.values()) {
-
-                    // we store the changelog topic here without the job id prefix
-                    // since it is within a single job and is only used for
                     if (stateFactory.isInternal && stateFactory.users.contains(node)) {
-                        stateChangelogTopics.add(stateFactory.supplier.name() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX);
+                        // prefix the job id to the change log topic name
+                        stateChangelogTopics.add(jobId + "-" + stateFactory.supplier.name() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX);
                     }
                 }
             }
@@ -586,7 +599,7 @@ public class TopologyBuilder {
 
         return nodeGroups;
     }
-    
+
     /**
      * Asserts that the streams of the specified source nodes must be copartitioned.
      *
@@ -624,7 +637,7 @@ public class TopologyBuilder {
      *
      * @see org.apache.kafka.streams.KafkaStreams#KafkaStreams(TopologyBuilder, org.apache.kafka.streams.StreamsConfig)
      */
-    public ProcessorTopology build(Integer topicGroupId) {
+    public ProcessorTopology build(String jobId, Integer topicGroupId) {
         Set<String> nodeGroup;
         if (topicGroupId != null) {
             nodeGroup = nodeGroups().get(topicGroupId);
@@ -632,11 +645,11 @@ public class TopologyBuilder {
             // when nodeGroup is null, we build the full topology. this is used in some tests.
             nodeGroup = null;
         }
-        return build(nodeGroup);
+        return build(jobId, nodeGroup);
     }
 
     @SuppressWarnings("unchecked")
-    private ProcessorTopology build(Set<String> nodeGroup) {
+    private ProcessorTopology build(String jobId, Set<String> nodeGroup) {
         List<ProcessorNode> processorNodes = new ArrayList<>(nodeFactories.size());
         Map<String, ProcessorNode> processorMap = new HashMap<>();
         Map<String, SourceNode> topicSourceMap = new HashMap<>();
@@ -645,7 +658,7 @@ public class TopologyBuilder {
         // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
         for (NodeFactory factory : nodeFactories.values()) {
             if (nodeGroup == null || nodeGroup.contains(factory.name)) {
-                ProcessorNode node = factory.build();
+                ProcessorNode node = factory.build(jobId);
                 processorNodes.add(node);
                 processorMap.put(node.name(), node);
 
@@ -660,7 +673,12 @@ public class TopologyBuilder {
                     }
                 } else if (factory instanceof SourceNodeFactory) {
                     for (String topic : ((SourceNodeFactory) factory).topics) {
-                        topicSourceMap.put(topic, (SourceNode) node);
+                        if (internalTopicNames.contains(topic)) {
+                            // prefix the job id to the internal topic name
+                            topicSourceMap.put(jobId + "-" + topic, (SourceNode) node);
+                        } else {
+                            topicSourceMap.put(topic, (SourceNode) node);
+                        }
                     }
                 } else if (factory instanceof SinkNodeFactory) {
                     for (String parent : ((SinkNodeFactory) factory).parents) {
@@ -679,7 +697,15 @@ public class TopologyBuilder {
      * Get the names of topics that are to be consumed by the source nodes created by this builder.
      * @return the unmodifiable set of topic names used by source nodes, which changes as new sources are added; never null
      */
-    public Set<String> sourceTopics() {
-        return Collections.unmodifiableSet(sourceTopicNames);
+    public Set<String> sourceTopics(String jobId) {
+        Set<String> topics = new HashSet<>();
+        for (String topic : sourceTopicNames) {
+            if (internalTopicNames.contains(topic)) {
+                topics.add(jobId + "-" + topic);
+            } else {
+                topics.add(topic);
+            }
+        }
+        return Collections.unmodifiableSet(topics);
     }
 }

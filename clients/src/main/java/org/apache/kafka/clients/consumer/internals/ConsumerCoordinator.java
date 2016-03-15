@@ -68,7 +68,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
     private final AutoCommitTask autoCommitTask;
-    private final ConsumerInterceptors interceptors;
+    private final ConsumerInterceptors<?, ?> interceptors;
 
     /**
      * Initialize the coordination manager.
@@ -87,7 +87,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                OffsetCommitCallback defaultOffsetCommitCallback,
                                boolean autoCommitEnabled,
                                long autoCommitIntervalMs,
-                               ConsumerInterceptors interceptors) {
+                               ConsumerInterceptors<?, ?> interceptors) {
         super(client,
                 groupId,
                 sessionTimeoutMs,

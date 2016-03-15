@@ -535,6 +535,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         return capturedRecords;
     }
 
+    @SuppressWarnings("unchecked")
     private IExpectationSetters<Object> expectOnePoll() {
         // Currently the SinkTask's put() method will not be invoked unless we provide some data, so instead of
         // returning empty data, we return one record. The expectation is that the data will be ignored by the

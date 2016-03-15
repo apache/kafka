@@ -171,7 +171,7 @@ public class StreamThreadTest {
         StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, jobId, clientId, processId, new Metrics(), new SystemTime()) {
             @Override
             protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
-                ProcessorTopology topology = builder.build(id.topicGroupId);
+                ProcessorTopology topology = builder.build("X", id.topicGroupId);
                 return new TestStreamTask(id, jobId, partitionsForTask, topology, consumer, producer, mockRestoreConsumer, config);
             }
         };
@@ -298,7 +298,7 @@ public class StreamThreadTest {
 
                 @Override
                 protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
-                    ProcessorTopology topology = builder.build(id.topicGroupId);
+                    ProcessorTopology topology = builder.build("X", id.topicGroupId);
                     return new TestStreamTask(id, jobId, partitionsForTask, topology, consumer, producer, mockRestoreConsumer, config);
                 }
             };
@@ -420,7 +420,7 @@ public class StreamThreadTest {
 
                 @Override
                 protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
-                    ProcessorTopology topology = builder.build(id.topicGroupId);
+                    ProcessorTopology topology = builder.build("X", id.topicGroupId);
                     return new TestStreamTask(id, jobId, partitionsForTask, topology, consumer, producer, mockRestoreConsumer, config);
                 }
             };

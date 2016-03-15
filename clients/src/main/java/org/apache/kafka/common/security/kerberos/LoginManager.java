@@ -31,7 +31,7 @@ import org.apache.kafka.common.security.JaasUtils;
 
 public class LoginManager {
 
-    private static final EnumMap<LoginType, LoginManager> CACHED_INSTANCES = new EnumMap(LoginType.class);
+    private static final EnumMap<LoginType, LoginManager> CACHED_INSTANCES = new EnumMap<>(LoginType.class);
 
     private final Login login;
     private final String serviceName;

@@ -117,7 +117,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         streamThread = (StreamThread) o;
         streamThread.partitionAssignor(this);
 
-        this.topicGroups = streamThread.builder.topicGroups();
+        this.topicGroups = streamThread.builder.topicGroups(streamThread.jobId);
 
         if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
             internalTopicManager = new InternalTopicManager(
@@ -350,7 +350,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             topicToTaskIds.putAll(internalSourceTopicToTaskIds);
 
             for (Map.Entry<String, Set<TaskId>> entry : topicToTaskIds.entrySet()) {
-                String topic = streamThread.jobId + "-" + entry.getKey();
+                String topic = entry.getKey();
 
                 // the expected number of partitions is the max value of TaskId.partition + 1
                 int numPartitions = 0;
@@ -445,7 +445,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     /* For Test Only */
     public Set<TaskId> tasksForState(String stateName) {
-        return stateChangelogTopicToTaskIds.get(stateName + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX);
+        return stateChangelogTopicToTaskIds.get(ProcessorStateManager.storeChangelogTopic(streamThread.jobId, stateName));
     }
 
     public Set<TaskId> tasksForPartition(TopicPartition partition) {
