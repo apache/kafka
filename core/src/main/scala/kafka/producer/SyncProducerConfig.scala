@@ -20,6 +20,8 @@ package kafka.producer
 import java.util.Properties
 import kafka.utils.VerifiableProperties
 
+@deprecated("This class has been deprecated and will be removed in a future release." +
+            "Please use org.apache.kafka.clients.producer.ProducerConfig instead.", "0.10.0.0")
 class SyncProducerConfig private (val props: VerifiableProperties) extends SyncProducerConfigShared {
   def this(originalProps: Properties) {
     this(new VerifiableProperties(originalProps))
@@ -33,6 +35,8 @@ class SyncProducerConfig private (val props: VerifiableProperties) extends SyncP
   val port = props.getInt("port")
 }
 
+@deprecated("This trait has been deprecated and will be removed in a future release." +
+            "Please use org.apache.kafka.clients.producer.ProducerConfig instead.", "0.10.0.0")
 trait SyncProducerConfigShared {
   val props: VerifiableProperties
   
@@ -59,6 +63,8 @@ trait SyncProducerConfigShared {
                                              (1, Integer.MAX_VALUE))
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release." +
+            "Please use org.apache.kafka.clients.producer.ProducerConfig instead.", "0.10.0.0")
 object SyncProducerConfig {
   val DefaultClientId = ""
   val DefaultRequiredAcks : Short = 0

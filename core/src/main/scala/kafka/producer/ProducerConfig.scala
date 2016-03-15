@@ -23,6 +23,8 @@ import kafka.utils.{CoreUtils, VerifiableProperties}
 import kafka.message.NoCompressionCodec
 import kafka.common.{InvalidConfigException, Config}
 
+@deprecated("This object has been deprecated and will be removed in a future release." +
+            "Please use org.apache.kafka.clients.producer.ProducerConfig instead.", "0.10.0.0")
 object ProducerConfig extends Config {
   def validate(config: ProducerConfig) {
     validateClientId(config.clientId)
@@ -48,6 +50,8 @@ object ProducerConfig extends Config {
   }
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release." +
+            "Please use org.apache.kafka.clients.producer.ProducerConfig instead.", "0.10.0.0")
 class ProducerConfig private (val props: VerifiableProperties)
         extends AsyncProducerConfig with SyncProducerConfigShared {
   import ProducerConfig._
