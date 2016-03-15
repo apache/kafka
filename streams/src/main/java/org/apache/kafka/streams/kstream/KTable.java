@@ -193,10 +193,8 @@ public interface KTable<K, V> {
     <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector,
                                 Serializer<K1> keySerializer,
                                 Serializer<V> valueSerializer,
-                                Serializer<Long> aggValueSerializer,
                                 Deserializer<K1> keyDeserializer,
                                 Deserializer<V> valueDeserializer,
-                                Deserializer<Long> aggValueDeserializer,
                                 String name);
 
 }
