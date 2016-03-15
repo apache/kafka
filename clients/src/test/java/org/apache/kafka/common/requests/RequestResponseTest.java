@@ -295,6 +295,7 @@ public class RequestResponseTest {
     private AbstractRequest createOffsetCommitRequest() {
         Map<TopicPartition, OffsetCommitRequest.PartitionData> commitData = new HashMap<>();
         commitData.put(new TopicPartition("test", 0), new OffsetCommitRequest.PartitionData(100, ""));
+        commitData.put(new TopicPartition("test", 1), new OffsetCommitRequest.PartitionData(200, null));
         return new OffsetCommitRequest("group1", 100, "consumer1", 1000000, commitData);
     }
 
@@ -311,6 +312,7 @@ public class RequestResponseTest {
     private AbstractRequestResponse createOffsetFetchResponse() {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(100L, "", Errors.NONE.code()));
+        responseData.put(new TopicPartition("test", 1), new OffsetFetchResponse.PartitionData(100L, null, Errors.NONE.code()));
         return new OffsetFetchResponse(responseData);
     }
 
