@@ -320,7 +320,7 @@ The compaction is done in the background by periodically recopying log segments.
 
 Log compaction guarantees the following:
 <ol>
-<li>Any consumer that stays caught-up to within the head of the log will see every message that is written; these messages will have sequential offsets.
+<li>Any consumer that stays caught-up to within the head of the log will see every message that is written; these messages will have sequential offsets. The topic's <code>min.compaction.lag.ms</code> can be used to guarantee the minimum length of time must pass after a message is written before it could be compacted. I.e. it provides a lower bound on how long each message will remain in the (uncompacted) head.
 <li>Ordering of messages is always maintained.  Compaction will never re-order messages, just remove some.
 <li>The offset for a message never changes.  It is the permanent identifier for a position in the log.
 <li>Any read progressing from offset 0 will see at least the final state of all records in the order they were written. All delete markers for deleted records will be seen provided the reader reaches the head of the log in a time period less than the topic's delete.retention.ms setting (the default is 24 hours). This is important as delete marker removal happens concurrently with read (and thus it is important that we not remove any delete marker prior to the reader seeing it).
@@ -345,13 +345,14 @@ This will start the pool of cleaner threads. To enable log cleaning on a particu
   <pre>  log.cleanup.policy=compact</pre>
 This can be done either at topic creation time or using the alter topic command.
 <p>
+The log cleaner can be configured retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag.
+  <pre>  log.cleaner.min.compaction.lag.ms</pre>
+
+This can be used to prevent messages newer than a minimum message age from being subject to compaction. If not set, all log segments are eligible for compaction except for the last segment, i.e. the one currently being written to. The active segment will not be compacted even if all of its messages are older than the minimum compaction time lag.
+</p>
+<p>
 Further cleaner configurations are described <a href="/documentation.html#brokerconfigs">here</a>.
 
-<h4><a id="design_compactionlimitations" href="#design_compactionlimitations">Log Compaction Limitations</a></h4>
-
-<ol>
-  <li>You cannot configure yet how much log is retained without compaction (the "head" of the log).  Currently all segments are eligible except for the last segment, i.e. the one currently being written to.</li>
-</ol>
 <h3><a id="design_quotas" href="#design_quotas">4.9 Quotas</a></h3>
 <p>
     Starting in 0.9, the Kafka cluster has the ability to enforce quotas on produce and fetch requests. Quotas are basically byte-rate thresholds defined per client-id. A client-id logically identifies an application making a request. Hence a single client-id can span multiple producer and consumer instances and the quota will apply for all of them as a single entity i.e. if client-id="test-client" has a produce quota of 10MB/sec, this is shared across all instances with that same id.
