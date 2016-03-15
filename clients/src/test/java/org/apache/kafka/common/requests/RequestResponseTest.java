@@ -74,8 +74,8 @@ public class RequestResponseTest {
                 createMetadataRequest(),
                 createMetadataRequest().getErrorResponse(0, new UnknownServerException()),
                 createMetadataResponse(),
-                createOffsetCommitRequest(),
-                createOffsetCommitRequest().getErrorResponse(0, new UnknownServerException()),
+                createOffsetCommitRequest(2),
+                createOffsetCommitRequest(2).getErrorResponse(2, new UnknownServerException()),
                 createOffsetCommitResponse(),
                 createOffsetFetchRequest(),
                 createOffsetFetchRequest().getErrorResponse(0, new UnknownServerException()),
@@ -98,6 +98,10 @@ public class RequestResponseTest {
         for (AbstractRequestResponse req : requestResponseList)
             checkSerialization(req, null);
 
+        checkSerialization(createOffsetCommitRequest(0), 0);
+        checkSerialization(createOffsetCommitRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
+        checkSerialization(createOffsetCommitRequest(1), 1);
+        checkSerialization(createOffsetCommitRequest(1).getErrorResponse(1, new UnknownServerException()), 1);
         checkSerialization(createUpdateMetadataRequest(0, null), 0);
         checkSerialization(createUpdateMetadataRequest(0, null).getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createUpdateMetadataRequest(1, null), 1);
@@ -292,11 +296,18 @@ public class RequestResponseTest {
         return new MetadataResponse(Arrays.asList(node), allTopicMetadata);
     }
 
-    private AbstractRequest createOffsetCommitRequest() {
+    private AbstractRequest createOffsetCommitRequest(int version) {
         Map<TopicPartition, OffsetCommitRequest.PartitionData> commitData = new HashMap<>();
         commitData.put(new TopicPartition("test", 0), new OffsetCommitRequest.PartitionData(100, ""));
         commitData.put(new TopicPartition("test", 1), new OffsetCommitRequest.PartitionData(200, null));
-        return new OffsetCommitRequest("group1", 100, "consumer1", 1000000, commitData);
+        if (version == 0) {
+            return new OffsetCommitRequest("group1", commitData);
+        } else if (version == 1) {
+            return new OffsetCommitRequest("group1", 100, "consumer1", commitData);
+        } else if (version == 2){
+            return new OffsetCommitRequest("group1", 100, "consumer1", 1000000, commitData);
+        }
+        throw new IllegalArgumentException("Unknown offset commit request version " + version);
     }
 
     private AbstractRequestResponse createOffsetCommitResponse() {
