@@ -60,7 +60,7 @@ public class ConnectorPluginsResourceTest {
         props.put("test.int.config", "10");
     }
 
-    private static ConfigInfos CONFIG_INFOS;
+    private static final ConfigInfos CONFIG_INFOS;
     static {
         List<ConfigInfo> configs = new LinkedList<>();
 
