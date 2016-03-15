@@ -60,7 +60,7 @@ class MetadataCacheTest {
     }
 
     val brokers = (0 to 2).map { brokerId =>
-      new Broker(brokerId, securityProtocolToEndPoint(brokerId).asJava)
+      new Broker(brokerId, securityProtocolToEndPoint(brokerId).asJava, "rack1")
     }.toSet
 
     val partitionStates = Map(
@@ -108,7 +108,7 @@ class MetadataCacheTest {
     val zkVersion = 3
     val controllerId = 2
     val controllerEpoch = 1
-    val brokers = Set(new Broker(0, Map(SecurityProtocol.PLAINTEXT -> new EndPoint("foo", 9092)).asJava))
+    val brokers = Set(new Broker(0, Map(SecurityProtocol.PLAINTEXT -> new EndPoint("foo", 9092)).asJava, null))
 
     val leader = 1
     val leaderEpoch = 1
@@ -144,7 +144,7 @@ class MetadataCacheTest {
     val zkVersion = 3
     val controllerId = 2
     val controllerEpoch = 1
-    val brokers = Set(new Broker(0, Map(SecurityProtocol.PLAINTEXT -> new EndPoint("foo", 9092)).asJava))
+    val brokers = Set(new Broker(0, Map(SecurityProtocol.PLAINTEXT -> new EndPoint("foo", 9092)).asJava, null))
 
     // replica 1 is not available
     val leader = 0
@@ -183,7 +183,7 @@ class MetadataCacheTest {
     val zkVersion = 3
     val controllerId = 2
     val controllerEpoch = 1
-    val brokers = Set(new Broker(0, Map(SecurityProtocol.PLAINTEXT -> new EndPoint("foo", 9092)).asJava))
+    val brokers = Set(new Broker(0, Map(SecurityProtocol.PLAINTEXT -> new EndPoint("foo", 9092)).asJava, "rack1"))
 
     // replica 1 is not available
     val leader = 0
@@ -217,7 +217,7 @@ class MetadataCacheTest {
   def getTopicMetadataWithNonSupportedSecurityProtocol() {
     val topic = "topic"
     val cache = new MetadataCache(1)
-    val brokers = Set(new Broker(0, Map(SecurityProtocol.PLAINTEXT -> new EndPoint("foo", 9092)).asJava))
+    val brokers = Set(new Broker(0, Map(SecurityProtocol.PLAINTEXT -> new EndPoint("foo", 9092)).asJava, ""))
     val controllerEpoch = 1
     val leader = 0
     val leaderEpoch = 0
