@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serialization;
-import org.apache.kafka.common.serialization.Serializations;
+import org.apache.kafka.common.serialization.SerDe;
+import org.apache.kafka.common.serialization.SerDes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -42,8 +42,8 @@ public class KStreamKStreamJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    final private Serialization<Integer> keySerde = new Serializations.IntegerSerialization();
-    final private Serialization<String> valueSerde = new Serializations.StringSerialization();
+    final private SerDe<Integer> keySerde = new SerDes.IntegerSerDe();
+    final private SerDe<String> valueSerde = new SerDes.StringSerDe();
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override

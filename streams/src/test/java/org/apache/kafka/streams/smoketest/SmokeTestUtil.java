@@ -19,15 +19,9 @@ package org.apache.kafka.streams.smoketest;
 
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.serialization.Serialization;
-import org.apache.kafka.common.serialization.Serializations;
+import org.apache.kafka.common.serialization.SerDe;
+import org.apache.kafka.common.serialization.SerDes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -130,23 +124,23 @@ public class SmokeTestUtil {
         }
     }
 
-    public static Serialization<String> stringSerialization = new Serializations.StringSerialization();
+    public static SerDe<String> stringSerDe = SerDes.STRING();
 
-    public static Serialization<Integer> intSerialization = new Serializations.IntegerSerialization();
+    public static SerDe<Integer> intSerDe = SerDes.INTEGER();
 
-    public static Serialization<Long> longSerialization = new Serializations.LongSerialization();
+    public static SerDe<Long> longSerDe = SerDes.LONG();
 
-    public static Serializer<String> stringSerializer = new StringSerializer();
+    public static Serializer<String> stringSerializer = stringSerDe.serializer();
 
-    public static Deserializer<String> stringDeserializer = new StringDeserializer();
+    public static Deserializer<String> stringDeserializer = stringSerDe.deserializer();
 
-    public static Serializer<Integer> integerSerializer = new IntegerSerializer();
+    public static Serializer<Integer> integerSerializer = intSerDe.serializer();
 
-    public static Deserializer<Integer> integerDeserializer = new IntegerDeserializer();
+    public static Deserializer<Integer> integerDeserializer = intSerDe.deserializer();
 
-    public static Serializer<Long> longSerializer = new LongSerializer();
+    public static Serializer<Long> longSerializer = longSerDe.serializer();
 
-    public static Deserializer<Long> longDeserializer = new LongDeserializer();
+    public static Deserializer<Long> longDeserializer = longSerDe.deserializer();
 
     public static Serializer<Double> doubleSerializer = new Serializer<Double>() {
 

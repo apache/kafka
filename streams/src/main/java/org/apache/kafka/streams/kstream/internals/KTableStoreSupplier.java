@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serialization;
+import org.apache.kafka.common.serialization.SerDe;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -38,11 +38,11 @@ public class KTableStoreSupplier<K, V> implements StateStoreSupplier {
     private final Time time;
 
     protected KTableStoreSupplier(String name,
-                                  Serialization<K> keySerialization,
-                                  Serialization<V> valSerialization,
+                                  SerDe<K> keySerDe,
+                                  SerDe<V> valSerDe,
                                   Time time) {
         this.name = name;
-        this.serdes = new StateSerdes<>(name, keySerialization, valSerialization);
+        this.serdes = new StateSerdes<>(name, keySerDe, valSerDe);
         this.time = time;
     }
 

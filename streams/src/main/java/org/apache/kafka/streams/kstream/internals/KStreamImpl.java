@@ -17,7 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serialization;
+import org.apache.kafka.common.serialization.SerDe;
+import org.apache.kafka.common.serialization.SerDes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -91,6 +92,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
 
+    private static final SerDe<Long> LONG_SER_DE = SerDes.LONG();
 
     public KStreamImpl(KStreamBuilder topology, String name, Set<String> sourceNodes) {
         super(topology, name, sourceNodes);
@@ -195,13 +197,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public KStream<K, V> through(String topic,
-                                 Serialization<K> keySerialization,
-                                 Serialization<V> valSerialization) {
-        to(topic, keySerialization == null ? null : keySerialization.serializer(),
-                valSerialization == null ? null : valSerialization.serializer());
+                                 SerDe<K> keySerDe,
+                                 SerDe<V> valSerDe) {
+        to(topic, keySerDe == null ? null : keySerDe.serializer(),
+                valSerDe == null ? null : valSerDe.serializer());
 
-        return topology.stream(keySerialization == null ? null : keySerialization.deserializer(),
-                valSerialization == null ? null : valSerialization.deserializer(), topic);
+        return topology.stream(keySerDe == null ? null : keySerDe.deserializer(),
+                valSerDe == null ? null : valSerDe.deserializer(), topic);
     }
 
     @Override
@@ -261,11 +263,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serialization<K> keySerialization,
-            Serialization<V> thisValueSerialization,
-            Serialization<V1> otherValueSerialization) {
+            SerDe<K> keySerDe,
+            SerDe<V> thisValueSerDe,
+            SerDe<V1> otherValueSerDe) {
 
-        return join(other, joiner, windows, keySerialization, thisValueSerialization, otherValueSerialization, false);
+        return join(other, joiner, windows, keySerDe, thisValueSerDe, otherValueSerDe, false);
     }
 
     @Override
@@ -273,11 +275,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serialization<K> keySerialization,
-            Serialization<V> thisValueSerialization,
-            Serialization<V1> otherValueSerialization) {
+            SerDe<K> keySerDe,
+            SerDe<V> thisValueSerDe,
+            SerDe<V1> otherValueSerDe) {
 
-        return join(other, joiner, windows, keySerialization, thisValueSerialization, otherValueSerialization, true);
+        return join(other, joiner, windows, keySerDe, thisValueSerDe, otherValueSerDe, true);
     }
 
     @SuppressWarnings("unchecked")
@@ -285,23 +287,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serialization<K> keySerialization,
-            Serialization<V> thisValueSerialization,
-            Serialization<V1> otherValueSerialization,
+            SerDe<K> keySerDe,
+            SerDe<V> thisValueSerDe,
+            SerDe<V1> otherValueSerDe,
             boolean outer) {
 
         Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         StateStoreSupplier thisWindow = Stores.create(windows.name() + "-this")
-                .withKeys(keySerialization)
-                .withValues(thisValueSerialization)
+                .withKeys(keySerDe)
+                .withValues(thisValueSerDe)
                 .persistent()
                 .windowed(windows.maintainMs(), windows.segments, true)
                 .build();
 
         StateStoreSupplier otherWindow = Stores.create(windows.name() + "-other")
-                .withKeys(keySerialization)
-                .withValues(otherValueSerialization)
+                .withKeys(keySerDe)
+                .withValues(otherValueSerDe)
                 .persistent()
                 .windowed(windows.maintainMs(), windows.segments, true)
                 .build();
@@ -337,14 +339,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serialization<K> keySerialization,
-            Serialization<V1> otherValueSerialization) {
+            SerDe<K> keySerDe,
+            SerDe<V1> otherValueSerDe) {
 
         Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         StateStoreSupplier otherWindow = Stores.create(windows.name() + "-other")
-                .withKeys(keySerialization)
-                .withValues(otherValueSerialization)
+                .withKeys(keySerDe)
+                .withValues(otherValueSerDe)
                 .persistent()
                 .windowed(windows.maintainMs(), windows.segments, true)
                 .build();
@@ -378,16 +380,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
                                                                  Windows<W> windows,
-                                                                 Serialization<K> keySerialization,
-                                                                 Serialization<V> aggValueSerialization) {
+                                                                 SerDe<K> keySerDe,
+                                                                 SerDe<V> aggValueSerDe) {
 
         String reduceName = topology.newName(REDUCE_NAME);
 
         KStreamWindowReduce<K, V, W> reduceSupplier = new KStreamWindowReduce<>(windows, windows.name(), reducer);
 
         StateStoreSupplier reduceStore = Stores.create(windows.name())
-                .withKeys(keySerialization)
-                .withValues(aggValueSerialization)
+                .withKeys(keySerDe)
+                .withValues(aggValueSerDe)
                 .persistent()
                 .windowed(windows.maintainMs(), windows.segments, false)
                 .build();
@@ -402,8 +404,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public KTable<K, V> reduceByKey(Reducer<V> reducer,
-                                    Serialization<K> keySerialization,
-                                    Serialization<V> aggValueSerialization,
+                                    SerDe<K> keySerDe,
+                                    SerDe<V> aggValueSerDe,
                                     String name) {
 
         String reduceName = topology.newName(REDUCE_NAME);
@@ -411,8 +413,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         KStreamReduce<K, V> reduceSupplier = new KStreamReduce<>(name, reducer);
 
         StateStoreSupplier reduceStore = Stores.create(name)
-                .withKeys(keySerialization)
-                .withValues(aggValueSerialization)
+                .withKeys(keySerDe)
+                .withValues(aggValueSerDe)
                 .persistent()
                 .build();
 
@@ -428,16 +430,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
                                                                        Aggregator<K, V, T> aggregator,
                                                                        Windows<W> windows,
-                                                                       Serialization<K> keySerialization,
-                                                                       Serialization<T> aggValueSerialization) {
+                                                                       SerDe<K> keySerDe,
+                                                                       SerDe<T> aggValueSerDe) {
 
         String aggregateName = topology.newName(AGGREGATE_NAME);
 
         KStreamAggProcessorSupplier<K, Windowed<K>, V, T> aggregateSupplier = new KStreamWindowAggregate<>(windows, windows.name(), initializer, aggregator);
 
         StateStoreSupplier aggregateStore = Stores.create(windows.name())
-                .withKeys(keySerialization)
-                .withValues(aggValueSerialization)
+                .withKeys(keySerDe)
+                .withValues(aggValueSerDe)
                 .persistent()
                 .windowed(windows.maintainMs(), windows.segments, false)
                 .build();
@@ -453,8 +455,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
                                            Aggregator<K, V, T> aggregator,
-                                           Serialization<K> keySerialization,
-                                           Serialization<T> aggValueSerialization,
+                                           SerDe<K> keySerDe,
+                                           SerDe<T> aggValueSerDe,
                                            String name) {
 
         String aggregateName = topology.newName(AGGREGATE_NAME);
@@ -462,8 +464,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         KStreamAggProcessorSupplier<K, K, V, T> aggregateSupplier = new KStreamAggregate<>(name, initializer, aggregator);
 
         StateStoreSupplier aggregateStore = Stores.create(name)
-                .withKeys(keySerialization)
-                .withValues(aggValueSerialization)
+                .withKeys(keySerDe)
+                .withValues(aggValueSerDe)
                 .persistent()
                 .build();
 
@@ -477,8 +479,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
-                                                                   Serialization<K> keySerialization,
-                                                                   Serialization<Long> aggValueSerialization) {
+                                                                   SerDe<K> keySerDe) {
         return this.aggregateByKey(
                 new Initializer<Long>() {
                     @Override
@@ -491,14 +492,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                     public Long apply(K aggKey, V value, Long aggregate) {
                         return aggregate + 1L;
                     }
-                }, windows, keySerialization, aggValueSerialization);
+                }, windows, keySerDe, LONG_SER_DE);
     }
 
     @Override
-    public     KTable<K, Long> countByKey(Serialization<K> keySerialization,
-                                          Serialization<Long> aggValueSerialization,
+    public     KTable<K, Long> countByKey(SerDe<K> keySerDe,
                                           String name) {
-
         return this.aggregateByKey(
                 new Initializer<Long>() {
                     @Override
@@ -511,6 +510,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                     public Long apply(K aggKey, V value, Long aggregate) {
                         return aggregate + 1L;
                     }
-                }, keySerialization, aggValueSerialization, name);
+                }, keySerDe, LONG_SER_DE, name);
     }
 }

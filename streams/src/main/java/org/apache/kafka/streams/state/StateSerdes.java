@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serialization;
-import org.apache.kafka.common.serialization.Serializations;
+import org.apache.kafka.common.serialization.SerDe;
+import org.apache.kafka.common.serialization.SerDes;
 import org.apache.kafka.common.serialization.Serializer;
 
 /**
@@ -30,12 +30,12 @@ import org.apache.kafka.common.serialization.Serializer;
 public final class StateSerdes<K, V> {
 
     public static <K, V> StateSerdes<K, V> withBuiltinTypes(String topic, Class<K> keyClass, Class<V> valueClass) {
-        return new StateSerdes<>(topic, Serializations.serialization(keyClass), Serializations.serialization(valueClass));
+        return new StateSerdes<>(topic, SerDes.serialization(keyClass), SerDes.serialization(valueClass));
     }
 
     private final String topic;
-    private final Serialization<K> keySerialization;
-    private final Serialization<V> valueSerialization;
+    private final SerDe<K> keySerDe;
+    private final SerDe<V> valueSerDe;
 
     /**
      * Create a context for serialization using the specified serializers and deserializers which
@@ -44,38 +44,38 @@ public final class StateSerdes<K, V> {
      * need to provide the topic name any more.
      *
      * @param topic the name of the topic
-     * @param keySerialization the serde for keys; may be null
-     * @param valueSerialization the serde for values; may be null
+     * @param keySerDe the serde for keys; may be null
+     * @param valueSerDe the serde for values; may be null
      */
     @SuppressWarnings("unchecked")
     public StateSerdes(String topic,
-                       Serialization<K> keySerialization,
-                       Serialization<V> valueSerialization) {
+                       SerDe<K> keySerDe,
+                       SerDe<V> valueSerDe) {
         this.topic = topic;
 
-        if (keySerialization == null)
+        if (keySerDe == null)
             throw new NullPointerException();
-        if (valueSerialization == null)
+        if (valueSerDe == null)
             throw new NullPointerException();
 
-        this.keySerialization = keySerialization;
-        this.valueSerialization = valueSerialization;
+        this.keySerDe = keySerDe;
+        this.valueSerDe = valueSerDe;
     }
 
     public Deserializer<K> keyDeserializer() {
-        return keySerialization.deserializer();
+        return keySerDe.deserializer();
     }
 
     public Serializer<K> keySerializer() {
-        return keySerialization.serializer();
+        return keySerDe.serializer();
     }
 
     public Deserializer<V> valueDeserializer() {
-        return valueSerialization.deserializer();
+        return valueSerDe.deserializer();
     }
 
     public Serializer<V> valueSerializer() {
-        return valueSerialization.serializer();
+        return valueSerDe.serializer();
     }
 
     public String topic() {
@@ -83,18 +83,18 @@ public final class StateSerdes<K, V> {
     }
 
     public K keyFrom(byte[] rawKey) {
-        return keySerialization.deserializer().deserialize(topic, rawKey);
+        return keySerDe.deserializer().deserialize(topic, rawKey);
     }
 
     public V valueFrom(byte[] rawValue) {
-        return valueSerialization.deserializer().deserialize(topic, rawValue);
+        return valueSerDe.deserializer().deserialize(topic, rawValue);
     }
 
     public byte[] rawKey(K key) {
-        return keySerialization.serializer().serialize(topic, key);
+        return keySerDe.serializer().serialize(topic, key);
     }
 
     public byte[] rawValue(V value) {
-        return valueSerialization.serializer().serialize(topic, value);
+        return valueSerDe.serializer().serialize(topic, value);
     }
 }

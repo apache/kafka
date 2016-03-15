@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.serialization.Serialization;
+import org.apache.kafka.common.serialization.SerDe;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 
@@ -68,13 +68,13 @@ public interface KTable<K, V> {
      * This is equivalent to calling to(topic) and table(topic).
      *
      * @param topic           the topic name
-     * @param keySerialization   key serde used to send key-value pairs,
+     * @param keySerDe   key serde used to send key-value pairs,
      *                        if not specified the default key serde defined in the configuration will be used
-     * @param valSerialization   value serde used to send key-value pairs,
+     * @param valSerDe   value serde used to send key-value pairs,
      *                        if not specified the default value serde defined in the configuration will be used
      * @return the new stream that consumes the given topic
      */
-    KTable<K, V> through(String topic, Serialization<K> keySerialization, Serialization<V> valSerialization);
+    KTable<K, V> through(String topic, SerDe<K> keySerDe, SerDe<V> valSerDe);
 
     /**
      * Sends key-value to a topic using default serializers specified in the config.
@@ -148,8 +148,8 @@ public interface KTable<K, V> {
     <K1, V1> KTable<K1, V1> reduce(Reducer<V1> addReducer,
                                    Reducer<V1> removeReducer,
                                    KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                   Serialization<K1> keySerialization,
-                                   Serialization<V1> valueSerialization,
+                                   SerDe<K1> keySerDe,
+                                   SerDe<V1> valueSerDe,
                                    String name);
 
     /**
@@ -168,9 +168,9 @@ public interface KTable<K, V> {
                                         Aggregator<K1, V1, T> add,
                                         Aggregator<K1, V1, T> remove,
                                         KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                        Serialization<K1> keySerialization,
-                                        Serialization<V1> valueSerialization,
-                                        Serialization<T> aggValueSerialization,
+                                        SerDe<K1> keySerDe,
+                                        SerDe<V1> valueSerDe,
+                                        SerDe<T> aggValueSerDe,
                                         String name);
 
     /**
@@ -182,9 +182,7 @@ public interface KTable<K, V> {
      * @return the instance of KTable
      */
     <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector,
-                                Serialization<K1> keySerialization,
-                                Serialization<V> valueSerialization,
-                                Serialization<Long> aggValueSerialization,
+                                SerDe<K1> keySerDe,
+                                SerDe<V> valueSerDe,
                                 String name);
-
 }

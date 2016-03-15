@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.common.serialization.Serializations;
-import org.apache.kafka.common.serialization.Serialization;
+import org.apache.kafka.common.serialization.SerDes;
+import org.apache.kafka.common.serialization.SerDe;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreSupplier;
@@ -38,12 +38,12 @@ public class Stores {
     public static StoreFactory create(final String name) {
         return new StoreFactory() {
             @Override
-            public <K> ValueFactory<K> withKeys(final Serialization<K> keySerialization) {
+            public <K> ValueFactory<K> withKeys(final SerDe<K> keySerDe) {
                 return new ValueFactory<K>() {
                     @Override
-                    public <V> KeyValueFactory<K, V> withValues(final Serialization<V> valueSerialization) {
+                    public <V> KeyValueFactory<K, V> withValues(final SerDe<V> valueSerDe) {
                         final StateSerdes<K, V> serdes =
-                                new StateSerdes<>(name, keySerialization, valueSerialization);
+                                new StateSerdes<>(name, keySerDe, valueSerDe);
                         return new KeyValueFactory<K, V>() {
                             @Override
                             public InMemoryKeyValueFactory<K, V> inMemory() {
@@ -107,7 +107,7 @@ public class Stores {
          * @return the interface used to specify the type of values; never null
          */
         public ValueFactory<String> withStringKeys() {
-            return withKeys(Serializations.STRING());
+            return withKeys(SerDes.STRING());
         }
 
         /**
@@ -116,7 +116,7 @@ public class Stores {
          * @return the interface used to specify the type of values; never null
          */
         public ValueFactory<Integer> withIntegerKeys() {
-            return withKeys(Serializations.INT());
+            return withKeys(SerDes.INTEGER());
         }
 
         /**
@@ -125,7 +125,7 @@ public class Stores {
          * @return the interface used to specify the type of values; never null
          */
         public ValueFactory<Long> withLongKeys() {
-            return withKeys(Serializations.LONG());
+            return withKeys(SerDes.LONG());
         }
 
         /**
@@ -134,7 +134,7 @@ public class Stores {
          * @return the interface used to specify the type of values; never null
          */
         public ValueFactory<byte[]> withByteArrayKeys() {
-            return withKeys(Serializations.BYTEARRAY());
+            return withKeys(SerDes.BYTE_ARRAY());
         }
 
         /**
@@ -144,16 +144,16 @@ public class Stores {
          * @return the interface used to specify the type of values; never null
          */
         public <K> ValueFactory<K> withKeys(Class<K> keyClass) {
-            return withKeys(Serializations.serialization(keyClass));
+            return withKeys(SerDes.serialization(keyClass));
         }
 
         /**
          * Begin to create a {@link KeyValueStore} by specifying the serializer and deserializer for the keys.
          *
-         * @param keySerialization the serialization factory for keys; may not be null
+         * @param keySerDe the serialization factory for keys; may not be null
          * @return the interface used to specify the type of values; never null
          */
-        public abstract <K> ValueFactory<K> withKeys(Serialization<K> keySerialization);
+        public abstract <K> ValueFactory<K> withKeys(SerDe<K> keySerDe);
     }
 
     /**
@@ -168,7 +168,7 @@ public class Stores {
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public KeyValueFactory<K, String> withStringValues() {
-            return withValues(Serializations.STRING());
+            return withValues(SerDes.STRING());
         }
 
         /**
@@ -177,7 +177,7 @@ public class Stores {
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public KeyValueFactory<K, Integer> withIntegerValues() {
-            return withValues(Serializations.INT());
+            return withValues(SerDes.INTEGER());
         }
 
         /**
@@ -186,7 +186,7 @@ public class Stores {
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public KeyValueFactory<K, Long> withLongValues() {
-            return withValues(Serializations.LONG());
+            return withValues(SerDes.LONG());
         }
 
         /**
@@ -195,7 +195,7 @@ public class Stores {
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public KeyValueFactory<K, byte[]> withByteArrayValues() {
-            return withValues(Serializations.BYTEARRAY());
+            return withValues(SerDes.BYTE_ARRAY());
         }
 
         /**
@@ -205,16 +205,16 @@ public class Stores {
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public <V> KeyValueFactory<K, V> withValues(Class<V> valueClass) {
-            return withValues(Serializations.serialization(valueClass));
+            return withValues(SerDes.serialization(valueClass));
         }
 
         /**
          * Use the specified serializer and deserializer for the values.
          *
-         * @param valueSerialization the serialization factory for values; may not be null
+         * @param valueSerDe the serialization factory for values; may not be null
          * @return the interface used to specify the remaining key-value store options; never null
          */
-        public abstract <V> KeyValueFactory<K, V> withValues(Serialization<V> valueSerialization);
+        public abstract <V> KeyValueFactory<K, V> withValues(SerDe<V> valueSerDe);
     }
 
     /**

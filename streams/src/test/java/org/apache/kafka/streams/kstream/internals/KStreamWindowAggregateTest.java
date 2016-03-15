@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serialization;
-import org.apache.kafka.common.serialization.Serializations;
+import org.apache.kafka.common.serialization.SerDe;
+import org.apache.kafka.common.serialization.SerDes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.HoppingWindows;
@@ -39,7 +39,7 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamWindowAggregateTest {
 
-    final private Serialization<String> strSerde = new Serializations.StringSerialization();
+    final private SerDe<String> strSerde = new SerDes.StringSerDe();
 
     private class StringAdd implements Aggregator<String, String, String> {
 

@@ -16,92 +16,94 @@ package org.apache.kafka.common.serialization;
 /**
  * Factory for creating serializers / deserializers.
  */
-public class Serializations {
+public class SerDes {
 
-    static public class LongSerialization implements Serialization<Long> {
-        private Serializer<Long> serializer = new LongSerializer();
-        private Deserializer<Long> deserializer = new LongDeserializer();
+    static private final Serializer<Long> longSerializer = new LongSerializer();
+    static private final Deserializer<Long> longDeserializer = new LongDeserializer();
+
+    static private final Serializer<Integer> integerSerializer = new IntegerSerializer();
+    static private final Deserializer<Integer> integerDeserializer = new IntegerDeserializer();
+
+    static private final Serializer<String> stringSerializer = new StringSerializer();
+    static private final Deserializer<String> stringDeserializer = new StringDeserializer();
+
+    static private final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
+    static private final Deserializer<byte[]> bytesDeserializer = new ByteArrayDeserializer();
+
+
+    static public final class LongSerDe implements SerDe<Long> {
 
         @Override
         public Serializer<Long> serializer() {
-            return serializer;
+            return longSerializer;
         }
 
         @Override
         public Deserializer<Long> deserializer() {
-            return deserializer;
+            return longDeserializer;
         }
     }
 
-    static public class IntegerSerialization implements Serialization<Integer> {
-        private Serializer<Integer> serializer = new IntegerSerializer();
-        private Deserializer<Integer> deserializer = new IntegerDeserializer();
-
+    static public final class IntegerSerDe implements SerDe<Integer> {
         @Override
         public Serializer<Integer> serializer() {
-            return serializer;
+            return integerSerializer;
         }
 
         @Override
         public Deserializer<Integer> deserializer() {
-            return deserializer;
+            return integerDeserializer;
         }
     }
 
-    static public class StringSerialization implements Serialization<String> {
-        private Serializer<String> serializer = new StringSerializer();
-        private Deserializer<String> deserializer = new StringDeserializer();
-
+    static public final class StringSerDe implements SerDe<String> {
         @Override
         public Serializer<String> serializer() {
-            return serializer;
+            return stringSerializer;
         }
 
         @Override
         public Deserializer<String> deserializer() {
-            return deserializer;
+            return stringDeserializer;
         }
     }
 
-    static public class ByteArraySerialization implements Serialization<byte[]> {
-        private Serializer<byte[]> serializer = new ByteArraySerializer();
-        private Deserializer<byte[]> deserializer = new ByteArrayDeserializer();
-
+    static public final class ByteArraySerDe implements SerDe<byte[]> {
         @Override
         public Serializer<byte[]> serializer() {
-            return serializer;
+            return bytesSerializer;
         }
 
         @Override
         public Deserializer<byte[]> deserializer() {
-            return deserializer;
+            return bytesDeserializer;
         }
     }
 
     @SuppressWarnings("unchecked")
-    static public <T> Serialization<T> serialization(Class<T> type) {
+    static public <T> SerDe<T> serialization(Class<T> type) {
         if (String.class.isAssignableFrom(type)) {
-            return (Serialization<T>) STRING();
+            return (SerDe<T>) STRING();
         }
 
         if (Integer.class.isAssignableFrom(type)) {
-            return (Serialization<T>) INT();
+            return (SerDe<T>) INTEGER();
         }
 
         if (Long.class.isAssignableFrom(type)) {
-            return (Serialization<T>) LONG();
+            return (SerDe<T>) LONG();
         }
 
         if (byte[].class.isAssignableFrom(type)) {
-            return (Serialization<T>) BYTEARRAY();
+            return (SerDe<T>) BYTE_ARRAY();
         }
 
         // TODO: we can also serializes objects of type T using generic Java serialization by default
         throw new IllegalArgumentException("Unknown class for built-in serializer");
     }
 
-    static public <T> Serialization<T> serialization(final Serializer<T> serializer, final Deserializer<T> deserializer) {
-        return new Serialization<T>() {
+    static public <T> SerDe<T> serialization(final Serializer<T> serializer, final Deserializer<T> deserializer) {
+        return new SerDe<T>() {
             @Override
             public Serializer<T> serializer() {
                 return serializer;
@@ -117,28 +119,28 @@ public class Serializations {
     /*
      * A serde for nullable long type.
      */
-    static public Serialization<Long> LONG() {
-        return new LongSerialization();
+    static public SerDe<Long> LONG() {
+        return new LongSerDe();
     }
 
     /*
      * A serde for nullable long type.
      */
-    static public Serialization<Integer> INT() {
-        return new IntegerSerialization();
+    static public SerDe<Integer> INTEGER() {
+        return new IntegerSerDe();
     }
 
     /*
      * A serde for nullable string type.
      */
-    static public Serialization<String> STRING() {
-        return new StringSerialization();
+    static public SerDe<String> STRING() {
+        return new StringSerDe();
     }
 
     /*
      * A serde for nullable byte array type.
      */
-    static public Serialization<byte[]> BYTEARRAY() {
-        return new ByteArraySerialization();
+    static public SerDe<byte[]> BYTE_ARRAY() {
+        return new ByteArraySerDe();
     }
 }

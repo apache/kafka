@@ -18,8 +18,8 @@
 package org.apache.kafka.streams.examples.wordcount;
 
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.SerDes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -63,11 +63,6 @@ public class WordCountJob {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        final Serializer<String> stringSerializer = new StringSerializer();
-        final Deserializer<String> stringDeserializer = new StringDeserializer();
-        final Serializer<Long> longSerializer = new LongSerializer();
-        final Deserializer<Long> longDeserializer = new LongDeserializer();
-
         KStream<String, String> source = builder.stream("streams-file-input");
 
         KTable<String, Long> counts = source
@@ -82,9 +77,9 @@ public class WordCountJob {
                         return new KeyValue<String, String>(value, value);
                     }
                 })
-                .countByKey(stringSerializer, longSerializer, stringDeserializer, longDeserializer, "Counts");
+                .countByKey(SerDes.STRING(), "Counts");
 
-        counts.to("streams-wordcount-output", stringSerializer, longSerializer);
+        counts.to("streams-wordcount-output", SerDes.STRING().serializer(), SerDes.LONG().serializer());
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();

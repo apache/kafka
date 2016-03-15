@@ -425,7 +425,7 @@ public class JsonConverter implements Converter {
             ObjectNode jsonSchemaParams = JsonNodeFactory.instance.objectNode();
             for (Map.Entry<String, String> prop : schema.parameters().entrySet())
                 jsonSchemaParams.put(prop.getKey(), prop.getValue());
-            jsonSchema.put(JsonSchema.SCHEMA_PARAMETERS_FIELD_NAME, jsonSchemaParams);
+            jsonSchema.set(JsonSchema.SCHEMA_PARAMETERS_FIELD_NAME, jsonSchemaParams);
         }
         if (schema.defaultValue() != null)
             jsonSchema.set(JsonSchema.SCHEMA_DEFAULT_FIELD_NAME, convertToJson(schema, schema.defaultValue()));

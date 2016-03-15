@@ -22,7 +22,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializations;
+import org.apache.kafka.common.serialization.SerDes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -165,8 +165,8 @@ public class KeyValueStoreTestDriver<K, V> {
                                                               Serializer<V> valueSerializer,
                                                               Deserializer<V> valueDeserializer) {
         StateSerdes<K, V> serdes = new StateSerdes<K, V>("unexpected",
-                Serializations.serialization(keySerializer, keyDeserializer),
-                Serializations.serialization(valueSerializer, valueDeserializer));
+                SerDes.serialization(keySerializer, keyDeserializer),
+                SerDes.serialization(valueSerializer, valueDeserializer));
         return new KeyValueStoreTestDriver<K, V>(serdes);
     }
 

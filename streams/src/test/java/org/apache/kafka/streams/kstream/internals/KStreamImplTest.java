@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serialization;
-import org.apache.kafka.common.serialization.Serializations;
+import org.apache.kafka.common.serialization.SerDe;
+import org.apache.kafka.common.serialization.SerDes;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -37,8 +37,8 @@ public class KStreamImplTest {
 
     @Test
     public void testNumProcesses() {
-        final Serialization<String> stringSerde = new Serializations.StringSerialization();
-        final Serialization<Integer> intSerde = new Serializations.IntegerSerialization();
+        final SerDe<String> stringSerde = new SerDes.StringSerDe();
+        final SerDe<Integer> intSerde = new SerDes.IntegerSerDe();
 
         final KStreamBuilder builder = new KStreamBuilder();
 
