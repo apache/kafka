@@ -37,6 +37,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.exceptions.TestFailedException
 
+@deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
 class ProducerTest extends ZooKeeperTestHarness with Logging{
   private val brokerId1 = 0
   private val brokerId2 = 1

@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.junit.Test
 import org.junit.Assert._
 
+@deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
 class SyncProducerTest extends KafkaServerTestHarness {
   private val messageBytes =  new Array[Byte](2)
   // turning off controlled shutdown since testProducerCanTimeout() explicitly shuts down request handler pool.

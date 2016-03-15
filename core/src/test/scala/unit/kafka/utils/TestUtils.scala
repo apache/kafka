@@ -419,6 +419,7 @@ object TestUtils extends Logging {
    * Create a producer with a few pre-configured properties.
    * If certain properties need to be overridden, they can be provided in producerProps.
    */
+  @deprecated("This method has been deprecated and it will be removed in a future release.", "0.10.0.0")
   def createProducer[K, V](brokerList: String,
                            encoder: String = classOf[DefaultEncoder].getName,
                            keyEncoder: String = classOf[DefaultEncoder].getName,
@@ -620,6 +621,7 @@ object TestUtils extends Logging {
   /**
    * Create a wired format request based on simple basic information
    */
+  @deprecated("This method has been deprecated and it will be removed in a future release", "0.10.0.0")
   def produceRequest(topic: String,
                      partition: Int,
                      message: ByteBufferMessageSet,
@@ -630,6 +632,7 @@ object TestUtils extends Logging {
     produceRequestWithAcks(Seq(topic), Seq(partition), message, acks, timeout, correlationId, clientId)
   }
 
+  @deprecated("This method has been deprecated and it will be removed in a future release", "0.10.0.0")
   def produceRequestWithAcks(topics: Seq[String],
                              partitions: Seq[Int],
                              message: ByteBufferMessageSet,
@@ -889,6 +892,8 @@ object TestUtils extends Logging {
                    time = time,
                    brokerState = new BrokerState())
   }
+
+  @deprecated("This method has been deprecated and it will be removed in a future release.", "0.10.0.0")
   def sendMessages(servers: Seq[KafkaServer],
                    topic: String,
                    numMessages: Int,
@@ -928,10 +933,7 @@ object TestUtils extends Logging {
 
   }
 
-  def sendMessage(servers: Seq[KafkaServer],
-                  topic: String,
-                  message: String) = {
-
+  def sendMessage(servers: Seq[KafkaServer], topic: String, message: String) {
     val producer: Producer[String, String] =
       createProducer(TestUtils.getBrokerListStrFromServers(servers),
         encoder = classOf[StringEncoder].getName(),
@@ -1056,18 +1058,14 @@ class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {
   override def toBytes(n: Int) = n.toString.getBytes
 }
 
-class StaticPartitioner(props: VerifiableProperties = null) extends Partitioner{
+@deprecated("This class is deprecated and it will be removed in a future release.", "0.10.0.0")
+class StaticPartitioner(props: VerifiableProperties = null) extends Partitioner {
   def partition(data: Any, numPartitions: Int): Int = {
     (data.asInstanceOf[String].length % numPartitions)
   }
 }
 
-class HashPartitioner(props: VerifiableProperties = null) extends Partitioner {
-  def partition(data: Any, numPartitions: Int): Int = {
-    (data.hashCode % numPartitions)
-  }
-}
-
+@deprecated("This class has been deprecated and it will be removed in a future release.", "0.10.0.0")
 class FixedValuePartitioner(props: VerifiableProperties = null) extends Partitioner {
   def partition(data: Any, numPartitions: Int): Int = data.asInstanceOf[Int]
 }

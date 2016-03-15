@@ -35,7 +35,13 @@ import scala.collection.Map
 import scala.collection.mutable.ArrayBuffer
 import kafka.utils._
 
+@deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
 class AsyncProducerTest {
+
+  class NegativePartitioner(props: VerifiableProperties = null) extends Partitioner {
+    def partition(data: Any, numPartitions: Int): Int = -1
+  }
+
   // One of the few cases we can just set a fixed port because the producer is mocked out here since this uses mocks
   val props = Seq(createBrokerConfig(1, "127.0.0.1:1", port=65534))
   val configs = props.map(KafkaConfig.fromProps)
@@ -479,8 +485,4 @@ class AsyncProducerTest {
       NoCompressionCodec,
       messages.map(m => new Message(key = key, bytes = m, timestamp = 0L, magicValue = Message.MagicValue_V1)): _*)
   }
-}
-
-class NegativePartitioner(props: VerifiableProperties = null) extends Partitioner {
-  def partition(data: Any, numPartitions: Int): Int = -1
 }
