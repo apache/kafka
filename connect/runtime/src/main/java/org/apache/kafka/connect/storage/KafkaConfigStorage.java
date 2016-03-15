@@ -375,6 +375,7 @@ public class KafkaConfigStorage {
         return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, new SystemTime());
     }
 
+    @SuppressWarnings("unchecked")
     private final Callback<ConsumerRecord<String, byte[]>> consumedCallback = new Callback<ConsumerRecord<String, byte[]>>() {
         @Override
         public void onCompletion(Throwable error, ConsumerRecord<String, byte[]> record) {

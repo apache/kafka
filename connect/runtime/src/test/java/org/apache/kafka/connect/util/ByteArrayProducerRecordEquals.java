@@ -36,6 +36,7 @@ public class ByteArrayProducerRecordEquals implements IArgumentMatcher {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean matches(Object argument) {
         if (!(argument instanceof ProducerRecord))
             return false;

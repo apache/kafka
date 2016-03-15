@@ -14,9 +14,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.BrokerEndPoint;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -278,16 +276,16 @@ public class RequestResponseTest {
 
     private AbstractRequestResponse createMetadataResponse() {
         Node node = new Node(1, "host1", 1001);
-        Node[] replicas = new Node[1];
-        replicas[0] = node;
-        Node[] isr = new Node[1];
-        isr[0] = node;
-        Cluster cluster = new Cluster(Arrays.asList(node), Arrays.asList(new PartitionInfo("topic1", 1, node, replicas, isr)),
-                Collections.<String>emptySet());
+        List<Node> replicas = Arrays.asList(node);
+        List<Node> isr = Arrays.asList(node);
 
-        Map<String, Errors> errors = new HashMap<String, Errors>();
-        errors.put("topic2", Errors.LEADER_NOT_AVAILABLE);
-        return new MetadataResponse(cluster, errors);
+        List<MetadataResponse.TopicMetadata> allTopicMetadata = new ArrayList<>();
+        allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "topic1",
+                Arrays.asList(new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node, replicas, isr))));
+        allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2",
+                Collections.<MetadataResponse.PartitionMetadata>emptyList()));
+
+        return new MetadataResponse(Arrays.asList(node), allTopicMetadata);
     }
 
     private AbstractRequest createOffsetCommitRequest() {
@@ -372,6 +370,7 @@ public class RequestResponseTest {
         return new LeaderAndIsrResponse(Errors.NONE.code(), responses);
     }
 
+    @SuppressWarnings("deprecation")
     private AbstractRequest createUpdateMetadataRequest(int version) {
         Map<TopicPartition, UpdateMetadataRequest.PartitionState> partitionStates = new HashMap<>();
         List<Integer> isr = Arrays.asList(1, 2);
