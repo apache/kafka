@@ -23,6 +23,7 @@ import kafka.api.ApiVersion
 import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
 import kafka.coordinator.OffsetConfig
+import kafka.log.LogConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
@@ -184,6 +185,8 @@ object Defaults {
 
 object KafkaConfig {
 
+  private val LogConfigPrefix = "log."
+
   def main(args: Array[String]) {
     System.out.println(configDef.toHtmlTable)
   }
@@ -255,9 +258,9 @@ object KafkaConfig {
   val LogFlushIntervalMsProp = "log.flush.interval.ms"
   val LogFlushOffsetCheckpointIntervalMsProp = "log.flush.offset.checkpoint.interval.ms"
   val LogPreAllocateProp = "log.preallocate"
-  val LogMessageFormatVersionProp = "log.message.format.version"
-  val LogMessageTimestampTypeProp = "log.message.timestamp.type"
-  val LogMessageTimestampDifferenceMaxMsProp = "log.message.timestamp.difference.max.ms"
+  val LogMessageFormatVersionProp = LogConfigPrefix + LogConfig.MessageFormatVersionProp
+  val LogMessageTimestampTypeProp = LogConfigPrefix + LogConfig.MessageTimestampTypeProp
+  val LogMessageTimestampDifferenceMaxMsProp = LogConfigPrefix + LogConfig.MessageTimestampDifferenceMaxMsProp
   val NumRecoveryThreadsPerDataDirProp = "num.recovery.threads.per.data.dir"
   val AutoCreateTopicsEnableProp = "auto.create.topics.enable"
   val MinInSyncReplicasProp = "min.insync.replicas"
