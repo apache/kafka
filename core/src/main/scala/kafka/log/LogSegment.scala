@@ -259,7 +259,7 @@ class LogSegment(val log: FileMessageSet,
 
     def kafkaStorageException(fileType: String, e: IOException) =
       new KafkaStorageException(s"Failed to change the $fileType file suffix from $oldSuffix to $newSuffix for log segment $baseOffset", e)
-
+    close()
     try log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
     catch {
       case e: IOException => throw kafkaStorageException("log", e)
