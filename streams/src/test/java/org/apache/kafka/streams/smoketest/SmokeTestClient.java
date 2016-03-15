@@ -125,15 +125,13 @@ public class SmokeTestClient extends SmokeTestUtil {
                     }
                 },
                 UnlimitedWindows.of("uwin-min"),
-                stringSerializer,
-                integerSerializer,
-                stringDeserializer,
-                integerDeserializer
+                stringSerialization,
+                intSerialization
         ).toStream().map(
                 new Unwindow<String, Integer>()
         ).to("min", stringSerializer, integerSerializer);
 
-        KTable<String, Integer> minTable = builder.table(stringSerializer, integerSerializer, stringDeserializer, integerDeserializer, "min");
+        KTable<String, Integer> minTable = builder.table(stringSerialization, intSerialization, "min");
         minTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("min"));
 
         // max
@@ -150,15 +148,13 @@ public class SmokeTestClient extends SmokeTestUtil {
                     }
                 },
                 UnlimitedWindows.of("uwin-max"),
-                stringSerializer,
-                integerSerializer,
-                stringDeserializer,
-                integerDeserializer
+                stringSerialization,
+                intSerialization
         ).toStream().map(
                 new Unwindow<String, Integer>()
         ).to("max", stringSerializer, integerSerializer);
 
-        KTable<String, Integer> maxTable = builder.table(stringSerializer, integerSerializer, stringDeserializer, integerDeserializer, "max");
+        KTable<String, Integer> maxTable = builder.table(stringSerialization, intSerialization, "max");
         maxTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("max"));
 
         // sum
@@ -175,30 +171,26 @@ public class SmokeTestClient extends SmokeTestUtil {
                     }
                 },
                 UnlimitedWindows.of("win-sum"),
-                stringSerializer,
-                longSerializer,
-                stringDeserializer,
-                longDeserializer
+                stringSerialization,
+                longSerialization
         ).toStream().map(
                 new Unwindow<String, Long>()
         ).to("sum", stringSerializer, longSerializer);
 
 
-        KTable<String, Long> sumTable = builder.table(stringSerializer, longSerializer, stringDeserializer, longDeserializer, "sum");
+        KTable<String, Long> sumTable = builder.table(stringSerialization, longSerialization, "sum");
         sumTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("sum"));
 
         // cnt
         data.countByKey(
                 UnlimitedWindows.of("uwin-cnt"),
-                stringSerializer,
-                longSerializer,
-                stringDeserializer,
-                longDeserializer
+                stringSerialization,
+                longSerialization
         ).toStream().map(
                 new Unwindow<String, Long>()
         ).to("cnt", stringSerializer, longSerializer);
 
-        KTable<String, Long> cntTable = builder.table(stringSerializer, longSerializer, stringDeserializer, longDeserializer, "cnt");
+        KTable<String, Long> cntTable = builder.table(stringSerialization, longSerialization, "cnt");
         cntTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("cnt"));
 
         // dif
@@ -223,10 +215,8 @@ public class SmokeTestClient extends SmokeTestUtil {
         // windowed count
         data.countByKey(
                 TumblingWindows.of("tumbling-win-cnt").with(WINDOW_SIZE),
-                stringSerializer,
-                longSerializer,
-                stringDeserializer,
-                longDeserializer
+                stringSerialization,
+                longSerialization
         ).toStream().map(
                 new KeyValueMapper<Windowed<String>, Long, KeyValue<String, Long>>() {
                     @Override
@@ -243,12 +233,9 @@ public class SmokeTestClient extends SmokeTestUtil {
                 agg.adder(),
                 agg.remover(),
                 agg.selector(),
-                stringSerializer,
-                longSerializer,
-                longSerializer,
-                stringDeserializer,
-                longDeserializer,
-                longDeserializer,
+                stringSerialization,
+                longSerialization,
+                longSerialization,
                 "cntByCnt"
         ).to("tagg", stringSerializer, longSerializer);
 

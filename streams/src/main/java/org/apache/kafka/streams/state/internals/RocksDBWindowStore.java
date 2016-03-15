@@ -25,7 +25,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.WindowStoreUtils;
@@ -61,15 +61,15 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     private static class RocksDBWindowStoreIterator<V> implements WindowStoreIterator<V> {
-        private final Serdes<?, V> serdes;
+        private final StateSerdes<?, V> serdes;
         private final KeyValueIterator<byte[], byte[]>[] iterators;
         private int index = 0;
 
-        RocksDBWindowStoreIterator(Serdes<?, V> serdes) {
+        RocksDBWindowStoreIterator(StateSerdes<?, V> serdes) {
             this(serdes, WindowStoreUtils.NO_ITERATORS);
         }
 
-        RocksDBWindowStoreIterator(Serdes<?, V> serdes, KeyValueIterator<byte[], byte[]>[] iterators) {
+        RocksDBWindowStoreIterator(StateSerdes<?, V> serdes, KeyValueIterator<byte[], byte[]>[] iterators) {
             this.serdes = serdes;
             this.iterators = iterators;
         }
@@ -114,7 +114,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private final long segmentInterval;
     private final boolean retainDuplicates;
     private final Segment[] segments;
-    private final Serdes<K, V> serdes;
+    private final StateSerdes<K, V> serdes;
     private final SimpleDateFormat formatter;
     private final StoreChangeLogger.ValueGetter<byte[], byte[]> getter;
 
@@ -125,7 +125,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private boolean loggingEnabled = false;
     private StoreChangeLogger<byte[], byte[]> changeLogger = null;
 
-    public RocksDBWindowStore(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serdes<K, V> serdes) {
+    public RocksDBWindowStore(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, StateSerdes<K, V> serdes) {
         this.name = name;
 
         // The segment interval must be greater than MIN_SEGMENT_INTERVAL

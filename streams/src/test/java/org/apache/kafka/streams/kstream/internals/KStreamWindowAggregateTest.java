@@ -17,10 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serialization;
+import org.apache.kafka.common.serialization.Serializations;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.HoppingWindows;
@@ -41,8 +39,7 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamWindowAggregateTest {
 
-    private final Serializer<String> strSerializer = new StringSerializer();
-    private final Deserializer<String> strDeserializer = new StringDeserializer();
+    final private Serialization<String> strSerde = new Serializations.StringSerialization();
 
     private class StringAdd implements Aggregator<String, String, String> {
 
@@ -68,13 +65,11 @@ public class KStreamWindowAggregateTest {
             final KStreamBuilder builder = new KStreamBuilder();
             String topic1 = "topic1";
 
-            KStream<String, String> stream1 = builder.stream(strDeserializer, strDeserializer, topic1);
+            KStream<String, String> stream1 = builder.stream(strSerde.deserializer(), strSerde.deserializer(), topic1);
             KTable<Windowed<String>, String> table2 = stream1.aggregateByKey(new StringInit(), new StringAdd(),
                     HoppingWindows.of("topic1-Canonized").with(10L).every(5L),
-                    strSerializer,
-                    strSerializer,
-                    strDeserializer,
-                    strDeserializer);
+                    strSerde,
+                    strSerde);
 
             MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
             table2.toStream().process(proc2);
@@ -147,24 +142,20 @@ public class KStreamWindowAggregateTest {
             String topic1 = "topic1";
             String topic2 = "topic2";
 
-            KStream<String, String> stream1 = builder.stream(strDeserializer, strDeserializer, topic1);
+            KStream<String, String> stream1 = builder.stream(strSerde.deserializer(), strSerde.deserializer(), topic1);
             KTable<Windowed<String>, String> table1 = stream1.aggregateByKey(new StringInit(), new StringAdd(),
                     HoppingWindows.of("topic1-Canonized").with(10L).every(5L),
-                    strSerializer,
-                    strSerializer,
-                    strDeserializer,
-                    strDeserializer);
+                    strSerde,
+                    strSerde);
 
             MockProcessorSupplier<Windowed<String>, String> proc1 = new MockProcessorSupplier<>();
             table1.toStream().process(proc1);
 
-            KStream<String, String> stream2 = builder.stream(strDeserializer, strDeserializer, topic2);
+            KStream<String, String> stream2 = builder.stream(strSerde.deserializer(), strSerde.deserializer(), topic2);
             KTable<Windowed<String>, String> table2 = stream2.aggregateByKey(new StringInit(), new StringAdd(),
                     HoppingWindows.of("topic2-Canonized").with(10L).every(5L),
-                    strSerializer,
-                    strSerializer,
-                    strDeserializer,
-                    strDeserializer);
+                    strSerde,
+                    strSerde);
 
             MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
             table2.toStream().process(proc2);

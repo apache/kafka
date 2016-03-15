@@ -17,10 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serialization;
+import org.apache.kafka.common.serialization.Serializations;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -41,8 +39,7 @@ import static org.junit.Assert.assertTrue;
 
 public class KTableMapValuesTest {
 
-    private final Serializer<String> strSerializer = new StringSerializer();
-    private final Deserializer<String> strDeserializer = new StringDeserializer();
+    final private Serialization<String> strSerde = new Serializations.StringSerialization();
 
     @Test
     public void testKTable() {
@@ -50,7 +47,7 @@ public class KTableMapValuesTest {
 
         String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
+        KTable<String, String> table1 = builder.table(strSerde, strSerde, topic1);
         KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<String, Integer>() {
             @Override
             public Integer apply(String value) {
@@ -75,15 +72,13 @@ public class KTableMapValuesTest {
     public void testValueGetter() throws IOException {
         File stateDir = Files.createTempDirectory("test").toFile();
         try {
-            final Serializer<String> serializer = new StringSerializer();
-            final Deserializer<String> deserializer = new StringDeserializer();
             final KStreamBuilder builder = new KStreamBuilder();
 
             String topic1 = "topic1";
             String topic2 = "topic2";
 
             KTableImpl<String, String, String> table1 =
-                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic1);
+                    (KTableImpl<String, String, String>) builder.table(strSerde, strSerde, topic1);
             KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                     new ValueMapper<String, Integer>() {
                         @Override
@@ -99,7 +94,7 @@ public class KTableMapValuesTest {
                         }
                     });
             KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>)
-                    table1.through(topic2, serializer, serializer, deserializer, deserializer);
+                    table1.through(topic2, strSerde, strSerde);
 
             KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
             KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
@@ -201,14 +196,12 @@ public class KTableMapValuesTest {
     public void testNotSendingOldValue() throws IOException {
         File stateDir = Files.createTempDirectory("test").toFile();
         try {
-            final Serializer<String> serializer = new StringSerializer();
-            final Deserializer<String> deserializer = new StringDeserializer();
             final KStreamBuilder builder = new KStreamBuilder();
 
             String topic1 = "topic1";
 
             KTableImpl<String, String, String> table1 =
-                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic1);
+                    (KTableImpl<String, String, String>) builder.table(strSerde, strSerde, topic1);
             KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                     new ValueMapper<String, Integer>() {
                         @Override
@@ -254,14 +247,12 @@ public class KTableMapValuesTest {
     public void testSendingOldValue() throws IOException {
         File stateDir = Files.createTempDirectory("test").toFile();
         try {
-            final Serializer<String> serializer = new StringSerializer();
-            final Deserializer<String> deserializer = new StringDeserializer();
             final KStreamBuilder builder = new KStreamBuilder();
 
             String topic1 = "topic1";
 
             KTableImpl<String, String, String> table1 =
-                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic1);
+                    (KTableImpl<String, String, String>) builder.table(strSerde, strSerde, topic1);
             KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                     new ValueMapper<String, Integer>() {
                         @Override

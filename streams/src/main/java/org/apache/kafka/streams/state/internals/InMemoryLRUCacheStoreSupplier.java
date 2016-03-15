@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 
 /**
  * An in-memory key-value store that is limited in size and retains a maximum number of most recently used entries.
@@ -32,10 +32,10 @@ public class InMemoryLRUCacheStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
     private final int capacity;
-    private final Serdes<K, V> serdes;
+    private final StateSerdes<K, V> serdes;
     private final Time time;
 
-    public InMemoryLRUCacheStoreSupplier(String name, int capacity, Serdes<K, V> serdes, Time time) {
+    public InMemoryLRUCacheStoreSupplier(String name, int capacity, StateSerdes<K, V> serdes, Time time) {
         this.name = name;
         this.capacity = capacity;
         this.serdes = serdes;

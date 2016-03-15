@@ -17,14 +17,13 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.Serialization;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBStore;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 
 /**
  * A KTable storage. It stores all entries in a local RocksDB database.
@@ -35,15 +34,15 @@ import org.apache.kafka.streams.state.Serdes;
 public class KTableStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
-    private final Serdes<K, V> serdes;
+    private final StateSerdes<K, V> serdes;
     private final Time time;
 
     protected KTableStoreSupplier(String name,
-                                  Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
-                                  Serializer<V> valSerializer, Deserializer<V> valDeserializer,
+                                  Serialization<K> keySerialization,
+                                  Serialization<V> valSerialization,
                                   Time time) {
         this.name = name;
-        this.serdes = new Serdes<>(name, keySerializer, keyDeserializer, valSerializer, valDeserializer);
+        this.serdes = new StateSerdes<>(name, keySerialization, valSerialization);
         this.time = time;
     }
 

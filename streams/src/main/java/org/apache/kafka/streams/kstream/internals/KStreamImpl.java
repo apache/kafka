@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serialization;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -195,18 +195,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public KStream<K, V> through(String topic,
-                                 Serializer<K> keySerializer,
-                                 Serializer<V> valSerializer,
-                                 Deserializer<K> keyDeserializer,
-                                 Deserializer<V> valDeserializer) {
-        to(topic, keySerializer, valSerializer);
+                                 Serialization<K> keySerialization,
+                                 Serialization<V> valSerialization) {
+        to(topic, keySerialization == null ? null : keySerialization.serializer(),
+                valSerialization == null ? null : valSerialization.serializer());
 
-        return topology.stream(keyDeserializer, valDeserializer, topic);
+        return topology.stream(keySerialization == null ? null : keySerialization.deserializer(),
+                valSerialization == null ? null : valSerialization.deserializer(), topic);
     }
 
     @Override
     public KStream<K, V> through(String topic) {
-        return through(topic, null, null, null, null);
+        return through(topic, null, null);
     }
 
     @Override
@@ -261,16 +261,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serializer<K> keySerializer,
-            Serializer<V> thisValueSerializer,
-            Serializer<V1> otherValueSerializer,
-            Deserializer<K> keyDeserializer,
-            Deserializer<V> thisValueDeserializer,
-            Deserializer<V1> otherValueDeserializer) {
+            Serialization<K> keySerialization,
+            Serialization<V> thisValueSerialization,
+            Serialization<V1> otherValueSerialization) {
 
-        return join(other, joiner, windows,
-                keySerializer, thisValueSerializer, otherValueSerializer,
-                keyDeserializer, thisValueDeserializer, otherValueDeserializer, false);
+        return join(other, joiner, windows, keySerialization, thisValueSerialization, otherValueSerialization, false);
     }
 
     @Override
@@ -278,16 +273,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serializer<K> keySerializer,
-            Serializer<V> thisValueSerializer,
-            Serializer<V1> otherValueSerializer,
-            Deserializer<K> keyDeserializer,
-            Deserializer<V> thisValueDeserializer,
-            Deserializer<V1> otherValueDeserializer) {
+            Serialization<K> keySerialization,
+            Serialization<V> thisValueSerialization,
+            Serialization<V1> otherValueSerialization) {
 
-        return join(other, joiner, windows,
-                keySerializer, thisValueSerializer, otherValueSerializer,
-                keyDeserializer, thisValueDeserializer, otherValueDeserializer, true);
+        return join(other, joiner, windows, keySerialization, thisValueSerialization, otherValueSerialization, true);
     }
 
     @SuppressWarnings("unchecked")
@@ -295,26 +285,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serializer<K> keySerializer,
-            Serializer<V> thisValueSerializer,
-            Serializer<V1> otherValueSerializer,
-            Deserializer<K> keyDeserializer,
-            Deserializer<V> thisValueDeserializer,
-            Deserializer<V1> otherValueDeserializer,
+            Serialization<K> keySerialization,
+            Serialization<V> thisValueSerialization,
+            Serialization<V1> otherValueSerialization,
             boolean outer) {
 
         Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         StateStoreSupplier thisWindow = Stores.create(windows.name() + "-this")
-                .withKeys(keySerializer, keyDeserializer)
-                .withValues(thisValueSerializer, thisValueDeserializer)
+                .withKeys(keySerialization)
+                .withValues(thisValueSerialization)
                 .persistent()
                 .windowed(windows.maintainMs(), windows.segments, true)
                 .build();
 
         StateStoreSupplier otherWindow = Stores.create(windows.name() + "-other")
-                .withKeys(keySerializer, keyDeserializer)
-                .withValues(otherValueSerializer, otherValueDeserializer)
+                .withKeys(keySerialization)
+                .withValues(otherValueSerialization)
                 .persistent()
                 .windowed(windows.maintainMs(), windows.segments, true)
                 .build();
@@ -350,16 +337,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serializer<K> keySerializer,
-            Serializer<V1> otherValueSerializer,
-            Deserializer<K> keyDeserializer,
-            Deserializer<V1> otherValueDeserializer) {
+            Serialization<K> keySerialization,
+            Serialization<V1> otherValueSerialization) {
 
         Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         StateStoreSupplier otherWindow = Stores.create(windows.name() + "-other")
-                .withKeys(keySerializer, keyDeserializer)
-                .withValues(otherValueSerializer, otherValueDeserializer)
+                .withKeys(keySerialization)
+                .withValues(otherValueSerialization)
                 .persistent()
                 .windowed(windows.maintainMs(), windows.segments, true)
                 .build();
@@ -393,18 +378,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
                                                                  Windows<W> windows,
-                                                                 Serializer<K> keySerializer,
-                                                                 Serializer<V> aggValueSerializer,
-                                                                 Deserializer<K> keyDeserializer,
-                                                                 Deserializer<V> aggValueDeserializer) {
+                                                                 Serialization<K> keySerialization,
+                                                                 Serialization<V> aggValueSerialization) {
 
         String reduceName = topology.newName(REDUCE_NAME);
 
         KStreamWindowReduce<K, V, W> reduceSupplier = new KStreamWindowReduce<>(windows, windows.name(), reducer);
 
         StateStoreSupplier reduceStore = Stores.create(windows.name())
-                .withKeys(keySerializer, keyDeserializer)
-                .withValues(aggValueSerializer, aggValueDeserializer)
+                .withKeys(keySerialization)
+                .withValues(aggValueSerialization)
                 .persistent()
                 .windowed(windows.maintainMs(), windows.segments, false)
                 .build();
@@ -419,10 +402,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public KTable<K, V> reduceByKey(Reducer<V> reducer,
-                                    Serializer<K> keySerializer,
-                                    Serializer<V> aggValueSerializer,
-                                    Deserializer<K> keyDeserializer,
-                                    Deserializer<V> aggValueDeserializer,
+                                    Serialization<K> keySerialization,
+                                    Serialization<V> aggValueSerialization,
                                     String name) {
 
         String reduceName = topology.newName(REDUCE_NAME);
@@ -430,8 +411,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         KStreamReduce<K, V> reduceSupplier = new KStreamReduce<>(name, reducer);
 
         StateStoreSupplier reduceStore = Stores.create(name)
-                .withKeys(keySerializer, keyDeserializer)
-                .withValues(aggValueSerializer, aggValueDeserializer)
+                .withKeys(keySerialization)
+                .withValues(aggValueSerialization)
                 .persistent()
                 .build();
 
@@ -447,18 +428,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
                                                                        Aggregator<K, V, T> aggregator,
                                                                        Windows<W> windows,
-                                                                       Serializer<K> keySerializer,
-                                                                       Serializer<T> aggValueSerializer,
-                                                                       Deserializer<K> keyDeserializer,
-                                                                       Deserializer<T> aggValueDeserializer) {
+                                                                       Serialization<K> keySerialization,
+                                                                       Serialization<T> aggValueSerialization) {
 
         String aggregateName = topology.newName(AGGREGATE_NAME);
 
         KStreamAggProcessorSupplier<K, Windowed<K>, V, T> aggregateSupplier = new KStreamWindowAggregate<>(windows, windows.name(), initializer, aggregator);
 
         StateStoreSupplier aggregateStore = Stores.create(windows.name())
-                .withKeys(keySerializer, keyDeserializer)
-                .withValues(aggValueSerializer, aggValueDeserializer)
+                .withKeys(keySerialization)
+                .withValues(aggValueSerialization)
                 .persistent()
                 .windowed(windows.maintainMs(), windows.segments, false)
                 .build();
@@ -474,10 +453,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
                                            Aggregator<K, V, T> aggregator,
-                                           Serializer<K> keySerializer,
-                                           Serializer<T> aggValueSerializer,
-                                           Deserializer<K> keyDeserializer,
-                                           Deserializer<T> aggValueDeserializer,
+                                           Serialization<K> keySerialization,
+                                           Serialization<T> aggValueSerialization,
                                            String name) {
 
         String aggregateName = topology.newName(AGGREGATE_NAME);
@@ -485,8 +462,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         KStreamAggProcessorSupplier<K, K, V, T> aggregateSupplier = new KStreamAggregate<>(name, initializer, aggregator);
 
         StateStoreSupplier aggregateStore = Stores.create(name)
-                .withKeys(keySerializer, keyDeserializer)
-                .withValues(aggValueSerializer, aggValueDeserializer)
+                .withKeys(keySerialization)
+                .withValues(aggValueSerialization)
                 .persistent()
                 .build();
 
@@ -500,10 +477,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
-                                                                   Serializer<K> keySerializer,
-                                                                   Serializer<Long> aggValueSerializer,
-                                                                   Deserializer<K> keyDeserializer,
-                                                                   Deserializer<Long> aggValueDeserializer) {
+                                                                   Serialization<K> keySerialization,
+                                                                   Serialization<Long> aggValueSerialization) {
         return this.aggregateByKey(
                 new Initializer<Long>() {
                     @Override
@@ -516,14 +491,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                     public Long apply(K aggKey, V value, Long aggregate) {
                         return aggregate + 1L;
                     }
-                }, windows, keySerializer, aggValueSerializer, keyDeserializer, aggValueDeserializer);
+                }, windows, keySerialization, aggValueSerialization);
     }
 
     @Override
-    public     KTable<K, Long> countByKey(Serializer<K> keySerializer,
-                                          Serializer<Long> aggValueSerializer,
-                                          Deserializer<K> keyDeserializer,
-                                          Deserializer<Long> aggValueDeserializer,
+    public     KTable<K, Long> countByKey(Serialization<K> keySerialization,
+                                          Serialization<Long> aggValueSerialization,
                                           String name) {
 
         return this.aggregateByKey(
@@ -538,6 +511,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                     public Long apply(K aggKey, V value, Long aggregate) {
                         return aggregate + 1L;
                     }
-                }, keySerializer, aggValueSerializer, keyDeserializer, aggValueDeserializer, name);
+                }, keySerialization, aggValueSerialization, name);
     }
 }

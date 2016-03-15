@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serialization;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -109,17 +109,13 @@ public interface KStream<K, V> {
      * This is equivalent to calling to(topic) and from(topic).
      *
      * @param topic           the topic name
-     * @param keySerializer   key serializer used to send key-value pairs,
-     *                        if not specified the default key serializer defined in the configuration will be used
-     * @param valSerializer   value serializer used to send key-value pairs,
-     *                        if not specified the default value serializer defined in the configuration will be used
-     * @param keyDeserializer key deserializer used to create the new KStream,
-     *                        if not specified the default key deserializer defined in the configuration will be used
-     * @param valDeserializer value deserializer used to create the new KStream,
-     *                        if not specified the default value deserializer defined in the configuration will be used
+     * @param keySerialization   key serdes used to send key-value pairs,
+     *                        if not specified the default key serdes defined in the configuration will be used
+     * @param valSerialization   value serdes used to send key-value pairs,
+     *                        if not specified the default value serdes defined in the configuration will be used
      * @return the instance of KStream that consumes the given topic
      */
-    KStream<K, V> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer);
+    KStream<K, V> through(String topic, Serialization<K> keySerialization, Serialization<V> valSerialization);
 
     /**
      * Sends key-value to a topic using default serializers specified in the config.
@@ -171,18 +167,12 @@ public interface KStream<K, V> {
      * @param otherStream the instance of KStream joined with this stream
      * @param joiner ValueJoiner
      * @param windows the specification of the join window
-     * @param keySerializer key serializer,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param thisValueSerializer value serializer for this stream,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param otherValueSerializer value serializer for other stream,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param keyDeserializer key deserializer,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param thisValueDeserializer value deserializer for this stream,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param otherValueDeserializer value deserializer for other stream,
-     *                      if not specified the default serializer defined in the configs will be used
+     * @param keySerialization key serdes,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param thisValueSerialization value serdes for this stream,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param otherValueSerialization value serdes for other stream,
+     *                      if not specified the default serdes defined in the configs will be used
      * @param <V1>   the value type of the other stream
      * @param <R>   the value type of the new stream
      */
@@ -190,12 +180,9 @@ public interface KStream<K, V> {
             KStream<K, V1> otherStream,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serializer<K> keySerializer,
-            Serializer<V> thisValueSerializer,
-            Serializer<V1> otherValueSerializer,
-            Deserializer<K> keyDeserializer,
-            Deserializer<V> thisValueDeserializer,
-            Deserializer<V1> otherValueDeserializer);
+            Serialization<K> keySerialization,
+            Serialization<V> thisValueSerialization,
+            Serialization<V1> otherValueSerialization);
 
     /**
      * Combines values of this stream with another KStream using Windowed Outer Join.
@@ -203,18 +190,12 @@ public interface KStream<K, V> {
      * @param otherStream the instance of KStream joined with this stream
      * @param joiner ValueJoiner
      * @param windows the specification of the join window
-     * @param keySerializer key serializer,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param thisValueSerializer value serializer for this stream,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param otherValueSerializer value serializer for other stream,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param keyDeserializer key deserializer,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param thisValueDeserializer value deserializer for this stream,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param otherValueDeserializer value deserializer for other stream,
-     *                      if not specified the default serializer defined in the configs will be used
+     * @param keySerialization key serdes,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param thisValueSerialization value serdes for this stream,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param otherValueSerialization value serdes for other stream,
+     *                      if not specified the default serdes defined in the configs will be used
      * @param <V1>   the value type of the other stream
      * @param <R>   the value type of the new stream
      */
@@ -222,12 +203,9 @@ public interface KStream<K, V> {
             KStream<K, V1> otherStream,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serializer<K> keySerializer,
-            Serializer<V> thisValueSerializer,
-            Serializer<V1> otherValueSerializer,
-            Deserializer<K> keyDeserializer,
-            Deserializer<V> thisValueDeserializer,
-            Deserializer<V1> otherValueDeserializer);
+            Serialization<K> keySerialization,
+            Serialization<V> thisValueSerialization,
+            Serialization<V1> otherValueSerialization);
 
     /**
      * Combines values of this stream with another KStream using Windowed Left Join.
@@ -235,14 +213,10 @@ public interface KStream<K, V> {
      * @param otherStream the instance of KStream joined with this stream
      * @param joiner ValueJoiner
      * @param windows the specification of the join window
-     * @param keySerializer key serializer,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param otherValueSerializer value serializer for other stream,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param keyDeserializer key deserializer,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param otherValueDeserializer value deserializer for other stream,
-     *                      if not specified the default serializer defined in the configs will be used
+     * @param keySerialization key serdes,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param otherValueSerialization value serdes for other stream,
+     *                      if not specified the default serdes defined in the configs will be used
      * @param <V1>   the value type of the other stream
      * @param <R>   the value type of the new stream
      */
@@ -250,10 +224,8 @@ public interface KStream<K, V> {
             KStream<K, V1> otherStream,
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
-            Serializer<K> keySerializer,
-            Serializer<V1> otherValueSerializer,
-            Deserializer<K> keyDeserializer,
-            Deserializer<V1> otherValueDeserializer);
+            Serialization<K> keySerialization,
+            Serialization<V1> otherValueSerialization);
 
     /**
      * Combines values of this stream with KTable using Left Join.
@@ -273,10 +245,8 @@ public interface KStream<K, V> {
      */
     <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
                                                           Windows<W> windows,
-                                                          Serializer<K> keySerializer,
-                                                          Serializer<V> aggValueSerializer,
-                                                          Deserializer<K> keyDeserializer,
-                                                          Deserializer<V> aggValueDeserializer);
+                                                          Serialization<K> keySerialization,
+                                                          Serialization<V> aggValueSerialization);
 
     /**
      * Aggregate values of this stream by key on a window basis.
@@ -284,10 +254,8 @@ public interface KStream<K, V> {
      * @param reducer the class of Reducer
      */
     KTable<K, V> reduceByKey(Reducer<V> reducer,
-                             Serializer<K> keySerializer,
-                             Serializer<V> aggValueSerializer,
-                             Deserializer<K> keyDeserializer,
-                             Deserializer<V> aggValueDeserializer,
+                             Serialization<K> keySerialization,
+                             Serialization<V> aggValueSerialization,
                              String name);
 
     /**
@@ -301,10 +269,8 @@ public interface KStream<K, V> {
     <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
                                                                 Aggregator<K, V, T> aggregator,
                                                                 Windows<W> windows,
-                                                                Serializer<K> keySerializer,
-                                                                Serializer<T> aggValueSerializer,
-                                                                Deserializer<K> keyDeserializer,
-                                                                Deserializer<T> aggValueDeserializer);
+                                                                Serialization<K> keySerialization,
+                                                                Serialization<T> aggValueSerialization);
 
     /**
      * Aggregate values of this stream by key without a window basis, and hence
@@ -316,10 +282,8 @@ public interface KStream<K, V> {
      */
     <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
                                     Aggregator<K, V, T> aggregator,
-                                    Serializer<K> keySerializer,
-                                    Serializer<T> aggValueSerializer,
-                                    Deserializer<K> keyDeserializer,
-                                    Deserializer<T> aggValueDeserializer,
+                                    Serialization<K> keySerialization,
+                                    Serialization<T> aggValueSerialization,
                                     String name);
 
     /**
@@ -328,19 +292,15 @@ public interface KStream<K, V> {
      * @param windows the specification of the aggregation window
      */
     <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
-                                                            Serializer<K> keySerializer,
-                                                            Serializer<Long> aggValueSerializer,
-                                                            Deserializer<K> keyDeserializer,
-                                                            Deserializer<Long> aggValueDeserializer);
+                                                            Serialization<K> keySerialization,
+                                                            Serialization<Long> aggValueSerialization);
 
     /**
      * Count number of messages of this stream by key without a window basis, and hence
      * return a ever updating counting table
      *
      */
-    KTable<K, Long> countByKey(Serializer<K> keySerializer,
-                               Serializer<Long> aggValueSerializer,
-                               Deserializer<K> keyDeserializer,
-                               Deserializer<Long> aggValueDeserializer,
+    KTable<K, Long> countByKey(Serialization<K> keySerialization,
+                               Serialization<Long> aggValueSerialization,
                                String name);
 }

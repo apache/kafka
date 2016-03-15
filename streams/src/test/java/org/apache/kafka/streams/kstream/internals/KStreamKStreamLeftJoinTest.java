@@ -17,10 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serialization;
+import org.apache.kafka.common.serialization.Serializations;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -44,10 +42,8 @@ public class KStreamKStreamLeftJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    private IntegerSerializer keySerializer = new IntegerSerializer();
-    private StringSerializer valSerializer = new StringSerializer();
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
+    final private Serialization<Integer> keySerde = new Serializations.IntegerSerialization();
+    final private Serialization<String> valueSerde = new Serializations.StringSerialization();
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
@@ -71,10 +67,9 @@ public class KStreamKStreamLeftJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(keyDeserializer, valDeserializer, topic1);
-            stream2 = builder.stream(keyDeserializer, valDeserializer, topic2);
-            joined = stream1.leftJoin(stream2, joiner, JoinWindows.of("test").within(100),
-                    keySerializer, valSerializer, keyDeserializer, valDeserializer);
+            stream1 = builder.stream(keySerde.deserializer(), valueSerde.deserializer(), topic1);
+            stream2 = builder.stream(keySerde.deserializer(), valueSerde.deserializer(), topic2);
+            joined = stream1.leftJoin(stream2, joiner, JoinWindows.of("test").within(100), keySerde, valueSerde);
             joined.process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
@@ -157,10 +152,9 @@ public class KStreamKStreamLeftJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(keyDeserializer, valDeserializer, topic1);
-            stream2 = builder.stream(keyDeserializer, valDeserializer, topic2);
-            joined = stream1.leftJoin(stream2, joiner, JoinWindows.of("test").within(100),
-                    keySerializer, valSerializer, keyDeserializer, valDeserializer);
+            stream1 = builder.stream(keySerde.deserializer(), valueSerde.deserializer(), topic1);
+            stream2 = builder.stream(keySerde.deserializer(), valueSerde.deserializer(), topic2);
+            joined = stream1.leftJoin(stream2, joiner, JoinWindows.of("test").within(100), keySerde, valueSerde);
             joined.process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();

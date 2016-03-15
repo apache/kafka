@@ -23,6 +23,8 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.Serialization;
+import org.apache.kafka.common.serialization.Serializations;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -127,6 +129,12 @@ public class SmokeTestUtil {
             };
         }
     }
+
+    public static Serialization<String> stringSerialization = new Serializations.StringSerialization();
+
+    public static Serialization<Integer> intSerialization = new Serializations.IntegerSerialization();
+
+    public static Serialization<Long> longSerialization = new Serializations.LongSerialization();
 
     public static Serializer<String> stringSerializer = new StringSerializer();
 

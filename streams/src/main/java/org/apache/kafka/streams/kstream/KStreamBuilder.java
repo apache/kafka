@@ -18,7 +18,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.Serialization;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
@@ -40,7 +40,6 @@ public class KStreamBuilder extends TopologyBuilder {
         super();
     }
 
-    // TODO: needs updated
     /**
      * Creates a KStream instance for the specified topic.
      * The default deserializers specified in the config are used.
@@ -78,33 +77,29 @@ public class KStreamBuilder extends TopologyBuilder {
      * @return KTable
      */
     public <K, V> KTable<K, V> table(String topic) {
-        return table(null, null, null, null, topic);
+        return table(null, null, topic);
     }
 
     /**
      * Creates a KTable instance for the specified topic.
      *
-     * @param keySerializer   key serializer used to send key-value pairs,
-     *                        if not specified the default key serializer defined in the configuration will be used
-     * @param valSerializer   value serializer used to send key-value pairs,
-     *                        if not specified the default value serializer defined in the configuration will be used
-     * @param keyDeserializer key deserializer used to read this source KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
-     * @param valDeserializer value deserializer used to read this source KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
+     * @param keySerialization   key serde used to send key-value pairs,
+     *                        if not specified the default key serde defined in the configuration will be used
+     * @param valSerialization   value serde used to send key-value pairs,
+     *                        if not specified the default value serde defined in the configuration will be used
      * @param topic          the topic name
      * @return KStream
      */
-    public <K, V> KTable<K, V> table(Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String topic) {
+    public <K, V> KTable<K, V> table(Serialization<K> keySerialization, Serialization<V> valSerialization, String topic) {
         String source = newName(KStreamImpl.SOURCE_NAME);
         String name = newName(KTableImpl.SOURCE_NAME);
 
-        addSource(source, keyDeserializer, valDeserializer, topic);
+        addSource(source, keySerialization == null ? null : keySerialization.deserializer(), valSerialization == null ? null : valSerialization.deserializer(), topic);
 
         ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(topic);
         addProcessor(name, processorSupplier, source);
 
-        return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerializer, valSerializer, keyDeserializer, valDeserializer);
+        return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerialization, valSerialization);
     }
 
     /**

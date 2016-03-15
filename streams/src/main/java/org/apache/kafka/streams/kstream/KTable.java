@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serialization;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 
@@ -68,17 +68,13 @@ public interface KTable<K, V> {
      * This is equivalent to calling to(topic) and table(topic).
      *
      * @param topic           the topic name
-     * @param keySerializer   key serializer used to send key-value pairs,
-     *                        if not specified the default key serializer defined in the configuration will be used
-     * @param valSerializer   value serializer used to send key-value pairs,
-     *                        if not specified the default value serializer defined in the configuration will be used
-     * @param keyDeserializer key deserializer used to create the new KStream,
-     *                        if not specified the default key deserializer defined in the configuration will be used
-     * @param valDeserializer value deserializer used to create the new KStream,
-     *                        if not specified the default value deserializer defined in the configuration will be used
+     * @param keySerialization   key serde used to send key-value pairs,
+     *                        if not specified the default key serde defined in the configuration will be used
+     * @param valSerialization   value serde used to send key-value pairs,
+     *                        if not specified the default value serde defined in the configuration will be used
      * @return the new stream that consumes the given topic
      */
-    KTable<K, V> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer);
+    KTable<K, V> through(String topic, Serialization<K> keySerialization, Serialization<V> valSerialization);
 
     /**
      * Sends key-value to a topic using default serializers specified in the config.
@@ -152,10 +148,8 @@ public interface KTable<K, V> {
     <K1, V1> KTable<K1, V1> reduce(Reducer<V1> addReducer,
                                    Reducer<V1> removeReducer,
                                    KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                   Serializer<K1> keySerializer,
-                                   Serializer<V1> valueSerializer,
-                                   Deserializer<K1> keyDeserializer,
-                                   Deserializer<V1> valueDeserializer,
+                                   Serialization<K1> keySerialization,
+                                   Serialization<V1> valueSerialization,
                                    String name);
 
     /**
@@ -174,12 +168,9 @@ public interface KTable<K, V> {
                                         Aggregator<K1, V1, T> add,
                                         Aggregator<K1, V1, T> remove,
                                         KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                        Serializer<K1> keySerializer,
-                                        Serializer<V1> valueSerializer,
-                                        Serializer<T> aggValueSerializer,
-                                        Deserializer<K1> keyDeserializer,
-                                        Deserializer<V1> valueDeserializer,
-                                        Deserializer<T> aggValueDeserializer,
+                                        Serialization<K1> keySerialization,
+                                        Serialization<V1> valueSerialization,
+                                        Serialization<T> aggValueSerialization,
                                         String name);
 
     /**
@@ -191,12 +182,9 @@ public interface KTable<K, V> {
      * @return the instance of KTable
      */
     <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector,
-                                Serializer<K1> keySerializer,
-                                Serializer<V> valueSerializer,
-                                Serializer<Long> aggValueSerializer,
-                                Deserializer<K1> keyDeserializer,
-                                Deserializer<V> valueDeserializer,
-                                Deserializer<Long> aggValueDeserializer,
+                                Serialization<K1> keySerialization,
+                                Serialization<V> valueSerialization,
+                                Serialization<Long> aggValueSerialization,
                                 String name);
 
 }

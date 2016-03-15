@@ -24,11 +24,14 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.WallclockTimestampExtractor;
 
 import java.util.Map;
 
@@ -121,8 +124,6 @@ public class StreamsConfig extends AbstractConfig {
     /** <code>auto.offset.reset</code> */
     public static final String AUTO_OFFSET_RESET_CONFIG = ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 
-    private static final String WALLCLOCK_TIMESTAMP_EXTRACTOR = "org.apache.kafka.streams.processor.internals.WallclockTimestampExtractor";
-
     static {
         CONFIG = new ConfigDef().define(JOB_ID_CONFIG,      // required with no default value
                                         Type.STRING,
@@ -152,25 +153,29 @@ public class StreamsConfig extends AbstractConfig {
                                         1,
                                         Importance.MEDIUM,
                                         REPLICATION_FACTOR_DOC)
-                                .define(KEY_SERIALIZER_CLASS_CONFIG,        // required with no default value
+                                .define(KEY_SERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
+                                        ByteArraySerializer.class,
                                         Importance.HIGH,
                                         ProducerConfig.KEY_SERIALIZER_CLASS_DOC)
-                                .define(VALUE_SERIALIZER_CLASS_CONFIG,      // required with no default value
+                                .define(VALUE_SERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
+                                        ByteArraySerializer.class,
                                         Importance.HIGH,
                                         ProducerConfig.VALUE_SERIALIZER_CLASS_DOC)
-                                .define(KEY_DESERIALIZER_CLASS_CONFIG,      // required with no default value
+                                .define(KEY_DESERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
+                                        ByteArrayDeserializer.class,
                                         Importance.HIGH,
                                         ConsumerConfig.KEY_DESERIALIZER_CLASS_DOC)
-                                .define(VALUE_DESERIALIZER_CLASS_CONFIG,    // required with no default value
+                                .define(VALUE_DESERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
+                                        ByteArrayDeserializer.class,
                                         Importance.HIGH,
                                         ConsumerConfig.VALUE_DESERIALIZER_CLASS_DOC)
                                 .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                                         Type.CLASS,
-                                        WALLCLOCK_TIMESTAMP_EXTRACTOR,
+                                        WallclockTimestampExtractor.class,
                                         Importance.MEDIUM,
                                         TIMESTAMP_EXTRACTOR_CLASS_DOC)
                                 .define(PARTITION_GROUPER_CLASS_CONFIG,

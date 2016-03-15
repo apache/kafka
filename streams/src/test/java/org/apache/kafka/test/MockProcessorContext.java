@@ -27,7 +27,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import java.io.File;
 import java.util.Collections;
@@ -50,7 +50,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     long timestamp = -1L;
 
-    public MockProcessorContext(Serdes<?, ?> serdes, RecordCollector collector) {
+    public MockProcessorContext(StateSerdes<?, ?> serdes, RecordCollector collector) {
         this(null, null, serdes.keySerializer(), serdes.keyDeserializer(), serdes.valueSerializer(), serdes.valueDeserializer(), collector);
     }
 
