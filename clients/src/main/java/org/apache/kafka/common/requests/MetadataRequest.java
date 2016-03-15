@@ -12,9 +12,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
@@ -24,9 +22,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class MetadataRequest extends AbstractRequest {
     
@@ -44,7 +40,7 @@ public class MetadataRequest extends AbstractRequest {
     public MetadataRequest(Struct struct) {
         super(struct);
         Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
-        topics = new ArrayList<String>();
+        topics = new ArrayList<>();
         for (Object topicObj: topicArray) {
             topics.add((String) topicObj);
         }
@@ -52,16 +48,16 @@ public class MetadataRequest extends AbstractRequest {
 
     @Override
     public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
-        Map<String, Errors> topicErrors = new HashMap<String, Errors>();
-        for (String topic : topics) {
-            topicErrors.put(topic, Errors.forException(e));
-        }
+        List<MetadataResponse.TopicMetadata> topicMetadatas = new ArrayList<>();
+        Errors error = Errors.forException(e);
+        List<MetadataResponse.PartitionMetadata> partitions = Collections.emptyList();
 
-        Cluster cluster = new Cluster(Collections.<Node>emptyList(), Collections.<PartitionInfo>emptyList(),
-                Collections.<String>emptySet());
+        for (String topic : topics)
+            topicMetadatas.add(new MetadataResponse.TopicMetadata(error, topic, partitions));
+
         switch (versionId) {
             case 0:
-                return new MetadataResponse(cluster, topicErrors);
+                return new MetadataResponse(Collections.<Node>emptyList(), topicMetadatas);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.METADATA.id)));

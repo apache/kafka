@@ -56,6 +56,7 @@ import static org.junit.Assert.assertEquals;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(RestServer.class)
 @PowerMockIgnore("javax.management.*")
+@SuppressWarnings("unchecked")
 public class ConnectorsResourceTest {
     // Note trailing / and that we do *not* use LEADER_URL to construct our reference values. This checks that we handle
     // URL construction properly, avoiding //, which will mess up routing in the REST server

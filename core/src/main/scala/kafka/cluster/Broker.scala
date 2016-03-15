@@ -21,6 +21,7 @@ import java.nio.ByteBuffer
 
 import kafka.common.{BrokerEndPointNotAvailableException, BrokerNotAvailableException, KafkaException}
 import kafka.utils.Json
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.protocol.SecurityProtocol
 
 /**
@@ -103,7 +104,7 @@ object Broker {
   }
 }
 
-case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) {
+case class Broker(id: Int, endPoints: collection.Map[SecurityProtocol, EndPoint]) {
 
   override def toString: String = id + " : " + endPoints.values.mkString("(",",",")")
 
@@ -133,13 +134,14 @@ case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) {
     endPoints.contains(protocolType)
   }
 
+  def getNode(protocolType: SecurityProtocol): Node = {
+    val endpoint = endPoints.getOrElse(protocolType, throw new BrokerEndPointNotAvailableException("End point %s not found for broker %d".format(protocolType,id)))
+    new Node(id, endpoint.host, endpoint.port)
+  }
+
   def getBrokerEndPoint(protocolType: SecurityProtocol): BrokerEndPoint = {
-    val endpoint = endPoints.get(protocolType)
-    endpoint match {
-      case Some(endpoint) => new BrokerEndPoint(id, endpoint.host, endpoint.port)
-      case None =>
-        throw new BrokerEndPointNotAvailableException("End point %s not found for broker %d".format(protocolType,id))
-    }
+    val endpoint = endPoints.getOrElse(protocolType, throw new BrokerEndPointNotAvailableException("End point %s not found for broker %d".format(protocolType,id)))
+    new BrokerEndPoint(id, endpoint.host, endpoint.port)
   }
 
 }

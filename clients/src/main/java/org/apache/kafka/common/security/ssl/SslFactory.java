@@ -69,11 +69,12 @@ public class SslFactory implements Configurable {
         this.protocol =  (String) configs.get(SslConfigs.SSL_PROTOCOL_CONFIG);
         this.provider = (String) configs.get(SslConfigs.SSL_PROVIDER_CONFIG);
 
-
+        @SuppressWarnings("unchecked")
         List<String> cipherSuitesList = (List<String>) configs.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
         if (cipherSuitesList != null)
             this.cipherSuites = cipherSuitesList.toArray(new String[cipherSuitesList.size()]);
 
+        @SuppressWarnings("unchecked")
         List<String> enabledProtocolsList = (List<String>) configs.get(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
         if (enabledProtocolsList != null)
             this.enabledProtocols = enabledProtocolsList.toArray(new String[enabledProtocolsList.size()]);

@@ -92,8 +92,9 @@ class AdminClient(val time: Time,
     val request = new MetadataRequest(List[String]())
     val responseBody = sendAnyNode(ApiKeys.METADATA, request)
     val response = new MetadataResponse(responseBody)
-    if (!response.errors().isEmpty)
-      debug(s"Metadata request contained errors: ${response.errors()}")
+    val errors = response.errors()
+    if (!errors.isEmpty)
+      debug(s"Metadata request contained errors: ${errors}")
     response.cluster().nodes().asScala.toList
   }
 

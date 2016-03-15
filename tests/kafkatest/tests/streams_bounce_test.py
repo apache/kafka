@@ -41,7 +41,6 @@ class StreamsBounceTest(KafkaTest):
         self.driver = StreamsSmokeTestDriverService(test_context, self.kafka)
         self.processor1 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
 
-    @ignore
     def test_bounce(self):
         """
         Start a smoke test client, then abort (kill -9) and restart it a few times.

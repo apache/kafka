@@ -137,8 +137,6 @@ public class ProcessorStateManager {
         }
     }
 
-
-
     public File baseDir() {
         return this.baseDir;
     }
@@ -303,16 +301,6 @@ public class ProcessorStateManager {
 
     public StateStore getStore(String name) {
         return stores.get(name);
-    }
-
-    public void cleanup() throws IOException {
-        // clean up any unknown files in the state directory
-        for (File file : this.baseDir.listFiles()) {
-            if (!this.stores.containsKey(file.getName())) {
-                log.info("Deleting state directory {}", file.getAbsolutePath());
-                file.delete();
-            }
-        }
     }
 
     public void flush() {

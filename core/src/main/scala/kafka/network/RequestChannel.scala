@@ -63,7 +63,6 @@ object RequestChannel extends Logging {
     // o.a.k.common.requests.AbstractRequest.getRequest()
     private val keyToNameAndDeserializerMap: Map[Short, (ByteBuffer) => RequestOrResponse]=
       Map(ApiKeys.FETCH.id -> FetchRequest.readFrom,
-        ApiKeys.METADATA.id -> TopicMetadataRequest.readFrom,
         ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ControlledShutdownRequest.readFrom
       )
 
