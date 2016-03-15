@@ -318,7 +318,7 @@ private[log] class Cleaner(val id: Int,
 
     // build the offset map
     info("Building offset map for %s...".format(cleanable.log.name))
-    val upperBoundOffset = log.activeSegment.baseOffset
+    val upperBoundOffset = log.activeSegment.baseOffset //FIXME: if determine how far into the dirty segments we may clean. (don't clean segments with messages that are too new)
     val endOffset = buildOffsetMap(log, cleanable.firstDirtyOffset, upperBoundOffset, offsetMap) + 1
     stats.indexDone()
     
