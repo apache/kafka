@@ -31,26 +31,26 @@ trait RackAwareTest {
                                verifyReplicasDistribution: Boolean = true) {
     // always verify that no broker will be assigned for more than one replica
     for ((_, brokerList) <- assignment) {
-      assertEquals(brokerList.toSet.size, brokerList.size)
+      assertEquals("More than one replica is assigned to same broker for the same partition", brokerList.toSet.size, brokerList.size)
     }
     val distribution = getReplicaDistribution(assignment, brokerRackMapping)
 
     if (verifyRackAware) {
       val partitionRackMap = distribution.partitionRacks
-      assertEquals(List.fill(numPartitions)(replicationFactor), partitionRackMap.values.toList.map(_.size))
-      assertEquals(List.fill(numPartitions)(replicationFactor), partitionRackMap.values.toList.map(_.distinct.size))
+      assertEquals("More than one replica of the same partition is assigned to the same rack",
+        List.fill(numPartitions)(replicationFactor), partitionRackMap.values.toList.map(_.distinct.size))
     }
 
     if (verifyLeaderDistribution) {
       val leaderCount = distribution.brokerLeaderCount
       val leaderCountPerBroker = numPartitions / numBrokers
-      assertEquals(List.fill(numBrokers)(leaderCountPerBroker), leaderCount.values.toList)
+      assertEquals("Preferred leader count is not even for brokers", List.fill(numBrokers)(leaderCountPerBroker), leaderCount.values.toList)
     }
 
     if (verifyReplicasDistribution) {
       val replicasCount = distribution.brokerReplicasCount
       val numReplicasPerBroker = numPartitions * replicationFactor / numBrokers
-      assertEquals(List.fill(numBrokers)(numReplicasPerBroker), replicasCount.values.toList)
+      assertEquals("Replica count is not even for broker", List.fill(numBrokers)(numReplicasPerBroker), replicasCount.values.toList)
     }
   }
 
