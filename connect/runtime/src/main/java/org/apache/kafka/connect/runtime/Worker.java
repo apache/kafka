@@ -28,12 +28,15 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
+import org.apache.kafka.connect.tools.VerifiableSinkConnector;
+import org.apache.kafka.connect.tools.VerifiableSourceConnector;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.reflections.Reflections;
 import org.reflections.util.ClasspathHelper;
@@ -42,6 +45,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -77,6 +81,8 @@ public class Worker {
     private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<>();
     private KafkaProducer<byte[], byte[]> producer;
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
+    private static final List<Class<? extends Connector>>
+        SKIPPED_CONNECTORS = Arrays.asList(SourceConnector.class, SinkConnector.class, VerifiableSourceConnector.class, VerifiableSinkConnector.class);
 
     public Worker(String workerId,
                   Time time,
@@ -192,6 +198,13 @@ public class Worker {
     public Connector getConnector(String connType) {
         Class<? extends Connector> connectorClass = getConnectorClass(connType);
         return instantiateConnector(connectorClass);
+    }
+
+    public static Set<Class<? extends Connector>> getConnectorPlugins() {
+        Reflections reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath()));
+        Set<Class<? extends Connector>> connectorClasses = reflections.getSubTypesOf(Connector.class);
+        connectorClasses.removeAll(SKIPPED_CONNECTORS);
+        return connectorClasses;
     }
 
     @SuppressWarnings("unchecked")

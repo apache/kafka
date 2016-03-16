@@ -40,6 +40,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -187,6 +188,16 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         allGroups.addAll(groups);
 
         return generateResult(connType, resultConfigKeys, configValues, allGroups);
+    }
+
+    @Override
+    public List<String> connectorPlugins() {
+        List<String> connectorPlugins = new LinkedList<>();
+        Set<Class<? extends Connector>> connectorClasses = Worker.getConnectorPlugins();
+        for (Class<? extends Connector> connectorClass: connectorClasses) {
+            connectorPlugins.add(connectorClass.getCanonicalName());
+        }
+        return connectorPlugins;
     }
 
     // public for testing

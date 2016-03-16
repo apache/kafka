@@ -27,11 +27,16 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.tools.VerifiableSinkConnector;
+import org.apache.kafka.connect.tools.VerifiableSourceConnector;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
 import org.junit.Before;
@@ -49,8 +54,11 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(RestServer.class)
@@ -118,6 +126,31 @@ public class ConnectorPluginsResourceTest {
         assertEquals(new HashSet<>(CONFIG_INFOS.values()), new HashSet<>(configInfos.values()));
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testListConnectorPlugins() {
+        herder.connectorPlugins();
+
+        PowerMock.expectLastCall().andAnswer(new IAnswer<List<String>>() {
+            @Override
+            public List<String> answer() {
+                List<String> connectorPlugins = new LinkedList<>();
+                Set<Class<? extends Connector>> connectorClasses = Worker.getConnectorPlugins();
+                for (Class<? extends Connector> connectorClass: connectorClasses) {
+                    connectorPlugins.add(connectorClass.getCanonicalName());
+                }
+                return connectorPlugins;
+            }
+        });
+        PowerMock.replayAll();
+
+        Set<String> connectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins());
+        assertTrue(connectorPlugins.contains(ConnectorPluginsResourceTestConnector.class.getCanonicalName()));
+        assertFalse(connectorPlugins.contains(SourceConnector.class.getCanonicalName()));
+        assertFalse(connectorPlugins.contains(SinkConnector.class.getCanonicalName()));
+        assertFalse(connectorPlugins.contains(VerifiableSourceConnector.class.getCanonicalName()));
+        assertFalse(connectorPlugins.contains(VerifiableSinkConnector.class.getCanonicalName()));
     }
 
     /* Name here needs to be unique as we are testing the aliasing mechanism */

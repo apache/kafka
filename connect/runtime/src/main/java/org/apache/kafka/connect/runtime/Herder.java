@@ -135,6 +135,12 @@ public interface Herder {
      */
     ConfigInfos validateConfigs(String connType, Map<String, String> connectorConfig);
 
+    /**
+     * List the available connector plugins
+     * @return the list of connector plugin names
+     */
+    List<String> connectorPlugins();
+
     class Created<T> {
         private final boolean created;
         private final T result;
