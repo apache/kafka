@@ -54,8 +54,7 @@ class SimpleConsumerShellTest(Test):
         # This will produce to kafka cluster
         self.producer = VerifiableProducer(self.test_context, num_nodes=1, kafka=self.kafka, topic=TOPIC, throughput=1000, max_messages=MAX_MESSAGES)
         self.producer.start()
-        current_acked = self.producer.num_acked
-        wait_until(lambda: self.producer.num_acked >= current_acked + MAX_MESSAGES, timeout_sec=10,
+        wait_until(lambda: self.producer.num_acked == MAX_MESSAGES, timeout_sec=10,
                    err_msg="Timeout awaiting messages to be produced and acked")
 
     def test_simple_consumer_shell(self, security_protocol='PLAINTEXT'):
