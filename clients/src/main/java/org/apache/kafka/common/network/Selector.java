@@ -24,6 +24,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -84,6 +85,7 @@ public class Selector implements Selectable {
     private final List<Send> completedSends;
     private final List<NetworkReceive> completedReceives;
     private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
+    private final Set<KafkaChannel> connectableChannels;
     private final List<String> disconnected;
     private final List<String> connected;
     private final List<String> failedSends;
@@ -118,6 +120,7 @@ public class Selector implements Selectable {
         this.completedSends = new ArrayList<Send>();
         this.completedReceives = new ArrayList<NetworkReceive>();
         this.stagedReceives = new HashMap<KafkaChannel, Deque<NetworkReceive>>();
+        this.connectableChannels = new HashSet<>();
         this.connected = new ArrayList<String>();
         this.disconnected = new ArrayList<String>();
         this.failedSends = new ArrayList<String>();
@@ -161,8 +164,9 @@ public class Selector implements Selectable {
         if (receiveBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
             socket.setReceiveBufferSize(receiveBufferSize);
         socket.setTcpNoDelay(true);
+        boolean connected;
         try {
-            socketChannel.connect(address);
+            connected = socketChannel.connect(address);
         } catch (UnresolvedAddressException e) {
             socketChannel.close();
             throw new IOException("Can't resolve address: " + address, e);
@@ -174,6 +178,14 @@ public class Selector implements Selectable {
         KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
         key.attach(channel);
         this.channels.put(id, channel);
+        
+        if (connected) {
+            // Since the channel is already connected OP_CONNECT won't trigger
+            // Add to connectableChannels so poll() will be able to handle this case
+            log.debug("Instantly connected to node {}", channel.id());
+            connectableChannels.add(channel);
+            key.interestOps(0);
+        }
     }
 
     /**
@@ -259,7 +271,7 @@ public class Selector implements Selectable {
         if (timeout < 0)
             throw new IllegalArgumentException("timeout should be >= 0");
         clear();
-        if (hasStagedReceives())
+        if (hasStagedReceives() || connectableChannels.size() > 0)
             timeout = 0;
         /* check ready keys */
         long startSelect = time.nanoseconds();
@@ -268,6 +280,13 @@ public class Selector implements Selectable {
         currentTimeNanos = endSelect;
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
 
+        // Perform setup for instantly connected channels since they won't be included in selectedKeys()
+        if (connectableChannels.size() > 0)
+            for (KafkaChannel channel : connectableChannels) {
+                sensors.maybeRegisterConnectionMetrics(channel.id());
+                lruConnections.put(channel.id(), currentTimeNanos);
+            }
+        
         if (readyKeys > 0) {
             Set<SelectionKey> keys = this.nioSelector.selectedKeys();
             Iterator<SelectionKey> iter = keys.iterator();
@@ -281,11 +300,10 @@ public class Selector implements Selectable {
                 lruConnections.put(channel.id(), currentTimeNanos);
 
                 try {
-                    /* complete any connections that have finished their handshake */
+                    /* queue for completion any connections that have finished their handshake */
                     if (key.isConnectable()) {
-                        channel.finishConnect();
-                        this.connected.add(channel.id());
-                        this.sensors.connectionCreated.record();
+                        connectableChannels.add(channel);
+                        continue;
                     }
 
                     /* if channel is not ready finish prepare */
@@ -327,6 +345,17 @@ public class Selector implements Selectable {
 
         addToCompletedReceives();
 
+        // finish connection setup
+        if (connectableChannels.size() > 0) {
+            for (KafkaChannel channel : connectableChannels) {
+                channel.finishConnect();
+                this.connected.add(channel.id());
+                this.sensors.connectionCreated.record();
+                channel.prepare();
+            }
+            connectableChannels.clear();
+        }
+        
         long endIo = time.nanoseconds();
         this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
         maybeCloseOldestConnection();
