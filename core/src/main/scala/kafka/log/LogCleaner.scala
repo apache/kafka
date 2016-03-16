@@ -35,7 +35,9 @@ import scala.collection._
  * A message with key K and offset O is obsolete if there exists a message with key K and offset O' such that O < O'.
  * 
  * Each log can be thought of being split into two sections of segments: a "clean" section which has previously been cleaned followed by a
- * "dirty" section that has not yet been cleaned. The active log segment is always excluded from cleaning.
+ * "dirty" section that has not yet been cleaned. The dirty section is further divided into the "cleanable" section followed by an "uncleanable" section.
+ * The uncleanable section is excluded from cleaning. The active log segment is always uncleanable. If there is a
+ * compaction lag time set, segments whose last modification date is within the compaction lag time of the cleaning operation are also uncleanable.
  *
  * The cleaning is carried out by a pool of background threads. Each thread chooses the dirtiest log that has the "dedupe" retention policy 
  * and cleans that. The dirtiness of the log is guessed by taking the ratio of bytes in the dirty section of the log to the total bytes in the log. 
@@ -219,7 +221,7 @@ class LogCleaner(val config: CleanerConfig,
      * Clean a log if there is a dirty log available, otherwise sleep for a bit
      */
     private def cleanOrSleep() {
-      cleanerManager.grabFilthiestLog() match {
+      cleanerManager.grabFilthiestLog(time) match {
         case None =>
           // there are no cleanable logs, sleep a while
           backOffWaitLatch.await(config.backOffMs, TimeUnit.MILLISECONDS)
@@ -318,7 +320,7 @@ private[log] class Cleaner(val id: Int,
 
     // build the offset map
     info("Building offset map for %s...".format(cleanable.log.name))
-    val upperBoundOffset = log.activeSegment.baseOffset //FIXME: if determine how far into the dirty segments we may clean. (don't clean segments with messages that are too new)
+    val upperBoundOffset = cleanable.firstUncleanableOffset
     val endOffset = buildOffsetMap(log, cleanable.firstDirtyOffset, upperBoundOffset, offsetMap) + 1
     stats.indexDone()
     
@@ -329,9 +331,13 @@ private[log] class Cleaner(val id: Int,
         case None => 0L
         case Some(seg) => seg.lastModified - log.config.deleteRetentionMs
     }
-        
+
+    // determine the timestamp up to which the log will be cleaned
+    // this is the lower of the last active segment and the compaction lag
+    val cleanableHorizionMs = log.logSegments(0, cleanable.firstUncleanableOffset).lastOption.map(_.lastModified).getOrElse(0L)
+
     // group the segments and clean the groups
-    info("Cleaning log %s (discarding tombstones prior to %s)...".format(log.name, new Date(deleteHorizonMs)))
+    info("Cleaning log %s (cleaning prior to %s, discarding tombstones prior to %s)...".format(log.name, new Date(cleanableHorizionMs), new Date(deleteHorizonMs)))
     for (group <- groupSegmentsBySize(log.logSegments(0, endOffset), log.config.segmentSize, log.config.maxIndexSize))
       cleanSegments(log, group, offsetMap, deleteHorizonMs)
       
@@ -591,7 +597,7 @@ private[log] class Cleaner(val id: Int,
   }
 
   /**
-   * Build a map of key_hash => offset for the keys in the dirty portion of the log to use in cleaning.
+   * Build a map of key_hash => offset for the keys in the cleanable dirty portion of the log to use in cleaning.
    * @param log The log to use
    * @param start The offset at which dirty messages begin
    * @param end The ending offset for the map that is being built
@@ -604,7 +610,7 @@ private[log] class Cleaner(val id: Int,
     val dirty = log.logSegments(start, end).toSeq
     info("Building offset map for log %s for %d segments in offset range [%d, %d).".format(log.name, dirty.size, start, end))
     
-    // Add all the dirty segments. We must take at least map.slots * load_factor,
+    // Add all the cleanable dirty segments. We must take at least map.slots * load_factor,
     // but we may be able to fit more (if there is lots of duplication in the dirty section of the log)
     var offset = dirty.head.baseOffset
     require(offset == start, "Last clean offset is %d but segment base offset is %d for log %s.".format(start, offset, log.name))
@@ -719,12 +725,14 @@ private case class CleanerStats(time: Time = SystemTime) {
 }
 
 /**
- * Helper class for a log, its topic/partition, and the last clean position
+ * Helper class for a log, its topic/partition, the first cleanable position, and the first uncleanable dirty position
  */
-private case class LogToClean(topicPartition: TopicAndPartition, log: Log, firstDirtyOffset: Long) extends Ordered[LogToClean] {
+private case class LogToClean(topicPartition: TopicAndPartition, log: Log, firstDirtyOffset: Long, uncleanableOffset: Long) extends Ordered[LogToClean] {
   val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size).sum
-  val dirtyBytes = log.logSegments(firstDirtyOffset, math.max(firstDirtyOffset, log.activeSegment.baseOffset)).map(_.size).sum
-  val cleanableRatio = dirtyBytes / totalBytes.toDouble
-  def totalBytes = cleanBytes + dirtyBytes
+  private[this] val firstUncleanableSegment = log.logSegments(uncleanableOffset, log.activeSegment.baseOffset).headOption.getOrElse(log.activeSegment)
+  val firstUncleanableOffset = firstUncleanableSegment.baseOffset
+  val cleanableBytes = log.logSegments(firstDirtyOffset, math.max(firstDirtyOffset, firstUncleanableOffset)).map(_.size).sum
+  val totalBytes = cleanBytes + cleanableBytes
+  val cleanableRatio = cleanableBytes / totalBytes.toDouble
   override def compare(that: LogToClean): Int = math.signum(this.cleanableRatio - that.cleanableRatio).toInt
 }
