@@ -60,7 +60,6 @@ class MessageFormatChangeTest(ProduceConsumeValidateTest):
         time.sleep(1)
         
     @parametrize(producer_version=str(TRUNK), consumer_version=str(TRUNK))
-    @parametrize(producer_version=str(LATEST_0_9), consumer_version=str(LATEST_0_9))
     def test_compatibility(self, producer_version, consumer_version):
        
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, version=TRUNK, topics={self.topic: {
