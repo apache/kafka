@@ -193,7 +193,8 @@ public class Worker {
         Class<? extends Connector> connectorClass = getConnectorClass(connType);
         return instantiateConnector(connectorClass);
     }
-    
+
+    @SuppressWarnings("unchecked")
     private Class<? extends Connector> getConnectorClass(String connectorAlias) {
         // Avoid the classpath scan if the full class name was provided
         try {

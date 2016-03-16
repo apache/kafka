@@ -46,7 +46,6 @@ import java.util.Map;
 public abstract class Connector {
 
     protected ConnectorContext context;
-    protected ConfigDef configDef;
 
     /**
      * Get the version of this connector.

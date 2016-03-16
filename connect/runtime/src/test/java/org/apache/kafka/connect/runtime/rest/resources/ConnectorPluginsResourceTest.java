@@ -43,6 +43,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -60,7 +61,7 @@ public class ConnectorPluginsResourceTest {
         props.put("test.int.config", "10");
     }
 
-    private static ConfigInfos CONFIG_INFOS;
+    private static final ConfigInfos CONFIG_INFOS;
     static {
         List<ConfigInfo> configs = new LinkedList<>();
 
@@ -101,11 +102,13 @@ public class ConnectorPluginsResourceTest {
                 return AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), configDef.configKeys(), config.configValues(), configDef.groups());
             }
         });
-
         PowerMock.replayAll();
 
         ConfigInfos configInfos = connectorPluginsResource.validateConfigs(ConnectorPluginsResourceTestConnector.class.getName(), props);
-        assertEquals(CONFIG_INFOS, configInfos);
+        assertEquals(CONFIG_INFOS.name(), configInfos.name());
+        assertEquals(CONFIG_INFOS.errorCount(), configInfos.errorCount());
+        assertEquals(CONFIG_INFOS.groups(), configInfos.groups());
+        assertEquals(new HashSet<>(CONFIG_INFOS.values()), new HashSet<>(configInfos.values()));
 
         PowerMock.verifyAll();
     }
@@ -115,6 +118,9 @@ public class ConnectorPluginsResourceTest {
 
         public static final String TEST_STRING_CONFIG = "test.string.config";
         public static final String TEST_INT_CONFIG = "test.int.config";
+        private static final ConfigDef CONFIG_DEF = new ConfigDef()
+            .define(TEST_STRING_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Test configuration for string type.")
+            .define(TEST_INT_CONFIG, ConfigDef.Type.INT, ConfigDef.Importance.MEDIUM, "Test configuration for integer type.");
 
         @Override
         public String version() {
@@ -143,14 +149,7 @@ public class ConnectorPluginsResourceTest {
 
         @Override
         public ConfigDef config() {
-            if (this.configDef != null) {
-                return this.configDef;
-            } else {
-                configDef = new ConfigDef()
-                    .define(TEST_STRING_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Test configuration for string type.")
-                    .define(TEST_INT_CONFIG, ConfigDef.Type.INT, ConfigDef.Importance.MEDIUM, "Test configuration for integer type.");
-                return configDef;
-            }
+            return CONFIG_DEF;
         }
     }
 }

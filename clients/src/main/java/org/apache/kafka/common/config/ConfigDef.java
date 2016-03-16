@@ -454,7 +454,7 @@ public class ConfigDef {
         return validate(parsed, configValues);
     }
 
-    // Testing
+    // package accessible for testing
     Map<String, Object> parseForValidate(Map<String, String> props, Map<String, ConfigValue> configValues) {
         Map<String, Object> parsed = new HashMap<>();
         Set<String> configsWithNoParent = getConfigsWithNoParent();

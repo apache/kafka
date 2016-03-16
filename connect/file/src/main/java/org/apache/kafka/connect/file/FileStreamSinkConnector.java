@@ -36,6 +36,8 @@ import java.util.Map;
 public class FileStreamSinkConnector extends SinkConnector {
 
     public static final String FILE_CONFIG = "file";
+    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+        .define(FILE_CONFIG, Type.STRING, Importance.HIGH, "Destination filename.");
 
     private String filename;
 
@@ -73,12 +75,6 @@ public class FileStreamSinkConnector extends SinkConnector {
 
     @Override
     public ConfigDef config() {
-        if (this.configDef != null) {
-            return this.configDef;
-        } else {
-            configDef = new ConfigDef()
-                .define(FILE_CONFIG, Type.STRING, Importance.HIGH, "Destination filename.");
-            return configDef;
-        }
+        return CONFIG_DEF;
     }
 }

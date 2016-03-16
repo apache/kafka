@@ -38,6 +38,10 @@ public class FileStreamSourceConnector extends SourceConnector {
     public static final String TOPIC_CONFIG = "topic";
     public static final String FILE_CONFIG = "file";
 
+    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+        .define(FILE_CONFIG, Type.STRING, Importance.HIGH, "Source filename.")
+        .define(TOPIC_CONFIG, Type.STRING, Importance.HIGH, "The topic to publish data to");
+
     private String filename;
     private String topic;
 
@@ -80,13 +84,6 @@ public class FileStreamSourceConnector extends SourceConnector {
 
     @Override
     public ConfigDef config() {
-        if (this.configDef != null) {
-            return this.configDef;
-        } else {
-            configDef = new ConfigDef()
-                .define(FILE_CONFIG, Type.STRING, Importance.HIGH, "Source filename.")
-                .define(TOPIC_CONFIG, Type.STRING, Importance.HIGH, "The topic to publish data to");
-            return configDef;
-        }
+        return CONFIG_DEF;
     }
 }
