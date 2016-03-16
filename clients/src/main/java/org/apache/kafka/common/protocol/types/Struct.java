@@ -70,6 +70,22 @@ public class Struct {
     }
 
     /**
+     *
+     * @param field
+     * @return
+     */
+    public Object getRaw(Field field) {
+        validateField(field);
+        Object value = this.values[field.index];
+        if (value != null)
+            return value;
+        else if (field.type.isNullable())
+            return null;
+        else
+            throw new SchemaException("Missing value for field '" + field.name);
+    }
+
+    /**
      * Get the record value for the field with the given name by doing a hash table lookup (slower!)
      * 
      * @param name The name of the field
@@ -237,10 +253,24 @@ public class Struct {
     }
 
     /**
+     * Get the raw size of the object excluding defaults
+     */
+    public int sizeOfRaw() {
+        return this.schema.sizeOfRaw(this);
+    }
+
+    /**
      * Write this struct to a buffer
      */
     public void writeTo(ByteBuffer buffer) {
         this.schema.write(buffer, this);
+    }
+
+    /**
+     * Write the struct to a buffer without including default values
+     */
+    public void writeRawTo(ByteBuffer buffer) {
+        this.schema.writeRaw(buffer, this);
     }
 
     /**
