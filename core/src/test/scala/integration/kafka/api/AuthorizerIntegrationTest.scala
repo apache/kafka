@@ -187,7 +187,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   private def createUpdateMetadataRequest = {
     val partitionState = Map(tp -> new requests.UpdateMetadataRequest.PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Set(brokerId).asJava)).asJava
     val brokers = Set(new requests.UpdateMetadataRequest.Broker(brokerId,
-      Map(SecurityProtocol.PLAINTEXT -> new requests.UpdateMetadataRequest.EndPoint("localhost", 0)).asJava)).asJava
+      Map(SecurityProtocol.PLAINTEXT -> new requests.UpdateMetadataRequest.EndPoint("localhost", 0)).asJava, null)).asJava
     new requests.UpdateMetadataRequest(brokerId, Int.MaxValue, partitionState, brokers)
   }
 
