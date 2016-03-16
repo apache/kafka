@@ -26,7 +26,7 @@ import time
 
 #
 # This tests performs the following checks:
-# 1. Have both 0.9 and 0.10 producer and consumer produce to and consume from a 0.10.x cluster
+# 1. Have 0.10.x producer and consumer produce to and consume from a 0.10.x cluster
 # 2. initially the topic is using message format 0.9.0
 # 3. change the message format version for topic to 0.10.0 on the fly.
 # 4. change the message format version for topic back to 0.9.0 on the fly.
