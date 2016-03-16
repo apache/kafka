@@ -99,20 +99,19 @@ public class ProducerInterceptors<K, V> implements Closeable {
      * method for each interceptor
      *
      * @param record The record from client
-     * @param tp The topic/partition for the record if an error occurred after partition gets assigned;
-     *           the topic part of tp is the same as in record.
+     * @param interceptTopicPartition  The topic/partition for the record if an error occurred
+     *        after partition gets assigned; the topic part of interceptTopicPartition is the same as in record.
      * @param exception The exception thrown during processing of this record.
      */
-    public void onSendError(ProducerRecord<K, V> record, TopicPartition tp, Exception exception) {
+    public void onSendError(ProducerRecord<K, V> record, TopicPartition interceptTopicPartition, Exception exception) {
         for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
             try {
-                if (record == null && tp == null) {
+                if (record == null && interceptTopicPartition == null) {
                     interceptor.onAcknowledgement(null, exception);
                 } else {
-                    TopicPartition interceptTopicPartition = tp;
                     if (interceptTopicPartition == null) {
                         interceptTopicPartition = new TopicPartition(record.topic(),
-                                                                     record.partition() == null ? RecordMetadata.NO_PARTITION : record.partition());
+                                                                     record.partition() == null ? RecordMetadata.UNKNOWN_PARTITION : record.partition());
                     }
                     interceptor.onAcknowledgement(new RecordMetadata(interceptTopicPartition, -1, -1, Record.NO_TIMESTAMP, -1, -1, -1),
                                                   exception);

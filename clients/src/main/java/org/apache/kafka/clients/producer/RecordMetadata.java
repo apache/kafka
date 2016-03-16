@@ -26,7 +26,7 @@ public final class RecordMetadata {
     /**
      * Partition value for record without partition assigned
      */
-    public static final int NO_PARTITION = -1;
+    public static final int UNKNOWN_PARTITION = -1;
 
     private final long offset;
     // The timestamp of the message.
