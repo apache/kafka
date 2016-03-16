@@ -83,13 +83,13 @@ public class StreamsConfig extends AbstractConfig {
     public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
     private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>PartitionGrouper</code> interface.";
 
-    /** <code>job.id</code> */
-    public static final String JOB_ID_CONFIG = "job.id";
-    public static final String JOB_ID_DOC = "An id string to identify for the stream job. It is used as 1) the default client-id prefix, 2) the group-id for membership management, 3) the changelog topic prefix.";
+    /** <code>application.id</code> */
+    public static final String APPLICATION_ID_CONFIG = "application.id";
+    public static final String APPLICATION_ID_DOC = "An identifier for the stream processing application. Must be unique within the Kafka cluster. It is used as 1) the default client-id prefix, 2) the group-id for membership management, 3) the changelog topic prefix.";
 
     /** <code>replication.factor</code> */
     public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
-    public static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the job.";
+    public static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the stream processing application.";
 
     /** <code>key.serializer</code> */
     public static final String KEY_SERIALIZER_CLASS_CONFIG = ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -124,10 +124,10 @@ public class StreamsConfig extends AbstractConfig {
     private static final String WALLCLOCK_TIMESTAMP_EXTRACTOR = "org.apache.kafka.streams.processor.internals.WallclockTimestampExtractor";
 
     static {
-        CONFIG = new ConfigDef().define(JOB_ID_CONFIG,      // required with no default value
+        CONFIG = new ConfigDef().define(APPLICATION_ID_CONFIG,      // required with no default value
                                         Type.STRING,
                                         Importance.HIGH,
-                                        StreamsConfig.JOB_ID_DOC)
+                                        StreamsConfig.APPLICATION_ID_DOC)
                                 .define(BOOTSTRAP_SERVERS_CONFIG,       // required with no default value
                                         Type.STRING,
                                         Importance.HIGH,
@@ -297,7 +297,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     private void removeStreamsSpecificConfigs(Map<String, Object> props) {
-        props.remove(StreamsConfig.JOB_ID_CONFIG);
+        props.remove(StreamsConfig.APPLICATION_ID_CONFIG);
         props.remove(StreamsConfig.STATE_DIR_CONFIG);
         props.remove(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         props.remove(StreamsConfig.NUM_STREAM_THREADS_CONFIG);

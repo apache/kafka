@@ -84,8 +84,8 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public String jobId() {
-        return task.jobId();
+    public String applicationId() {
+        return task.applicationId();
     }
 
     @Override

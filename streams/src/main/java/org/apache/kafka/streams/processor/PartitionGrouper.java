@@ -28,7 +28,8 @@ import java.util.Set;
  *
  * This grouper also acts as the stream task creation function along with partition distribution
  * such that each generated partition group is assigned with a distinct {@link TaskId};
- * the created task ids will then be assigned to Kafka Streams instances that host the stream job.
+ * the created task ids will then be assigned to Kafka Streams instances that host the stream
+ * processing application.
  */
 public interface PartitionGrouper {
 
