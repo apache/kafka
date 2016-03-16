@@ -21,8 +21,8 @@ import static org.junit.Assert.assertEquals;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
@@ -34,20 +34,23 @@ public class ConsumerRecordsTest {
     @Test
     public void iterator() throws Exception {
 
-        Map<TopicPartition, List<ConsumerRecord<Integer, String>>> records = new HashMap<>();
+        Map<TopicPartition, List<ConsumerRecord<Integer, String>>> records = new LinkedHashMap<>();
 
         String topic = "topic";
         records.put(new TopicPartition(topic, 0), new ArrayList<ConsumerRecord<Integer, String>>());
         ConsumerRecord<Integer, String> record1 = new ConsumerRecord<>(topic, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 1, "value1");
         ConsumerRecord<Integer, String> record2 = new ConsumerRecord<>(topic, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 2, "value2");
         records.put(new TopicPartition(topic, 1), Arrays.asList(record1, record2));
+        records.put(new TopicPartition(topic, 2), new ArrayList<ConsumerRecord<Integer, String>>());
 
         ConsumerRecords<Integer, String> consumerRecords = new ConsumerRecords<>(records);
         Iterator<ConsumerRecord<Integer, String>> iter = consumerRecords.iterator();
 
         int c = 0;
-        for (; iter.hasNext(); iter.next()) {
-            c++;
+        for (;iter.hasNext(); c++) {
+            ConsumerRecord<Integer, String> record = iter.next();
+            assertEquals(1, record.partition());
+            assertEquals(topic, record.topic());
         }
         assertEquals(2, c);
     }
