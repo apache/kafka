@@ -18,7 +18,7 @@ package org.apache.kafka.common.serialization;
  *
  * @param <T>
  */
-public interface SerDe<T> {
+public interface Serde<T> {
 
     Serializer<T> serializer();
 

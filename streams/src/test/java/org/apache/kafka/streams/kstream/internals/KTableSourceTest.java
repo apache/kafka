@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.SerDe;
-import org.apache.kafka.common.serialization.SerDes;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -36,7 +36,7 @@ import static org.junit.Assert.assertTrue;
 
 public class KTableSourceTest {
 
-    final private SerDe<String> strSerde = new SerDes.StringSerDe();
+    final private Serde<String> strSerde = new Serdes.StringSerde();
 
     @Test
     public void testKTable() {

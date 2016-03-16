@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.examples.wordcount;
 
-import org.apache.kafka.common.serialization.SerDes;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -54,7 +54,7 @@ public class WordCountJob {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> source = builder.stream(SerDes.STRING().deserializer(), SerDes.STRING().deserializer(), "streams-file-input");
+        KStream<String, String> source = builder.stream(Serdes.STRING(), Serdes.STRING(), "streams-file-input");
 
         KTable<String, Long> counts = source
                 .flatMapValues(new ValueMapper<String, Iterable<String>>() {
@@ -68,9 +68,9 @@ public class WordCountJob {
                         return new KeyValue<String, String>(value, value);
                     }
                 })
-                .countByKey(SerDes.STRING(), "Counts");
+                .countByKey(Serdes.STRING(), "Counts");
 
-        counts.to("streams-wordcount-output", SerDes.STRING().serializer(), SerDes.LONG().serializer());
+        counts.to("streams-wordcount-output", Serdes.STRING(), Serdes.LONG());
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();

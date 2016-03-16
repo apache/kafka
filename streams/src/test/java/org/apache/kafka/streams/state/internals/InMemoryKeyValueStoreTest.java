@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.SerDes;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -39,7 +39,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             Deserializer<K> keyDeser = (Deserializer<K>) context.keyDeserializer();
             Serializer<V> valSer = (Serializer<V>) context.valueSerializer();
             Deserializer<V> valDeser = (Deserializer<V>) context.valueDeserializer();
-            supplier = Stores.create("my-store").withKeys(SerDes.serialization(keySer, keyDeser)).withValues(SerDes.serialization(valSer, valDeser)).inMemory().build();
+            supplier = Stores.create("my-store").withKeys(Serdes.serdeFrom(keySer, keyDeser)).withValues(Serdes.serdeFrom(valSer, valDeser)).inMemory().build();
         } else {
             supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass).inMemory().build();
         }

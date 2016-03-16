@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.KeyValue;
@@ -33,8 +33,8 @@ public class KStreamMapTest {
 
     private String topicName = "topic";
 
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
+    private Serde<Integer> keySerde = Serdes.INTEGER();
+    private Serde<String> valSerde = Serdes.STRING();
 
     @Test
     public void testMap() {
@@ -54,7 +54,7 @@ public class KStreamMapTest {
         MockProcessorSupplier<String, Integer> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keyDeserializer, valDeserializer, topicName);
+        stream = builder.stream(keySerde, valSerde, topicName);
         stream.map(mapper).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);

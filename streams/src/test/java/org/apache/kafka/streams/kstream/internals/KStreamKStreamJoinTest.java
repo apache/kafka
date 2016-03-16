@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.SerDe;
-import org.apache.kafka.common.serialization.SerDes;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -42,8 +42,8 @@ public class KStreamKStreamJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    final private SerDe<Integer> keySerde = new SerDes.IntegerSerDe();
-    final private SerDe<String> valueSerde = new SerDes.StringSerDe();
+    final private Serde<Integer> keySerde = Serdes.INTEGER();
+    final private Serde<String> valueSerde = Serdes.STRING();
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
@@ -67,8 +67,8 @@ public class KStreamKStreamJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(keySerde.deserializer(), valueSerde.deserializer(), topic1);
-            stream2 = builder.stream(keySerde.deserializer(), valueSerde.deserializer(), topic2);
+            stream1 = builder.stream(Serdes.INTEGER(), Serdes.STRING(), topic1);
+            stream2 = builder.stream(Serdes.INTEGER(), Serdes.STRING(), topic2);
             joined = stream1.join(stream2, joiner, JoinWindows.of("test").within(100), keySerde, valueSerde, valueSerde);
             joined.process(processor);
 
@@ -172,8 +172,8 @@ public class KStreamKStreamJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(keySerde.deserializer(), valueSerde.deserializer(), topic1);
-            stream2 = builder.stream(keySerde.deserializer(), valueSerde.deserializer(), topic2);
+            stream1 = builder.stream(keySerde, valueSerde, topic1);
+            stream2 = builder.stream(keySerde, valueSerde, topic2);
             joined = stream1.outerJoin(stream2, joiner, JoinWindows.of("test").within(100), keySerde, valueSerde, valueSerde);
             joined.process(processor);
 
@@ -279,8 +279,8 @@ public class KStreamKStreamJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(keySerde.deserializer(), valueSerde.deserializer(), topic1);
-            stream2 = builder.stream(keySerde.deserializer(), valueSerde.deserializer(), topic2);
+            stream1 = builder.stream(keySerde, valueSerde, topic1);
+            stream2 = builder.stream(keySerde, valueSerde, topic2);
             joined = stream1.join(stream2, joiner, JoinWindows.of("test").within(100), keySerde, valueSerde, valueSerde);
             joined.process(processor);
 

@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.SerDe;
-import org.apache.kafka.common.serialization.SerDes;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -37,14 +37,14 @@ public class KStreamImplTest {
 
     @Test
     public void testNumProcesses() {
-        final SerDe<String> stringSerde = new SerDes.StringSerDe();
-        final SerDe<Integer> intSerde = new SerDes.IntegerSerDe();
+        final Serde<String> stringSerde = Serdes.STRING();
+        final Serde<Integer> intSerde = Serdes.INTEGER();
 
         final KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> source1 = builder.stream(stringSerde.deserializer(), stringSerde.deserializer(), "topic-1", "topic-2");
+        KStream<String, String> source1 = builder.stream(stringSerde, stringSerde, "topic-1", "topic-2");
 
-        KStream<String, String> source2 = builder.stream(stringSerde.deserializer(), stringSerde.deserializer(), "topic-3", "topic-4");
+        KStream<String, String> source2 = builder.stream(stringSerde, stringSerde, "topic-3", "topic-4");
 
         KStream<String, String> stream1 =
             source1.filter(new Predicate<String, String>() {

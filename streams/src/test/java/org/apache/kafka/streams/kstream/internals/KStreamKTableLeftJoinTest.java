@@ -18,8 +18,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.serialization.SerDe;
-import org.apache.kafka.common.serialization.SerDes;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -45,8 +45,8 @@ public class KStreamKTableLeftJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    final private SerDe<Integer> keySerde = new SerDes.IntegerSerDe();
-    final private SerDe<String> valueSerde = new SerDes.StringSerDe();
+    final private Serde<Integer> keySerde = new Serdes.IntegerSerde();
+    final private Serde<String> valueSerde = new Serdes.StringSerde();
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
@@ -77,7 +77,7 @@ public class KStreamKTableLeftJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream = builder.stream(keySerde.deserializer(), valueSerde.deserializer(), topic1);
+            stream = builder.stream(keySerde, valueSerde, topic1);
             table = builder.table(keySerde, valueSerde, topic2);
             stream.leftJoin(table, joiner).process(processor);
 
@@ -158,7 +158,7 @@ public class KStreamKTableLeftJoinTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keySerde.deserializer(), valueSerde.deserializer(), topic1).map(keyValueMapper);
+        stream = builder.stream(keySerde, valueSerde, topic1).map(keyValueMapper);
         table = builder.table(keySerde, valueSerde, topic2);
 
         stream.leftJoin(table, joiner).process(processor);

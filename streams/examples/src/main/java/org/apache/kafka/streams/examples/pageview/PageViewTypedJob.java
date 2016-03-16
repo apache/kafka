@@ -18,7 +18,7 @@
 package org.apache.kafka.streams.examples.pageview;
 
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.SerDes;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -112,9 +112,9 @@ public class PageViewTypedJob {
         serdeProps.put("JsonPOJOClass", RegionCount.class);
         regionCountSerializer.configure(serdeProps, false);
 
-        KStream<String, PageView> views = builder.stream(SerDes.STRING().deserializer(), pageViewDeserializer, "streams-pageview-input");
+        KStream<String, PageView> views = builder.stream(Serdes.STRING(), Serdes.serdeFrom(null, pageViewDeserializer), "streams-pageview-input");
 
-        KTable<String, UserProfile> users = builder.table(SerDes.STRING(), SerDes.serialization(userProfileSerializer, userProfileDeserializer), "streams-userprofile-input");
+        KTable<String, UserProfile> users = builder.table(Serdes.STRING(), Serdes.serdeFrom(userProfileSerializer, userProfileDeserializer), "streams-userprofile-input");
 
         KStream<WindowedPageViewByRegion, RegionCount> regionCount = views
                 .leftJoin(users, new ValueJoiner<PageView, UserProfile, PageViewByRegion>() {
@@ -138,7 +138,7 @@ public class PageViewTypedJob {
                         return new KeyValue<>(viewRegion.region, viewRegion);
                     }
                 })
-                .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000), SerDes.STRING())
+                .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000), Serdes.STRING())
                 // TODO: we can merge ths toStream().map(...) with a single toStream(...)
                 .toStream()
                 .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<WindowedPageViewByRegion, RegionCount>>() {
@@ -157,7 +157,7 @@ public class PageViewTypedJob {
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-typed-output", wPageViewByRegionSerializer, regionCountSerializer);
+        regionCount.to("streams-pageviewstats-typed-output", Serdes.serdeFrom(wPageViewByRegionSerializer, null), Serdes.serdeFrom(regionCountSerializer, null));
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();

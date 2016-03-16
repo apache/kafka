@@ -19,8 +19,8 @@ package org.apache.kafka.streams.smoketest;
 
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.SerDe;
-import org.apache.kafka.common.serialization.SerDes;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -124,23 +124,23 @@ public class SmokeTestUtil {
         }
     }
 
-    public static SerDe<String> stringSerDe = SerDes.STRING();
+    public static Serde<String> stringSerde = Serdes.STRING();
 
-    public static SerDe<Integer> intSerDe = SerDes.INTEGER();
+    public static Serde<Integer> intSerde = Serdes.INTEGER();
 
-    public static SerDe<Long> longSerDe = SerDes.LONG();
+    public static Serde<Long> longSerde = Serdes.LONG();
 
-    public static Serializer<String> stringSerializer = stringSerDe.serializer();
+    public static Serializer<String> stringSerializer = stringSerde.serializer();
 
-    public static Deserializer<String> stringDeserializer = stringSerDe.deserializer();
+    public static Deserializer<String> stringDeserializer = stringSerde.deserializer();
 
-    public static Serializer<Integer> integerSerializer = intSerDe.serializer();
+    public static Serializer<Integer> integerSerializer = intSerde.serializer();
 
-    public static Deserializer<Integer> integerDeserializer = intSerDe.deserializer();
+    public static Deserializer<Integer> integerDeserializer = intSerde.deserializer();
 
-    public static Serializer<Long> longSerializer = longSerDe.serializer();
+    public static Serializer<Long> longSerializer = longSerde.serializer();
 
-    public static Deserializer<Long> longDeserializer = longSerDe.deserializer();
+    public static Deserializer<Long> longDeserializer = longSerde.deserializer();
 
     public static Serializer<Double> doubleSerializer = new Serializer<Double>() {
 

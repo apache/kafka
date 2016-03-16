@@ -21,7 +21,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.SerDes;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.connect.json.JsonSerializer;
 import org.apache.kafka.connect.json.JsonDeserializer;
@@ -67,10 +68,11 @@ public class PageViewUntypedJob {
 
         final Serializer<JsonNode> jsonSerializer = new JsonSerializer();
         final Deserializer<JsonNode> jsonDeserializer = new JsonDeserializer();
+        final Serde<JsonNode> jsonSerde = Serdes.serdeFrom(jsonSerializer, jsonDeserializer);
 
-        KStream<String, JsonNode> views = builder.stream(SerDes.STRING().deserializer(), jsonDeserializer, "streams-pageview-input");
+        KStream<String, JsonNode> views = builder.stream(Serdes.STRING(), jsonSerde, "streams-pageview-input");
 
-        KTable<String, JsonNode> users = builder.table(SerDes.STRING(), SerDes.serialization(jsonSerializer, jsonDeserializer), "streams-userprofile-input");
+        KTable<String, JsonNode> users = builder.table(Serdes.STRING(), Serdes.serdeFrom(jsonSerializer, jsonDeserializer), "streams-userprofile-input");
 
         KTable<String, String> userRegions = users.mapValues(new ValueMapper<JsonNode, String>() {
             @Override
@@ -96,7 +98,7 @@ public class PageViewUntypedJob {
                         return new KeyValue<>(viewRegion.get("region").textValue(), viewRegion);
                     }
                 })
-                .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000), SerDes.STRING())
+                .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000), Serdes.STRING())
                 // TODO: we can merge ths toStream().map(...) with a single toStream(...)
                 .toStream()
                 .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<JsonNode, JsonNode>>() {
@@ -114,7 +116,7 @@ public class PageViewUntypedJob {
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-untyped-output", jsonSerializer, jsonSerializer);
+        regionCount.to("streams-pageviewstats-untyped-output", jsonSerde, jsonSerde);
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
