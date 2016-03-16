@@ -244,12 +244,14 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getConsumerConfigs(StreamThread streamThread, String groupId, String clientId) {
         Map<String, Object> props = getBaseConsumerConfigs();
 
+        // add client id with stream client id prefix, and group id
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
+
+        // add configs required for stream partition assignor
+        props.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG));
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
-
-        props.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
 
         return props;
     }
@@ -260,6 +262,7 @@ public class StreamsConfig extends AbstractConfig {
         // no need to set group id for a restore consumer
         props.remove(ConsumerConfig.GROUP_ID_CONFIG);
 
+        // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-restore-consumer");
 
         return props;
@@ -289,8 +292,9 @@ public class StreamsConfig extends AbstractConfig {
         removeStreamsSpecificConfigs(props);
         props.remove(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG);
         props.remove(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
-        props.remove(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+        props.remove(StreamsConfig.AUTO_OFFSET_RESET_CONFIG);
 
+        // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
 
         return props;
@@ -298,11 +302,13 @@ public class StreamsConfig extends AbstractConfig {
 
     private void removeStreamsSpecificConfigs(Map<String, Object> props) {
         props.remove(StreamsConfig.JOB_ID_CONFIG);
+        props.remove(StreamsConfig.POLL_MS_CONFIG);
         props.remove(StreamsConfig.STATE_DIR_CONFIG);
-        props.remove(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        props.remove(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         props.remove(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
+        props.remove(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
         props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
-        props.remove(InternalConfig.STREAM_THREAD_INSTANCE);
+        props.remove(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
     }
 
     public Serializer keySerializer() {
