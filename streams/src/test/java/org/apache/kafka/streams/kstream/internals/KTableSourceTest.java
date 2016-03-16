@@ -73,7 +73,7 @@ public class KTableSourceTest {
 
             KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
 
             KTableValueGetter<String, String> getter1 = getterSupplier1.get();
             getter1.init(driver.context());
@@ -125,7 +125,7 @@ public class KTableSourceTest {
 
             builder.addProcessor("proc1", proc1, table1.name);
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
 
             driver.process(topic1, "A", "01");
             driver.process(topic1, "B", "01");
@@ -170,7 +170,7 @@ public class KTableSourceTest {
 
             builder.addProcessor("proc1", proc1, table1.name);
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
 
             driver.process(topic1, "A", "01");
             driver.process(topic1, "B", "01");

@@ -62,6 +62,14 @@ public final class StateSerdes<K, V> {
         this.valueSerde = valueSerde;
     }
 
+    public Serde<K> keySerde() {
+        return keySerde;
+    }
+
+    public Serde<V> valueSerde() {
+        return valueSerde;
+    }
+
     public Deserializer<K> keyDeserializer() {
         return keySerde.deserializer();
     }

@@ -24,10 +24,8 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -94,17 +92,13 @@ public class StreamsConfig extends AbstractConfig {
     public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
     public static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the job.";
 
-    /** <code>key.serializer</code> */
-    public static final String KEY_SERIALIZER_CLASS_CONFIG = ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
+    /** <code>replication.factor</code> */
+    public static final String KEY_SERDE_CLASS_CONFIG = "key.serde";
+    public static final String KEY_SERDE_CLASS_DOC = "Serializer / deserializer class for key that implements the <code>Serde</code> interface.";
 
-    /** <code>value.serializer</code> */
-    public static final String VALUE_SERIALIZER_CLASS_CONFIG = ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
-
-    /** <code>key.deserializer</code> */
-    public static final String KEY_DESERIALIZER_CLASS_CONFIG = ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-
-    /** <code>value.deserializer</code> */
-    public static final String VALUE_DESERIALIZER_CLASS_CONFIG = ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+    /** <code>replication.factor</code> */
+    public static final String VALUE_SERDE_CLASS_CONFIG = "value.serde";
+    public static final String VALUE_SERDE_CLASS_DOC = "Serializer / deserializer class for key that implements the <code>Serde</code> interface.";
 
     /** <code>metrics.sample.window.ms</code> */
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
@@ -153,36 +147,26 @@ public class StreamsConfig extends AbstractConfig {
                                         1,
                                         Importance.MEDIUM,
                                         REPLICATION_FACTOR_DOC)
-                                .define(KEY_SERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        ByteArraySerializer.class,
-                                        Importance.HIGH,
-                                        ProducerConfig.KEY_SERIALIZER_CLASS_DOC)
-                                .define(VALUE_SERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        ByteArraySerializer.class,
-                                        Importance.HIGH,
-                                        ProducerConfig.VALUE_SERIALIZER_CLASS_DOC)
-                                .define(KEY_DESERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        ByteArrayDeserializer.class,
-                                        Importance.HIGH,
-                                        ConsumerConfig.KEY_DESERIALIZER_CLASS_DOC)
-                                .define(VALUE_DESERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        ByteArrayDeserializer.class,
-                                        Importance.HIGH,
-                                        ConsumerConfig.VALUE_DESERIALIZER_CLASS_DOC)
                                 .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                                         Type.CLASS,
-                                        WallclockTimestampExtractor.class,
+                                        WallclockTimestampExtractor.class.getName(),
                                         Importance.MEDIUM,
                                         TIMESTAMP_EXTRACTOR_CLASS_DOC)
                                 .define(PARTITION_GROUPER_CLASS_CONFIG,
                                         Type.CLASS,
-                                        DefaultPartitionGrouper.class,
+                                        DefaultPartitionGrouper.class.getName(),
                                         Importance.MEDIUM,
                                         PARTITION_GROUPER_CLASS_DOC)
+                                .define(KEY_SERDE_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        Serdes.ByteArraySerde.class.getName(),
+                                        Importance.MEDIUM,
+                                        KEY_SERDE_CLASS_DOC)
+                                .define(VALUE_SERDE_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        Serdes.ByteArraySerde.class.getName(),
+                                        Importance.MEDIUM,
+                                        VALUE_SERDE_CLASS_DOC)
                                 .define(COMMIT_INTERVAL_MS_CONFIG,
                                         Type.LONG,
                                         30000,
@@ -278,8 +262,6 @@ public class StreamsConfig extends AbstractConfig {
 
         // remove properties that are not required for consumers
         removeStreamsSpecificConfigs(props);
-        props.remove(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG);
-        props.remove(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG);
 
         return props;
     }
@@ -292,8 +274,6 @@ public class StreamsConfig extends AbstractConfig {
 
         // remove properties that are not required for producers
         removeStreamsSpecificConfigs(props);
-        props.remove(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG);
-        props.remove(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
         props.remove(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
 
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
@@ -307,23 +287,17 @@ public class StreamsConfig extends AbstractConfig {
         props.remove(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         props.remove(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
         props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        props.remove(StreamsConfig.KEY_SERDE_CLASS_CONFIG);
+        props.remove(StreamsConfig.VALUE_SERDE_CLASS_CONFIG);
         props.remove(InternalConfig.STREAM_THREAD_INSTANCE);
     }
 
-    public Serializer keySerializer() {
-        return getConfiguredInstance(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
+    public Serde keySerde() {
+        return getConfiguredInstance(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serde.class);
     }
 
-    public Serializer valueSerializer() {
-        return getConfiguredInstance(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
-    }
-
-    public Deserializer keyDeserializer() {
-        return getConfiguredInstance(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-    }
-
-    public Deserializer valueDeserializer() {
-        return getConfiguredInstance(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+    public Serde valueSerde() {
+        return getConfiguredInstance(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serde.class);
     }
 
     public static void main(String[] args) {

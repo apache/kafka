@@ -123,7 +123,7 @@ public class KTableImplTest {
             KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
             KTableValueGetterSupplier<String, String> getterSupplier4 = table4.valueGetterSupplier();
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
 
             // two state store should be created
             assertEquals(2, driver.allStateStores().size());
@@ -246,7 +246,7 @@ public class KTableImplTest {
                         }
                     });
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
             driver.setTime(0L);
 
             // no state store should be created
@@ -286,7 +286,7 @@ public class KTableImplTest {
                         }
                     });
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
             driver.setTime(0L);
 
             // two state store should be created

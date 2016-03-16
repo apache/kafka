@@ -17,11 +17,10 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -42,10 +41,8 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     private final RecordCollector collector;
     private final ProcessorStateManager stateMgr;
 
-    private final Serializer<?> keySerializer;
-    private final Serializer<?> valSerializer;
-    private final Deserializer<?> keyDeserializer;
-    private final Deserializer<?> valDeserializer;
+    private final Serde<?> keySerde;
+    private final Serde<?> valSerde;
 
     private boolean initialized;
 
@@ -62,10 +59,8 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         this.collector = collector;
         this.stateMgr = stateMgr;
 
-        this.keySerializer = config.keySerializer();
-        this.valSerializer = config.valueSerializer();
-        this.keyDeserializer = config.keyDeserializer();
-        this.valDeserializer = config.valueDeserializer();
+        this.keySerde = config.keySerde();
+        this.valSerde = config.valueSerde();
 
         this.initialized = false;
     }
@@ -94,23 +89,13 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public Serializer<?> keySerializer() {
-        return this.keySerializer;
+    public Serde<?> keySerde() {
+        return this.keySerde;
     }
 
     @Override
-    public Serializer<?> valueSerializer() {
-        return this.valSerializer;
-    }
-
-    @Override
-    public Deserializer<?> keyDeserializer() {
-        return this.keyDeserializer;
-    }
-
-    @Override
-    public Deserializer<?> valueDeserializer() {
-        return this.valDeserializer;
+    public Serde<?> valueSerde() {
+        return this.valSerde;
     }
 
     @Override

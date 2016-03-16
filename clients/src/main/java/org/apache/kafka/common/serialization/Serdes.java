@@ -42,6 +42,18 @@ public class Serdes {
         }
     }
 
+    static public final class DoubleSerde implements Serde<Double> {
+        @Override
+        public Serializer<Double> serializer() {
+            return new DoubleSerializer();
+        }
+
+        @Override
+        public Deserializer<Double> deserializer() {
+            return new DoubleDeserializer();
+        }
+    }
+
     static public final class StringSerde implements Serde<String> {
         @Override
         public Serializer<String> serializer() {
@@ -80,6 +92,10 @@ public class Serdes {
             return (Serde<T>) LONG();
         }
 
+        if (Double.class.isAssignableFrom(type)) {
+            return (Serde<T>) DOUBLE();
+        }
+
         if (byte[].class.isAssignableFrom(type)) {
             return (Serde<T>) BYTE_ARRAY();
         }
@@ -114,6 +130,13 @@ public class Serdes {
      */
     static public Serde<Integer> INTEGER() {
         return new IntegerSerde();
+    }
+
+    /*
+     * A serde for nullable long type.
+     */
+    static public Serde<Double> DOUBLE() {
+        return new DoubleSerde();
     }
 
     /*
