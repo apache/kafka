@@ -62,7 +62,7 @@ public class SerializationTest {
         encodings.add("UTF-16");
 
         for (String encoding : encodings) {
-            Serde<String> serDeser = getStringSerDeser(encoding);
+            Serde<String> serDeser = getStringSerde(encoding);
             Serializer<String> serializer = serDeser.serializer();
             Deserializer<String> deserializer = serDeser.deserializer();
 
@@ -158,7 +158,7 @@ public class SerializationTest {
         deserializer.close();
     }
 
-    private Serde<String> getStringSerDeser(String encoder) {
+    private Serde<String> getStringSerde(String encoder) {
         Map<String, Object> serializerConfigs = new HashMap<String, Object>();
         serializerConfigs.put("key.serializer.encoding", encoder);
         Serializer<String> serializer = Serdes.String().serializer();

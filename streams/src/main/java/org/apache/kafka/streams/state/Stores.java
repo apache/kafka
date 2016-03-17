@@ -24,6 +24,8 @@ import org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 
+import java.nio.ByteBuffer;
+
 /**
  * Factory for creating state stores in Kafka Streams.
  */
@@ -138,6 +140,15 @@ public class Stores {
         }
 
         /**
+         * Begin to create a {@link KeyValueStore} by specifying the keys will be {@link ByteBuffer}.
+         *
+         * @return the interface used to specify the type of values; never null
+         */
+        public ValueFactory<ByteBuffer> withByteBufferKeys() {
+            return withKeys(Serdes.ByteBuffer());
+        }
+
+        /**
          * Begin to create a {@link KeyValueStore} by specifying the keys will be byte arrays.
          *
          * @return the interface used to specify the type of values; never null
@@ -205,6 +216,15 @@ public class Stores {
          */
         public KeyValueFactory<K, Double> withDoubleValues() {
             return withValues(Serdes.Double());
+        }
+
+        /**
+         * Use {@link ByteBuffer} for values.
+         *
+         * @return the interface used to specify the remaining key-value store options; never null
+         */
+        public KeyValueFactory<K, ByteBuffer> withByteBufferValues() {
+            return withValues(Serdes.ByteBuffer());
         }
 
         /**
