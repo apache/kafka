@@ -26,7 +26,7 @@ import org.junit.Assert._
 import org.junit.{Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
-import org.apache.kafka.common.internals.Topics
+import org.apache.kafka.common.internals.TopicConstants
 
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
@@ -193,7 +193,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     // get metadata for the topic
     var parts: Seq[PartitionInfo] = null
     while (parts == null)
-      parts = consumer0.partitionsFor(Topics.GROUP_METADATA_TOPIC_NAME).asScala
+      parts = consumer0.partitionsFor(TopicConstants.GROUP_METADATA_TOPIC_NAME).asScala
     assertEquals(1, parts.size)
     assertNotNull(parts(0).leader())
 

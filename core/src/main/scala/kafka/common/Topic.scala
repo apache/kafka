@@ -19,7 +19,6 @@ package kafka.common
 
 import util.matching.Regex
 import kafka.coordinator.GroupCoordinator
-import org.apache.kafka.common.internals.Topics
 
 object Topic {
   val legalChars = "[a-zA-Z0-9\\._\\-]"

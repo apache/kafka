@@ -176,7 +176,8 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String EXCLUDE_INTERNAL_TOPICS_CONFIG = "exclude.internal.topics";
     private static final String EXCLUDE_INTERNAL_TOPICS_DOC = "Whether records from internal topics (such as offsets) should be exposed to the consumer. "
                                                             + "If set to <code>true</code> the only way to receive records from an internal topic is subscribing to it.";
-
+    public static final boolean EXCLUDE_INTERNAL_TOPICS_DEFAULT = true;
+    
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -323,7 +324,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         MAX_POLL_RECORDS_DOC)
                                 .define(EXCLUDE_INTERNAL_TOPICS_CONFIG,
                                         Type.BOOLEAN,
-                                        true,
+                                        EXCLUDE_INTERNAL_TOPICS_DEFAULT,
                                         Importance.MEDIUM,
                                         EXCLUDE_INTERNAL_TOPICS_DOC)
 

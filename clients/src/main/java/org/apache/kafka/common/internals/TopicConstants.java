@@ -17,15 +17,17 @@
 package org.apache.kafka.common.internals;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Set;
 
-/**
- * Common definitions used in client-side tools
- */
-public final class Topics {
+public final class TopicConstants {
+
+    //avoid instantiation
+    private TopicConstants() {
+    }
+
     // TODO: we store both group metadata and offset data here despite the topic name being offsets only
     public static final String GROUP_METADATA_TOPIC_NAME = "__consumer_offsets";
-    public static final Set<String> INTERNAL_TOPICS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(GROUP_METADATA_TOPIC_NAME)));
+    public static final Collection<String> INTERNAL_TOPICS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(GROUP_METADATA_TOPIC_NAME)));
 }

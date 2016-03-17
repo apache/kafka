@@ -26,7 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.internals.Topics;
+import org.apache.kafka.common.internals.TopicConstants;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -145,7 +145,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                     for (String topic : cluster.topics())
                         if (subscriptions.getSubscribedPattern().matcher(topic).matches() &&
-                                !(excludeInternalTopics && Topics.INTERNAL_TOPICS.contains(topic)))
+                                !(excludeInternalTopics && TopicConstants.INTERNAL_TOPICS.contains(topic)))
                             topicsToSubscribe.add(topic);
 
                     subscriptions.changeSubscription(topicsToSubscribe);
