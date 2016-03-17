@@ -115,44 +115,38 @@ class CleanerTest extends JUnitSuite {
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
+    // Number of distinct keys. For an effective test this should be small enough such that each log segment contains some duplicates.
     val N = 10
+    val numCleanableSegments = 2
+    val numTotalSegments = 7
 
-    // append messages with the keys 0 through N
-    while(log.numberOfSegments < 3)
+    // append messages with the keys 0 through N-1, values equal offset
+    while(log.numberOfSegments <= numCleanableSegments)
       log.append(message(log.logEndOffset.toInt % N, log.logEndOffset.toInt))
 
-    val firstUncleanableOffset = log.logEndOffset
+    // at this point one message past the cleanable segments has been added
+    // the entire segment containing the first uncleanable offset should not be cleaned.
+    val firstUncleanableOffset = log.logEndOffset + 1  // +1  so it is past the baseOffset
 
-    println(s"**** firstUncleanableOffset = $firstUncleanableOffset")
-
-    while(log.numberOfSegments < 6)
+    while(log.numberOfSegments < numTotalSegments - 1)
       log.append(message(log.logEndOffset.toInt % N, log.logEndOffset.toInt))
 
-    def valuesBySegment = log.logSegments.map(s => s.log.map(m => TestUtils.readString(m.message.payload)).toSet.size)
+    // the last (active) segment has just one message
 
-    val valuesBySegmentBeforeClean = valuesBySegment
+    def distinctValuesBySegment = log.logSegments.map(s => s.log.map(m => TestUtils.readString(m.message.payload)).toSet.size).toSeq
 
-    println("***** BEFORE CLEAN")
-    valuesBySegmentBeforeClean.zipWithIndex.foreach { case (valCnt: Int ,segNum: Int) => println(s"segment $segNum : $valCnt") }
-    log.logSegments.foreach(dumpSegment)
+    val disctinctValuesBySegmentBeforeClean = distinctValuesBySegment
+    assertTrue("Test is not effective unless each segment contains duplicates. Increase segment size or decrease number of keys.",
+      distinctValuesBySegment.reverse.tail.forall(_ > N))
 
-//    val firstUncleanableSegment = log.logSegments.toSeq(2)
-//    println(s"***** FIRST UNCLEANABLE SEGMENT BASEOFFSET: ${firstUncleanableSegment.baseOffset}")
-//    val ltc = LogToClean(TopicAndPartition("test", 0), log, 0, firstUncleanableSegment.baseOffset + 5)
+    cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 0, firstUncleanableOffset))
 
-    val ltc = LogToClean(TopicAndPartition("test", 0), log, 0, firstUncleanableOffset)
+    val distinctValuesBySegmentAfterClean = distinctValuesBySegment
 
-    println(s"***** LogToClean: firstDirtyOffset=${ltc.firstDirtyOffset} firstUncleanableOffset=${ltc.firstUncleanableOffset} firstUncleanableSegment=${ltc.firstUncleanableSegment}")
-    println(s"***** LogToClean: $ltc")
-    cleaner.clean(ltc)
-
-    val valuesBySegmentAfterClean = valuesBySegment
-
-    println("***** AFTER CLEAN")
-    valuesBySegmentAfterClean.zipWithIndex.foreach { case (valCnt: Int ,segNum: Int) => println(s"segment $segNum : $valCnt") }
-    log.logSegments.foreach(dumpSegment)
-
-    assertArrayEquals("The uncleanable segments should have the same number of values after cleaning", valuesBySegmentBeforeClean.slice(2,7).toArray, valuesBySegmentAfterClean.slice(2,7).toArray)
+    assertTrue("The cleanable segments should have fewer number of values after cleaning",
+      disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean).take(numCleanableSegments).forall { case (before, after) => after < before })
+    assertTrue("The uncleanable segments should have the same number of values after cleaning", disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
+      .slice(numCleanableSegments, numTotalSegments).forall { x => x._1 == x._2 })
   }
 
   def dumpSegment(s: LogSegment): Unit = {
