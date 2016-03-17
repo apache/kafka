@@ -44,8 +44,8 @@ public final class StateSerdes<K, V> {
      * need to provide the topic name any more.
      *
      * @param topic the name of the topic
-     * @param keySerde the serde for keys; may be null
-     * @param valueSerde the serde for values; may be null
+     * @param keySerde the serde for keys; cannot be null
+     * @param valueSerde the serde for values; cannot be null
      */
     @SuppressWarnings("unchecked")
     public StateSerdes(String topic,
@@ -54,9 +54,9 @@ public final class StateSerdes<K, V> {
         this.topic = topic;
 
         if (keySerde == null)
-            throw new NullPointerException();
+            throw new IllegalArgumentException("key serde cannot be null");
         if (valueSerde == null)
-            throw new NullPointerException();
+            throw new IllegalArgumentException("value serde cannot be null");
 
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;

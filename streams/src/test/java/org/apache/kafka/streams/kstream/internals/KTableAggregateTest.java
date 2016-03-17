@@ -36,7 +36,7 @@ import static org.junit.Assert.assertEquals;
 
 public class KTableAggregateTest {
 
-    final private Serde<String> strSerde = new Serdes.StringSerde();
+    final private Serde<String> stringSerde = new Serdes.StringSerde();
 
     private class StringAdd implements Aggregator<String, String, String> {
 
@@ -71,12 +71,12 @@ public class KTableAggregateTest {
             final KStreamBuilder builder = new KStreamBuilder();
             String topic1 = "topic1";
 
-            KTable<String, String> table1 = builder.table(strSerde, strSerde, topic1);
+            KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
             KTable<String, String> table2 = table1.aggregate(new StringInit(), new StringAdd(), new StringRemove(),
                     new NoOpKeyValueMapper<String, String>(),
-                    strSerde,
-                    strSerde,
-                    strSerde,
+                    stringSerde,
+                    stringSerde,
+                    stringSerde,
                     "topic1-Canonized");
 
             MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();

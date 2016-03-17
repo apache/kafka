@@ -46,8 +46,8 @@ public class KTableKTableLeftJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    final private Serde<Integer> keySerde = new Serdes.IntegerSerde();
-    final private Serde<String> valueSerde = new Serdes.StringSerde();
+    final private Serde<Integer> intSerde = new Serdes.IntegerSerde();
+    final private Serde<String> stringSerde = new Serdes.StringSerde();
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
@@ -79,15 +79,11 @@ public class KTableKTableLeftJoinTest {
 
             final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
-            KTable<Integer, String> table1;
-            KTable<Integer, String> table2;
-            KTable<Integer, String> joined;
+            KTable<Integer, String> table1 = builder.table(intSerde, stringSerde, topic1);
+            KTable<Integer, String> table2 = builder.table(intSerde, stringSerde, topic2);
+            KTable<Integer, String> joined = table1.leftJoin(table2, joiner);
             MockProcessorSupplier<Integer, String> processor;
-
             processor = new MockProcessorSupplier<>();
-            table1 = builder.table(keySerde, valueSerde, topic1);
-            table2 = builder.table(keySerde, valueSerde, topic2);
-            joined = table1.leftJoin(table2, joiner);
             joined.toStream().process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
@@ -184,8 +180,8 @@ public class KTableKTableLeftJoinTest {
             KTable<Integer, String> joined;
             MockProcessorSupplier<Integer, String> proc;
 
-            table1 = builder.table(keySerde, valueSerde, topic1);
-            table2 = builder.table(keySerde, valueSerde, topic2);
+            table1 = builder.table(intSerde, stringSerde, topic1);
+            table2 = builder.table(intSerde, stringSerde, topic2);
             joined = table1.leftJoin(table2, joiner);
 
             proc = new MockProcessorSupplier<>();
@@ -272,8 +268,8 @@ public class KTableKTableLeftJoinTest {
             KTable<Integer, String> joined;
             MockProcessorSupplier<Integer, String> proc;
 
-            table1 = builder.table(keySerde, valueSerde, topic1);
-            table2 = builder.table(keySerde, valueSerde, topic2);
+            table1 = builder.table(intSerde, stringSerde, topic1);
+            table2 = builder.table(intSerde, stringSerde, topic2);
             joined = table1.leftJoin(table2, joiner);
 
             ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();

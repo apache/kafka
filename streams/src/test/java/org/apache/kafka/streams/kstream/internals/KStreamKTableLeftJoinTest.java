@@ -45,8 +45,8 @@ public class KStreamKTableLeftJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    final private Serde<Integer> keySerde = new Serdes.IntegerSerde();
-    final private Serde<String> valueSerde = new Serdes.StringSerde();
+    final private Serde<Integer> intSerde = new Serdes.IntegerSerde();
+    final private Serde<String> stringSerde = new Serdes.StringSerde();
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
@@ -77,8 +77,8 @@ public class KStreamKTableLeftJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream = builder.stream(keySerde, valueSerde, topic1);
-            table = builder.table(keySerde, valueSerde, topic2);
+            stream = builder.stream(intSerde, stringSerde, topic1);
+            table = builder.table(intSerde, stringSerde, topic2);
             stream.leftJoin(table, joiner).process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
@@ -158,8 +158,8 @@ public class KStreamKTableLeftJoinTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keySerde, valueSerde, topic1).map(keyValueMapper);
-        table = builder.table(keySerde, valueSerde, topic2);
+        stream = builder.stream(intSerde, stringSerde, topic1).map(keyValueMapper);
+        table = builder.table(intSerde, stringSerde, topic2);
 
         stream.leftJoin(table, joiner).process(processor);
     }

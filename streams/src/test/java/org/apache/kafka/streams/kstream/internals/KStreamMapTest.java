@@ -33,8 +33,8 @@ public class KStreamMapTest {
 
     private String topicName = "topic";
 
-    private Serde<Integer> keySerde = Serdes.Integer();
-    private Serde<String> valSerde = Serdes.String();
+    final private Serde<Integer> intSerde = Serdes.Integer();
+    final private Serde<String> stringSerde = Serdes.String();
 
     @Test
     public void testMap() {
@@ -50,11 +50,10 @@ public class KStreamMapTest {
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
-        KStream<Integer, String> stream;
+        KStream<Integer, String> stream = builder.stream(intSerde, stringSerde, topicName);
         MockProcessorSupplier<String, Integer> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keySerde, valSerde, topicName);
         stream.map(mapper).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);

@@ -92,27 +92,39 @@ public class PageViewTypedJob {
         // TODO: the following can be removed with a serialization factory
         Map<String, Object> serdeProps = new HashMap<>();
 
+        final Serializer<PageView> pageViewSerializer = new JsonPOJOSerializer<>();
+        serdeProps.put("JsonPOJOClass", PageView.class);
+        pageViewSerializer.configure(serdeProps, false);
+
         final Deserializer<PageView> pageViewDeserializer = new JsonPOJODeserializer<>();
         serdeProps.put("JsonPOJOClass", PageView.class);
         pageViewDeserializer.configure(serdeProps, false);
-
-        final Deserializer<UserProfile> userProfileDeserializer = new JsonPOJODeserializer<>();
-        serdeProps.put("JsonPOJOClass", UserProfile.class);
-        userProfileDeserializer.configure(serdeProps, false);
 
         final Serializer<UserProfile> userProfileSerializer = new JsonPOJOSerializer<>();
         serdeProps.put("JsonPOJOClass", UserProfile.class);
         userProfileSerializer.configure(serdeProps, false);
 
+        final Deserializer<UserProfile> userProfileDeserializer = new JsonPOJODeserializer<>();
+        serdeProps.put("JsonPOJOClass", UserProfile.class);
+        userProfileDeserializer.configure(serdeProps, false);
+
         final Serializer<WindowedPageViewByRegion> wPageViewByRegionSerializer = new JsonPOJOSerializer<>();
         serdeProps.put("JsonPOJOClass", WindowedPageViewByRegion.class);
         wPageViewByRegionSerializer.configure(serdeProps, false);
+
+        final Deserializer<WindowedPageViewByRegion> wPageViewByRegionDeserializer = new JsonPOJODeserializer<>();
+        serdeProps.put("JsonPOJOClass", WindowedPageViewByRegion.class);
+        wPageViewByRegionDeserializer.configure(serdeProps, false);
 
         final Serializer<RegionCount> regionCountSerializer = new JsonPOJOSerializer<>();
         serdeProps.put("JsonPOJOClass", RegionCount.class);
         regionCountSerializer.configure(serdeProps, false);
 
-        KStream<String, PageView> views = builder.stream(Serdes.String(), Serdes.serdeFrom(null, pageViewDeserializer), "streams-pageview-input");
+        final Deserializer<RegionCount> regionCountDeserializer = new JsonPOJODeserializer<>();
+        serdeProps.put("JsonPOJOClass", RegionCount.class);
+        regionCountDeserializer.configure(serdeProps, false);
+
+        KStream<String, PageView> views = builder.stream(Serdes.String(), Serdes.serdeFrom(pageViewSerializer, pageViewDeserializer), "streams-pageview-input");
 
         KTable<String, UserProfile> users = builder.table(Serdes.String(), Serdes.serdeFrom(userProfileSerializer, userProfileDeserializer), "streams-userprofile-input");
 
@@ -157,7 +169,7 @@ public class PageViewTypedJob {
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-typed-output", Serdes.serdeFrom(wPageViewByRegionSerializer, null), Serdes.serdeFrom(regionCountSerializer, null));
+        regionCount.to("streams-pageviewstats-typed-output", Serdes.serdeFrom(wPageViewByRegionSerializer, wPageViewByRegionDeserializer), Serdes.serdeFrom(regionCountSerializer, regionCountDeserializer));
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();

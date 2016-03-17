@@ -13,6 +13,8 @@
 
 package org.apache.kafka.common.serialization;
 
+import java.nio.ByteBuffer;
+
 /**
  * Factory for creating serializers / deserializers.
  */
@@ -66,6 +68,18 @@ public class Serdes {
         }
     }
 
+    static public final class ByteBufferSerde implements Serde<ByteBuffer> {
+        @Override
+        public Serializer<ByteBuffer> serializer() {
+            return new ByteBufferSerializer();
+        }
+
+        @Override
+        public Deserializer<ByteBuffer> deserializer() {
+            return new ByteBufferDeserializer();
+        }
+    }
+
     static public final class ByteArraySerde implements Serde<byte[]> {
         @Override
         public Serializer<byte[]> serializer() {
@@ -100,11 +114,28 @@ public class Serdes {
             return (Serde<T>) ByteArray();
         }
 
+        if (ByteBufferSerde.class.isAssignableFrom(type)) {
+            return (Serde<T>) ByteBuffer();
+        }
+
         // TODO: we can also serializes objects of type T using generic Java serialization by default
         throw new IllegalArgumentException("Unknown class for built-in serializer");
     }
 
+    /**
+     * Construct a serde object from separate serializer and deserializer
+     *
+     * @param serializer    must not be null.
+     * @param deserializer  must not be null.
+     */
     static public <T> Serde<T> serdeFrom(final Serializer<T> serializer, final Deserializer<T> deserializer) {
+        if (serializer == null) {
+            throw new IllegalArgumentException("serializer must not be null");
+        }
+        if (deserializer == null) {
+            throw new IllegalArgumentException("deserializer must not be null");
+        }
+
         return new Serde<T>() {
             @Override
             public Serializer<T> serializer() {
@@ -144,6 +175,13 @@ public class Serdes {
      */
     static public Serde<String> String() {
         return new StringSerde();
+    }
+
+    /*
+     * A serde for nullable byte array type.
+     */
+    static public Serde<ByteBuffer> ByteBuffer() {
+        return new ByteBufferSerde();
     }
 
     /*

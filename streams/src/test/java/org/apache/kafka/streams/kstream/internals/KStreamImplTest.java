@@ -35,11 +35,11 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamImplTest {
 
+    final private Serde<String> stringSerde = Serdes.String();
+    final private Serde<Integer> intSerde = Serdes.Integer();
+
     @Test
     public void testNumProcesses() {
-        final Serde<String> stringSerde = Serdes.String();
-        final Serde<Integer> intSerde = Serdes.Integer();
-
         final KStreamBuilder builder = new KStreamBuilder();
 
         KStream<String, String> source1 = builder.stream(stringSerde, stringSerde, "topic-1", "topic-2");

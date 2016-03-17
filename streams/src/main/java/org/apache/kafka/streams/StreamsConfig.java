@@ -98,7 +98,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** <code>replication.factor</code> */
     public static final String VALUE_SERDE_CLASS_CONFIG = "value.serde";
-    public static final String VALUE_SERDE_CLASS_DOC = "Serializer / deserializer class for key that implements the <code>Serde</code> interface.";
+    public static final String VALUE_SERDE_CLASS_DOC = "Serializer / deserializer class for value that implements the <code>Serde</code> interface.";
 
     /** <code>metrics.sample.window.ms</code> */
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;

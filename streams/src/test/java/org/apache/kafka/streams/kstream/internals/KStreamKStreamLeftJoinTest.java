@@ -42,8 +42,8 @@ public class KStreamKStreamLeftJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    final private Serde<Integer> keySerde = Serdes.Integer();
-    final private Serde<String> valueSerde = Serdes.String();
+    final private Serde<Integer> intSerde = Serdes.Integer();
+    final private Serde<String> stringSerde = Serdes.String();
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
@@ -67,9 +67,9 @@ public class KStreamKStreamLeftJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(keySerde, valueSerde, topic1);
-            stream2 = builder.stream(keySerde, valueSerde, topic2);
-            joined = stream1.leftJoin(stream2, joiner, JoinWindows.of("test").within(100), keySerde, valueSerde);
+            stream1 = builder.stream(intSerde, stringSerde, topic1);
+            stream2 = builder.stream(intSerde, stringSerde, topic2);
+            joined = stream1.leftJoin(stream2, joiner, JoinWindows.of("test").within(100), intSerde, stringSerde);
             joined.process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
@@ -152,9 +152,9 @@ public class KStreamKStreamLeftJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(keySerde, valueSerde, topic1);
-            stream2 = builder.stream(keySerde, valueSerde, topic2);
-            joined = stream1.leftJoin(stream2, joiner, JoinWindows.of("test").within(100), keySerde, valueSerde);
+            stream1 = builder.stream(intSerde, stringSerde, topic1);
+            stream2 = builder.stream(intSerde, stringSerde, topic2);
+            joined = stream1.leftJoin(stream2, joiner, JoinWindows.of("test").within(100), intSerde, stringSerde);
             joined.process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();

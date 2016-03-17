@@ -34,8 +34,7 @@ public class KStreamTransformValuesTest {
 
     private String topicName = "topic";
 
-    private Serde<Integer> keySerde = Serdes.Integer();
-    private Serde<Integer> valSerde = Serdes.Integer();
+    final private Serde<Integer> intSerde = Serdes.Integer();
 
     @Test
     public void testTransform() {
@@ -73,7 +72,7 @@ public class KStreamTransformValuesTest {
 
         KStream<Integer, Integer> stream;
         MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keySerde, valSerde, topicName);
+        stream = builder.stream(intSerde, intSerde, topicName);
         stream.transformValues(valueTransformerSupplier).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);

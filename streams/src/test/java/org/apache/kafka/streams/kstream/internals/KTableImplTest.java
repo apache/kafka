@@ -38,7 +38,7 @@ import static org.junit.Assert.assertNull;
 
 public class KTableImplTest {
 
-    final private Serde<String> strSerde = new Serdes.StringSerde();
+    final private Serde<String> stringSerde = new Serdes.StringSerde();
 
     @Test
     public void testKTable() {
@@ -47,7 +47,7 @@ public class KTableImplTest {
         String topic1 = "topic1";
         String topic2 = "topic2";
 
-        KTable<String, String> table1 = builder.table(strSerde, strSerde, topic1);
+        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
 
         MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
@@ -72,7 +72,7 @@ public class KTableImplTest {
         MockProcessorSupplier<String, Integer> proc3 = new MockProcessorSupplier<>();
         table3.toStream().process(proc3);
 
-        KTable<String, String> table4 = table1.through(topic2, strSerde, strSerde);
+        KTable<String, String> table4 = table1.through(topic2, stringSerde, stringSerde);
 
         MockProcessorSupplier<String, String> proc4 = new MockProcessorSupplier<>();
         table4.toStream().process(proc4);
@@ -100,7 +100,7 @@ public class KTableImplTest {
             String topic2 = "topic2";
 
             KTableImpl<String, String, String> table1 =
-                    (KTableImpl<String, String, String>) builder.table(strSerde, strSerde, topic1);
+                    (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
             KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                     new ValueMapper<String, Integer>() {
                         @Override
@@ -116,7 +116,7 @@ public class KTableImplTest {
                         }
                     });
             KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>)
-                    table1.through(topic2, strSerde, strSerde);
+                    table1.through(topic2, stringSerde, stringSerde);
 
             KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
             KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
@@ -227,9 +227,9 @@ public class KTableImplTest {
             KStreamBuilder builder = new KStreamBuilder();
 
             KTableImpl<String, String, String> table1 =
-                    (KTableImpl<String, String, String>) builder.table(strSerde, strSerde, topic1);
+                    (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
             KTableImpl<String, String, String> table2 =
-                    (KTableImpl<String, String, String>) builder.table(strSerde, strSerde, topic2);
+                    (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic2);
 
             KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
                     new ValueMapper<String, Integer>() {
@@ -260,9 +260,9 @@ public class KTableImplTest {
             KStreamBuilder builder = new KStreamBuilder();
 
             KTableImpl<String, String, String> table1 =
-                    (KTableImpl<String, String, String>) builder.table(strSerde, strSerde, topic1);
+                    (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
             KTableImpl<String, String, String> table2 =
-                    (KTableImpl<String, String, String>) builder.table(strSerde, strSerde, topic2);
+                    (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic2);
 
             KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
                     new ValueMapper<String, Integer>() {

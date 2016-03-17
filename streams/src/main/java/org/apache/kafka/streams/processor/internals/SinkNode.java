@@ -50,7 +50,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     public void init(ProcessorContext context) {
         this.context = context;
         if (this.keySerializer == null) this.keySerializer = (Serializer<K>) context.keySerde().serializer();
-        if (this.valSerializer == null) this.valSerializer = (Serializer<V>) context.keySerde().serializer();
+        if (this.valSerializer == null) this.valSerializer = (Serializer<V>) context.valueSerde().serializer();
     }
 
     @Override

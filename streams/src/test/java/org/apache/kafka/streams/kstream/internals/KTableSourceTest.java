@@ -36,7 +36,7 @@ import static org.junit.Assert.assertTrue;
 
 public class KTableSourceTest {
 
-    final private Serde<String> strSerde = new Serdes.StringSerde();
+    final private Serde<String> stringSerde = new Serdes.StringSerde();
 
     @Test
     public void testKTable() {
@@ -44,7 +44,7 @@ public class KTableSourceTest {
 
         String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(strSerde, strSerde, topic1);
+        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
 
         MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
@@ -69,7 +69,7 @@ public class KTableSourceTest {
 
             String topic1 = "topic1";
 
-            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(strSerde, strSerde, topic1);
+            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
 
             KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
 
@@ -119,7 +119,7 @@ public class KTableSourceTest {
 
             String topic1 = "topic1";
 
-            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(strSerde, strSerde, topic1);
+            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
 
             MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
 
@@ -160,7 +160,7 @@ public class KTableSourceTest {
 
             String topic1 = "topic1";
 
-            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(strSerde, strSerde, topic1);
+            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
 
             table1.enableSendingOldValues();
 

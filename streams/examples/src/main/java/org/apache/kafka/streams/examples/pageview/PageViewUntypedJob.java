@@ -72,7 +72,7 @@ public class PageViewUntypedJob {
 
         KStream<String, JsonNode> views = builder.stream(Serdes.String(), jsonSerde, "streams-pageview-input");
 
-        KTable<String, JsonNode> users = builder.table(Serdes.String(), Serdes.serdeFrom(jsonSerializer, jsonDeserializer), "streams-userprofile-input");
+        KTable<String, JsonNode> users = builder.table(Serdes.String(), jsonSerde, "streams-userprofile-input");
 
         KTable<String, String> userRegions = users.mapValues(new ValueMapper<JsonNode, String>() {
             @Override
