@@ -559,8 +559,6 @@ object TestUtils extends Logging {
     props.put("request.timeout.ms", "2000")
     props.put("request.required.acks", "-1")
     props.put("send.buffer.bytes", "65536")
-    props.put("connect.timeout.ms", "100000")
-    props.put("reconnect.interval", "10000")
 
     props
   }
