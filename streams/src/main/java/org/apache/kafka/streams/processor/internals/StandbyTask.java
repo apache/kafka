@@ -23,8 +23,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -35,8 +33,6 @@ import java.util.Map;
  * A StandbyTask
  */
 public class StandbyTask extends AbstractTask {
-
-    private static final Logger log = LoggerFactory.getLogger(StandbyTask.class);
 
     private final Map<TopicPartition, Long> checkpointedOffsets;
 
