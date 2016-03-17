@@ -28,12 +28,19 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.tools.VerifiableSinkConnector;
+import org.apache.kafka.connect.tools.VerifiableSourceConnector;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.reflections.Reflections;
+import org.reflections.util.ClasspathHelper;
+import org.reflections.util.ConfigurationBuilder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -70,7 +77,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected final StatusBackingStore statusBackingStore;
     private final String workerId;
 
-    protected Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
+    private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
+    private static final List<Class<? extends Connector>> SKIPPED_CONNECTORS = Arrays.<Class<? extends Connector>>asList(VerifiableSourceConnector.class, VerifiableSinkConnector.class);
+    private static List<String> validConnectorPlugins;
 
     public AbstractHerder(Worker worker, StatusBackingStore statusBackingStore, String workerId) {
         this.worker = worker;
@@ -190,13 +199,22 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return generateResult(connType, resultConfigKeys, configValues, allGroups);
     }
 
-    @Override
-    public List<String> connectorPlugins() {
-        List<String> connectorPlugins = new LinkedList<>();
-        Set<Class<? extends Connector>> connectorClasses = Worker.getConnectorPlugins();
-        for (Class<? extends Connector> connectorClass: connectorClasses) {
-            connectorPlugins.add(connectorClass.getCanonicalName());
+    public static List<String> connectorPlugins() {
+        if (validConnectorPlugins != null) {
+            return validConnectorPlugins;
         }
+
+        Reflections reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath()));
+        Set<Class<? extends Connector>> connectorClasses = reflections.getSubTypesOf(Connector.class);
+        connectorClasses.removeAll(SKIPPED_CONNECTORS);
+        List<String> connectorPlugins = new LinkedList<>();
+        for (Class<? extends Connector> connectorClass: connectorClasses) {
+            int mod = connectorClass.getModifiers();
+            if (!Modifier.isAbstract(mod) && !Modifier.isInterface(mod)) {
+                connectorPlugins.add(connectorClass.getCanonicalName());
+            }
+        }
+        validConnectorPlugins = connectorPlugins;
         return connectorPlugins;
     }
 

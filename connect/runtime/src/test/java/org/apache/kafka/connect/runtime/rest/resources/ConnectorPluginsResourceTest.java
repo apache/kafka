@@ -21,13 +21,12 @@ import com.fasterxml.jackson.core.type.TypeReference;
 
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
@@ -72,6 +71,7 @@ public class ConnectorPluginsResourceTest {
     }
 
     private static final ConfigInfos CONFIG_INFOS;
+
     static {
         List<ConfigInfo> configs = new LinkedList<>();
 
@@ -130,27 +130,13 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testListConnectorPlugins() {
-        herder.connectorPlugins();
-
-        PowerMock.expectLastCall().andAnswer(new IAnswer<List<String>>() {
-            @Override
-            public List<String> answer() {
-                List<String> connectorPlugins = new LinkedList<>();
-                Set<Class<? extends Connector>> connectorClasses = Worker.getConnectorPlugins();
-                for (Class<? extends Connector> connectorClass: connectorClasses) {
-                    connectorPlugins.add(connectorClass.getCanonicalName());
-                }
-                return connectorPlugins;
-            }
-        });
-        PowerMock.replayAll();
-
         Set<String> connectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins());
-        assertTrue(connectorPlugins.contains(ConnectorPluginsResourceTestConnector.class.getCanonicalName()));
+        assertFalse(connectorPlugins.contains(Connector.class.getCanonicalName()));
         assertFalse(connectorPlugins.contains(SourceConnector.class.getCanonicalName()));
         assertFalse(connectorPlugins.contains(SinkConnector.class.getCanonicalName()));
         assertFalse(connectorPlugins.contains(VerifiableSourceConnector.class.getCanonicalName()));
         assertFalse(connectorPlugins.contains(VerifiableSinkConnector.class.getCanonicalName()));
+        assertTrue(connectorPlugins.contains(ConnectorPluginsResourceTestConnector.class.getCanonicalName()));
     }
 
     /* Name here needs to be unique as we are testing the aliasing mechanism */
