@@ -17,6 +17,9 @@
 
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -34,6 +37,10 @@ import java.util.Map;
 public class FileStreamSourceConnector extends SourceConnector {
     public static final String TOPIC_CONFIG = "topic";
     public static final String FILE_CONFIG = "file";
+
+    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+        .define(FILE_CONFIG, Type.STRING, Importance.HIGH, "Source filename.")
+        .define(TOPIC_CONFIG, Type.STRING, Importance.HIGH, "The topic to publish data to");
 
     private String filename;
     private String topic;
@@ -73,5 +80,10 @@ public class FileStreamSourceConnector extends SourceConnector {
     @Override
     public void stop() {
         // Nothing to do since FileStreamSourceConnector has no background monitoring.
+    }
+
+    @Override
+    public ConfigDef config() {
+        return CONFIG_DEF;
     }
 }

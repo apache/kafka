@@ -133,8 +133,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         final CountDownLatch pollLatch = expectPolls(10);
         // In this test, we don't flush, so nothing goes any further than the offset writer
 
-        expectCommitRecord(10);
-
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
@@ -205,8 +203,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
-        
-        expectCommitRecord(1);
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -238,7 +234,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectPolls(1);
-        expectCommitRecord(1);
         expectOffsetFlush(true);
 
         sourceTask.stop();
@@ -259,14 +254,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         PowerMock.verifyAll();
     }
-
-    private void expectCommitRecord(int count) throws Exception {
-        for (int i = 0; i < count; i++) {
-            sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class));
-            EasyMock.expectLastCall();
-        }
-    }
-
+    
     @Test
     public void testSendRecordsConvertsData() throws Exception {
         createWorkerTask();
@@ -276,8 +264,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD));
 
         Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
-
-        expectCommitRecord(records.size());
 
         PowerMock.replayAll();
 
@@ -306,8 +292,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // Second round
         expectSendRecordOnce(true);
         expectSendRecordOnce(false);
-
-        expectCommitRecord(3);
 
         PowerMock.replayAll();
 
@@ -438,6 +422,13 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             expect.andStubAnswer(expectResponse);
         else
             expect.andAnswer(expectResponse);
+
+        // 3. As a result of a successful producer send callback, we'll notify the source task of the record commit
+        sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class));
+        if (anyTimes)
+            EasyMock.expectLastCall().anyTimes();
+        else
+            EasyMock.expectLastCall();
 
         return sent;
     }

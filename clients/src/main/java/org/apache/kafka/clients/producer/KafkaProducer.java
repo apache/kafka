@@ -427,9 +427,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         // intercept the record, which can be potentially modified; this method does not throw exceptions
         ProducerRecord<K, V> interceptedRecord = this.interceptors == null ? record : this.interceptors.onSend(record);
-        // producer callback will make sure to call both 'callback' and interceptor callback
-        Callback interceptCallback = this.interceptors == null ? callback : new InterceptorCallback<>(callback, this.interceptors);
-        return doSend(interceptedRecord, interceptCallback);
+        return doSend(interceptedRecord, callback);
     }
 
     /**
@@ -437,6 +435,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * See {@link #send(ProducerRecord, Callback)} for details.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
+        TopicPartition tp = null;
         try {
             // first make sure the metadata for the topic is available
             long waitedOnMetadataMs = waitOnMetadata(record.topic(), this.maxBlockTimeMs);
@@ -460,10 +459,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int partition = partition(record, serializedKey, serializedValue, metadata.fetch());
             int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(serializedKey, serializedValue);
             ensureValidRecordSize(serializedSize);
-            TopicPartition tp = new TopicPartition(record.topic(), partition);
+            tp = new TopicPartition(record.topic(), partition);
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
-            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey, serializedValue, callback, remainingWaitMs);
+            // producer callback will make sure to call both 'callback' and interceptor callback
+            Callback interceptCallback = this.interceptors == null ? callback : new InterceptorCallback<>(callback, this.interceptors, tp);
+            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey, serializedValue, interceptCallback, remainingWaitMs);
             if (result.batchIsFull || result.newBatchCreated) {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
@@ -477,27 +478,29 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (callback != null)
                 callback.onCompletion(null, e);
             this.errors.record();
+            if (this.interceptors != null)
+                this.interceptors.onSendError(record, tp, e);
             return new FutureFailure(e);
         } catch (InterruptedException e) {
             this.errors.record();
             if (this.interceptors != null)
-                this.interceptors.onAcknowledgement(null, e);
+                this.interceptors.onSendError(record, tp, e);
             throw new InterruptException(e);
         } catch (BufferExhaustedException e) {
             this.errors.record();
             this.metrics.sensor("buffer-exhausted-records").record();
             if (this.interceptors != null)
-                this.interceptors.onAcknowledgement(null, e);
+                this.interceptors.onSendError(record, tp, e);
             throw e;
         } catch (KafkaException e) {
             this.errors.record();
             if (this.interceptors != null)
-                this.interceptors.onAcknowledgement(null, e);
+                this.interceptors.onSendError(record, tp, e);
             throw e;
         } catch (Exception e) {
             // we notify interceptor about all exceptions, since onSend is called before anything else in this method
             if (this.interceptors != null)
-                this.interceptors.onAcknowledgement(null, e);
+                this.interceptors.onSendError(record, tp, e);
             throw e;
         }
     }
@@ -763,15 +766,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static class InterceptorCallback<K, V> implements Callback {
         private final Callback userCallback;
         private final ProducerInterceptors<K, V> interceptors;
+        private final TopicPartition tp;
 
-        public InterceptorCallback(Callback userCallback, ProducerInterceptors<K, V> interceptors) {
+        public InterceptorCallback(Callback userCallback, ProducerInterceptors<K, V> interceptors,
+                                   TopicPartition tp) {
             this.userCallback = userCallback;
             this.interceptors = interceptors;
+            this.tp = tp;
         }
 
         public void onCompletion(RecordMetadata metadata, Exception exception) {
-            if (this.interceptors != null)
-                this.interceptors.onAcknowledgement(metadata, exception);
+            if (this.interceptors != null) {
+                if (metadata == null) {
+                    this.interceptors.onAcknowledgement(new RecordMetadata(tp, -1, -1, Record.NO_TIMESTAMP, -1, -1, -1),
+                                                        exception);
+                } else {
+                    this.interceptors.onAcknowledgement(metadata, exception);
+                }
+            }
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
         }

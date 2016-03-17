@@ -126,7 +126,7 @@ public class ProcessorTopologyTestDriver {
 
     private final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
 
-    private final String jobId = "test-driver-job";
+    private final String applicationId = "test-driver-application";
 
     private final TaskId id;
     private final ProcessorTopology topology;
@@ -167,7 +167,7 @@ public class ProcessorTopologyTestDriver {
         }
 
         task = new StreamTask(id,
-            jobId,
+            applicationId,
             partitionsByTopic.values(),
             topology,
             consumer,
@@ -334,7 +334,7 @@ public class ProcessorTopologyTestDriver {
         };
         // For each store name ...
         for (String storeName : storeNames) {
-            String topicName = ProcessorStateManager.storeChangelogTopic(jobId, storeName);
+            String topicName = ProcessorStateManager.storeChangelogTopic(applicationId, storeName);
             // Set up the restore-state topic ...
             // consumer.subscribe(new TopicPartition(topicName, 1));
             // Set up the partition that matches the ID (which is what ProcessorStateManager expects) ...

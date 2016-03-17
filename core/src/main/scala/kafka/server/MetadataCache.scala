@@ -24,7 +24,7 @@ import scala.collection.{Seq, Set, mutable}
 import scala.collection.JavaConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
-import kafka.common.TopicAndPartition
+import kafka.common.{BrokerEndPointNotAvailableException, TopicAndPartition}
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch}
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
@@ -55,7 +55,10 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
   }
 
   private def getAliveEndpoint(brokerId: Int, protocol: SecurityProtocol): Option[Node] =
-    aliveNodes.get(brokerId).flatMap(_.get(protocol))
+    aliveNodes.get(brokerId).map { nodeMap =>
+      nodeMap.getOrElse(protocol,
+        throw new BrokerEndPointNotAvailableException(s"Broker `$brokerId` does not support security protocol `$protocol`"))
+    }
 
   private def getPartitionMetadata(topic: String, protocol: SecurityProtocol): Option[Iterable[MetadataResponse.PartitionMetadata]] = {
     cache.get(topic).map { partitions =>
@@ -129,7 +132,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
 
   def getAliveBrokers: Seq[Broker] = {
     inReadLock(partitionMetadataLock) {
-      aliveBrokers.values.toSeq
+      aliveBrokers.values.toBuffer
     }
   }
 

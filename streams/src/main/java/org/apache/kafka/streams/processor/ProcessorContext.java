@@ -29,11 +29,11 @@ import java.io.File;
 public interface ProcessorContext {
 
     /**
-     * Returns the job id
+     * Returns the application id
      *
-     * @return the job id
+     * @return the application id
      */
-    String jobId();
+    String applicationId();
 
     /**
      * Returns the task id
