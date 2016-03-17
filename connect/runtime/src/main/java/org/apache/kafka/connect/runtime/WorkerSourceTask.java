@@ -207,6 +207,7 @@ class WorkerSourceTask extends WorkerTask {
                                     log.trace("Wrote record successfully: topic {} partition {} offset {}",
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
+                                    commitTaskRecord(record);
                                 }
                                 recordSent(producerRecord);
                             }
@@ -224,6 +225,14 @@ class WorkerSourceTask extends WorkerTask {
         }
         toSend = null;
         return true;
+    }
+
+    private void commitTaskRecord(SourceRecord record) {
+        try {
+            task.commitRecord(record);
+        } catch (InterruptedException e) {
+            log.error("Exception thrown", e);
+        }
     }
 
     private synchronized void recordSent(final ProducerRecord<byte[], byte[]> record) {

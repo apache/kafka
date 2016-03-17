@@ -329,18 +329,13 @@ public interface KStream<K, V> {
      */
     <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
                                                             Serializer<K> keySerializer,
-                                                            Serializer<Long> aggValueSerializer,
-                                                            Deserializer<K> keyDeserializer,
-                                                            Deserializer<Long> aggValueDeserializer);
+                                                            Deserializer<K> keyDeserializer);
 
     /**
      * Count number of messages of this stream by key without a window basis, and hence
-     * return a ever updating counting table
-     *
+     * return a ever updating counting table.
      */
     KTable<K, Long> countByKey(Serializer<K> keySerializer,
-                               Serializer<Long> aggValueSerializer,
                                Deserializer<K> keyDeserializer,
-                               Deserializer<Long> aggValueDeserializer,
                                String name);
 }

@@ -38,18 +38,18 @@ public enum ApiKeys {
     DESCRIBE_GROUPS(15, "DescribeGroups"),
     LIST_GROUPS(16, "ListGroups");
 
-    private static ApiKeys[] codeToType;
+    private static final ApiKeys[] ID_TO_TYPE;
+    private static final int MIN_API_KEY = 0;
     public static final int MAX_API_KEY;
 
     static {
         int maxKey = -1;
-        for (ApiKeys key : ApiKeys.values()) {
+        for (ApiKeys key : ApiKeys.values())
             maxKey = Math.max(maxKey, key.id);
-        }
-        codeToType = new ApiKeys[maxKey + 1];
-        for (ApiKeys key : ApiKeys.values()) {
-            codeToType[key.id] = key;
-        }
+        ApiKeys[] idToType = new ApiKeys[maxKey + 1];
+        for (ApiKeys key : ApiKeys.values())
+            idToType[key.id] = key;
+        ID_TO_TYPE = idToType;
         MAX_API_KEY = maxKey;
     }
 
@@ -65,6 +65,35 @@ public enum ApiKeys {
     }
 
     public static ApiKeys forId(int id) {
-        return codeToType[id];
+        if (id < MIN_API_KEY || id > MAX_API_KEY)
+            throw new IllegalArgumentException(String.format("Unexpected ApiKeys id `%s`, it should be between `%s` " +
+                    "and `%s` (inclusive)", id, MIN_API_KEY, MAX_API_KEY));
+        return ID_TO_TYPE[id];
     }
+
+    private static String toHtml() {
+        final StringBuilder b = new StringBuilder();
+        b.append("<table class=\"data-table\"><tbody>\n");
+        b.append("<tr>");
+        b.append("<th>Name</th>\n");
+        b.append("<th>Key</th>\n");
+        b.append("</tr>");
+        for (ApiKeys key : ApiKeys.values()) {
+            b.append("<tr>\n");
+            b.append("<td>");
+            b.append(key.name);
+            b.append("</td>");
+            b.append("<td>");
+            b.append(key.id);
+            b.append("</td>");
+            b.append("</tr>\n");
+        }
+        b.append("</table>\n");
+        return b.toString();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(toHtml());
+    }
+
 }

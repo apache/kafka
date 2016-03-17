@@ -66,4 +66,8 @@ public class Field {
         return type;
     }
 
+    public Schema schema() {
+        return schema;
+    }
+
 }

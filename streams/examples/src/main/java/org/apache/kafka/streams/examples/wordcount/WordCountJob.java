@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.examples.wordcount;
 
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -66,7 +65,6 @@ public class WordCountJob {
         final Serializer<String> stringSerializer = new StringSerializer();
         final Deserializer<String> stringDeserializer = new StringDeserializer();
         final Serializer<Long> longSerializer = new LongSerializer();
-        final Deserializer<Long> longDeserializer = new LongDeserializer();
 
         KStream<String, String> source = builder.stream("streams-file-input");
 
@@ -82,7 +80,7 @@ public class WordCountJob {
                         return new KeyValue<String, String>(value, value);
                     }
                 })
-                .countByKey(stringSerializer, longSerializer, stringDeserializer, longDeserializer, "Counts");
+                .countByKey(stringSerializer, stringDeserializer, "Counts");
 
         counts.to("streams-wordcount-output", stringSerializer, longSerializer);
 

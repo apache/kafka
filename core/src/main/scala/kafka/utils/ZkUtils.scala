@@ -18,31 +18,26 @@
 package kafka.utils
 
 import java.util.concurrent.CountDownLatch
+
+import kafka.admin._
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0, LeaderAndIsr}
 import kafka.cluster._
+import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndPartition}
 import kafka.consumer.{ConsumerThreadId, TopicCount}
+import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
 import kafka.server.ConfigType
-import org.I0Itec.zkclient.{ZkClient,ZkConnection}
-import org.I0Itec.zkclient.exception.{ZkException, ZkNodeExistsException, ZkNoNodeException,
-  ZkMarshallingError, ZkBadVersionException}
+import kafka.utils.ZkUtils._
+import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
+import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.zookeeper.ZooDefs
-import scala.collection._
-import kafka.api.LeaderAndIsr
-import org.apache.zookeeper.data.{ACL, Stat}
-import kafka.admin._
-import kafka.common.{KafkaException, NoEpochForPartitionException}
-import kafka.controller.ReassignedPartitionsContext
-import kafka.controller.KafkaController
-import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.common.TopicAndPartition
-import kafka.utils.ZkUtils._
-import org.apache.zookeeper.AsyncCallback.{DataCallback,StringCallback}
-import org.apache.zookeeper.CreateMode
-import org.apache.zookeeper.KeeperException
+import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
-import org.apache.zookeeper.ZooKeeper
+import org.apache.zookeeper.data.{ACL, Stat}
+import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
+
+import scala.collection._
 
 object ZkUtils {
   val ConsumersPath = "/consumers"
@@ -256,19 +251,43 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   /**
-   * Register brokers with v2 json format (which includes multiple endpoints).
+   * Register brokers with v3 json format (which includes multiple endpoints and rack) if
+   * the apiVersion is 0.10.0.X or above. Register the broker with v2 json format otherwise.
+   * Due to KAFKA-3100, 0.9.0.0 broker and old clients will break if JSON version is above 2.
+   * We include v2 to make it possible for the broker to migrate from 0.9.0.0 to 0.10.0.X without having to upgrade
+   * to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in any case).
+   *
    * This format also includes default endpoints for compatibility with older clients.
-   * @param id
-   * @param host
-   * @param port
-   * @param advertisedEndpoints
-   * @param jmxPort
+   *
+   * @param id broker ID
+   * @param host broker host name
+   * @param port broker port
+   * @param advertisedEndpoints broker end points
+   * @param jmxPort jmx port
+   * @param rack broker rack
+   * @param apiVersion Kafka version the broker is running as
    */
-  def registerBrokerInZk(id: Int, host: String, port: Int, advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint], jmxPort: Int) {
+  def registerBrokerInZk(id: Int,
+                         host: String,
+                         port: Int,
+                         advertisedEndpoints: collection.Map[SecurityProtocol, EndPoint],
+                         jmxPort: Int,
+                         rack: Option[String],
+                         apiVersion: ApiVersion) {
     val brokerIdPath = BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
 
-    val brokerInfo = Json.encode(Map("version" -> 2, "host" -> host, "port" -> port, "endpoints"->advertisedEndpoints.values.map(_.connectionString).toArray, "jmx_port" -> jmxPort, "timestamp" -> timestamp))
+    val version = if (apiVersion >= KAFKA_0_10_0_IV0) 3 else 2
+    var jsonMap = Map("version" -> version,
+                      "host" -> host,
+                      "port" -> port,
+                      "endpoints" -> advertisedEndpoints.values.map(_.connectionString).toArray,
+                      "jmx_port" -> jmxPort,
+                      "timestamp" -> timestamp
+    )
+    rack.foreach(rack => if (version >= 3) jsonMap += ("rack" -> rack))
+
+    val brokerInfo = Json.encode(jsonMap)
     registerBrokerInZk(brokerIdPath, brokerInfo)
 
     info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
@@ -745,6 +764,7 @@ class ZkUtils(val zkClient: ZkClient,
   /**
    * This API takes in a broker id, queries zookeeper for the broker metadata and returns the metadata for that broker
    * or throws an exception if the broker dies before the query to zookeeper finishes
+   *
    * @param brokerId The broker id
    * @return An optional Broker object encapsulating the broker metadata
    */
@@ -768,7 +788,6 @@ class ZkUtils(val zkClient: ZkClient,
       case e: ZkNoNodeException => {
         createParentPath(BrokerSequenceIdPath, acls)
         try {
-          import scala.collection.JavaConversions._
           zkClient.createPersistent(BrokerSequenceIdPath, "", acls)
           0
         } catch {
@@ -880,7 +899,6 @@ class ZKConfig(props: VerifiableProperties) {
 
 object ZkPath {
   @volatile private var isNamespacePresent: Boolean = false
-  import scala.collection.JavaConversions._
 
   def checkNamespace(client: ZkClient) {
     if(isNamespacePresent)

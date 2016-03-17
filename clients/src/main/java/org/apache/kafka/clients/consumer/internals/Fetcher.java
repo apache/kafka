@@ -215,13 +215,14 @@ public class Fetcher<K, V> {
                     throw new TopicAuthorizationException(unauthorizedTopics);
 
                 boolean shouldRetry = false;
-                if (!response.errors().isEmpty()) {
+                Map<String, Errors> errors = response.errors();
+                if (!errors.isEmpty()) {
                     // if there were errors, we need to check whether they were fatal or whether
                     // we should just retry
 
-                    log.debug("Topic metadata fetch included errors: {}", response.errors());
+                    log.debug("Topic metadata fetch included errors: {}", errors);
 
-                    for (Map.Entry<String, Errors> errorEntry : response.errors().entrySet()) {
+                    for (Map.Entry<String, Errors> errorEntry : errors.entrySet()) {
                         String topic = errorEntry.getKey();
                         Errors error = errorEntry.getValue();
 
@@ -501,12 +502,12 @@ public class Fetcher<K, V> {
             future.complete(offset);
         } else if (errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()
                 || errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
-            log.warn("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
+            log.debug("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
                     topicPartition);
             future.raise(Errors.forCode(errorCode));
         } else {
-            log.error("Attempt to fetch offsets for partition {} failed due to: {}",
-                    topicPartition, Errors.forCode(errorCode).exception().getMessage());
+            log.warn("Attempt to fetch offsets for partition {} failed due to: {}",
+                    topicPartition, Errors.forCode(errorCode).message());
             future.raise(new StaleMetadataException());
         }
     }
@@ -766,18 +767,43 @@ public class Fetcher<K, V> {
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {
+            Map<String, String> metricTags = new HashMap<>();
+            metricTags.put("topic", topic.replace(".", "_"));
+
             // record bytes fetched
             String name = "topic." + topic + ".bytes-fetched";
             Sensor bytesFetched = this.metrics.getSensor(name);
-            if (bytesFetched == null)
+            if (bytesFetched == null) {
                 bytesFetched = this.metrics.sensor(name);
+                bytesFetched.add(this.metrics.metricName("fetch-size-avg",
+                        this.metricGrpName,
+                        "The average number of bytes fetched per request for topic " + topic,
+                        metricTags), new Avg());
+                bytesFetched.add(this.metrics.metricName("fetch-size-max",
+                        this.metricGrpName,
+                        "The maximum number of bytes fetched per request for topic " + topic,
+                        metricTags), new Max());
+                bytesFetched.add(this.metrics.metricName("bytes-consumed-rate",
+                        this.metricGrpName,
+                        "The average number of bytes consumed per second for topic " + topic,
+                        metricTags), new Rate());
+            }
             bytesFetched.record(bytes);
 
             // record records fetched
             name = "topic." + topic + ".records-fetched";
             Sensor recordsFetched = this.metrics.getSensor(name);
-            if (recordsFetched == null)
+            if (recordsFetched == null) {
                 recordsFetched = this.metrics.sensor(name);
+                recordsFetched.add(this.metrics.metricName("records-per-request-avg",
+                        this.metricGrpName,
+                        "The average number of records in each request for topic " + topic,
+                        metricTags), new Avg());
+                recordsFetched.add(this.metrics.metricName("records-consumed-rate",
+                        this.metricGrpName,
+                        "The average number of records consumed per second for topic " + topic,
+                        metricTags), new Rate());
+            }
             recordsFetched.record(records);
         }
     }

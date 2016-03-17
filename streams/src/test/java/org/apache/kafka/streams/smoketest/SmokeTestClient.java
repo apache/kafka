@@ -191,9 +191,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         data.countByKey(
                 UnlimitedWindows.of("uwin-cnt"),
                 stringSerializer,
-                longSerializer,
-                stringDeserializer,
-                longDeserializer
+                stringDeserializer
         ).toStream().map(
                 new Unwindow<String, Long>()
         ).to("cnt", stringSerializer, longSerializer);
@@ -224,9 +222,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         data.countByKey(
                 TumblingWindows.of("tumbling-win-cnt").with(WINDOW_SIZE),
                 stringSerializer,
-                longSerializer,
-                stringDeserializer,
-                longDeserializer
+                stringDeserializer
         ).toStream().map(
                 new KeyValueMapper<Windowed<String>, Long, KeyValue<String, Long>>() {
                     @Override
