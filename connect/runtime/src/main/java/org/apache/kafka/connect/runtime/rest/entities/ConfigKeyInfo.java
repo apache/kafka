@@ -27,6 +27,7 @@ public class ConfigKeyInfo {
 
     private final String name;
     private final String type;
+    private final boolean required;
     private final Object defaultValue;
     private final String importance;
     private final String documentation;
@@ -39,6 +40,7 @@ public class ConfigKeyInfo {
     @JsonCreator
     public ConfigKeyInfo(@JsonProperty("name") String name,
                          @JsonProperty("type") String type,
+                         @JsonProperty("required") boolean required,
                          @JsonProperty("default_value") Object defaultValue,
                          @JsonProperty("importance") String importance,
                          @JsonProperty("documentation") String documentation,
@@ -49,6 +51,7 @@ public class ConfigKeyInfo {
                          @JsonProperty("dependents") List<String> dependents) {
         this.name = name;
         this.type = type;
+        this.required = required;
         this.defaultValue = defaultValue;
         this.importance = importance;
         this.documentation = documentation;
@@ -67,6 +70,11 @@ public class ConfigKeyInfo {
     @JsonProperty
     public String type() {
         return type;
+    }
+
+    @JsonProperty
+    public boolean required() {
+        return required;
     }
 
     @JsonProperty("default_value")
@@ -116,6 +124,7 @@ public class ConfigKeyInfo {
         ConfigKeyInfo that = (ConfigKeyInfo) o;
         return Objects.equals(name, that.name) &&
                Objects.equals(type, that.type) &&
+               Objects.equals(required, that.required) &&
                Objects.equals(defaultValue, that.defaultValue) &&
                Objects.equals(importance, that.importance) &&
                Objects.equals(documentation, that.documentation) &&
@@ -128,7 +137,7 @@ public class ConfigKeyInfo {
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, type, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents);
+        return Objects.hash(name, type, required, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents);
     }
 
     @Override
@@ -138,6 +147,8 @@ public class ConfigKeyInfo {
             .append(name)
             .append(",")
             .append(type)
+            .append(",")
+            .append(required)
             .append(",")
             .append(defaultValue)
             .append(",")

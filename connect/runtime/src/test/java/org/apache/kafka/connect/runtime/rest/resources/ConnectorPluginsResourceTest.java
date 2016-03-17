@@ -21,6 +21,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.AbstractHerder;
@@ -65,13 +67,18 @@ public class ConnectorPluginsResourceTest {
     static {
         List<ConfigInfo> configs = new LinkedList<>();
 
-        ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", "", "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", new LinkedList<String>());
+        ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", true, "", "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", new LinkedList<String>());
         ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", Collections.<Object>emptyList(), Collections.<String>emptyList(), true);
         ConfigInfo configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
 
-        configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", "", "MEDIUM", "Test configuration for integer type.", null, -1, "NONE", "test.int.config", new LinkedList<String>());
+        configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", true, "", "MEDIUM", "Test configuration for integer type.", null, -1, "NONE", "test.int.config", new LinkedList<String>());
         configValueInfo = new ConfigValueInfo("test.int.config", 10, Collections.<Object>emptyList(), Collections.<String>emptyList(), true);
+        configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
+        configs.add(configInfo);
+
+        configKeyInfo = new ConfigKeyInfo("test.string.config.default", "STRING", false, "", "LOW", "Test configuration with default value.", null, -1, "NONE", "test.string.config.default", new LinkedList<String>());
+        configValueInfo = new ConfigValueInfo("test.string.config.default", "", Collections.<Object>emptyList(), Collections.<String>emptyList(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
 
@@ -118,9 +125,12 @@ public class ConnectorPluginsResourceTest {
 
         public static final String TEST_STRING_CONFIG = "test.string.config";
         public static final String TEST_INT_CONFIG = "test.int.config";
+        public static final String TEST_STRING_CONFIG_DEFAULT = "test.string.config.default";
+
         private static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(TEST_STRING_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Test configuration for string type.")
-            .define(TEST_INT_CONFIG, ConfigDef.Type.INT, ConfigDef.Importance.MEDIUM, "Test configuration for integer type.");
+            .define(TEST_STRING_CONFIG, Type.STRING, Importance.HIGH, "Test configuration for string type.")
+            .define(TEST_INT_CONFIG, Type.INT, Importance.MEDIUM, "Test configuration for integer type.")
+            .define(TEST_STRING_CONFIG_DEFAULT, Type.STRING, "", Importance.LOW, "Test configuration with default value.");
 
         @Override
         public String version() {

@@ -221,6 +221,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         String name = configKey.name;
         String type = configKey.type.name();
         Object defaultValue = configKey.defaultValue;
+        boolean required = false;
+        if (defaultValue == ConfigDef.NO_DEFAULT_VALUE) {
+            required = true;
+        }
         String importance = configKey.importance.name();
         String documentation = configKey.documentation;
         String group = configKey.group;
@@ -228,7 +232,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         String width = configKey.width.name();
         String displayName = configKey.displayName;
         List<String> dependents = configKey.dependents;
-        return new ConfigKeyInfo(name, type, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents);
+        return new ConfigKeyInfo(name, type, required, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents);
     }
 
     private static ConfigValueInfo convertConfigValue(ConfigValue configValue) {
