@@ -99,8 +99,8 @@ public class SerializationTest {
     @Test
     public void testLongSerializer() {
         Long[] longs = new Long[]{
-                922337203685477580L,
-                -922337203685477581L
+            922337203685477580L,
+            -922337203685477581L
         };
 
         Serializer<Long> serializer = Serdes.Long().serializer();
@@ -121,8 +121,8 @@ public class SerializationTest {
     @Test
     public void testDoubleSerializer() {
         Double[] doubles = new Double[]{
-                5678567.12312d,
-                -5678567.12341d
+            5678567.12312d,
+            -5678567.12341d
         };
 
         Serializer<Double> serializer = Serdes.Double().serializer();
