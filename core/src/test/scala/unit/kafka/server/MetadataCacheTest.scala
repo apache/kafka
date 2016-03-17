@@ -238,4 +238,32 @@ class MetadataCacheTest {
 
   }
 
+  @Test
+  def getAliveBrokersShouldNotBeMutatedByUpdateCache() {
+    val topic = "topic"
+    val cache = new MetadataCache(1)
+
+    def updateCache(brokerIds: Set[Int]) {
+      val brokers = brokerIds.map { brokerId =>
+        new Broker(brokerId, Map(SecurityProtocol.PLAINTEXT -> new EndPoint("foo", 9092)).asJava, "")
+      }
+      val controllerEpoch = 1
+      val leader = 0
+      val leaderEpoch = 0
+      val replicas = asSet[Integer](0)
+      val isr = asList[Integer](0, 1)
+      val partitionStates = Map(
+        new TopicPartition(topic, 0) -> new PartitionState(controllerEpoch, leader, leaderEpoch, isr, 3, replicas))
+      val updateMetadataRequest = new UpdateMetadataRequest(2, controllerEpoch, partitionStates.asJava, brokers.asJava)
+      cache.updateCache(15, updateMetadataRequest)
+    }
+
+    val initialBrokerIds = (0 to 2).toSet
+    updateCache(initialBrokerIds)
+    val aliveBrokersFromCache = cache.getAliveBrokers
+    // This should not change `aliveBrokersFromCache`
+    updateCache((0 to 3).toSet)
+    assertEquals(initialBrokerIds, aliveBrokersFromCache.map(_.id).toSet)
+  }
+
 }
