@@ -288,27 +288,34 @@ public class StreamsConfig extends AbstractConfig {
         // set producer default property values
         props.put(ProducerConfig.LINGER_MS_CONFIG, "100");
 
+        // add client id with stream client id prefix
+        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
+
         // remove properties that are not required for producers
         removeStreamsSpecificConfigs(props);
         props.remove(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG);
         props.remove(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
         props.remove(StreamsConfig.AUTO_OFFSET_RESET_CONFIG);
 
-        // add client id with stream client id prefix
-        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
-
         return props;
     }
 
-    private void removeStreamsSpecificConfigs(Map<String, Object> props) {
-        props.remove(StreamsConfig.APPLICATION_ID_CONFIG);
-        props.remove(StreamsConfig.POLL_MS_CONFIG);
-        props.remove(StreamsConfig.STATE_DIR_CONFIG);
-        props.remove(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
-        props.remove(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
-        props.remove(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
-        props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
-        props.remove(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+    private AbstractConfig removeStreamsSpecificConfigs(AbstractConfig config) {
+        config.ignore(StreamsConfig.POLL_MS_CONFIG);
+        config.ignore(StreamsConfig.STATE_DIR_CONFIG);
+        config.ignore(StreamsConfig.APPLICATION_ID_CONFIG);
+        config.ignore(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
+        config.ignore(StreamsConfig.REPLICATION_FACTOR_CONFIG);
+        config.ignore(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+        config.ignore(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
+        config.ignore(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+        config.ignore(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
+        config.ignore(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG);
+        config.ignore(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        config.ignore(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        config.ignore(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE);
+
+        return config;
     }
 
     public Serializer keySerializer() {
