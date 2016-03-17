@@ -182,9 +182,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         resultConfigKeys.putAll(connectorConfigDef.configKeys());
         configValues.addAll(connectorConfigValues);
 
+        List<String> allGroups = new LinkedList<>(connectorConfigDef.groups());
         List<String> groups = configDef.groups();
+        allGroups.addAll(groups);
 
-        return generateResult(connType, resultConfigKeys, configValues, groups);
+        return generateResult(connType, resultConfigKeys, configValues, allGroups);
     }
 
     // public for testing
