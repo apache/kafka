@@ -68,7 +68,7 @@ public class ProcessorTopologyTest {
         // Create a new directory in which we'll put all of the state for this test, enabling running tests in parallel ...
         File localState = StateTestUtils.tempDir();
         Properties props = new Properties();
-        props.setProperty(StreamsConfig.JOB_ID_CONFIG, "processor-topology-test");
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "processor-topology-test");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, localState.getAbsolutePath());
         props.setProperty(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());

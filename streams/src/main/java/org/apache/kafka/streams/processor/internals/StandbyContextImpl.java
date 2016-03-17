@@ -24,17 +24,13 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 
 public class StandbyContextImpl implements ProcessorContext, RecordCollector.Supplier {
 
-    private static final Logger log = LoggerFactory.getLogger(StandbyContextImpl.class);
-
     private final TaskId id;
-    private final String jobId;
+    private final String applicationId;
     private final StreamsMetrics metrics;
     private final ProcessorStateManager stateMgr;
 
@@ -44,12 +40,12 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     private boolean initialized;
 
     public StandbyContextImpl(TaskId id,
-                              String jobId,
+                              String applicationId,
                               StreamsConfig config,
                               ProcessorStateManager stateMgr,
                               StreamsMetrics metrics) {
         this.id = id;
-        this.jobId = jobId;
+        this.applicationId = applicationId;
         this.metrics = metrics;
         this.stateMgr = stateMgr;
 
@@ -73,8 +69,8 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     }
 
     @Override
-    public String jobId() {
-        return jobId;
+    public String applicationId() {
+        return applicationId;
     }
 
     @Override

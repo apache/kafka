@@ -47,7 +47,7 @@ import java.util.Properties;
  * Before running this example you must create the source topic (e.g. via bin/kafka-topics.sh --create ...)
  * and write some data to it (e.g. via bin-kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
  */
-public class PageViewTypedJob {
+public class PageViewTypedDemo {
 
     // POJO classes
     static public class PageView {
@@ -79,7 +79,7 @@ public class PageViewTypedJob {
 
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
-        props.put(StreamsConfig.JOB_ID_CONFIG, "streams-pageview-typed");
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-typed");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
         props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
@@ -174,7 +174,7 @@ public class PageViewTypedJob {
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
 
-        // usually the streaming job would be ever running,
+        // usually the stream application would be running forever,
         // in this example we just let it run for some time and stop since the input data is finite.
         Thread.sleep(5000L);
 

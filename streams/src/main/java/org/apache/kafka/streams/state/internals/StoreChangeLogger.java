@@ -57,7 +57,7 @@ public class StoreChangeLogger<K, V> {
     }
 
     protected StoreChangeLogger(String storeName, ProcessorContext context, int partition, StateSerdes<K, V> serialization, int maxDirty, int maxRemoved) {
-        this.topic = ProcessorStateManager.storeChangelogTopic(context.jobId(), storeName);
+        this.topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
         this.context = context;
         this.partition = partition;
         this.serialization = serialization;

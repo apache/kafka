@@ -36,7 +36,7 @@ public class StreamsConfigTest {
 
     @Before
     public void setUp() {
-        props.put(StreamsConfig.JOB_ID_CONFIG, "streams-config-test");
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         streamsConfig = new StreamsConfig(props);
     }
@@ -49,9 +49,10 @@ public class StreamsConfigTest {
 
     @Test
     public void testGetConsumerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamsConfig.getConsumerConfigs(streamThreadPlaceHolder, "example-job", "client");
+        Map<String, Object> returnedProps =
+            streamsConfig.getConsumerConfigs(streamThreadPlaceHolder, "example-application", "client");
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-consumer");
-        assertEquals(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), "example-job");
+        assertEquals(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), "example-application");
 
     }
 

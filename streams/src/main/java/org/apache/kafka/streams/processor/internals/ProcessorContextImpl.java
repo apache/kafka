@@ -26,14 +26,9 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.TaskId;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.File;
 
 public class ProcessorContextImpl implements ProcessorContext, RecordCollector.Supplier {
-
-    private static final Logger log = LoggerFactory.getLogger(ProcessorContextImpl.class);
 
     private final TaskId id;
     private final StreamTask task;
@@ -79,8 +74,8 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public String jobId() {
-        return task.jobId();
+    public String applicationId() {
+        return task.applicationId();
     }
 
     @Override

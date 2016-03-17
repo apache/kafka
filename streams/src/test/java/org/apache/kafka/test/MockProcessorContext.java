@@ -95,8 +95,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public String jobId() {
-        return "mockJob";
+    public String applicationId() {
+        return "mockApplication";
     }
 
     @Override
