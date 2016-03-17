@@ -21,8 +21,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -54,11 +52,11 @@ import java.util.Properties;
  * Before running this example you must create the source topic (e.g. via bin/kafka-topics.sh --create ...)
  * and write some data to it (e.g. via bin-kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
  */
-public class PageViewUntypedJob {
+public class PageViewUntypedDemo {
 
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
-        props.put(StreamsConfig.JOB_ID_CONFIG, "streams-pageview-untyped");
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-untyped");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
         props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -74,8 +72,6 @@ public class PageViewUntypedJob {
 
         final Serializer<String> stringSerializer = new StringSerializer();
         final Deserializer<String> stringDeserializer = new StringDeserializer();
-        final Serializer<Long> longSerializer = new LongSerializer();
-        final Deserializer<Long> longDeserializer = new LongDeserializer();
         final Serializer<JsonNode> jsonSerializer = new JsonSerializer();
         final Deserializer<JsonNode> jsonDeserializer = new JsonDeserializer();
 
@@ -131,7 +127,7 @@ public class PageViewUntypedJob {
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
 
-        // usually the streaming job would be ever running,
+        // usually the stream application would be running forever,
         // in this example we just let it run for some time and stop since the input data is finite.
         Thread.sleep(5000L);
 

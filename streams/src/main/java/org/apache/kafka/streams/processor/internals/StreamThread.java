@@ -72,7 +72,7 @@ public class StreamThread extends Thread {
     private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     public final PartitionGrouper partitionGrouper;
-    public final String jobId;
+    public final String applicationId;
     public final String clientId;
     public final UUID processId;
 
@@ -106,12 +106,12 @@ public class StreamThread extends Thread {
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
 
-    static File makeStateDir(String jobId, String baseDirName) {
+    static File makeStateDir(String applicationId, String baseDirName) {
         File baseDir = new File(baseDirName);
         if (!baseDir.exists())
             baseDir.mkdir();
 
-        File stateDir = new File(baseDir, jobId);
+        File stateDir = new File(baseDir, applicationId);
         if (!stateDir.exists())
             stateDir.mkdir();
 
@@ -150,12 +150,12 @@ public class StreamThread extends Thread {
 
     public StreamThread(TopologyBuilder builder,
                         StreamsConfig config,
-                        String jobId,
+                        String applicationId,
                         String clientId,
                         UUID processId,
                         Metrics metrics,
                         Time time) {
-        this(builder, config, null , null, null, jobId, clientId, processId, metrics, time);
+        this(builder, config, null , null, null, applicationId, clientId, processId, metrics, time);
     }
 
     StreamThread(TopologyBuilder builder,
@@ -163,17 +163,17 @@ public class StreamThread extends Thread {
                  Producer<byte[], byte[]> producer,
                  Consumer<byte[], byte[]> consumer,
                  Consumer<byte[], byte[]> restoreConsumer,
-                 String jobId,
+                 String applicationId,
                  String clientId,
                  UUID processId,
                  Metrics metrics,
                  Time time) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
 
-        this.jobId = jobId;
+        this.applicationId = applicationId;
         this.config = config;
         this.builder = builder;
-        this.sourceTopics = builder.sourceTopics(jobId);
+        this.sourceTopics = builder.sourceTopics(applicationId);
         this.clientId = clientId;
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
@@ -194,7 +194,7 @@ public class StreamThread extends Thread {
         this.standbyRecords = new HashMap<>();
 
         // read in task specific config values
-        this.stateDir = makeStateDir(this.jobId, this.config.getString(StreamsConfig.STATE_DIR_CONFIG));
+        this.stateDir = makeStateDir(this.applicationId, this.config.getString(StreamsConfig.STATE_DIR_CONFIG));
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.cleanTimeMs = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
@@ -224,7 +224,7 @@ public class StreamThread extends Thread {
     private Consumer<byte[], byte[]> createConsumer() {
         String threadName = this.getName();
         log.info("Creating consumer client for stream thread [" + threadName + "]");
-        return new KafkaConsumer<>(config.getConsumerConfigs(this, this.jobId, this.clientId + "-" + threadName),
+        return new KafkaConsumer<>(config.getConsumerConfigs(this, this.applicationId, this.clientId + "-" + threadName),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
@@ -580,9 +580,9 @@ public class StreamThread extends Thread {
     protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitions) {
         sensors.taskCreationSensor.record();
 
-        ProcessorTopology topology = builder.build(jobId, id.topicGroupId);
+        ProcessorTopology topology = builder.build(applicationId, id.topicGroupId);
 
-        return new StreamTask(id, jobId, partitions, topology, consumer, producer, restoreConsumer, config, sensors);
+        return new StreamTask(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, sensors);
     }
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
@@ -650,10 +650,10 @@ public class StreamThread extends Thread {
     protected StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
         sensors.taskCreationSensor.record();
 
-        ProcessorTopology topology = builder.build(jobId, id.topicGroupId);
+        ProcessorTopology topology = builder.build(applicationId, id.topicGroupId);
 
         if (!topology.stateStoreSuppliers().isEmpty()) {
-            return new StandbyTask(id, jobId, partitions, topology, consumer, restoreConsumer, config, sensors);
+            return new StandbyTask(id, applicationId, partitions, topology, consumer, restoreConsumer, config, sensors);
         } else {
             return null;
         }

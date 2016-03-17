@@ -51,7 +51,7 @@ public class ProcessorStateManager {
     public static final String CHECKPOINT_FILE_NAME = ".checkpoint";
     public static final String LOCK_FILE_NAME = ".lock";
 
-    private final String jobId;
+    private final String applicationId;
     private final int defaultPartition;
     private final Map<String, TopicPartition> partitionForTopic;
     private final File baseDir;
@@ -65,8 +65,8 @@ public class ProcessorStateManager {
     private final boolean isStandby;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
 
-    public ProcessorStateManager(String jobId, int defaultPartition, Collection<TopicPartition> sources, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
-        this.jobId = jobId;
+    public ProcessorStateManager(String applicationId, int defaultPartition, Collection<TopicPartition> sources, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
+        this.applicationId = applicationId;
         this.defaultPartition = defaultPartition;
         this.partitionForTopic = new HashMap<>();
         for (TopicPartition source : sources) {
@@ -104,8 +104,8 @@ public class ProcessorStateManager {
         }
     }
 
-    public static String storeChangelogTopic(String jobId, String storeName) {
-        return jobId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
+    public static String storeChangelogTopic(String applicationId, String storeName) {
+        return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
     }
 
     public static FileLock lockStateDirectory(File stateDir) throws IOException {
@@ -154,7 +154,7 @@ public class ProcessorStateManager {
         // check that the underlying change log topic exist or not
         String topic;
         if (loggingEnabled)
-            topic = storeChangelogTopic(this.jobId, store.name());
+            topic = storeChangelogTopic(this.applicationId, store.name());
         else topic = store.name();
 
         // block until the partition is ready for this state changelog topic or time has elapsed
@@ -325,7 +325,7 @@ public class ProcessorStateManager {
                 for (String storeName : stores.keySet()) {
                     TopicPartition part;
                     if (loggingEnabled.contains(storeName))
-                        part = new TopicPartition(storeChangelogTopic(jobId, storeName), getPartition(storeName));
+                        part = new TopicPartition(storeChangelogTopic(applicationId, storeName), getPartition(storeName));
                     else
                         part = new TopicPartition(storeName, getPartition(storeName));
 
