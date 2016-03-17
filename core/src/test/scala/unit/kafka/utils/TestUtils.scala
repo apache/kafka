@@ -623,10 +623,10 @@ object TestUtils extends Logging {
   def produceRequest(topic: String,
                      partition: Int,
                      message: ByteBufferMessageSet,
-                     acks: Int = SyncProducerConfig.DefaultRequiredAcks,
-                     timeout: Int = SyncProducerConfig.DefaultAckTimeoutMs,
+                     acks: Int,
+                     timeout: Int,
                      correlationId: Int = 0,
-                     clientId: String = SyncProducerConfig.DefaultClientId): ProducerRequest = {
+                     clientId: String): ProducerRequest = {
     produceRequestWithAcks(Seq(topic), Seq(partition), message, acks, timeout, correlationId, clientId)
   }
 
@@ -634,10 +634,10 @@ object TestUtils extends Logging {
   def produceRequestWithAcks(topics: Seq[String],
                              partitions: Seq[Int],
                              message: ByteBufferMessageSet,
-                             acks: Int = SyncProducerConfig.DefaultRequiredAcks,
-                             timeout: Int = SyncProducerConfig.DefaultAckTimeoutMs,
+                             acks: Int,
+                             timeout: Int,
                              correlationId: Int = 0,
-                             clientId: String = SyncProducerConfig.DefaultClientId): ProducerRequest = {
+                             clientId: String): ProducerRequest = {
     val data = topics.flatMap(topic =>
       partitions.map(partition => (TopicAndPartition(topic,  partition), message))
     )
