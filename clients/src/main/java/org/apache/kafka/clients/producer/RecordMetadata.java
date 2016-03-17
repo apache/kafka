@@ -23,6 +23,11 @@ import org.apache.kafka.common.TopicPartition;
  */
 public final class RecordMetadata {
 
+    /**
+     * Partition value for record without partition assigned
+     */
+    public static final int UNKNOWN_PARTITION = -1;
+
     private final long offset;
     // The timestamp of the message.
     // If LogAppendTime is used for the topic, the timestamp will be the timestamp returned by the broker.
