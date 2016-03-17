@@ -723,9 +723,10 @@ private case class CleanerStats(time: Time = SystemTime) {
 /**
  * Helper class for a log, its topic/partition, the first cleanable position, and the first uncleanable dirty position
  */
-private case class LogToClean(topicPartition: TopicAndPartition, log: Log, firstDirtyOffset: Long, firstUncleanableOffset: Long) extends Ordered[LogToClean] {
+private case class LogToClean(topicPartition: TopicAndPartition, log: Log, firstDirtyOffset: Long, uncleanableOffset: Long) extends Ordered[LogToClean] {
   val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size).sum
-  val firstUncleanableSegment = log.logSegments(firstDirtyOffset, firstUncleanableOffset).lastOption.getOrElse(log.activeSegment)
+  val firstUncleanableSegment = log.logSegments(uncleanableOffset, log.activeSegment.baseOffset).headOption.getOrElse(log.activeSegment)
+  val firstUncleanableOffset = firstUncleanableSegment.baseOffset
   val cleanableBytes = log.logSegments(firstDirtyOffset, math.max(firstDirtyOffset, firstUncleanableSegment.baseOffset)).map(_.size).sum
   val totalBytes = cleanBytes + cleanableBytes
   val cleanableRatio = cleanableBytes / totalBytes.toDouble

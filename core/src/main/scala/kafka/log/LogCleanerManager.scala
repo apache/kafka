@@ -103,8 +103,8 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
 
   /**
     * Returns the range of dirty offsets that can be cleaned.
-    * @param log
-    * @param lastClean the
+    * @param log the log
+    * @param lastClean the checkpointed offset, ie., the first offset of the next segment to clean
     * @param now the current unix timestamp
     * @return the lower (inclusive) and upper (exclusive) offsets
     */
