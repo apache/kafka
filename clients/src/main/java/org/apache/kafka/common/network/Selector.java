@@ -351,10 +351,7 @@ public class Selector implements Selectable {
                 channel.finishConnect();
                 this.connected.add(channel.id());
                 this.sensors.connectionCreated.record();
-<<<<<<< HEAD
                 channel.prepare();
-=======
->>>>>>> branch 'trunk' of https://github.com/llowrey/kafka.git
             }
             connectableChannels.clear();
         }
