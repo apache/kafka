@@ -42,8 +42,8 @@ public class KStreamKStreamLeftJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    final private Serde<Integer> keySerde = Serdes.INTEGER();
-    final private Serde<String> valueSerde = Serdes.STRING();
+    final private Serde<Integer> keySerde = Serdes.Integer();
+    final private Serde<String> valueSerde = Serdes.String();
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override

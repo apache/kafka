@@ -54,7 +54,7 @@ public class KStreamFlatMapValuesTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(Serdes.INTEGER(), Serdes.STRING(), topicName);
+        stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
         stream.flatMapValues(mapper).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);

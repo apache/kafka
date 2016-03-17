@@ -43,11 +43,11 @@ public class KStreamTestDriver {
     private ProcessorNode currNode;
 
     public KStreamTestDriver(KStreamBuilder builder) {
-        this(builder, null, Serdes.BYTE_ARRAY(), Serdes.BYTE_ARRAY());
+        this(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
     public KStreamTestDriver(KStreamBuilder builder, File stateDir) {
-        this(builder, stateDir, Serdes.BYTE_ARRAY(), Serdes.BYTE_ARRAY());
+        this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
     public KStreamTestDriver(KStreamBuilder builder,

@@ -42,8 +42,8 @@ public class KStreamKStreamJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    final private Serde<Integer> keySerde = Serdes.INTEGER();
-    final private Serde<String> valueSerde = Serdes.STRING();
+    final private Serde<Integer> keySerde = Serdes.Integer();
+    final private Serde<String> valueSerde = Serdes.String();
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
@@ -67,8 +67,8 @@ public class KStreamKStreamJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(Serdes.INTEGER(), Serdes.STRING(), topic1);
-            stream2 = builder.stream(Serdes.INTEGER(), Serdes.STRING(), topic2);
+            stream1 = builder.stream(Serdes.Integer(), Serdes.String(), topic1);
+            stream2 = builder.stream(Serdes.Integer(), Serdes.String(), topic2);
             joined = stream1.join(stream2, joiner, JoinWindows.of("test").within(100), keySerde, valueSerde, valueSerde);
             joined.process(processor);
 

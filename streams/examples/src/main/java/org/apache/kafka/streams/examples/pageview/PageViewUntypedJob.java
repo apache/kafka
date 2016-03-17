@@ -70,9 +70,9 @@ public class PageViewUntypedJob {
         final Deserializer<JsonNode> jsonDeserializer = new JsonDeserializer();
         final Serde<JsonNode> jsonSerde = Serdes.serdeFrom(jsonSerializer, jsonDeserializer);
 
-        KStream<String, JsonNode> views = builder.stream(Serdes.STRING(), jsonSerde, "streams-pageview-input");
+        KStream<String, JsonNode> views = builder.stream(Serdes.String(), jsonSerde, "streams-pageview-input");
 
-        KTable<String, JsonNode> users = builder.table(Serdes.STRING(), Serdes.serdeFrom(jsonSerializer, jsonDeserializer), "streams-userprofile-input");
+        KTable<String, JsonNode> users = builder.table(Serdes.String(), Serdes.serdeFrom(jsonSerializer, jsonDeserializer), "streams-userprofile-input");
 
         KTable<String, String> userRegions = users.mapValues(new ValueMapper<JsonNode, String>() {
             @Override
@@ -98,7 +98,7 @@ public class PageViewUntypedJob {
                         return new KeyValue<>(viewRegion.get("region").textValue(), viewRegion);
                     }
                 })
-                .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000), Serdes.STRING())
+                .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000), Serdes.String())
                 // TODO: we can merge ths toStream().map(...) with a single toStream(...)
                 .toStream()
                 .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<JsonNode, JsonNode>>() {

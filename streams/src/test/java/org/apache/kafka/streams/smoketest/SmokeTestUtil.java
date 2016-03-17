@@ -120,13 +120,13 @@ public class SmokeTestUtil {
         }
     }
 
-    public static Serde<String> stringSerde = Serdes.STRING();
+    public static Serde<String> stringSerde = Serdes.String();
 
-    public static Serde<Integer> intSerde = Serdes.INTEGER();
+    public static Serde<Integer> intSerde = Serdes.Integer();
 
-    public static Serde<Long> longSerde = Serdes.LONG();
+    public static Serde<Long> longSerde = Serdes.Long();
 
-    public static Serde<Double> doubleSerde = Serdes.DOUBLE();
+    public static Serde<Double> doubleSerde = Serdes.Double();
 
     public static File createDir(String path) throws Exception {
         File dir = new File(path);

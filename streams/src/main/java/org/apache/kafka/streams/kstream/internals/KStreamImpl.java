@@ -491,7 +491,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                     public Long apply(K aggKey, V value, Long aggregate) {
                         return aggregate + 1L;
                     }
-                }, windows, keySerde, Serdes.LONG());
+                }, windows, keySerde, Serdes.Long());
     }
 
     @Override
@@ -509,6 +509,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                     public Long apply(K aggKey, V value, Long aggregate) {
                         return aggregate + 1L;
                     }
-                }, keySerde, Serdes.LONG(), name);
+                }, keySerde, Serdes.Long(), name);
     }
 }

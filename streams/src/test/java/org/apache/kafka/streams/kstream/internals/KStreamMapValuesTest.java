@@ -32,8 +32,8 @@ public class KStreamMapValuesTest {
 
     private String topicName = "topic";
 
-    private Serde<Integer> keySerde = Serdes.INTEGER();
-    private Serde<String> valSerde = Serdes.STRING();
+    private Serde<Integer> keySerde = Serdes.Integer();
+    private Serde<String> valSerde = Serdes.String();
 
     @Test
     public void testFlatMapValues() {

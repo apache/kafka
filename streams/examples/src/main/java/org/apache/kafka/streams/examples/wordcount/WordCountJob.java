@@ -54,7 +54,7 @@ public class WordCountJob {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> source = builder.stream(Serdes.STRING(), Serdes.STRING(), "streams-file-input");
+        KStream<String, String> source = builder.stream(Serdes.String(), Serdes.String(), "streams-file-input");
 
         KTable<String, Long> counts = source
                 .flatMapValues(new ValueMapper<String, Iterable<String>>() {
@@ -68,9 +68,9 @@ public class WordCountJob {
                         return new KeyValue<String, String>(value, value);
                     }
                 })
-                .countByKey(Serdes.STRING(), "Counts");
+                .countByKey(Serdes.String(), "Counts");
 
-        counts.to("streams-wordcount-output", Serdes.STRING(), Serdes.LONG());
+        counts.to("streams-wordcount-output", Serdes.String(), Serdes.Long());
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();

@@ -37,8 +37,8 @@ public class KStreamImplTest {
 
     @Test
     public void testNumProcesses() {
-        final Serde<String> stringSerde = Serdes.STRING();
-        final Serde<Integer> intSerde = Serdes.INTEGER();
+        final Serde<String> stringSerde = Serdes.String();
+        final Serde<Integer> intSerde = Serdes.Integer();
 
         final KStreamBuilder builder = new KStreamBuilder();
 

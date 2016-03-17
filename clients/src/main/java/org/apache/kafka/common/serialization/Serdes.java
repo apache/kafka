@@ -81,23 +81,23 @@ public class Serdes {
     @SuppressWarnings("unchecked")
     static public <T> Serde<T> serdeFrom(Class<T> type) {
         if (String.class.isAssignableFrom(type)) {
-            return (Serde<T>) STRING();
+            return (Serde<T>) String();
         }
 
         if (Integer.class.isAssignableFrom(type)) {
-            return (Serde<T>) INTEGER();
+            return (Serde<T>) Integer();
         }
 
         if (Long.class.isAssignableFrom(type)) {
-            return (Serde<T>) LONG();
+            return (Serde<T>) Long();
         }
 
         if (Double.class.isAssignableFrom(type)) {
-            return (Serde<T>) DOUBLE();
+            return (Serde<T>) Double();
         }
 
         if (byte[].class.isAssignableFrom(type)) {
-            return (Serde<T>) BYTE_ARRAY();
+            return (Serde<T>) ByteArray();
         }
 
         // TODO: we can also serializes objects of type T using generic Java serialization by default
@@ -121,35 +121,35 @@ public class Serdes {
     /*
      * A serde for nullable long type.
      */
-    static public Serde<Long> LONG() {
+    static public Serde<Long> Long() {
         return new LongSerde();
     }
 
     /*
      * A serde for nullable int type.
      */
-    static public Serde<Integer> INTEGER() {
+    static public Serde<Integer> Integer() {
         return new IntegerSerde();
     }
 
     /*
      * A serde for nullable long type.
      */
-    static public Serde<Double> DOUBLE() {
+    static public Serde<Double> Double() {
         return new DoubleSerde();
     }
 
     /*
      * A serde for nullable string type.
      */
-    static public Serde<String> STRING() {
+    static public Serde<String> String() {
         return new StringSerde();
     }
 
     /*
      * A serde for nullable byte array type.
      */
-    static public Serde<byte[]> BYTE_ARRAY() {
+    static public Serde<byte[]> ByteArray() {
         return new ByteArraySerde();
     }
 }

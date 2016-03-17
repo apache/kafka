@@ -107,7 +107,7 @@ public class Stores {
          * @return the interface used to specify the type of values; never null
          */
         public ValueFactory<String> withStringKeys() {
-            return withKeys(Serdes.STRING());
+            return withKeys(Serdes.String());
         }
 
         /**
@@ -116,7 +116,7 @@ public class Stores {
          * @return the interface used to specify the type of values; never null
          */
         public ValueFactory<Integer> withIntegerKeys() {
-            return withKeys(Serdes.INTEGER());
+            return withKeys(Serdes.Integer());
         }
 
         /**
@@ -125,7 +125,7 @@ public class Stores {
          * @return the interface used to specify the type of values; never null
          */
         public ValueFactory<Long> withLongKeys() {
-            return withKeys(Serdes.LONG());
+            return withKeys(Serdes.Long());
         }
 
         /**
@@ -134,7 +134,7 @@ public class Stores {
          * @return the interface used to specify the type of values; never null
          */
         public ValueFactory<byte[]> withByteArrayKeys() {
-            return withKeys(Serdes.BYTE_ARRAY());
+            return withKeys(Serdes.ByteArray());
         }
 
         /**
@@ -168,7 +168,7 @@ public class Stores {
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public KeyValueFactory<K, String> withStringValues() {
-            return withValues(Serdes.STRING());
+            return withValues(Serdes.String());
         }
 
         /**
@@ -177,7 +177,7 @@ public class Stores {
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public KeyValueFactory<K, Integer> withIntegerValues() {
-            return withValues(Serdes.INTEGER());
+            return withValues(Serdes.Integer());
         }
 
         /**
@@ -186,7 +186,7 @@ public class Stores {
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public KeyValueFactory<K, Long> withLongValues() {
-            return withValues(Serdes.LONG());
+            return withValues(Serdes.Long());
         }
 
         /**
@@ -195,7 +195,7 @@ public class Stores {
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public KeyValueFactory<K, byte[]> withByteArrayValues() {
-            return withValues(Serdes.BYTE_ARRAY());
+            return withValues(Serdes.ByteArray());
         }
 
         /**

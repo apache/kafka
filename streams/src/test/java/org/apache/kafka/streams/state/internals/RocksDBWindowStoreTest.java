@@ -51,7 +51,7 @@ import static org.junit.Assert.assertNull;
 
 public class RocksDBWindowStoreTest {
 
-    private final Serde<byte[]> byteArraySerde = Serdes.BYTE_ARRAY();
+    private final Serde<byte[]> byteArraySerde = Serdes.ByteArray();
     private final String windowName = "window";
     private final int numSegments = 3;
     private final long segmentSize = RocksDBWindowStore.MIN_SEGMENT_INTERVAL;

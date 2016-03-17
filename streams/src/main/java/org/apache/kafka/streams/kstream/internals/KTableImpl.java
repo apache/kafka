@@ -314,7 +314,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                         return new KeyValue<>(selector.apply(key, value), value);
                     }
                 },
-                keySerde, valueSerde, Serdes.LONG(), name);
+                keySerde, valueSerde, Serdes.Long(), name);
     }
 
     @Override

@@ -34,8 +34,8 @@ public class KStreamTransformValuesTest {
 
     private String topicName = "topic";
 
-    private Serde<Integer> keySerde = Serdes.INTEGER();
-    private Serde<Integer> valSerde = Serdes.INTEGER();
+    private Serde<Integer> keySerde = Serdes.Integer();
+    private Serde<Integer> valSerde = Serdes.Integer();
 
     @Test
     public void testTransform() {
