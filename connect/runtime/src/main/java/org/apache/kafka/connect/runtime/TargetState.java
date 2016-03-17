@@ -16,6 +16,20 @@
  **/
 package org.apache.kafka.connect.runtime;
 
+/**
+ * The target state of a connector is its desired state as indicated by the user
+ * through interaction with the REST API. When a connector is first created, its
+ * target state is "STARTED." This does not mean it has actually started, just that
+ * the Connect framework will attempt to start it after its tasks have been assigned.
+ * After the connector has been paused, the target state will change to PAUSED,
+ * and all the tasks will stop doing work.
+ *
+ * Target states are persisted in the config topic, which is read by all of the
+ * workers in the group. When a worker sees a new target state for a connector which
+ * is running, it will transition any tasks which it owns (i.e. which have been
+ * assigned to it by the leader) into the desired target state. Upon completion of
+ * a task rebalance, the worker will start the task in the last known target state.
+ */
 public enum TargetState {
     STARTED,
     PAUSED,
