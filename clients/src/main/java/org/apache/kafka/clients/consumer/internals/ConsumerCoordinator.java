@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.internals.TopicConstants;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -69,6 +70,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final boolean autoCommitEnabled;
     private final AutoCommitTask autoCommitTask;
     private final ConsumerInterceptors<?, ?> interceptors;
+    private final boolean excludeInternalTopics;
 
     /**
      * Initialize the coordination manager.
@@ -87,7 +89,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                OffsetCommitCallback defaultOffsetCommitCallback,
                                boolean autoCommitEnabled,
                                long autoCommitIntervalMs,
-                               ConsumerInterceptors<?, ?> interceptors) {
+                               ConsumerInterceptors<?, ?> interceptors,
+                               boolean excludeInternalTopics) {
         super(client,
                 groupId,
                 sessionTimeoutMs,
@@ -110,6 +113,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.autoCommitTask = autoCommitEnabled ? new AutoCommitTask(autoCommitIntervalMs) : null;
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
+        this.excludeInternalTopics = excludeInternalTopics;
     }
 
     @Override
@@ -140,7 +144,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     final List<String> topicsToSubscribe = new ArrayList<>();
 
                     for (String topic : cluster.topics())
-                        if (subscriptions.getSubscribedPattern().matcher(topic).matches())
+                        if (subscriptions.getSubscribedPattern().matcher(topic).matches() &&
+                                !(excludeInternalTopics && TopicConstants.INTERNAL_TOPICS.contains(topic)))
                             topicsToSubscribe.add(topic);
 
                     subscriptions.changeSubscription(topicsToSubscribe);
