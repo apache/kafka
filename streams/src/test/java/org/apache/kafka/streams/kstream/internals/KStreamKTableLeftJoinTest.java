@@ -18,10 +18,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -47,10 +45,8 @@ public class KStreamKTableLeftJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    private IntegerSerializer keySerializer = new IntegerSerializer();
-    private StringSerializer valSerializer = new StringSerializer();
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
+    final private Serde<Integer> intSerde = new Serdes.IntegerSerde();
+    final private Serde<String> stringSerde = new Serdes.StringSerde();
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
@@ -81,8 +77,8 @@ public class KStreamKTableLeftJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream = builder.stream(keyDeserializer, valDeserializer, topic1);
-            table = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
+            stream = builder.stream(intSerde, stringSerde, topic1);
+            table = builder.table(intSerde, stringSerde, topic2);
             stream.leftJoin(table, joiner).process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
@@ -162,8 +158,8 @@ public class KStreamKTableLeftJoinTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keyDeserializer, valDeserializer, topic1).map(keyValueMapper);
-        table = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
+        stream = builder.stream(intSerde, stringSerde, topic1).map(keyValueMapper);
+        table = builder.table(intSerde, stringSerde, topic2);
 
         stream.leftJoin(table, joiner).process(processor);
     }

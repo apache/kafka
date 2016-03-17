@@ -20,7 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 
 /**
  * A {@link org.apache.kafka.streams.state.KeyValueStore} that stores all entries in a local RocksDB database.
@@ -33,10 +33,10 @@ import org.apache.kafka.streams.state.Serdes;
 public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
-    private final Serdes<K, V> serdes;
+    private final StateSerdes<K, V> serdes;
     private final Time time;
 
-    public RocksDBKeyValueStoreSupplier(String name, Serdes<K, V> serdes, Time time) {
+    public RocksDBKeyValueStoreSupplier(String name, StateSerdes<K, V> serdes, Time time) {
         this.name = name;
         this.serdes = serdes;
         this.time = time;

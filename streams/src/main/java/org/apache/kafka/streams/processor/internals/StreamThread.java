@@ -100,7 +100,6 @@ public class StreamThread extends Thread {
 
     private long lastClean;
     private long lastCommit;
-    private long recordsProcessed;
     private Throwable rebalanceException = null;
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
@@ -201,7 +200,6 @@ public class StreamThread extends Thread {
 
         this.lastClean = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommit = time.milliseconds();
-        this.recordsProcessed = 0;
         this.time = time;
 
         this.sensors = new StreamsMetricsImpl(metrics);

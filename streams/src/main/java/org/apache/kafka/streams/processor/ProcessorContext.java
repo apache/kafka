@@ -17,8 +17,7 @@
 
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 
 import java.io.File;
@@ -43,32 +42,18 @@ public interface ProcessorContext {
     TaskId taskId();
 
     /**
-     * Returns the key serializer
+     * Returns the default key serde
      *
      * @return the key serializer
      */
-    Serializer<?> keySerializer();
+    Serde<?> keySerde();
 
     /**
-     * Returns the value serializer
+     * Returns the default value serde
      *
      * @return the value serializer
      */
-    Serializer<?> valueSerializer();
-
-    /**
-     * Returns the key deserializer
-     *
-     * @return the key deserializer
-     */
-    Deserializer<?> keyDeserializer();
-
-    /**
-     * Returns the value deserializer
-     *
-     * @return the value deserializer
-     */
-    Deserializer<?> valueDeserializer();
+    Serde<?> valueSerde();
 
     /**
      * Returns the state directory for the partition.

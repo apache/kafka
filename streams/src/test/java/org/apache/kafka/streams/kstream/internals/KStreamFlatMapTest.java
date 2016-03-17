@@ -17,8 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.KeyValue;
@@ -34,9 +33,6 @@ import java.util.ArrayList;
 public class KStreamFlatMapTest {
 
     private String topicName = "topic";
-
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
 
     @Test
     public void testFlatMap() {
@@ -60,7 +56,7 @@ public class KStreamFlatMapTest {
         MockProcessorSupplier<String, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keyDeserializer, valDeserializer, topicName);
+        stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
         stream.flatMap(mapper).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);

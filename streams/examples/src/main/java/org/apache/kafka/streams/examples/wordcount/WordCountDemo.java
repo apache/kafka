@@ -17,11 +17,7 @@
 
 package org.apache.kafka.streams.examples.wordcount;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -52,21 +48,13 @@ public class WordCountDemo {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
-        props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(StreamsConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        final Serializer<String> stringSerializer = new StringSerializer();
-        final Deserializer<String> stringDeserializer = new StringDeserializer();
-        final Serializer<Long> longSerializer = new LongSerializer();
-
-        KStream<String, String> source = builder.stream("streams-file-input");
+        KStream<String, String> source = builder.stream(Serdes.String(), Serdes.String(), "streams-file-input");
 
         KTable<String, Long> counts = source
                 .flatMapValues(new ValueMapper<String, Iterable<String>>() {
@@ -80,9 +68,9 @@ public class WordCountDemo {
                         return new KeyValue<String, String>(value, value);
                     }
                 })
-                .countByKey(stringSerializer, stringDeserializer, "Counts");
+                .countByKey(Serdes.String(), "Counts");
 
-        counts.to("streams-wordcount-output", stringSerializer, longSerializer);
+        counts.to("streams-wordcount-output", Serdes.String(), Serdes.Long());
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();

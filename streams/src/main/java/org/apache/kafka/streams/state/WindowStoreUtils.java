@@ -25,11 +25,11 @@ public class WindowStoreUtils {
 
     public static final int TIMESTAMP_SIZE = 8;
     public static final int SEQNUM_SIZE = 4;
-    public static final Serdes<byte[], byte[]> INNER_SERDES = Serdes.withBuiltinTypes("", byte[].class, byte[].class);
+    public static final StateSerdes<byte[], byte[]> INNER_SERDES = StateSerdes.withBuiltinTypes("", byte[].class, byte[].class);
     @SuppressWarnings("unchecked")
     public static final KeyValueIterator<byte[], byte[]>[] NO_ITERATORS = (KeyValueIterator<byte[], byte[]>[]) new KeyValueIterator[0];
 
-    public static <K> byte[] toBinaryKey(K key, final long timestamp, final int seqnum, Serdes<K, ?> serdes) {
+    public static <K> byte[] toBinaryKey(K key, final long timestamp, final int seqnum, StateSerdes<K, ?> serdes) {
         byte[] serializedKey = serdes.rawKey(key);
 
         ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + TIMESTAMP_SIZE + SEQNUM_SIZE);
@@ -40,7 +40,7 @@ public class WindowStoreUtils {
         return buf.array();
     }
 
-    public static <K> K keyFromBinaryKey(byte[] binaryKey, Serdes<K, ?> serdes) {
+    public static <K> K keyFromBinaryKey(byte[] binaryKey, StateSerdes<K, ?> serdes) {
         byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE];
 
         System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);

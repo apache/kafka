@@ -18,16 +18,15 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import java.io.File;
 import java.util.Collections;
@@ -38,10 +37,8 @@ import java.util.Map;
 public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
 
     private final KStreamTestDriver driver;
-    private final Serializer keySerializer;
-    private final Serializer valueSerializer;
-    private final Deserializer keyDeserializer;
-    private final Deserializer valueDeserializer;
+    private final Serde<?> keySerde;
+    private final Serde<?> valSerde;
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final File stateDir;
 
@@ -50,21 +47,15 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     long timestamp = -1L;
 
-    public MockProcessorContext(Serdes<?, ?> serdes, RecordCollector collector) {
-        this(null, null, serdes.keySerializer(), serdes.keyDeserializer(), serdes.valueSerializer(), serdes.valueDeserializer(), collector);
-    }
-
-    public MockProcessorContext(Serializer<?> keySerializer, Deserializer<?> keyDeserializer,
-                                Serializer<?> valueSerializer, Deserializer<?> valueDeserializer,
-                                RecordCollector collector) {
-        this(null, null, keySerializer, keyDeserializer, valueSerializer, valueDeserializer, collector);
+    public MockProcessorContext(StateSerdes<?, ?> serdes, RecordCollector collector) {
+        this(null, null, serdes.keySerde(), serdes.valueSerde(), collector);
     }
 
     public MockProcessorContext(KStreamTestDriver driver, File stateDir,
-                                Serializer<?> keySerializer, Deserializer<?> keyDeserializer,
-                                Serializer<?> valueSerializer, Deserializer<?> valueDeserializer,
+                                Serde<?> keySerde,
+                                Serde<?> valSerde,
                                 final RecordCollector collector) {
-        this(driver, stateDir, keySerializer, keyDeserializer, valueSerializer, valueDeserializer,
+        this(driver, stateDir, keySerde, valSerde,
                 new RecordCollector.Supplier() {
                     @Override
                     public RecordCollector recordCollector() {
@@ -74,15 +65,13 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     public MockProcessorContext(KStreamTestDriver driver, File stateDir,
-                                Serializer<?> keySerializer, Deserializer<?> keyDeserializer,
-                                Serializer<?> valueSerializer, Deserializer<?> valueDeserializer,
+                                Serde<?> keySerde,
+                                Serde<?> valSerde,
                                 RecordCollector.Supplier collectorSupplier) {
         this.driver = driver;
         this.stateDir = stateDir;
-        this.keySerializer = keySerializer;
-        this.valueSerializer = valueSerializer;
-        this.keyDeserializer = keyDeserializer;
-        this.valueDeserializer = valueDeserializer;
+        this.keySerde = keySerde;
+        this.valSerde = valSerde;
         this.recordCollectorSupplier = collectorSupplier;
     }
 
@@ -111,23 +100,13 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public Serializer<?> keySerializer() {
-        return keySerializer;
+    public Serde<?> keySerde() {
+        return this.keySerde;
     }
 
     @Override
-    public Serializer<?> valueSerializer() {
-        return valueSerializer;
-    }
-
-    @Override
-    public Deserializer<?> keyDeserializer() {
-        return keyDeserializer;
-    }
-
-    @Override
-    public Deserializer<?> valueDeserializer() {
-        return valueDeserializer;
+    public Serde<?> valueSerde() {
+        return this.valSerde;
     }
 
     @Override

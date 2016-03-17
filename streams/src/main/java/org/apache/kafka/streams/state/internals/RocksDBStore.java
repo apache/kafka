@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
@@ -68,7 +68,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private final FlushOptions fOptions;
 
     private ProcessorContext context;
-    private Serdes<K, V> serdes;
+    private StateSerdes<K, V> serdes;
     protected File dbDir;
     private RocksDB db;
 
@@ -92,11 +92,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         return this;
     }
 
-    public RocksDBStore(String name, Serdes<K, V> serdes) {
+    public RocksDBStore(String name, StateSerdes<K, V> serdes) {
         this(name, DB_FILE_DIR, serdes);
     }
 
-    public RocksDBStore(String name, String parentDir, Serdes<K, V> serdes) {
+    public RocksDBStore(String name, String parentDir, StateSerdes<K, V> serdes) {
         this.name = name;
         this.parentDir = parentDir;
         this.serdes = serdes;
@@ -399,9 +399,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private static class RocksDbIterator<K, V> implements KeyValueIterator<K, V> {
         private final RocksIterator iter;
-        private final Serdes<K, V> serdes;
+        private final StateSerdes<K, V> serdes;
 
-        public RocksDbIterator(RocksIterator iter, Serdes<K, V> serdes) {
+        public RocksDbIterator(RocksIterator iter, StateSerdes<K, V> serdes) {
             this.iter = iter;
             this.serdes = serdes;
         }
@@ -463,7 +463,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         private final Comparator<byte[]> comparator = new LexicographicComparator();
         byte[] rawToKey;
 
-        public RocksDBRangeIterator(RocksIterator iter, Serdes<K, V> serdes,
+        public RocksDBRangeIterator(RocksIterator iter, StateSerdes<K, V> serdes,
                                     K from, K to) {
             super(iter, serdes);
             iter.seek(serdes.rawKey(from));
