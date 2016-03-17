@@ -606,7 +606,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Handle a topic metadata request
    */
   def handleTopicMetadataRequest(request: RequestChannel.Request) {
-    val metadataRequest = request.body.asInstanceOf[TopicMetadataRequest]
+    val metadataRequest = request.requestObj.asInstanceOf[TopicMetadataRequest]
 
     val topics = metadataRequest.topics.toSet
     var (authorizedTopics, unauthorizedTopics) = if (metadataRequest.topics.isEmpty) {

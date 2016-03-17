@@ -45,9 +45,20 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
 
   this.logIdent = "[Kafka Metadata Cache on broker %d] ".format(brokerId)
 
+  //private def getAliveEndpoints(brokers: Iterable[Int], protocol: SecurityProtocol): Seq[BrokerEndPoint] = {
+  //  brokers.map(aliveBrokers.getOrElse(_, null)).filter(_ != null).toSeq.map(_.getBrokerEndPoint(protocol))
+  //}
+
   private def getAliveEndpoints(brokers: Iterable[Int], protocol: SecurityProtocol): Seq[BrokerEndPoint] = {
-    brokers.map(aliveBrokers.getOrElse(_, null)).filter(_ != null).toSeq.map(_.getBrokerEndPoint(protocol))
+    val result = new mutable.ArrayBuffer[BrokerEndPoint](math.min(aliveBrokers.size, brokers.size))
+    brokers.foreach { brokerId =>
+      getAliveEndpoint(brokerId, protocol).foreach(result +=)
+    }
+    result
   }
+
+  private def getAliveEndpoint(brokerId: Int, protocol: SecurityProtocol): Option[BrokerEndPoint] =
+    aliveBrokers.get(brokerId).map(_.getBrokerEndPoint(protocol))
 
   private def getPartitionMetadata(topic: String, protocol: SecurityProtocol): Option[Iterable[PartitionMetadata]] = {
     cache.get(topic).map { partitions =>
@@ -118,7 +129,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
 
   def getAliveBrokers: Seq[Broker] = {
     inReadLock(partitionMetadataLock) {
-      aliveBrokers.values.toSeq
+      aliveBrokers.values.toBuffer
     }
   }
 
