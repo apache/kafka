@@ -35,11 +35,11 @@ Tool to bring up a vagrant cluster on local machine or aws.
     -h | --help             Show this help message
     --aws                   Use if you are running in aws
     --no-parallel           Bring up machines not in parallel. Only applicable on aws
-    --max-parallel  MAX     Maximum number of machines to bring up in parallel. Only applicable on aws, default: $MAX_PARALLEL
+    --max-parallel  MAX     Maximum number of machines to bring up in parallel. Note: only applicable on test worker machines on aws. default: $MAX_PARALLEL
 
-This wrapper script essentially wraps 2 commands:
-vagrant up
-vagrant hostmanager
+Approximately speaking, this wrapper script essentially wraps 2 commands:
+    vagrant up
+    vagrant hostmanager
 
 The situation on aws is complicated by the fact that aws imposes a maximum request rate,
 which effectively caps the number of machines we are able to bring up in parallel. Therefore, on aws,
@@ -118,6 +118,37 @@ function read_vagrant_machines {
     done < <(vagrant status)
 }
 
+# Filter "list", returning a list of strings containing pattern as a substring
+function filter {
+    local list="$1"
+    local pattern="$2"
+
+    local result=""
+    for item in $list; do
+        if [[ ! -z "$(echo $item | grep "$pattern")"  ]]; then
+            result="$result $item"
+        fi
+    done
+    echo "$result"
+}
+
+# Given a list of machine names, return only test worker machines
+function worker {
+    local machines="$1"
+    local workers=$(filter "$machines" "worker")
+    workers=$(echo "$workers" | xargs)  # trim leading/trailing whitespace
+    echo "$workers"
+}
+
+# Given a list of machine names, return only zookeeper and broker machines
+function zk_broker {
+    local machines="$1"
+    local zk_broker_list=$(filter "$machines" "zk")
+    zk_broker_list="$zk_broker_list $(filter "$machines" "broker")"
+    zk_broker_list=$(echo "$zk_broker_list" | xargs)  # trim leading/trailing whitespace
+    echo "$zk_broker_list"
+}
+
 # Run a vagrant command on batches of machines of size $group_size
 # This is annoying but necessary on aws to avoid errors due to AWS request rate
 # throttling
@@ -171,18 +202,25 @@ function bring_up_aws {
     local max_parallel="$2"
     local machines="$(read_vagrant_machines)"
 
+    zk_broker_machines=$(zk_broker "$machines")
+    worker_machines=$(worker "$machines")
+
     if [[ "$parallel" == "true" ]]; then
-        echo "Bringing up machines in batches of size $max_parallel"
-        vagrant_batch_command "vagrant up --provider=aws --no-provision" "$machines" "$max_parallel"
+        if [[ ! -z "$zk_broker_machines" ]]; then
+            # We still have to bring up zookeeper/broker nodes serially
+            echo "Bringing up zookeeper/broker machines serially"
+            vagrant up --provider=aws --no-parallel --no-provision $zk_broker_machines
+            vagrant hostmanager
+            vagrant provision
+        fi
 
-        # Ensure hostmanager is run after machines are up, and before provisioning
-        vagrant_batch_command "vagrant hostmanager" "$machines" "$max_parallel"
-
-        # Provision the machines. Note we provision with a call to "vagrant up --provision" instead of "vagrant provision"
-        # This is because "vagrant provision" does *not* provision machines in parallel
-        vagrant_batch_command "vagrant up --provider=aws --provision" "$machines" "$max_parallel"
+        if [[ ! -z "$worker_machines" ]]; then
+            echo "Bringing up test worker machines in parallel"
+            vagrant_batch_command "vagrant up --provider=aws" "$worker_machines" "$max_parallel"
+            vagrant hostmanager
+        fi
     else
-        vagrant up --no-parallel --no-provision
+        vagrant up --provider=aws --no-parallel --no-provision
         vagrant hostmanager
         vagrant provision
     fi
