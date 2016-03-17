@@ -14,4 +14,7 @@ rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 rem See the License for the specific language governing permissions and
 rem limitations under the License.
 
+SetLocal
+set PROJECT_NAME=core
 %~dp0kafka-run-class.bat kafka.admin.AclCommand %*
+EndLocal

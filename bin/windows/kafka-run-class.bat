@@ -34,32 +34,59 @@ IF ["%SCALA_BINARY_VERSION%"] EQU [""] (
   set SCALA_BINARY_VERSION=2.10
 )
 
-rem Classpath addition for kafka-core dependencies
-for %%i in (%BASE_DIR%\core\build\dependant-libs-%SCALA_VERSION%\*.jar) do (
+rem Classpath for central deduplicated dependencies
+if ["%PROJECT_NAME%"] equ [""] (
+  for %%i in (%BASE_DIR%\build\dependant-libs-java\*.jar) do (
 	call :concat %%i
+  )
 )
 
-rem Classpath addition for kafka-perf dependencies
-for %%i in (%BASE_DIR%\perf\build\dependant-libs-%SCALA_VERSION%\*.jar) do (
+rem Classpath addition for kafka-core dependencies
+if ["%PROJECT_NAME%"] equ ["core"] (
+  for %%i in (%BASE_DIR%\core\build\dependant-libs-java\*.jar) do (
 	call :concat %%i
+  )
+  for %%i in (%BASE_DIR%\core\build\dependant-libs-scala-%SCALA_BINARY_VERSION%\*.jar) do (
+	call :concat %%i
+  )
+  for %%i in (%BASE_DIR%\core\build\libs\kafka_%SCALA_BINARY_VERSION%*.jar) do (
+	call :concat %%i
+  )
+)
+
+rem Classpath addition for kafka-tools dependencies
+if ["%PROJECT_NAME%"] equ ["tools"] (
+  for %%i in (%BASE_DIR%\tools\build\dependant-libs-java\*.jar) do (
+	call :concat %%i
+  )
+  for %%i in (%BASE_DIR%\tools\build\libs\kafka_tools*.jar) do (
+	call :concat %%i
+  )
 )
 
 rem Classpath addition for kafka-clients
-for %%i in (%BASE_DIR%\clients\build\libs\kafka-clients-*.jar) do (
+if ["%PROJECT_NAME%"] equ ["clients"] (
+  for %%i in (%BASE_DIR%\clients\build\dependant-libs-java\*.jar) do (
 	call :concat %%i
+  )
+  for %%i in (%BASE_DIR%\clients\build\kafka-clients*.jar) do (
+	call :concat %%i
+  )
 )
 
 rem Classpath addition for kafka-examples
-for %%i in (%BASE_DIR%\examples\build\libs\kafka-examples-*.jar) do (
+if ["%PROJECT_NAME%"] equ ["examples"] (
+  for %%i in (%BASE_DIR%\examples\build\dependant-libs-java\*.jar) do (
 	call :concat %%i
+  )
+  for %%i in (%BASE_DIR%\examples\build\kafka-examples*.jar) do (
+	call :concat %%i
+  )
 )
 
 rem Classpath addition for release
-call :concat %BASE_DIR%\libs\*
-
-rem Classpath addition for core
-for %%i in (%BASE_DIR%\core\build\libs\kafka_%SCALA_BINARY_VERSION%*.jar) do (
-	call :concat %%i
+for %%i in (%BASE_DIR%\libs\*.jar) do (
+  call :concat %%i
 )
 
 rem JMX settings

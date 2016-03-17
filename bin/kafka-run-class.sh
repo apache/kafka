@@ -30,66 +30,49 @@ if [ -z "$SCALA_BINARY_VERSION" ]; then
 	SCALA_BINARY_VERSION=2.10
 fi
 
-# run ./gradlew copyDependantLibs to get all dependant jars in a local dir
+JARPATH=""
+
+case $PROJECT_NAME in
+  "core")
+  JARPATH=$JARPATH" $base_dir/core/build/dependant-libs-java/*.jar $base_dir/core/build/dependant-libs-scala-${SCALA_BINARY_VERSION}/*.jar $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar "
+  ;;
+  "tools")
+  JARPATH=$JARPATH" $base_dir/tools/build/dependant-libs-java/*.jar $base_dir/tools/build/libs/kafka-tools*.jar"
+  ;;
+  "clients")
+  JARPATH=$JARPATH" $base_dir/clients/build/dependant-libs-java/*.jar $base_dir/clients/build/libs/kafka-clients*.jar "
+  ;;
+  "connect-json")
+  JARPATH=$JARPATH" $base_dir/connect/json/build/dependant-libs-java/*.jar $base_dir/connect/json/build/libs/connect-*.jar"
+  ;;
+  "connect-api")
+  JARPATH=$JARPATH" $base_dir/connect/api/build/dependant-libs-java/*.jar $base_dir/connect/api/build/libs/connect-*.jar"
+  ;;
+  "connect-file")
+  JARPATH=$JARPATH" $base_dir/connect/file/build/dependant-libs-java/*.jar $base_dir/file/json/build/libs/connect-*.jar"
+  ;;
+  "connect-runtime")
+  JARPATH=$JARPATH" $base_dir/connect/runtime/build/dependant-libs-java/*.jar $base_dir/connect/runtime/build/libs/connect-*.jar"
+  ;;
+  "streams")
+  JARPATH=$JARPATH" $base_dir/streams/build/dependant-libs-java/*.jar $base_dir/streams/build/libs/connect-*.jar"
+  ;;
+  "log4j-appender")
+  JARPATH=$JARPATH" $base_dir/log4j-appender/build/dependant-libs-java/*.jar $base_dir/log4j-appender/build/libs/kafka-*.jar "
+  ;;
+  "")
+  JARPATH=$JARPATH" $base_dir/build/dependant-libs-java/*.jar $base_dir/build/dependant-libs-scala-${SCALA_BINARY_VERSION}/*.jar"
+esac
+
+JARPATH=$JARPATH" $base_dir/libs/*.jar"
+
+JARPATH=($JARPATH)
+
 shopt -s nullglob
-for dir in $base_dir/core/build/dependant-libs-${SCALA_VERSION}*;
-do
-  CLASSPATH=$CLASSPATH:$dir/*
-done
-
-for file in $base_dir/examples/build/libs//kafka-examples*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/clients/build/libs/kafka-clients*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/streams/build/libs/kafka-streams*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/streams/examples/build/libs/kafka-streams-examples*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/streams/build/dependant-libs-${SCALA_VERSION}/rocksdb*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/tools/build/libs/kafka-tools*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for dir in $base_dir/tools/build/dependant-libs-${SCALA_VERSION}*;
-do
-  CLASSPATH=$CLASSPATH:$dir/*
-done
-
-for cc_pkg in "api" "runtime" "file" "json" "tools"
-do
-  for file in $base_dir/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
+for file in ${JARPATH[@]};
   do
     CLASSPATH=$CLASSPATH:$file
   done
-  if [ -d "$base_dir/connect/${cc_pkg}/build/dependant-libs" ] ; then
-    CLASSPATH=$CLASSPATH:$base_dir/connect/${cc_pkg}/build/dependant-libs/*
-  fi
-done
-
-# classpath addition for release
-CLASSPATH=$CLASSPATH:$base_dir/libs/*
-
-for file in $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
 shopt -u nullglob
 
 # JMX settings

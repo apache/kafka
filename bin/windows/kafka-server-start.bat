@@ -26,5 +26,6 @@ IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
 IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
     set KAFKA_HEAP_OPTS=-Xmx1G -Xms1G
 )
+set PROJECT_NAME=core
 %~dp0kafka-run-class.bat kafka.Kafka %*
 EndLocal

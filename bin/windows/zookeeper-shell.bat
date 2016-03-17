@@ -18,5 +18,7 @@ IF [%1] EQU [] (
 	echo USAGE: %0 zookeeper_host:port[/path] [args...]
 	EXIT /B 1
 )
-
+SetLocal
+set PROJECT_NAME=core
 %~dp0kafka-run-class.bat org.apache.zookeeper.ZooKeeperMain -server %*
+EndLocal

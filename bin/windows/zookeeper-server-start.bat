@@ -26,5 +26,6 @@ IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
 IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
     set KAFKA_HEAP_OPTS=-Xmx512M -Xms512M
 )
+set PROJECT_NAME=core
 %~dp0kafka-run-class.bat org.apache.zookeeper.server.quorum.QuorumPeerMain %*
 EndLocal
