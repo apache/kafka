@@ -157,7 +157,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
 
             ProducerRecord<byte[], byte[]> record =
-                    new ProducerRecord<>("data", stringSerializer.serialize("", key), integerSerializer.serialize("", value));
+                    new ProducerRecord<>("data", stringSerde.serializer().serialize("", key), intSerde.serializer().serialize("", value));
 
             producer.send(record);
 
@@ -233,10 +233,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 retryCount = 0;
 
                 for (ConsumerRecord<byte[], byte[]> record : records) {
-                    String key = stringDeserializer.deserialize("", record.key());
+                    String key = stringSerde.deserializer().deserialize("", record.key());
                     switch (record.topic()) {
                         case "echo":
-                            Integer value = integerDeserializer.deserialize("", record.value());
+                            Integer value = intSerde.deserializer().deserialize("", record.value());
                             if (value != null && value == END) {
                                 keys.remove(key);
                                 if (keys.isEmpty()) {
@@ -249,28 +249,28 @@ public class SmokeTestDriver extends SmokeTestUtil {
                             }
                             break;
                         case "min":
-                            min.put(key, integerDeserializer.deserialize("", record.value()));
+                            min.put(key, intSerde.deserializer().deserialize("", record.value()));
                             break;
                         case "max":
-                            max.put(key, integerDeserializer.deserialize("", record.value()));
+                            max.put(key, intSerde.deserializer().deserialize("", record.value()));
                             break;
                         case "dif":
-                            dif.put(key, integerDeserializer.deserialize("", record.value()));
+                            dif.put(key, intSerde.deserializer().deserialize("", record.value()));
                             break;
                         case "sum":
-                            sum.put(key, longDeserializer.deserialize("", record.value()));
+                            sum.put(key, longSerde.deserializer().deserialize("", record.value()));
                             break;
                         case "cnt":
-                            cnt.put(key, longDeserializer.deserialize("", record.value()));
+                            cnt.put(key, longSerde.deserializer().deserialize("", record.value()));
                             break;
                         case "avg":
-                            avg.put(key, doubleDeserializer.deserialize("", record.value()));
+                            avg.put(key, doubleSerde.deserializer().deserialize("", record.value()));
                             break;
                         case "wcnt":
-                            wcnt.put(key, longDeserializer.deserialize("", record.value()));
+                            wcnt.put(key, longSerde.deserializer().deserialize("", record.value()));
                             break;
                         case "tagg":
-                            tagg.put(key, longDeserializer.deserialize("", record.value()));
+                            tagg.put(key, longSerde.deserializer().deserialize("", record.value()));
                             break;
                         default:
                             System.out.println("unknown topic: " + record.topic());

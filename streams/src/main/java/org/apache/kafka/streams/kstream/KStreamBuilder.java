@@ -17,8 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
@@ -40,7 +39,6 @@ public class KStreamBuilder extends TopologyBuilder {
         super();
     }
 
-    // TODO: needs updated
     /**
      * Creates a KStream instance for the specified topic.
      * The default deserializers specified in the config are used.
@@ -55,17 +53,17 @@ public class KStreamBuilder extends TopologyBuilder {
     /**
      * Creates a KStream instance for the specified topic.
      *
-     * @param keyDeserializer key deserializer used to read this source KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
-     * @param valDeserializer value deserializer used to read this source KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
-     * @param topics          the topic names, if empty default to all the topics in the config
+     * @param keySerde key serde used to read this source KStream,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to read this source KStream,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param topics   the topic names, if empty default to all the topics in the config
      * @return KStream
      */
-    public <K, V> KStream<K, V> stream(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
+    public <K, V> KStream<K, V> stream(Serde<K> keySerde, Serde<V> valSerde, String... topics) {
         String name = newName(KStreamImpl.SOURCE_NAME);
 
-        addSource(name, keyDeserializer, valDeserializer, topics);
+        addSource(name, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topics);
 
         return new KStreamImpl<>(this, name, Collections.singleton(name));
     }
@@ -78,33 +76,29 @@ public class KStreamBuilder extends TopologyBuilder {
      * @return KTable
      */
     public <K, V> KTable<K, V> table(String topic) {
-        return table(null, null, null, null, topic);
+        return table(null, null, topic);
     }
 
     /**
      * Creates a KTable instance for the specified topic.
      *
-     * @param keySerializer   key serializer used to send key-value pairs,
-     *                        if not specified the default key serializer defined in the configuration will be used
-     * @param valSerializer   value serializer used to send key-value pairs,
-     *                        if not specified the default value serializer defined in the configuration will be used
-     * @param keyDeserializer key deserializer used to read this source KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
-     * @param valDeserializer value deserializer used to read this source KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
+     * @param keySerde   key serde used to send key-value pairs,
+     *                        if not specified the default key serde defined in the configuration will be used
+     * @param valSerde   value serde used to send key-value pairs,
+     *                        if not specified the default value serde defined in the configuration will be used
      * @param topic          the topic name
      * @return KStream
      */
-    public <K, V> KTable<K, V> table(Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String topic) {
+    public <K, V> KTable<K, V> table(Serde<K> keySerde, Serde<V> valSerde, String topic) {
         String source = newName(KStreamImpl.SOURCE_NAME);
         String name = newName(KTableImpl.SOURCE_NAME);
 
-        addSource(source, keyDeserializer, valDeserializer, topic);
+        addSource(source, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topic);
 
         ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(topic);
         addProcessor(name, processorSupplier, source);
 
-        return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerializer, valSerializer, keyDeserializer, valDeserializer);
+        return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde);
     }
 
     /**

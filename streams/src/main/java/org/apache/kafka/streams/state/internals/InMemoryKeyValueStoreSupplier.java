@@ -25,7 +25,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.Iterator;
 import java.util.List;
@@ -45,9 +45,9 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
     private final Time time;
-    private final Serdes<K, V> serdes;
+    private final StateSerdes<K, V> serdes;
 
-    public InMemoryKeyValueStoreSupplier(String name, Serdes<K, V> serdes, Time time) {
+    public InMemoryKeyValueStoreSupplier(String name, StateSerdes<K, V> serdes, Time time) {
         this.name = name;
         this.time = time;
         this.serdes = serdes;
@@ -67,7 +67,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         private final NavigableMap<K, V> map;
 
         private boolean loggingEnabled = false;
-        private Serdes<K, V> serdes = null;
+        private StateSerdes<K, V> serdes = null;
 
         public MemoryStore(String name) {
             super();
@@ -75,7 +75,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
             this.map = new TreeMap<>();
         }
 
-        public KeyValueStore<K, V> enableLogging(Serdes<K, V> serdes) {
+        public KeyValueStore<K, V> enableLogging(StateSerdes<K, V> serdes) {
             this.loggingEnabled = true;
             this.serdes = serdes;
 

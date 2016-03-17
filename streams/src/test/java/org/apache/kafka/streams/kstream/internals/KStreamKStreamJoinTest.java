@@ -17,10 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -44,10 +42,8 @@ public class KStreamKStreamJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    private IntegerSerializer keySerializer = new IntegerSerializer();
-    private StringSerializer valSerializer = new StringSerializer();
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
+    final private Serde<Integer> intSerde = Serdes.Integer();
+    final private Serde<String> stringSerde = Serdes.String();
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
@@ -71,10 +67,9 @@ public class KStreamKStreamJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(keyDeserializer, valDeserializer, topic1);
-            stream2 = builder.stream(keyDeserializer, valDeserializer, topic2);
-            joined = stream1.join(stream2, joiner, JoinWindows.of("test").within(100),
-                    keySerializer, valSerializer, valSerializer, keyDeserializer, valDeserializer, valDeserializer);
+            stream1 = builder.stream(intSerde, stringSerde, topic1);
+            stream2 = builder.stream(intSerde, stringSerde, topic2);
+            joined = stream1.join(stream2, joiner, JoinWindows.of("test").within(100), intSerde, stringSerde, stringSerde);
             joined.process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
@@ -177,10 +172,9 @@ public class KStreamKStreamJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(keyDeserializer, valDeserializer, topic1);
-            stream2 = builder.stream(keyDeserializer, valDeserializer, topic2);
-            joined = stream1.outerJoin(stream2, joiner, JoinWindows.of("test").within(100),
-                    keySerializer, valSerializer, valSerializer, keyDeserializer, valDeserializer, valDeserializer);
+            stream1 = builder.stream(intSerde, stringSerde, topic1);
+            stream2 = builder.stream(intSerde, stringSerde, topic2);
+            joined = stream1.outerJoin(stream2, joiner, JoinWindows.of("test").within(100), intSerde, stringSerde, stringSerde);
             joined.process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
@@ -285,10 +279,9 @@ public class KStreamKStreamJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream1 = builder.stream(keyDeserializer, valDeserializer, topic1);
-            stream2 = builder.stream(keyDeserializer, valDeserializer, topic2);
-            joined = stream1.join(stream2, joiner, JoinWindows.of("test").within(100),
-                    keySerializer, valSerializer, valSerializer, keyDeserializer, valDeserializer, valDeserializer);
+            stream1 = builder.stream(intSerde, stringSerde, topic1);
+            stream2 = builder.stream(intSerde, stringSerde, topic2);
+            joined = stream1.join(stream2, joiner, JoinWindows.of("test").within(100), intSerde, stringSerde, stringSerde);
             joined.process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();

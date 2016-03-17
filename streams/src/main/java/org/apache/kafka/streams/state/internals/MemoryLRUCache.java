@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -43,7 +43,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     protected EldestEntryRemovalListener<K, V> listener;
 
     private boolean loggingEnabled = false;
-    private Serdes<K, V> serdes = null;
+    private StateSerdes<K, V> serdes = null;
 
     // this is used for extended MemoryNavigableLRUCache only
     public MemoryLRUCache() {}
@@ -69,7 +69,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         };
     }
 
-    public KeyValueStore<K, V> enableLogging(Serdes<K, V> serdes) {
+    public KeyValueStore<K, V> enableLogging(StateSerdes<K, V> serdes) {
         this.loggingEnabled = true;
         this.serdes = serdes;
 
