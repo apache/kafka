@@ -103,7 +103,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
                 Iterator<ConsumerRecord<K, V>> current;
 
                 public ConsumerRecord<K, V> makeNext() {
-                    if (current == null || !current.hasNext()) {
+                    while (current == null || !current.hasNext()) {
                         if (iters.hasNext())
                             current = iters.next().iterator();
                         else
