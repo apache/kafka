@@ -317,7 +317,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private def deletePath(path: String, expectedVersion: Int): Boolean = {
     try {
-      zkUtils.zkConnection.getZookeeper.delete(path, expectedVersion) // Workaround until zkClient supports versioned deletes
+      zkUtils.zkClient.delete(path, expectedVersion)
       true
     } catch {
       case e: KeeperException.NoNodeException => true // This path was already deleted
