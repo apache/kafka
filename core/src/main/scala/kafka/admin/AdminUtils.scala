@@ -242,13 +242,14 @@ object AdminUtils extends Logging {
   * @param numPartitions Number of partitions to be set
   * @param replicaAssignmentStr Manual replica assignment
   * @param checkBrokerAvailable Ignore checking if assigned replica broker is available. Only used for testing
+  * @return number of partitions added
   */
   def addPartitions(zkUtils: ZkUtils,
                     topic: String,
                     numPartitions: Int = 1,
                     replicaAssignmentStr: String = "",
                     checkBrokerAvailable: Boolean = true,
-                    rackAwareMode: RackAwareMode = RackAwareMode.Enforced) {
+                    rackAwareMode: RackAwareMode = RackAwareMode.Enforced) = {
     val existingPartitionsReplicaList = zkUtils.getReplicaAssignmentForTopics(List(topic))
     if (existingPartitionsReplicaList.size == 0)
       throw new AdminOperationException("The topic %s does not exist".format(topic))
@@ -258,32 +259,35 @@ object AdminUtils extends Logging {
       case Some(headPartitionReplica) => headPartitionReplica._2
     }
     val partitionsToAdd = numPartitions - existingPartitionsReplicaList.size
-    if (partitionsToAdd <= 0)
+    if (partitionsToAdd < 0)
       throw new AdminOperationException("The number of partitions for a topic can only be increased")
 
-    // create the new partition replication list
-    val brokerMetadatas = getBrokerMetadatas(zkUtils, rackAwareMode)
-    val newPartitionReplicaList =
-      if (replicaAssignmentStr == null || replicaAssignmentStr == "") {
-        val startIndex = math.max(0, brokerMetadatas.indexWhere(_.id >= existingReplicaListForPartitionZero.head))
-        AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitionsToAdd, existingReplicaListForPartitionZero.size,
-          startIndex, existingPartitionsReplicaList.size)
-      }
-      else
-        getManualReplicaAssignment(replicaAssignmentStr, brokerMetadatas.map(_.id).toSet,
-          existingPartitionsReplicaList.size, checkBrokerAvailable)
+    if (partitionsToAdd > 0) {
+      // create the new partition replication list
+      val brokerMetadatas = getBrokerMetadatas(zkUtils, rackAwareMode)
+      val newPartitionReplicaList =
+        if (replicaAssignmentStr == null || replicaAssignmentStr == "") {
+          val startIndex = math.max(0, brokerMetadatas.indexWhere(_.id >= existingReplicaListForPartitionZero.head))
+          AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitionsToAdd, existingReplicaListForPartitionZero.size,
+            startIndex, existingPartitionsReplicaList.size)
+        }
+        else
+          getManualReplicaAssignment(replicaAssignmentStr, brokerMetadatas.map(_.id).toSet,
+            existingPartitionsReplicaList.size, checkBrokerAvailable)
 
-    // check if manual assignment has the right replication factor
-    val unmatchedRepFactorList = newPartitionReplicaList.values.filter(p => (p.size != existingReplicaListForPartitionZero.size))
-    if (unmatchedRepFactorList.size != 0)
-      throw new AdminOperationException("The replication factor in manual replication assignment " +
-        " is not equal to the existing replication factor for the topic " + existingReplicaListForPartitionZero.size)
+      // check if manual assignment has the right replication factor
+      val unmatchedRepFactorList = newPartitionReplicaList.values.filter(p => (p.size != existingReplicaListForPartitionZero.size))
+      if (unmatchedRepFactorList.size != 0)
+        throw new AdminOperationException("The replication factor in manual replication assignment " +
+          " is not equal to the existing replication factor for the topic " + existingReplicaListForPartitionZero.size)
 
-    info("Add partition list for %s is %s".format(topic, newPartitionReplicaList))
-    val partitionReplicaList = existingPartitionsReplicaList.map(p => p._1.partition -> p._2)
-    // add the new list
-    partitionReplicaList ++= newPartitionReplicaList
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, partitionReplicaList, update = true)
+      info("Add partition list for %s is %s".format(topic, newPartitionReplicaList))
+      val partitionReplicaList = existingPartitionsReplicaList.map(p => p._1.partition -> p._2)
+      // add the new list
+      partitionReplicaList ++= newPartitionReplicaList
+      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, partitionReplicaList, update = true)
+    }
+    partitionsToAdd
   }
 
   def getManualReplicaAssignment(replicaAssignmentList: String, availableBrokerList: Set[Int], startPartitionId: Int, checkBrokerAvailable: Boolean = true): Map[Int, List[Int]] = {

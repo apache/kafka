@@ -145,8 +145,8 @@ object TopicCommand extends Logging {
           "logic or ordering of the messages will be affected")
         val nPartitions = opts.options.valueOf(opts.partitionsOpt).intValue
         val replicaAssignmentStr = opts.options.valueOf(opts.replicaAssignmentOpt)
-        AdminUtils.addPartitions(zkUtils, topic, nPartitions, replicaAssignmentStr)
-        println("Adding partitions succeeded!")
+        val addedPartitions = AdminUtils.addPartitions(zkUtils, topic, nPartitions, replicaAssignmentStr)
+        println("Adding partitions succeeded! Added %d partitions to topic \"%s\".".format(addedPartitions, topic))
       }
     }
   }
