@@ -138,7 +138,7 @@ public class Node {
         if (port != other.port)
             return false;
         if (rack == null) {
-            if (other.host != null)
+            if (other.rack != null)
                 return false;
         } else if (!rack.equals(other.rack))
             return false;

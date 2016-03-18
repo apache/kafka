@@ -59,10 +59,9 @@ public class Protocol {
 
     public static final Schema METADATA_REQUEST_V1 = METADATA_REQUEST_V0;
 
-    public static final Schema BROKER_V0 = new Schema(new Field("node_id", INT32, "The broker id."),
+    public static final Schema METADATA_BROKER_V0 = new Schema(new Field("node_id", INT32, "The broker id."),
                                                    new Field("host", STRING, "The hostname of the broker."),
-                                                   new Field("port",
-                                                             INT32,
+                                                   new Field("port", INT32,
                                                              "The port on which the broker accepts requests."));
 
     public static final Schema PARTITION_METADATA_V0 = new Schema(new Field("partition_error_code",
@@ -90,12 +89,12 @@ public class Protocol {
                                                                         "Metadata for each partition of the topic."));
 
     public static final Schema METADATA_RESPONSE_V0 = new Schema(new Field("brokers",
-                                                                           new ArrayOf(BROKER_V0),
+                                                                           new ArrayOf(METADATA_BROKER_V0),
                                                                            "Host and port information for all brokers."),
                                                                  new Field("topic_metadata",
                                                                            new ArrayOf(TOPIC_METADATA_V0)));
 
-    public static final Schema BROKER_V1 = new Schema(new Field("node_id", INT32, "The broker id."),
+    public static final Schema METADATA_BROKER_V1 = new Schema(new Field("node_id", INT32, "The broker id."),
                                                       new Field("host", STRING, "The hostname of the broker."),
                                                       new Field("port", INT32,
                                                         "The port on which the broker accepts requests."),
@@ -113,7 +112,7 @@ public class Protocol {
                                                               new Field("partition_metadata", new ArrayOf(PARTITION_METADATA_V1),
                                                                 "Metadata for each partition of the topic."));
 
-    public static final Schema METADATA_RESPONSE_V1 = new Schema(new Field("brokers", new ArrayOf(BROKER_V1),
+    public static final Schema METADATA_RESPONSE_V1 = new Schema(new Field("brokers", new ArrayOf(METADATA_BROKER_V1),
                                                                     "Host and port information for all brokers."),
                                                                  new Field("topic_metadata",
                                                                      new ArrayOf(TOPIC_METADATA_V1)));
@@ -522,9 +521,14 @@ public class Protocol {
                                                                                    STRING,
                                                                                    "The unique group id."));
 
+    public static final Schema GROUP_COORDINATOR_BROKER_V0 = new Schema(new Field("node_id", INT32, "The broker id."),
+                                                                        new Field("host", STRING, "The hostname of the broker."),
+                                                                        new Field("port", INT32,
+                                                                            "The port on which the broker accepts requests."));
+
     public static final Schema GROUP_COORDINATOR_RESPONSE_V0 = new Schema(new Field("error_code", INT16),
                                                                           new Field("coordinator",
-                                                                                    BROKER_V0,
+                                                                                    GROUP_COORDINATOR_BROKER_V0,
                                                                                     "Host and port information for the coordinator for a consumer group."));
 
     public static final Schema[] GROUP_COORDINATOR_REQUEST = new Schema[] {GROUP_COORDINATOR_REQUEST_V0};
