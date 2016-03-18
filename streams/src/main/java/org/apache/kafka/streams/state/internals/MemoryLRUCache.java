@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -41,9 +40,6 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     protected Set<K> keys;
 
     protected EldestEntryRemovalListener<K, V> listener;
-
-    private boolean loggingEnabled = false;
-    private StateSerdes<K, V> serdes = null;
 
     // this is used for extended MemoryNavigableLRUCache only
     public MemoryLRUCache() {}
@@ -69,11 +65,8 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         };
     }
 
-    public KeyValueStore<K, V> enableLogging(StateSerdes<K, V> serdes) {
-        this.loggingEnabled = true;
-        this.serdes = serdes;
-
-        return new InMemoryKeyValueLoggedStore<>(this.name, this, serdes);
+    public KeyValueStore<K, V> enableLogging(Serde<K> keySerde, Serde<V> valueSerde) {
+        return new InMemoryKeyValueLoggedStore<>(this.name, this, keySerde, valueSerde);
     }
 
     public MemoryLRUCache<K, V> whenEldestRemoved(EldestEntryRemovalListener<K, V> listener) {
@@ -88,17 +81,9 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
-        if (loggingEnabled) {
-            context.register(root, true, new StateRestoreCallback() {
-
-                @Override
-                public void restore(byte[] key, byte[] value) {
-                    put(serdes.keyFrom(key), serdes.valueFrom(value));
-                }
-            });
-
-        }
+        // do nothing
     }
 
     @Override

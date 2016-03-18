@@ -19,13 +19,18 @@
 
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
+
 import java.nio.ByteBuffer;
 
 public class WindowStoreUtils {
 
-    public static final int TIMESTAMP_SIZE = 8;
     public static final int SEQNUM_SIZE = 4;
-    public static final StateSerdes<byte[], byte[]> INNER_SERDES = StateSerdes.withBuiltinTypes("", byte[].class, byte[].class);
+    public static final int TIMESTAMP_SIZE = 8;
+    public static final Serde<byte[]> INNER_SERDE = Serdes.ByteArray();
+    public static final StateSerdes<byte[], byte[]> INNER_SERDES = new StateSerdes<>("", INNER_SERDE, INNER_SERDE);
+
     @SuppressWarnings("unchecked")
     public static final KeyValueIterator<byte[], byte[]>[] NO_ITERATORS = (KeyValueIterator<byte[], byte[]>[]) new KeyValueIterator[0];
 

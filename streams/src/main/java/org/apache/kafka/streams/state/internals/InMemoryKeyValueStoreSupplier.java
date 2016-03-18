@@ -17,15 +17,14 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.Iterator;
 import java.util.List;
@@ -45,12 +44,14 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
     private final Time time;
-    private final StateSerdes<K, V> serdes;
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
 
-    public InMemoryKeyValueStoreSupplier(String name, StateSerdes<K, V> serdes, Time time) {
+    public InMemoryKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time) {
         this.name = name;
         this.time = time;
-        this.serdes = serdes;
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
     }
 
     public String name() {
@@ -58,28 +59,24 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        return new MeteredKeyValueStore<>(new MemoryStore<K, V>(name).enableLogging(serdes), "in-memory-state", time);
+        return new MeteredKeyValueStore<>(new MemoryStore<K, V>(name, keySerde, valueSerde).enableLogging(), "in-memory-state", time);
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
-
         private final String name;
+        private final Serde<K> keySerde;
+        private final Serde<V> valueSerde;
         private final NavigableMap<K, V> map;
 
-        private boolean loggingEnabled = false;
-        private StateSerdes<K, V> serdes = null;
-
-        public MemoryStore(String name) {
-            super();
+        public MemoryStore(String name, Serde<K> keySerde, Serde<V> valueSerde) {
             this.name = name;
+            this.keySerde = keySerde;
+            this.valueSerde = valueSerde;
             this.map = new TreeMap<>();
         }
 
-        public KeyValueStore<K, V> enableLogging(StateSerdes<K, V> serdes) {
-            this.loggingEnabled = true;
-            this.serdes = serdes;
-
-            return new InMemoryKeyValueLoggedStore<>(this.name, this, serdes);
+        public KeyValueStore<K, V> enableLogging() {
+            return new InMemoryKeyValueLoggedStore<>(this.name, this, keySerde, valueSerde);
         }
 
         @Override
@@ -88,17 +85,9 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         public void init(ProcessorContext context, StateStore root) {
-            if (loggingEnabled) {
-                context.register(root, true, new StateRestoreCallback() {
-
-                    @Override
-                    public void restore(byte[] key, byte[] value) {
-                        put(serdes.keyFrom(key), serdes.valueFrom(value));
-                    }
-                });
-
-            }
+            // do nothing
         }
 
         @Override

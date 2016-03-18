@@ -98,8 +98,9 @@ public interface KStream<K, V> {
      * Sends key-value to a topic, also creates a new instance of KStream from the topic.
      * This is equivalent to calling to(topic) and from(topic).
      *
-     * @param topic           the topic name
-     * @return the instance of KStream that consumes the given topic
+     * @param topic     the topic name
+     *
+     * @return          the instance of {@link KStream} that consumes the given topic
      */
     KStream<K, V> through(String topic);
 
@@ -107,32 +108,33 @@ public interface KStream<K, V> {
      * Sends key-value to a topic, also creates a new instance of KStream from the topic.
      * This is equivalent to calling to(topic) and from(topic).
      *
-     * @param topic      the topic name
-     * @param keySerde   key serde used to send key-value pairs,
-     *                   if not specified the default key serde defined in the configuration will be used
-     * @param valSerde   value serde used to send key-value pairs,
-     *                   if not specified the default value serde defined in the configuration will be used
-     * @return the instance of KStream that consumes the given topic
+     * @param keySerde  key serde used to send key-value pairs,
+     *                  if not specified the default key serde defined in the configuration will be used
+     * @param valSerde  value serde used to send key-value pairs,
+     *                  if not specified the default value serde defined in the configuration will be used
+     * @param topic     the topic name
+     *
+     * @return          the instance of {@link KStream} that consumes the given topic
      */
-    KStream<K, V> through(String topic, Serde<K> keySerde, Serde<V> valSerde);
+    KStream<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic);
 
     /**
      * Sends key-value to a topic using default serializers specified in the config.
      *
-     * @param topic         the topic name
+     * @param topic     the topic name
      */
     void to(String topic);
 
     /**
      * Sends key-value to a topic.
      *
-     * @param topic    the topic name
-     * @param keySerde key serde used to send key-value pairs,
-     *                 if not specified the default serde defined in the configs will be used
-     * @param keySerde value serde used to send key-value pairs,
-     *                 if not specified the default serde defined in the configs will be used
+     * @param keySerde  key serde used to send key-value pairs,
+     *                  if not specified the default serde defined in the configs will be used
+     * @param valSerde  value serde used to send key-value pairs,
+     *                  if not specified the default serde defined in the configs will be used
+     * @param topic     the topic name
      */
-    void to(String topic, Serde<K> keySerde, Serde<V> valSerde);
+    void to(Serde<K> keySerde, Serde<V> valSerde, String topic);
 
     /**
      * Applies a stateful transformation to all elements in this stream.
@@ -184,6 +186,20 @@ public interface KStream<K, V> {
             Serde<V1> otherValueSerde);
 
     /**
+     * Combines values of this stream with another KStream using Windowed Inner Join.
+     *
+     * @param otherStream   the instance of {@link KStream} joined with this stream
+     * @param joiner        the instance of {@link ValueJoiner}
+     * @param windows       the specification of the {@link JoinWindows}
+     * @param <V1>          the value type of the other stream
+     * @param <R>           the value type of the new stream
+     */
+    <V1, R> KStream<K, R> join(
+            KStream<K, V1> otherStream,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindows windows);
+
+    /**
      * Combines values of this stream with another KStream using Windowed Outer Join.
      *
      * @param otherStream the instance of KStream joined with this stream
@@ -207,6 +223,20 @@ public interface KStream<K, V> {
             Serde<V1> otherValueSerde);
 
     /**
+     * Combines values of this stream with another KStream using Windowed Outer Join.
+     *
+     * @param otherStream   the instance of {@link KStream} joined with this stream
+     * @param joiner        the instance of {@link ValueJoiner}
+     * @param windows       the specification of the {@link JoinWindows}
+     * @param <V1>          the value type of the other stream
+     * @param <R>           the value type of the new stream
+     */
+    <V1, R> KStream<K, R> outerJoin(
+            KStream<K, V1> otherStream,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindows windows);
+
+    /**
      * Combines values of this stream with another KStream using Windowed Left Join.
      *
      * @param otherStream the instance of KStream joined with this stream
@@ -227,25 +257,47 @@ public interface KStream<K, V> {
             Serde<V1> otherValueSerde);
 
     /**
+     * Combines values of this stream with another KStream using Windowed Left Join.
+     *
+     * @param otherStream   the instance of {@link KStream} joined with this stream
+     * @param joiner        the instance of {@link ValueJoiner}
+     * @param windows       the specification of the {@link JoinWindows}
+     * @param <V1>          the value type of the other stream
+     * @param <R>           the value type of the new stream
+     */
+    <V1, R> KStream<K, R> leftJoin(
+            KStream<K, V1> otherStream,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindows windows);
+
+    /**
      * Combines values of this stream with KTable using Left Join.
      *
-     * @param ktable the instance of KTable joined with this stream
-     * @param joiner ValueJoiner
-     * @param <V1>   the value type of the table
-     * @param <V2>   the value type of the new stream
+     * @param table     the instance of {@link KTable} joined with this stream
+     * @param joiner    the instance of {@link ValueJoiner}
+     * @param <V1>      the value type of the table
+     * @param <V2>      the value type of the new stream
      */
-    <V1, V2> KStream<K, V2> leftJoin(KTable<K, V1> ktable, ValueJoiner<V, V1, V2> joiner);
+    <V1, V2> KStream<K, V2> leftJoin(KTable<K, V1> table, ValueJoiner<V, V1, V2> joiner);
 
     /**
      * Aggregate values of this stream by key on a window basis.
      *
-     * @param reducer the class of Reducer
-     * @param windows the specification of the aggregation window
+     * @param reducer the class of {@link Reducer}
+     * @param windows the specification of the aggregation {@link Windows}
      */
     <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
                                                           Windows<W> windows,
                                                           Serde<K> keySerde,
                                                           Serde<V> aggValueSerde);
+
+    /**
+     * Aggregate values of this stream by key on a window basis.
+     *
+     * @param reducer the class of {@link Reducer}
+     * @param windows the specification of the aggregation {@link Windows}
+     */
+    <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer, Windows<W> windows);
 
     /**
      * Aggregate values of this stream by key on a window basis.
@@ -260,9 +312,16 @@ public interface KStream<K, V> {
     /**
      * Aggregate values of this stream by key on a window basis.
      *
+     * @param reducer the class of {@link Reducer}
+     */
+    KTable<K, V> reduceByKey(Reducer<V> reducer, String name);
+
+    /**
+     * Aggregate values of this stream by key on a window basis.
+     *
      * @param initializer the class of Initializer
      * @param aggregator the class of Aggregator
-     * @param windows the specification of the aggregation window
+     * @param windows the specification of the aggregation {@link Windows}
      * @param <T>   the value type of the aggregated table
      */
     <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
@@ -272,12 +331,25 @@ public interface KStream<K, V> {
                                                                 Serde<T> aggValueSerde);
 
     /**
+     * Aggregate values of this stream by key on a window basis.
+     *
+     * @param initializer   the class of {@link Initializer}
+     * @param aggregator    the class of {@link Aggregator}
+     * @param windows       the specification of the aggregation {@link Windows}
+     * @param <T>           the value type of the aggregated table
+     */
+    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
+                                                                Aggregator<K, V, T> aggregator,
+                                                                Windows<W> windows);
+
+    /**
      * Aggregate values of this stream by key without a window basis, and hence
      * return an ever updating table
      *
-     * @param initializer the class of Initializer
-     * @param aggregator the class of Aggregator
-     * @param <T>   the value type of the aggregated table
+     * @param initializer   the class of {@link Initializer}
+     * @param aggregator    the class of {@link Aggregator}
+     * @param name          the name of the aggregated table
+     * @param <T>           the value type of the aggregated table
      */
     <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
                                     Aggregator<K, V, T> aggregator,
@@ -286,17 +358,46 @@ public interface KStream<K, V> {
                                     String name);
 
     /**
+     * Aggregate values of this stream by key without a window basis, and hence
+     * return an ever updating table
+     *
+     * @param initializer   the class of {@link Initializer}
+     * @param aggregator    the class of {@link Aggregator}
+     * @param name          the name of the aggregated table
+     * @param <T>           the value type of the aggregated table
+     */
+    <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
+                                    Aggregator<K, V, T> aggregator,
+                                    String name);
+
+    /**
      * Count number of messages of this stream by key on a window basis.
      *
-     * @param windows the specification of the aggregation window
+     * @param windows       the specification of the aggregation {@link Windows}
      */
-    <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
-                                                            Serde<K> keySerde);
+    <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows, Serde<K> keySerde);
+
+    /**
+     * Count number of messages of this stream by key on a window basis.
+     *
+     * @param windows       the specification of the aggregation {@link Windows}
+     */
+    <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows);
 
     /**
      * Count number of messages of this stream by key without a window basis, and hence
      * return a ever updating counting table.
+     *
+     * @param name          the name of the aggregated table
      */
-    KTable<K, Long> countByKey(Serde<K> keySerde,
-                               String name);
+    KTable<K, Long> countByKey(Serde<K> keySerde, String name);
+
+    /**
+     * Count number of messages of this stream by key without a window basis, and hence
+     * return a ever updating counting table.
+     *
+     * @param name          the name of the aggregated table
+     */
+    KTable<K, Long> countByKey(String name);
+
 }
