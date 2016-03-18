@@ -200,7 +200,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props);
         List<TopicPartition> partitions = getAllPartitions(consumer, "echo", "max", "min", "dif", "sum", "cnt", "avg", "wcnt", "tagg");
         consumer.assign(partitions);
-        consumer.seekToBeginning(partitions.toArray(new TopicPartition[partitions.size()]));
+        consumer.seekToBeginning(partitions);
 
         final int recordsGenerated = allData.size() * maxRecordsPerKey;
         int recordsProcessed = 0;

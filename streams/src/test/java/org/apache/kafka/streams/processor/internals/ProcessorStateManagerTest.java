@@ -38,9 +38,9 @@ import java.io.IOException;
 import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -94,7 +94,7 @@ public class ProcessorStateManagerTest {
         }
 
         @Override
-        public synchronized void assign(List<TopicPartition> partitions) {
+        public synchronized void assign(Collection<TopicPartition> partitions) {
             int numPartitions = partitions.size();
             if (numPartitions > 1)
                 throw new IllegalArgumentException("RestoreConsumer: more than one partition specified");
@@ -102,7 +102,7 @@ public class ProcessorStateManagerTest {
             if (numPartitions == 1) {
                 if (assignedPartition != null)
                     throw new IllegalStateException("RestoreConsumer: partition already assigned");
-                assignedPartition = partitions.get(0);
+                assignedPartition = partitions.iterator().next();
 
                 // set the beginning offset to 0
                 // NOTE: this is users responsible to set the initial lEO.
@@ -154,8 +154,8 @@ public class ProcessorStateManagerTest {
         }
 
         @Override
-        public synchronized void seekToBeginning(TopicPartition... partitions) {
-            if (partitions.length != 1)
+        public synchronized void seekToBeginning(Collection<TopicPartition> partitions) {
+            if (partitions.size() != 1)
                 throw new IllegalStateException("RestoreConsumer: other than one partition specified");
 
             for (TopicPartition partition : partitions) {
@@ -168,8 +168,8 @@ public class ProcessorStateManagerTest {
         }
 
         @Override
-        public synchronized void seekToEnd(TopicPartition... partitions) {
-            if (partitions.length != 1)
+        public synchronized void seekToEnd(Collection<TopicPartition> partitions) {
+            if (partitions.size() != 1)
                 throw new IllegalStateException("RestoreConsumer: other than one partition specified");
 
             for (TopicPartition partition : partitions) {

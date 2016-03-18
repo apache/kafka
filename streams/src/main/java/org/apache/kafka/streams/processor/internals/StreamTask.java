@@ -34,6 +34,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static java.util.Collections.singleton;
+
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
  */
@@ -136,7 +138,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
         if (queueSize > this.maxBufferedSize) {
-            consumer.pause(partition);
+            consumer.pause(singleton(partition));
         }
     }
 
@@ -178,7 +180,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 // after processing this record, if its partition queue's buffered size has been
                 // decreased to the threshold, we can then resume the consumption on this partition
                 if (partitionGroup.numBuffered(partition) == this.maxBufferedSize) {
-                    consumer.resume(partition);
+                    consumer.resume(singleton(partition));
                     requiresPoll = true;
                 }
 

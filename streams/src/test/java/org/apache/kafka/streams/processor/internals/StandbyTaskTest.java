@@ -49,6 +49,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -181,7 +182,7 @@ public class StandbyTaskTest {
                 if (offset >= 0) {
                     restoreStateConsumer.seek(partition, offset);
                 } else {
-                    restoreStateConsumer.seekToBeginning(partition);
+                    restoreStateConsumer.seekToBeginning(singleton(partition));
                 }
             }
 
@@ -246,7 +247,7 @@ public class StandbyTaskTest {
                 if (offset >= 0) {
                     restoreStateConsumer.seek(partition, offset);
                 } else {
-                    restoreStateConsumer.seekToBeginning(partition);
+                    restoreStateConsumer.seekToBeginning(singleton(partition));
                 }
             }
 
