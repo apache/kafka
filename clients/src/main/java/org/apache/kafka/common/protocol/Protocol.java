@@ -26,6 +26,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.INT16;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
@@ -56,7 +57,9 @@ public class Protocol {
                                                                           new ArrayOf(STRING),
                                                                           "An array of topics to fetch metadata for. If no topics are specified fetch metadata for all topics."));
 
-    public static final Schema BROKER = new Schema(new Field("node_id", INT32, "The broker id."),
+    public static final Schema METADATA_REQUEST_V1 = METADATA_REQUEST_V0;
+
+    public static final Schema BROKER_V0 = new Schema(new Field("node_id", INT32, "The broker id."),
                                                    new Field("host", STRING, "The hostname of the broker."),
                                                    new Field("port",
                                                              INT32,
@@ -87,13 +90,36 @@ public class Protocol {
                                                                         "Metadata for each partition of the topic."));
 
     public static final Schema METADATA_RESPONSE_V0 = new Schema(new Field("brokers",
-                                                                           new ArrayOf(BROKER),
+                                                                           new ArrayOf(BROKER_V0),
                                                                            "Host and port information for all brokers."),
                                                                  new Field("topic_metadata",
                                                                            new ArrayOf(TOPIC_METADATA_V0)));
 
-    public static final Schema[] METADATA_REQUEST = new Schema[] {METADATA_REQUEST_V0};
-    public static final Schema[] METADATA_RESPONSE = new Schema[] {METADATA_RESPONSE_V0};
+    public static final Schema BROKER_V1 = new Schema(new Field("node_id", INT32, "The broker id."),
+                                                      new Field("host", STRING, "The hostname of the broker."),
+                                                      new Field("port", INT32,
+                                                        "The port on which the broker accepts requests."),
+                                                      new Field("rack", NULLABLE_STRING, "The rack of the broker."),
+                                                      new Field("is_controller", BOOLEAN, "The rack of the broker."));
+
+    public static final Schema PARTITION_METADATA_V1 = PARTITION_METADATA_V0;
+
+    public static final Schema TOPIC_METADATA_V1 = new Schema(new Field("topic_error_code", INT16, "The error code for the given topic."),
+                                                              new Field("topic", STRING, "The name of the topic"),
+                                                              new Field("is_internal", BOOLEAN,
+                                                                  "Indicates if the topic is considered a Kafka internal topic"),
+                                                              new Field("marked_for_deletion", BOOLEAN,
+                                                                  "Indicates if the topic is marked for deletion"),
+                                                              new Field("partition_metadata", new ArrayOf(PARTITION_METADATA_V1),
+                                                                "Metadata for each partition of the topic."));
+
+    public static final Schema METADATA_RESPONSE_V1 = new Schema(new Field("brokers", new ArrayOf(BROKER_V1),
+                                                                    "Host and port information for all brokers."),
+                                                                 new Field("topic_metadata",
+                                                                     new ArrayOf(TOPIC_METADATA_V1)));
+
+    public static final Schema[] METADATA_REQUEST = new Schema[] {METADATA_REQUEST_V0, METADATA_REQUEST_V1};
+    public static final Schema[] METADATA_RESPONSE = new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1};
 
     /* Produce api */
 
@@ -498,7 +524,7 @@ public class Protocol {
 
     public static final Schema GROUP_COORDINATOR_RESPONSE_V0 = new Schema(new Field("error_code", INT16),
                                                                           new Field("coordinator",
-                                                                                    BROKER,
+                                                                                    BROKER_V0,
                                                                                     "Host and port information for the coordinator for a consumer group."));
 
     public static final Schema[] GROUP_COORDINATOR_REQUEST = new Schema[] {GROUP_COORDINATOR_REQUEST_V0};

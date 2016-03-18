@@ -570,7 +570,7 @@ public class FetcherTest {
             }
         }
 
-        MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topic, partitionsMetadata);
+        MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topic, false, false, partitionsMetadata);
         return new MetadataResponse(cluster.nodes(), Arrays.asList(topicMetadata));
     }
 

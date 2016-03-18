@@ -24,6 +24,7 @@ import java.util.Properties
 import kafka.admin.{RackAwareMode, AdminUtils}
 import kafka.api._
 import kafka.cluster.Partition
+import kafka.common
 import kafka.common._
 import kafka.controller.KafkaController
 import kafka.coordinator.{GroupCoordinator, JoinGroupResult}
@@ -628,12 +629,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       AdminUtils.createTopic(zkUtils, topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe)
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
         .format(topic, numPartitions, replicationFactor))
-      new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, java.util.Collections.emptyList())
+      new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, common.Topic.isInternal(topic),
+        metadataCache.isMarkedForDeletion(topic), java.util.Collections.emptyList())
     } catch {
       case e: TopicExistsException => // let it go, possibly another broker created this topic
-        new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, java.util.Collections.emptyList())
+        new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, common.Topic.isInternal(topic),
+          metadataCache.isMarkedForDeletion(topic), java.util.Collections.emptyList())
       case itex: InvalidTopicException =>
-        new MetadataResponse.TopicMetadata(Errors.INVALID_TOPIC_EXCEPTION, topic, java.util.Collections.emptyList())
+        new MetadataResponse.TopicMetadata(Errors.INVALID_TOPIC_EXCEPTION, topic, common.Topic.isInternal(topic),
+          metadataCache.isMarkedForDeletion(topic), java.util.Collections.emptyList())
     }
   }
 
@@ -665,7 +669,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else if (config.autoCreateTopicsEnable) {
           createTopic(topic, config.numPartitions, config.defaultReplicationFactor)
         } else {
-          new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, java.util.Collections.emptyList())
+          new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, common.Topic.isInternal(topic),
+            metadataCache.isMarkedForDeletion(topic), java.util.Collections.emptyList())
         }
       }
       topicResponses ++ responsesForNonExistentTopics
@@ -678,45 +683,58 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleTopicMetadataRequest(request: RequestChannel.Request) {
     val metadataRequest = request.body.asInstanceOf[MetadataRequest]
 
-    val topics = metadataRequest.topics.asScala.toSet
-    var (authorizedTopics, unauthorizedTopics) = if (metadataRequest.topics.isEmpty) {
-      //if topics is empty -> fetch all topics metadata but filter out the topic response that are not authorized
-      val authorized = metadataCache.getAllTopics()
-        .filter(topic => authorize(request.session, Describe, new Resource(Topic, topic)))
-      (authorized, mutable.Set[String]())
-    } else {
-      topics.partition(topic => authorize(request.session, Describe, new Resource(Topic, topic)))
-    }
+    val completeTopicMetadata =
+      if(metadataRequest.hasTopics) {
+        val topics = metadataRequest.topics.asScala.toSet
+        var (authorizedTopics, unauthorizedTopics) = if (metadataRequest.topics.isEmpty) {
+          //if topics is empty -> fetch all topics metadata but filter out the topic response that are not authorized
+          val authorized = metadataCache.getAllTopics()
+            .filter(topic => authorize(request.session, Describe, new Resource(Topic, topic)))
+          (authorized, mutable.Set[String]())
+        } else {
+          topics.partition(topic => authorize(request.session, Describe, new Resource(Topic, topic)))
+        }
 
-    if (authorizedTopics.nonEmpty) {
-      val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
-      if (config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
-        authorizer.foreach { az =>
-          if (!az.authorize(request.session, Create, Resource.ClusterResource)) {
-            authorizedTopics --= nonExistingTopics
-            unauthorizedTopics ++= nonExistingTopics
+        if (authorizedTopics.nonEmpty) {
+          val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
+          if (config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
+            authorizer.foreach { az =>
+              if (!az.authorize(request.session, Create, Resource.ClusterResource)) {
+                authorizedTopics --= nonExistingTopics
+                unauthorizedTopics ++= nonExistingTopics
+              }
+            }
           }
         }
+
+        val unauthorizedTopicMetadata = unauthorizedTopics.map(topic =>
+          new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic,
+            common.Topic.isInternal(topic), metadataCache.isMarkedForDeletion(topic), java.util.Collections.emptyList()))
+
+        val topicMetadata = if (authorizedTopics.isEmpty)
+          Seq.empty[MetadataResponse.TopicMetadata]
+        else
+          getTopicMetadata(authorizedTopics, request.securityProtocol)
+
+        topicMetadata ++ unauthorizedTopicMetadata
+      } else {
+        Seq[MetadataResponse.TopicMetadata]()
       }
-    }
-
-    val unauthorizedTopicMetadata = unauthorizedTopics.map(topic =>
-      new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, java.util.Collections.emptyList()))
-
-    val topicMetadata = if (authorizedTopics.isEmpty)
-      Seq.empty[MetadataResponse.TopicMetadata]
-    else
-      getTopicMetadata(authorizedTopics, request.securityProtocol)
 
     val brokers = metadataCache.getAliveBrokers
 
-    trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(topicMetadata.mkString(","),
+    trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
 
     val responseHeader = new ResponseHeader(request.header.correlationId)
+
     val responseBody = new MetadataResponse(
-      brokers.map(_.getNode(request.securityProtocol)).asJava,
-      (topicMetadata ++ unauthorizedTopicMetadata).asJava
+      brokers.map { b =>
+        val isController = metadataCache.isController(b.id)
+        b.getNode(request.securityProtocol, isController)
+      }.asJava,
+      completeTopicMetadata.asJava,
+      request.header.apiVersion()
     )
     requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
   }

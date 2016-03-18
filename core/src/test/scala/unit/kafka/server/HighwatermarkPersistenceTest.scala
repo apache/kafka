@@ -38,7 +38,7 @@ class HighwatermarkPersistenceTest {
       logDirs = config.logDirs.map(new File(_)).toArray,
       cleanerConfig = CleanerConfig())
   }
-    
+
   @After
   def teardown() {
     for(manager <- logManagers; dir <- manager.logDirs)
@@ -48,9 +48,11 @@ class HighwatermarkPersistenceTest {
   @Test
   def testHighWatermarkPersistenceSinglePartition() {
     // mock zkclient
-    val zkUtils = EasyMock.createMock(classOf[ZkUtils])
-    EasyMock.replay(zkUtils)
-    
+    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
+    EasyMock.replay(zkClient)
+
+    val zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
+
     // create kafka scheduler
     val scheduler = new KafkaScheduler(2)
     scheduler.startup
@@ -78,7 +80,7 @@ class HighwatermarkPersistenceTest {
       replicaManager.checkpointHighWatermarks()
       fooPartition0Hw = hwmFor(replicaManager, topic, 0)
       assertEquals(leaderReplicaPartition0.highWatermark.messageOffset, fooPartition0Hw)
-      EasyMock.verify(zkUtils)
+      EasyMock.verify(zkClient)
     } finally {
       // shutdown the replica manager upon test completion
       replicaManager.shutdown(false)
@@ -92,8 +94,10 @@ class HighwatermarkPersistenceTest {
     val topic1 = "foo1"
     val topic2 = "foo2"
     // mock zkclient
-    val zkUtils = EasyMock.createMock(classOf[ZkUtils])
-    EasyMock.replay(zkUtils)
+    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
+    EasyMock.replay(zkClient)
+
+    val zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
     // create kafka scheduler
     val scheduler = new KafkaScheduler(2)
     scheduler.startup
@@ -144,7 +148,7 @@ class HighwatermarkPersistenceTest {
       // verify checkpointed hw for topic 1
       topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)
       assertEquals(10L, topic1Partition0Hw)
-      EasyMock.verify(zkUtils)
+      EasyMock.verify(zkClient)
     } finally {
       // shutdown the replica manager upon test completion
       replicaManager.shutdown(false)
@@ -156,5 +160,5 @@ class HighwatermarkPersistenceTest {
   def hwmFor(replicaManager: ReplicaManager, topic: String, partition: Int): Long = {
     replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs(0)).getAbsolutePath).read.getOrElse(TopicAndPartition(topic, partition), 0L)
   }
-  
+
 }

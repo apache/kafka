@@ -59,6 +59,47 @@ public abstract class Type {
         return false;
     }
 
+    /**
+     * The Boolean type represents a boolean value in a byte by using
+     * the value of 0 to represent false, and 1 to represent true.
+     *
+     * If for some reason a value that is not 0 or 1 is read,
+     * then any non-zero value will return true.
+     */
+    public static final Type BOOLEAN = new Type() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if ((Boolean) o)
+                buffer.put((byte) 1);
+            else
+                buffer.put((byte) 0);
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            Byte value = buffer.get();
+            return value != 0;
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            return 1;
+        }
+
+        @Override
+        public String toString() {
+            return "BOOLEAN";
+        }
+
+        @Override
+        public Boolean validate(Object item) {
+            if (item instanceof Boolean)
+                return (Boolean) item;
+            else
+                throw new SchemaException(item + " is not a Boolean.");
+        }
+    };
+
     public static final Type INT8 = new Type() {
         @Override
         public void write(ByteBuffer buffer, Object o) {

@@ -24,7 +24,7 @@ import scala.collection.{Seq, Set, mutable}
 import scala.collection.JavaConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
-import kafka.common.{BrokerEndPointNotAvailableException, TopicAndPartition}
+import kafka.common.{BrokerEndPointNotAvailableException, Topic, TopicAndPartition}
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch}
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
@@ -40,8 +40,10 @@ import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest
 private[server] class MetadataCache(brokerId: Int) extends Logging {
   private val stateChangeLogger = KafkaController.stateChangeLogger
   private val cache = mutable.Map[String, mutable.Map[Int, PartitionStateInfo]]()
+  private var controllerId: Option[Int] = None
   private val aliveBrokers = mutable.Map[Int, Broker]()
   private val aliveNodes = mutable.Map[Int, collection.Map[SecurityProtocol, Node]]()
+  private var topicsMarkedForDeletion: Set[String] = Set()
   private val partitionMetadataLock = new ReentrantReadWriteLock()
 
   this.logIdent = "[Kafka Metadata Cache on broker %d] ".format(brokerId)
@@ -106,7 +108,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
       val topicsRequested = if (topics.isEmpty) cache.keySet else topics
       topicsRequested.toSeq.flatMap { topic =>
         getPartitionMetadata(topic, protocol).map { partitionMetadata =>
-          new MetadataResponse.TopicMetadata(Errors.NONE, topic, partitionMetadata.toBuffer.asJava)
+          new MetadataResponse.TopicMetadata(Errors.NONE, topic, Topic.isInternal(topic), isMarkedForDeletion(topic), partitionMetadata.toBuffer.asJava)
         }
       }
     }
@@ -151,8 +153,21 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  def updateCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest) {
+  def isController(brokerId: Int): Boolean = {
+    controllerId.exists(_ == brokerId)
+  }
+
+  def isMarkedForDeletion(topic: String): Boolean = {
+    topicsMarkedForDeletion.contains(topic)
+  }
+
+  def updateCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest, topicsMarkedForDeletion: Set[String]) {
     inWriteLock(partitionMetadataLock) {
+      controllerId =
+        updateMetadataRequest.controllerId match {
+          case id if id < 0 => None
+          case id => Some(id)
+        }
       aliveNodes.clear()
       aliveBrokers.clear()
       updateMetadataRequest.liveBrokers.asScala.foreach { broker =>
@@ -182,6 +197,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
               updateMetadataRequest.controllerEpoch, correlationId))
         }
       }
+      this.topicsMarkedForDeletion = topicsMarkedForDeletion
     }
   }
 

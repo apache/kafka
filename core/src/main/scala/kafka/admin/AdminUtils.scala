@@ -564,6 +564,13 @@ object AdminUtils extends Logging {
                                        cachedBrokerInfo: mutable.HashMap[Int, Broker],
                                        protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): MetadataResponse.TopicMetadata = {
     if(zkUtils.pathExists(getTopicPath(topic))) {
+      val controllerId =
+        try {
+          zkUtils.getController()
+        } catch {
+          case e: KafkaException => -1 // No controller id available
+        }
+
       val topicPartitionAssignment = zkUtils.getPartitionAssignmentForTopics(List(topic)).get(topic).get
       val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
       val partitionMetadata = sortedPartitions.map { partitionMap =>
@@ -580,15 +587,20 @@ object AdminUtils extends Logging {
           leaderInfo = leader match {
             case Some(l) =>
               try {
-                getBrokerInfoFromCache(zkUtils, cachedBrokerInfo, List(l)).head.getNode(protocol)
+                val broker = getBrokerInfoFromCache(zkUtils, cachedBrokerInfo, List(l)).head
+                broker.getNode(protocol, broker.id == controllerId)
               } catch {
                 case e: Throwable => throw new LeaderNotAvailableException("Leader not available for partition [%s,%d]".format(topic, partition), e)
               }
             case None => throw new LeaderNotAvailableException("No leader exists for partition " + partition)
           }
           try {
-            replicaInfo = getBrokerInfoFromCache(zkUtils, cachedBrokerInfo, replicas).map(_.getNode(protocol))
-            isrInfo = getBrokerInfoFromCache(zkUtils, cachedBrokerInfo, inSyncReplicas).map(_.getNode(protocol))
+            replicaInfo = getBrokerInfoFromCache(zkUtils, cachedBrokerInfo, replicas).map { broker =>
+              broker.getNode(protocol, broker.id == controllerId)
+            }
+            isrInfo = getBrokerInfoFromCache(zkUtils, cachedBrokerInfo, inSyncReplicas).map { broker =>
+              broker.getNode(protocol, broker.id == controllerId)
+            }
           } catch {
             case e: Throwable => throw new ReplicaNotAvailableException(e)
           }
@@ -605,10 +617,11 @@ object AdminUtils extends Logging {
             new MetadataResponse.PartitionMetadata(Errors.forException(e), partition, leaderInfo, replicaInfo.asJava, isrInfo.asJava)
         }
       }
-      new MetadataResponse.TopicMetadata(Errors.NONE, topic, partitionMetadata.toList.asJava)
+      val isMarkedForDeletion = zkUtils.pathExists(getDeleteTopicPath(topic))
+      new MetadataResponse.TopicMetadata(Errors.NONE, topic, Topic.isInternal(topic), isMarkedForDeletion, partitionMetadata.toList.asJava)
     } else {
       // topic doesn't exist, send appropriate error code
-      new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, java.util.Collections.emptyList())
+      new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, Topic.isInternal(topic), false, java.util.Collections.emptyList())
     }
   }
 

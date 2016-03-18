@@ -18,7 +18,7 @@
 package kafka.common
 
 import util.matching.Regex
-import kafka.coordinator.GroupCoordinator
+import org.apache.kafka.common.internals.TopicConstants.INTERNAL_TOPICS
 
 object Topic {
   val legalChars = "[a-zA-Z0-9\\._\\-]"
@@ -60,6 +60,10 @@ object Topic {
    */
   def hasCollision(topicA: String, topicB: String): Boolean = {
     topicA.replace('.', '_') == topicB.replace('.', '_')
+  }
+
+  def isInternal(topic: String): Boolean = {
+    INTERNAL_TOPICS.contains(topic)
   }
 
 }

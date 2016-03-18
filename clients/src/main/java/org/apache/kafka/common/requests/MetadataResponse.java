@@ -18,7 +18,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -32,7 +31,7 @@ import java.util.Set;
 
 public class MetadataResponse extends AbstractRequestResponse {
 
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.METADATA.id);
+    private static final short CURRENT_VERSION = ProtoUtils.latestVersion(ApiKeys.METADATA.id);
     private static final String BROKERS_KEY_NAME = "brokers";
     private static final String TOPIC_METADATA_KEY_NAME = "topic_metadata";
 
@@ -40,6 +39,8 @@ public class MetadataResponse extends AbstractRequestResponse {
     private static final String NODE_ID_KEY_NAME = "node_id";
     private static final String HOST_KEY_NAME = "host";
     private static final String PORT_KEY_NAME = "port";
+    private static final String RACK_KEY_NAME = "rack";
+    private static final String IS_CONTROLLER_KEY_NAME = "is_controller";
 
     // topic level field names
     private static final String TOPIC_ERROR_CODE_KEY_NAME = "topic_error_code";
@@ -54,6 +55,8 @@ public class MetadataResponse extends AbstractRequestResponse {
      */
 
     private static final String TOPIC_KEY_NAME = "topic";
+    private static final String IS_INTERNAL_KEY_NAME = "is_internal";
+    private static final String MARKED_FOR_DELETION_KEY_NAME = "marked_for_deletion";
     private static final String PARTITION_METADATA_KEY_NAME = "partition_metadata";
 
     // partition level field names
@@ -74,9 +77,18 @@ public class MetadataResponse extends AbstractRequestResponse {
     private final Collection<Node> brokers;
     private final List<TopicMetadata> topicMetadata;
 
-
+    /**
+     * Constructor for the latest version
+     */
     public MetadataResponse(List<Node> brokers, List<TopicMetadata> topicMetadata) {
-        super(new Struct(CURRENT_SCHEMA));
+        this(brokers, topicMetadata, CURRENT_VERSION);
+    }
+
+    /**
+     * Constructor for a specific version
+     */
+    public MetadataResponse(List<Node> brokers, List<TopicMetadata> topicMetadata, int version) {
+        super(new Struct(ProtoUtils.responseSchema(ApiKeys.METADATA.id, version)));
 
         this.brokers = brokers;
         this.topicMetadata = topicMetadata;
@@ -87,6 +99,10 @@ public class MetadataResponse extends AbstractRequestResponse {
             broker.set(NODE_ID_KEY_NAME, node.id());
             broker.set(HOST_KEY_NAME, node.host());
             broker.set(PORT_KEY_NAME, node.port());
+            if (broker.hasField(RACK_KEY_NAME))
+                broker.set(RACK_KEY_NAME, node.rack());
+            if (broker.hasField(IS_CONTROLLER_KEY_NAME))
+                broker.set(IS_CONTROLLER_KEY_NAME, node.isController());
             brokerArray.add(broker);
         }
         struct.set(BROKERS_KEY_NAME, brokerArray.toArray());
@@ -96,6 +112,10 @@ public class MetadataResponse extends AbstractRequestResponse {
             Struct topicData = struct.instance(TOPIC_METADATA_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, metadata.topic);
             topicData.set(TOPIC_ERROR_CODE_KEY_NAME, metadata.error.code());
+            if (topicData.hasField(MARKED_FOR_DELETION_KEY_NAME))
+                topicData.set(MARKED_FOR_DELETION_KEY_NAME, metadata.markedForDeletion());
+            if (topicData.hasField(IS_INTERNAL_KEY_NAME))
+                topicData.set(IS_INTERNAL_KEY_NAME, metadata.isInternal());
 
             List<Struct> partitionMetadataArray = new ArrayList<>(metadata.partitionMetadata.size());
             for (PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
@@ -130,7 +150,9 @@ public class MetadataResponse extends AbstractRequestResponse {
             int nodeId = broker.getInt(NODE_ID_KEY_NAME);
             String host = broker.getString(HOST_KEY_NAME);
             int port = broker.getInt(PORT_KEY_NAME);
-            brokers.put(nodeId, new Node(nodeId, host, port));
+            String rack =  broker.hasField(RACK_KEY_NAME) ? broker.getString(RACK_KEY_NAME) : null;
+            boolean isController = broker.hasField(IS_CONTROLLER_KEY_NAME) ? broker.getBoolean(IS_CONTROLLER_KEY_NAME) : false;
+            brokers.put(nodeId, new Node(nodeId, host, port, rack, isController));
         }
 
         List<TopicMetadata> topicMetadata = new ArrayList<>();
@@ -139,6 +161,9 @@ public class MetadataResponse extends AbstractRequestResponse {
             Struct topicInfo = (Struct) topicInfos[i];
             Errors topicError = Errors.forCode(topicInfo.getShort(TOPIC_ERROR_CODE_KEY_NAME));
             String topic = topicInfo.getString(TOPIC_KEY_NAME);
+            boolean isInternal = topicInfo.hasField(IS_INTERNAL_KEY_NAME) ? topicInfo.getBoolean(IS_INTERNAL_KEY_NAME) : false;
+            boolean isMarkedForDeletion = topicInfo.hasField(MARKED_FOR_DELETION_KEY_NAME) ? topicInfo.getBoolean(MARKED_FOR_DELETION_KEY_NAME) : false;
+
             List<PartitionMetadata> partitionMetadata = new ArrayList<>();
 
             Object[] partitionInfos = (Object[]) topicInfo.get(PARTITION_METADATA_KEY_NAME);
@@ -159,7 +184,7 @@ public class MetadataResponse extends AbstractRequestResponse {
                 partitionMetadata.add(new PartitionMetadata(partitionError, partition, leaderNode, replicaNodes, isrNodes));
             }
 
-            topicMetadata.add(new TopicMetadata(topicError, topic, partitionMetadata));
+            topicMetadata.add(new TopicMetadata(topicError, topic, isInternal, isMarkedForDeletion, partitionMetadata));
         }
 
         this.brokers = brokers.values();
@@ -211,20 +236,53 @@ public class MetadataResponse extends AbstractRequestResponse {
         return brokers;
     }
 
+    /**
+     * Get all topic metadata returned in the metadata response
+     * @return the topicMetadata
+     */
+    public Collection<TopicMetadata> topicMetadata() {
+        return topicMetadata;
+    }
+
+    /**
+     * Get all the controller node returned in metadata response
+     * @return the controller node or null if it doesn't exist
+     */
+    public Node controller() {
+        Node controller = null;
+        for (Node broker : brokers) {
+            if (broker.isController()) {
+                controller = broker;
+                break;
+            }
+        }
+        return controller;
+    }
+
     public static MetadataResponse parse(ByteBuffer buffer) {
-        return new MetadataResponse(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, CURRENT_VERSION);
+    }
+
+    public static MetadataResponse parse(ByteBuffer buffer, int version) {
+        return new MetadataResponse(ProtoUtils.responseSchema(ApiKeys.METADATA.id, version).read(buffer));
     }
 
     public static class TopicMetadata {
         private final Errors error;
         private final String topic;
+        private final boolean isInternal;
+        private final boolean markedForDeletion;
         private final List<PartitionMetadata> partitionMetadata;
 
         public TopicMetadata(Errors error,
                              String topic,
+                             boolean isInternal,
+                             boolean markedForDeletion,
                              List<PartitionMetadata> partitionMetadata) {
             this.error = error;
             this.topic = topic;
+            this.isInternal = isInternal;
+            this.markedForDeletion = markedForDeletion;
             this.partitionMetadata = partitionMetadata;
         }
 
@@ -234,6 +292,14 @@ public class MetadataResponse extends AbstractRequestResponse {
 
         public String topic() {
             return topic;
+        }
+
+        public boolean isInternal() {
+            return isInternal;
+        }
+
+        public boolean markedForDeletion() {
+            return markedForDeletion;
         }
 
         public List<PartitionMetadata> partitionMetadata() {

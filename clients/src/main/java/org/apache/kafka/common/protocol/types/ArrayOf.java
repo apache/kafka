@@ -30,7 +30,17 @@ public class ArrayOf extends Type {
     }
 
     @Override
+    public boolean isNullable() {
+        return true;
+    }
+
+    @Override
     public void write(ByteBuffer buffer, Object o) {
+        if (o == null) {
+            buffer.putInt(-1);
+            return;
+        }
+
         Object[] objs = (Object[]) o;
         int size = objs.length;
         buffer.putInt(size);
@@ -41,6 +51,10 @@ public class ArrayOf extends Type {
     @Override
     public Object read(ByteBuffer buffer) {
         int size = buffer.getInt();
+
+        if (size < 0)
+            return null;
+
         if (size > buffer.remaining())
             throw new SchemaException("Error reading array of size " + size + ", only " + buffer.remaining() + " bytes available");
         Object[] objs = new Object[size];
@@ -51,8 +65,11 @@ public class ArrayOf extends Type {
 
     @Override
     public int sizeOf(Object o) {
-        Object[] objs = (Object[]) o;
         int size = 4;
+        if (o == null)
+            return size;
+
+        Object[] objs = (Object[]) o;
         for (int i = 0; i < objs.length; i++)
             size += type.sizeOf(objs[i]);
         return size;
@@ -70,6 +87,9 @@ public class ArrayOf extends Type {
     @Override
     public Object[] validate(Object item) {
         try {
+            if (item == null)
+                return null;
+
             Object[] array = (Object[]) item;
             for (int i = 0; i < array.length; i++)
                 type.validate(array[i]);

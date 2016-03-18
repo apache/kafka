@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -23,13 +23,25 @@ public class Node {
     private final String idString;
     private final String host;
     private final int port;
+    private final String rack;
+    private final boolean isController;
 
     public Node(int id, String host, int port) {
+        this(id, host, port, null, false);
+    }
+
+    public Node(int id, String host, int port, String rack) {
+        this(id, host, port, rack, false);
+    }
+
+    public Node(int id, String host, int port, String rack, Boolean isController) {
         super();
         this.id = id;
         this.idString = Integer.toString(id);
         this.host = host;
         this.port = port;
+        this.rack = rack;
+        this.isController = isController;
     }
 
     public static Node noNode() {
@@ -74,6 +86,27 @@ public class Node {
         return port;
     }
 
+    /**
+     * True if this node has a defined rack
+     */
+    public boolean hasRack() {
+        return rack != null;
+    }
+
+    /**
+     * The rack for this node
+     */
+    public String rack() {
+        return rack;
+    }
+
+    /**
+     * True if this node is the controller node
+     */
+    public boolean isController() {
+        return isController;
+    }
+
     @Override
     public int hashCode() {
         final int prime = 31;
@@ -81,6 +114,8 @@ public class Node {
         result = prime * result + ((host == null) ? 0 : host.hashCode());
         result = prime * result + id;
         result = prime * result + port;
+        result = prime * result + ((rack == null) ? 0 : rack.hashCode());
+        result = prime * result + (isController ? 1 : 0);
         return result;
     }
 
@@ -102,12 +137,19 @@ public class Node {
             return false;
         if (port != other.port)
             return false;
+        if (rack == null) {
+            if (other.host != null)
+                return false;
+        } else if (!rack.equals(other.rack))
+            return false;
+        if (isController != other.isController)
+            return false;
         return true;
     }
 
     @Override
     public String toString() {
-        return host + ":" + port + " (id: " + idString + ")";
+        return host + ":" + port + " (id: " + idString + " rack: " + rack + " isController: " + isController + ")";
     }
 
 }
