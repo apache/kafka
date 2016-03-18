@@ -229,7 +229,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case (topicAndPartition, metaAndError) => {
           val topicDirs = new ZKGroupTopicDirs(offsetCommitRequest.groupId, topicAndPartition.topic)
           try {
-            if (metadataCache.hasTopicMetadata(topicAndPartition.topic)) {
+            if (!metadataCache.hasTopicMetadata(topicAndPartition.topic)) {
               (topicAndPartition, ErrorMapping.UnknownTopicOrPartitionCode)
             } else if (metaAndError.metadata != null && metaAndError.metadata.length > config.offsetMetadataMaxSize) {
               (topicAndPartition, ErrorMapping.OffsetMetadataTooLargeCode)
