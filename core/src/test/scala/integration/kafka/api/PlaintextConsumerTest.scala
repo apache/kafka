@@ -224,8 +224,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val callback = new CountConsumerCommitCallback
     this.consumers(0).commitAsync(Map((tp, asyncMetadata)).asJava, callback)
     awaitCommitCallback(this.consumers(0), callback)
-
     assertEquals(asyncMetadata, this.consumers(0).committed(tp))
+
+    // handle null metadata
+    val nullMetadata = new OffsetAndMetadata(5, null)
+    this.consumers(0).commitSync(Map((tp, nullMetadata)).asJava)
+    assertEquals(nullMetadata, this.consumers(0).committed(tp))
   }
 
   @Test
