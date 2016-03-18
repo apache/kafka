@@ -22,7 +22,6 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -281,9 +280,8 @@ public class Selector implements Selectable {
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
 
         if (readyKeys > 0 || !immediatelyConnectedKeys.isEmpty()) {
-            Set<SelectionKey> selectedKeys = this.nioSelector.selectedKeys();
-            for (Iterator<SelectionKey> iter : Arrays.asList(selectedKeys.iterator(), immediatelyConnectedKeys.iterator()))
-                pollSelectionKeys(iter);
+            pollSelectionKeys(this.nioSelector.selectedKeys());
+            pollSelectionKeys(immediatelyConnectedKeys);
         }
 
         addToCompletedReceives();
@@ -293,7 +291,8 @@ public class Selector implements Selectable {
         maybeCloseOldestConnection();
     }
 
-    private void pollSelectionKeys(Iterator<SelectionKey> iterator) {
+    private void pollSelectionKeys(Iterable<SelectionKey> selectionKeys) {
+        Iterator<SelectionKey> iterator = selectionKeys.iterator();
         while (iterator.hasNext()) {
             SelectionKey key = iterator.next();
             iterator.remove();
