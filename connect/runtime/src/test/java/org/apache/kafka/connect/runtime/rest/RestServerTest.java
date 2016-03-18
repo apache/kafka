@@ -70,7 +70,16 @@ public class RestServerTest {
     }
 
     @Test
-    public void testCORS() {
+    public void testCORSEnabled() {
+        checkCORSRequest("*", "http://bar.com", "http://bar.com");
+    }
+
+    @Test
+    public void testCORSDisabled() {
+        checkCORSRequest("", "http://bar.com", null);
+    }
+
+    public void checkCORSRequest(String corsDomain, String origin, String expectedHeader) {
         // To be able to set the Origin, we need to toggle this flag
         System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
 
@@ -86,17 +95,18 @@ public class RestServerTest {
         PowerMock.replayAll();
 
         Map<String, String> workerProps = baseWorkerProps();
-        workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, "*");
+        workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, corsDomain);
         WorkerConfig workerConfig = new StandaloneConfig(workerProps);
         server = new RestServer(workerConfig);
         server.start(herder);
 
         Response response = request("/connectors")
-                .header("Referer", "http://bar.com/page")
-                .header("Origin", "http://bar.com")
+                .header("Referer", origin + "/page")
+                .header("Origin", origin)
                 .get();
         assertEquals(200, response.getStatus());
-        assertEquals("http://bar.com", response.getHeaderString("Access-Control-Allow-Origin"));
+
+        assertEquals(expectedHeader, response.getHeaderString("Access-Control-Allow-Origin"));
         PowerMock.verifyAll();
     }
 
