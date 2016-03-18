@@ -200,14 +200,14 @@ public class RequestResponseTest {
             OffsetCommitRequest request = requestEntry.getValue();
 
             // write the raw struct which won't override the null with the default
-            ByteBuffer buffer = ByteBuffer.allocate(request.struct.sizeOfRaw());
-            request.struct.writeTo(buffer);
+            ByteBuffer buffer = ByteBuffer.allocate(request.sizeOf());
+            request.writeTo(buffer);
 
             buffer.rewind();
 
             // null is converted to "" when parsed
             OffsetCommitRequest deserialized = OffsetCommitRequest.parse(buffer, version);
-            assertEquals("", deserialized.offsetData().get(tp).metadata);
+            assertEquals(null, deserialized.offsetData().get(tp).metadata);
         }
     }
 

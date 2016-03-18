@@ -41,24 +41,16 @@ public class Schema extends Type {
         }
     }
 
-    public void writeRaw(ByteBuffer buffer, Object o) {
-        write(buffer, o, true);
-    }
-
     /**
      * Write a struct to the buffer
      */
     @Override
     public void write(ByteBuffer buffer, Object o) {
-        write(buffer, o, false);
-    }
-
-    private void write(ByteBuffer buffer, Object o, boolean raw) {
         Struct r = (Struct) o;
         for (int i = 0; i < fields.length; i++) {
             Field f = fields[i];
             try {
-                Object value = f.type().validate(raw ? r.getRaw(f) : r.get(f));
+                Object value = f.type().validate(r.get(f));
                 f.type.write(buffer, value);
             } catch (Exception e) {
                 throw new SchemaException("Error writing field '" + f.name +
@@ -67,7 +59,6 @@ public class Schema extends Type {
             }
         }
     }
-
 
     /**
      * Read a struct from the buffer
@@ -92,21 +83,10 @@ public class Schema extends Type {
      */
     @Override
     public int sizeOf(Object o) {
-        return sizeOf(o, false);
-    }
-
-    /**
-     * Size of the raw object which excludes default values.
-     */
-    public int sizeOfRaw(Object o) {
-        return sizeOf(o, true);
-    }
-
-    private int sizeOf(Object o, boolean raw) {
         int size = 0;
         Struct r = (Struct) o;
         for (int i = 0; i < fields.length; i++)
-            size += fields[i].type.sizeOf(raw ? r.getRaw(fields[i]) : r.get(fields[i]));
+            size += fields[i].type.sizeOf(r.get(fields[i]));
         return size;
     }
 
