@@ -33,7 +33,7 @@ public final class StateSerdes<K, V> {
         return new StateSerdes<>(topic, Serdes.serdeFrom(keyClass), Serdes.serdeFrom(valueClass));
     }
 
-    private final String topic;
+    private final String stateName;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
 
@@ -43,15 +43,15 @@ public final class StateSerdes<K, V> {
      * is provided to bind this serde factory to, so that future calls for serialize / deserialize do not
      * need to provide the topic name any more.
      *
-     * @param topic the name of the topic
-     * @param keySerde the serde for keys; cannot be null
-     * @param valueSerde the serde for values; cannot be null
+     * @param stateName     the name of the state
+     * @param keySerde      the serde for keys; cannot be null
+     * @param valueSerde    the serde for values; cannot be null
      */
     @SuppressWarnings("unchecked")
-    public StateSerdes(String topic,
+    public StateSerdes(String stateName,
                        Serde<K> keySerde,
                        Serde<V> valueSerde) {
-        this.topic = topic;
+        this.stateName = stateName;
 
         if (keySerde == null)
             throw new IllegalArgumentException("key serde cannot be null");
@@ -87,22 +87,22 @@ public final class StateSerdes<K, V> {
     }
 
     public String topic() {
-        return topic;
+        return stateName;
     }
 
     public K keyFrom(byte[] rawKey) {
-        return keySerde.deserializer().deserialize(topic, rawKey);
+        return keySerde.deserializer().deserialize(stateName, rawKey);
     }
 
     public V valueFrom(byte[] rawValue) {
-        return valueSerde.deserializer().deserialize(topic, rawValue);
+        return valueSerde.deserializer().deserialize(stateName, rawValue);
     }
 
     public byte[] rawKey(K key) {
-        return keySerde.serializer().serialize(topic, key);
+        return keySerde.serializer().serialize(stateName, key);
     }
 
     public byte[] rawValue(V value) {
-        return valueSerde.serializer().serialize(topic, value);
+        return valueSerde.serializer().serialize(stateName, value);
     }
 }

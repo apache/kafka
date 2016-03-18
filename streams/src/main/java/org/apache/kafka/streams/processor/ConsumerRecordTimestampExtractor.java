@@ -15,14 +15,25 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.processor.TimestampExtractor;
 
-public class WallclockTimestampExtractor implements TimestampExtractor {
+/**
+ * Retrieves built-in timestamps from Kafka messages (introduced in KIP-32: Add timestamps to Kafka message).
+ *
+ * Here, "built-in" refers to the fact that compatible Kafka producer clients automatically and
+ * transparently embed such timestamps into messages they sent to Kafka, which can then be retrieved
+ * via this timestamp extractor.
+ *
+ * If <i>CreateTime</i> is used to define the built-in timestamps, using this extractor effectively provide
+ * <i>event-time</i> semantics.
+ *
+ * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
+ */
+public class ConsumerRecordTimestampExtractor implements TimestampExtractor {
     @Override
     public long extract(ConsumerRecord<Object, Object> record) {
-        return System.currentTimeMillis();
+        return record.timestamp();
     }
 }

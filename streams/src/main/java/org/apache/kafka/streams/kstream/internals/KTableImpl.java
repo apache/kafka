@@ -131,27 +131,27 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public KTable<K, V> through(String topic,
-                                Serde<K> keySerde,
-                                Serde<V> valSerde) {
-        to(topic, keySerde, valSerde);
+    public KTable<K, V> through(Serde<K> keySerde,
+                                Serde<V> valSerde,
+                                String topic) {
+        to(keySerde, valSerde, topic);
 
         return topology.table(keySerde, valSerde, topic);
     }
 
     @Override
     public KTable<K, V> through(String topic) {
-        return through(topic, null, null);
+        return through(null, null, topic);
     }
 
     @Override
     public void to(String topic) {
-        to(topic, null, null);
+        to(null, null, topic);
     }
 
     @Override
-    public void to(String topic, Serde<K> keySerde, Serde<V> valSerde) {
-        this.toStream().to(topic, keySerde, valSerde);
+    public void to(Serde<K> keySerde, Serde<V> valSerde, String topic) {
+        this.toStream().to(keySerde, valSerde, topic);
     }
 
     @Override
@@ -239,8 +239,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public <K1, V1, T> KTable<K1, T> aggregate(Initializer<T> initializer,
-                                               Aggregator<K1, V1, T> add,
-                                               Aggregator<K1, V1, T> remove,
+                                               Aggregator<K1, V1, T> adder,
+                                               Aggregator<K1, V1, T> subtractor,
                                                KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
                                                Serde<K1> keySerde,
                                                Serde<V1> valueSerde,
@@ -259,7 +259,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
 
-        ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableAggregate<>(name, initializer, add, remove);
+        ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableAggregate<>(name, initializer, adder, subtractor);
 
         StateStoreSupplier aggregateStore = Stores.create(name)
                 .withKeys(keySerde)
@@ -284,6 +284,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(topology, aggregateName, aggregateSupplier, Collections.singleton(sourceName));
+    }
+
+    @Override
+    public <K1, V1, T> KTable<K1, T> aggregate(Initializer<T> initializer,
+                                               Aggregator<K1, V1, T> adder,
+                                               Aggregator<K1, V1, T> substractor,
+                                               KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
+                                               String name) {
+
+        return aggregate(initializer, adder, substractor, selector, null, null, null, name);
     }
 
     @Override
@@ -318,8 +328,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1, V1> KTable<K1, V1> reduce(Reducer<V1> addReducer,
-                                          Reducer<V1> removeReducer,
+    public <K1> KTable<K1, Long> count(final KeyValueMapper<K, V, K1> selector, String name) {
+        return count(selector, null, null, name);
+    }
+
+    @Override
+    public <K1, V1> KTable<K1, V1> reduce(Reducer<V1> adder,
+                                          Reducer<V1> subtractor,
                                           KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
                                           Serde<K1> keySerde,
                                           Serde<V1> valueSerde,
@@ -337,7 +352,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
 
-        ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableReduce<>(name, addReducer, removeReducer);
+        ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableReduce<>(name, adder, subtractor);
 
         StateStoreSupplier aggregateStore = Stores.create(name)
                 .withKeys(keySerde)
@@ -362,6 +377,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(topology, reduceName, aggregateSupplier, Collections.singleton(sourceName));
+    }
+
+    @Override
+    public <K1, V1> KTable<K1, V1> reduce(Reducer<V1> adder,
+                                          Reducer<V1> subtractor,
+                                          KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
+                                          String name) {
+
+        return reduce(adder, subtractor, selector, null, null, name);
     }
 
     @SuppressWarnings("unchecked")

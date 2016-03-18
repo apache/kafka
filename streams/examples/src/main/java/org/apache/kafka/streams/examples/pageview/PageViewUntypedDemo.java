@@ -116,7 +116,7 @@ public class PageViewUntypedDemo {
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-untyped-output", jsonSerde, jsonSerde);
+        regionCount.to(jsonSerde, jsonSerde, "streams-pageviewstats-untyped-output");
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
