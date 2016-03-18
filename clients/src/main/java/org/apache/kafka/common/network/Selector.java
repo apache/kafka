@@ -22,8 +22,10 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -83,6 +85,7 @@ public class Selector implements Selectable {
     private final List<Send> completedSends;
     private final List<NetworkReceive> completedReceives;
     private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
+    private final Set<SelectionKey> immediatelyConnectedKeys;
     private final List<String> disconnected;
     private final List<String> connected;
     private final List<String> failedSends;
@@ -117,6 +120,7 @@ public class Selector implements Selectable {
         this.completedSends = new ArrayList<>();
         this.completedReceives = new ArrayList<>();
         this.stagedReceives = new HashMap<>();
+        this.immediatelyConnectedKeys = new HashSet<>();
         this.connected = new ArrayList<>();
         this.disconnected = new ArrayList<>();
         this.failedSends = new ArrayList<>();
@@ -160,8 +164,9 @@ public class Selector implements Selectable {
         if (receiveBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
             socket.setReceiveBufferSize(receiveBufferSize);
         socket.setTcpNoDelay(true);
+        boolean connected;
         try {
-            socketChannel.connect(address);
+            connected = socketChannel.connect(address);
         } catch (UnresolvedAddressException e) {
             socketChannel.close();
             throw new IOException("Can't resolve address: " + address, e);
@@ -173,6 +178,13 @@ public class Selector implements Selectable {
         KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
         key.attach(channel);
         this.channels.put(id, channel);
+
+        if (connected) {
+            // OP_CONNECT won't trigger for immediately connected channels
+            log.debug("Immediately connected to node {}", channel.id());
+            immediatelyConnectedKeys.add(key);
+            key.interestOps(0);
+        }
     }
 
     /**
@@ -255,9 +267,12 @@ public class Selector implements Selectable {
     public void poll(long timeout) throws IOException {
         if (timeout < 0)
             throw new IllegalArgumentException("timeout should be >= 0");
+
         clear();
-        if (hasStagedReceives())
+
+        if (hasStagedReceives() || !immediatelyConnectedKeys.isEmpty())
             timeout = 0;
+
         /* check ready keys */
         long startSelect = time.nanoseconds();
         int readyKeys = select(timeout);
@@ -265,61 +280,10 @@ public class Selector implements Selectable {
         currentTimeNanos = endSelect;
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
 
-        if (readyKeys > 0) {
-            Set<SelectionKey> keys = this.nioSelector.selectedKeys();
-            Iterator<SelectionKey> iter = keys.iterator();
-            while (iter.hasNext()) {
-                SelectionKey key = iter.next();
-                iter.remove();
-                KafkaChannel channel = channel(key);
-
-                // register all per-connection metrics at once
-                sensors.maybeRegisterConnectionMetrics(channel.id());
-                lruConnections.put(channel.id(), currentTimeNanos);
-
-                try {
-                    /* complete any connections that have finished their handshake */
-                    if (key.isConnectable()) {
-                        channel.finishConnect();
-                        this.connected.add(channel.id());
-                        this.sensors.connectionCreated.record();
-                    }
-
-                    /* if channel is not ready finish prepare */
-                    if (channel.isConnected() && !channel.ready())
-                        channel.prepare();
-
-                    /* if channel is ready read from any connections that have readable data */
-                    if (channel.ready() && key.isReadable() && !hasStagedReceive(channel)) {
-                        NetworkReceive networkReceive;
-                        while ((networkReceive = channel.read()) != null)
-                            addToStagedReceives(channel, networkReceive);
-                    }
-
-                    /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
-                    if (channel.ready() && key.isWritable()) {
-                        Send send = channel.write();
-                        if (send != null) {
-                            this.completedSends.add(send);
-                            this.sensors.recordBytesSent(channel.id(), send.size());
-                        }
-                    }
-
-                    /* cancel any defunct sockets */
-                    if (!key.isValid()) {
-                        close(channel);
-                        this.disconnected.add(channel.id());
-                    }
-                } catch (Exception e) {
-                    String desc = channel.socketDescription();
-                    if (e instanceof IOException)
-                        log.debug("Connection with {} disconnected", desc, e);
-                    else
-                        log.warn("Unexpected error from {}; closing connection", desc, e);
-                    close(channel);
-                    this.disconnected.add(channel.id());
-                }
-            }
+        if (readyKeys > 0 || !immediatelyConnectedKeys.isEmpty()) {
+            Set<SelectionKey> selectedKeys = this.nioSelector.selectedKeys();
+            for (Iterator<SelectionKey> iter : Arrays.asList(selectedKeys.iterator(), immediatelyConnectedKeys.iterator()))
+                pollSelectionKeys(iter);
         }
 
         addToCompletedReceives();
@@ -329,7 +293,64 @@ public class Selector implements Selectable {
         maybeCloseOldestConnection();
     }
 
+    private void pollSelectionKeys(Iterator<SelectionKey> iterator) {
+        while (iterator.hasNext()) {
+            SelectionKey key = iterator.next();
+            iterator.remove();
+            KafkaChannel channel = channel(key);
 
+            // register all per-connection metrics at once
+            sensors.maybeRegisterConnectionMetrics(channel.id());
+            lruConnections.put(channel.id(), currentTimeNanos);
+
+            try {
+
+                /* complete any connections that have finished their handshake */
+                if (key.isConnectable()) {
+                    if (channel.finishConnect()) {
+                        this.connected.add(channel.id());
+                        this.sensors.connectionCreated.record();
+                    } else
+                        continue;
+                }
+
+                /* if channel is not ready finish prepare */
+                if (channel.isConnected() && !channel.ready())
+                    channel.prepare();
+
+                /* if channel is ready read from any connections that have readable data */
+                if (channel.ready() && key.isReadable() && !hasStagedReceive(channel)) {
+                    NetworkReceive networkReceive;
+                    while ((networkReceive = channel.read()) != null)
+                        addToStagedReceives(channel, networkReceive);
+                }
+
+                /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
+                if (channel.ready() && key.isWritable()) {
+                    Send send = channel.write();
+                    if (send != null) {
+                        this.completedSends.add(send);
+                        this.sensors.recordBytesSent(channel.id(), send.size());
+                    }
+                }
+
+                /* cancel any defunct sockets */
+                if (!key.isValid()) {
+                    close(channel);
+                    this.disconnected.add(channel.id());
+                }
+
+            } catch (Exception e) {
+                String desc = channel.socketDescription();
+                if (e instanceof IOException)
+                    log.debug("Connection with {} disconnected", desc, e);
+                else
+                    log.warn("Unexpected error from {}; closing connection", desc, e);
+                close(channel);
+                this.disconnected.add(channel.id());
+            }
+        }
+    }
 
     @Override
     public List<Send> completedSends() {
