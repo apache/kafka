@@ -26,8 +26,10 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
  * transparently embed such timestamps into messages they sent to Kafka, which can then be retrieved
  * via this timestamp extractor.
  *
- * Depending on whether <i>CreateTime</i> or <i>LogAppendTime</i> are used to define the built-in timestamps,
- * using this extractor effectively provide event-time or processing-time semantics
+ * If <i>CreateTime</i> is used to define the built-in timestamps, using this extractor effectively provide
+ * <i>event-time</i> semantics.
+ *
+ * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
  */
 public class ConsumerRecordTimestampExtractor implements TimestampExtractor {
     @Override
