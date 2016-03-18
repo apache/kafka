@@ -41,7 +41,6 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -125,6 +124,7 @@ public class Selector implements Selectable {
         this.channelBuilder = channelBuilder;
         // initial capacity and load factor are default, we set them explicitly because we want to set accessOrder = true
         this.lruConnections = new LinkedHashMap<>(16, .75F, true);
+        currentTimeNanos = time.nanoseconds();
         nextIdleCloseCheckTime = currentTimeNanos + connectionsMaxIdleNanos;
         this.metricsPerConnection = metricsPerConnection;
     }
@@ -205,17 +205,15 @@ public class Selector implements Selectable {
             close(id);
         try {
             this.nioSelector.close();
-        } catch (IOException e) {
+        } catch (IOException | SecurityException e) {
             log.error("Exception closing nioSelector:", e);
-        } catch (SecurityException se) {
-            log.error("Exception closing nioSelector:", se);
         }
         sensors.close();
         channelBuilder.close();
     }
 
     /**
-     * Queue the given request for sending in the subsequent {@poll(long)} calls
+     * Queue the given request for sending in the subsequent {@link #poll(long)} calls
      * @param send The request to send
      */
     public void send(Send send) {
@@ -234,7 +232,7 @@ public class Selector implements Selectable {
      *
      * When this call is completed the user can check for completed sends, receives, connections or disconnects using
      * {@link #completedSends()}, {@link #completedReceives()}, {@link #connected()}, {@link #disconnected()}. These
-     * lists will be cleared at the beginning of each {@link #poll(long)} call and repopulated by the call if there is
+     * lists will be cleared at the beginning of each `poll` call and repopulated by the call if there is
      * any completed I/O.
      *
      * In the "Plaintext" setting, we are using socketChannel to read & write to the network. But for the "SSL" setting,
@@ -467,9 +465,7 @@ public class Selector implements Selectable {
     @Override
     public boolean isChannelReady(String id) {
         KafkaChannel channel = this.channels.get(id);
-        if (channel == null)
-            return false;
-        return channel.ready();
+        return channel != null && channel.ready();
     }
 
     private KafkaChannel channelOrFail(String id) {
