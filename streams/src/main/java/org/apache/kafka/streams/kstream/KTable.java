@@ -31,61 +31,58 @@ import org.apache.kafka.streams.KeyValue;
 public interface KTable<K, V> {
 
     /**
-     * Creates a new instance of KTable consists of all elements of this stream which satisfy a predicate
+     * Create a new instance of {@link KTable} consists of all elements of this stream which satisfy a predicate.
      *
-     * @param predicate the instance of Predicate
-     * @return the instance of KTable with only those elements that satisfy the predicate
+     * @param predicate     the instance of {@link Predicate}
      */
     KTable<K, V> filter(Predicate<K, V> predicate);
 
     /**
-     * Creates a new instance of KTable consists all elements of this stream which do not satisfy a predicate
+     * Create a new instance of {@link KTable} consists all elements of this stream which do not satisfy a predicate
      *
-     * @param predicate the instance of Predicate
-     * @return the instance of KTable with only those elements that do not satisfy the predicate
+     * @param predicate     the instance of {@link Predicate}
      */
     KTable<K, V> filterOut(Predicate<K, V> predicate);
 
     /**
-     * Creates a new instance of KTable by transforming each value in this stream into a different value in the new stream.
+     * Create a new instance of {@link KTable} by transforming each value in this stream into a different value in the new stream.
      *
-     * @param mapper the instance of ValueMapper
-     * @param <V1>   the value type of the new stream
-     * @return the instance of KTable
+     * @param mapper        the instance of {@link ValueMapper}
+     * @param <V1>          the value type of the new stream
      */
     <V1> KTable<K, V1> mapValues(ValueMapper<V, V1> mapper);
 
     /**
-     * Sends key-value to a topic, also creates a new instance of KTable from the topic.
-     * This is equivalent to calling to(topic) and table(topic).
+     * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic
+     * using default serializers and deserializers.
+     * This is equivalent to calling {@link this#to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(String)}.
      *
-     * @param topic           the topic name
-     * @return the instance of KTable that consumes the given topic
+     * @param topic         the topic name
      */
     KTable<K, V> through(String topic);
 
     /**
-     * Sends key-value to a topic, also creates a new instance of KTable from the topic.
-     * This is equivalent to calling to(topic) and table(topic).
+     * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic.
+     * This is equivalent to calling {@link this#to(Serde, Serde, String)} and
+     * {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(Serde, Serde, String)}.
      *
      * @param keySerde  key serde used to send key-value pairs,
      *                  if not specified the default key serde defined in the configuration will be used
      * @param valSerde  value serde used to send key-value pairs,
      *                  if not specified the default value serde defined in the configuration will be used
      * @param topic     the topic name
-     * @return the new stream that consumes the given topic
      */
     KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic);
 
     /**
-     * Sends key-value to a topic using default serializers specified in the config.
+     * Materialize this stream to a topic using default serializers specified in the config.
      *
      * @param topic         the topic name
      */
     void to(String topic);
 
     /**
-     * Sends key-value to a topic.
+     * Materialize this stream to a topic.
      *
      * @param keySerde  key serde used to send key-value pairs,
      *                  if not specified the default serde defined in the configs will be used
@@ -96,55 +93,53 @@ public interface KTable<K, V> {
     void to(Serde<K> keySerde, Serde<V> valSerde, String topic);
 
     /**
-     * Creates a new instance of KStream from this KTable
-     *
-     * @return the instance of KStream
+     * Convert this stream to a new instance of {@link KStream}.
      */
     KStream<K, V> toStream();
 
     /**
-     * Combines values of this KTable with another KTable using Inner Join.
+     * Combine values of this stream with another {@link KTable} stream using Inner Join.
      *
-     * @param other the instance of KTable joined with this stream
-     * @param joiner ValueJoiner
-     * @param <V1>   the value type of the other stream
-     * @param <R>   the value type of the new stream
-     * @return the instance of KTable
+     * @param other         the instance of {@link KTable} joined with this stream
+     * @param joiner        the instance of {@link ValueJoiner}
+     * @param <V1>          the value type of the other stream
+     * @param <R>           the value type of the new stream
      */
     <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
-     * Combines values of this KTable with another KTable using Outer Join.
+     * Combine values of this stream with another {@link KTable} stream using Outer Join.
      *
-     * @param other the instance of KTable joined with this stream
-     * @param joiner ValueJoiner
-     * @param <V1>   the value type of the other stream
-     * @param <R>   the value type of the new stream
-     * @return the instance of KTable
+     * @param other         the instance of {@link KTable} joined with this stream
+     * @param joiner        the instance of {@link ValueJoiner}
+     * @param <V1>          the value type of the other stream
+     * @param <R>           the value type of the new stream
      */
     <V1, R> KTable<K, R> outerJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
-     * Combines values of this KTable with another KTable using Left Join.
+     * Combine values of this stream with another {@link KTable} stream using Left Join.
      *
-     * @param other the instance of KTable joined with this stream
-     * @param joiner ValueJoiner
-     * @param <V1>   the value type of the other stream
-     * @param <R>   the value type of the new stream
-     * @return the instance of KTable
+     * @param other         the instance of {@link KTable} joined with this stream
+     * @param joiner        the instance of {@link ValueJoiner}
+     * @param <V1>          the value type of the other stream
+     * @param <R>           the value type of the new stream
      */
     <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
-     * Reduce values of this table by the selected key.
+     * Combine updating values of this stream by the selected key into a new instance of {@link KTable}.
      *
-     * @param adder the class of Reducer
-     * @param subtractor the class of Reducer
-     * @param selector the KeyValue mapper that select the aggregate key
-     * @param name the name of the resulted table
-     * @param <K1>   the key type of the aggregated table
-     * @param <V1>   the value type of the aggregated table
-     * @return the instance of KTable
+     * @param adder             the instance of {@link Reducer} for addition
+     * @param subtractor        the instance of {@link Reducer} for subtraction
+     * @param selector          the instance of {@link KeyValueMapper} that select the aggregate key
+     * @param keySerde          key serdes for materializing the aggregated table,
+     *                          if not specified the default serdes defined in the configs will be used
+     * @param valueSerde        value serdes for materializing the aggregated table,
+     *                          if not specified the default serdes defined in the configs will be used
+     * @param name              the name of the resulted {@link KTable}
+     * @param <K1>              the key type of the aggregated {@link KTable}
+     * @param <V1>              the value type of the aggregated {@link KTable}
      */
     <K1, V1> KTable<K1, V1> reduce(Reducer<V1> adder,
                                    Reducer<V1> subtractor,
@@ -154,15 +149,15 @@ public interface KTable<K, V> {
                                    String name);
 
     /**
-     * Reduce values of this table by the selected key.
+     * Combine updating values of this stream by the selected key into a new instance of {@link KTable}
+     * using default serializers and deserializers.
      *
      * @param adder         the instance of {@link Reducer} for addition
      * @param subtractor    the instance of {@link Reducer} for subtraction
      * @param selector      the instance of {@link KeyValueMapper} that select the aggregate key
-     * @param name          the name of the resulted table
-     * @param <K1>          the key type of the aggregated table
-     * @param <V1>          the value type of the aggregated table
-     * @return              the instance of KTable
+     * @param name          the name of the resulted {@link KTable}
+     * @param <K1>          the key type of the aggregated {@link KTable}
+     * @param <V1>          the value type of the aggregated {@link KTable}
      */
     <K1, V1> KTable<K1, V1> reduce(Reducer<V1> adder,
                                    Reducer<V1> subtractor,
@@ -170,20 +165,26 @@ public interface KTable<K, V> {
                                    String name);
 
     /**
-     * Aggregate values of this table by the selected key.
+     * Aggregate updating values of this stream by the selected key into a new instance of {@link KTable}.
      *
-     * @param initializer the class of Initializer
-     * @param add the class of Aggregator
-     * @param remove the class of Aggregator
-     * @param selector the KeyValue mapper that select the aggregate key
-     * @param name the name of the resulted table
-     * @param <K1>   the key type of the aggregated table
-     * @param <V1>   the value type of the aggregated table
-     * @return the instance of KTable
+     * @param initializer   the instance of {@link Initializer}
+     * @param adder         the instance of {@link Aggregator} for addition
+     * @param substractor   the instance of {@link Aggregator} for subtraction
+     * @param selector      the instance of {@link KeyValueMapper} that select the aggregate key
+     * @param keySerde      key serdes for materializing this stream and the aggregated table,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param valueSerde    value serdes for materializing this stream,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param aggValueSerde value serdes for materializing the aggregated table,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param name          the name of the resulted table
+     * @param <K1>          the key type of this {@link KTable}
+     * @param <V1>          the value type of this {@link KTable}
+     * @param <T>           the value type of the aggregated {@link KTable}
      */
     <K1, V1, T> KTable<K1, T> aggregate(Initializer<T> initializer,
-                                        Aggregator<K1, V1, T> add,
-                                        Aggregator<K1, V1, T> remove,
+                                        Aggregator<K1, V1, T> adder,
+                                        Aggregator<K1, V1, T> substractor,
                                         KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
                                         Serde<K1> keySerde,
                                         Serde<V1> valueSerde,
@@ -191,16 +192,17 @@ public interface KTable<K, V> {
                                         String name);
 
     /**
-     * Aggregate values of this table by the selected key.
+     * Aggregate updating values of this stream by the selected key into a new instance of {@link KTable}
+     * using default serializers and deserializers.
      *
      * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
      * @param substractor   the instance of {@link Aggregator} for subtraction
      * @param selector      the instance of {@link KeyValueMapper} that select the aggregate key
-     * @param name          the name of the resulted table
-     * @param <K1>          the key type of the aggregated table
-     * @param <V1>          the value type of the aggregated table
-     * @return              the instance of aggregated {@link KTable}
+     * @param name          the name of the resulted {@link KTable}
+     * @param <K1>          the key type of the aggregated {@link KTable}
+     * @param <V1>          the value type of the aggregated {@link KTable}
+     * @param <T>           the value type of the aggregated {@link KTable}
      */
     <K1, V1, T> KTable<K1, T> aggregate(Initializer<T> initializer,
                                         Aggregator<K1, V1, T> adder,
@@ -209,12 +211,15 @@ public interface KTable<K, V> {
                                         String name);
 
     /**
-     * Count number of records of this table by the selected key.
+     * Count number of records of this stream by the selected key into a new instance of {@link KTable}.
      *
-     * @param selector the KeyValue mapper that select the aggregate key
-     * @param name the name of the resulted table
-     * @param <K1>   the key type of the aggregated table
-     * @return the instance of KTable
+     * @param selector      the instance of {@link KeyValueMapper} that select the aggregate key
+     * @param keySerde      key serdes for materializing this stream,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param valueSerde    value serdes for materializing this stream,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param name          the name of the resulted table
+     * @param <K1>          the key type of the aggregated {@link KTable}
      */
     <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector,
                                 Serde<K1> keySerde,
@@ -222,12 +227,12 @@ public interface KTable<K, V> {
                                 String name);
 
     /**
-     * Count number of records of this table by the selected key.
+     * Count number of records of this stream by the selected key into a new instance of {@link KTable}
+     * using default serializers and deserializers.
      *
      * @param selector      the instance of {@link KeyValueMapper} that select the aggregate key
-     * @param name          the name of the resulted table
-     * @param <K1>          the key type of the aggregated table
-     * @return              the instance of aggregated {@link KTable}
+     * @param name          the name of the resulted {@link KTable}
+     * @param <K1>          the key type of the aggregated {@link KTable}
      */
     <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector, String name);
 }
