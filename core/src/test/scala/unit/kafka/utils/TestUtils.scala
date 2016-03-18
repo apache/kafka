@@ -42,14 +42,15 @@ import kafka.consumer.{ConsumerConfig, ConsumerTimeoutException, KafkaStream}
 import kafka.serializer.{DefaultEncoder, Encoder, StringEncoder}
 import kafka.common.TopicAndPartition
 import kafka.admin.AdminUtils
-import kafka.producer.ProducerConfig
 import kafka.log._
 import kafka.utils.ZkUtils._
 import org.junit.Assert._
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.network.Mode
+import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
 
 import scala.collection.Map
 import scala.collection.JavaConversions._
@@ -342,7 +343,7 @@ object TestUtils extends Logging {
 
     // check if the actual iterator was longer
     if (actual.hasNext) {
-      var length2 = length;
+      var length2 = length
       while (actual.hasNext) {
         actual.next
         length2 += 1
@@ -434,7 +435,7 @@ object TestUtils extends Logging {
     props.put("serializer.class", encoder)
     props.put("key.serializer.class", keyEncoder)
     props.put("partitioner.class", partitioner)
-    new Producer[K, V](new ProducerConfig(props))
+    new Producer[K, V](new kafka.producer.ProducerConfig(props))
   }
 
   private def securityConfigs(mode: Mode,
@@ -454,16 +455,18 @@ object TestUtils extends Logging {
   /**
    * Create a (new) producer with a few pre-configured properties.
    */
-  def createNewProducer(brokerList: String,
+  def createNewProducer[K, V](brokerList: String,
                         acks: Int = -1,
                         maxBlockMs: Long = 60 * 1000L,
                         bufferSize: Long = 1024L * 1024L,
                         retries: Int = 0,
                         lingerMs: Long = 0,
+                        requestTimeoutMs: Long = 10 * 1024L,
                         securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                         trustStoreFile: Option[File] = None,
-                        props: Option[Properties] = None): KafkaProducer[Array[Byte], Array[Byte]] = {
-    import org.apache.kafka.clients.producer.ProducerConfig
+                        keySerializer: Serializer[K] = new ByteArraySerializer,
+                        valueSerializer: Serializer[V] = new ByteArraySerializer,
+                        props: Option[Properties] = None): KafkaProducer[K, V] = {
 
     val producerProps = props.getOrElse(new Properties)
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
@@ -471,15 +474,15 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
     producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
     producerProps.put(ProducerConfig.RETRIES_CONFIG, retries.toString)
+    producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString)
 
     /* Only use these if not already set */
     val defaultProps = Map(
       ProducerConfig.RETRY_BACKOFF_MS_CONFIG -> "100",
       ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG -> "200",
-      ProducerConfig.LINGER_MS_CONFIG -> lingerMs.toString,
-      ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArraySerializer",
-      ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArraySerializer"
+      ProducerConfig.LINGER_MS_CONFIG -> lingerMs.toString
     )
+
     defaultProps.foreach { case (key, value) =>
       if (!producerProps.containsKey(key)) producerProps.put(key, value)
     }
@@ -490,10 +493,10 @@ object TestUtils extends Logging {
      * invoke it before this call in IntegrationTestHarness, otherwise the
      * SSL client auth fails.
      */
-    if(!producerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
+    if (!producerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
       producerProps.putAll(producerSecurityConfigs(securityProtocol, trustStoreFile))
 
-    new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
+    new KafkaProducer[K, V](producerProps, keySerializer, valueSerializer)
   }
 
   private def usesSslTransportLayer(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
@@ -911,7 +914,7 @@ object TestUtils extends Logging {
           partitioner = classOf[FixedValuePartitioner].getName,
           producerProps = props)
 
-      producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)):_*)
+      producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)): _*)
       debug("Sent %d messages for partition [%s,%d]".format(ms.size, topic, partition))
       producer.close()
       ms.toList
@@ -923,21 +926,43 @@ object TestUtils extends Logging {
         keyEncoder = classOf[StringEncoder].getName,
         partitioner = classOf[DefaultPartitioner].getName,
         producerProps = props)
-      producer.send(ms.map(m => new KeyedMessage[String, String](topic, topic, m)):_*)
+      producer.send(ms.map(m => new KeyedMessage[String, String](topic, topic, m)): _*)
       producer.close()
       debug("Sent %d messages for topic [%s]".format(ms.size, topic))
       ms.toList
     }
-
   }
 
-  def sendMessage(servers: Seq[KafkaServer], topic: String, message: String) {
-    val producer: Producer[String, String] =
-      createProducer(TestUtils.getBrokerListStrFromServers(servers),
-        encoder = classOf[StringEncoder].getName(),
-        keyEncoder = classOf[StringEncoder].getName())
+  def produceMessages(servers: Seq[KafkaServer],
+                      topic: String,
+                      numMessages: Int): Seq[String] = {
 
-    producer.send(new KeyedMessage[String, String](topic, topic, message))
+    val producer = createNewProducer(
+      TestUtils.getBrokerListStrFromServers(servers),
+      retries = 5,
+      requestTimeoutMs = 2000
+    )
+
+    val values = (0 until numMessages).map(x => s"test-$x")
+    
+    val futures = values.map { value =>
+      producer.send(new ProducerRecord(topic, null, null, value.getBytes))
+    }
+    futures.foreach(_.get)
+    producer.close()
+
+    debug(s"Sent ${values.size} messages for topic [$topic]")
+
+    values
+  }
+
+  def produceMessage(servers: Seq[KafkaServer], topic: String, message: String) {
+    val producer = createNewProducer(
+      TestUtils.getBrokerListStrFromServers(servers),
+      retries = 5,
+      requestTimeoutMs = 2000
+    )
+    producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
     producer.close()
   }
 
