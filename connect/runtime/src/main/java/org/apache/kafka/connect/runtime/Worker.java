@@ -133,7 +133,7 @@ public class Worker {
         for (Map.Entry<String, WorkerConnector> entry : connectors.entrySet()) {
             WorkerConnector conn = entry.getValue();
             log.warn("Shutting down connector {} uncleanly; herder should have shut down connectors before the" +
-                    "Worker is stopped.", conn);
+                    "Worker is stopped.", entry.getKey());
             conn.shutdown();
         }
 

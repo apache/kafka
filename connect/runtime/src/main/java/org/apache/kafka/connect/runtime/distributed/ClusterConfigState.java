@@ -71,7 +71,7 @@ public class ClusterConfigState {
     }
 
     /**
-     * Check whether a connect has configuration for a connector.
+     * Check whether this snapshot contains configuration for a connector.
      * @param connector name of the connector
      * @return true if this state contains configuration for the connector, false otherwise
      */

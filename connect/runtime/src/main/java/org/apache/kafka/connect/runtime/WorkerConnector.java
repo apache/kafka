@@ -73,6 +73,9 @@ public class WorkerConnector {
         try {
             if (state == State.STARTED)
                 return;
+            else if (state != State.FAILED && state != State.STOPPED)
+                throw new IllegalArgumentException("Cannot start connector in state " + state);
+
             connector.start(config);
             statusListener.onStartup(connName);
             this.state = State.STARTED;
@@ -87,9 +90,10 @@ public class WorkerConnector {
         try {
             if (state == State.STOPPED)
                 return;
-
-            if (state == State.STARTED)
+            else if (state == State.STARTED)
                 connector.stop();
+            else if (state != State.FAILED)
+                throw new IllegalArgumentException("Cannot pause connector in state " + state);
 
             statusListener.onPause(connName);
             this.state = State.STOPPED;
@@ -134,7 +138,9 @@ public class WorkerConnector {
 
     @Override
     public String toString() {
-        return connector.toString();
+        return "WorkerConnector{" +
+                "connName='" + connName + '\'' +
+                ", connector=" + connector +
+                '}';
     }
-
 }

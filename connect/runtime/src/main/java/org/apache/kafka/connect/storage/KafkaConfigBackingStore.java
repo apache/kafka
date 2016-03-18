@@ -210,7 +210,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     private Set<String> inconsistent = new HashSet<>();
     // The most recently read offset. This does not take into account deferred task updates/commits, so we may have
     // outstanding data to be applied.
-    private long offset;
+    private volatile long offset;
 
     // Connector -> Map[ConnectorTaskId -> Configs]
     private final Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();
@@ -492,7 +492,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                                     newConnectorConfig == null ? null : newConnectorConfig.getClass());
                             return;
                         }
-                        log.debug("Updating configuration for connector " + connectorName + " configuation: " + newConnectorConfig);
+                        log.debug("Updating configuration for connector " + connectorName + " configuration: " + newConnectorConfig);
                         connectorConfigs.put(connectorName, (Map<String, String>) newConnectorConfig);
 
                         if (!connectorTargetStates.containsKey(connectorName))
