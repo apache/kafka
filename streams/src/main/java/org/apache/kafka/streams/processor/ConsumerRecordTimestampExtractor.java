@@ -19,6 +19,16 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
+/**
+ * Retrieves built-in timestamps from Kafka messages (introduced in KIP-32: Add timestamps to Kafka message).
+ *
+ * Here, "built-in" refers to the fact that compatible Kafka producer clients automatically and
+ * transparently embed such timestamps into messages they sent to Kafka, which can then be retrieved
+ * via this timestamp extractor.
+ *
+ * Depending on whether <i>CreateTime</i> or <i>LogAppendTime</i> are used to define the built-in timestamps,
+ * using this extractor effectively provide event-time or processing-time semantics
+ */
 public class ConsumerRecordTimestampExtractor implements TimestampExtractor {
     @Override
     public long extract(ConsumerRecord<Object, Object> record) {

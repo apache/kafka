@@ -40,6 +40,10 @@ public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
     private final Serde<V> valueSerde;
     private final Time time;
 
+    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde) {
+        this(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, null);
+    }
+
     public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, Time time) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;

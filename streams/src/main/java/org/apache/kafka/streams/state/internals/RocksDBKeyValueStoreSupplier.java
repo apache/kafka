@@ -37,6 +37,10 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
     private final Serde<V> valueSerde;
     private final Time time;
 
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde) {
+        this(name, keySerde, valueSerde, null);
+    }
+
     public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time) {
         this.name = name;
         this.keySerde = keySerde;

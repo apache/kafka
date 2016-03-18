@@ -60,9 +60,9 @@ public class Stores {
                                     @Override
                                     public StateStoreSupplier build() {
                                         if (capacity < Integer.MAX_VALUE) {
-                                            return new InMemoryLRUCacheStoreSupplier<>(name, capacity, keySerde, valueSerde, null);
+                                            return new InMemoryLRUCacheStoreSupplier<>(name, capacity, keySerde, valueSerde);
                                         }
-                                        return new InMemoryKeyValueStoreSupplier<>(name, keySerde, valueSerde, null);
+                                        return new InMemoryKeyValueStoreSupplier<>(name, keySerde, valueSerde);
                                     }
                                 };
                             }
@@ -86,10 +86,10 @@ public class Stores {
                                     @Override
                                     public StateStoreSupplier build() {
                                         if (numSegments > 0) {
-                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, null);
+                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde);
                                         }
 
-                                        return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde, null);
+                                        return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde);
                                     }
                                 };
                             }

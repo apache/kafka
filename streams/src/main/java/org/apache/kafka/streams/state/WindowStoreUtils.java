@@ -26,9 +26,13 @@ import java.nio.ByteBuffer;
 
 public class WindowStoreUtils {
 
-    public static final int SEQNUM_SIZE = 4;
-    public static final int TIMESTAMP_SIZE = 8;
+    private static final int SEQNUM_SIZE = 4;
+    private static final int TIMESTAMP_SIZE = 8;
+
+    // Inner byte array serde used for segments
     public static final Serde<byte[]> INNER_SERDE = Serdes.ByteArray();
+
+    // Inner byte array state serde used for segments
     public static final StateSerdes<byte[], byte[]> INNER_SERDES = new StateSerdes<>("", INNER_SERDE, INNER_SERDE);
 
     @SuppressWarnings("unchecked")

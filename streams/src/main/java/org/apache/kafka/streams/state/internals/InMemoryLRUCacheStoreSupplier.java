@@ -36,6 +36,10 @@ public class InMemoryLRUCacheStoreSupplier<K, V> implements StateStoreSupplier {
     private final Serde<V> valueSerde;
     private final Time time;
 
+    public InMemoryLRUCacheStoreSupplier(String name, int capacity, Serde<K> keySerde, Serde<V> valueSerde) {
+        this(name, capacity, keySerde, valueSerde, null);
+    }
+
     public InMemoryLRUCacheStoreSupplier(String name, int capacity, Serde<K> keySerde, Serde<V> valueSerde, Time time) {
         this.name = name;
         this.capacity = capacity;
