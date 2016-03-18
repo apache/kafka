@@ -18,9 +18,9 @@
 package org.apache.kafka.streams.kstream;
 
 /**
- * The Initializer interface for creating an initial value for aggregations.
+ * The Initializer interface for creating an initial value in aggregations.
  *
- * @param <T> Aggregate value type.
+ * @param <T> Aggregate value type
  */
 public interface Initializer<T> {
 

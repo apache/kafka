@@ -17,15 +17,17 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 
 /**
- * KTable is an abstraction of a change log stream from a primary-keyed table.
+ * KTable is an abstraction of a <i>changelog stream</i> from a primary-keyed table.
  *
  * @param <K> Type of primary keys
  * @param <V> Type of value changes
  */
+@InterfaceStability.Unstable
 public interface KTable<K, V> {
 
     /**

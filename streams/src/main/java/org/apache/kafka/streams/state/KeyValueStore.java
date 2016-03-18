@@ -19,6 +19,7 @@
 
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStore;
 
@@ -30,6 +31,7 @@ import java.util.List;
  * @param <K> The key type
  * @param <V> The value type
  */
+@InterfaceStability.Unstable
 public interface KeyValueStore<K, V> extends StateStore {
 
     /**
