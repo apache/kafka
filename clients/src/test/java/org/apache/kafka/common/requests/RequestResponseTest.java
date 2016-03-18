@@ -183,34 +183,6 @@ public class RequestResponseTest {
         assertEquals("", deserialized.clientId()); // null is defaulted to ""
     }
 
-    @Test
-    public void testNullMetadataInOffsetCommitRequest() {
-        TopicPartition tp = new TopicPartition("test", 0);
-
-        Map<TopicPartition, OffsetCommitRequest.PartitionData> commitData = new HashMap<>();
-        commitData.put(tp, new OffsetCommitRequest.PartitionData(100, null));
-
-        Map<Integer, OffsetCommitRequest> requests = new HashMap<>();
-        requests.put(0, new OffsetCommitRequest("groupId", commitData));
-        requests.put(1, new OffsetCommitRequest("groupId", 0, "memberId", commitData));
-        requests.put(2, new OffsetCommitRequest("groupId", 0, "memberId", 100000, commitData));
-
-        for (Map.Entry<Integer, OffsetCommitRequest> requestEntry : requests.entrySet()) {
-            Integer version = requestEntry.getKey();
-            OffsetCommitRequest request = requestEntry.getValue();
-
-            // write the raw struct which won't override the null with the default
-            ByteBuffer buffer = ByteBuffer.allocate(request.sizeOf());
-            request.writeTo(buffer);
-
-            buffer.rewind();
-
-            // null is converted to "" when parsed
-            OffsetCommitRequest deserialized = OffsetCommitRequest.parse(buffer, version);
-            assertEquals(null, deserialized.offsetData().get(tp).metadata);
-        }
-    }
-
     private AbstractRequestResponse createRequestHeader() {
         return new RequestHeader((short) 10, (short) 1, "", 10);
     }
