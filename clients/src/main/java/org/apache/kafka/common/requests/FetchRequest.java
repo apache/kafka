@@ -132,6 +132,7 @@ public class FetchRequest extends AbstractRequest {
 
         switch (versionId) {
             case 0:
+                return new FetchResponse(responseData);
             case 1:
                 return new FetchResponse(responseData, 0);
             default:

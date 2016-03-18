@@ -51,7 +51,7 @@ public class RequestResponseTest {
                 createControlledShutdownResponse(),
                 createControlledShutdownRequest().getErrorResponse(1, new UnknownServerException()),
                 createFetchRequest(),
-                createFetchRequest().getErrorResponse(0, new UnknownServerException()),
+                createFetchRequest().getErrorResponse(1, new UnknownServerException()),
                 createFetchResponse(),
                 createHeartBeatRequest(),
                 createHeartBeatRequest().getErrorResponse(0, new UnknownServerException()),
@@ -98,6 +98,7 @@ public class RequestResponseTest {
         for (AbstractRequestResponse req : requestResponseList)
             checkSerialization(req, null);
 
+        checkSerialization(createFetchRequest().getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createUpdateMetadataRequest(0, null), 0);
         checkSerialization(createUpdateMetadataRequest(0, null).getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createUpdateMetadataRequest(1, null), 1);
