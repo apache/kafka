@@ -28,7 +28,6 @@ import kafka.utils._
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.zookeeper.KeeperException
 import scala.collection.JavaConverters._
 import org.apache.log4j.Logger
 
@@ -75,6 +74,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private val aclCache = new scala.collection.mutable.HashMap[Resource, VersionedAcls]
   private val lock = new ReentrantReadWriteLock()
+
+  // The maximum number of times we should try to update the resource acls in zookeeper before failing;
+  // This should never occur, but is a safeguard just in case.
+  private val maxUpdateRetries = 15
 
   /**
    * Guaranteed to be called before any authorize call is made.
@@ -165,8 +168,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   override def addAcls(acls: Set[Acl], resource: Resource) {
-    inWriteLock(lock) {
-      if (acls != null && acls.nonEmpty) {
+    if (acls != null && acls.nonEmpty) {
+      inWriteLock(lock) {
         updateResourceAcls(resource) { currentAcls =>
           currentAcls ++ acls
         }
@@ -262,7 +265,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
         getAclsFromZk(resource)
     var newVersionedAcls: VersionedAcls = null
     var writeComplete = false
-    while (!writeComplete) {
+    var retries = 0
+    while (!writeComplete && retries <= maxUpdateRetries) {
       val newAcls = getNewAcls(currentVersionedAcls.acls)
       val data = Json.encode(Acl.toJsonCompatibleMap(newAcls))
       val (updateSucceeded, updateVersion) =
@@ -270,17 +274,21 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
          updatePath(path, data, currentVersionedAcls.zkVersion)
         } else {
           trace(s"Deleting path for $resource because it had no ACLs remaining")
-          (deletePath(path, currentVersionedAcls.zkVersion), 0)
+          (zkUtils.conditionalDeletePath(path, currentVersionedAcls.zkVersion), 0)
         }
 
       if (!updateSucceeded) {
         trace(s"Failed to update ACLs for $resource. Used version ${currentVersionedAcls.zkVersion}. Reading data and retrying update.")
         currentVersionedAcls = getAclsFromZk(resource);
+        retries += 1
       } else {
         newVersionedAcls = VersionedAcls(newAcls, updateVersion)
         writeComplete = updateSucceeded
       }
     }
+
+    if(!writeComplete)
+      throw new IllegalStateException(s"Failed to update ACLs for $resource after trying a maximum of $maxUpdateRetries times")
 
     if (newVersionedAcls.acls != currentVersionedAcls.acls) {
       debug(s"Updated ACLs for $resource to ${newVersionedAcls.acls} with version ${newVersionedAcls.zkVersion}")
@@ -312,16 +320,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
             debug(s"Failed to create node for $path because it already exists.")
             (false, 0)
         }
-    }
-  }
-
-  private def deletePath(path: String, expectedVersion: Int): Boolean = {
-    try {
-      zkUtils.zkClient.delete(path, expectedVersion)
-      true
-    } catch {
-      case e: KeeperException.NoNodeException => true // This path was already deleted
-      case e: KeeperException.BadVersionException => false
     }
   }
 
