@@ -54,8 +54,8 @@ public class Schema extends Type {
                 f.type.write(buffer, value);
             } catch (Exception e) {
                 throw new SchemaException("Error writing field '" + f.name +
-                        "': " +
-                        (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
+                                          "': " +
+                                          (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
             }
         }
     }
