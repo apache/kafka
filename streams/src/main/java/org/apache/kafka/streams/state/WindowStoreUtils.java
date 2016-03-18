@@ -29,10 +29,10 @@ public class WindowStoreUtils {
     private static final int SEQNUM_SIZE = 4;
     private static final int TIMESTAMP_SIZE = 8;
 
-    // Inner byte array serde used for segments
+    /** Inner byte array serde used for segments */
     public static final Serde<byte[]> INNER_SERDE = Serdes.ByteArray();
 
-    // Inner byte array state serde used for segments
+    /** Inner byte array state serde used for segments */
     public static final StateSerdes<byte[], byte[]> INNER_SERDES = new StateSerdes<>("", INNER_SERDE, INNER_SERDE);
 
     @SuppressWarnings("unchecked")

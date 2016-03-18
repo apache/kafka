@@ -250,8 +250,12 @@ public interface KStream<K, V> {
             Serde<V1> otherValueSerde);
 
     /**
+<<<<<<< HEAD
      * Combine values of this stream with another {@link KStream} using windowed Left Join
      * with default serializers and deserializers.
+=======
+     * Combines values of this stream with another KStream using Windowed Left Join.
+>>>>>>> 5d0cd7667f7e584f05ab4e76ed139fbafa81e042
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
@@ -265,7 +269,11 @@ public interface KStream<K, V> {
             JoinWindows windows);
 
     /**
+<<<<<<< HEAD
      * Combine values of this stream with {@link KTable} using non-windowed Left Join.
+=======
+     * Combines values of this stream with KTable using Left Join.
+>>>>>>> 5d0cd7667f7e584f05ab4e76ed139fbafa81e042
      *
      * @param table     the instance of {@link KTable} joined with this stream
      * @param joiner    the instance of {@link ValueJoiner}

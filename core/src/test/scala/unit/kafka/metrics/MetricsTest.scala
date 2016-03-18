@@ -52,6 +52,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
+  @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
   def testMetricsLeak() {
     // create topic topic1 with 1 partition on broker 0
     createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = servers)
@@ -78,13 +79,14 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertFalse("Topic metrics exists after deleteTopic", checkTopicMetricsExists(topic))
   }
 
+  @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
   def createAndShutdownStep(group: String, consumerId: String, producerId: String): Unit = {
-    val sentMessages1 = sendMessages(servers, topic, nMessages)
+    sendMessages(servers, topic, nMessages)
     // create a consumer
     val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumerId))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Map(topic -> 1), new StringDecoder(), new StringDecoder())
-    val receivedMessages1 = getMessages(topicMessageStreams1, nMessages)
+    getMessages(topicMessageStreams1, nMessages)
 
     zkConsumerConnector1.shutdown()
   }

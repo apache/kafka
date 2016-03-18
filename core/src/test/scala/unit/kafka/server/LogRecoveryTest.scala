@@ -19,15 +19,14 @@ package kafka.server
 import java.util.Properties
 
 import kafka.utils.TestUtils._
-import kafka.utils.{IntEncoder, CoreUtils, TestUtils}
+import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.common._
-import kafka.producer.{KeyedMessage, Producer}
-import kafka.serializer.StringEncoder
-
 import java.io.File
 
-import org.junit.{Test, After, Before}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
+import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
 class LogRecoveryTest extends ZooKeeperTestHarness {
@@ -54,7 +53,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
 
   val message = "hello"
 
-  var producer: Producer[Int, String] = null
+  var producer: KafkaProducer[Integer, String] = null
   def hwFile1 = new OffsetCheckpoint(new File(configProps1.logDirs(0), ReplicaManager.HighWatermarkFilename))
   def hwFile2 = new OffsetCheckpoint(new File(configProps2.logDirs(0), ReplicaManager.HighWatermarkFilename))
   var servers = Seq.empty[KafkaServer]
@@ -64,16 +63,19 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   def updateProducer() = {
     if (producer != null)
       producer.close()
-    producer = TestUtils.createProducer[Int, String](TestUtils.getBrokerListStrFromServers(servers),
-      encoder = classOf[StringEncoder].getName,
-      keyEncoder = classOf[IntEncoder].getName)
+    producer = TestUtils.createNewProducer(
+      TestUtils.getBrokerListStrFromServers(servers),
+      retries = 5,
+      keySerializer = new IntegerSerializer,
+      valueSerializer = new StringSerializer
+    )
   }
 
   @Before
   override def setUp() {
     super.setUp()
 
-    configs = TestUtils.createBrokerConfigs(2, zkConnect, false).map(KafkaConfig.fromProps(_, overridingProps))
+    configs = TestUtils.createBrokerConfigs(2, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
 
     // start both servers
     server1 = TestUtils.createServer(configProps1)
@@ -230,7 +232,6 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   }
 
   private def sendMessages(n: Int = 1) {
-    for(i <- 0 until n)
-      producer.send(new KeyedMessage[Int, String](topic, 0, message))
+    (0 until n).map(_ => producer.send(new ProducerRecord(topic, 0, message))).foreach(_.get)
   }
 }

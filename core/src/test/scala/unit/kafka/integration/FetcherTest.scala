@@ -68,11 +68,11 @@ class FetcherTest extends KafkaServerTestHarness {
   @Test
   def testFetcher() {
     val perNode = 2
-    var count = TestUtils.sendMessages(servers, topic, perNode).size
+    var count = TestUtils.produceMessages(servers, topic, perNode).size
 
     fetch(count)
     assertQueueEmpty()
-    count = TestUtils.sendMessages(servers, topic, perNode).size
+    count = TestUtils.produceMessages(servers, topic, perNode).size
     fetch(count)
     assertQueueEmpty()
   }
