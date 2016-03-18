@@ -15,14 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.processor.TimestampExtractor;
 
-public class WallclockTimestampExtractor implements TimestampExtractor {
+public class ConsumerRecordTimestampExtractor implements TimestampExtractor {
     @Override
     public long extract(ConsumerRecord<Object, Object> record) {
-        return System.currentTimeMillis();
+        return record.timestamp();
     }
 }

@@ -26,10 +26,10 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.processor.ConsumerRecordTimestampExtractor;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
-import org.apache.kafka.streams.processor.internals.WallclockTimestampExtractor;
 
 import java.util.Map;
 
@@ -149,7 +149,7 @@ public class StreamsConfig extends AbstractConfig {
                                         REPLICATION_FACTOR_DOC)
                                 .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                                         Type.CLASS,
-                                        WallclockTimestampExtractor.class.getName(),
+                                        ConsumerRecordTimestampExtractor.class.getName(),
                                         Importance.MEDIUM,
                                         TIMESTAMP_EXTRACTOR_CLASS_DOC)
                                 .define(PARTITION_GROUPER_CLASS_CONFIG,
