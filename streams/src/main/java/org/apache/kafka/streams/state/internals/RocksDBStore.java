@@ -71,7 +71,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
 
-    private ProcessorContext context;
     private StateSerdes<K, V> serdes;
     protected File dbDir;
     private RocksDB db;
@@ -154,8 +153,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     public void init(ProcessorContext context, StateStore root) {
-        this.context = context;
-
         // open the DB dir
         openDB(context);
 
