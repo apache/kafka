@@ -21,11 +21,15 @@ import java.util.Properties
 
 // A base producer used whenever we need to have options for both old and new producers;
 // this class will be removed once we fully rolled out 0.9
+@deprecated("This trait has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.KafkaProducer instead.", "0.10.0.0")
 trait BaseProducer {
   def send(topic: String, key: Array[Byte], value: Array[Byte])
   def close()
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.KafkaProducer instead.", "0.10.0.0")
 class NewShinyProducer(producerProps: Properties) extends BaseProducer {
   import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
   import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
@@ -50,6 +54,8 @@ class NewShinyProducer(producerProps: Properties) extends BaseProducer {
   }
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.KafkaProducer instead.", "0.10.0.0")
 class OldProducer(producerProps: Properties) extends BaseProducer {
 
   // default to byte array partitioner

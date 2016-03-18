@@ -60,7 +60,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * The user need to provide the configuration file for 0.7 consumer and 0.8 producer. For 0.8 producer,
  * the "serializer.class" config is set to "kafka.serializer.DefaultEncoder" by the code.
  */
-@SuppressWarnings({"unchecked", "rawtypes"})
+@SuppressWarnings({"unchecked", "rawtypes", "deprecation"})
 public class KafkaMigrationTool {
     private static final org.apache.log4j.Logger log = org.apache.log4j.Logger.getLogger(KafkaMigrationTool.class.getName());
     private static final String KAFKA_07_STATIC_CONSUMER_CLASS_NAME = "kafka.consumer.Consumer";

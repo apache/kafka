@@ -20,6 +20,7 @@ package kafka.producer.async
 /**
  * Indicates that the given config parameter has invalid value
  */
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 class IllegalQueueStateException(message: String) extends RuntimeException(message) {
   def this() = this(null)
 }

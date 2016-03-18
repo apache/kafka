@@ -28,6 +28,7 @@ import org.junit.{After, Before, Test}
 import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
 
+@deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
 class AutoOffsetResetTest extends KafkaServerTestHarness with Logging {
 
   def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))

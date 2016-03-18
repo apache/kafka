@@ -35,7 +35,13 @@ import scala.collection.Map
 import scala.collection.mutable.ArrayBuffer
 import kafka.utils._
 
+@deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
 class AsyncProducerTest {
+
+  class NegativePartitioner(props: VerifiableProperties = null) extends Partitioner {
+    def partition(data: Any, numPartitions: Int): Int = -1
+  }
+
   // One of the few cases we can just set a fixed port because the producer is mocked out here since this uses mocks
   val props = Seq(createBrokerConfig(1, "127.0.0.1:1", port=65534))
   val configs = props.map(KafkaConfig.fromProps)
@@ -373,15 +379,20 @@ class AsyncProducerTest {
 
     val msgs = TestUtils.getMsgStrings(2)
 
+    import SyncProducerConfig.{DefaultAckTimeoutMs, DefaultClientId}
+
     // produce request for topic1 and partitions 0 and 1.  Let the first request fail
     // entirely.  The second request will succeed for partition 1 but fail for partition 0.
     // On the third try for partition 0, let it succeed.
-    val request1 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), acks = 1, correlationId = 11)
-    val request2 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), acks = 1, correlationId = 17)
+    val request1 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), acks = 1,
+      correlationId = 11, timeout = DefaultAckTimeoutMs, clientId = DefaultClientId)
+    val request2 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), acks = 1,
+      correlationId = 17, timeout = DefaultAckTimeoutMs, clientId = DefaultClientId)
     val response1 = ProducerResponse(0,
       Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(Errors.NOT_LEADER_FOR_PARTITION.code, 0L)),
           (TopicAndPartition("topic1", 1), ProducerResponseStatus(Errors.NONE.code, 0L))))
-    val request3 = TestUtils.produceRequest(topic1, 0, messagesToSet(msgs), acks = 1, correlationId = 21)
+    val request3 = TestUtils.produceRequest(topic1, 0, messagesToSet(msgs), acks = 1, correlationId = 21,
+      timeout = DefaultAckTimeoutMs, clientId = DefaultClientId)
     val response2 = ProducerResponse(0,
       Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(Errors.NONE.code, 0L))))
     val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
@@ -479,8 +490,4 @@ class AsyncProducerTest {
       NoCompressionCodec,
       messages.map(m => new Message(key = key, bytes = m, timestamp = 0L, magicValue = Message.MagicValue_V1)): _*)
   }
-}
-
-class NegativePartitioner(props: VerifiableProperties = null) extends Partitioner {
-  def partition(data: Any, numPartitions: Int): Int = -1
 }
