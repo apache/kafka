@@ -114,18 +114,17 @@ public class Selector implements Selectable {
         this.time = time;
         this.metricGrpPrefix = metricGrpPrefix;
         this.metricTags = metricTags;
-        this.channels = new HashMap<String, KafkaChannel>();
-        this.completedSends = new ArrayList<Send>();
-        this.completedReceives = new ArrayList<NetworkReceive>();
-        this.stagedReceives = new HashMap<KafkaChannel, Deque<NetworkReceive>>();
-        this.connected = new ArrayList<String>();
-        this.disconnected = new ArrayList<String>();
-        this.failedSends = new ArrayList<String>();
+        this.channels = new HashMap<>();
+        this.completedSends = new ArrayList<>();
+        this.completedReceives = new ArrayList<>();
+        this.stagedReceives = new HashMap<>();
+        this.connected = new ArrayList<>();
+        this.disconnected = new ArrayList<>();
+        this.failedSends = new ArrayList<>();
         this.sensors = new SelectorMetrics(metrics);
         this.channelBuilder = channelBuilder;
         // initial capacity and load factor are default, we set them explicitly because we want to set accessOrder = true
-        this.lruConnections = new LinkedHashMap<String, Long>(16, .75F, true);
-        currentTimeNanos = new SystemTime().nanoseconds();
+        this.lruConnections = new LinkedHashMap<>(16, .75F, true);
         nextIdleCloseCheckTime = currentTimeNanos + connectionsMaxIdleNanos;
         this.metricsPerConnection = metricsPerConnection;
     }
@@ -645,7 +644,7 @@ public class Selector implements Selectable {
                 if (nodeRequest == null) {
                     String metricGrpName = metricGrpPrefix + "-node-metrics";
 
-                    Map<String, String> tags = new LinkedHashMap<String, String>(metricTags);
+                    Map<String, String> tags = new LinkedHashMap<>(metricTags);
                     tags.put("node-id", "node-" + connectionId);
 
                     nodeRequest = sensor(nodeRequestName);
