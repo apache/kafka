@@ -50,14 +50,15 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -136,10 +137,9 @@ public class WorkerSinkTaskTest {
         expectInitializeTask();
         expectPollInitialAssignment();
 
-        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2)));
-        consumer.pause(TOPIC_PARTITION);
-        PowerMock.expectLastCall();
-        consumer.pause(TOPIC_PARTITION2);
+        Set<TopicPartition> partitions = new HashSet<>(asList(TOPIC_PARTITION, TOPIC_PARTITION2));
+        EasyMock.expect(consumer.assignment()).andReturn(partitions);
+        consumer.pause(partitions);
         PowerMock.expectLastCall();
 
         PowerMock.replayAll();
@@ -161,12 +161,12 @@ public class WorkerSinkTaskTest {
         sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
         EasyMock.expectLastCall();
 
+        Set<TopicPartition> partitions = new HashSet<>(asList(TOPIC_PARTITION, TOPIC_PARTITION2));
+
         // Pause
         expectConsumerWakeup();
-        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2)));
-        consumer.pause(TOPIC_PARTITION);
-        PowerMock.expectLastCall();
-        consumer.pause(TOPIC_PARTITION2);
+        EasyMock.expect(consumer.assignment()).andReturn(partitions);
+        consumer.pause(partitions);
         PowerMock.expectLastCall();
 
         // No records returned
@@ -176,10 +176,10 @@ public class WorkerSinkTaskTest {
 
         // And unpause
         expectConsumerWakeup();
-        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2)));
-        consumer.resume(TOPIC_PARTITION);
+        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(asList(TOPIC_PARTITION, TOPIC_PARTITION2)));
+        consumer.resume(singleton(TOPIC_PARTITION));
         PowerMock.expectLastCall();
-        consumer.resume(TOPIC_PARTITION2);
+        consumer.resume(singleton(TOPIC_PARTITION2));
         PowerMock.expectLastCall();
 
         expectConsumerPoll(1);
@@ -215,7 +215,7 @@ public class WorkerSinkTaskTest {
         sinkTask.put(EasyMock.capture(records));
         EasyMock.expectLastCall().andThrow(new RetriableException("retry"));
         // Pause
-        HashSet<TopicPartition> partitions = new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
+        HashSet<TopicPartition> partitions = new HashSet<>(asList(TOPIC_PARTITION, TOPIC_PARTITION2));
         EasyMock.expect(consumer.assignment()).andReturn(partitions);
         consumer.pause(partitions);
         PowerMock.expectLastCall();
@@ -291,7 +291,7 @@ public class WorkerSinkTaskTest {
 
     private void expectInitializeTask() throws Exception {
         PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
-        consumer.subscribe(EasyMock.eq(Arrays.asList(TOPIC)), EasyMock.capture(rebalanceListener));
+        consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 
         sinkTask.initialize(EasyMock.capture(sinkTaskContext));
@@ -301,7 +301,7 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectRebalanceRevocationError(RuntimeException e) {
-        final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2);
+        final List<TopicPartition> partitions = asList(TOPIC_PARTITION, TOPIC_PARTITION2);
 
         sinkTask.close(new HashSet<>(partitions));
         EasyMock.expectLastCall().andThrow(e);
@@ -317,7 +317,7 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectRebalanceAssignmentError(RuntimeException e) {
-        final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2);
+        final List<TopicPartition> partitions = asList(TOPIC_PARTITION, TOPIC_PARTITION2);
 
         sinkTask.close(new HashSet<>(partitions));
         EasyMock.expectLastCall();
@@ -346,7 +346,7 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectPollInitialAssignment() {
-        final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2);
+        final List<TopicPartition> partitions = asList(TOPIC_PARTITION, TOPIC_PARTITION2);
 
         sinkTask.open(partitions);
         EasyMock.expectLastCall();

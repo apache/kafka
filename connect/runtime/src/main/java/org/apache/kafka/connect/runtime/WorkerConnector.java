@@ -28,7 +28,7 @@ public class WorkerConnector {
     private static final Logger log = LoggerFactory.getLogger(WorkerConnector.class);
 
     private enum State {
-        STOPPED, STARTED, FAILED
+        INIT, STOPPED, STARTED, FAILED
     }
 
     private final String connName;
@@ -47,7 +47,7 @@ public class WorkerConnector {
         this.ctx = ctx;
         this.connector = connector;
         this.statusListener = statusListener;
-        this.state = null;
+        this.state = State.INIT;
     }
 
     public synchronized void initialize(Map<String, String> config) {
@@ -71,14 +71,21 @@ public class WorkerConnector {
 
     private void start() {
         try {
-            if (state == State.STARTED)
-                return;
-            else if (state != State.FAILED && state != State.STOPPED)
-                throw new IllegalArgumentException("Cannot start connector in state " + state);
+            switch (state) {
+                case STARTED:
+                    return;
 
-            connector.start(config);
-            statusListener.onStartup(connName);
-            this.state = State.STARTED;
+                case INIT:
+                case FAILED:
+                case STOPPED:
+                    connector.start(config);
+                    statusListener.onStartup(connName);
+                    this.state = State.STARTED;
+                    break;
+
+                default:
+                    throw new IllegalArgumentException("Cannot start connector in state " + state);
+            }
         } catch (Throwable t) {
             log.error("Error while starting connector {}", connName, t);
             statusListener.onFailure(connName, t);
@@ -88,15 +95,23 @@ public class WorkerConnector {
 
     private void pause() {
         try {
-            if (state == State.STOPPED)
-                return;
-            else if (state == State.STARTED)
-                connector.stop();
-            else if (state != State.FAILED)
-                throw new IllegalArgumentException("Cannot pause connector in state " + state);
+            switch (state) {
+                case STOPPED:
+                    return;
 
-            statusListener.onPause(connName);
-            this.state = State.STOPPED;
+                case STARTED:
+                    connector.stop();
+                    // fall through
+
+                case INIT:
+                case FAILED:
+                    statusListener.onPause(connName);
+                    this.state = State.STOPPED;
+                    break;
+
+                default:
+                    throw new IllegalArgumentException("Cannot pause connector in state " + state);
+            }
         } catch (Throwable t) {
             log.error("Error while shutting down connector {}", connName, t);
             statusListener.onFailure(connName, t);

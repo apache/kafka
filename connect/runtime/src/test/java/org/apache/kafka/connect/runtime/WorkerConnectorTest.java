@@ -181,4 +181,67 @@ public class WorkerConnectorTest extends EasyMockSupport {
         verifyAll();
     }
 
+    @Test
+    public void testTransitionStartedToStarted() {
+        connector.initialize(EasyMock.notNull(ConnectorContext.class));
+        expectLastCall();
+
+        connector.start(CONFIG);
+        expectLastCall();
+
+        // expect only one call to onStartup()
+        listener.onStartup(CONNECTOR);
+        expectLastCall();
+
+        connector.stop();
+        expectLastCall();
+
+        listener.onShutdown(CONNECTOR);
+        expectLastCall();
+
+        replayAll();
+
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+
+        workerConnector.initialize(CONFIG);
+        workerConnector.transitionTo(TargetState.STARTED);
+        workerConnector.transitionTo(TargetState.STARTED);
+        workerConnector.shutdown();
+
+        verifyAll();
+    }
+
+    @Test
+    public void testTransitionPausedToPaused() {
+        connector.initialize(EasyMock.notNull(ConnectorContext.class));
+        expectLastCall();
+
+        connector.start(CONFIG);
+        expectLastCall();
+
+        listener.onStartup(CONNECTOR);
+        expectLastCall();
+
+        connector.stop();
+        expectLastCall();
+
+        listener.onPause(CONNECTOR);
+        expectLastCall();
+
+        listener.onShutdown(CONNECTOR);
+        expectLastCall();
+
+        replayAll();
+
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+
+        workerConnector.initialize(CONFIG);
+        workerConnector.transitionTo(TargetState.STARTED);
+        workerConnector.transitionTo(TargetState.PAUSED);
+        workerConnector.transitionTo(TargetState.PAUSED);
+        workerConnector.shutdown();
+
+        verifyAll();
+    }
+
 }
