@@ -117,7 +117,7 @@ public class ProtocolSerializationTest {
     }
 
     @Test
-    public void testArray() {
+    public void testReadArraySizeTooLarge() {
         Type type = new ArrayOf(Type.INT8);
         int size = 10;
         ByteBuffer invalidBuffer = ByteBuffer.allocate(4 + size);
@@ -128,6 +128,97 @@ public class ProtocolSerializationTest {
         try {
             type.read(invalidBuffer);
             fail("Array size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+    }
+
+    @Test
+    public void testReadNegativeArraySize() {
+        Type type = new ArrayOf(Type.INT8);
+        int size = 10;
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(4 + size);
+        invalidBuffer.putInt(-1);
+        for (int i = 0; i < size; i++)
+            invalidBuffer.put((byte) i);
+        invalidBuffer.rewind();
+        try {
+            type.read(invalidBuffer);
+            fail("Array size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+    }
+
+    @Test
+    public void testReadStringSizeTooLarge() {
+        byte[] stringBytes = "foo".getBytes();
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(2 + stringBytes.length);
+        invalidBuffer.putShort((short) (stringBytes.length * 5));
+        invalidBuffer.put(stringBytes);
+        invalidBuffer.rewind();
+        try {
+            Type.STRING.read(invalidBuffer);
+            fail("String size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+        invalidBuffer.rewind();
+        try {
+            Type.NULLABLE_STRING.read(invalidBuffer);
+            fail("String size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+    }
+
+    @Test
+    public void testReadNegativeStringSize() {
+        byte[] stringBytes = "foo".getBytes();
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(2 + stringBytes.length);
+        invalidBuffer.putShort((short) -1);
+        invalidBuffer.put(stringBytes);
+        invalidBuffer.rewind();
+        try {
+            Type.STRING.read(invalidBuffer);
+            fail("String size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+    }
+
+    @Test
+    public void testReadBytesSizeTooLarge() {
+        byte[] stringBytes = "foo".getBytes();
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(4 + stringBytes.length);
+        invalidBuffer.putInt(stringBytes.length * 5);
+        invalidBuffer.put(stringBytes);
+        invalidBuffer.rewind();
+        try {
+            Type.BYTES.read(invalidBuffer);
+            fail("Bytes size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+        invalidBuffer.rewind();
+        try {
+            Type.NULLABLE_BYTES.read(invalidBuffer);
+            fail("Bytes size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+    }
+
+    @Test
+    public void testReadNegativeBytesSize() {
+        byte[] stringBytes = "foo".getBytes();
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(4 + stringBytes.length);
+        invalidBuffer.putInt(-20);
+        invalidBuffer.put(stringBytes);
+        invalidBuffer.rewind();
+        try {
+            Type.BYTES.read(invalidBuffer);
+            fail("Bytes size not validated");
         } catch (SchemaException e) {
             // Expected exception
         }
