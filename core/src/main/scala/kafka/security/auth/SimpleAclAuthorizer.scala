@@ -31,6 +31,8 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import scala.collection.JavaConverters._
 import org.apache.log4j.Logger
 
+import scala.util.Random
+
 object SimpleAclAuthorizer {
   //optional override zookeeper cluster configuration where acls will be stored, if not specified acls will be stored in
   //same zookeeper where all other kafka broker info is stored.
@@ -77,7 +79,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   // The maximum number of times we should try to update the resource acls in zookeeper before failing;
   // This should never occur, but is a safeguard just in case.
-  private val maxUpdateRetries = 15
+  private val maxUpdateRetries = 10
+
+  private val retryBackoffMs = 100
+  private val retryBackoffJitterMs = 50
 
   /**
    * Guaranteed to be called before any authorize call is made.
@@ -279,6 +284,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
       if (!updateSucceeded) {
         trace(s"Failed to update ACLs for $resource. Used version ${currentVersionedAcls.zkVersion}. Reading data and retrying update.")
+        Thread.sleep(backoffTime)
         currentVersionedAcls = getAclsFromZk(resource);
         retries += 1
       } else {
@@ -342,6 +348,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private def updateAclChangedFlag(resource: Resource) {
     zkUtils.createSequentialPersistentPath(SimpleAclAuthorizer.AclChangedZkPath + "/" + SimpleAclAuthorizer.AclChangedPrefix, resource.toString)
+  }
+
+  private def backoffTime = {
+    retryBackoffMs + Random.nextInt(retryBackoffJitterMs)
   }
 
   object AclChangedNotificationHandler extends NotificationHandler {
