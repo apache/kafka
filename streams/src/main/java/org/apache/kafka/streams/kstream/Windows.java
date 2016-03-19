@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * The window specification interface that can be extended for windowing operation in joins and aggregations.
  *
- * @param <W> Type of the window instance
+ * @param <W>   type of the window instance
  */
 public abstract class Windows<W extends Window> {
 
@@ -56,7 +56,7 @@ public abstract class Windows<W extends Window> {
     }
 
     /**
-     * Set the window emit duration in milliseconds of system time
+     * Set the window emit duration in milliseconds of system time.
      */
     public Windows emit(long duration) {
         this.emitDuration = duration;
@@ -65,7 +65,7 @@ public abstract class Windows<W extends Window> {
     }
 
     /**
-     * Set the window maintain duration in milliseconds of system time
+     * Set the window maintain duration in milliseconds of system time.
      */
     public Windows until(long duration) {
         this.maintainDuration = duration;
@@ -74,11 +74,8 @@ public abstract class Windows<W extends Window> {
     }
 
     /**
-     * Specifies the number of segments to be used for rolling the window store,
-     * this function is not exposed to users but can be called by developers that extend this JoinWindows specs
-     *
-     * @param segments
-     * @return
+     * Specify the number of segments to be used for rolling the window store,
+     * this function is not exposed to users but can be called by developers that extend this JoinWindows specs.
      */
     protected Windows segments(int segments) {
         this.segments = segments;

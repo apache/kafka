@@ -92,7 +92,7 @@ public interface KStream<K, V> {
     /**
      * Materialize this stream to a topic, also creates a new instance of {@link KStream} from the topic
      * using default serializers and deserializers.
-     * This is equivalent to calling {@link this#to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#stream(String...)}.
+     * This is equivalent to calling {@link #to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#stream(String...)}.
      *
      * @param topic     the topic name
      */
@@ -100,7 +100,7 @@ public interface KStream<K, V> {
 
     /**
      * Materialize this stream to a topic, also creates a new instance of {@link KStream} from the topic.
-     * This is equivalent to calling {@link this#to(Serde, Serde, String)} and
+     * This is equivalent to calling {@link #to(Serde, Serde, String)} and
      * {@link org.apache.kafka.streams.kstream.KStreamBuilder#stream(Serde, Serde, String...)}.
      *
      * @param keySerde  key serde used to send key-value pairs,

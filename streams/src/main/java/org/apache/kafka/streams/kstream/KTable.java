@@ -55,7 +55,7 @@ public interface KTable<K, V> {
     /**
      * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic
      * using default serializers and deserializers.
-     * This is equivalent to calling {@link this#to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(String)}.
+     * This is equivalent to calling {@link #to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(String)}.
      *
      * @param topic         the topic name
      */
@@ -63,7 +63,7 @@ public interface KTable<K, V> {
 
     /**
      * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic.
-     * This is equivalent to calling {@link this#to(Serde, Serde, String)} and
+     * This is equivalent to calling {@link #to(Serde, Serde, String)} and
      * {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(Serde, Serde, String)}.
      *
      * @param keySerde  key serde used to send key-value pairs,
