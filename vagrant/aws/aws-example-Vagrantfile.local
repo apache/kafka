@@ -18,6 +18,7 @@
 # To use it, move it to the base kafka directory and rename
 # it to Vagrantfile.local, and adjust variables as needed.
 ec2_instance_type = "m3.xlarge"
+enable_hostmanager = false
 num_zookeepers = 0
 num_brokers = 0
 num_workers = 9
