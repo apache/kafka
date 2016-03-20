@@ -17,22 +17,23 @@
 
 package kafka.server
 
-import org.apache.kafka.common.{BrokerEndPoint, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.LeaderAndIsrRequest.PartitionState
 
 import scala.collection.JavaConverters._
 import kafka.api.LeaderAndIsr
-import org.apache.kafka.common.requests.{LeaderAndIsrResponse, LeaderAndIsrRequest, AbstractRequestResponse}
+import org.apache.kafka.common.requests.{AbstractRequestResponse, LeaderAndIsrRequest, LeaderAndIsrResponse}
 import org.junit.Assert._
-import kafka.utils.{TestUtils, CoreUtils}
+import kafka.utils.{CoreUtils, TestUtils}
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.internals.BrokerEndPoint
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{Errors, ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.utils.SystemTime
-import org.junit.{Test, After, Before}
+import org.junit.{After, Before, Test}
 
 class LeaderElectionTest extends ZooKeeperTestHarness {
   val brokerId1 = 0

@@ -82,6 +82,7 @@
     </subpackage>
 
     <subpackage name="requests">
+      <allow pkg="org.apache.kafka.common.internals" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.record" />
