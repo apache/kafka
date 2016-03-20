@@ -280,8 +280,8 @@ public class Selector implements Selectable {
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
 
         if (readyKeys > 0 || !immediatelyConnectedKeys.isEmpty()) {
-            pollSelectionKeys(this.nioSelector.selectedKeys());
-            pollSelectionKeys(immediatelyConnectedKeys);
+            pollSelectionKeys(this.nioSelector.selectedKeys(), false);
+            pollSelectionKeys(immediatelyConnectedKeys, true);
         }
 
         addToCompletedReceives();
@@ -291,7 +291,7 @@ public class Selector implements Selectable {
         maybeCloseOldestConnection();
     }
 
-    private void pollSelectionKeys(Iterable<SelectionKey> selectionKeys) {
+    private void pollSelectionKeys(Iterable<SelectionKey> selectionKeys, boolean isImmediatelyConnected) {
         Iterator<SelectionKey> iterator = selectionKeys.iterator();
         while (iterator.hasNext()) {
             SelectionKey key = iterator.next();
@@ -304,8 +304,8 @@ public class Selector implements Selectable {
 
             try {
 
-                /* complete any connections that have finished their handshake */
-                if (key.isConnectable()) {
+                /* complete any connections that have finished their handshake (either normally or immediately) */
+                if (isImmediatelyConnected || key.isConnectable()) {
                     if (channel.finishConnect()) {
                         this.connected.add(channel.id());
                         this.sensors.connectionCreated.record();
