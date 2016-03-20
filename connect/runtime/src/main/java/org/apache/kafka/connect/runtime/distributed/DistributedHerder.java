@@ -84,7 +84,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS = 250;
 
-    private final Worker worker;
     private final KafkaConfigStorage configStorage;
     private ClusterConfigState configState;
     private final Time time;
@@ -130,9 +129,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       WorkerGroupMember member,
                       String restUrl,
                       Time time) {
-        super(statusBackingStore, workerId);
+        super(worker, statusBackingStore, workerId);
 
-        this.worker = worker;
         if (configStorage != null) {
             // For testing. Assume configuration has already been performed
             this.configStorage = configStorage;
@@ -551,6 +549,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         return generation;
     }
 
+
     // Should only be called from work thread, so synchronization should not be needed
     private boolean isLeader() {
         return assignment != null && member.memberId().equals(assignment.leader());
@@ -701,7 +700,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
         ConnectorContext ctx = new HerderConnectorContext(DistributedHerder.this, connName);
         worker.startConnector(connConfig, ctx, this);
-
         // Immediately request configuration since this could be a brand new connector. However, also only update those
         // task configs if they are actually different from the existing ones to avoid unnecessary updates when this is
         // just restoring an existing connector.

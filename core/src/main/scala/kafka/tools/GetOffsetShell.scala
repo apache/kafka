@@ -47,6 +47,7 @@ object GetOffsetShell {
                            .withRequiredArg
                            .describedAs("timestamp/-1(latest)/-2(earliest)")
                            .ofType(classOf[java.lang.Long])
+                           .defaultsTo(-1)
     val nOffsetsOpt = parser.accepts("offsets", "number of offsets returned")
                            .withRequiredArg
                            .describedAs("count")

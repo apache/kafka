@@ -17,10 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -47,10 +45,8 @@ public class KTableKTableJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    private IntegerSerializer keySerializer = new IntegerSerializer();
-    private StringSerializer valSerializer = new StringSerializer();
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
+    final private Serde<Integer> intSerde = new Serdes.IntegerSerde();
+    final private Serde<String> stringSerde = new Serdes.StringSerde();
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
@@ -80,8 +76,8 @@ public class KTableKTableJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            table1 = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic1);
-            table2 = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
+            table1 = builder.table(intSerde, stringSerde, topic1);
+            table2 = builder.table(intSerde, stringSerde, topic2);
             joined = table1.join(table2, joiner);
             joined.toStream().process(processor);
 
@@ -179,8 +175,8 @@ public class KTableKTableJoinTest {
             KTable<Integer, String> joined;
             MockProcessorSupplier<Integer, String> proc;
 
-            table1 = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic1);
-            table2 = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
+            table1 = builder.table(intSerde, stringSerde, topic1);
+            table2 = builder.table(intSerde, stringSerde, topic2);
             joined = table1.join(table2, joiner);
 
             proc = new MockProcessorSupplier<>();
@@ -267,8 +263,8 @@ public class KTableKTableJoinTest {
             KTable<Integer, String> joined;
             MockProcessorSupplier<Integer, String> proc;
 
-            table1 = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic1);
-            table2 = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
+            table1 = builder.table(intSerde, stringSerde, topic1);
+            table2 = builder.table(intSerde, stringSerde, topic2);
             joined = table1.join(table2, joiner);
 
             ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();

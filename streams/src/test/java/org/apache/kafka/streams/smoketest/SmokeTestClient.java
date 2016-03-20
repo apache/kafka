@@ -18,8 +18,6 @@
 package org.apache.kafka.streams.smoketest;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -81,15 +79,11 @@ public class SmokeTestClient extends SmokeTestUtil {
 
     private static KafkaStreams createKafkaStreams(File stateDir, String kafka, String zookeeper) {
         Properties props = new Properties();
-        props.put(StreamsConfig.JOB_ID_CONFIG, "SmokeTest");
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, zookeeper);
-        props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TestTimestampExtractor.class);
-        props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-        props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TestTimestampExtractor.class.getName());
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
@@ -98,9 +92,9 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, Integer> source = builder.stream(stringDeserializer, integerDeserializer, "data");
+        KStream<String, Integer> source = builder.stream(stringSerde, intSerde, "data");
 
-        source.to("echo", stringSerializer, integerSerializer);
+        source.to(stringSerde, intSerde, "echo");
 
         KStream<String, Integer> data = source.filter(new Predicate<String, Integer>() {
             @Override
@@ -125,15 +119,13 @@ public class SmokeTestClient extends SmokeTestUtil {
                     }
                 },
                 UnlimitedWindows.of("uwin-min"),
-                stringSerializer,
-                integerSerializer,
-                stringDeserializer,
-                integerDeserializer
+                stringSerde,
+                intSerde
         ).toStream().map(
                 new Unwindow<String, Integer>()
-        ).to("min", stringSerializer, integerSerializer);
+        ).to(stringSerde, intSerde, "min");
 
-        KTable<String, Integer> minTable = builder.table(stringSerializer, integerSerializer, stringDeserializer, integerDeserializer, "min");
+        KTable<String, Integer> minTable = builder.table(stringSerde, intSerde, "min");
         minTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("min"));
 
         // max
@@ -150,15 +142,13 @@ public class SmokeTestClient extends SmokeTestUtil {
                     }
                 },
                 UnlimitedWindows.of("uwin-max"),
-                stringSerializer,
-                integerSerializer,
-                stringDeserializer,
-                integerDeserializer
+                stringSerde,
+                intSerde
         ).toStream().map(
                 new Unwindow<String, Integer>()
-        ).to("max", stringSerializer, integerSerializer);
+        ).to(stringSerde, intSerde, "max");
 
-        KTable<String, Integer> maxTable = builder.table(stringSerializer, integerSerializer, stringDeserializer, integerDeserializer, "max");
+        KTable<String, Integer> maxTable = builder.table(stringSerde, intSerde, "max");
         maxTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("max"));
 
         // sum
@@ -175,28 +165,25 @@ public class SmokeTestClient extends SmokeTestUtil {
                     }
                 },
                 UnlimitedWindows.of("win-sum"),
-                stringSerializer,
-                longSerializer,
-                stringDeserializer,
-                longDeserializer
+                stringSerde,
+                longSerde
         ).toStream().map(
                 new Unwindow<String, Long>()
-        ).to("sum", stringSerializer, longSerializer);
+        ).to(stringSerde, longSerde, "sum");
 
 
-        KTable<String, Long> sumTable = builder.table(stringSerializer, longSerializer, stringDeserializer, longDeserializer, "sum");
+        KTable<String, Long> sumTable = builder.table(stringSerde, longSerde, "sum");
         sumTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("sum"));
 
         // cnt
         data.countByKey(
                 UnlimitedWindows.of("uwin-cnt"),
-                stringSerializer,
-                stringDeserializer
+                stringSerde
         ).toStream().map(
                 new Unwindow<String, Long>()
-        ).to("cnt", stringSerializer, longSerializer);
+        ).to(stringSerde, longSerde, "cnt");
 
-        KTable<String, Long> cntTable = builder.table(stringSerializer, longSerializer, stringDeserializer, longDeserializer, "cnt");
+        KTable<String, Long> cntTable = builder.table(stringSerde, longSerde, "cnt");
         cntTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("cnt"));
 
         // dif
@@ -206,7 +193,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return value1 - value2;
                     }
                 }
-        ).to("dif", stringSerializer, integerSerializer);
+        ).to(stringSerde, intSerde, "dif");
 
         // avg
         sumTable.join(
@@ -216,13 +203,12 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return (double) value1 / (double) value2;
                     }
                 }
-        ).to("avg", stringSerializer, doubleSerializer);
+        ).to(stringSerde, doubleSerde, "avg");
 
         // windowed count
         data.countByKey(
                 TumblingWindows.of("tumbling-win-cnt").with(WINDOW_SIZE),
-                stringSerializer,
-                stringDeserializer
+                stringSerde
         ).toStream().map(
                 new KeyValueMapper<Windowed<String>, Long, KeyValue<String, Long>>() {
                     @Override
@@ -230,7 +216,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return new KeyValue<>(key.value() + "@" + key.window().start(), value);
                     }
                 }
-        ).to("wcnt", stringSerializer, longSerializer);
+        ).to(stringSerde, longSerde, "wcnt");
 
         // test repartition
         Agg agg = new Agg();
@@ -239,14 +225,11 @@ public class SmokeTestClient extends SmokeTestUtil {
                 agg.adder(),
                 agg.remover(),
                 agg.selector(),
-                stringSerializer,
-                longSerializer,
-                longSerializer,
-                stringDeserializer,
-                longDeserializer,
-                longDeserializer,
+                stringSerde,
+                longSerde,
+                longSerde,
                 "cntByCnt"
-        ).to("tagg", stringSerializer, longSerializer);
+        ).to(stringSerde, longSerde, "tagg");
 
         return new KafkaStreams(builder, props);
     }

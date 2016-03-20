@@ -47,8 +47,8 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         this.context = context;
 
         // if serializers are null, get the default ones from the context
-        if (this.keyDeserializer == null) this.keyDeserializer = (Deserializer<K>) context.keyDeserializer();
-        if (this.valDeserializer == null) this.valDeserializer = (Deserializer<V>) context.valueDeserializer();
+        if (this.keyDeserializer == null) this.keyDeserializer = (Deserializer<K>) context.keySerde().deserializer();
+        if (this.valDeserializer == null) this.valDeserializer = (Deserializer<V>) context.valueSerde().deserializer();
     }
 
     @Override

@@ -23,6 +23,7 @@ import kafka.producer.Producer
 import kafka.utils.{StaticPartitioner, TestUtils}
 import kafka.serializer.StringEncoder
 
+@deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
 trait ProducerConsumerTestHarness extends KafkaServerTestHarness {
   val host = "localhost"
   var producer: Producer[String, String] = null

@@ -49,6 +49,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static java.util.Collections.singleton;
+
 /**
  * WorkerTask that uses a SinkTask to export data from Kafka.
  */
@@ -350,7 +352,7 @@ class WorkerSinkTask extends WorkerTask {
             if (pausedForRedelivery) {
                 for (TopicPartition tp : consumer.assignment())
                     if (!context.pausedPartitions().contains(tp))
-                        consumer.resume(tp);
+                        consumer.resume(singleton(tp));
                 pausedForRedelivery = false;
             }
         } catch (RetriableException e) {
@@ -358,8 +360,7 @@ class WorkerSinkTask extends WorkerTask {
             // If we're retrying a previous batch, make sure we've paused all topic partitions so we don't get new data,
             // but will still be able to poll in order to handle user-requested timeouts, keep group membership, etc.
             pausedForRedelivery = true;
-            for (TopicPartition tp : consumer.assignment())
-                consumer.pause(tp);
+            consumer.pause(consumer.assignment());
             // Let this exit normally, the batch will be reprocessed on the next loop.
         } catch (Throwable t) {
             log.error("Task {} threw an uncaught and unrecoverable exception", id, t);
@@ -419,7 +420,7 @@ class WorkerSinkTask extends WorkerTask {
 
                 for (TopicPartition tp : partitions) {
                     if (!taskPaused.contains(tp))
-                        consumer.resume(tp);
+                        consumer.resume(singleton(tp));
                 }
 
                 Iterator<TopicPartition> tpIter = taskPaused.iterator();

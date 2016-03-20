@@ -29,9 +29,6 @@ public class OffsetAndMetadata implements Serializable {
      * @param metadata Non-null metadata
      */
     public OffsetAndMetadata(long offset, String metadata) {
-        if (metadata == null)
-            throw new IllegalArgumentException("Metadata cannot be null");
-
         this.offset = offset;
         this.metadata = metadata;
     }

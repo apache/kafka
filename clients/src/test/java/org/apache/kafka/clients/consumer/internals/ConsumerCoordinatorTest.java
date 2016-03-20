@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -34,6 +35,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
+import org.apache.kafka.common.internals.TopicConstants;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -63,6 +65,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -107,7 +110,7 @@ public class ConsumerCoordinatorTest {
         this.partitionAssignor.clear();
 
         client.setNode(node);
-        this.coordinator = buildCoordinator(metrics, assignors);
+        this.coordinator = buildCoordinator(metrics, assignors, ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT);
     }
 
     @After
@@ -263,7 +266,7 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test(expected = ApiException.class)
-    public void testJoinGroupInvalidGroupId() {
+    public void testJoinGroupInvalidGroupId() { 
         final String consumerId = "leader";
 
         subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
@@ -509,7 +512,7 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testMetadataChangeTriggersRebalance() {
+    public void testMetadataChangeTriggersRebalance() { 
         final String consumerId = "consumer";
 
         subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
@@ -532,6 +535,25 @@ public class ConsumerCoordinatorTest {
         assertTrue(subscriptions.partitionAssignmentNeeded());
     }
 
+    @Test
+    public void testExcludeInternalTopicsConfigOption() { 
+        subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
+
+        metadata.update(TestUtils.singletonCluster(TopicConstants.GROUP_METADATA_TOPIC_NAME, 2), time.milliseconds());
+
+        assertFalse(subscriptions.partitionAssignmentNeeded());
+    }
+
+    @Test
+    public void testIncludeInternalTopicsConfigOption() {
+        coordinator = buildCoordinator(new Metrics(), assignors, false);
+        subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
+
+        metadata.update(TestUtils.singletonCluster(TopicConstants.GROUP_METADATA_TOPIC_NAME, 2), time.milliseconds());
+
+        assertTrue(subscriptions.partitionAssignmentNeeded());
+    }
+    
     @Test
     public void testRejoinGroup() {
         subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
@@ -882,7 +904,7 @@ public class ConsumerCoordinatorTest {
         RangeAssignor range = new RangeAssignor();
 
         try (Metrics metrics = new Metrics(time)) {
-            ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(roundRobin, range));
+            ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(roundRobin, range), ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT);
             List<ProtocolMetadata> metadata = coordinator.metadata();
             assertEquals(2, metadata.size());
             assertEquals(roundRobin.name(), metadata.get(0).name());
@@ -890,7 +912,7 @@ public class ConsumerCoordinatorTest {
         }
 
         try (Metrics metrics = new Metrics(time)) {
-            ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(range, roundRobin));
+            ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(range, roundRobin), ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT);
             List<ProtocolMetadata> metadata = coordinator.metadata();
             assertEquals(2, metadata.size());
             assertEquals(range.name(), metadata.get(0).name());
@@ -898,7 +920,7 @@ public class ConsumerCoordinatorTest {
         }
     }
 
-    private ConsumerCoordinator buildCoordinator(Metrics metrics, List<PartitionAssignor> assignors) {
+    private ConsumerCoordinator buildCoordinator(Metrics metrics, List<PartitionAssignor> assignors, boolean excludeInternalTopics) {
         return new ConsumerCoordinator(
                 consumerClient,
                 groupId,
@@ -914,7 +936,8 @@ public class ConsumerCoordinatorTest {
                 defaultOffsetCommitCallback,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
-                null);
+                null,
+                excludeInternalTopics);
     }
 
     private Struct consumerMetadataResponse(Node node, short error) {
