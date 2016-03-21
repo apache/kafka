@@ -222,7 +222,7 @@ public final class RecordAccumulator {
         int count = 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
             Deque<RecordBatch> dq = entry.getValue();
-            // We will check if the batch should be expried if one of the following is true:
+            // We will check if the batch should be expired if one of the following is true:
             // 1. The leader is unknown.
             // 2. The leader broker is disconnected.
             Node leader = cluster.leaderFor(entry.getKey());
