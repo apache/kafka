@@ -22,8 +22,8 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 /**
  * A stateful Value Transformer interface for transform a value into a new value.
  *
- * @param <V> Value type.
- * @param <R> Return type.
+ * @param <V>   value type
+ * @param <R>   return type
  */
 public interface ValueTransformer<V, R> {
 
