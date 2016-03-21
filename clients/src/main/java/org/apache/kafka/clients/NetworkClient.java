@@ -266,6 +266,7 @@ public class NetworkClient implements KafkaClient {
         handleDisconnections(responses, updatedNow);
         handleConnections();
         handleTimedOutRequests(responses, updatedNow);
+        handleFailedReceives(responses, updatedNow);
 
         // invoke callbacks
         for (ClientResponse response : responses) {
@@ -406,6 +407,26 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * The connection to the node associated with the responses that can not be parsed will be
+     * terminated and will be treated as a disconnection.
+     *
+     * @param responses The list of responses to update
+     * @param now The current time
+     */
+    private void handleFailedReceives(List<ClientResponse> responses, long now) {
+        for (String nodeId : this.selector.failedReceives()) {
+            // close connection to the node
+            this.selector.close(nodeId);
+            log.debug("Disconnecting from node {} due to response that can not be parsed.", nodeId);
+            processDisconnection(responses, nodeId, now);
+        }
+
+        // we disconnected, so we should probably refresh our metadata
+        if (this.selector.failedReceives().size() > 0)
+            metadataUpdater.requestUpdate();
+    }
+
+    /**
      * Handle any completed request send. In particular if no response is expected consider the request complete.
      *
      * @param responses The list of responses to update
@@ -431,16 +452,23 @@ public class NetworkClient implements KafkaClient {
     private void handleCompletedReceives(List<ClientResponse> responses, long now) {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
-            ClientRequest req = inFlightRequests.earliestSent(source);
-            ResponseHeader header = ResponseHeader.parse(receive.payload());
-            // Always expect the response version id to be the same as the request version id
-            short apiKey = req.request().header().apiKey();
-            short apiVer = req.request().header().apiVersion();
-            Struct body = ProtoUtils.responseSchema(apiKey, apiVer).read(receive.payload());
-            correlate(req.request().header(), header);
-            if (!metadataUpdater.maybeHandleCompletedReceive(req, now, body))
+            ClientRequest req = inFlightRequests.completeNext(source);
+            Struct body = null;
+            ResponseHeader header = null;
+            try {
+                header = ResponseHeader.parse(receive.payload());
+                // Always expect the response version id to be the same as the request version id
+                short apiKey = req.request().header().apiKey();
+                short apiVer = req.request().header().apiVersion();
+                body = ProtoUtils.responseSchema(apiKey, apiVer).read(receive.payload());
+                correlate(req.request().header(), header);
+            } catch (Exception e) {
+                log.error("Unexpected error when parsing response", e);
+                this.selector.failReceive(source);
+            }
+
+            if (body != null || !metadataUpdater.maybeHandleCompletedReceive(req, now, body))
                 responses.add(new ClientResponse(req, now, false, body));
-            inFlightRequests.completeNext(source);
         }
     }
 

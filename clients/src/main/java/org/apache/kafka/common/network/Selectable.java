@@ -16,6 +16,7 @@ package org.apache.kafka.common.network;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.Set;
 
 /**
  * An interface for asynchronous, multi-channel network I/O
@@ -74,6 +75,16 @@ public interface Selectable {
      * The list of receives that completed on the last {@link #poll(long) poll()} call.
      */
     public List<NetworkReceive> completedReceives();
+
+    /**
+     * The list of connections that received response that can not be parsed on the last {@link #poll(long) poll()} call.
+     */
+    public Set<String> failedReceives();
+
+    /**
+     * Add node to the list of connections that received response that can not be parsed on the last {@link #poll(long) poll()} call.
+     */
+    public void failReceive(String id);
 
     /**
      * The list of connections that finished disconnecting on the last {@link #poll(long) poll()}

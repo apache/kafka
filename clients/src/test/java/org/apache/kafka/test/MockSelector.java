@@ -15,7 +15,9 @@ package org.apache.kafka.test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.NetworkSend;
@@ -32,6 +34,7 @@ public class MockSelector implements Selectable {
     private final List<Send> initiatedSends = new ArrayList<Send>();
     private final List<Send> completedSends = new ArrayList<Send>();
     private final List<NetworkReceive> completedReceives = new ArrayList<NetworkReceive>();
+    private final Set<String> failedReceives = new HashSet<String>();
     private final List<String> disconnected = new ArrayList<String>();
     private final List<String> connected = new ArrayList<String>();
 
@@ -66,6 +69,7 @@ public class MockSelector implements Selectable {
     public void clear() {
         this.completedSends.clear();
         this.completedReceives.clear();
+        this.failedReceives.clear();
         this.disconnected.clear();
         this.connected.clear();
     }
@@ -94,6 +98,14 @@ public class MockSelector implements Selectable {
     @Override
     public List<NetworkReceive> completedReceives() {
         return completedReceives;
+    }
+
+    public Set<String> failedReceives() {
+        return failedReceives;
+    }
+
+    public void failReceive(String id) {
+        failedReceives.add(id);
     }
 
     public void completeReceive(NetworkReceive receive) {

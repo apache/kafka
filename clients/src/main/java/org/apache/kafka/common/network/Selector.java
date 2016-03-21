@@ -24,6 +24,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -87,6 +88,7 @@ public class Selector implements Selectable {
     private final List<String> disconnected;
     private final List<String> connected;
     private final List<String> failedSends;
+    private final Set<String> failedReceives;
     private final Time time;
     private final SelectorMetrics sensors;
     private final String metricGrpPrefix;
@@ -121,6 +123,7 @@ public class Selector implements Selectable {
         this.connected = new ArrayList<String>();
         this.disconnected = new ArrayList<String>();
         this.failedSends = new ArrayList<String>();
+        this.failedReceives = new HashSet<String>();
         this.sensors = new SelectorMetrics(metrics);
         this.channelBuilder = channelBuilder;
         // initial capacity and load factor are default, we set them explicitly because we want to set accessOrder = true
@@ -332,8 +335,6 @@ public class Selector implements Selectable {
         maybeCloseOldestConnection();
     }
 
-
-
     @Override
     public List<Send> completedSends() {
         return this.completedSends;
@@ -342,6 +343,16 @@ public class Selector implements Selectable {
     @Override
     public List<NetworkReceive> completedReceives() {
         return this.completedReceives;
+    }
+
+    @Override
+    public Set<String> failedReceives() {
+        return this.failedReceives;
+    }
+
+    @Override
+    public void failReceive(String id) {
+        this.failedReceives.add(id);
     }
 
     @Override
@@ -417,6 +428,7 @@ public class Selector implements Selectable {
         this.disconnected.clear();
         this.disconnected.addAll(this.failedSends);
         this.failedSends.clear();
+        this.failedReceives.clear();
     }
 
     /**
