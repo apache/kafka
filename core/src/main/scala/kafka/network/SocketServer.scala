@@ -306,7 +306,7 @@ private[kafka] class Processor(val id: Int,
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
   private val connectionsMaxIdleNanos = connectionsMaxIdleMs * 1000 * 1000
   private var currentTimeNanos = SystemTime.nanoseconds
-  private val lruConnections = new util.LinkedHashMap[SelectionKey, Long]
+  private val lruConnections = new util.LinkedHashMap[SelectionKey, Long](64,0.75f,true)
   private var nextIdleCloseCheckTime = currentTimeNanos + connectionsMaxIdleNanos
 
   override def run() {
