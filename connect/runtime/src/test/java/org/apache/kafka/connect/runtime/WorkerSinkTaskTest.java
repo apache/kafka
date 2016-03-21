@@ -164,6 +164,8 @@ public class WorkerSinkTaskTest {
         Set<TopicPartition> partitions = new HashSet<>(asList(TOPIC_PARTITION, TOPIC_PARTITION2));
 
         // Pause
+        statusListener.onPause(taskId);
+        EasyMock.expectLastCall();
         expectConsumerWakeup();
         EasyMock.expect(consumer.assignment()).andReturn(partitions);
         consumer.pause(partitions);
@@ -175,6 +177,8 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall();
 
         // And unpause
+        statusListener.onResume(taskId);
+        EasyMock.expectLastCall();
         expectConsumerWakeup();
         EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(asList(TOPIC_PARTITION, TOPIC_PARTITION2)));
         consumer.resume(singleton(TOPIC_PARTITION));

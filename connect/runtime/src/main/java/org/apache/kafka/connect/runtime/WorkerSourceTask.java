@@ -24,7 +24,6 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -143,7 +142,7 @@ class WorkerSourceTask extends WorkerTask {
 
             while (!isStopping()) {
                 if (isPaused()) {
-                    Utils.sleep(PAUSE_BACKOFF_MS);
+                    awaitUnpause(PAUSE_BACKOFF_MS);
                     continue;
                 }
 

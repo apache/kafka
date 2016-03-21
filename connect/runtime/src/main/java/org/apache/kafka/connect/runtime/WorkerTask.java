@@ -70,7 +70,9 @@ abstract class WorkerTask implements Runnable {
      * shutdown. Use #{@link #awaitStop} to block until completion.
      */
     public void stop() {
-        this.stopping.set(true);
+        synchronized (stopping) {
+            this.stopping.set(true);
+        }
     }
 
     /**
@@ -142,15 +144,29 @@ abstract class WorkerTask implements Runnable {
         }
     }
 
+    private void onShutdown() {
+        synchronized (stopping) {
+            stopping.set(false);
+            if (!cancelled.get())
+                statusListener.onShutdown(id);
+        }
+    }
+
+    private void onFailure(Throwable t) {
+        synchronized (stopping) {
+            stopping.set(false);
+            if (!cancelled.get())
+                statusListener.onFailure(id, t);
+        }
+    }
+
     @Override
     public void run() {
         try {
             doRun();
-            if (!cancelled.get())
-                statusListener.onShutdown(id);
+            onShutdown();
         } catch (Throwable t) {
-            if (!cancelled.get())
-                statusListener.onFailure(id, t);
+            onFailure(t);
 
             if (t instanceof Error)
                 throw t;
@@ -164,14 +180,35 @@ abstract class WorkerTask implements Runnable {
         return this.targetState.get() == TargetState.PAUSED;
     }
 
+    protected void awaitUnpause(long timeoutMs) throws InterruptedException {
+        synchronized (targetState) {
+            if (targetState.get() != TargetState.PAUSED) return;
+            this.targetState.wait(timeoutMs);
+        }
+    }
+
+    private void resume() {
+        synchronized (targetState) {
+            statusListener.onResume(id);
+            this.targetState.notifyAll();
+        }
+    }
+
+    private void pause() {
+        statusListener.onPause(id);
+    }
+
     public void transitionTo(TargetState state) {
-        TargetState oldState = this.targetState.getAndSet(state);
-        if (state != oldState && running.get()) {
-            // FIXME: this is racy
-            if (state == TargetState.PAUSED)
-                statusListener.onPause(id);
-            else if (state == TargetState.STARTED)
-                statusListener.onResume(id);
+        synchronized (stopping) {
+            TargetState oldState = this.targetState.getAndSet(state);
+            if (state != oldState && !stopping.get()) {
+                if (state == TargetState.PAUSED)
+                    pause();
+                else if (state == TargetState.STARTED)
+                    resume();
+                else
+                    throw new IllegalArgumentException("Unhandled target state " + state);
+            }
         }
     }
 
