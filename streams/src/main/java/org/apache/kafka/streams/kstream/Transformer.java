@@ -22,9 +22,9 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 /**
  * A stateful Transformer interface for transform a key-value pair into a new value.
  *
- * @param <K> Key type.
- * @param <V> Value type.
- * @param <R> Return type.
+ * @param <K>   key type
+ * @param <V>   value type
+ * @param <R>   return type
  */
 public interface Transformer<K, V, R> {
 
