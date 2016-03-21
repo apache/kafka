@@ -43,7 +43,7 @@ public class ProtocolSerializationTest {
                                  new Field("bytes", Type.BYTES),
                                  new Field("nullable_bytes", Type.NULLABLE_BYTES),
                                  new Field("array", new ArrayOf(Type.INT32)),
-                                 new Field("null_array", new ArrayOf(Type.INT32)),
+                                 new Field("null_array", new ArrayOf(Type.INT32, true)),
                                  new Field("struct", new Schema(new Field("field", new ArrayOf(Type.INT32)))));
         this.struct = new Struct(this.schema).set("boolean", true)
                                              .set("int8", (byte) 1)
@@ -82,7 +82,7 @@ public class ProtocolSerializationTest {
         check(new ArrayOf(Type.INT32), new Object[] {1, 2, 3, 4});
         check(new ArrayOf(Type.STRING), new Object[] {});
         check(new ArrayOf(Type.STRING), new Object[] {"hello", "there", "beautiful"});
-        check(new ArrayOf(Type.STRING), null);
+        check(new ArrayOf(Type.STRING, true), null);
     }
 
     @Test

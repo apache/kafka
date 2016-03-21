@@ -24,14 +24,20 @@ import java.nio.ByteBuffer;
 public class ArrayOf extends Type {
 
     private final Type type;
+    private final boolean nullable;
 
     public ArrayOf(Type type) {
+        this(type, false);
+    }
+
+    public ArrayOf(Type type, boolean nullable) {
         this.type = type;
+        this.nullable = nullable;
     }
 
     @Override
     public boolean isNullable() {
-        return true;
+        return nullable;
     }
 
     @Override
@@ -87,7 +93,7 @@ public class ArrayOf extends Type {
     @Override
     public Object[] validate(Object item) {
         try {
-            if (item == null)
+            if (isNullable() && item == null)
                 return null;
 
             Object[] array = (Object[]) item;
