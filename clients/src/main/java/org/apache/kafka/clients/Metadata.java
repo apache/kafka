@@ -179,10 +179,6 @@ public final class Metadata {
     public synchronized void failedUpdate(long now) {
         this.lastRefreshMs = now;
     }
-
-    public synchronized long lastRefresh() {
-        return this.lastRefreshMs;
-    }
     
     /**
      * @return The current metadata version
