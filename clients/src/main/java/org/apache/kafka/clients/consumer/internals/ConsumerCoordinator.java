@@ -347,7 +347,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         });
 
         // ensure commit has a chance to be transmitted (without blocking on its completion)
-        client.poll(0);
+        // note that we allow delayed tasks to be executed in case heartbeats need to be sent
+        client.quickPoll(true);
     }
 
     /**
