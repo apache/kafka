@@ -345,6 +345,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 cb.onComplete(offsets, e);
             }
         });
+
+        // ensure commit has a chance to be transmitted (without blocking on its completion)
+        client.poll(0);
     }
 
     /**
