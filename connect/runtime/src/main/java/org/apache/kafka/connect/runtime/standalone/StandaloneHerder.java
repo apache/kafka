@@ -310,6 +310,8 @@ public class StandaloneHerder extends AbstractHerder {
 
         @Override
         public void onConnectorConfigUpdate(String connector) {
+            // TODO: move connector configuration update handling here to be consistent with
+            //       the semantics of the config backing store
             configState = configBackingStore.snapshot();
         }
 
