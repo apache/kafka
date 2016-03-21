@@ -94,7 +94,7 @@ public class KTableMapValuesTest {
                         }
                     });
             KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>)
-                    table1.through(topic2, stringSerde, stringSerde);
+                    table1.through(stringSerde, stringSerde, topic2);
 
             KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
             KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();

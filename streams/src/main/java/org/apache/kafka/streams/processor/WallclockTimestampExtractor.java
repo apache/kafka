@@ -15,14 +15,21 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.streams.processor;
+
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 /**
- * The Reducer interface for combining two values of the same type into a new value.
+ * Retrieves current wall clock timestamps as {@link System#currentTimeMillis()}.
  *
- * @param <V>   value type
+ * Using this extractor effectively provides <i>processing-time</i> semantics.
+ *
+ * If you need <i>event-time</i> semantics, use {@link ConsumerRecordTimestampExtractor} with
+ * built-in <i>CreateTime</i> timestamp (see KIP-32: Add timestamps to Kafka message for details).
  */
-public interface Reducer<V> {
-
-    V apply(V value1, V value2);
+public class WallclockTimestampExtractor implements TimestampExtractor {
+    @Override
+    public long extract(ConsumerRecord<Object, Object> record) {
+        return System.currentTimeMillis();
+    }
 }

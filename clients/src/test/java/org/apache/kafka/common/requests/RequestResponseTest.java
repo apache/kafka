@@ -51,7 +51,7 @@ public class RequestResponseTest {
                 createControlledShutdownResponse(),
                 createControlledShutdownRequest().getErrorResponse(1, new UnknownServerException()),
                 createFetchRequest(),
-                createFetchRequest().getErrorResponse(0, new UnknownServerException()),
+                createFetchRequest().getErrorResponse(1, new UnknownServerException()),
                 createFetchResponse(),
                 createHeartBeatRequest(),
                 createHeartBeatRequest().getErrorResponse(0, new UnknownServerException()),
@@ -75,8 +75,8 @@ public class RequestResponseTest {
                 createMetadataRequest(Arrays.asList("topic1")),
                 createMetadataRequest(null).getErrorResponse(1, new UnknownServerException()),
                 createMetadataResponse(1),
-                createOffsetCommitRequest(),
-                createOffsetCommitRequest().getErrorResponse(0, new UnknownServerException()),
+                createOffsetCommitRequest(2),
+                createOffsetCommitRequest(2).getErrorResponse(2, new UnknownServerException()),
                 createOffsetCommitResponse(),
                 createOffsetFetchRequest(),
                 createOffsetFetchRequest().getErrorResponse(0, new UnknownServerException()),
@@ -101,6 +101,11 @@ public class RequestResponseTest {
 
         createMetadataResponse(0);
         createMetadataRequest(null).getErrorResponse(0, new UnknownServerException());
+        checkSerialization(createFetchRequest().getErrorResponse(0, new UnknownServerException()), 0);
+        checkSerialization(createOffsetCommitRequest(0), 0);
+        checkSerialization(createOffsetCommitRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
+        checkSerialization(createOffsetCommitRequest(1), 1);
+        checkSerialization(createOffsetCommitRequest(1).getErrorResponse(1, new UnknownServerException()), 1);
         checkSerialization(createUpdateMetadataRequest(0, null), 0);
         checkSerialization(createUpdateMetadataRequest(0, null).getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createUpdateMetadataRequest(1, null), 1);
@@ -295,10 +300,18 @@ public class RequestResponseTest {
         return new MetadataResponse(Arrays.asList(node), allTopicMetadata, version);
     }
 
-    private AbstractRequest createOffsetCommitRequest() {
+    private AbstractRequest createOffsetCommitRequest(int version) {
         Map<TopicPartition, OffsetCommitRequest.PartitionData> commitData = new HashMap<>();
         commitData.put(new TopicPartition("test", 0), new OffsetCommitRequest.PartitionData(100, ""));
-        return new OffsetCommitRequest("group1", 100, "consumer1", 1000000, commitData);
+        commitData.put(new TopicPartition("test", 1), new OffsetCommitRequest.PartitionData(200, null));
+        if (version == 0) {
+            return new OffsetCommitRequest("group1", commitData);
+        } else if (version == 1) {
+            return new OffsetCommitRequest("group1", 100, "consumer1", commitData);
+        } else if (version == 2) {
+            return new OffsetCommitRequest("group1", 100, "consumer1", 1000000, commitData);
+        }
+        throw new IllegalArgumentException("Unknown offset commit request version " + version);
     }
 
     private AbstractRequestResponse createOffsetCommitResponse() {
@@ -314,6 +327,7 @@ public class RequestResponseTest {
     private AbstractRequestResponse createOffsetFetchResponse() {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(100L, "", Errors.NONE.code()));
+        responseData.put(new TopicPartition("test", 1), new OffsetFetchResponse.PartitionData(100L, null, Errors.NONE.code()));
         return new OffsetFetchResponse(responseData);
     }
 

@@ -45,8 +45,7 @@ public class JoinWindows extends Windows<TumblingWindow> {
      * Specifies that records of the same key are joinable if their timestamp stamps are within
      * timeDifference.
      *
-     * @param timeDifference
-     * @return
+     * @param timeDifference    join window interval in milliseconds
      */
     public JoinWindows within(long timeDifference) {
         return new JoinWindows(this.name, timeDifference, timeDifference);
@@ -54,11 +53,10 @@ public class JoinWindows extends Windows<TumblingWindow> {
 
     /**
      * Specifies that records of the same key are joinable if their timestamp stamps are within
-     * timeDifference, and if the timestamp of a record from the secondary stream is
-     * is earlier than or equal to the timestamp of a record from the first stream.
+     * the join window interval, and if the timestamp of a record from the secondary stream is
+     * earlier than or equal to the timestamp of a record from the first stream.
      *
-     * @param timeDifference
-     * @return
+     * @param timeDifference    join window interval in milliseconds
      */
     public JoinWindows before(long timeDifference) {
         return new JoinWindows(this.name, timeDifference, this.after);
@@ -66,11 +64,10 @@ public class JoinWindows extends Windows<TumblingWindow> {
 
     /**
      * Specifies that records of the same key are joinable if their timestamp stamps are within
-     * timeDifference, and if the timestamp of a record from the secondary stream is
+     * the join window interval, and if the timestamp of a record from the secondary stream
      * is later than or equal to the timestamp of a record from the first stream.
      *
-     * @param timeDifference
-     * @return
+     * @param timeDifference    join window interval in milliseconds
      */
     public JoinWindows after(long timeDifference) {
         return new JoinWindows(this.name, this.before, timeDifference);

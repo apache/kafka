@@ -205,7 +205,7 @@ public class Protocol {
                                                                                          INT64,
                                                                                          "Message offset to be committed."),
                                                                                new Field("metadata",
-                                                                                         STRING,
+                                                                                         NULLABLE_STRING,
                                                                                          "Any associated metadata the client wants to keep."));
 
     public static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V1 = new Schema(new Field("partition",
@@ -218,7 +218,7 @@ public class Protocol {
                                                                                          INT64,
                                                                                          "Timestamp of the commit"),
                                                                                new Field("metadata",
-                                                                                         STRING,
+                                                                                         NULLABLE_STRING,
                                                                                          "Any associated metadata the client wants to keep."));
 
     public static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V2 = new Schema(new Field("partition",
@@ -228,7 +228,7 @@ public class Protocol {
                                                                                          INT64,
                                                                                          "Message offset to be committed."),
                                                                                new Field("metadata",
-                                                                                         STRING,
+                                                                                         NULLABLE_STRING,
                                                                                          "Any associated metadata the client wants to keep."));
 
     public static final Schema OFFSET_COMMIT_REQUEST_TOPIC_V0 = new Schema(new Field("topic",
@@ -341,7 +341,7 @@ public class Protocol {
                                                                                          INT64,
                                                                                          "Last committed message offset."),
                                                                                new Field("metadata",
-                                                                                         STRING,
+                                                                                         NULLABLE_STRING,
                                                                                          "Any associated metadata the client wants to keep."),
                                                                                new Field("error_code", INT16));
 

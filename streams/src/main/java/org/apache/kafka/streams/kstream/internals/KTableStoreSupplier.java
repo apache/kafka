@@ -23,7 +23,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBStore;
-import org.apache.kafka.streams.state.StateSerdes;
 
 /**
  * A KTable storage. It stores all entries in a local RocksDB database.
@@ -34,15 +33,17 @@ import org.apache.kafka.streams.state.StateSerdes;
 public class KTableStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
-    private final StateSerdes<K, V> serdes;
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
     private final Time time;
 
     protected KTableStoreSupplier(String name,
                                   Serde<K> keySerde,
-                                  Serde<V> valSerde,
+                                  Serde<V> valueSerde,
                                   Time time) {
         this.name = name;
-        this.serdes = new StateSerdes<>(name, keySerde, valSerde);
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
         this.time = time;
     }
 
@@ -51,7 +52,7 @@ public class KTableStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        return new MeteredKeyValueStore<>(new RocksDBStore<>(name, serdes), "rocksdb-state", time);
+        return new MeteredKeyValueStore<>(new RocksDBStore<>(name, keySerde, valueSerde), "rocksdb-state", time);
     }
 
 }

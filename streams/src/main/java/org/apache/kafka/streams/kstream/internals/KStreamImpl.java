@@ -194,27 +194,25 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public KStream<K, V> through(String topic,
-                                 Serde<K> keySerde,
-                                 Serde<V> valSerde) {
-        to(topic, keySerde, valSerde);
+    public KStream<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic) {
+        to(keySerde, valSerde, topic);
 
-        return topology.stream(keySerde, valSerde);
+        return topology.stream(keySerde, valSerde, topic);
     }
 
     @Override
     public KStream<K, V> through(String topic) {
-        return through(topic, null, null);
+        return through(null, null, topic);
     }
 
     @Override
     public void to(String topic) {
-        to(topic, null, null);
+        to(null, null, topic);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public void to(String topic, Serde<K> keySerde, Serde<V> valSerde) {
+    public void to(Serde<K> keySerde, Serde<V> valSerde, String topic) {
         String name = topology.newName(SINK_NAME);
         StreamPartitioner<K, V> streamPartitioner = null;
 
@@ -270,6 +268,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
+    public <V1, R> KStream<K, R> join(
+            KStream<K, V1> other,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindows windows) {
+
+        return join(other, joiner, windows, null, null, null, false);
+    }
+
+    @Override
     public <V1, R> KStream<K, R> outerJoin(
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
@@ -279,6 +286,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             Serde<V1> otherValueSerde) {
 
         return join(other, joiner, windows, keySerde, thisValueSerde, otherValueSerde, true);
+    }
+
+    @Override
+    public <V1, R> KStream<K, R> outerJoin(
+            KStream<K, V1> other,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindows windows) {
+
+        return join(other, joiner, windows, null, null, null, true);
     }
 
     @SuppressWarnings("unchecked")
@@ -363,6 +379,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return new KStreamImpl<>(topology, joinThisName, allSourceNodes);
     }
 
+    @Override
+    public <V1, R> KStream<K, R> leftJoin(
+            KStream<K, V1> other,
+            ValueJoiner<V, V1, R> joiner,
+            JoinWindows windows) {
+
+        return leftJoin(other, joiner, windows, null, null);
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KStream<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
@@ -402,6 +427,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
+    public <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
+                                                                 Windows<W> windows) {
+
+        return reduceByKey(reducer, windows, null, null);
+    }
+
+    @Override
     public KTable<K, V> reduceByKey(Reducer<V> reducer,
                                     Serde<K> keySerde,
                                     Serde<V> aggValueSerde,
@@ -423,6 +455,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(topology, reduceName, reduceSupplier, sourceNodes);
+    }
+
+    @Override
+    public KTable<K, V> reduceByKey(Reducer<V> reducer, String name) {
+
+        return reduceByKey(reducer, null, null, name);
     }
 
     @Override
@@ -452,6 +490,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
+    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
+                                                                       Aggregator<K, V, T> aggregator,
+                                                                       Windows<W> windows) {
+
+        return aggregateByKey(initializer, aggregator, windows, null, null);
+    }
+
+    @Override
     public <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
                                            Aggregator<K, V, T> aggregator,
                                            Serde<K> keySerde,
@@ -477,6 +523,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
+    public <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
+                                           Aggregator<K, V, T> aggregator,
+                                           String name) {
+
+        return aggregateByKey(initializer, aggregator, null, null, name);
+    }
+
+    @Override
     public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
                                                                    Serde<K> keySerde) {
         return this.aggregateByKey(
@@ -495,8 +549,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public     KTable<K, Long> countByKey(Serde<K> keySerde,
-                                          String name) {
+    public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows) {
+        return countByKey(windows, null);
+    }
+
+    @Override
+    public KTable<K, Long> countByKey(Serde<K> keySerde, String name) {
         return this.aggregateByKey(
                 new Initializer<Long>() {
                     @Override
@@ -510,5 +568,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                         return aggregate + 1L;
                     }
                 }, keySerde, Serdes.Long(), name);
+    }
+
+    @Override
+    public KTable<K, Long> countByKey(String name) {
+        return countByKey(null, name);
     }
 }

@@ -26,10 +26,10 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.processor.ConsumerRecordTimestampExtractor;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
-import org.apache.kafka.streams.processor.internals.WallclockTimestampExtractor;
 
 import java.util.Map;
 
@@ -149,7 +149,7 @@ public class StreamsConfig extends AbstractConfig {
                                         REPLICATION_FACTOR_DOC)
                                 .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                                         Type.CLASS,
-                                        WallclockTimestampExtractor.class.getName(),
+                                        ConsumerRecordTimestampExtractor.class.getName(),
                                         Importance.MEDIUM,
                                         TIMESTAMP_EXTRACTOR_CLASS_DOC)
                                 .define(PARTITION_GROUPER_CLASS_CONFIG,
@@ -233,12 +233,18 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getConsumerConfigs(StreamThread streamThread, String groupId, String clientId) {
         Map<String, Object> props = getBaseConsumerConfigs();
 
+        // add client id with stream client id prefix, and group id
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
-        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG));
+
+        // add configs required for stream partition assignor
+        props.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
+        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
 
-        props.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
+        if (!getString(ZOOKEEPER_CONNECT_CONFIG).equals(""))
+            props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, getString(ZOOKEEPER_CONNECT_CONFIG));
 
         return props;
     }
@@ -249,6 +255,7 @@ public class StreamsConfig extends AbstractConfig {
         // no need to set group id for a restore consumer
         props.remove(ConsumerConfig.GROUP_ID_CONFIG);
 
+        // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-restore-consumer");
 
         return props;
@@ -257,11 +264,11 @@ public class StreamsConfig extends AbstractConfig {
     private Map<String, Object> getBaseConsumerConfigs() {
         Map<String, Object> props = this.originals();
 
+        // remove streams properties
+        removeStreamsSpecificConfigs(props);
+
         // set consumer default property values
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-
-        // remove properties that are not required for consumers
-        removeStreamsSpecificConfigs(props);
 
         return props;
     }
@@ -269,27 +276,37 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getProducerConfigs(String clientId) {
         Map<String, Object> props = this.originals();
 
+        // remove consumer properties that are not required for producers
+        props.remove(StreamsConfig.AUTO_OFFSET_RESET_CONFIG);
+
+        // remove streams properties
+        removeStreamsSpecificConfigs(props);
+
         // set producer default property values
         props.put(ProducerConfig.LINGER_MS_CONFIG, "100");
 
-        // remove properties that are not required for producers
-        removeStreamsSpecificConfigs(props);
-        props.remove(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
-
+        // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
 
         return props;
     }
 
     private void removeStreamsSpecificConfigs(Map<String, Object> props) {
-        props.remove(StreamsConfig.APPLICATION_ID_CONFIG);
+        props.remove(StreamsConfig.POLL_MS_CONFIG);
         props.remove(StreamsConfig.STATE_DIR_CONFIG);
-        props.remove(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-        props.remove(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
-        props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        props.remove(StreamsConfig.APPLICATION_ID_CONFIG);
         props.remove(StreamsConfig.KEY_SERDE_CLASS_CONFIG);
         props.remove(StreamsConfig.VALUE_SERDE_CLASS_CONFIG);
-        props.remove(InternalConfig.STREAM_THREAD_INSTANCE);
+        props.remove(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
+        props.remove(StreamsConfig.REPLICATION_FACTOR_CONFIG);
+        props.remove(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+        props.remove(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
+        props.remove(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+        props.remove(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
+        props.remove(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG);
+        props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        props.remove(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        props.remove(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE);
     }
 
     public Serde keySerde() {

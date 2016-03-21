@@ -52,12 +52,12 @@ object ZkUtils {
   val IsrChangeNotificationPath = "/isr_change_notification"
   val EntityConfigPath = "/config"
   val EntityConfigChangesPath = "/config/changes"
-  
+
   def apply(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean): ZkUtils = {
     val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
     new ZkUtils(zkClient, zkConnection, isZkSecurityEnabled)
   }
-  
+
   /*
    * Used in tests
    */
@@ -75,7 +75,7 @@ object ZkUtils {
     val zkClient = new ZkClient(zkConnection, connectionTimeout, ZKStringSerializer)
     (zkClient, zkConnection)
   }
-  
+
   def DefaultAcls(isSecure: Boolean): java.util.List[ACL] = if (isSecure) {
     val list = new java.util.ArrayList[ACL]
     list.addAll(ZooDefs.Ids.CREATOR_ALL_ACL)
@@ -84,7 +84,7 @@ object ZkUtils {
   } else {
     ZooDefs.Ids.OPEN_ACL_UNSAFE
   }
-   
+
   def maybeDeletePath(zkUrl: String, dir: String) {
     try {
       val zk = createZkClient(zkUrl, 30*1000, 30*1000)
@@ -94,7 +94,7 @@ object ZkUtils {
       case _: Throwable => // swallow
     }
   }
-  
+
   /*
    * Get calls that only depend on static paths
    */
@@ -111,7 +111,7 @@ object ZkUtils {
 
   def getTopicPartitionLeaderAndIsrPath(topic: String, partitionId: Int): String =
     getTopicPartitionPath(topic, partitionId) + "/" + "state"
-    
+
   def getEntityConfigRootPath(entityType: String): String =
     ZkUtils.EntityConfigPath + "/" + entityType
 
@@ -122,7 +122,7 @@ object ZkUtils {
     DeleteTopicsPath + "/" + topic
 }
 
-class ZkUtils(val zkClient: ZkClient, 
+class ZkUtils(val zkClient: ZkClient,
               val zkConnection: ZkConnection,
               val isSecure: Boolean) extends Logging {
   // These are persistent ZK paths that should exist on kafka broker startup.
@@ -146,7 +146,7 @@ class ZkUtils(val zkClient: ZkClient,
                                     IsrChangeNotificationPath)
 
   val DefaultAcls: java.util.List[ACL] = ZkUtils.DefaultAcls(isSecure)
-  
+
   def getController(): Int = {
     readDataMaybeNull(ControllerPath)._1 match {
       case Some(controller) => KafkaController.parseControllerId(controller)
@@ -512,6 +512,19 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
+  /**
+    * Conditional delete the persistent path data, return true if it succeeds,
+    * otherwise (the current version is not the expected version)
+    */
+   def conditionalDeletePath(path: String, expectedVersion: Int): Boolean = {
+    try {
+      zkClient.delete(path, expectedVersion)
+      true
+    } catch {
+      case e: KeeperException.BadVersionException => false
+    }
+  }
+
   def deletePathRecursive(path: String) {
     try {
       zkClient.deleteRecursive(path)
@@ -847,7 +860,7 @@ class ZkUtils(val zkClient: ZkClient,
       }
     }
   }
-  
+
   def close() {
     if(zkClient != null) {
       zkClient.close()
@@ -941,7 +954,7 @@ object ZkPath {
  * znode is created and the create call returns OK. If
  * the call receives a node exists event, then it checks
  * if the session matches. If it does, then it returns OK,
- * and otherwise it fails the operation.  
+ * and otherwise it fails the operation.
  */
 
 class ZKCheckedEphemeral(path: String,
@@ -952,7 +965,7 @@ class ZKCheckedEphemeral(path: String,
   private val getDataCallback = new GetDataCallback
   val latch: CountDownLatch = new CountDownLatch(1)
   var result: Code = Code.OK
-  
+
   private class CreateCallback extends StringCallback {
     def processResult(rc: Int,
                       path: String,
@@ -1009,7 +1022,7 @@ class ZKCheckedEphemeral(path: String,
         }
       }
   }
-  
+
   private def createEphemeral() {
     zkHandle.create(path,
                     ZKStringSerializer.serialize(data),
@@ -1018,7 +1031,7 @@ class ZKCheckedEphemeral(path: String,
                     createCallback,
                     null)
   }
-  
+
   private def createRecursive(prefix: String, suffix: String) {
     debug("Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
     if(suffix.isEmpty()) {

@@ -44,8 +44,6 @@ public class Stores {
                 return new ValueFactory<K>() {
                     @Override
                     public <V> KeyValueFactory<K, V> withValues(final Serde<V> valueSerde) {
-                        final StateSerdes<K, V> serdes =
-                                new StateSerdes<>(name, keySerde, valueSerde);
                         return new KeyValueFactory<K, V>() {
                             @Override
                             public InMemoryKeyValueFactory<K, V> inMemory() {
@@ -62,9 +60,9 @@ public class Stores {
                                     @Override
                                     public StateStoreSupplier build() {
                                         if (capacity < Integer.MAX_VALUE) {
-                                            return new InMemoryLRUCacheStoreSupplier<>(name, capacity, serdes, null);
+                                            return new InMemoryLRUCacheStoreSupplier<>(name, capacity, keySerde, valueSerde);
                                         }
-                                        return new InMemoryKeyValueStoreSupplier<>(name, serdes, null);
+                                        return new InMemoryKeyValueStoreSupplier<>(name, keySerde, valueSerde);
                                     }
                                 };
                             }
@@ -88,10 +86,10 @@ public class Stores {
                                     @Override
                                     public StateStoreSupplier build() {
                                         if (numSegments > 0) {
-                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, serdes, null);
+                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde);
                                         }
 
-                                        return new RocksDBKeyValueStoreSupplier<>(name, serdes, null);
+                                        return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde);
                                     }
                                 };
                             }
@@ -170,8 +168,8 @@ public class Stores {
         /**
          * Begin to create a {@link KeyValueStore} by specifying the serializer and deserializer for the keys.
          *
-         * @param keySerde the serialization factory for keys; may not be null
-         * @return the interface used to specify the type of values; never null
+         * @param keySerde  the serialization factory for keys; may be null
+         * @return          the interface used to specify the type of values; never null
          */
         public abstract <K> ValueFactory<K> withKeys(Serde<K> keySerde);
     }
@@ -249,8 +247,8 @@ public class Stores {
         /**
          * Use the specified serializer and deserializer for the values.
          *
-         * @param valueSerde the serialization factory for values; may not be null
-         * @return the interface used to specify the remaining key-value store options; never null
+         * @param valueSerde    the serialization factory for values; may be null
+         * @return              the interface used to specify the remaining key-value store options; never null
          */
         public abstract <V> KeyValueFactory<K, V> withValues(Serde<V> valueSerde);
     }

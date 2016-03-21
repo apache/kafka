@@ -94,7 +94,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         KStream<String, Integer> source = builder.stream(stringSerde, intSerde, "data");
 
-        source.to("echo", stringSerde, intSerde);
+        source.to(stringSerde, intSerde, "echo");
 
         KStream<String, Integer> data = source.filter(new Predicate<String, Integer>() {
             @Override
@@ -123,7 +123,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                 intSerde
         ).toStream().map(
                 new Unwindow<String, Integer>()
-        ).to("min", stringSerde, intSerde);
+        ).to(stringSerde, intSerde, "min");
 
         KTable<String, Integer> minTable = builder.table(stringSerde, intSerde, "min");
         minTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("min"));
@@ -146,7 +146,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                 intSerde
         ).toStream().map(
                 new Unwindow<String, Integer>()
-        ).to("max", stringSerde, intSerde);
+        ).to(stringSerde, intSerde, "max");
 
         KTable<String, Integer> maxTable = builder.table(stringSerde, intSerde, "max");
         maxTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("max"));
@@ -169,7 +169,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                 longSerde
         ).toStream().map(
                 new Unwindow<String, Long>()
-        ).to("sum", stringSerde, longSerde);
+        ).to(stringSerde, longSerde, "sum");
 
 
         KTable<String, Long> sumTable = builder.table(stringSerde, longSerde, "sum");
@@ -181,7 +181,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                 stringSerde
         ).toStream().map(
                 new Unwindow<String, Long>()
-        ).to("cnt", stringSerde, longSerde);
+        ).to(stringSerde, longSerde, "cnt");
 
         KTable<String, Long> cntTable = builder.table(stringSerde, longSerde, "cnt");
         cntTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("cnt"));
@@ -193,7 +193,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return value1 - value2;
                     }
                 }
-        ).to("dif", stringSerde, intSerde);
+        ).to(stringSerde, intSerde, "dif");
 
         // avg
         sumTable.join(
@@ -203,7 +203,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return (double) value1 / (double) value2;
                     }
                 }
-        ).to("avg", stringSerde, doubleSerde);
+        ).to(stringSerde, doubleSerde, "avg");
 
         // windowed count
         data.countByKey(
@@ -216,7 +216,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return new KeyValue<>(key.value() + "@" + key.window().start(), value);
                     }
                 }
-        ).to("wcnt", stringSerde, longSerde);
+        ).to(stringSerde, longSerde, "wcnt");
 
         // test repartition
         Agg agg = new Agg();
@@ -229,7 +229,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                 longSerde,
                 longSerde,
                 "cntByCnt"
-        ).to("tagg", stringSerde, longSerde);
+        ).to(stringSerde, longSerde, "tagg");
 
         return new KafkaStreams(builder, props);
     }
