@@ -196,6 +196,7 @@ public class ConsumerNetworkClient implements Closeable {
     /**
      * Poll for network IO and return immediately. This will not trigger wakeups,
      * nor will it execute any delayed tasks.
+     * @param executeDelayedTasks Whether to allow delayed task execution (true allows)
      */
     public void quickPoll(boolean executeDelayedTasks) {
         disableWakeups();
