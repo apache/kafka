@@ -22,11 +22,11 @@ public final class ConsumerRecord<K, V> {
     private final String topic;
     private final int partition;
     private final long offset;
-    private final long timestamp;
+    private final Long timestamp;
     private final TimestampType timestampType;
-    private final long checksum;
-    private final int serializedKeySize;
-    private final int serializedValueSize;
+    private final Long checksum;
+    private final Integer serializedKeySize;
+    private final Integer serializedValueSize;
     private final K key;
     private final V value;
 
@@ -36,19 +36,39 @@ public final class ConsumerRecord<K, V> {
      * @param topic The topic this record is received from
      * @param partition The partition of the topic this record is received from
      * @param offset The offset of this record in the corresponding Kafka partition
-     * @param timestamp The timestamp of the record.
-     * @param timestampType The timestamp type
      * @param key The key of the record, if one exists (null is allowed)
      * @param value The record contents
      */
     public ConsumerRecord(String topic,
                           int partition,
                           long offset,
-                          long timestamp,
+                          K key,
+                          V value) {
+        this(topic, partition, offset, null, null, null, null, null, key, value);
+    }
+
+    /**
+     * Creates a record to be received from a specified topic and partition
+     *
+     * @param topic The topic this record is received from
+     * @param partition The partition of the topic this record is received from
+     * @param offset The offset of this record in the corresponding Kafka partition
+     * @param timestamp The timestamp of the record.
+     * @param timestampType The timestamp type
+     * @param checksum The CRC32 checksum of the full record (including header, key, and value)
+     * @param serializedKeySize Length in bytes of the serialized key
+     * @param serializedValueSize Length in bytes of the serialized value
+     * @param key The key of the record, if one exists (null is allowed)
+     * @param value The record contents
+     */
+    public ConsumerRecord(String topic,
+                          int partition,
+                          long offset,
+                          Long timestamp,
                           TimestampType timestampType,
-                          long checksum,
-                          int serializedKeySize,
-                          int serializedValueSize,
+                          Long checksum,
+                          Integer serializedKeySize,
+                          Integer serializedValueSize,
                           K key,
                           V value) {
         if (topic == null)
@@ -103,7 +123,7 @@ public final class ConsumerRecord<K, V> {
     /**
      * The timestamp of this record
      */
-    public long timestamp() {
+    public Long timestamp() {
         return timestamp;
     }
 
@@ -117,7 +137,7 @@ public final class ConsumerRecord<K, V> {
     /**
      * The checksum (CRC32) of the record.
      */
-    public long checksum() {
+    public Long checksum() {
         return this.checksum;
     }
 
@@ -125,7 +145,7 @@ public final class ConsumerRecord<K, V> {
      * The size of the serialized, uncompressed key in bytes. If key is null, the returned size
      * is -1.
      */
-    public int serializedKeySize() {
+    public Integer serializedKeySize() {
         return this.serializedKeySize;
     }
 
@@ -133,7 +153,7 @@ public final class ConsumerRecord<K, V> {
      * The size of the serialized, uncompressed value in bytes. If value is null, the
      * returned size is -1.
      */
-    public int serializedValueSize() {
+    public Integer serializedValueSize() {
         return this.serializedValueSize;
     }
 
