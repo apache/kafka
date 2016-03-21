@@ -365,6 +365,7 @@ project(':core') {
       exclude('kafka-clients*')
     }
     into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
   }
 
 
@@ -417,6 +418,7 @@ project(':core') {
     compression = Compression.GZIP
     from project.file("../docs")
     into 'site-docs'
+    duplicatesStrategy 'exclude'
   }
 
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
@@ -443,6 +445,7 @@ project(':core') {
     from(project(':streams').configurations.runtime) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtime) { into("libs/") }
+    duplicatesStrategy 'exclude'
   }
 
   jar {
@@ -460,6 +463,7 @@ project(':core') {
       include('*.jar')
     }
     into "$buildDir/dependant-testlibs"
+    duplicatesStrategy 'exclude'
   }
 
   checkstyle {
@@ -543,6 +547,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/*"
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/serialization/*"
+    include "**/org/apache/kafka/common/config/*"
   }
 }
 
@@ -572,6 +577,7 @@ project(':tools') {
             exclude('kafka-clients*')
         }
         into "$buildDir/dependant-libs-${versions.scala}"
+        duplicatesStrategy 'exclude'
     }
 
     jar {
@@ -607,6 +613,7 @@ project(':streams') {
             exclude('kafka-clients*')
         }
         into "$buildDir/dependant-libs-${versions.scala}"
+        duplicatesStrategy 'exclude'
     }
 
     jar {
@@ -635,6 +642,7 @@ project(':streams:examples') {
       exclude('kafka-streams*')
     }
     into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
   }
 
   jar {
@@ -683,6 +691,7 @@ project(':connect:api') {
       exclude('connect-*')
     }
     into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
   }
 
   jar {
@@ -719,6 +728,7 @@ project(':connect:json') {
       exclude('connect-*')
     }
     into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
   }
 
   jar {
@@ -739,6 +749,7 @@ project(':connect:runtime') {
     compile libs.jerseyContainerServlet
     compile libs.jettyServer
     compile libs.jettyServlet
+    compile libs.jettyServlets
     compile libs.reflections
 
     testCompile project(':clients').sourceSets.test.output
@@ -764,6 +775,7 @@ project(':connect:runtime') {
       exclude('connect-*')
     }
     into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
   }
 
   jar {
@@ -806,6 +818,7 @@ project(':connect:file') {
       exclude('connect-*')
     }
     into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
   }
 
   jar {

@@ -132,7 +132,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
 
   def getAliveBrokers: Seq[Broker] = {
     inReadLock(partitionMetadataLock) {
-      aliveBrokers.values.toSeq
+      aliveBrokers.values.toBuffer
     }
   }
 

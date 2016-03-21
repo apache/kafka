@@ -24,7 +24,7 @@ import kafka.common.KafkaException
 import kafka.utils.Logging
 import kafka.client.ClientUtils
 
-
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 class BrokerPartitionInfo(producerConfig: ProducerConfig,
                           producerPool: ProducerPool,
                           topicPartitionInfo: HashMap[String, TopicMetadata])
@@ -101,4 +101,5 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
 
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 case class PartitionAndLeader(topic: String, partitionId: Int, leaderBrokerIdOpt: Option[Int])

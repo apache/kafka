@@ -19,7 +19,6 @@ package kafka.api
 
 import java.util.concurrent.{ExecutionException, TimeUnit, TimeoutException}
 import java.util.{Properties, Random}
-
 import kafka.common.Topic
 import kafka.consumer.SimpleConsumer
 import kafka.integration.KafkaServerTestHarness
@@ -31,6 +30,7 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors.{InvalidTopicException, NotEnoughReplicasAfterAppendException, NotEnoughReplicasException}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.apache.kafka.common.internals.TopicConstants
 
 class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val producerBufferSize = 30000
@@ -63,9 +63,12 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   override def setUp() {
     super.setUp()
 
-    producer1 = TestUtils.createNewProducer(brokerList, acks = 0, maxBlockMs = 10000L, bufferSize = producerBufferSize)
-    producer2 = TestUtils.createNewProducer(brokerList, acks = 1, maxBlockMs = 10000L, bufferSize = producerBufferSize)
-    producer3 = TestUtils.createNewProducer(brokerList, acks = -1, maxBlockMs = 10000L, bufferSize = producerBufferSize)
+    producer1 = TestUtils.createNewProducer(brokerList, acks = 0, requestTimeoutMs = 30000L, maxBlockMs = 10000L,
+      bufferSize = producerBufferSize)
+    producer2 = TestUtils.createNewProducer(brokerList, acks = 1, requestTimeoutMs = 30000L, maxBlockMs = 10000L,
+      bufferSize = producerBufferSize)
+    producer3 = TestUtils.createNewProducer(brokerList, acks = -1, requestTimeoutMs = 30000L, maxBlockMs = 10000L,
+      bufferSize = producerBufferSize)
   }
 
   @After
@@ -198,7 +201,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   @Test
   def testCannotSendToInternalTopic() {
     val thrown = intercept[ExecutionException] {
-      producer2.send(new ProducerRecord[Array[Byte],Array[Byte]](Topic.InternalTopics.head, "test".getBytes, "test".getBytes)).get
+      producer2.send(new ProducerRecord[Array[Byte],Array[Byte]](TopicConstants.INTERNAL_TOPICS.iterator.next, "test".getBytes, "test".getBytes)).get
     }
     assertTrue("Unexpected exception while sending to an invalid topic " + thrown.getCause, thrown.getCause.isInstanceOf[InvalidTopicException])
   }

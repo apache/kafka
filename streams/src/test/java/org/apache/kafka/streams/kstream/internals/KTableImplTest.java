@@ -17,10 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -40,16 +38,16 @@ import static org.junit.Assert.assertNull;
 
 public class KTableImplTest {
 
+    final private Serde<String> stringSerde = new Serdes.StringSerde();
+
     @Test
     public void testKTable() {
-        final Serializer<String> serializer = new StringSerializer();
-        final Deserializer<String> deserializer = new StringDeserializer();
         final KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
         String topic2 = "topic2";
 
-        KTable<String, String> table1 = builder.table(serializer, serializer, deserializer, deserializer, topic1);
+        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
 
         MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
@@ -74,7 +72,7 @@ public class KTableImplTest {
         MockProcessorSupplier<String, Integer> proc3 = new MockProcessorSupplier<>();
         table3.toStream().process(proc3);
 
-        KTable<String, String> table4 = table1.through(topic2, serializer, serializer, deserializer, deserializer);
+        KTable<String, String> table4 = table1.through(stringSerde, stringSerde, topic2);
 
         MockProcessorSupplier<String, String> proc4 = new MockProcessorSupplier<>();
         table4.toStream().process(proc4);
@@ -96,15 +94,13 @@ public class KTableImplTest {
     public void testValueGetter() throws IOException {
         File stateDir = Files.createTempDirectory("test").toFile();
         try {
-            final Serializer<String> serializer = new StringSerializer();
-            final Deserializer<String> deserializer = new StringDeserializer();
             final KStreamBuilder builder = new KStreamBuilder();
 
             String topic1 = "topic1";
             String topic2 = "topic2";
 
             KTableImpl<String, String, String> table1 =
-                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic1);
+                    (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
             KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                     new ValueMapper<String, Integer>() {
                         @Override
@@ -120,14 +116,14 @@ public class KTableImplTest {
                         }
                     });
             KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>)
-                    table1.through(topic2, serializer, serializer, deserializer, deserializer);
+                    table1.through(stringSerde, stringSerde, topic2);
 
             KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
             KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
             KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
             KTableValueGetterSupplier<String, String> getterSupplier4 = table4.valueGetterSupplier();
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
 
             // two state store should be created
             assertEquals(2, driver.allStateStores().size());
@@ -223,9 +219,6 @@ public class KTableImplTest {
 
     @Test
     public void testStateStore() throws IOException {
-        final Serializer<String> serializer = new StringSerializer();
-        final Deserializer<String> deserializer = new StringDeserializer();
-
         String topic1 = "topic1";
         String topic2 = "topic2";
 
@@ -234,9 +227,9 @@ public class KTableImplTest {
             KStreamBuilder builder = new KStreamBuilder();
 
             KTableImpl<String, String, String> table1 =
-                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic1);
+                    (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
             KTableImpl<String, String, String> table2 =
-                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic2);
+                    (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic2);
 
             KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
                     new ValueMapper<String, Integer>() {
@@ -253,7 +246,7 @@ public class KTableImplTest {
                         }
                     });
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
             driver.setTime(0L);
 
             // no state store should be created
@@ -267,9 +260,9 @@ public class KTableImplTest {
             KStreamBuilder builder = new KStreamBuilder();
 
             KTableImpl<String, String, String> table1 =
-                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic1);
+                    (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
             KTableImpl<String, String, String> table2 =
-                    (KTableImpl<String, String, String>) builder.table(serializer, serializer, deserializer, deserializer, topic2);
+                    (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic2);
 
             KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
                     new ValueMapper<String, Integer>() {
@@ -293,7 +286,7 @@ public class KTableImplTest {
                         }
                     });
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
             driver.setTime(0L);
 
             // two state store should be created

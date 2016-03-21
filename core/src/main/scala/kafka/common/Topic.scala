@@ -25,8 +25,6 @@ object Topic {
   private val maxNameLength = 255
   private val rgx = new Regex(legalChars + "+")
 
-  val InternalTopics = Set(GroupCoordinator.GroupMetadataTopicName)
-
   def validate(topic: String) {
     if (topic.length <= 0)
       throw new org.apache.kafka.common.errors.InvalidTopicException("topic name is illegal, can't be empty")

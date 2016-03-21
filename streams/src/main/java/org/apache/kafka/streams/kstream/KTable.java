@@ -17,8 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 
 /**
@@ -67,18 +66,14 @@ public interface KTable<K, V> {
      * Sends key-value to a topic, also creates a new instance of KTable from the topic.
      * This is equivalent to calling to(topic) and table(topic).
      *
-     * @param topic           the topic name
-     * @param keySerializer   key serializer used to send key-value pairs,
-     *                        if not specified the default key serializer defined in the configuration will be used
-     * @param valSerializer   value serializer used to send key-value pairs,
-     *                        if not specified the default value serializer defined in the configuration will be used
-     * @param keyDeserializer key deserializer used to create the new KStream,
-     *                        if not specified the default key deserializer defined in the configuration will be used
-     * @param valDeserializer value deserializer used to create the new KStream,
-     *                        if not specified the default value deserializer defined in the configuration will be used
+     * @param keySerde  key serde used to send key-value pairs,
+     *                  if not specified the default key serde defined in the configuration will be used
+     * @param valSerde  value serde used to send key-value pairs,
+     *                  if not specified the default value serde defined in the configuration will be used
+     * @param topic     the topic name
      * @return the new stream that consumes the given topic
      */
-    KTable<K, V> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer);
+    KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic);
 
     /**
      * Sends key-value to a topic using default serializers specified in the config.
@@ -90,13 +85,13 @@ public interface KTable<K, V> {
     /**
      * Sends key-value to a topic.
      *
-     * @param topic         the topic name
-     * @param keySerializer key serializer used to send key-value pairs,
-     *                      if not specified the default serializer defined in the configs will be used
-     * @param valSerializer value serializer used to send key-value pairs,
-     *                      if not specified the default serializer defined in the configs will be used
+     * @param keySerde  key serde used to send key-value pairs,
+     *                  if not specified the default serde defined in the configs will be used
+     * @param valSerde  value serde used to send key-value pairs,
+     *                  if not specified the default serde defined in the configs will be used
+     * @param topic     the topic name
      */
-    void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer);
+    void to(Serde<K> keySerde, Serde<V> valSerde, String topic);
 
     /**
      * Creates a new instance of KStream from this KTable
@@ -141,21 +136,35 @@ public interface KTable<K, V> {
     /**
      * Reduce values of this table by the selected key.
      *
-     * @param addReducer the class of Reducer
-     * @param removeReducer the class of Reducer
+     * @param adder the class of Reducer
+     * @param subtractor the class of Reducer
      * @param selector the KeyValue mapper that select the aggregate key
      * @param name the name of the resulted table
      * @param <K1>   the key type of the aggregated table
      * @param <V1>   the value type of the aggregated table
      * @return the instance of KTable
      */
-    <K1, V1> KTable<K1, V1> reduce(Reducer<V1> addReducer,
-                                   Reducer<V1> removeReducer,
+    <K1, V1> KTable<K1, V1> reduce(Reducer<V1> adder,
+                                   Reducer<V1> subtractor,
                                    KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                   Serializer<K1> keySerializer,
-                                   Serializer<V1> valueSerializer,
-                                   Deserializer<K1> keyDeserializer,
-                                   Deserializer<V1> valueDeserializer,
+                                   Serde<K1> keySerde,
+                                   Serde<V1> valueSerde,
+                                   String name);
+
+    /**
+     * Reduce values of this table by the selected key.
+     *
+     * @param adder         the instance of {@link Reducer} for addition
+     * @param subtractor    the instance of {@link Reducer} for subtraction
+     * @param selector      the instance of {@link KeyValueMapper} that select the aggregate key
+     * @param name          the name of the resulted table
+     * @param <K1>          the key type of the aggregated table
+     * @param <V1>          the value type of the aggregated table
+     * @return              the instance of KTable
+     */
+    <K1, V1> KTable<K1, V1> reduce(Reducer<V1> adder,
+                                   Reducer<V1> subtractor,
+                                   KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
                                    String name);
 
     /**
@@ -174,12 +183,27 @@ public interface KTable<K, V> {
                                         Aggregator<K1, V1, T> add,
                                         Aggregator<K1, V1, T> remove,
                                         KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                        Serializer<K1> keySerializer,
-                                        Serializer<V1> valueSerializer,
-                                        Serializer<T> aggValueSerializer,
-                                        Deserializer<K1> keyDeserializer,
-                                        Deserializer<V1> valueDeserializer,
-                                        Deserializer<T> aggValueDeserializer,
+                                        Serde<K1> keySerde,
+                                        Serde<V1> valueSerde,
+                                        Serde<T> aggValueSerde,
+                                        String name);
+
+    /**
+     * Aggregate values of this table by the selected key.
+     *
+     * @param initializer   the instance of {@link Initializer}
+     * @param adder         the instance of {@link Aggregator} for addition
+     * @param substractor   the instance of {@link Aggregator} for subtraction
+     * @param selector      the instance of {@link KeyValueMapper} that select the aggregate key
+     * @param name          the name of the resulted table
+     * @param <K1>          the key type of the aggregated table
+     * @param <V1>          the value type of the aggregated table
+     * @return              the instance of aggregated {@link KTable}
+     */
+    <K1, V1, T> KTable<K1, T> aggregate(Initializer<T> initializer,
+                                        Aggregator<K1, V1, T> adder,
+                                        Aggregator<K1, V1, T> substractor,
+                                        KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
                                         String name);
 
     /**
@@ -191,10 +215,17 @@ public interface KTable<K, V> {
      * @return the instance of KTable
      */
     <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector,
-                                Serializer<K1> keySerializer,
-                                Serializer<V> valueSerializer,
-                                Deserializer<K1> keyDeserializer,
-                                Deserializer<V> valueDeserializer,
+                                Serde<K1> keySerde,
+                                Serde<V> valueSerde,
                                 String name);
 
+    /**
+     * Count number of records of this table by the selected key.
+     *
+     * @param selector      the instance of {@link KeyValueMapper} that select the aggregate key
+     * @param name          the name of the resulted table
+     * @param <K1>          the key type of the aggregated table
+     * @return              the instance of aggregated {@link KTable}
+     */
+    <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector, String name);
 }

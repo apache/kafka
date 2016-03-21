@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -82,7 +83,6 @@ public class ConnectorsResourceTest {
         TASK_INFOS.add(new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 0), TASK_CONFIGS.get(0)));
         TASK_INFOS.add(new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 1), TASK_CONFIGS.get(1)));
     }
-
 
     @Mock
     private Herder herder;
@@ -172,6 +172,8 @@ public class ConnectorsResourceTest {
         connectorsResource.createConnector(body);
 
         PowerMock.verifyAll();
+
+
     }
 
     @Test(expected = AlreadyExistsException.class)

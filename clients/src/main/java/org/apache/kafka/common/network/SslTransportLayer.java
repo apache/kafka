@@ -106,9 +106,11 @@ public class SslTransportLayer implements TransportLayer {
      * does socketChannel.finishConnect()
      */
     @Override
-    public void finishConnect() throws IOException {
-        socketChannel.finishConnect();
-        key.interestOps(key.interestOps() & ~SelectionKey.OP_CONNECT | SelectionKey.OP_READ);
+    public boolean finishConnect() throws IOException {
+        boolean connected = socketChannel.finishConnect();
+        if (connected)
+            key.interestOps(key.interestOps() & ~SelectionKey.OP_CONNECT | SelectionKey.OP_READ);
+        return connected;
     }
 
     /**

@@ -34,6 +34,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static java.util.Collections.singleton;
+
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
  */
@@ -61,7 +63,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * Create {@link StreamTask} with its assigned partitions
      *
      * @param id                    the ID of this task
-     * @param jobId                 the ID of the job
+     * @param applicationId         the ID of the stream processing application
      * @param partitions            the collection of assigned {@link TopicPartition}
      * @param topology              the instance of {@link ProcessorTopology}
      * @param consumer              the instance of {@link Consumer}
@@ -71,7 +73,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @param metrics               the {@link StreamsMetrics} created by the thread
      */
     public StreamTask(TaskId id,
-                      String jobId,
+                      String applicationId,
                       Collection<TopicPartition> partitions,
                       ProcessorTopology topology,
                       Consumer<byte[], byte[]> consumer,
@@ -79,7 +81,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       Consumer<byte[], byte[]> restoreConsumer,
                       StreamsConfig config,
                       StreamsMetrics metrics) {
-        super(id, jobId, partitions, topology, consumer, restoreConsumer, config, false);
+        super(id, applicationId, partitions, topology, consumer, restoreConsumer, config, false);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
 
@@ -136,7 +138,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
         if (queueSize > this.maxBufferedSize) {
-            consumer.pause(partition);
+            consumer.pause(singleton(partition));
         }
     }
 
@@ -178,7 +180,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 // after processing this record, if its partition queue's buffered size has been
                 // decreased to the threshold, we can then resume the consumption on this partition
                 if (partitionGroup.numBuffered(partition) == this.maxBufferedSize) {
-                    consumer.resume(partition);
+                    consumer.resume(singleton(partition));
                     requiresPoll = true;
                 }
 

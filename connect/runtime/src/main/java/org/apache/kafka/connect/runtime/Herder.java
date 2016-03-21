@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -127,6 +128,12 @@ public interface Herder {
      */
     ConnectorStateInfo.TaskState taskStatus(ConnectorTaskId id);
 
+    /**
+     * Validate the provided connector config values against the configuration definition.
+     * @param connType the connector class
+     * @param connectorConfig the provided connector config values
+     */
+    ConfigInfos validateConfigs(String connType, Map<String, String> connectorConfig);
 
     class Created<T> {
         private final boolean created;
