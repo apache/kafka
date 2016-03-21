@@ -133,7 +133,7 @@ public interface KStream<K, V> {
     /**
      * Create a new {@link KStream} instance by applying a {@link org.apache.kafka.streams.kstream.Transformer} to all elements in this stream, one element at a time.
      *
-     * @param transformerSupplier   the instance of {@link TransformerSupplier} that generates stateful processors
+     * @param transformerSupplier   the instance of {@link TransformerSupplier} that generates {@link org.apache.kafka.streams.kstream.Transformer}
      * @param stateStoreNames       the names of the state store used by the processor
      */
     <K1, V1> KStream<K1, V1> transform(TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier, String... stateStoreNames);
@@ -141,7 +141,7 @@ public interface KStream<K, V> {
     /**
      * Create a new {@link KStream} instance by applying a {@link org.apache.kafka.streams.kstream.ValueTransformer} to all values in this stream, one element at a time.
      *
-     * @param valueTransformerSupplier  the instance of {@link ValueTransformerSupplier} that generates stateful processors
+     * @param valueTransformerSupplier  the instance of {@link ValueTransformerSupplier} that generates {@link org.apache.kafka.streams.kstream.ValueTransformer}
      * @param stateStoreNames           the names of the state store used by the processor
      */
     <R> KStream<K, R> transformValues(ValueTransformerSupplier<V, R> valueTransformerSupplier, String... stateStoreNames);
@@ -149,7 +149,7 @@ public interface KStream<K, V> {
     /**
      * Process all elements in this stream, one element at a time, by applying a {@link org.apache.kafka.streams.processor.Processor}.
      *
-     * @param processorSupplier         the supplier of {@link ProcessorSupplier} that generates processors
+     * @param processorSupplier         the supplier of {@link ProcessorSupplier} that generates {@link org.apache.kafka.streams.processor.Processor}
      * @param stateStoreNames           the names of the state store used by the processor
      */
     void process(ProcessorSupplier<K, V> processorSupplier, String... stateStoreNames);
