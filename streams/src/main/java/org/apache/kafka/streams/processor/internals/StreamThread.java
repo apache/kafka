@@ -66,6 +66,8 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static java.util.Collections.singleton;
+
 public class StreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
@@ -382,7 +384,7 @@ public class StreamThread extends Thread {
                             if (remaining != null) {
                                 remainingStandbyRecords.put(partition, remaining);
                             } else {
-                                restoreConsumer.resume(partition);
+                                restoreConsumer.resume(singleton(partition));
                             }
                         }
                     }
@@ -405,7 +407,7 @@ public class StreamThread extends Thread {
 
                     List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
                     if (remaining != null) {
-                        restoreConsumer.pause(partition);
+                        restoreConsumer.pause(singleton(partition));
                         standbyRecords.put(partition, remaining);
                     }
                 }
@@ -690,7 +692,7 @@ public class StreamThread extends Thread {
             if (offset >= 0) {
                 restoreConsumer.seek(partition, offset);
             } else {
-                restoreConsumer.seekToBeginning(partition);
+                restoreConsumer.seekToBeginning(singleton(partition));
             }
         }
     }

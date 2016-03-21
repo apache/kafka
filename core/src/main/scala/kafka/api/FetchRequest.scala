@@ -150,7 +150,8 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
       case (topicAndPartition, data) =>
         (topicAndPartition, FetchResponsePartitionData(Errors.forException(e).code, -1, MessageSet.Empty))
     }
-    val errorResponse = FetchResponse(correlationId, fetchResponsePartitionData)
+    val fetchRequest = request.requestObj.asInstanceOf[FetchRequest]
+    val errorResponse = FetchResponse(correlationId, fetchResponsePartitionData, fetchRequest.versionId)
     // Magic value does not matter here because the message set is empty
     requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, errorResponse)))
   }

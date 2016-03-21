@@ -43,6 +43,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static java.util.Collections.singleton;
+
 public class ProcessorStateManager {
 
     private static final Logger log = LoggerFactory.getLogger(ProcessorStateManager.class);
@@ -204,7 +206,7 @@ public class ProcessorStateManager {
         try {
             // calculate the end offset of the partition
             // TODO: this is a bit hacky to first seek then position to get the end offset
-            restoreConsumer.seekToEnd(storePartition);
+            restoreConsumer.seekToEnd(singleton(storePartition));
             long endOffset = restoreConsumer.position(storePartition);
 
             // restore from the checkpointed offset of the change log if it is persistent and the offset exists;
@@ -212,7 +214,7 @@ public class ProcessorStateManager {
             if (checkpointedOffsets.containsKey(storePartition)) {
                 restoreConsumer.seek(storePartition, checkpointedOffsets.get(storePartition));
             } else {
-                restoreConsumer.seekToBeginning(storePartition);
+                restoreConsumer.seekToBeginning(singleton(storePartition));
             }
 
             // restore its state from changelog records
