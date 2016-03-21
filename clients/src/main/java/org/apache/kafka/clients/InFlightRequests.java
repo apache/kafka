@@ -55,10 +55,17 @@ final class InFlightRequests {
     }
 
     /**
-     * Get the oldest request (the one that that will be completed next) for the given node
+     * Get the oldest request (the one that that will be completed next) for the given node and remove it from the queue
      */
     public ClientRequest completeNext(String node) {
         return requestQueue(node).pollLast();
+    }
+
+    /**
+     * Get the oldest request (the one that that will be completed next) for the given node
+     */
+    public ClientRequest earliestSent(String node) {
+        return requestQueue(node).peekLast();
     }
 
     /**
