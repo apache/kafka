@@ -472,8 +472,8 @@ object KafkaConfig {
   val ControlledShutdownRetryBackoffMsDoc = "Before each retry, the system needs time to recover from the state that caused the previous failure (Controller fail over, replica lag etc). This config determines the amount of time to wait before retrying."
   val ControlledShutdownEnableDoc = "Enable controlled shutdown of the server"
   /** ********* Consumer coordinator configuration ***********/
-  val ConsumerMinSessionTimeoutMsDoc = "The minimum allowed session timeout for registered consumers"
-  val ConsumerMaxSessionTimeoutMsDoc = "The maximum allowed session timeout for registered consumers"
+  val ConsumerMinSessionTimeoutMsDoc = "The minimum allowed session timeout for registered consumers. Shorter timeouts lead to more consumer heartbeating which can overwhelm broker resources."
+  val ConsumerMaxSessionTimeoutMsDoc = "The maximum allowed session timeout for registered consumers. Longer timeouts give consumers more time to process messages in between heartbeats at the cost of a longer time to detect failures."
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeDoc = "The maximum size for a metadata entry associated with an offset commit"
   val OffsetsLoadBufferSizeDoc = "Batch size for reading from the offsets segments when loading offsets into the cache."
