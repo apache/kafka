@@ -23,7 +23,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 /**
- * KStream is an abstraction of a <i>record stream</i> in key-value pairs.
+ * KStream is an abstraction of a <i>record stream</i> of key-value pairs.
  *
  * @param <K> Type of keys
  * @param <V> Type of values
@@ -32,14 +32,14 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 public interface KStream<K, V> {
 
     /**
-     * Create a new instance of {@link KStream} consists of all elements of this stream which satisfy a predicate.
+     * Create a new instance of {@link KStream} that consists of all elements of this stream which satisfy a predicate.
      *
      * @param predicate     the instance of {@link Predicate}
      */
     KStream<K, V> filter(Predicate<K, V> predicate);
 
     /**
-     * Create a new instance of KStream consists all elements of this stream which do not satisfy a predicate.
+     * Create a new instance of {@link KStream} that consists all elements of this stream which do not satisfy a predicate.
      *
      * @param predicate     the instance of {@link Predicate}
      */
@@ -55,7 +55,7 @@ public interface KStream<K, V> {
     <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, KeyValue<K1, V1>> mapper);
 
     /**
-     * Create a new instance of {@link KStream} by transforming each value in this stream into a different value in the new stream.
+     * Create a new instance of {@link KStream} by transforming the value of each element in this stream into a new value in the new stream.
      *
      * @param mapper        the instance of {@link ValueMapper}
      * @param <V1>          the value type of the new stream
@@ -72,7 +72,7 @@ public interface KStream<K, V> {
     <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K, V, Iterable<KeyValue<K1, V1>>> mapper);
 
     /**
-     * Create a new instance of {@link KStream} by transforming each value in this stream into zero or more values in the new stream.
+     * Create a new instance of {@link KStream} by transforming the value of each element in this stream into zero or more values with the same key in the new stream.
      *
      * @param processor     the instance of {@link ValueMapper}
      * @param <V1>          the value type of the new stream
@@ -80,10 +80,11 @@ public interface KStream<K, V> {
     <V1> KStream<K, V1> flatMapValues(ValueMapper<V, Iterable<V1>> processor);
 
     /**
-     * Create an array of {@link KStream} from this stream. Each stream in the array corresponds to a predicate in
-     * supplied predicates in the same order. Predicates are evaluated in order. An element is streamed to
-     * a corresponding stream for the first predicate is evaluated true.
-     * An element will be dropped if none of the predicates evaluate true.
+     * Creates an array of {@link KStream} from this stream by branching the elements in the original stream based on the supplied predicates.
+     * Each element is evaluated against the supplied predicates, and predicates are evaluated in order. Each stream in the result array
+     * corresponds position-wise (index) to the predicate in the supplied predicates. The branching happens on first-match: An element
+     * in the original stream is assigned to the corresponding result stream for the first predicate that evaluates to true, and
+     * assigned to this stream only. An element will be dropped if none of the predicates evaluate to true.
      *
      * @param predicates    the ordered list of {@link Predicate} instances
      */
@@ -130,7 +131,7 @@ public interface KStream<K, V> {
     void to(Serde<K> keySerde, Serde<V> valSerde, String topic);
 
     /**
-     * Create a new {@link KStream} instance by applying a stateful transformation to all elements in this stream.
+     * Create a new {@link KStream} instance by applying a {@link org.apache.kafka.streams.kstream.Transformer} to all elements in this stream, one element at a time.
      *
      * @param transformerSupplier   the instance of {@link TransformerSupplier} that generates stateful processors
      * @param stateStoreNames       the names of the state store used by the processor
@@ -138,7 +139,7 @@ public interface KStream<K, V> {
     <K1, V1> KStream<K1, V1> transform(TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier, String... stateStoreNames);
 
     /**
-     * Create a new {@link KStream} instance by applying a stateful transformation to all values in this stream.
+     * Create a new {@link KStream} instance by applying a {@link org.apache.kafka.streams.kstream.ValueTransformer} to all values in this stream, one element at a time.
      *
      * @param valueTransformerSupplier  the instance of {@link ValueTransformerSupplier} that generates stateful processors
      * @param stateStoreNames           the names of the state store used by the processor
@@ -146,7 +147,7 @@ public interface KStream<K, V> {
     <R> KStream<K, R> transformValues(ValueTransformerSupplier<V, R> valueTransformerSupplier, String... stateStoreNames);
 
     /**
-     * Process all elements in this stream by applying a {@link org.apache.kafka.streams.processor.Processor}.
+     * Process all elements in this stream, one element at a time, by applying a {@link org.apache.kafka.streams.processor.Processor}.
      *
      * @param processorSupplier         the supplier of {@link ProcessorSupplier} that generates processors
      * @param stateStoreNames           the names of the state store used by the processor
@@ -154,7 +155,7 @@ public interface KStream<K, V> {
     void process(ProcessorSupplier<K, V> processorSupplier, String... stateStoreNames);
 
     /**
-     * Combine values of this stream with another {@link KStream} using windowed Inner Join.
+     * Combine element values of this stream with another {@link KStream}'s elements of the same key using windowed Inner Join.
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -177,7 +178,7 @@ public interface KStream<K, V> {
             Serde<V1> otherValueSerde);
 
     /**
-     * Combine values of this stream with another {@link KStream} using windowed Inner Join
+     * Combine element values of this stream with another {@link KStream}'s elements of the same key using windowed Inner Join
      * with default serializers and deserializers.
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
@@ -192,7 +193,7 @@ public interface KStream<K, V> {
             JoinWindows windows);
 
     /**
-     * Combine values of this stream with another {@link KStream} using windowed Outer Join.
+     * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join.
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -215,7 +216,7 @@ public interface KStream<K, V> {
             Serde<V1> otherValueSerde);
 
     /**
-     * Combine values of this stream with another {@link KStream} using windowed Outer Join
+     * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join
      * with default serializers and deserializers.
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
@@ -230,7 +231,7 @@ public interface KStream<K, V> {
             JoinWindows windows);
 
     /**
-     * Combine values of this stream with another {@link KStream} using windowed Left Join.
+     * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join.
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -250,7 +251,7 @@ public interface KStream<K, V> {
             Serde<V1> otherValueSerde);
 
     /**
-     * Combine values of this stream with another {@link KStream} using windowed Left Join
+     * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join
      * with default serializers and deserializers.
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
@@ -265,7 +266,7 @@ public interface KStream<K, V> {
             JoinWindows windows);
 
     /**
-     * Combine values of this stream with {@link KTable} using non-windowed Left Join.
+     * Combine values of this stream with {@link KTable}'s elements of the same key using non-windowed Left Join.
      *
      * @param table     the instance of {@link KTable} joined with this stream
      * @param joiner    the instance of {@link ValueJoiner}
@@ -322,7 +323,7 @@ public interface KStream<K, V> {
     KTable<K, V> reduceByKey(Reducer<V> reducer, String name);
 
     /**
-     * Aggregate values of this stream by key on a window basis into a new instance of {@link KTable}.
+     * Aggregate values of this stream by key on a window basis into a new instance of windowed {@link KTable}.
      *
      * @param initializer   the instance of {@link Initializer}
      * @param aggregator    the instance of {@link Aggregator}

@@ -54,7 +54,7 @@ public class JoinWindows extends Windows<TumblingWindow> {
     /**
      * Specifies that records of the same key are joinable if their timestamp stamps are within
      * the join window interval, and if the timestamp of a record from the secondary stream is
-     * is earlier than or equal to the timestamp of a record from the first stream.
+     * earlier than or equal to the timestamp of a record from the first stream.
      *
      * @param timeDifference    join window interval in milliseconds
      */
@@ -64,7 +64,7 @@ public class JoinWindows extends Windows<TumblingWindow> {
 
     /**
      * Specifies that records of the same key are joinable if their timestamp stamps are within
-     * the join window interval, and if the timestamp of a record from the secondary stream is
+     * the join window interval, and if the timestamp of a record from the secondary stream
      * is later than or equal to the timestamp of a record from the first stream.
      *
      * @param timeDifference    join window interval in milliseconds

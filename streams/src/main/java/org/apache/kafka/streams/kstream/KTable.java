@@ -31,21 +31,21 @@ import org.apache.kafka.streams.KeyValue;
 public interface KTable<K, V> {
 
     /**
-     * Create a new instance of {@link KTable} consists of all elements of this stream which satisfy a predicate.
+     * Create a new instance of {@link KTable} that consists of all elements of this stream which satisfy a predicate.
      *
      * @param predicate     the instance of {@link Predicate}
      */
     KTable<K, V> filter(Predicate<K, V> predicate);
 
     /**
-     * Create a new instance of {@link KTable} consists all elements of this stream which do not satisfy a predicate
+     * Create a new instance of {@link KTable} that consists all elements of this stream which do not satisfy a predicate
      *
      * @param predicate     the instance of {@link Predicate}
      */
     KTable<K, V> filterOut(Predicate<K, V> predicate);
 
     /**
-     * Create a new instance of {@link KTable} by transforming each value in this stream into a different value in the new stream.
+     * Create a new instance of {@link KTable} by transforming the value of each element in this stream into a new value in the new stream.
      *
      * @param mapper        the instance of {@link ValueMapper}
      * @param <V1>          the value type of the new stream
@@ -98,7 +98,7 @@ public interface KTable<K, V> {
     KStream<K, V> toStream();
 
     /**
-     * Combine values of this stream with another {@link KTable} stream using Inner Join.
+     * Combine values of this stream with another {@link KTable} stream's elements of the same key using Inner Join.
      *
      * @param other         the instance of {@link KTable} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
@@ -108,7 +108,7 @@ public interface KTable<K, V> {
     <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
-     * Combine values of this stream with another {@link KTable} stream using Outer Join.
+     * Combine values of this stream with another {@link KTable} stream's elements of the same key using Outer Join.
      *
      * @param other         the instance of {@link KTable} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
@@ -118,7 +118,7 @@ public interface KTable<K, V> {
     <V1, R> KTable<K, R> outerJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
-     * Combine values of this stream with another {@link KTable} stream using Left Join.
+     * Combine values of this stream with another {@link KTable} stream's elements of the same key using Left Join.
      *
      * @param other         the instance of {@link KTable} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}

@@ -28,7 +28,7 @@ import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * KStreamBuilder is a subclass of {@link TopologyBuilder} that provides the higher-level Streams DSL
+ * KStreamBuilder is a subclass of {@link TopologyBuilder} that provides the Kafka Streams DSL
  * for users to specify computational logic and translates the given logic to a {@link org.apache.kafka.streams.processor.internals.ProcessorTopology}.
  */
 public class KStreamBuilder extends TopologyBuilder {
@@ -43,7 +43,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * Creates a {@link KStream} instance from the specified topics.
      * The default deserializers specified in the config are used.
      *
-     * @param topics    the topic names, if empty default to all the topics in the config
+     * @param topics    the topic names; must contain at least one topic name
      */
     public <K, V> KStream<K, V> stream(String... topics) {
         return stream(null, null, topics);
@@ -56,7 +56,7 @@ public class KStreamBuilder extends TopologyBuilder {
      *                  if not specified the default serde defined in the configs will be used
      * @param valSerde  value serde used to read this source {@link KStream},
      *                  if not specified the default serde defined in the configs will be used
-     * @param topics    the topic names, if empty default to all the topics in the config
+     * @param topics    the topic names; must contain at least one topic name
      */
     public <K, V> KStream<K, V> stream(Serde<K> keySerde, Serde<V> valSerde, String... topics) {
         String name = newName(KStreamImpl.SOURCE_NAME);
