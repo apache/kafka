@@ -47,13 +47,14 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>session.timeout.ms</code>
      */
     public static final String SESSION_TIMEOUT_MS_CONFIG = "session.timeout.ms";
-    private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect failures when using Kafka's consumer " +
-            "group management facilities. When the session timeout expires on the broker without having received a heartbeat " +
-            "from the consumer, the group will be rebalanced. Since heartbeats are sent only when poll() is invoked, a higher " +
-            "session timeout allows more time for message processing in the consumer's poll loop at the cost of a longer time " +
-            "to detect hard failures. See also <code>max.poll.records</code> for another option to control the processing time " +
-            "in the poll loop. Note that the value must be in the broker's allowable range as configured in the broker " +
-            "configuration by <code>group.min.session.timeout.ms</code> and <code>group.max.session.timeout.ms</code>.";
+    private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect failures when using Kafka's " +
+            "group management facilities. When a consumer's heartbeat is not received within the session timeout, " +
+            "the broker will mark the consumer as failed and rebalance the group. Since heartbeats are sent only " +
+            "when poll() is invoked, a higher session timeout allows more time for message processing in the consumer's " +
+            "poll loop at the cost of a longer time to detect hard failures. See also <code>max.poll.records</code> for " +
+            "another option to control the processing time in the poll loop. Note that the value must be in the " +
+            "allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> " +
+            "and <code>group.max.session.timeout.ms</code>.";
 
     /**
      * <code>heartbeat.interval.ms</code>
