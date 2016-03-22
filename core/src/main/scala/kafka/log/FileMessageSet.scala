@@ -245,10 +245,11 @@ class FileMessageSet private[kafka](@volatile var file: File,
   def iterator(maxMessageSize: Int): Iterator[MessageAndOffset] = {
     new IteratorTemplate[MessageAndOffset] {
       var location = start
-      val sizeOffsetBuffer = ByteBuffer.allocate(12)
+      val SizeOffsetLength = 12
+      val sizeOffsetBuffer = ByteBuffer.allocate(SizeOffsetLength)
 
       override def makeNext(): MessageAndOffset = {
-        if(location >= end)
+        if(location + SizeOffsetLength >= end)
           return allDone()
 
         // read the size of the item
@@ -260,20 +261,20 @@ class FileMessageSet private[kafka](@volatile var file: File,
         sizeOffsetBuffer.rewind()
         val offset = sizeOffsetBuffer.getLong()
         val size = sizeOffsetBuffer.getInt()
-        if(size < Message.MinMessageOverhead)
+        if(size < Message.MinMessageOverhead || location + SizeOffsetLength + size > end)
           return allDone()
         if(size > maxMessageSize)
           throw new CorruptRecordException("Message size exceeds the largest allowable message size (%d).".format(maxMessageSize))
 
         // read the item itself
         val buffer = ByteBuffer.allocate(size)
-        channel.read(buffer, location + 12)
+        channel.read(buffer, location + SizeOffsetLength)
         if(buffer.hasRemaining)
           return allDone()
         buffer.rewind()
 
         // increment the location and return the item
-        location += size + 12
+        location += size + SizeOffsetLength
         new MessageAndOffset(new Message(buffer), offset)
       }
     }

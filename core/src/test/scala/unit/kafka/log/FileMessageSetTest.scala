@@ -133,11 +133,13 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   def testIteratorWithLimits() {
     val message = messageSet.toList(1)
     val start = messageSet.searchFor(1, 0).position
-    val size = message.message.size
+    val size = message.message.size + 12
     val slice = messageSet.read(start, size)
     assertEquals(List(message), slice.toList)
+    val slice2 = messageSet.read(start, size - 1)
+    assertEquals(List(), slice2.toList)
   }
-  
+
   /**
    * Test the truncateTo method lops off messages and appropriately updates the size
    */
