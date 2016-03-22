@@ -233,6 +233,21 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
+  def testAsyncCommit() {
+    val consumer = this.consumers(0)
+    consumer.assign(List(tp).asJava)
+    consumer.poll(0)
+
+    val callback = new CountConsumerCommitCallback
+    val count = 5
+    for (i <- 1 to count)
+      consumer.commitAsync(Map(tp -> new OffsetAndMetadata(i)).asJava, callback)
+
+    awaitCommitCallback(consumer, callback, count=count)
+    assertEquals(new OffsetAndMetadata(count), consumer.committed(tp))
+  }
+
+  @Test
   def testExpandingTopicSubscriptions() {
     val otherTopic = "other"
     val subscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))

@@ -870,7 +870,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // must return these records to users to process before being interrupted or
                     // auto-committing offsets
                     fetcher.sendFetches(metadata.fetch());
-                    client.quickPoll();
+                    client.quickPoll(false);
                     return this.interceptors == null
                         ? new ConsumerRecords<>(records) : this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
