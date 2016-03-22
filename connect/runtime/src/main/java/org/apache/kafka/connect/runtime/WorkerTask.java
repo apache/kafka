@@ -111,9 +111,6 @@ abstract class WorkerTask implements Runnable {
         } catch (Throwable t) {
             log.error("Task {} threw an uncaught and unrecoverable exception during shutdown", id, t);
             throw t;
-        } finally {
-            running.set(false);
-            shutdownLatch.countDown();
         }
     }
 
@@ -145,6 +142,12 @@ abstract class WorkerTask implements Runnable {
         } catch (Throwable t) {
             if (!cancelled.get())
                 lifecycleListener.onFailure(id, t);
+
+            if (t instanceof Error)
+                throw t;
+        } finally {
+            running.set(false);
+            shutdownLatch.countDown();
         }
     }
 

@@ -28,6 +28,8 @@ import java.util.Set;
  * partition returned by a {@link Consumer#poll(long)} operation.
  */
 public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
+
+    @SuppressWarnings("unchecked")
     public static final ConsumerRecords<Object, Object> EMPTY = new ConsumerRecords<>(Collections.EMPTY_MAP);
 
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
@@ -101,7 +103,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
                 Iterator<ConsumerRecord<K, V>> current;
 
                 public ConsumerRecord<K, V> makeNext() {
-                    if (current == null || !current.hasNext()) {
+                    while (current == null || !current.hasNext()) {
                         if (iters.hasNext())
                             current = iters.next().iterator();
                         else

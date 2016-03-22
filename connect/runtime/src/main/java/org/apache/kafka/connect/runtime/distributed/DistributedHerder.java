@@ -84,7 +84,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS = 250;
 
-    private final Worker worker;
     private final KafkaConfigStorage configStorage;
     private ClusterConfigState configState;
     private final Time time;
@@ -100,6 +99,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // and the from other nodes are safe to process
     private boolean rebalanceResolved;
     private ConnectProtocol.Assignment assignment;
+    private boolean canReadConfigs;
 
     // To handle most external requests, like creating or destroying a connector, we can use a generic request where
     // the caller specifies all the code that should be executed.
@@ -129,15 +129,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       WorkerGroupMember member,
                       String restUrl,
                       Time time) {
-        super(statusBackingStore, workerId);
+        super(worker, statusBackingStore, workerId);
 
-        this.worker = worker;
         if (configStorage != null) {
             // For testing. Assume configuration has already been performed
             this.configStorage = configStorage;
         } else {
             this.configStorage = new KafkaConfigStorage(worker.getInternalValueConverter(), connectorConfigCallback(), taskConfigCallback());
-            this.configStorage.configure(config.originals());
+            this.configStorage.configure(config);
         }
         configState = ClusterConfigState.EMPTY;
         this.time = time;
@@ -150,6 +149,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         rebalanceResolved = true; // If we still need to follow up after a rebalance occurred, starting up tasks
         needsReconfigRebalance = false;
+        canReadConfigs = true; // We didn't try yet, but Configs are readable until proven otherwise
 
         forwardRequestExecutor = Executors.newSingleThreadExecutor();
     }
@@ -206,6 +206,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // blocking up this thread (especially those in callbacks due to rebalance events).
 
         try {
+            // if we failed to read to end of log before, we need to make sure the issue was resolved before joining group
+            // Joining and immediately leaving for failure to read configs is exceedingly impolite
+            if (!canReadConfigs && !readConfigToEnd(workerSyncTimeoutMs))
+                return; // Safe to return and tick immediately because readConfigToEnd will do the backoff for us
+
             member.ensureActive();
             // Ensure we're in a good state in our group. If not restart and everything should be setup to rejoin
             if (!handleRebalanceCompleted()) return;
@@ -544,6 +549,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         return generation;
     }
 
+
     // Should only be called from work thread, so synchronization should not be needed
     private boolean isLeader() {
         return assignment != null && member.memberId().equals(assignment.leader());
@@ -574,21 +580,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         //      even attempting to. If we can't we should drop out of the group because we will block everyone from making
         //      progress. We can backoff and try rejoining later.
         //  1b. We are not the leader. We might need to catch up. If we're already caught up we can rejoin immediately,
-        //      otherwise, we just want to wait indefinitely to catch up and rejoin whenever we're finally ready.
+        //      otherwise, we just want to wait reasonable amount of time to catch up and rejoin if we are ready.
         // 2. Assignment succeeded.
         //  2a. We are caught up on configs. Awesome! We can proceed to run our assigned work.
-        //  2b. We need to try to catch up. We can do this potentially indefinitely because if it takes to long, we'll
-        //      be kicked out of the group anyway due to lack of heartbeats.
+        //  2b. We need to try to catch up - try reading configs for reasonable amount of time.
 
         boolean needsReadToEnd = false;
-        long syncConfigsTimeoutMs = Long.MAX_VALUE;
         boolean needsRejoin = false;
         if (assignment.failed()) {
             needsRejoin = true;
             if (isLeader()) {
                 log.warn("Join group completed, but assignment failed and we are the leader. Reading to end of config and retrying.");
                 needsReadToEnd = true;
-                syncConfigsTimeoutMs = workerSyncTimeoutMs;
             } else if (configState.offset() < assignment.offset()) {
                 log.warn("Join group completed, but assignment failed and we lagging. Reading to end of config and retrying.");
                 needsReadToEnd = true;
@@ -604,11 +607,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         if (needsReadToEnd) {
             // Force exiting this method to avoid creating any connectors/tasks and require immediate rejoining if
-            // we timed out. This should only happen if we were the leader and didn't finish quickly enough, in which
-            // case we've waited a long time and should have already left the group OR the timeout should have been
-            // very long and not having finished also indicates we've waited longer than the session timeout.
-            if (!readConfigToEnd(syncConfigsTimeoutMs))
+            // we timed out. This should only happen if we failed to read configuration for long enough,
+            // in which case giving back control to the main loop will prevent hanging around indefinitely after getting kicked out of the group.
+            // We also indicate to the main loop that we failed to readConfigs so it will check that the issue was resolved before trying to join the group
+            if (!readConfigToEnd(workerSyncTimeoutMs)) {
+                canReadConfigs = false;
                 needsRejoin = true;
+            }
         }
 
         if (needsRejoin) {
@@ -646,11 +651,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.info("Finished reading to end of log and updated config snapshot, new config log offset: {}", configState.offset());
             return true;
         } catch (TimeoutException e) {
+            // in case reading the log takes too long, leave the group to ensure a quick rebalance (although by default we should be out of the group already)
+            // and back off to avoid a tight loop of rejoin-attempt-to-catch-up-leave
             log.warn("Didn't reach end of config log quickly enough", e);
-            // TODO: With explicit leave group support, it would be good to explicitly leave the group *before* this
-            // backoff since it'll be longer than the session timeout
-            if (isLeader())
-                backoff(workerUnsyncBackoffMs);
+            member.maybeLeaveGroup();
+            backoff(workerUnsyncBackoffMs);
             return false;
         } catch (InterruptedException | ExecutionException e) {
             throw new ConnectException("Error trying to catch up after assignment", e);
@@ -695,7 +700,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
         ConnectorContext ctx = new HerderConnectorContext(DistributedHerder.this, connName);
         worker.startConnector(connConfig, ctx, this);
-
         // Immediately request configuration since this could be a brand new connector. However, also only update those
         // task configs if they are actually different from the existing ones to avoid unnecessary updates when this is
         // just restoring an existing connector.

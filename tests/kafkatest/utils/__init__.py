@@ -14,4 +14,4 @@
 # limitations under the License.
 # see kafka.server.KafkaConfig for additional details and defaults
 
-from util import kafkatest_version, is_version
+from util import kafkatest_version, is_version, is_int, is_int_with_prefix

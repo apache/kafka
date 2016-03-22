@@ -18,10 +18,10 @@ package kafka.admin
 
 import kafka.log.Log
 import kafka.zk.ZooKeeperTestHarness
-import junit.framework.Assert._
-import kafka.utils.{ZkUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.utils.ZkUtils._
 import kafka.server.{KafkaServer, KafkaConfig}
+import org.junit.Assert._
 import org.junit.Test
 import java.util.Properties
 import kafka.common.{TopicAlreadyMarkedForDeletionException, TopicAndPartition}

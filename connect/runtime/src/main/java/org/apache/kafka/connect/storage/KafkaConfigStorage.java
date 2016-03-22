@@ -20,6 +20,7 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -33,6 +34,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
@@ -147,8 +149,6 @@ import java.util.concurrent.TimeoutException;
 public class KafkaConfigStorage {
     private static final Logger log = LoggerFactory.getLogger(KafkaConfigStorage.class);
 
-    public static final String CONFIG_TOPIC_CONFIG = "config.storage.topic";
-
     public static final String CONNECTOR_PREFIX = "connector-";
 
     public static String CONNECTOR_KEY(String connectorName) {
@@ -216,19 +216,19 @@ public class KafkaConfigStorage {
         offset = -1;
     }
 
-    public void configure(Map<String, ?> configs) {
-        if (configs.get(CONFIG_TOPIC_CONFIG) == null)
-            throw new ConnectException("Must specify topic for connector configuration.");
-        topic = (String) configs.get(CONFIG_TOPIC_CONFIG);
+    public void configure(DistributedConfig config) {
+        topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
+        if (topic.equals(""))
+            throw new ConfigException("Must specify topic for connector configuration.");
 
         Map<String, Object> producerProps = new HashMap<>();
-        producerProps.putAll(configs);
+        producerProps.putAll(config.originals());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
 
         Map<String, Object> consumerProps = new HashMap<>();
-        consumerProps.putAll(configs);
+        consumerProps.putAll(config.originals());
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
@@ -286,6 +286,7 @@ public class KafkaConfigStorage {
         }
 
         try {
+            log.debug("Writing connector configuration for connector " + connector + " configuration: " + properties);
             configLog.send(CONNECTOR_KEY(connector), serializedConfig);
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
@@ -334,6 +335,7 @@ public class KafkaConfigStorage {
             Struct connectConfig = new Struct(TASK_CONFIGURATION_V0);
             connectConfig.put("properties", taskConfigEntry.getValue());
             byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
+            log.debug("Writing configuration for task " + taskConfigEntry.getKey() + " configuration: " + taskConfigEntry.getValue());
             configLog.send(TASK_KEY(taskConfigEntry.getKey()), serializedConfig);
         }
 
@@ -348,6 +350,7 @@ public class KafkaConfigStorage {
                 Struct connectConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
                 connectConfig.put("tasks", taskCountEntry.getValue());
                 byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
+                log.debug("Writing commit for connector " + taskCountEntry.getKey() + " with " + taskCountEntry.getValue() + " tasks.");
                 configLog.send(COMMIT_TASKS_KEY(taskCountEntry.getKey()), serializedConfig);
             }
 
@@ -372,6 +375,7 @@ public class KafkaConfigStorage {
         return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, new SystemTime());
     }
 
+    @SuppressWarnings("unchecked")
     private final Callback<ConsumerRecord<String, byte[]>> consumedCallback = new Callback<ConsumerRecord<String, byte[]>>() {
         @Override
         public void onCompletion(Throwable error, ConsumerRecord<String, byte[]> record) {
@@ -396,6 +400,7 @@ public class KafkaConfigStorage {
                 synchronized (lock) {
                     if (value.value() == null) {
                         // Connector deletion will be written as a null value
+                        log.info("Removed connector " + connectorName + " due to null configuration. This is usually intentional and does not indicate an issue.");
                         connectorConfigs.remove(connectorName);
                     } else {
                         // Connector configs can be applied and callbacks invoked immediately
@@ -405,9 +410,10 @@ public class KafkaConfigStorage {
                         }
                         Object newConnectorConfig = ((Map<String, Object>) value.value()).get("properties");
                         if (!(newConnectorConfig instanceof Map)) {
-                            log.error("Invalid data for connector config: properties filed should be a Map but is " + newConnectorConfig.getClass());
+                            log.error("Invalid data for connector config (" + connectorName + "): properties filed should be a Map but is " + newConnectorConfig.getClass());
                             return;
                         }
+                        log.debug("Updating configuration for connector " + connectorName + " configuation: " + newConnectorConfig);
                         connectorConfigs.put(connectorName, (Map<String, String>) newConnectorConfig);
                     }
                 }
@@ -421,13 +427,13 @@ public class KafkaConfigStorage {
                         return;
                     }
                     if (!(value.value() instanceof Map)) {
-                        log.error("Ignoring task configuration because it is in the wrong format: " + value.value());
+                        log.error("Ignoring task configuration for task " + taskId + " because it is in the wrong format: " + value.value());
                         return;
                     }
 
                     Object newTaskConfig = ((Map<String, Object>) value.value()).get("properties");
                     if (!(newTaskConfig instanceof Map)) {
-                        log.error("Invalid data for task config: properties filed should be a Map but is " + newTaskConfig.getClass());
+                        log.error("Invalid data for task config (" + taskId + "): properties filed should be a Map but is " + newTaskConfig.getClass());
                         return;
                     }
 
@@ -436,6 +442,7 @@ public class KafkaConfigStorage {
                         deferred = new HashMap<>();
                         deferredTaskUpdates.put(taskId.connector(), deferred);
                     }
+                    log.debug("Storing new config for task " + taskId + " this will wait for a commit message before the new config will take effect. New config: " + newTaskConfig);
                     deferred.put(taskId, (Map<String, String>) newTaskConfig);
                 }
             } else if (record.key().startsWith(COMMIT_TASKS_PREFIX)) {
@@ -464,7 +471,7 @@ public class KafkaConfigStorage {
                     // resolve this (i.e., get the connector to recommit its configuration). This inconsistent state is
                     // exposed in the snapshots provided via ClusterConfigState so they are easy to handle.
                     if (!(value.value() instanceof Map)) { // Schema-less, so we get maps instead of structs
-                        log.error("Ignoring connector tasks configuration commit because it is in the wrong format: " + value.value());
+                        log.error("Ignoring connector tasks configuration commit for connector " + connectorName + " because it is in the wrong format: " + value.value());
                         return;
                     }
 
@@ -476,11 +483,17 @@ public class KafkaConfigStorage {
                     // update of all tasks that are expected based on the number of tasks in the commit message.
                     Map<String, Set<Integer>> updatedConfigIdsByConnector = taskIdsByConnector(deferred);
                     Set<Integer> taskIdSet = updatedConfigIdsByConnector.get(connectorName);
+                    if (taskIdSet == null) {
+                        //TODO: Figure out why this happens (KAFKA-3321)
+                        log.error("Received a commit message for connector " + connectorName + " but there is no matching configuration for tasks in this connector. This should never happen.");
+                        return;
+                    }
                     if (!completeTaskIdSet(taskIdSet, newTaskCount)) {
                         // Given the logic for writing commit messages, we should only hit this condition due to compacted
                         // historical data, in which case we would not have applied any updates yet and there will be no
                         // task config data already committed for the connector, so we shouldn't have to clear any data
                         // out. All we need to do is add the flag marking it inconsistent.
+                        log.debug("We have an incomplete set of task configs for connector " + connectorName + " probably due to compaction. So we are not doing anything with the new configuration.");
                         inconsistent.add(connectorName);
                     } else {
                         if (deferred != null) {

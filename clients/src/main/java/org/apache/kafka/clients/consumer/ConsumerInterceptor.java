@@ -38,7 +38,10 @@ public interface ConsumerInterceptor<K, V> extends Configurable {
     /**
      * This is called just before the records are returned by {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(long)}
      * <p>
-     * This method is allowed to modify consumer records, in which case the new records will be returned.
+     * This method is allowed to modify consumer records, in which case the new records will be
+     * returned. There is no limitation on number of records that could be returned from this
+     * method. I.e., the interceptor can filter the records or generate new records.
+     * <p>
      * Any exception thrown by this method will be caught by the caller, logged, but not propagated to the client.
      * <p>
      * Since the consumer may run multiple interceptors, a particular interceptor's onConsume() callback will be called

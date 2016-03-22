@@ -40,3 +40,34 @@ def is_version(node, version_list, proc_grep_string="kafka"):
     versions = _kafka_jar_versions(lines[0])
     return versions == {str(v) for v in version_list}
 
+
+def is_int(msg):
+    """Method used to check whether the given message is an integer
+
+    return int or raises an exception if message is not an integer
+    """
+    try:
+        return int(msg)
+    except ValueError:
+        raise Exception("Unexpected message format (expected an integer). Message: %s" % (msg))
+
+
+def is_int_with_prefix(msg):
+    """
+    Method used check whether the given message is of format 'integer_prefix'.'integer_value'
+
+    :param msg: message to validate
+    :return: msg or raises an exception is a message is of wrong format
+    """
+    try:
+        parts = msg.split(".")
+        if len(parts) != 2:
+            raise Exception("Unexpected message format. Message should be of format: integer "
+                            "prefix dot integer value. Message: %s" % (msg))
+        int(parts[0])
+        int(parts[1])
+        return msg
+    except ValueError:
+        raise Exception("Unexpected message format. Message should be of format: integer "
+                        "prefix dot integer value, but one of the two parts (before or after dot) "
+                        "are not integers. Message: %s" % (msg))

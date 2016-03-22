@@ -43,6 +43,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static java.util.Collections.singleton;
+
 public class ProcessorStateManager {
 
     private static final Logger log = LoggerFactory.getLogger(ProcessorStateManager.class);
@@ -51,7 +53,7 @@ public class ProcessorStateManager {
     public static final String CHECKPOINT_FILE_NAME = ".checkpoint";
     public static final String LOCK_FILE_NAME = ".lock";
 
-    private final String jobId;
+    private final String applicationId;
     private final int defaultPartition;
     private final Map<String, TopicPartition> partitionForTopic;
     private final File baseDir;
@@ -65,8 +67,8 @@ public class ProcessorStateManager {
     private final boolean isStandby;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
 
-    public ProcessorStateManager(String jobId, int defaultPartition, Collection<TopicPartition> sources, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
-        this.jobId = jobId;
+    public ProcessorStateManager(String applicationId, int defaultPartition, Collection<TopicPartition> sources, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
+        this.applicationId = applicationId;
         this.defaultPartition = defaultPartition;
         this.partitionForTopic = new HashMap<>();
         for (TopicPartition source : sources) {
@@ -104,8 +106,8 @@ public class ProcessorStateManager {
         }
     }
 
-    public static String storeChangelogTopic(String jobId, String storeName) {
-        return jobId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
+    public static String storeChangelogTopic(String applicationId, String storeName) {
+        return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
     }
 
     public static FileLock lockStateDirectory(File stateDir) throws IOException {
@@ -137,8 +139,6 @@ public class ProcessorStateManager {
         }
     }
 
-
-
     public File baseDir() {
         return this.baseDir;
     }
@@ -156,7 +156,7 @@ public class ProcessorStateManager {
         // check that the underlying change log topic exist or not
         String topic;
         if (loggingEnabled)
-            topic = storeChangelogTopic(this.jobId, store.name());
+            topic = storeChangelogTopic(this.applicationId, store.name());
         else topic = store.name();
 
         // block until the partition is ready for this state changelog topic or time has elapsed
@@ -206,7 +206,7 @@ public class ProcessorStateManager {
         try {
             // calculate the end offset of the partition
             // TODO: this is a bit hacky to first seek then position to get the end offset
-            restoreConsumer.seekToEnd(storePartition);
+            restoreConsumer.seekToEnd(singleton(storePartition));
             long endOffset = restoreConsumer.position(storePartition);
 
             // restore from the checkpointed offset of the change log if it is persistent and the offset exists;
@@ -214,7 +214,7 @@ public class ProcessorStateManager {
             if (checkpointedOffsets.containsKey(storePartition)) {
                 restoreConsumer.seek(storePartition, checkpointedOffsets.get(storePartition));
             } else {
-                restoreConsumer.seekToBeginning(storePartition);
+                restoreConsumer.seekToBeginning(singleton(storePartition));
             }
 
             // restore its state from changelog records
@@ -305,16 +305,6 @@ public class ProcessorStateManager {
         return stores.get(name);
     }
 
-    public void cleanup() throws IOException {
-        // clean up any unknown files in the state directory
-        for (File file : this.baseDir.listFiles()) {
-            if (!this.stores.containsKey(file.getName())) {
-                log.info("Deleting state directory {}", file.getAbsolutePath());
-                file.delete();
-            }
-        }
-    }
-
     public void flush() {
         if (!this.stores.isEmpty()) {
             log.debug("Flushing stores.");
@@ -337,7 +327,7 @@ public class ProcessorStateManager {
                 for (String storeName : stores.keySet()) {
                     TopicPartition part;
                     if (loggingEnabled.contains(storeName))
-                        part = new TopicPartition(storeChangelogTopic(jobId, storeName), getPartition(storeName));
+                        part = new TopicPartition(storeChangelogTopic(applicationId, storeName), getPartition(storeName));
                     else
                         part = new TopicPartition(storeName, getPartition(storeName));
 

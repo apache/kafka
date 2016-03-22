@@ -110,11 +110,47 @@ public final class Cluster {
      * @return A cluster for these hosts/ports
      */
     public static Cluster bootstrap(List<InetSocketAddress> addresses) {
-        List<Node> nodes = new ArrayList<Node>();
+        List<Node> nodes = new ArrayList<>();
         int nodeId = -1;
         for (InetSocketAddress address : addresses)
-            nodes.add(new Node(nodeId--, address.getHostName(), address.getPort()));
+            nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
         return new Cluster(nodes, new ArrayList<PartitionInfo>(0), Collections.<String>emptySet());
+    }
+
+    /**
+     * Update the cluster information for specific topic with new partition information
+     */
+    public Cluster update(String topic, Collection<PartitionInfo> partitions) {
+
+        // re-index the partitions by topic/partition for quick lookup
+        for (PartitionInfo p : partitions)
+            this.partitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
+
+        // re-index the partitions by topic and node respectively
+        this.partitionsByTopic.put(topic, Collections.unmodifiableList(new ArrayList<>(partitions)));
+
+        List<PartitionInfo> availablePartitions = new ArrayList<>();
+        for (PartitionInfo part : partitions) {
+            if (part.leader() != null)
+                availablePartitions.add(part);
+        }
+        this.availablePartitionsByTopic.put(topic, Collections.unmodifiableList(availablePartitions));
+
+        HashMap<Integer, List<PartitionInfo>> partsForNode = new HashMap<>();
+        for (Node n : this.nodes) {
+            partsForNode.put(n.id(), new ArrayList<PartitionInfo>());
+        }
+        for (PartitionInfo p : partitions) {
+            if (p.leader() != null) {
+                List<PartitionInfo> psNode = Utils.notNull(partsForNode.get(p.leader().id()));
+                psNode.add(p);
+            }
+        }
+
+        for (Map.Entry<Integer, List<PartitionInfo>> entry : partsForNode.entrySet())
+            this.partitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
+
+        return this;
     }
 
     /**

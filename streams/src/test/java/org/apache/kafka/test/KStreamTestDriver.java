@@ -18,7 +18,8 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -42,20 +43,20 @@ public class KStreamTestDriver {
     private ProcessorNode currNode;
 
     public KStreamTestDriver(KStreamBuilder builder) {
-        this(builder, null, null, null, null, null);
+        this(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
     public KStreamTestDriver(KStreamBuilder builder, File stateDir) {
-        this(builder, stateDir, null, null, null, null);
+        this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
     public KStreamTestDriver(KStreamBuilder builder,
                              File stateDir,
-                             Serializer<?> keySerializer, Deserializer<?> keyDeserializer,
-                             Serializer<?> valSerializer, Deserializer<?> valDeserializer) {
-        this.topology = builder.build(null);
+                             Serde<?> keySerde,
+                             Serde<?> valSerde) {
+        this.topology = builder.build("X", null);
         this.stateDir = stateDir;
-        this.context = new MockProcessorContext(this, stateDir, keySerializer, keyDeserializer, valSerializer, valDeserializer, new MockRecordCollector());
+        this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector());
 
         for (StateStoreSupplier stateStoreSupplier : topology.stateStoreSuppliers()) {
             StateStore store = stateStoreSupplier.get();
@@ -127,7 +128,7 @@ public class KStreamTestDriver {
         public MockRecordCollector() {
             super(null);
         }
-        
+
         @Override
         public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer,
                                 StreamPartitioner<K, V> partitioner) {

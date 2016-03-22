@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * DefaultPartitionGrouper groups partitions by the partition id. This behavior is assumed by the join processing in KStream.
+ * Default implementation of the {@link PartitionGrouper} interface that groups partitions by the partition id.
  *
  * Join operations requires that topics of the joining entities are copartitoned, i.e., being partitioned by the same key and having the same
  * number of partitions. Copartitioning is ensured by having the same number of partitions on
@@ -39,11 +39,11 @@ import java.util.Set;
 public class DefaultPartitionGrouper implements PartitionGrouper {
 
     /**
-     * Generate tasks with the assigned topic partitions
+     * Generate tasks with the assigned topic partitions.
      *
-     * @param topicGroups {@link TopologyBuilder#topicGroups()} where topics of the same group need to be joined together
-     * @param metadata Metadata of the consuming cluster
-     * @return The map from generated task ids to the assigned partitions.
+     * @param topicGroups   group of topics that need to be joined together
+     * @param metadata      metadata of the consuming cluster
+     * @return The map from generated task ids to the assigned partitions
      */
     public Map<TaskId, Set<TopicPartition>> partitionGroups(Map<Integer, Set<String>> topicGroups, Cluster metadata) {
         Map<TaskId, Set<TopicPartition>> groups = new HashMap<>();

@@ -19,6 +19,13 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
 
+/**
+ * A stateful Transformer interface for transform a key-value pair into a new value.
+ *
+ * @param <K>   key type
+ * @param <V>   value type
+ * @param <R>   return type
+ */
 public interface Transformer<K, V, R> {
 
     /**

@@ -117,6 +117,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("internal.key.converter.schemas.enable", "false");
         workerProps.put("internal.value.converter.schemas.enable", "false");
+        workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
@@ -376,9 +377,9 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 return null;
             }
         });
-        consumer.pause(UNASSIGNED_TOPIC_PARTITION);
+        consumer.pause(Arrays.asList(UNASSIGNED_TOPIC_PARTITION));
         PowerMock.expectLastCall().andThrow(new IllegalStateException("unassigned topic partition"));
-        consumer.pause(TOPIC_PARTITION, TOPIC_PARTITION2);
+        consumer.pause(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
         PowerMock.expectLastCall();
 
         expectOnePoll().andAnswer(new IAnswer<Object>() {
@@ -395,9 +396,9 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 return null;
             }
         });
-        consumer.resume(UNASSIGNED_TOPIC_PARTITION);
+        consumer.resume(Arrays.asList(UNASSIGNED_TOPIC_PARTITION));
         PowerMock.expectLastCall().andThrow(new IllegalStateException("unassigned topic partition"));
-        consumer.resume(TOPIC_PARTITION, TOPIC_PARTITION2);
+        consumer.resume(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
         PowerMock.expectLastCall();
 
         expectStopTask(0);
@@ -520,7 +521,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                                 Collections.singletonMap(
                                         new TopicPartition(TOPIC, PARTITION),
                                         Arrays.asList(
-                                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, 0L, TimestampType.CREATE_TIME, RAW_KEY, RAW_VALUE)
+                                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, RAW_KEY, RAW_VALUE)
                                         )));
                         recordsReturned++;
                         return records;
@@ -534,6 +535,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         return capturedRecords;
     }
 
+    @SuppressWarnings("unchecked")
     private IExpectationSetters<Object> expectOnePoll() {
         // Currently the SinkTask's put() method will not be invoked unless we provide some data, so instead of
         // returning empty data, we return one record. The expectation is that the data will be ignored by the
@@ -548,7 +550,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                                 Collections.singletonMap(
                                         new TopicPartition(TOPIC, PARTITION),
                                         Arrays.asList(
-                                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, 0L, TimestampType.CREATE_TIME, RAW_KEY, RAW_VALUE)
+                                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, RAW_KEY, RAW_VALUE)
                                         )));
                         recordsReturned++;
                         return records;

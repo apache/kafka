@@ -26,7 +26,8 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
 
 * Bring up the test cluster
 
-        $ vagrant up
+        $ vagrant/vagrant-up.sh
+        $ # When using Virtualbox, it also works to run: vagrant up
 
 * Build the desired branch of Kafka
        
@@ -111,6 +112,7 @@ the test driver machine.
         ec2_instance_type = "..." # Pick something appropriate for your
                                   # test. Note that the default m3.medium has
                                   # a small disk.
+        enable_hostmanager = false
         num_zookeepers = 0
         num_kafka = 0
         num_workers = 9
@@ -120,9 +122,10 @@ the test driver machine.
         ec2_region = 'us-west-2'
         ec2_ami = "ami-29ebb519"
 
-* Start up the instances (note we have found bringing up machines in parallel can cause errors on aws):
+* Start up the instances:
 
-        $ vagrant up --provider=aws --no-provision --no-parallel && vagrant provision
+        # This will brink up worker machines in small parallel batches
+        $ vagrant/vagrant-up.sh --aws
 
 * Now you should be able to run tests:
 

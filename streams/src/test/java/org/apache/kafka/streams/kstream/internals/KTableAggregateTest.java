@@ -17,10 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -38,8 +36,7 @@ import static org.junit.Assert.assertEquals;
 
 public class KTableAggregateTest {
 
-    private final Serializer<String> strSerializer = new StringSerializer();
-    private final Deserializer<String> strDeserializer = new StringDeserializer();
+    final private Serde<String> stringSerde = new Serdes.StringSerde();
 
     private class StringAdd implements Aggregator<String, String, String> {
 
@@ -65,6 +62,7 @@ public class KTableAggregateTest {
         }
     }
 
+
     @Test
     public void testAggBasic() throws Exception {
         final File baseDir = Files.createTempDirectory("test").toFile();
@@ -73,15 +71,12 @@ public class KTableAggregateTest {
             final KStreamBuilder builder = new KStreamBuilder();
             String topic1 = "topic1";
 
-            KTable<String, String> table1 = builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
-            KTable<String, String> table2 = table1.<String, String, String>aggregate(new StringInit(), new StringAdd(), new StringRemove(),
+            KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
+            KTable<String, String> table2 = table1.aggregate(new StringInit(), new StringAdd(), new StringRemove(),
                     new NoOpKeyValueMapper<String, String>(),
-                    strSerializer,
-                    strSerializer,
-                    strSerializer,
-                    strDeserializer,
-                    strDeserializer,
-                    strDeserializer,
+                    stringSerde,
+                    stringSerde,
+                    stringSerde,
                     "topic1-Canonized");
 
             MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();

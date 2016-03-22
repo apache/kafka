@@ -40,6 +40,7 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -126,7 +127,7 @@ public class ProcessorTopologyTestDriver {
 
     private final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
 
-    private final String jobId = "test-driver-job";
+    private final String applicationId = "test-driver-application";
 
     private final TaskId id;
     private final ProcessorTopology topology;
@@ -146,7 +147,7 @@ public class ProcessorTopologyTestDriver {
      */
     public ProcessorTopologyTestDriver(StreamsConfig config, TopologyBuilder builder, String... storeNames) {
         id = new TaskId(0, 0);
-        topology = builder.build(null);
+        topology = builder.build("X", null);
 
         // Set up the consumer and producer ...
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
@@ -167,7 +168,7 @@ public class ProcessorTopologyTestDriver {
         }
 
         task = new StreamTask(id,
-            jobId,
+            applicationId,
             partitionsByTopic.values(),
             topology,
             consumer,
@@ -201,7 +202,7 @@ public class ProcessorTopologyTestDriver {
         }
         // Add the record ...
         long offset = offsetsByTopicPartition.get(tp).incrementAndGet();
-        task.addRecords(tp, records(new ConsumerRecord<byte[], byte[]>(tp.topic(), tp.partition(), offset, 0L, TimestampType.CREATE_TIME, key, value)));
+        task.addRecords(tp, records(new ConsumerRecord<byte[], byte[]>(tp.topic(), tp.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, value)));
         producer.clear();
         // Process the record ...
         task.process();
@@ -317,12 +318,12 @@ public class ProcessorTopologyTestDriver {
     protected MockConsumer<byte[], byte[]> createRestoreConsumer(TaskId id, String... storeNames) {
         MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.LATEST) {
             @Override
-            public synchronized void seekToEnd(TopicPartition... partitions) {
+            public synchronized void seekToEnd(Collection<TopicPartition> partitions) {
                 // do nothing ...
             }
 
             @Override
-            public synchronized void seekToBeginning(TopicPartition... partitions) {
+            public synchronized void seekToBeginning(Collection<TopicPartition> partitions) {
                 // do nothing ...
             }
 
@@ -334,7 +335,7 @@ public class ProcessorTopologyTestDriver {
         };
         // For each store name ...
         for (String storeName : storeNames) {
-            String topicName = ProcessorStateManager.storeChangelogTopic(jobId, storeName);
+            String topicName = ProcessorStateManager.storeChangelogTopic(applicationId, storeName);
             // Set up the restore-state topic ...
             // consumer.subscribe(new TopicPartition(topicName, 1));
             // Set up the partition that matches the ID (which is what ProcessorStateManager expects) ...

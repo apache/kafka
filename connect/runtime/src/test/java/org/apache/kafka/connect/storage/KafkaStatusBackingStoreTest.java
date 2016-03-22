@@ -45,6 +45,7 @@ import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.newCapture;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("unchecked")
 public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
     private static final String STATUS_TOPIC = "status-topic";
@@ -367,7 +368,7 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
     private static ConsumerRecord<String, byte[]> consumerRecord(long offset, String key, byte[] value) {
         return new ConsumerRecord<>(STATUS_TOPIC, 0, offset, System.currentTimeMillis(),
-                TimestampType.CREATE_TIME, key, value);
+                TimestampType.CREATE_TIME, 0L, 0, 0, key, value);
     }
 
 }

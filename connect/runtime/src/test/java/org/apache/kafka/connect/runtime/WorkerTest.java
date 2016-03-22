@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
@@ -79,6 +80,7 @@ public class WorkerTest extends ThreadedTest {
         workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("internal.key.converter.schemas.enable", "false");
         workerProps.put("internal.value.converter.schemas.enable", "false");
+        workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         config = new StandaloneConfig(workerProps);
     }
 
@@ -452,7 +454,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     private void expectStartStorage() {
-        offsetBackingStore.configure(EasyMock.anyObject(Map.class));
+        offsetBackingStore.configure(EasyMock.anyObject(WorkerConfig.class));
         EasyMock.expectLastCall();
         offsetBackingStore.start();
         EasyMock.expectLastCall();
@@ -465,7 +467,11 @@ public class WorkerTest extends ThreadedTest {
 
 
     /* Name here needs to be unique as we are testing the aliasing mechanism */
-    private static class WorkerTestConnector extends Connector {
+    public static class WorkerTestConnector extends Connector {
+
+        private static final ConfigDef CONFIG_DEF  = new ConfigDef()
+            .define("configName", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Test configName.");
+
         @Override
         public String version() {
             return "1.0";
@@ -489,6 +495,11 @@ public class WorkerTest extends ThreadedTest {
         @Override
         public void stop() {
 
+        }
+
+        @Override
+        public ConfigDef config() {
+            return CONFIG_DEF;
         }
     }
 

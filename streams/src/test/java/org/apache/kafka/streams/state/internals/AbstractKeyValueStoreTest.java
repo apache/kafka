@@ -192,4 +192,41 @@ public abstract class AbstractKeyValueStoreTest {
         }
     }
 
+
+
+    @Test
+    public void testPutIfAbsent() {
+        // Create the test driver ...
+        KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
+        KeyValueStore<Integer, String> store = createKeyValueStore(driver.context(), Integer.class, String.class, true);
+        try {
+
+            // Verify that the store reads and writes correctly ...
+            assertNull(store.putIfAbsent(0, "zero"));
+            assertNull(store.putIfAbsent(1, "one"));
+            assertNull(store.putIfAbsent(2, "two"));
+            assertNull(store.putIfAbsent(4, "four"));
+            assertEquals("four", store.putIfAbsent(4, "unexpected value"));
+            assertEquals(4, driver.sizeOf(store));
+            assertEquals("zero", store.get(0));
+            assertEquals("one", store.get(1));
+            assertEquals("two", store.get(2));
+            assertNull(store.get(3));
+            assertEquals("four", store.get(4));
+
+            // Flush the store and verify all current entries were properly flushed ...
+            store.flush();
+            assertEquals("zero", driver.flushedEntryStored(0));
+            assertEquals("one", driver.flushedEntryStored(1));
+            assertEquals("two", driver.flushedEntryStored(2));
+            assertEquals("four", driver.flushedEntryStored(4));
+
+            assertEquals(false, driver.flushedEntryRemoved(0));
+            assertEquals(false, driver.flushedEntryRemoved(1));
+            assertEquals(false, driver.flushedEntryRemoved(2));
+            assertEquals(false, driver.flushedEntryRemoved(4));
+        } finally {
+            store.close();
+        }
+    }
 }

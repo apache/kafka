@@ -55,6 +55,7 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> Map<Map<String, T>, Map<String, Object>> offsets(Collection<Map<String, T>> partitions) {
         // Serialize keys so backing store can work with them
         Map<ByteBuffer, Map<String, T>> serializedToOriginal = new HashMap<>(partitions.size());

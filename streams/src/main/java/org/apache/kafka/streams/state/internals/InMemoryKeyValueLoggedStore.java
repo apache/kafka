@@ -17,28 +17,33 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
 public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
 
     private final KeyValueStore<K, V> inner;
-    private final Serdes<K, V> serdes;
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
     private final String storeName;
 
+    private StateSerdes<K, V> serdes;
     private StoreChangeLogger<K, V> changeLogger;
     private StoreChangeLogger.ValueGetter<K, V> getter;
 
-    public InMemoryKeyValueLoggedStore(final String storeName, final KeyValueStore<K, V> inner, final Serdes<K, V> serdes) {
+    public InMemoryKeyValueLoggedStore(final String storeName, final KeyValueStore<K, V> inner, Serde<K> keySerde, Serde<V> valueSerde) {
         this.storeName = storeName;
         this.inner = inner;
-        this.serdes = serdes;
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
     }
 
     @Override
@@ -47,8 +52,23 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
+        // construct the serde
+        this.serdes = new StateSerdes<>(storeName,
+                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+
         this.changeLogger = new StoreChangeLogger<>(storeName, context, serdes);
+
+        context.register(root, true, new StateRestoreCallback() {
+            @Override
+            public void restore(byte[] key, byte[] value) {
+
+                // directly call inner functions so that the operation is not logged
+                inner.put(serdes.keyFrom(key), serdes.valueFrom(value));
+            }
+        });
 
         inner.init(context, root);
 
@@ -76,6 +96,16 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
 
         changeLogger.add(key);
         changeLogger.maybeLogChange(this.getter);
+    }
+
+    @Override
+    public V putIfAbsent(K key, V value) {
+        V originalValue = this.inner.putIfAbsent(key, value);
+        if (originalValue == null) {
+            changeLogger.add(key);
+            changeLogger.maybeLogChange(this.getter);
+        }
+        return originalValue;
     }
 
     @Override

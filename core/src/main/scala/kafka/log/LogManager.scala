@@ -286,8 +286,10 @@ class LogManager(val logDirs: Array[File],
         if (needToStopCleaner && cleaner != null)
           cleaner.abortAndPauseCleaning(topicAndPartition)
         log.truncateTo(truncateOffset)
-        if (needToStopCleaner && cleaner != null)
+        if (needToStopCleaner && cleaner != null) {
+          cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicAndPartition, log.activeSegment.baseOffset)
           cleaner.resumeCleaning(topicAndPartition)
+        }
       }
     }
     checkpointRecoveryPointOffsets()
@@ -305,8 +307,10 @@ class LogManager(val logDirs: Array[File],
       if (cleaner != null)
         cleaner.abortAndPauseCleaning(topicAndPartition)
       log.truncateFullyAndStartAt(newOffset)
-      if (cleaner != null)
+      if (cleaner != null) {
+        cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicAndPartition, log.activeSegment.baseOffset)
         cleaner.resumeCleaning(topicAndPartition)
+      }
     }
     checkpointRecoveryPointOffsets()
   }

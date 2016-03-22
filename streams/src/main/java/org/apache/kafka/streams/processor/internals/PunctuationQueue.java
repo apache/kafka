@@ -21,7 +21,7 @@ import java.util.PriorityQueue;
 
 public class PunctuationQueue {
 
-    private PriorityQueue<PunctuationSchedule> pq = new PriorityQueue<>();
+    private final PriorityQueue<PunctuationSchedule> pq = new PriorityQueue<>();
 
     public void schedule(PunctuationSchedule sched) {
         synchronized (pq) {
