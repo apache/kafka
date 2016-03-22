@@ -19,8 +19,7 @@ import kafka.utils.ZkUtils._
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.{After, Before, Test}
-import org.hamcrest.MatcherAssert._
-import org.hamcrest.core.Is._
+import org.junit.Assert.assertEquals
 import scala.collection.Seq
 
 
@@ -58,7 +57,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitFor(ReassignPartitionsPath)
 
     //Then the replica should be on 101
-    assertThat(zkUtils.getPartitionAssignmentForTopics(Seq(topicName)).get(topicName).get(partition), is(Seq(101)))
+    assertEquals(zkUtils.getPartitionAssignmentForTopics(Seq(topicName)).get(topicName).get(partition), Seq(101))
   }
 
   @Test
@@ -79,7 +78,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Then the replicas should span all three brokers
     val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
-    assertThat(actual.values.flatten.toSeq.distinct.sorted, is(Seq(100, 101, 102)))
+    assertEquals(actual.values.flatten.toSeq.distinct.sorted, Seq(100, 101, 102))
   }
 
   @Test
@@ -100,7 +99,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Then replicas should only span the first two brokers
     val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
-    assertThat(actual.values.flatten.toSeq.distinct.sorted, is(Seq(100, 101)))
+    assertEquals(actual.values.flatten.toSeq.distinct.sorted, Seq(100, 101))
   }
 
   def waitFor(path: String) {
