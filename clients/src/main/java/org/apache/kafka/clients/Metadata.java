@@ -15,6 +15,7 @@ package org.apache.kafka.clients;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -42,7 +43,7 @@ public final class Metadata {
     private int version;
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
-    private Cluster cluster;
+    private volatile Cluster cluster;
     private boolean needUpdate;
     private final Set<String> topics;
     private final List<Listener> listeners;
@@ -69,7 +70,7 @@ public final class Metadata {
         this.version = 0;
         this.cluster = Cluster.empty();
         this.needUpdate = false;
-        this.topics = new HashSet<String>();
+        this.topics = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
         this.listeners = new ArrayList<>();
         this.needMetadataForAllTopics = false;
     }
@@ -77,7 +78,7 @@ public final class Metadata {
     /**
      * Get the current cluster info without blocking
      */
-    public synchronized Cluster fetch() {
+    public Cluster fetch() {
         return this.cluster;
     }
 
@@ -149,7 +150,7 @@ public final class Metadata {
      * @param topic topic to check
      * @return true if the topic exists, false otherwise
      */
-    public synchronized boolean containsTopic(String topic) {
+    public boolean containsTopic(String topic) {
         return this.topics.contains(topic);
     }
 
@@ -166,7 +167,10 @@ public final class Metadata {
             listener.onMetadataUpdate(cluster);
 
         // Do this after notifying listeners as subscribed topics' list can be changed by listeners
-        this.cluster = this.needMetadataForAllTopics ? getClusterForCurrentTopics(cluster) : cluster;
+        final Set<String> topicsCopy = topics();
+        this.cluster = this.needMetadataForAllTopics ? 
+            getClusterForCurrentTopics(cluster, topicsCopy) : 
+            cluster;
 
         notifyAll();
         log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
@@ -237,15 +241,15 @@ public final class Metadata {
         void onMetadataUpdate(Cluster cluster);
     }
 
-    private Cluster getClusterForCurrentTopics(Cluster cluster) {
+    private Cluster getClusterForCurrentTopics(Cluster cluster, final Set<String> topicsCopy) {
         Set<String> unauthorizedTopics = new HashSet<>();
         Collection<PartitionInfo> partitionInfos = new ArrayList<>();
         List<Node> nodes = Collections.emptyList();
         if (cluster != null) {
             unauthorizedTopics.addAll(cluster.unauthorizedTopics());
-            unauthorizedTopics.retainAll(this.topics);
+            unauthorizedTopics.retainAll(topicsCopy);
 
-            for (String topic : this.topics) {
+            for (String topic : topicsCopy) {
                 partitionInfos.addAll(cluster.partitionsForTopic(topic));
             }
             nodes = cluster.nodes();
