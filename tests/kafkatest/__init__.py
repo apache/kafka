@@ -23,4 +23,5 @@
 # Instead, in trunk, the version should have a suffix of the form ".devN"
 #
 # For example, when Kafka is at version 0.9.0.0-SNAPSHOT, this should be something like "0.9.0.0.dev0"
-__version__ = '0.10.1.0.dev0'
+__version__ = '0.10.0.0'
+
