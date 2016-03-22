@@ -240,12 +240,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val callback = new CountConsumerCommitCallback
     val count = 5
-    for (i <- 1 to count) {
-      val asyncMetadata = new OffsetAndMetadata(i, i.toString)
-      consumer.commitAsync(Map((tp, asyncMetadata)).asJava, callback)
-    }
+    for (i <- 1 to count)
+      consumer.commitAsync(Map(tp -> new OffsetAndMetadata(i)).asJava, callback)
+
     awaitCommitCallback(consumer, callback, count=count)
-    assertEquals(new OffsetAndMetadata(count, count.toString), consumer.committed(tp))
+    assertEquals(new OffsetAndMetadata(count), consumer.committed(tp))
   }
 
   @Test
