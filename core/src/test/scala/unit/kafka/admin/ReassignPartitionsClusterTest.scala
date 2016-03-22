@@ -24,7 +24,7 @@ import org.hamcrest.core.Is._
 import scala.collection.Seq
 
 
-class ReassigningPartitionsTest extends ZooKeeperTestHarness with Logging {
+class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   val partitionId = 0
   var servers: Seq[KafkaServer] = null
   val topicName = "my-topic"
@@ -73,7 +73,7 @@ class ReassigningPartitionsTest extends ZooKeeperTestHarness with Logging {
     ), servers = servers)
 
     //When rebalancing
-    val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, brokers, json(topicName))._1
+    val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, brokers, json(topicName), true)._1
     ReassignPartitionsCommand.executeAssignment(zkUtils, zkUtils.formatAsReassignmentJson(newAssignment))
     waitFor(ReassignPartitionsPath)
 
@@ -94,7 +94,7 @@ class ReassigningPartitionsTest extends ZooKeeperTestHarness with Logging {
     ), servers = servers)
 
     //When rebalancing
-    val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, Array(100, 101), json(topicName))._1
+    val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, Array(100, 101), json(topicName), true)._1
     ReassignPartitionsCommand.executeAssignment(zkUtils, zkUtils.formatAsReassignmentJson(newAssignment))
     waitFor(ReassignPartitionsPath)
 
