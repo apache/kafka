@@ -226,7 +226,14 @@ public final class RecordAccumulator {
             // 1. The leader is unknown.
             // 2. The leader broker is disconnected.
             Node leader = cluster.leaderFor(entry.getKey());
-            if (leader == null || client.connectionFailed(leader)) {
+            boolean leaderNotConnected = true;
+            try {
+                leaderNotConnected = client.connectionFailed(leader);
+            } catch (IllegalArgumentException e) {
+                // This means the client does not know the leader node. So it is not connected.
+            }
+
+            if (leader == null || leaderNotConnected) {
                 synchronized (dq) {
                     // iterate over the batches and expire them if they have stayed in accumulator for more than requestTimeOut
                     RecordBatch lastBatch = dq.peekLast();
