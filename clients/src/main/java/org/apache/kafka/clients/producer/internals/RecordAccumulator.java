@@ -244,9 +244,7 @@ public final class RecordAccumulator {
                             batchIterator.remove();
                             deallocate(batch);
                         } else {
-                            if (!batch.inRetry()) {
-                                break;
-                            }
+                            break;
                         }
                     }
                 }
