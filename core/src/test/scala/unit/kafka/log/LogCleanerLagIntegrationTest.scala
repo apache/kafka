@@ -22,7 +22,6 @@ import java.util.Properties
 
 import kafka.common.TopicAndPartition
 import kafka.message._
-import kafka.server.OffsetCheckpoint
 import kafka.utils._
 import org.apache.kafka.common.record.CompressionType
 import org.junit.Assert._
@@ -38,60 +37,71 @@ import scala.collection._
   * This is an integration test that tests the fully integrated log cleaner
   */
 @RunWith(value = classOf[Parameterized])
-class LogCleanerLagIntegrationTest(compressionCodec: String) {
+class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging {
+  val msPerHour = 60 * 60 * 1000
 
-  val time = new MockTime()
+  val compactionLag = 1 * msPerHour
+  assertTrue("compactionLag must be divisible by 2 for this test", compactionLag % 2 == 0)
+
+  val time = new MockTime(1400000000000L)  // Tue May 13 16:53:20 UTC 2014
+  val cleanerBackOffMs = 200L
   val segmentSize = 100
   val deleteDelay = 1000
-  val compactionLag = 60 * 60 * 1000
   val logName = "log"
   val logDir = TestUtils.tempDir()
   var counter = 0
   val topics = Array(TopicAndPartition("log", 0), TopicAndPartition("log", 1), TopicAndPartition("log", 2))
+//  val compressionCodec = CompressionCodec.getCompressionCodec("none")
+  val compressionCodec = CompressionCodec.getCompressionCodec(compressionCodecName)
 
   @Test
   def cleanerTest() {
-    val cleaner = makeCleaner(parts = 3)
+    val cleaner = makeCleaner(parts = 3, backOffMs = cleanerBackOffMs)
     val log = cleaner.logs.get(topics(0))
 
-    val appends = writeDups(numKeys = 100, numDups = 3, log, CompressionCodec.getCompressionCodec(compressionCodec))
-    val startSize = log.size
+    // T+00:00
+    val t0 = time.milliseconds
+    val appends0 = writeDups(numKeys = 100, numDups = 3, log, compressionCodec)
+    val startSizeBlock0 = log.size
+
+    // force the modification time of the log segments
+    log.logSegments.foreach(_.log.file.setLastModified(t0))
+    log.logSegments.foreach { s => assertEquals("Segments should have lastModified time of T0", t0, s.lastModified) }
+
+    val activeSegAtT0 = log.activeSegment
+    debug(s"active segment at T0 has base offset: ${activeSegAtT0.baseOffset}")
+
     cleaner.startup()
 
-    val firstDirty = log.activeSegment.baseOffset
-    // wait until cleaning up to base_offset, note that cleaning happens only when "log dirty ratio" is higher than LogConfig.MinCleanableDirtyRatioProp
-    cleaner.awaitCleaned("log", 0, firstDirty)
-    val compactedSize = log.logSegments.map(_.size).sum
+    time.sleep(compactionLag/2)
+    Thread.sleep(5 * cleanerBackOffMs) // give cleaning thread a chance to _not_ clean
+    assertEquals("There should be no cleaning until the compaction lag has passed", startSizeBlock0, log.size)
+
+    // advance time by a bit more than one compaction lag
+    time.sleep(compactionLag/2 + 1)
+    val t1 = time.milliseconds
+
+    // write another block of data
+    val appends1 = appends0 ++ writeDups(numKeys = 100, numDups = 3, log, compressionCodec)
+    val firstBlock1SegmentBaseOffset = activeSegAtT0.baseOffset
+    log.logSegments.foreach { s =>
+      if (s.baseOffset >= activeSegAtT0.baseOffset)
+        s.log.file.setLastModified(t1)
+    }
+
+    // the first block should get cleaned
+    cleaner.awaitCleaned("log", 0, activeSegAtT0.baseOffset)
+
+    // check the data is the same
+    val read1 = readFromLog(log)
+    assertEquals("Contents of the map shouldn't change.", appends1.toMap, read1.toMap)
+
+    val compactedSize = log.logSegments(0L, activeSegAtT0.baseOffset).map(_.size).sum
     val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition("log", 0)).get
-    assertTrue(s"log cleaner should have processed up to offset $firstDirty, but lastCleaned=$lastCleaned", lastCleaned >= firstDirty)
-    assertTrue(s"log should have been compacted:  startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
-
-    val read = readFromLog(log)
-    assertEquals("Contents of the map shouldn't change.", appends.toMap, read.toMap)
-    assertTrue(startSize > log.size)
-
-    // write some more stuff and validate again
-    val appends2 = appends ++ writeDups(numKeys = 100, numDups = 3, log, CompressionCodec.getCompressionCodec(compressionCodec))
-    val firstDirty2 = log.activeSegment.baseOffset
-    cleaner.awaitCleaned("log", 0, firstDirty2)
-
-    val lastCleaned2 = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition("log", 0)).get
-    assertTrue(s"log cleaner should have processed up to offset $firstDirty2", lastCleaned2 >= firstDirty2);
-
-    val read2 = readFromLog(log)
-    assertEquals("Contents of the map shouldn't change.", appends2.toMap, read2.toMap)
-
-    // simulate deleting a partition, by removing it from logs
-    // force a checkpoint
-    // and make sure its gone from checkpoint file
+    assertTrue(s"log cleaner should have processed up to offset $firstBlock1SegmentBaseOffset, but lastCleaned=$lastCleaned", lastCleaned >= firstBlock1SegmentBaseOffset)
+    assertTrue(s"log should have been compacted:  startSize=$startSizeBlock0 compactedSize=$compactedSize", startSizeBlock0 > compactedSize)
 
     cleaner.logs.remove(topics(0))
-
-    cleaner.updateCheckpoints(logDir)
-    val checkpoints = new OffsetCheckpoint(new File(logDir,cleaner.cleanerManager.offsetCheckpointFile)).read()
-
-    // we expect partition 0 to be gone
-    assert(!checkpoints.contains(topics(0)))
     cleaner.shutdown()
   }
 
@@ -112,7 +122,7 @@ class LogCleanerLagIntegrationTest(compressionCodec: String) {
   def writeDups(numKeys: Int, numDups: Int, log: Log, codec: CompressionCodec): Seq[(Int, Int)] = {
     for(dup <- 0 until numDups; key <- 0 until numKeys) yield {
       val count = counter
-      log.append(TestUtils.singleMessageSet(payload = counter.toString.getBytes, codec = codec, key = key.toString.getBytes), assignOffsets = true)
+      val info = log.append(TestUtils.singleMessageSet(payload = counter.toString.getBytes, codec = codec, key = key.toString.getBytes), assignOffsets = true)
       counter += 1
       (key, count)
     }
@@ -128,6 +138,7 @@ class LogCleanerLagIntegrationTest(compressionCodec: String) {
   def makeCleaner(parts: Int,
                   minCleanableDirtyRatio: Float = 0.0F,
                   numThreads: Int = 1,
+                  backOffMs: Long = 200L,
                   defaultPolicy: String = "compact",
                   policyOverrides: Map[String, String] = Map()): LogCleaner = {
 
@@ -152,7 +163,7 @@ class LogCleanerLagIntegrationTest(compressionCodec: String) {
       logs.put(TopicAndPartition("log", i), log)
     }
 
-    new LogCleaner(CleanerConfig(numThreads = numThreads),
+    new LogCleaner(CleanerConfig(numThreads = numThreads, backOffMs = backOffMs),
       logDirs = Array(logDir),
       logs = logs,
       time = time)
@@ -161,14 +172,14 @@ class LogCleanerLagIntegrationTest(compressionCodec: String) {
 }
 
 object LogCleanerLagIntegrationTest {
-  @Parameters
-  def parameters: java.util.Collection[Array[String]] = {
+  def oneParameter: java.util.Collection[Array[String]] = {
     val l = new java.util.ArrayList[Array[String]]()
     l.add(Array("NONE"))
     l
   }
 
-  def xparameters: java.util.Collection[Array[String]] = {
+  @Parameters
+  def parameters: java.util.Collection[Array[String]] = {
     val list = new java.util.ArrayList[Array[String]]()
     for (codec <- CompressionType.values)
       list.add(Array(codec.name))
