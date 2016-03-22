@@ -81,7 +81,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
     // shouldn't make progress until poll is invoked
     Thread.sleep(10)
-    assertEquals(0, commitCallback.count)
+    assertEquals(0, commitCallback.successCount)
     awaitCommitCallback(this.consumers(0), commitCallback)
   }
 
@@ -330,18 +330,27 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     records
   }
 
-  protected def awaitCommitCallback[K, V](consumer: Consumer[K, V], commitCallback: CountConsumerCommitCallback): Unit = {
-    val startCount = commitCallback.count
+  protected def awaitCommitCallback[K, V](consumer: Consumer[K, V],
+                                          commitCallback: CountConsumerCommitCallback,
+                                          count: Int = 1): Unit = {
+    val startCount = commitCallback.successCount
     val started = System.currentTimeMillis()
-    while (commitCallback.count == startCount && System.currentTimeMillis() - started < 10000)
+    while (commitCallback.successCount < startCount + count && System.currentTimeMillis() - started < 10000)
       consumer.poll(50)
-    assertEquals(startCount + 1, commitCallback.count)
+    assertEquals(startCount + count, commitCallback.successCount)
   }
 
   protected class CountConsumerCommitCallback extends OffsetCommitCallback {
-    var count = 0
+    var successCount = 0
+    var failCount = 0
 
-    override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = count += 1
+    override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = {
+      if (exception == null)
+        successCount += 1
+      else {
+        failCount += 1
+      }
+    }
   }
 
   protected class ConsumerAssignmentPoller(consumer: Consumer[Array[Byte], Array[Byte]],
