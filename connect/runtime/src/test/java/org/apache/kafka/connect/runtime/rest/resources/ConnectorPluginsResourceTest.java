@@ -32,6 +32,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.tools.VerifiableSinkConnector;
@@ -130,13 +131,13 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testListConnectorPlugins() {
-        Set<String> connectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins());
-        assertFalse(connectorPlugins.contains(Connector.class.getCanonicalName()));
-        assertFalse(connectorPlugins.contains(SourceConnector.class.getCanonicalName()));
-        assertFalse(connectorPlugins.contains(SinkConnector.class.getCanonicalName()));
-        assertFalse(connectorPlugins.contains(VerifiableSourceConnector.class.getCanonicalName()));
-        assertFalse(connectorPlugins.contains(VerifiableSinkConnector.class.getCanonicalName()));
-        assertTrue(connectorPlugins.contains(ConnectorPluginsResourceTestConnector.class.getCanonicalName()));
+        Set<ConnectorPluginInfo> connectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins());
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(Connector.class.getCanonicalName())));
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(SourceConnector.class.getCanonicalName())));
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(SinkConnector.class.getCanonicalName())));
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(VerifiableSourceConnector.class.getCanonicalName())));
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(VerifiableSinkConnector.class.getCanonicalName())));
+        assertTrue(connectorPlugins.contains(new ConnectorPluginInfo(ConnectorPluginsResourceTestConnector.class.getCanonicalName())));
     }
 
     /* Name here needs to be unique as we are testing the aliasing mechanism */
