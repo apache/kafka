@@ -224,11 +224,19 @@ class FileMessageSet private[kafka](@volatile var file: File,
       }
     }
 
-    // We use the offset seq to assign offsets so the offset of the messages does not change.
-    new ByteBufferMessageSet(
-      compressionCodec = this.headOption.map(_.message.compressionCodec).getOrElse(NoCompressionCodec),
-      offsetSeq = offsets,
-      newMessages: _*)
+    if (_size.get() > 0 && newMessages.size == 0) {
+      // This indicates that the message is too large. We just return all the bytes in the file message set.
+      val buffer = ByteBuffer.allocate(_size.get())
+      channel.read(buffer, start)
+      buffer.rewind()
+      new ByteBufferMessageSet(buffer)
+    } else {
+      // We use the offset seq to assign offsets so the offset of the messages does not change.
+      new ByteBufferMessageSet(
+        compressionCodec = this.headOption.map(_.message.compressionCodec).getOrElse(NoCompressionCodec),
+        offsetSeq = offsets,
+        newMessages: _*)
+    }
   }
 
   /**
@@ -245,11 +253,11 @@ class FileMessageSet private[kafka](@volatile var file: File,
   def iterator(maxMessageSize: Int): Iterator[MessageAndOffset] = {
     new IteratorTemplate[MessageAndOffset] {
       var location = start
-      val SizeOffsetLength = 12
-      val sizeOffsetBuffer = ByteBuffer.allocate(SizeOffsetLength)
+      val sizeOffsetLength = 12
+      val sizeOffsetBuffer = ByteBuffer.allocate(sizeOffsetLength)
 
       override def makeNext(): MessageAndOffset = {
-        if(location + SizeOffsetLength >= end)
+        if(location + sizeOffsetLength >= end)
           return allDone()
 
         // read the size of the item
@@ -261,20 +269,20 @@ class FileMessageSet private[kafka](@volatile var file: File,
         sizeOffsetBuffer.rewind()
         val offset = sizeOffsetBuffer.getLong()
         val size = sizeOffsetBuffer.getInt()
-        if(size < Message.MinMessageOverhead || location + SizeOffsetLength + size > end)
+        if(size < Message.MinMessageOverhead || location + sizeOffsetLength + size > end)
           return allDone()
         if(size > maxMessageSize)
           throw new CorruptRecordException("Message size exceeds the largest allowable message size (%d).".format(maxMessageSize))
 
         // read the item itself
         val buffer = ByteBuffer.allocate(size)
-        channel.read(buffer, location + SizeOffsetLength)
+        channel.read(buffer, location + sizeOffsetLength)
         if(buffer.hasRemaining)
           return allDone()
         buffer.rewind()
 
         // increment the location and return the item
-        location += size + SizeOffsetLength
+        location += size + sizeOffsetLength
         new MessageAndOffset(new Message(buffer), offset)
       }
     }

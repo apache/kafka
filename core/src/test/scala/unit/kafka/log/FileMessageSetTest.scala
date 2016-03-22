@@ -205,6 +205,17 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   }
 
   @Test
+  def testFormatConversionWithPartialMessage() {
+    val message = messageSet.toList(1)
+    val start = messageSet.searchFor(1, 0).position
+    val size = message.message.size + 12
+    val slice = messageSet.read(start, size - 1)
+    val messageV0 = slice.toMessageFormat(Message.MagicValue_V0)
+    assertEquals("No message should be there", 0, messageV0.size)
+    assertEquals(s"There should be ${size - 1} bytes", size - 1, messageV0.sizeInBytes)
+  }
+
+  @Test
   def testMessageFormatConversion() {
 
     // Prepare messages.
