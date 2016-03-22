@@ -167,6 +167,8 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
       }
 
       updateMetadataRequest.partitionStates.asScala.foreach { case (tp, info) =>
+        val controllerId = updateMetadataRequest.controllerId
+        val controllerEpoch = updateMetadataRequest.controllerEpoch
         if (info.leader == LeaderAndIsr.LeaderDuringDelete) {
           removePartitionInfo(tp.topic, tp.partition)
           stateChangeLogger.trace(("Broker %d deleted partition %s from metadata cache in response to UpdateMetadata request " +
@@ -176,10 +178,8 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
         } else {
           val partitionInfo = partitionStateToPartitionStateInfo(info)
           addOrUpdatePartitionInfo(tp.topic, tp.partition, partitionInfo)
-          stateChangeLogger.trace(("Broker %d cached leader info %s for partition %s in response to UpdateMetadata request " +
-            "sent by controller %d epoch %d with correlation id %d")
-            .format(brokerId, info, tp, updateMetadataRequest.controllerId,
-              updateMetadataRequest.controllerEpoch, correlationId))
+          stateChangeLogger.trace(s"Broker $brokerId cached leader info $partitionInfo for partition $tp in response to " +
+            s"UpdateMetadata request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
         }
       }
     }
