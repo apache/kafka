@@ -16,6 +16,7 @@
 
 from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
+from kafkatest.services.simple_consumer_shell import SimpleConsumerShell
 from kafkatest.services.verifiable_producer import VerifiableProducer
 
 from kafkatest.services.zookeeper import ZookeeperService
@@ -57,6 +58,10 @@ class SimpleConsumerShellTest(Test):
         wait_until(lambda: self.producer.num_acked == MAX_MESSAGES, timeout_sec=10,
                    err_msg="Timeout awaiting messages to be produced and acked")
 
+    def start_simple_consumer_shell(self):
+        self.simple_consumer_shell = SimpleConsumerShell(self.test_context, 1, self.kafka, TOPIC)
+        self.simple_consumer_shell.start()
+
     def test_simple_consumer_shell(self, security_protocol='PLAINTEXT'):
         """
         Tests if SimpleConsumerShell is fetching expected records
@@ -64,7 +69,8 @@ class SimpleConsumerShellTest(Test):
         """
         self.start_kafka(security_protocol, security_protocol)
         self.start_producer()
+        self.start_simple_consumer_shell()
 
         # Assert that SimpleConsumerShell is fetching expected number of messages
-        wait_until(lambda: self.kafka.get_simple_consumer_shell(TOPIC).count("\n") == (MAX_MESSAGES + 1), timeout_sec=10,
+        wait_until(lambda: self.simple_consumer_shell.get_output().count("\n") == (MAX_MESSAGES + 1), timeout_sec=10,
                    err_msg="Timed out waiting to receive expected number of messages.")
