@@ -33,7 +33,7 @@ import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.requests.LeaderAndIsrRequest.PartitionState
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
-import org.apache.kafka.common.{BrokerEndPoint, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.Test
@@ -162,7 +162,7 @@ class ReplicaManagerTest {
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest(0, 0,
         collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerSet)).asJava,
-        Set(new BrokerEndPoint(0, "host1", 0), new BrokerEndPoint(1, "host2", 1)).asJava)
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava)
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, metadataCache, (_, _) => {})
       rm.getLeaderReplicaIfLocal(topic, 0)
 
@@ -185,7 +185,7 @@ class ReplicaManagerTest {
       // Make this replica the follower
       val leaderAndIsrRequest2 = new LeaderAndIsrRequest(0, 0,
         collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 1, 1, brokerList, 0, brokerSet)).asJava,
-        Set(new BrokerEndPoint(0, "host1", 0), new BrokerEndPoint(1, "host2", 1)).asJava)
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava)
       rm.becomeLeaderOrFollower(1, leaderAndIsrRequest2, metadataCache, (_, _) => {})
 
       assertTrue(produceCallbackFired)
