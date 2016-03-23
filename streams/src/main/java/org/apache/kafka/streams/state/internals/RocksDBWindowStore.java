@@ -245,7 +245,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public void put(K key, V value) {
         byte[] rawKey = putAndReturnInternalKey(key, value, USE_CURRENT_TIMESTAMP);
 
-        if (loggingEnabled) {
+        if (rawKey != null && loggingEnabled) {
             changeLogger.add(rawKey);
             changeLogger.maybeLogChange(this.getter);
         }
@@ -255,7 +255,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public void put(K key, V value, long timestamp) {
         byte[] rawKey = putAndReturnInternalKey(key, value, timestamp);
 
-        if (loggingEnabled) {
+        if (rawKey != null && loggingEnabled) {
             changeLogger.add(rawKey);
             changeLogger.maybeLogChange(this.getter);
         }
