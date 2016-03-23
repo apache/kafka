@@ -479,12 +479,17 @@ public class Fetcher<K, V> {
     private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequests(final Map<TopicPartition, Long> timestampsToSearch) {
         // Group the partitions by node.
         final Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = new HashMap<>();
+        Cluster cluster = metadata.fetch();
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
-            PartitionInfo info = metadata.fetch().partition(tp);
+            PartitionInfo info = cluster.partition(tp);
             if (info == null) {
+                if (!cluster.topics().contains(tp.topic()))
+                    log.warn("No metadata available for topic {}, wait for metadata refresh", tp.topic());
+                else
+                    log.warn("No metadata available for partition {}, wait for metadata refresh", tp);
+
                 metadata.add(tp.topic());
-                log.debug("Partition {} is unknown for fetching offset, wait for metadata refresh", tp);
                 return RequestFuture.staleMetadata();
             } else if (info.leader() == null) {
                 log.debug("Leader for partition {} unavailable for fetching offset, wait for metadata refresh", tp);
