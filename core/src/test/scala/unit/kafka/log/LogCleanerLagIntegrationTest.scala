@@ -151,7 +151,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
       logProps.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
       logProps.put(LogConfig.SegmentIndexBytesProp, 100*1024: java.lang.Integer)
       logProps.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
-      logProps.put(LogConfig.CompactionLagMsProp, compactionLag: java.lang.Integer)
+      logProps.put(LogConfig.MinCompactionLagMsProp, compactionLag: java.lang.Integer)
       logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
       logProps.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
 
