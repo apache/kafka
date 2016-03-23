@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,7 +51,7 @@ public final class Cluster {
         this.nodes = Collections.unmodifiableList(copy);
         
         this.nodesById = new HashMap<>();
-        for (Node node: nodes)
+        for (Node node : nodes)
             this.nodesById.put(node.id(), node);
 
         // index the partitions by topic/partition for quick lookup
@@ -118,39 +119,12 @@ public final class Cluster {
     }
 
     /**
-     * Update the cluster information for specific topic with new partition information
+     * Return a copy of this cluster combined with `partitions`.
      */
-    public Cluster update(String topic, Collection<PartitionInfo> partitions) {
-
-        // re-index the partitions by topic/partition for quick lookup
-        for (PartitionInfo p : partitions)
-            this.partitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
-
-        // re-index the partitions by topic and node respectively
-        this.partitionsByTopic.put(topic, Collections.unmodifiableList(new ArrayList<>(partitions)));
-
-        List<PartitionInfo> availablePartitions = new ArrayList<>();
-        for (PartitionInfo part : partitions) {
-            if (part.leader() != null)
-                availablePartitions.add(part);
-        }
-        this.availablePartitionsByTopic.put(topic, Collections.unmodifiableList(availablePartitions));
-
-        HashMap<Integer, List<PartitionInfo>> partsForNode = new HashMap<>();
-        for (Node n : this.nodes) {
-            partsForNode.put(n.id(), new ArrayList<PartitionInfo>());
-        }
-        for (PartitionInfo p : partitions) {
-            if (p.leader() != null) {
-                List<PartitionInfo> psNode = Utils.notNull(partsForNode.get(p.leader().id()));
-                psNode.add(p);
-            }
-        }
-
-        for (Map.Entry<Integer, List<PartitionInfo>> entry : partsForNode.entrySet())
-            this.partitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
-
-        return this;
+    public Cluster withPartitions(Map<TopicPartition, PartitionInfo> partitions) {
+        Map<TopicPartition, PartitionInfo> combinedPartitions = new HashMap<>(this.partitionsByTopicPartition);
+        combinedPartitions.putAll(partitions);
+        return new Cluster(this.nodes, combinedPartitions.values(), new HashSet<>(this.unauthorizedTopics));
     }
 
     /**
