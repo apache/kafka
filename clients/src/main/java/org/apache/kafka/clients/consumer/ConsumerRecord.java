@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 
 /**
@@ -19,6 +20,9 @@ import org.apache.kafka.common.record.TimestampType;
  * record is being received and an offset that points to the record in a Kafka partition.
  */
 public final class ConsumerRecord<K, V> {
+    public static final int NULL_SIZE = -1;
+    public static final int NULL_CHECKSUM = -1;
+
     private final String topic;
     private final int partition;
     private final long offset;
@@ -31,6 +35,27 @@ public final class ConsumerRecord<K, V> {
     private final V value;
 
     /**
+     * Creates a record to be received from a specified topic and partition (provided for
+     * compatibility with Kafka 0.9 before the message format supported timestamps and before
+     * serialized metadata were exposed).
+     *
+     * @param topic The topic this record is received from
+     * @param partition The partition of the topic this record is received from
+     * @param offset The offset of this record in the corresponding Kafka partition
+     * @param key The key of the record, if one exists (null is allowed)
+     * @param value The record contents
+     */
+    public ConsumerRecord(String topic,
+                          int partition,
+                          long offset,
+                          K key,
+                          V value) {
+        this(topic, partition, offset, Record.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
+                NULL_CHECKSUM, NULL_SIZE, NULL_SIZE, key, value);
+    }
+
+
+    /**
      * Creates a record to be received from a specified topic and partition
      *
      * @param topic The topic this record is received from
@@ -38,6 +63,9 @@ public final class ConsumerRecord<K, V> {
      * @param offset The offset of this record in the corresponding Kafka partition
      * @param timestamp The timestamp of the record.
      * @param timestampType The timestamp type
+     * @param checksum The checksum (CRC32) of the full record
+     * @param serializedKeySize The length of the serialized key
+     * @param serializedValueSize The length of the serialized value
      * @param key The key of the record, if one exists (null is allowed)
      * @param value The record contents
      */
