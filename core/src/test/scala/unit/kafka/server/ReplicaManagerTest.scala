@@ -33,7 +33,8 @@ import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.requests.LeaderAndIsrRequest.PartitionState
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
-import org.apache.kafka.common.{BrokerEndPoint, TopicPartition}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.internals.BrokerEndPoint
 import org.easymock.EasyMock
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.Test
