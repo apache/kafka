@@ -149,12 +149,6 @@ class CleanerTest extends JUnitSuite {
       .slice(numCleanableSegments, numTotalSegments).forall { x => x._1 == x._2 })
   }
 
-  def dumpSegment(s: LogSegment): Unit = {
-    println(s"Segment @ ${s.baseOffset}")
-    s.log.map(mao => mao.offset -> s"  ${mao.offset}: ${TestUtils.readString(mao.message.key)} -> ${TestUtils.readString(mao.message.payload)}" )
-      .foreach(println)
-  }
-
   @Test
   def testLogToClean: Unit = {
     // create a log with small segment size

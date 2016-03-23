@@ -59,34 +59,37 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
     val cleaner = makeCleaner(parts = 3, backOffMs = cleanerBackOffMs)
     val log = cleaner.logs.get(topics(0))
 
-    // T+00:00
-    val t0 = time.milliseconds
+    // t = T0
+    val T0 = time.milliseconds
     val appends0 = writeDups(numKeys = 100, numDups = 3, log, compressionCodec)
     val startSizeBlock0 = log.size
 
     // force the modification time of the log segments
-    log.logSegments.foreach(_.log.file.setLastModified(t0))
-    log.logSegments.foreach { s => assertEquals("Segments should have lastModified time of T0", t0, s.lastModified) }
+    log.logSegments.foreach(_.log.file.setLastModified(T0))
+    log.logSegments.foreach { s => assertEquals("Segments should have lastModified time of T0", T0, s.lastModified) }
 
     val activeSegAtT0 = log.activeSegment
     debug(s"active segment at T0 has base offset: ${activeSegAtT0.baseOffset}")
 
     cleaner.startup()
 
+    // T0 < t < T1
+    // advance to a time still less than one compaction lag from start
     time.sleep(compactionLag/2)
     Thread.sleep(5 * cleanerBackOffMs) // give cleaning thread a chance to _not_ clean
     assertEquals("There should be no cleaning until the compaction lag has passed", startSizeBlock0, log.size)
 
-    // advance time by a bit more than one compaction lag
+    // t = T1 > T0 + compactionLag
+    // advance to time a bit more than one compaction lag from start
     time.sleep(compactionLag/2 + 1)
-    val t1 = time.milliseconds
+    val T1 = time.milliseconds
 
     // write another block of data
     val appends1 = appends0 ++ writeDups(numKeys = 100, numDups = 3, log, compressionCodec)
     val firstBlock1SegmentBaseOffset = activeSegAtT0.baseOffset
     log.logSegments.foreach { s =>
       if (s.baseOffset >= activeSegAtT0.baseOffset)
-        s.log.file.setLastModified(t1)
+        s.log.file.setLastModified(T1)
     }
 
     // the first block should get cleaned
