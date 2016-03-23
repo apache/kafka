@@ -20,6 +20,7 @@ import org.apache.kafka.common.record.TimestampType;
  * record is being received and an offset that points to the record in a Kafka partition.
  */
 public final class ConsumerRecord<K, V> {
+    public static final long NO_TIMESTAMP = Record.NO_TIMESTAMP;
     public static final int NULL_SIZE = -1;
     public static final int NULL_CHECKSUM = -1;
 
@@ -50,7 +51,7 @@ public final class ConsumerRecord<K, V> {
                           long offset,
                           K key,
                           V value) {
-        this(topic, partition, offset, Record.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
+        this(topic, partition, offset, NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
                 NULL_CHECKSUM, NULL_SIZE, NULL_SIZE, key, value);
     }
 
