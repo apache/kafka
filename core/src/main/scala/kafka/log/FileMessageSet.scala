@@ -206,7 +206,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
   /**
    * Convert this message set to use the specified message format.
    */
-  def toMessageFormat(toMagicValue: Byte): ByteBufferMessageSet = {
+  def toMessageFormat(toMagicValue: Byte): MessageSet = {
     val offsets = new ArrayBuffer[Long]
     val newMessages = new ArrayBuffer[Message]
     this.foreach { messageAndOffset =>
@@ -224,12 +224,9 @@ class FileMessageSet private[kafka](@volatile var file: File,
       }
     }
 
-    if (_size.get() > 0 && newMessages.size == 0) {
+    if (sizeInBytes > 0 && newMessages.size == 0) {
       // This indicates that the message is too large. We just return all the bytes in the file message set.
-      val buffer = ByteBuffer.allocate(_size.get())
-      channel.read(buffer, start)
-      buffer.rewind()
-      new ByteBufferMessageSet(buffer)
+      this
     } else {
       // We use the offset seq to assign offsets so the offset of the messages does not change.
       new ByteBufferMessageSet(
