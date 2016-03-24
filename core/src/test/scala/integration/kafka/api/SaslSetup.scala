@@ -21,7 +21,7 @@ import java.io.{File}
 import javax.security.auth.login.Configuration
 
 import kafka.utils.{JaasTestUtils,TestUtils}
-import org.apache.hadoop.minikdc.MiniKdc
+import kafka.security.minikdc.MiniKdc
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.kerberos.LoginManager
 

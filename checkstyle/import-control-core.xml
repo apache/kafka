@@ -66,4 +66,8 @@
     <allow pkg="kafka.message" />
   </subpackage>
 
+  <subpackage name="security.minikdc">
+    <allow pkg=".*" regex="true" />
+  </subpackage>
+
 </import-control>
