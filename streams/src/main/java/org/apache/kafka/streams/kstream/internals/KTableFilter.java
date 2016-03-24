@@ -26,14 +26,14 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private final KTableImpl<K, ?, V> parent;
     private final Predicate<K, V> predicate;
-    private final boolean filterOut;
+    private final boolean filterNot;
 
     private boolean sendOldValues = false;
 
-    public KTableFilter(KTableImpl<K, ?, V> parent, Predicate<K, V> predicate, boolean filterOut) {
+    public KTableFilter(KTableImpl<K, ?, V> parent, Predicate<K, V> predicate, boolean filterNot) {
         this.parent = parent;
         this.predicate = predicate;
-        this.filterOut = filterOut;
+        this.filterNot = filterNot;
     }
 
     @Override
@@ -64,7 +64,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private V computeValue(K key, V value) {
         V newValue = null;
 
-        if (value != null && (filterOut ^ predicate.test(key, value)))
+        if (value != null && (filterNot ^ predicate.test(key, value)))
             newValue = value;
 
         return newValue;

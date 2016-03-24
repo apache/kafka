@@ -111,7 +111,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public KTable<K, V> filterOut(final Predicate<K, V> predicate) {
+    public KTable<K, V> filterNot(final Predicate<K, V> predicate) {
         String name = topology.newName(FILTER_NAME);
         KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, true);
 
