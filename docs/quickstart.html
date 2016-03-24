@@ -252,12 +252,13 @@ You should see the line appear in the console consumer output and in the sink fi
 
 <h4><a id="quickstart_kafkastreams" href="#quickstart_kafkastreams">Step 8: Use Kafka Streams to process data</a></h4>
 
+<p>
 Kafka Streams is a client library of Kafka for real-time stream processing and analyzing data stored in Kafka brokers.
 This quickstart example will demonstrate how to run a streaming application coded in this library. Here is the gist
-of the <a href="https://github.com/apache/kafka/blob/trunk/streams/examples/src/main/java/org/apache/kafka/streams/examples/wordcount/WordCountDemo.java">WordCount</a> example code (using Java 8 lambda expressions).
-
+of the <a href="https://github.com/apache/kafka/blob/trunk/streams/examples/src/main/java/org/apache/kafka/streams/examples/wordcount/WordCountDemo.java">WordCountDemo</a> example
+code (converted to use Java 8 lambda expressions for easy reading).
+</p>
 <pre>
-
 KStream<String, Long> wordCounts = textLines
 // Split each text line, by whitespace, into words.
 .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
@@ -267,18 +268,20 @@ KStream<String, Long> wordCounts = textLines
 .countByKey(stringSerializer, longSerializer, stringDeserializer, longDeserializer, "Counts")
 // Convert the resulted aggregate table into another stream.
 .toStream();
-
 </pre>
 
+<p>
 It implements the WordCount
 algorithm, which computes a word occurrence histogram from the input text. However, unlike other WordCount examples
-you might have seen before that operate on <b>bounded data</b>, the WordCount demo application behaves slightly differently because it is
+you might have seen before that operate on bounded data, the WordCount demo application behaves slightly differently because it is
 designed to operate on an <b>infinite, unbounded stream</b> of data. Similar to the bounded variant, it is a stateful algorithm that
 tracks and updates the counts of words. However, since it must assume potentially
 unbounded input data, it will periodically output its current state and results while continuing to process more data
 because it cannot know when it has processed "all" the input data.
-
+</p>
+<p>
 We will now prepare input data to a Kafka topic, which will subsequently processed by a Kafka Streams application.
+</p>
 
 <!--
 <pre>
@@ -296,26 +299,30 @@ We will now prepare input data to a Kafka topic, which will subsequently process
 &gt; <b>echo -e "all streams lead to kafka\nhello kafka streams\njoin kafka summit" > file-input.txt</b>
 </pre>
 
+<p>
 Next, we send this input data to the input topic named <b>streams-file-input</b> using the console producer (in practice,
 stream data will likely be flowing continuously into Kafka where the application will be up and running):
+</p>
 
 <pre>
 &gt; <b>cat /tmp/file-input.txt | ./bin/kafka-console-producer --broker-list localhost:9092 --topic streams-file-input</b>
 </pre>
 
-
+<p>
 We can now run the WordCount demo application to process the input data:
-
+</p>
 
 <pre>
-&gt; <b>./bin/kafka-run-class org.apache.kafka.streams.examples.wordcount.WordCountJob</b>
+&gt; <b>./bin/kafka-run-class org.apache.kafka.streams.examples.wordcount.WordCountDemo</b>
 </pre>
 
+<p>
 There won't be any STDOUT output except log entries as the results are continuously written back into another topic named <b>streams-wordcount-output</b> in Kafka.
 The demo will run for a few seconds and then, unlike typical stream processing applications, terminate automatically.
-
+</p>
+<p>
 We can now inspect the output of the WordCount demo application by reading from its output topic:
-
+</p>
 
 <pre>
 &gt; <b>./bin/kafka-console-consumer --zookeeper localhost:2181 \</b>
@@ -328,7 +335,9 @@ We can now inspect the output of the WordCount demo application by reading from 
             <b>--property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer</b>
 </pre>
 
+<p>
 with the following output data being printed to the console (You can stop the console consumer via <b>Ctrl-C</b>):
+</p>
 
 <pre>
 all     1
@@ -345,6 +354,8 @@ summit  1
 <b>^C</b>
 </pre>
 
+<p>
 Here, the first column is the Kafka message key, and the second column is the message value, both in in <b>java.lang.String</b> format.
 Note that the output is actually a continuous stream of updates, where each data record (i.e. each line in the original output above) is
 an updated count of a single word, aka record key such as "kafka". For multiple records with the same key, each later record is an update of the previous one.
+</p>

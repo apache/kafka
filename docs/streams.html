@@ -17,14 +17,17 @@
 
 <h3><a id="streams_overview" href="#streams_overview">9.1 Overview</a></h3>
 
+<p>
 Kafka Streams is a client library for processing and analyzing data stored in Kafka and either write the resulting data back to Kafka or send the final output to an external system. It builds upon important stream processing concepts such as properly distinguishing between event time and processing time, windowing support, and simple yet efficient management of application state.
-Kafka Streams has a <b>low barrier to entry</b>: You can quickly write and run a small-scale proof-of-concept on a single machine; and you only need to run additional instances of your application on multiple machines to scale up to high-volume production workloads. Kafka Streams transparently handles the load balancing of multiple instances of the same application by leveraging Kafka’s parallelism model.
-
+Kafka Streams has a <b>low barrier to entry</b>: You can quickly write and run a small-scale proof-of-concept on a single machine; and you only need to run additional instances of your application on multiple machines to scale up to high-volume production workloads. Kafka Streams transparently handles the load balancing of multiple instances of the same application by leveraging Kafka's parallelism model.
+</p>
+<p>
 Some highlights of Kafka Streams:
+</p>
 
 <ul>
     <li>Designed as a <b>simple and lightweight client library</b>, which can be easily embedded in any Java application and integrated with any existing packaging, deployment and operational tools that users have for their streaming applications.</li>
-    <li>Has <b>no external dependencies on systems other than Apache Kafka itself</b> as the internal messaging layer; notably, it uses Kafka’s partitioning model to horizontally scale processing while maintaining strong ordering guarantees.</li>
+    <li>Has <b>no external dependencies on systems other than Apache Kafka itself</b> as the internal messaging layer; notably, it uses Kafka's partitioning model to horizontally scale processing while maintaining strong ordering guarantees.</li>
     <li>Supports <b>fault-tolerant local state</b>, which enables very fast and efficient stateful operations like joins and windowed aggregations.</li>
     <li>Employs <b>one-record-at-a-time processing</b> to achieve low processing latency, and supports <b>event-time based windowing operations</b>.</li>
     <li>Offers necessary stream processing primitives, along with a <b>high-level Streams DSL</b> and a <b>low-level Processor API</b>.</li>
@@ -33,12 +36,16 @@ Some highlights of Kafka Streams:
 
 <h3><a id="streams_developer" href="#streams_developer">9.2 Developer Guide</a></h3>
 
+<p>
 There is a <a href="#quickstart_kafkastreams">quickstart</a> example that provides how to run a stream processing program coded in the Kafka Streams library.
 This section focuses on how to write, configure, and execute a Kafka Streams application.
+</p>
 
 <h4><a id="streams_concepts" href="#streams_concepts">Core Concepts</a></h4>
 
+<p>
 We first summarize the key concepts of Kafka Streams.
+</p>
 
 <h5><a id="streams_topology" href="#streams_topology">Stream Processing Topology</a></h5>
 
@@ -48,22 +55,28 @@ We first summarize the key concepts of Kafka Streams.
     <li>A <b>stream processor</b> is a node in the processor topology; it represents a processing step to transform data in streams by receiving one input record at a time from its upstream processors in the topology, applying its operation to it, and may subsequently producing one or more output records to its downstream processors.</li>
 </ul>
 
+<p>
 Kafka Streams offers two ways to define the stream processing topology: the <a href="#streams_dsl"><b>Kafka Streams DSL</b></a> provides
 the most common data transformation operations such as <b>map</b> and <b>filter</b>; the lower-level <a href="#streams_processor"><b>Processor API</b></a> allows
 developers define and connect custom processors as well as to interact with <a href="#streams_state"><b>state stores</b></a>.
+</p>
 
 <h5><a id="streams_time" href="#streams_time">Time</a></h5>
 
+<p>
 A critical aspect in stream processing is the the notion of <b>time</b>, and how it is modeled and integrated.
 For example, some operations such as <b>windowing</b> are defined based on time boundaries.
-
+</p>
+<p>
 Common notions of time in streams are:
+</p>
 
 <ul>
     <li><b>Event time</b> - The point in time when an event or data record occurred, i.e. was originally created "at the source".</li>
     <li><b>Processing time</b> - The point in time when the event or data record happens to be processed by the stream processing application, i.e. when the record is being consumed. The processing time may be milliseconds, hours, or days etc. later than the original event time.</li>
 </ul>
 
+<p>
 Kafka Streams assigns a <b>timestamp</b> to every data record
 via the <b><a href="https://github.com/apache/kafka/blob/trunk/streams/src/main/java/org/apache/kafka/streams/processor/TimestampExtractor.java">TimestampExtractor</a></b> interface.
 Concrete implementations of this interface may retrieve or compute timestamps based on the actual contents of data records such as an embedded timestamp field
@@ -72,31 +85,35 @@ thereby yielding processing-time semantics to stream processing applications.
 Developers can thus enforce different notions of time depending on their business needs. For example,
 per-record timestamps describe the progress of a stream with regards to time (although records may be out-of-order within the stream) and
 are leveraged by time-dependent operations such as joins.
-
+</p>
 
 <h5><a id="streams_state" href="#streams_state">States</a></h5>
 
-Some stream processing applications don’t require state, which means the processing of a message is independent from
+<p>
+Some stream processing applications don't require state, which means the processing of a message is independent from
 the processing of all other messages.
 However, being able to maintain state opens up many possibilities for sophisticated stream processing applications: you
 can join input streams, or group and aggregate data records. Many such stateful operators are provided by the <a href="#streams_dsl"><b>Kafka Streams DSL</b></a>.
-
+</p>
+<p>
 Kafka Streams provides so-called <b>state stores</b>, which can be used by stream processing applications to store and query data.
 This is an important capability when implementing stateful operations.
 Every task in Kafka Streams embeds one or more state stores that can be accessed via APIs to store and query data required for processing.
 These state stores can either be a persistent key-value store, an in-memory hashmap, or another convenient data structure.
 Kafka Streams offers fault-tolerance and automatic recovery for local state stores.
-
+</p>
 <br>
-
+<p>
 As we have mentioned above, the computational logic of a Kafka Streams application is defined as a <a href="#streams_topology">processor topology</a>.
 Currently Kafka Streams provides two sets of APIs to define the processor topology, which will be described in the subsequent sections.
+</p>
 
 <h4><a id="streams_dsl" href="#streams_dsl">High-Level Streams DSL</a></h4>
 
 <h4><a id="streams_processor" href="#streams_processor">Low-Level Processor API</a></h4>
 
 <br>
-
+<p>
 Besides defining the topology, developers will also need to configure their applications before running it. A complete list of
-Kafka Streams configs can be found here.
+Kafka Streams configs can be found <a href="#streamsconfigs"><b>here</b></a>.
+</p>
