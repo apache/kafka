@@ -255,8 +255,7 @@ You should see the line appear in the console consumer output and in the sink fi
 <p>
 Kafka Streams is a client library of Kafka for real-time stream processing and analyzing data stored in Kafka brokers.
 This quickstart example will demonstrate how to run a streaming application coded in this library. Here is the gist
-of the <a href="https://github.com/apache/kafka/blob/trunk/streams/examples/src/main/java/org/apache/kafka/streams/examples/wordcount/WordCountDemo.java">WordCountDemo</a> example
-code (converted to use Java 8 lambda expressions for easy reading).
+of the <code>WordCountDemo</code> example code (converted to use Java 8 lambda expressions for easy reading).
 </p>
 <pre>
 KStream<String, Long> wordCounts = textLines
@@ -355,7 +354,7 @@ summit  1
 </pre>
 
 <p>
-Here, the first column is the Kafka message key, and the second column is the message value, both in in <b>java.lang.String</b> format.
+Here, the first column is the Kafka message key, and the second column is the message value, both in in <code>java.lang.String</code> format.
 Note that the output is actually a continuous stream of updates, where each data record (i.e. each line in the original output above) is
 an updated count of a single word, aka record key such as "kafka". For multiple records with the same key, each later record is an update of the previous one.
 </p>

@@ -57,8 +57,8 @@ We first summarize the key concepts of Kafka Streams.
 
 <p>
 Kafka Streams offers two ways to define the stream processing topology: the <a href="#streams_dsl"><b>Kafka Streams DSL</b></a> provides
-the most common data transformation operations such as <b>map</b> and <b>filter</b>; the lower-level <a href="#streams_processor"><b>Processor API</b></a> allows
-developers define and connect custom processors as well as to interact with <a href="#streams_state"><b>state stores</b></a>.
+the most common data transformation operations such as <code>map</code> and <code>filter</code>; the lower-level <a href="#streams_processor"><b>Processor API</b></a> allows
+developers define and connect custom processors as well as to interact with <a href="#streams_state">state stores</a>.
 </p>
 
 <h5><a id="streams_time" href="#streams_time">Time</a></h5>
@@ -78,7 +78,7 @@ Common notions of time in streams are:
 
 <p>
 Kafka Streams assigns a <b>timestamp</b> to every data record
-via the <b><a href="https://github.com/apache/kafka/blob/trunk/streams/src/main/java/org/apache/kafka/streams/processor/TimestampExtractor.java">TimestampExtractor</a></b> interface.
+via the <code>TimestampExtractor</code> interface.
 Concrete implementations of this interface may retrieve or compute timestamps based on the actual contents of data records such as an embedded timestamp field
 to provide event-time semantics, or use any other approach such as returning the current wall-clock time at the time of processing,
 thereby yielding processing-time semantics to stream processing applications.
@@ -108,12 +108,103 @@ As we have mentioned above, the computational logic of a Kafka Streams applicati
 Currently Kafka Streams provides two sets of APIs to define the processor topology, which will be described in the subsequent sections.
 </p>
 
+<h4><a id="streams_processor" href="#streams_processor">Low-Level Processor API</a></h4>
+
 <h4><a id="streams_dsl" href="#streams_dsl">High-Level Streams DSL</a></h4>
 
-<h4><a id="streams_processor" href="#streams_processor">Low-Level Processor API</a></h4>
+Defining a processor topology using the Streams DSL uses the <code>KStreamBuilder</code> class, which is extended from the <code>TopologyBuilder</code>.
+A simple example is included with the source code for Kafka in the <code>streams/examples</code> package. The rest of this section will walk
+through some code to demonstrate the key steps in creating a topology using the Streams DSL, but we recommend developers to read the full example source
+codes for details.
+
+<h5><a id="streams_dsl_source" href="#streams_dsl_source">Create Source Streams from Kafka</a></h5>
+
+<p>
+Either a <b>record stream</b> (defined as <code>KStream</code>) or a <b>changelog stream</b> (defined as <code>KTable</code>)
+can be created as a source stream from one or more Kafka topics (for <code>KTable</code> you can only create the source stream
+from a single topic).
+</p>
+
+<pre>
+    KStreamBuilder builder = new KStreamBuilder();
+
+    KStream<String, GenericRecord> source1 = builder.stream("topic1", "topic2");
+    KTable<String, GenericRecord> source2 = builder.table("topic3");
+</pre>
+
+<h5><a id="streams_dsl_transform" href="#streams_dsl_transform">Transform a stream</a></h5>
+
+<p>
+There is a list of transformation operations provided for <code>KStream</code> and <code>KTable</code> respectively.
+Each of these operations may generate either one or more <code>KStream</code> and <code>KTable</code> objects and
+can be translated into one or more connected processors into the underlying processor topology.
+All these transformation methods can be chained together to compose a complex processor topology.
+Since <code>KStream</code> and <code>KTable</code> are strongly typed, all these transformation operations are defined as
+generics functions where users could specify the input and output data types.
+</p>
+
+<p>
+Among these transformations, <code>filter</code>, <code>map</code>, <code>mapValues</code>, etc, are stateless
+transformation operations and can be applied to both <code>KStream</code> and <code>KTable</code>,
+where users can usually pass a customized function to these functions as a parameter, such as <code>Predicate</code> for <code>filter</code>,
+<code>KeyValueMapper</code> for <code>map</code>, etc:
+
+</p>
+
+<pre>
+    // written in Java 8+, using lambda expressions
+    KStream<String, GenericRecord> mapped = source1.mapValue(record -> record.get("category"));
+</pre>
+
+<p>
+Stateless transformations, by definition, do not depend on any state for processing, and hence implementation-wise
+they do not require a state store associated with the stream processor; Stateful transformations, on the other hand,
+require accessing an associated state for processing and producing outputs.
+For example, in <code>join</code> and <code>aggregate</code> operations, a windowing state is usually used to store all the received records
+within the defined window boundary so far. The operators can then access these accumulated records in the store and compute
+based on them.
+</p>
+
+<pre>
+    // written in Java 8+, using lambda expressions
+    KTable<Windowed<String>, Long> counts = source1.aggregateByKey(
+        () -> 0L,  // initial value
+        (aggKey, value, aggregate) -> aggregate + 1L,   // aggregating value
+        HoppingWindows.of("counts").with(5000L).every(1000L), // intervals in milliseconds
+    );
+
+    KStream<String, String> joined = source1.leftJoin(source2,
+        (record1, record2) -> record1.get("user") + "-" + record2.get("region");
+    );
+</pre>
+
+<h5><a id="streams_dsl_sink" href="#streams_dsl_sink">Write streams back to Kafka</a></h5>
+
+<p>
+At the end of the processing, users can choose to (continuously) write the final resulted streams back to a Kafka topic through
+<code>KStream.to</code> and <code>KTable.to</code>.
+</p>
+
+<pre>
+    joined.to("topic4");
+</pre>
+
+If your application needs to continue reading and processing the records after they have been materialized
+to a topic via <code>to</code> above, one option is to construct a new stream that reads from the output topic;
+Kafka Streams provides a convenience method called <code>through</code>:
+
+<pre>
+    // equivalent to
+    //
+    // joined.to("topic4");
+    // materialized = builder.stream("topic4");
+    KStream<String, String> materialized = joined.through("topic4");
+</pre>
+
 
 <br>
 <p>
-Besides defining the topology, developers will also need to configure their applications before running it. A complete list of
+Besides defining the topology, developers will also need to configure their applications
+in <code>StreamsConfig</code> before running it. A complete list of
 Kafka Streams configs can be found <a href="#streamsconfigs"><b>here</b></a>.
 </p>
