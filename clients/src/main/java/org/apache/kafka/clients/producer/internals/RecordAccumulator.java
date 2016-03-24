@@ -14,7 +14,6 @@ package org.apache.kafka.clients.producer.internals;
 
 import java.util.Iterator;
 
-import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
@@ -214,28 +213,18 @@ public final class RecordAccumulator {
      * Abort the batches that have been sitting in RecordAccumulator for more than the configured requestTimeout
      * due to metadata being unavailable
      */
-    public List<RecordBatch> abortExpiredBatches(int requestTimeout,
-                                                 Cluster cluster,
-                                                 KafkaClient client,
-                                                 long now) {
+    public List<RecordBatch> abortExpiredBatches(int requestTimeout, Cluster cluster, long now) {
         List<RecordBatch> expiredBatches = new ArrayList<RecordBatch>();
         int count = 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
             Deque<RecordBatch> dq = entry.getValue();
             // We will check if the batch should be expired if one of the following is true:
             // 1. The leader is unknown.
-            // 2. The leader broker is disconnected.
-            Node leader = cluster.leaderFor(entry.getKey());
-            boolean leaderNotConnected = true;
-            if (leader != null) {
-                try {
-                    leaderNotConnected = client.connectionFailed(leader);
-                } catch (IllegalStateException e) {
-                    // This means the client does not know the leader node. So it is not connected.
-                }
-            }
+            // 2. The partition does not have a batch in flight.
+            TopicPartition tp = entry.getKey();
+            Node leader = cluster.leaderFor(tp);
 
-            if (leader == null) {
+            if (leader == null || !muted.contains(tp)) {
                 synchronized (dq) {
                     // iterate over the batches and expire them if they have stayed in accumulator for more than requestTimeOut
                     RecordBatch lastBatch = dq.peekLast();

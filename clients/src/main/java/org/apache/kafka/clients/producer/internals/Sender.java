@@ -202,10 +202,7 @@ public class Sender implements Runnable {
             }
         }
 
-        List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout,
-                                                                                cluster,
-                                                                                client,
-                                                                                now);
+        List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, cluster, now);
         // update sensors
         for (RecordBatch expiredBatch : expiredBatches)
             this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
