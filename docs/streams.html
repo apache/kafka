@@ -31,5 +31,72 @@ Some highlights of Kafka Streams:
 
 </ul>
 
-<h3><a id="streams_user" href="#streams_user">8.2 User Guide</a></h3>
+<h3><a id="streams_developer" href="#streams_developer">9.2 Developer Guide</a></h3>
 
+There is a <a href="#quickstart_kafkastreams">quickstart</a> example that provides how to run a stream processing program coded in the Kafka Streams library.
+This section focuses on how to write, configure, and execute a Kafka Streams application.
+
+<h4><a id="streams_concepts" href="#streams_concepts">Core Concepts</a></h4>
+
+We first summarize the key concepts of Kafka Streams.
+
+<h5><a id="streams_topology" href="#streams_topology">Stream Processing Topology</a></h5>
+
+<ul>
+    <li>A <b>stream</b>is the most important abstraction provided by Kafka Streams: it represents an unbounded, continuously updating data set. A stream is an ordered, replayable, and fault-tolerant sequence of immutable data records, where a <b>data record</b> is defined as a key-value pair.</li>
+    <li>A stream processing application written in Kafka Streams defines its computational logic through one or more <b>processor topologies</b>, where a processor topology is a graph of stream processors (nodes) that are connected by streams (edges).</li>
+    <li>A <b>stream processor</b> is a node in the processor topology; it represents a processing step to transform data in streams by receiving one input record at a time from its upstream processors in the topology, applying its operation to it, and may subsequently producing one or more output records to its downstream processors.</li>
+</ul>
+
+Kafka Streams offers two ways to define the stream processing topology: the <a href="#streams_dsl"><b>Kafka Streams DSL</b></a> provides
+the most common data transformation operations such as <b>map</b> and <b>filter</b>; the lower-level <a href="#streams_processor"><b>Processor API</b></a> allows
+developers define and connect custom processors as well as to interact with <a href="#streams_state"><b>state stores</b></a>.
+
+<h5><a id="streams_time" href="#streams_time">Time</a></h5>
+
+A critical aspect in stream processing is the the notion of <b>time</b>, and how it is modeled and integrated.
+For example, some operations such as <b>windowing</b> are defined based on time boundaries.
+
+Common notions of time in streams are:
+
+<ul>
+    <li><b>Event time</b> - The point in time when an event or data record occurred, i.e. was originally created "at the source".</li>
+    <li><b>Processing time</b> - The point in time when the event or data record happens to be processed by the stream processing application, i.e. when the record is being consumed. The processing time may be milliseconds, hours, or days etc. later than the original event time.</li>
+</ul>
+
+Kafka Streams assigns a <b>timestamp</b> to every data record
+via the <b><a href="https://github.com/apache/kafka/blob/trunk/streams/src/main/java/org/apache/kafka/streams/processor/TimestampExtractor.java">TimestampExtractor</a></b> interface.
+Concrete implementations of this interface may retrieve or compute timestamps based on the actual contents of data records such as an embedded timestamp field
+to provide event-time semantics, or use any other approach such as returning the current wall-clock time at the time of processing,
+thereby yielding processing-time semantics to stream processing applications.
+Developers can thus enforce different notions of time depending on their business needs. For example,
+per-record timestamps describe the progress of a stream with regards to time (although records may be out-of-order within the stream) and
+are leveraged by time-dependent operations such as joins.
+
+
+<h5><a id="streams_state" href="#streams_state">States</a></h5>
+
+Some stream processing applications don’t require state, which means the processing of a message is independent from
+the processing of all other messages.
+However, being able to maintain state opens up many possibilities for sophisticated stream processing applications: you
+can join input streams, or group and aggregate data records. Many such stateful operators are provided by the <a href="#streams_dsl"><b>Kafka Streams DSL</b></a>.
+
+Kafka Streams provides so-called <b>state stores</b>, which can be used by stream processing applications to store and query data.
+This is an important capability when implementing stateful operations.
+Every task in Kafka Streams embeds one or more state stores that can be accessed via APIs to store and query data required for processing.
+These state stores can either be a persistent key-value store, an in-memory hashmap, or another convenient data structure.
+Kafka Streams offers fault-tolerance and automatic recovery for local state stores.
+
+<br>
+
+As we have mentioned above, the computational logic of a Kafka Streams application is defined as a <a href="#streams_topology">processor topology</a>.
+Currently Kafka Streams provides two sets of APIs to define the processor topology, which will be described in the subsequent sections.
+
+<h4><a id="streams_dsl" href="#streams_dsl">High-Level Streams DSL</a></h4>
+
+<h4><a id="streams_processor" href="#streams_processor">Low-Level Processor API</a></h4>
+
+<br>
+
+Besides defining the topology, developers will also need to configure their applications before running it. A complete list of
+Kafka Streams configs can be found here.
