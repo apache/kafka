@@ -42,7 +42,7 @@ public interface KTable<K, V> {
      *
      * @param predicate     the instance of {@link Predicate}
      */
-    KTable<K, V> filterOut(Predicate<K, V> predicate);
+    KTable<K, V> filterNot(Predicate<K, V> predicate);
 
     /**
      * Create a new instance of {@link KTable} by transforming the value of each element in this stream into a new value in the new stream.
