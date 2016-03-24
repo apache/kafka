@@ -44,7 +44,7 @@ public class ErrorLoggingCallback implements Callback {
                     logAsString ? new String(key) : key.length + " bytes";
             String valueString = (valueLength == -1) ? "null" :
                     logAsString ? new String(value) : valueLength + " bytes";
-            log.error("Error when sending message to topic {} with key: {}, value: {} with error: {}",
+            log.error("Error when sending message to topic {} with key: {}, value: {} with error:",
                     topic, keyString, valueString, e);
         }
     }
