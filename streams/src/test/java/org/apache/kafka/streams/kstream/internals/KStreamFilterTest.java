@@ -60,7 +60,7 @@ public class KStreamFilterTest {
     }
 
     @Test
-    public void testFilterOut() {
+    public void testFilterNot() {
         KStreamBuilder builder = new KStreamBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
@@ -69,7 +69,7 @@ public class KStreamFilterTest {
 
         processor = new MockProcessorSupplier<>();
         stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
-        stream.filterOut(isMultipleOfThree).process(processor);
+        stream.filterNot(isMultipleOfThree).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {

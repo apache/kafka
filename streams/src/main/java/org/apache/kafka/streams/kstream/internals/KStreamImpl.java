@@ -106,7 +106,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public KStream<K, V> filterOut(final Predicate<K, V> predicate) {
+    public KStream<K, V> filterNot(final Predicate<K, V> predicate) {
         String name = topology.newName(FILTER_NAME);
 
         topology.addProcessor(name, new KStreamFilter<>(predicate, true), this.name);
