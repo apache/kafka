@@ -85,7 +85,6 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val leader2 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId,
                                                     oldLeaderOpt = if(leader1.get == 0) None else leader1)
     val leaderEpoch2 = zkUtils.getEpochForPartition(topic, partitionId)
-
     debug("Leader is elected to be: %s".format(leader1.getOrElse(-1)))
     debug("leader Epoc: " + leaderEpoch2)
     assertEquals("Leader must move to broker 0", 0, leader2.getOrElse(-1))
