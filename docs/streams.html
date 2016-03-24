@@ -110,9 +110,140 @@ Currently Kafka Streams provides two sets of APIs to define the processor topolo
 
 <h4><a id="streams_processor" href="#streams_processor">Low-Level Processor API</a></h4>
 
+<h5><a id="streams_processor_process" href="#streams_processor_process">Processor</a></h5>
+
+<p>
+Developers can define their customized processing logic by implementing the <code>Processor</code> interface, which
+provides <code>process</code> and <code>punctuate</code> methods. The <code>process</code> method is performed on each
+of the received record; and the <code>punctuate</code> method is performed periodically based on elapsed time.
+In addition, the processor can maintain the current <code>ProcessorContext</code> instance variable initialized in the
+<code>init</code> method, and use the context to schedule the punctuation period (<code>context().schedule</code>), to
+forward the modified / new key-value pair to downstream processors (<code>context().forward</code>), to commit the current
+processing progress (<code>context().commit</code>), etc.
+</p>
+
+<pre>
+    public class MyProcessor extends Processor<String, String> {
+        private ProcessorContext context;
+        private KeyValueStore<String, Integer> kvStore;
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public void init(ProcessorContext context) {
+            this.context = context;
+            this.context.schedule(1000);
+            this.kvStore = (KeyValueStore<String, Integer>) context.getStateStore("Counts");
+        }
+
+        @Override
+        public void process(String dummy, String line) {
+            String[] words = line.toLowerCase().split(" ");
+
+            for (String word : words) {
+                Integer oldValue = this.kvStore.get(word);
+
+                if (oldValue == null) {
+                    this.kvStore.put(word, 1);
+                } else {
+                    this.kvStore.put(word, oldValue + 1);
+                }
+            }
+        }
+
+        @Override
+        public void punctuate(long timestamp) {
+            KeyValueIterator<String, Integer> iter = this.kvStore.all();
+
+            while (iter.hasNext()) {
+                KeyValue<String, Integer> entry = iter.next();
+                context.forward(entry.key, entry.value.toString());
+            }
+
+            iter.close();
+            context.commit();
+        }
+
+        @Override
+        public void close() {
+            this.kvStore.close();
+        }
+    };
+</pre>
+
+<p>
+In the above implementation, the following actions are performed:
+
+<ul>
+    <li>In the <code>init</code> method, schedule the punctuation every 1 second and retrieve the local state store by its name "Counts".</li>
+    <li>In the <code>process</code> method, upon each received record, split the value string into words, and update their counts into the state store (we will talk about this feature later in the section).</li>
+    <li>In the <code>punctuate</code> method, iterate the local state store and send the aggregated counts to the downstream processor, and commit the current stream state.</li>
+</ul>
+</p>
+
+<h5><a id="streams_processor_topology" href="#streams_processor_topology">Processor Topology</a></h5>
+
+<p>
+With the customized processors defined in the Processor API, developers can use the <code>TopologyBuilder</code> to build a processor topology
+by connecting these processors together:
+
+<pre>
+    TopologyBuilder builder = new TopologyBuilder();
+
+    builder.addSource("SOURCE", "src-topic")
+
+        .addProcessor("PROCESS1", MyProcessor1::new /* the ProcessorSupplier that can generate MyProcessor1 */, "SOURCE")
+        .addProcessor("PROCESS2", MyProcessor2::new /* the ProcessorSupplier that can generate MyProcessor2 */, "PROCESS1")
+        .addProcessor("PROCESS3", MyProcessor3::new /* the ProcessorSupplier that can generate MyProcessor3 */, "PROCESS1")
+
+        .addSink("SINK1", "sink-topic1", "PROCESS1")
+        .addSink("SINK2", "sink-topic2", "PROCESS2")
+        .addSink("SINK3", "sink-topic3", "PROCESS3");
+</pre>
+
+There are several steps in the above code to build the topology, and here is a quick walk through:
+
+<ul>
+    <li>First of all a source node named "SOURCE" is added to the topology using the <code>addSource</code> method, with one Kafka topic "src-topic" fed to it.</li>
+    <li>Three processor nodes are then added using the <code>addProcessor</code> method; here the first processor is a child of the "SOURCE" node, but is the parent of the other two processors.</li>
+    <li>Finally three sink nodes are added to complete the topology using the <code>addSink</code> method, each piping from a different parent processor node and writing to a separate topic.</li>
+</ul>
+</p>
+
+<h5><a id="streams_processor_statestore" href="#streams_processor_statestore">Local State Store</a></h5>
+
+<p>
+Note that the Processor API is not limited to only accessing the current records as they arrive, but can also maintain local state stores
+that keep recently arrived records to use in stateful processing operations such as aggregation or windowed joins.
+To take advantage of this local states, developers can use the <code>TopologyBuilder.addStateStore</code> method when building the
+processor topology to create the local state and associate it with the processor nodes that needs to access it; or they can connect a created
+local state store with the existing processor nodes through <code>TopologyBuilder.connectProcessorAndStateStores</code>.
+
+<pre>
+    TopologyBuilder builder = new TopologyBuilder();
+
+    builder.addSource("SOURCE", "src-topic")
+
+        .addProcessor("PROCESS1", MyProcessor1::new, "SOURCE")
+        // create the in-memory state store "COUNTS" associated with processor "PROCESS1"
+        .addStateStore(Stores.create("COUNTS").withStringKeys().withStringValues().inMemory().build(), "PROCESS1")
+        .addProcessor("PROCESS2", MyProcessor3::new /* the ProcessorSupplier that can generate MyProcessor3 */, "PROCESS1")
+        .addProcessor("PROCESS3", MyProcessor3::new /* the ProcessorSupplier that can generate MyProcessor3 */, "PROCESS1")
+
+        // connect the state store "COUNTS" with processor "PROCESS2"
+        .connectProcessorAndStateStores("PROCESS2", "COUNTS");
+
+        .addSink("SINK1", "sink-topic1", "PROCESS1")
+        .addSink("SINK2", "sink-topic2", "PROCESS2")
+        .addSink("SINK3", "sink-topic3", "PROCESS3");
+</pre>
+
+</p>
+
+In the next section we present another way to build the processor topology: the Kafka Streams DSL.
+
 <h4><a id="streams_dsl" href="#streams_dsl">High-Level Streams DSL</a></h4>
 
-Defining a processor topology using the Streams DSL uses the <code>KStreamBuilder</code> class, which is extended from the <code>TopologyBuilder</code>.
+To build a processor topology using the Streams DSL, developers can apply the <code>KStreamBuilder</code> class, which is extended from the <code>TopologyBuilder</code>.
 A simple example is included with the source code for Kafka in the <code>streams/examples</code> package. The rest of this section will walk
 through some code to demonstrate the key steps in creating a topology using the Streams DSL, but we recommend developers to read the full example source
 codes for details.
