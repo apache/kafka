@@ -15,11 +15,7 @@ package org.apache.kafka.common.network;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.nio.channels.CancelledKeyException;
-import java.nio.channels.ClosedChannelException;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.SocketChannel;
-import java.nio.channels.UnresolvedAddressException;
+import java.nio.channels.*;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -33,6 +29,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.MetricName;
@@ -338,7 +335,8 @@ public class Selector implements Selectable {
                     close(channel);
                     this.disconnected.add(channel.id());
                 }
-
+            } catch (ClosedByInterruptException e){
+                throw new InterruptException(e.toString());
             } catch (Exception e) {
                 String desc = channel.socketDescription();
                 if (e instanceof IOException)

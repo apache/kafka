@@ -14,6 +14,8 @@ package org.apache.kafka.common.network;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.fail;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -22,6 +24,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
@@ -31,6 +34,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
@@ -197,6 +203,52 @@ public class SelectorTest {
         assertEquals(big, blockingRequest(node, big));
     }
 
+    /**
+     * Validate that we throw an InterruptException.
+     */
+    @Test
+    public void testProperInterruption() throws Exception {
+        final AtomicBoolean failed = new AtomicBoolean(false);
+        final CountDownLatch latch = new CountDownLatch(1);
+        // We need to interrupt a seperate Thread otherwise teardown won't work
+        Thread t = new Thread() {
+            @Override
+            public void run() {
+                String node = "0";
+                try {
+                    blockingConnect(node);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                String big = TestUtils.randomString(10 * BUFFER_SIZE);
+                selector.send(createSend(node, big));
+                Thread.currentThread().interrupt();
+                try {
+                    selector.poll(1000L);
+                    fail("Should be interrupted");
+                } catch (InterruptException e) {
+                    // We got the right exception: Positive case
+                    latch.countDown();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        };
+        t.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread t, Throwable e) {
+                System.err.println();
+                System.err.println("" + t + ": " + e);
+                failed.set(true);
+                latch.countDown();
+            }
+        });
+        t.start();
+        latch.await();
+        assertFalse("There should be no failure", failed.get());
+    }
+
+
     @Test
     public void testLargeMessageSequence() throws Exception {
         int bufferSize = 512 * 1024;
@@ -207,7 +259,6 @@ public class SelectorTest {
         String requestPrefix = TestUtils.randomString(bufferSize);
         sendAndReceive(node, requestPrefix, 0, reqs);
     }
-
 
 
     /**
@@ -261,7 +312,7 @@ public class SelectorTest {
         assertTrue("The idle connection should have been closed", selector.disconnected().contains(id));
     }
 
-    
+
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
         selector.poll(1000L);
@@ -272,7 +323,7 @@ public class SelectorTest {
                     return asString(receive);
         }
     }
-    
+
     protected void connect(String node, InetSocketAddress serverAddr) throws IOException {
         selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE);
     }
@@ -281,6 +332,7 @@ public class SelectorTest {
     private void blockingConnect(String node) throws IOException {
         blockingConnect(node, new InetSocketAddress("localhost", server.port));
     }
+
     protected void blockingConnect(String node, InetSocketAddress serverAddr) throws IOException {
         selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE);
         while (!selector.connected().contains(node))
