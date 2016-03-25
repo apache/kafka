@@ -136,16 +136,14 @@ public final class RecordBatch {
     /**
      * A batch whose metadata is not available should be expired if one of the following is true:
      * <ol>
-     *     <li> the batch is not in retry AND request timeout has elapsed after it is ready. (We need to see if a batch is
-     *     ready by explicitly checking if the record is full or linger time is met because the accumulator's partition
-     *     may not be ready if the leader is unavailable.)
+     *     <li> the batch is not in retry AND request timeout has elapsed after it is ready (full or linger.ms has reached).
      *     <li> the batch is in retry AND request timeout has elapsed after the backoff period ended.
      * </ol>
      */
-    public boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs) {
+    public boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
         boolean expire = false;
 
-        if (!this.inRetry() && this.records.isFull() && requestTimeoutMs < (now - this.lastAppendTime))
+        if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime))
             expire = true;
         else if (!this.inRetry() && requestTimeoutMs < (now - (this.createdMs + lingerMs)))
             expire = true;

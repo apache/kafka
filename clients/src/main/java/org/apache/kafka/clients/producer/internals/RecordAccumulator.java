@@ -218,30 +218,27 @@ public final class RecordAccumulator {
         int count = 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
             Deque<RecordBatch> dq = entry.getValue();
-            // We will check if the batch should be expired if one of the following is true:
-            // 1. The leader is unknown.
-            // 2. The partition does not have a batch in flight.
+            // We only check if the batch should be expired if the partition does not have a batch in flight.
+            // This is to avoid the later batches get expired when an earlier batch is still in progress.
+            // This protection only takes effect when user sets max.in.flight.request.per.connection=1.
+            // Otherwise the expiration order is not guranteed.
             TopicPartition tp = entry.getKey();
-            Node leader = cluster.leaderFor(tp);
-
-            if (leader == null || !muted.contains(tp)) {
+            if (!muted.contains(tp)) {
                 synchronized (dq) {
                     // iterate over the batches and expire them if they have stayed in accumulator for more than requestTimeOut
                     RecordBatch lastBatch = dq.peekLast();
                     Iterator<RecordBatch> batchIterator = dq.iterator();
                     while (batchIterator.hasNext()) {
                         RecordBatch batch = batchIterator.next();
-                        // We have to close the previous batches in the deque before expiration check, otherwise those
-                        // batches may never be considered as full.
-                        if (batch != lastBatch)
-                            batch.records.close();
+                        boolean isFull = batch != lastBatch || batch.records.isFull();
                         // check if the batch is expired
-                        if (batch.maybeExpire(requestTimeout, retryBackoffMs, now, this.lingerMs)) {
+                        if (batch.maybeExpire(requestTimeout, retryBackoffMs, now, this.lingerMs, isFull)) {
                             expiredBatches.add(batch);
                             count++;
                             batchIterator.remove();
                             deallocate(batch);
                         } else {
+                            // Stop at the first batch that has not expired.
                             break;
                         }
                     }
