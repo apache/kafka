@@ -87,6 +87,12 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     <li> The default value of the configuration parameter <code>receive.buffer.bytes</code> is now 64K for the new consumer </li>
 </ul>
 
+<h5><a id="upgrade_10_notable" href="#upgrade_10_notable">Notable changes in 0.10.0.0</a></h5>
+
+<ul>
+    <li> The default value of the configuration parameter <code>receive.buffer.bytes</code> is now 64K for the new consumer </li>
+</ul>
+
 <h4><a id="upgrade_9" href="#upgrade_9">Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.9.0.0</a></h4>
 
 0.9.0.0 has <a href="#upgrade_9_breaking">potential breaking changes</a> (please review before upgrading) and an inter-broker protocol change from previous versions. This means that upgraded brokers and clients may not be compatible with older versions. It is important that you upgrade your Kafka cluster before upgrading your clients. If you are using MirrorMaker downstream clusters should be upgraded first as well.
