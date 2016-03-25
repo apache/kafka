@@ -63,6 +63,7 @@ class SecurityConfig(TemplateRenderer):
     SSL = 'SSL'
     SASL_PLAINTEXT = 'SASL_PLAINTEXT'
     SASL_SSL = 'SASL_SSL'
+    ALL_PROTOCOLS = [PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL]
     SASL_MECHANISM_GSSAPI = 'GSSAPI'
     SASL_MECHANISM_PLAIN = 'PLAIN'
     CONFIG_DIR = "/mnt/security"
@@ -172,17 +173,22 @@ class SecurityConfig(TemplateRenderer):
         else:
             return ""
 
-    def __str__(self):
+    def props(self, prefix=''):
         """
-        Return properties as string with line separators.
+        Return properties as string with line separators, optionally with a prefix.
         This is used to append security config properties to
         a properties file.
+        :param prefix: prefix to add to each property
+        :return: a string containing line-separated properties
         """
+        if self.security_protocol == SecurityConfig.PLAINTEXT:
+            return ""
+        return "\n".join(prefix + key + "=" + value for key, value in self.properties.iteritems())
 
-        prop_str = ""
-        if self.security_protocol != SecurityConfig.PLAINTEXT:
-            for key, value in self.properties.items():
-                prop_str += ("\n" + key + "=" + value)
-            prop_str += "\n"
-        return prop_str
+    def __str__(self):
+        """
+        Return properties as a string with line separators.
+        """
+        return self.props()
+
 

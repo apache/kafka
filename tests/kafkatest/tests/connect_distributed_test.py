@@ -13,15 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.tests.kafka_test import KafkaTest
+from ducktape.tests.test import Test
+
+from kafkatest.services.zookeeper import ZookeeperService
+from kafkatest.services.kafka import KafkaService
 from kafkatest.services.connect import ConnectDistributedService, VerifiableSource, VerifiableSink
 from kafkatest.services.console_consumer import ConsoleConsumer
+from kafkatest.services.security.security_config import SecurityConfig
 from ducktape.utils.util import wait_until
 from ducktape.mark import matrix
 import subprocess, itertools, time
 from collections import Counter
 
-class ConnectDistributedTest(KafkaTest):
+class ConnectDistributedTest(Test):
     """
     Simple test of Kafka Connect in distributed mode, producing data from files on one cluster and consuming it on
     another, validating the total output is identical to the input.
@@ -45,22 +49,39 @@ class ConnectDistributedTest(KafkaTest):
     SCHEMA = { "type": "string", "optional": False }
 
     def __init__(self, test_context):
-        super(ConnectDistributedTest, self).__init__(test_context, num_zk=1, num_brokers=1, topics={
+        super(ConnectDistributedTest, self).__init__(test_context)
+        self.num_zk = 1
+        self.num_brokers = 1
+        self.topics = {
             'test' : { 'partitions': 1, 'replication-factor': 1 }
-        })
+        }
 
-        self.cc = ConnectDistributedService(test_context, 3, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE])
-        self.cc.log_level = "DEBUG"
+        self.zk = ZookeeperService(test_context, self.num_zk)
+
         self.key_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.value_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.schemas = True
 
-    def test_file_source_and_sink(self):
+    def setup_services(self, security_protocol=SecurityConfig.PLAINTEXT):
+        self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,
+                                  security_protocol=security_protocol, interbroker_security_protocol=security_protocol,
+                                  topics=self.topics)
+
+        self.cc = ConnectDistributedService(self.test_context, 3, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE])
+        self.cc.log_level = "DEBUG"
+
+        self.zk.start()
+        self.kafka.start()
+
+
+    @matrix(security_protocol=SecurityConfig.ALL_PROTOCOLS)
+    def test_file_source_and_sink(self, security_protocol):
         """
         Tests that a basic file connector works across clean rolling bounces. This validates that the connector is
         correctly created, tasks instantiated, and as nodes restart the work is rebalanced across nodes.
         """
 
+        self.setup_services(security_protocol=security_protocol)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
 
         self.cc.start()
@@ -94,6 +115,7 @@ class ConnectDistributedTest(KafkaTest):
         """
         num_tasks = 3
 
+        self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
         self.cc.start()
 
