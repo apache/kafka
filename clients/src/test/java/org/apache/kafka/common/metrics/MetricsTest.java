@@ -308,12 +308,22 @@ public class MetricsTest {
     @Test
     public void testOldDataHasNoEffect() {
         Max max = new Max();
+        Min min = new Min();
+        Avg avg = new Avg();
+        Count count = new Count();
         long windowMs = 100;
         int samples = 2;
         MetricConfig config = new MetricConfig().timeWindow(windowMs, TimeUnit.MILLISECONDS).samples(samples);
         max.record(config, 50, time.milliseconds());
+        min.record(config, 50, time.milliseconds());
+        avg.record(config, 50, time.milliseconds());
+        count.record(config, 50, time.milliseconds());
         time.sleep(samples * windowMs);
+        // this also serves as a check for a sane initialValue on each Stat
         assertEquals(Double.NEGATIVE_INFINITY, max.measure(config, time.milliseconds()), EPS);
+        assertEquals(Double.MAX_VALUE, min.measure(config, time.milliseconds()), EPS);
+        assertEquals(0.0, avg.measure(config, time.milliseconds()), EPS);
+        assertEquals(0, count.measure(config, time.milliseconds()), EPS);
     }
 
     @Test(expected = IllegalArgumentException.class)
