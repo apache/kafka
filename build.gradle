@@ -413,7 +413,7 @@ project(':core') {
 
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
                                'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
-                               ':connect:runtime:genConnectConfigDocs'], type: Tar) {
+                               ':connect:runtime:genConnectConfigDocs', ':streams:genStreamsConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("../docs")
@@ -552,77 +552,84 @@ project(':clients') {
 }
 
 project(':tools') {
-    archivesBaseName = "kafka-tools"
+  archivesBaseName = "kafka-tools"
 
-    dependencies {
-        compile project(':clients')
-        compile project(':log4j-appender')
-        compile libs.argparse4j
-        compile libs.jacksonDatabind
-        compile libs.slf4jlog4j
+  dependencies {
+    compile project(':clients')
+    compile project(':log4j-appender')
+    compile libs.argparse4j
+    compile libs.jacksonDatabind
+    compile libs.slf4jlog4j
 
-        testCompile project(':clients')
-        testCompile libs.junit
+    testCompile project(':clients')
+    testCompile libs.junit
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/tools/*"
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
     }
-
-    javadoc {
-        include "**/org/apache/kafka/tools/*"
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
     }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
 
-    tasks.create(name: "copyDependantLibs", type: Copy) {
-        from (configurations.testRuntime) {
-            include('slf4j-log4j12*')
-        }
-        from (configurations.runtime) {
-            exclude('kafka-clients*')
-        }
-        into "$buildDir/dependant-libs-${versions.scala}"
-        duplicatesStrategy 'exclude'
-    }
-
-    jar {
-        dependsOn 'copyDependantLibs'
-    }
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
 }
 
 project(':streams') {
-    archivesBaseName = "kafka-streams"
+  archivesBaseName = "kafka-streams"
 
-    dependencies {
-        compile project(':clients')
-        compile project(':connect:json')  // this dependency should be removed after we unify data API
-        compile libs.slf4jlog4j
-        compile libs.rocksDBJni
-        compile libs.zkclient // this dependency should be removed after KIP-4
-        compile libs.jacksonDatabind // this dependency should be removed after KIP-4
+  dependencies {
+    compile project(':clients')
+    compile project(':connect:json')  // this dependency should be removed after we unify data API
+    compile libs.slf4jlog4j
+    compile libs.rocksDBJni
+    compile libs.zkclient // this dependency should be removed after KIP-4
+    compile libs.jacksonDatabind // this dependency should be removed after KIP-4
 
-        testCompile project(':clients').sourceSets.test.output
-        testCompile libs.junit
+    testCompile project(':clients').sourceSets.test.output
+    testCompile libs.junit
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/streams/**"
+    exclude "**/internals/**"
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
     }
-
-    javadoc {
-        include "**/org/apache/kafka/streams/**"
-        exclude "**/internals/**"
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
     }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
 
-    tasks.create(name: "copyDependantLibs", type: Copy) {
-        from (configurations.testRuntime) {
-            include('slf4j-log4j12*')
-        }
-        from (configurations.runtime) {
-            exclude('kafka-clients*')
-        }
-        into "$buildDir/dependant-libs-${versions.scala}"
-        duplicatesStrategy 'exclude'
-    }
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
 
-    jar {
-        dependsOn 'copyDependantLibs'
-    }
+  systemTestLibs {
+    dependsOn testJar
+  }
 
-    systemTestLibs {
-        dependsOn testJar
-    }
+  task genStreamsConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.streams.StreamsConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
+  }
 }
 
 project(':streams:examples') {
