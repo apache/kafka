@@ -79,4 +79,13 @@ public interface SinkTaskContext {
      * @param partitions the partitions to resume
      */
     void resume(TopicPartition... partitions);
+
+    /**
+     * Whether to disable consumer offset commit in the framework. SinkTasks should use this if they manage offsets
+     * in the sink data store rather than using Kafka consumer offsets.  For example, an HDFS connector might record
+     * offsets in HDFS to provide exactly once delivery. When the SinkTask is started or a rebalance occurs, the task
+     * would reload offsets from HDFS. In this case, disabling consumer offset commit will save some CPU cycles and
+     * network IOs.
+     */
+    void disableOffsetCommit();
 }

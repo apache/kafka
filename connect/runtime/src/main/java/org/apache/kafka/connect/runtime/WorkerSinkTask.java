@@ -149,25 +149,30 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     protected void iteration() {
-        long now = time.milliseconds();
+        long timeoutMs;
+        if (!context.offsetCommitDisabled()) {
+            long now = time.milliseconds();
 
-        // Maybe commit
-        if (!committing && now >= nextCommit) {
-            commitOffsets(now, false);
-            nextCommit += workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
-        }
+            // Maybe commit
+            if (!committing && now >= nextCommit) {
+                commitOffsets(now, false);
+                nextCommit += workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+            }
 
-        // Check for timed out commits
-        long commitTimeout = commitStarted + workerConfig.getLong(
+            // Check for timed out commits
+            long commitTimeout = commitStarted + workerConfig.getLong(
                 WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
-        if (committing && now >= commitTimeout) {
-            log.warn("Commit of {} offsets timed out", this);
-            commitFailures++;
-            committing = false;
-        }
+            if (committing && now >= commitTimeout) {
+                log.warn("Commit of {} offsets timed out", this);
+                commitFailures++;
+                committing = false;
+            }
 
-        // And process messages
-        long timeoutMs = Math.max(nextCommit - now, 0);
+            // And process messages
+            timeoutMs = Math.max(nextCommit - now, 0);
+        } else {
+            timeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+        }
         poll(timeoutMs);
     }
 

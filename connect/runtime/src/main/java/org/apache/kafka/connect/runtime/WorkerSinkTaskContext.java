@@ -27,12 +27,14 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
     private long timeoutMs;
     private KafkaConsumer<byte[], byte[]> consumer;
     private final Set<TopicPartition> pausedPartitions;
+    private boolean offsetCommitDisabled;
 
     public WorkerSinkTaskContext(KafkaConsumer<byte[], byte[]> consumer) {
         this.offsets = new HashMap<>();
         this.timeoutMs = -1L;
         this.consumer = consumer;
         this.pausedPartitions = new HashSet<>();
+        this.offsetCommitDisabled = false;
     }
 
     @Override
@@ -108,5 +110,14 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
 
     public Set<TopicPartition> pausedPartitions() {
         return pausedPartitions;
+    }
+
+    @Override
+    public void disableOffsetCommit() {
+        this.offsetCommitDisabled = true;
+    }
+
+    public boolean offsetCommitDisabled() {
+        return offsetCommitDisabled;
     }
 }
