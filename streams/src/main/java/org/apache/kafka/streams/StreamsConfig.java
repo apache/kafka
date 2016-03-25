@@ -34,7 +34,6 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * Configuration for Kafka Streams. Documentation for these configurations can be found in the <a
@@ -115,9 +114,6 @@ public class StreamsConfig extends AbstractConfig {
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
-    /** <code>auto.offset.reset</code> */
-    public static final String AUTO_OFFSET_RESET_CONFIG = ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
-
     static {
         CONFIG = new ConfigDef().define(APPLICATION_ID_CONFIG,      // required with no default value
                                         Type.STRING,
@@ -197,12 +193,6 @@ public class StreamsConfig extends AbstractConfig {
                                         60000,
                                         Importance.LOW,
                                         STATE_CLEANUP_DELAY_MS_DOC)
-                                .define(AUTO_OFFSET_RESET_CONFIG,
-                                        Type.STRING,
-                                        "latest",
-                                        in("latest", "earliest", "none"),
-                                        Importance.MEDIUM,
-                                        ConsumerConfig.AUTO_OFFSET_RESET_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         "",
@@ -277,7 +267,7 @@ public class StreamsConfig extends AbstractConfig {
         Map<String, Object> props = this.originals();
 
         // remove consumer properties that are not required for producers
-        props.remove(StreamsConfig.AUTO_OFFSET_RESET_CONFIG);
+        props.remove(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
 
         // remove streams properties
         removeStreamsSpecificConfigs(props);
