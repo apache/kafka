@@ -13,6 +13,7 @@
 package org.apache.kafka.clients.producer.internals;
 
 import java.util.Iterator;
+
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
@@ -217,19 +218,27 @@ public final class RecordAccumulator {
         int count = 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
             Deque<RecordBatch> dq = entry.getValue();
-            synchronized (dq) {
-                // iterate over the batches and expire them if they have stayed in accumulator for more than requestTimeOut
-                Iterator<RecordBatch> batchIterator = dq.iterator();
-                while (batchIterator.hasNext()) {
-                    RecordBatch batch = batchIterator.next();
-                    // check if the batch is expired
-                    if (batch.maybeExpire(requestTimeout, now, this.lingerMs)) {
-                        expiredBatches.add(batch);
-                        count++;
-                        batchIterator.remove();
-                        deallocate(batch);
-                    } else {
-                        if (!batch.inRetry()) {
+            // We only check if the batch should be expired if the partition does not have a batch in flight.
+            // This is to avoid the later batches get expired when an earlier batch is still in progress.
+            // This protection only takes effect when user sets max.in.flight.request.per.connection=1.
+            // Otherwise the expiration order is not guranteed.
+            TopicPartition tp = entry.getKey();
+            if (!muted.contains(tp)) {
+                synchronized (dq) {
+                    // iterate over the batches and expire them if they have stayed in accumulator for more than requestTimeOut
+                    RecordBatch lastBatch = dq.peekLast();
+                    Iterator<RecordBatch> batchIterator = dq.iterator();
+                    while (batchIterator.hasNext()) {
+                        RecordBatch batch = batchIterator.next();
+                        boolean isFull = batch != lastBatch || batch.records.isFull();
+                        // check if the batch is expired
+                        if (batch.maybeExpire(requestTimeout, retryBackoffMs, now, this.lingerMs, isFull)) {
+                            expiredBatches.add(batch);
+                            count++;
+                            batchIterator.remove();
+                            deallocate(batch);
+                        } else {
+                            // Stop at the first batch that has not expired.
                             break;
                         }
                     }
