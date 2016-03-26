@@ -332,7 +332,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       processor.accept(socketChannel)
     } catch {
       case e: TooManyConnectionsException =>
-        info("Rejected connection from %s, address already has the configured maximum of %d connections.".format(e.ip, e.count))
+        warn("Rejected connection from %s, address already has the configured maximum of %d connections.".format(e.ip, e.count))
         close(socketChannel)
     }
   }
