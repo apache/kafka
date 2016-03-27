@@ -17,7 +17,7 @@
 
 package kafka.utils
 
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{Callable, CountDownLatch}
 
 import kafka.admin._
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0, LeaderAndIsr}
@@ -29,10 +29,10 @@ import kafka.server.ConfigType
 import kafka.utils.ZkUtils._
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
-import org.I0Itec.zkclient.{ZkClient, ZkConnection}
+import org.I0Itec.zkclient.{IZkConnection, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
+import org.apache.zookeeper.AsyncCallback.{DataCallback, StatCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
@@ -466,6 +466,26 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   /**
+   * Asynchronnously make conditional update on a persistent path. Unlike the synchronous update call, this method does
+   * not take an optional checker function. It is the caller's responsibility to refresh the data in ZK and decide
+   * whether to continue or abandon the update.
+   * @param path The persistent path to update
+   * @param data The data to write
+   * @param expectVersion The expected zkVersion
+   * @param resultHandler A method that takes (updateSucceeded, newZkVersion) as argument. This method will be fired
+   *                      as a callback when
+   */
+  def asyncConditionalUpdatePersistentPath(path: String,
+                                           data: String,
+                                           expectVersion: Int,
+                                           resultHandler: (Boolean, Int) => Unit) = {
+    val callbackWithData = new ZkWriteCallbackWithData(data, expectVersion) {
+      override def handle(updateSucceeded: Boolean, newZkVersion: Int) = resultHandler(updateSucceeded, newZkVersion)
+    }
+    zkClient.asyncWriteDataAndReturnStat(path, data, callbackWithData, expectVersion)
+  }
+
+  /**
    * Conditional update the persistent path data, return (true, newVersion) if it succeeds, otherwise (the current
    * version is not the expected version, etc.) return (false, -1). If path doesn't exist, throws ZkNoNodeException
    */
@@ -552,6 +572,10 @@ class ZkUtils(val zkClient: ZkClient,
                         case e2: Throwable => throw e2
                       }
     dataAndStat
+  }
+
+  def asyncReadDataMaybeNull(path: String, callback: DataCallback) = {
+    zkClient.asyncReadData(path, callback)
   }
 
   def getChildren(path: String): Seq[String] = {
@@ -1111,4 +1135,69 @@ class ZKCheckedEphemeral(path: String,
         throw ZkException.create(KeeperException.create(result))
     }
   }
+}
+
+private[kafka] class ZkClient(zkConnection: IZkConnection, connectionTimeout: Int, zkSerializer: ZkSerializer)
+  extends org.I0Itec.zkclient.ZkClient(zkConnection, connectionTimeout, zkSerializer) {
+
+  def this(zkServers: String, sessionTimeout: Int, connectionTimeout: Int, zkSerializer: ZkSerializer) {
+    this(new ZkConnection(zkServers, sessionTimeout), connectionTimeout, zkSerializer)
+  }
+
+  def asyncWriteDataAndReturnStat(path: String,
+                                  datat: String,
+                                  callbackWithData: StatCallback,
+                                  expectedVersion: Int) = {
+    val data: Array[Byte] = ZKStringSerializer.serialize(datat)
+    retryUntilConnected(new Callable[Object] {
+      def call: Object = {
+        _connection.asInstanceOf[ZkConnection].getZookeeper.setData(path, data, expectedVersion, callbackWithData, null)
+        null
+      }
+    })
+  }
+  
+  def asyncReadData(path: String, callback: DataCallback) {
+    retryUntilConnected(new Callable[Object] {
+      def call: Object = {
+        _connection.asInstanceOf[ZkConnection].getZookeeper.getData(path, false, callback, null)
+        null
+      }
+    })
+  }
+}
+
+private[kafka] abstract class ZkReadCallback extends DataCallback {
+  override def processResult(rc: Int, path: String, ctx: Object, data: Array[Byte], stat: Stat) {
+    val code = Code.get(rc)
+    val datat = code match {
+      case Code.OK => Some(ZKStringSerializer.deserialize(data).asInstanceOf[String])
+      case _ => None
+    }
+    // We mimic the sync zkClientBehavior here to return an exception.
+    val exceptionOpt = if (code != Code.OK && code != Code.NONODE) Some(KeeperException.create(Code.get(rc))) else None
+    handle(datat, stat, exceptionOpt)
+  }
+
+  def handle(dataOpt: Option[String], stat: Stat, exceptionOpt: Option[Exception])
+}
+
+private[kafka] abstract class ZkWriteCallbackWithData(val data: String,
+                                                      val expectVersion: Int)
+  extends StatCallback with Logging {
+
+  override def processResult(rc: Int, path: String, ctx: Object, stat: Stat) {
+    val code = Code.get(rc)
+    trace(s"Received return code $code for update of zk path $path")
+    val (updateSucceeded, newZkVesion) = code match {
+      case Code.OK => (true, stat.getVersion)
+      case _ =>
+        warn("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
+          expectVersion, KeeperException.create(code).getMessage))
+        (false, -1)
+    }
+    handle(updateSucceeded, newZkVesion)
+  }
+
+  def handle(updateSucceeded: Boolean, newZkVersion: Int)
 }

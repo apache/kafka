@@ -18,9 +18,8 @@
 package kafka.consumer
 
 import org.easymock.EasyMock
-import org.I0Itec.zkclient.ZkClient
 import org.apache.zookeeper.data.Stat
-import kafka.utils.{TestUtils, Logging, ZkUtils, Json}
+import kafka.utils.{ZkClient, TestUtils, Logging, ZkUtils, Json}
 import org.junit.Assert._
 import kafka.common.TopicAndPartition
 import kafka.consumer.PartitionAssignorTest.StaticSubscriptionInfo
