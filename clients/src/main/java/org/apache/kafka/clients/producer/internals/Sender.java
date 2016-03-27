@@ -188,7 +188,14 @@ public class Sender implements Runnable {
                 notReadyTimeout = Math.min(notReadyTimeout, this.client.connectionDelay(node, now));
             }
         }
-
+        
+        // Could we do the abortExpiredBatches step firstly and then drain Sendable RecordBatch for later transmission?
+        // Otherwise some expired packages may be hidden in the drained batches.
+        List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, cluster, now);
+        // update sensors
+        for (RecordBatch expiredBatch : expiredBatches)
+            this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
+            
         // create produce requests
         Map<Integer, List<RecordBatch>> batches = this.accumulator.drain(cluster,
                                                                          result.readyNodes,
@@ -201,11 +208,6 @@ public class Sender implements Runnable {
                     this.accumulator.mutePartition(batch.topicPartition);
             }
         }
-
-        List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, cluster, now);
-        // update sensors
-        for (RecordBatch expiredBatch : expiredBatches)
-            this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
 
         sensors.updateProduceRequestMetrics(batches);
         List<ClientRequest> requests = createProduceRequests(batches, now);
