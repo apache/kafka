@@ -114,6 +114,18 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         .describedAs("Java regex (String)")
         .ofType(classOf[String])
 
+      val topicPartitionOpt = parser.accepts("topic.partition.list",
+        "List of topic:partitions to mirror.")
+        .withRequiredArg()
+        .describedAs("Topic:partitions config string. Example: topicA:1-3,6,7;topicB:1,4-9")
+        .ofType(classOf[String])
+
+      val topicMappingOpt = parser.accepts("topic.mapping.prop",
+        "Topic mapping property file.")
+        .withRequiredArg()
+        .describedAs("Topic mapping property file")
+        .ofType(classOf[String])
+
       val blacklistOpt = parser.accepts("blacklist",
         "Blacklist of topics to mirror. Only old consumer supports blacklist.")
         .withRequiredArg()
@@ -179,13 +191,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           error("blacklist can not be used when using new consumer in mirror maker. Use whitelist instead.")
           System.exit(1)
         }
-        if (!options.has(whitelistOpt)) {
-          error("whitelist must be specified when using new consumer in mirror maker.")
+        if (List(whitelistOpt, topicPartitionOpt).count(options.has) != 1) {
+          error("Exactly one of whitelist or topic-partition-list is required for new consumer.")
           System.exit(1)
         }
       } else {
         if (List(whitelistOpt, blacklistOpt).count(options.has) != 1) {
-          error("Exactly one of whitelist or blacklist is required.")
+          error("Exactly one of whitelist or blacklist is required for old consumer.")
           System.exit(1)
         }
       }
@@ -210,7 +222,14 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       // Always set producer key and value serializer to ByteArraySerializer.
       producerProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
       producerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-      producer = new MirrorMakerProducer(producerProps)
+
+      val topicMappings: java.util.Map[String, String] = if (options.has(topicMappingOpt)) {
+        Utils.propsToStringMap(Utils.loadProps(options.valueOf(topicMappingOpt)))
+      } else {
+        Collections.emptyMap()
+      }
+
+      producer = new MirrorMakerProducer(producerProps, topicMappings)
 
       // Create consumers
       val mirrorMakerConsumers = if (!useNewConsumer) {
@@ -235,7 +254,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           options.valueOf(consumerConfigOpt),
           customRebalanceListener,
           Option(options.valueOf(whitelistOpt)),
-          Option(options.valueOf(blacklistOpt)))
+          Option(options.valueOf(blacklistOpt))
+        )
       } else {
         val customRebalanceListener = {
           val customRebalanceListenerClass = options.valueOf(consumerRebalanceListenerOpt)
@@ -257,7 +277,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           numStreams,
           options.valueOf(consumerConfigOpt),
           customRebalanceListener,
-          Option(options.valueOf(whitelistOpt)))
+          Option(options.valueOf(whitelistOpt)),
+          Option(options.valueOf(topicPartitionOpt)))
       }
 
       // Create mirror maker threads.
@@ -325,7 +346,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   def createNewConsumers(numStreams: Int,
                          consumerConfigPath: String,
                          customRebalanceListener: Option[org.apache.kafka.clients.consumer.ConsumerRebalanceListener],
-                         whitelist: Option[String]) : Seq[MirrorMakerBaseConsumer] = {
+                         whitelist: Option[String], topicPartitionList: Option[String]) : Seq[MirrorMakerBaseConsumer] = {
     // Create consumer connector
     val consumerConfigProps = Utils.loadProps(consumerConfigPath)
     // Disable consumer auto offsets commit to prevent data loss.
@@ -339,8 +360,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       consumerConfigProps.setProperty("client.id", groupIdString + "-" + i.toString)
       new KafkaConsumer[Array[Byte], Array[Byte]](consumerConfigProps)
     }
-    whitelist.getOrElse(throw new IllegalArgumentException("White list cannot be empty for new consumer"))
-    consumers.map(consumer => new MirrorMakerNewConsumer(consumer, customRebalanceListener, whitelist))
+
+    consumers.map(consumer => new MirrorMakerNewConsumer(consumer, customRebalanceListener, whitelist, topicPartitionList))
   }
 
   def commitOffsets(mirrorMakerConsumer: MirrorMakerBaseConsumer) {
@@ -526,9 +547,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
   private class MirrorMakerNewConsumer(consumer: Consumer[Array[Byte], Array[Byte]],
                                        customRebalanceListener: Option[org.apache.kafka.clients.consumer.ConsumerRebalanceListener],
-                                       whitelistOpt: Option[String])
+                                       whitelistOpt: Option[String], topicPartitions: Option[String])
     extends MirrorMakerBaseConsumer {
-    val regex = whitelistOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports whitelist."))
+
     var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
 
     // TODO: we need to manually maintain the consumed offsets for new consumer
@@ -547,6 +568,25 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
             error("Invalid expression syntax: %s".format(whitelistOpt.get))
             throw pse
         }
+
+      } else if (topicPartitions.isDefined) {
+
+        // examples: topicA:1-3,6,7;topicB:1,4-9
+        val topicPartitionPairs = new util.ArrayList[TopicPartition]()
+        topicPartitions.get.split(";").toList foreach { case tp =>
+          val Array(topic, partitionList) = tp.split(":")
+          partitionList.split(",") foreach { partitions =>
+            if (partitions.indexOf('-') > 0) {
+              val Array(start, end) = partitions.split("-")
+              start.toInt to end.toInt foreach { partition =>
+                topicPartitionPairs.add(new TopicPartition(topic, partition))
+              }
+            } else {
+              topicPartitionPairs.add(new TopicPartition(topic, partitions.toInt))
+            }
+          }
+        }
+        consumer.assign(topicPartitionPairs)
       }
     }
 
@@ -619,18 +659,27 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
   }
 
-  private class MirrorMakerProducer(val producerProps: Properties) {
+  private class MirrorMakerProducer(val producerProps: Properties, val topicMapping: java.util.Map[String, String]) {
 
     val sync = producerProps.getProperty("producer.type", "async").equals("sync")
 
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
     def send(record: ProducerRecord[Array[Byte], Array[Byte]]) {
-      if (sync) {
-        this.producer.send(record).get()
+
+      val convertedRecord = if (topicMapping.nonEmpty) {
+        // if topic mapping is used, then we will not honor partition from original topic
+        val targetTopic = if (topicMapping contains record.topic()) topicMapping(record.topic()) else record.topic()
+        new ProducerRecord[Array[Byte], Array[Byte]](targetTopic, record.key(), record.value())
       } else {
-          this.producer.send(record,
-            new MirrorMakerProducerCallback(record.topic(), record.key(), record.value()))
+        record
+      }
+
+      if (sync) {
+        this.producer.send(convertedRecord).get()
+      } else {
+          this.producer.send(convertedRecord,
+            new MirrorMakerProducerCallback(convertedRecord.topic(), convertedRecord.key(), convertedRecord.value()))
       }
     }
 
@@ -678,5 +727,6 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       Collections.singletonList(new ProducerRecord[Array[Byte], Array[Byte]](record.topic, record.key, record.value))
     }
   }
-
 }
+
+
