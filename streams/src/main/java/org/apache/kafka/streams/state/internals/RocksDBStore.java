@@ -35,7 +35,6 @@ import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
-import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 
 import java.io.File;
@@ -300,16 +299,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     // this function is only called in flush()
     private void putAllInternal(List<KeyValue<byte[], byte[]>> entries) {
-        WriteBatch batch = new WriteBatch();
-
         for (KeyValue<byte[], byte[]> entry : entries) {
-            batch.put(entry.key, entry.value);
-        }
-
-        try {
-            db.write(wOptions, batch);
-        } catch (RocksDBException e) {
-            throw new ProcessorStateException("Error while batch writing to store " + this.name, e);
+            putInternal(entry.key, entry.value);
         }
     }
 
