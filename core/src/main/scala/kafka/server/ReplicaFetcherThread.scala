@@ -25,6 +25,7 @@ import kafka.log.LogConfig
 import kafka.message.ByteBufferMessageSet
 import kafka.api.{KAFKA_0_10_0_IV0, KAFKA_0_9_0}
 import kafka.common.{KafkaStorageException, TopicAndPartition}
+import kafka.metrics.KafkaMetricsGroup
 import ReplicaFetcherThread._
 import org.apache.kafka.clients.{ManualMetadataUpdater, NetworkClient, ClientRequest, ClientResponse}
 import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, NetworkReceive, Selector, Mode}
@@ -38,6 +39,7 @@ import org.apache.kafka.common.utils.Time
 
 import scala.collection.{JavaConverters, Map, mutable}
 import JavaConverters._
+import java.util.concurrent.TimeUnit
 
 class ReplicaFetcherThread(name: String,
                            fetcherId: Int,
@@ -50,7 +52,8 @@ class ReplicaFetcherThread(name: String,
                                 clientId = name,
                                 sourceBroker = sourceBroker,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
-                                isInterruptible = false) {
+                                isInterruptible = false)
+  with KafkaMetricsGroup {
 
   type REQ = FetchRequest
   type PD = PartitionData
@@ -95,6 +98,10 @@ class ReplicaFetcherThread(name: String,
       time
     )
   }
+
+  val tags = Map("brokerId" -> sourceBroker.id.toString)
+  val connectionTimeoutRate = newMeter("ConnectionTimeoutPerSec", "timeouts", TimeUnit.SECONDS, tags)
+  val requestTimeoutRate = newMeter("RequestTimeoutPerSec", "timeouts", TimeUnit.SECONDS, tags)
 
   override def shutdown(): Unit = {
     super.shutdown()
@@ -228,12 +235,15 @@ class ReplicaFetcherThread(name: String,
     import kafka.utils.NetworkClientBlockingOps._
     val header = apiVersion.fold(networkClient.nextRequestHeader(apiKey))(networkClient.nextRequestHeader(apiKey, _))
     try {
-      if (!networkClient.blockingReady(sourceNode, socketTimeout)(time))
+      if (!networkClient.blockingReady(sourceNode, socketTimeout)(time)) {
+        connectionTimeoutRate.mark()
         throw new SocketTimeoutException(s"Failed to connect within $socketTimeout ms")
+      }
       else {
         val send = new RequestSend(sourceBroker.id.toString, header, request.toStruct)
         val clientRequest = new ClientRequest(time.milliseconds(), true, send, null)
         networkClient.blockingSendAndReceive(clientRequest, socketTimeout)(time).getOrElse {
+          requestTimeoutRate.mark()
           throw new SocketTimeoutException(s"No response received within $socketTimeout ms")
         }
       }
