@@ -1115,7 +1115,7 @@ object TestUtils extends Logging {
       }
     } catch {
       case ie: InterruptedException => failWithTimeout()
-      case e => exceptions += e
+      case e: Throwable => exceptions += e
     } finally {
       threadPool.shutdownNow()
     }
