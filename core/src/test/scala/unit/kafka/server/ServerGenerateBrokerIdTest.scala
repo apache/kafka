@@ -51,7 +51,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     server1.startup()
     assertEquals(server1.config.brokerId, 1001)
     server1.shutdown()
-    CoreUtils.rm(server1.config.logDirs)
+    CoreUtils.delete(server1.config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 
@@ -75,9 +75,9 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     assertTrue(verifyBrokerMetadata(server1.config.logDirs,1001))
     assertTrue(verifyBrokerMetadata(server2.config.logDirs,0))
     assertTrue(verifyBrokerMetadata(server3.config.logDirs,1002))
-    CoreUtils.rm(server1.config.logDirs)
-    CoreUtils.rm(server2.config.logDirs)
-    CoreUtils.rm(server3.config.logDirs)
+    CoreUtils.delete(server1.config.logDirs)
+    CoreUtils.delete(server2.config.logDirs)
+    CoreUtils.delete(server3.config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 
@@ -93,7 +93,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     assertEquals(server3.config.brokerId,3)
     server3.shutdown()
     assertTrue(verifyBrokerMetadata(server3.config.logDirs,3))
-    CoreUtils.rm(server3.config.logDirs)
+    CoreUtils.delete(server3.config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 
@@ -116,7 +116,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     server1.startup()
     server1.shutdown()
     assertTrue(verifyBrokerMetadata(config1.logDirs, 1001))
-    CoreUtils.rm(server1.config.logDirs)
+    CoreUtils.delete(server1.config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 
@@ -133,7 +133,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
       case e: kafka.common.InconsistentBrokerIdException => //success
     }
     server1.shutdown()
-    CoreUtils.rm(server1.config.logDirs)
+    CoreUtils.delete(server1.config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 
@@ -170,8 +170,8 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     // verify correct broker metadata was written
     assertTrue(verifyBrokerMetadata(serverA.config.logDirs,1))
     assertTrue(verifyBrokerMetadata(newServerB.config.logDirs,2))
-    CoreUtils.rm(serverA.config.logDirs)
-    CoreUtils.rm(newServerB.config.logDirs)
+    CoreUtils.delete(serverA.config.logDirs)
+    CoreUtils.delete(newServerB.config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 

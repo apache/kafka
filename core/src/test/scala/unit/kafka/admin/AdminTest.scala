@@ -420,7 +420,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       assertEquals(newConfig, configInZk)
     } finally {
       server.shutdown()
-      CoreUtils.rm(server.config.logDirs)
+      CoreUtils.delete(server.config.logDirs)
     }
   }
 
@@ -451,7 +451,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       assertEquals(new Quota(2000, true), server.apis.quotaManagers(ApiKeys.FETCH.id).quota(clientId))
     } finally {
       server.shutdown()
-      CoreUtils.rm(server.config.logDirs)
+      CoreUtils.delete(server.config.logDirs)
     }
   }
 

@@ -82,7 +82,7 @@ object CoreUtils extends Logging {
    * Recursively delete the list of files/directories and any subfiles (if any exist)
    * @param files sequence of files to be deleted
    */
-  def rm(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
+  def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
 
   /**
    * Register the given mbean with the platform mbean server,

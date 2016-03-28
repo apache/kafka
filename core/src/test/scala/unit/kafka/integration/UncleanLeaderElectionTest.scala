@@ -82,7 +82,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     servers.foreach(server => shutdownServer(server))
-    servers.foreach(server => CoreUtils.rm(server.config.logDirs))
+    servers.foreach(server => CoreUtils.delete(server.config.logDirs))
 
     // restore log levels
     kafkaApisLogger.setLevel(Level.ERROR)
