@@ -329,6 +329,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * It invokes the leader election API to elect a leader for the input offline partition
    * @param topic                                 The topic of the offline partition
    * @param partition                             The offline partition
+   * @param currState                             The current state of the partition.
    * @param leaderIsrAndControllerEpochOpt        The current leader and isr information in zookeeper
    * @param leaderSelector                        Specific leader selector (e.g., offline/reassigned/etc.)
    */
@@ -367,6 +368,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         val newLeaderIsrAndControllerEpoch = new LeaderIsrAndControllerEpoch(newLeaderAndIsr, controller.epoch)
         // update the leader cache
         controllerContext.partitionLeadershipInfo.put(topicAndPartition, newLeaderIsrAndControllerEpoch)
+        debug(s"After leader election, leader cache is updated to " +
+          s"${controllerContext.partitionLeadershipInfo.map(l => (l._1, l._2))}")
         val assignedReplicas = controllerContext.partitionReplicaAssignment(TopicAndPartition(topic, partition))
         // store new leader and isr info in cache
         brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicas, topic, partition,
@@ -374,8 +377,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         partitionState.put(topicAndPartition, OnlinePartition)
         stateChangeLogger.trace(s"Controller $controllerId epoch ${controller.epoch} changed partition $topicAndPartition " +
           s"from $currState to $OnlinePartition with leader ${newLeaderAndIsr.leader}")
-        debug(s"After leader election, leader cache is updated to " +
-          s"${controllerContext.partitionLeadershipInfo.map(l => (l._1, l._2))}")
       }
     } catch {
       case lenne: LeaderElectionNotNeededException => // swallow

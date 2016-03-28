@@ -301,6 +301,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    * @param topic the topic
    * @param partition the partition id
    * @param replicaId the replica id
+   * @param currState the current state fot the replica
    * @param leaderIsrAndEpochOpt The current LeaderAndIsr information. It is refreshed from zookeeper before the state
    *                             change.
    */

@@ -20,7 +20,7 @@ package kafka.zk
 import kafka.utils.{ZkReadCallback, TestUtils}
 import org.apache.zookeeper.data.Stat
 import org.junit.Test
-import org.junit.Assert._
+import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 
 class ZkClientAsyncOperationTest extends ZooKeeperTestHarness {
 
@@ -38,16 +38,19 @@ class ZkClientAsyncOperationTest extends ZooKeeperTestHarness {
     }}
 
     var callbackFired = 0
+    var errorInCallback = false
     def handleResult(updateSucceeded: Boolean, newZkVersion: Int) = {
-      assertTrue(updateSucceeded)
-      assertEquals(1, newZkVersion)
+      if(!updateSucceeded)
+        errorInCallback = true
+      if (newZkVersion != 1)
+        errorInCallback = true
       callbackFired += 1
     }
     paths.foreach { path =>
       zkUtils.asyncConditionalUpdatePersistentPath(path, "-1", 0, handleResult)
     }
     TestUtils.waitUntilTrue(() => callbackFired == numPaths, "Callback did not fire before timeout.")
-
+    assertFalse(errorInCallback)
     paths.foreach { path =>
       val (newData, newStat) = zkUtils.readDataMaybeNull(path)
       assertEquals("-1", newData.get)
@@ -80,17 +83,22 @@ class ZkClientAsyncOperationTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilTrue(() => writeCallbackFired == numPaths, "Callback did not fire before timeout.")
 
     var readCallbackFired = 0
+    var errorInCallback = false
     paths.foreach { path => {
       zkUtils.asyncReadDataMaybeNull(path, new ZkReadCallback() {
         override def handle(dataOpt: Option[String], stat: Stat, exceptionOpt: Option[Exception]) = {
-          assertTrue(exceptionOpt.isEmpty)
-          assertEquals(path + "data", dataOpt.get)
-          assertEquals(1, stat.getVersion)
+          if (!exceptionOpt.isEmpty)
+            errorInCallback = true
+          if (path + "data" != dataOpt.get)
+            errorInCallback = true
+          if (stat.getVersion != 1)
+            errorInCallback = true
           readCallbackFired += 1
         }
       })
     }}
     TestUtils.waitUntilTrue(() => readCallbackFired == numPaths, "Callback did not fire before timeout.")
+    assertFalse(errorInCallback)
   }
 
 }

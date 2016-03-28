@@ -130,7 +130,7 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     assertEquals(1, leaderAndIsrUpdateBatch.size)
     assertTrue(leaderAndIsrUpdateBatch.containsPartition(topicAndPartition))
 
-    // Test mismatched zkversion with same data
+    // Test mismatched zkversion with different data
     var updateSucceeded6 = false
     var newZkVersion6 = -1
     val newLeaderAndIsr6 = new LeaderAndIsr(brokerId, leaderEpoch + 2, replicas, zkVersion = 3)

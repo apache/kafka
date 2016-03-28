@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
-import kafka.admin.{PreferredReplicaLeaderElectionCommand}
+import kafka.admin.PreferredReplicaLeaderElectionCommand
 import kafka.api._
 import kafka.cluster.Broker
 import kafka.common._
@@ -251,10 +251,9 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
             .map(topicAndPartition => (topicAndPartition, controllerContext.partitionReplicaAssignment(topicAndPartition).size))
         }
 
+      val leadersOnBroker = new mutable.HashSet[TopicAndPartition]
+      val followersOnBroker = new mutable.HashSet[PartitionAndReplica]
       inLock(controllerContext.controllerLock) {
-        val leadersOnBroker = new mutable.HashSet[TopicAndPartition]
-        val followersOnBroker = new mutable.HashSet[PartitionAndReplica]
-
         allPartitionsAndReplicationFactorOnBroker.foreach {
           case (topicAndPartition, replicationFactor) =>
             controllerContext.partitionLeadershipInfo.get(topicAndPartition).foreach { currLeaderIsrAndControllerEpoch =>
@@ -267,32 +266,23 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
               }
             }
         }
-        // If the broker leads the topic partitions, transition all the leaders and update isr. Updates zk and
-        // notifies all affected brokers
-        partitionStateMachine.handleStateChanges(leadersOnBroker, OnlinePartition,
-          controlledShutdownPartitionLeaderSelector)
+      }
 
-        // Stop the follower replicas first. The state change below initiates ZK changes which should take some time
-        // before which the stop replica request should be completed (in most cases)
-        brokerRequestBatch.newBatch()
-        followersOnBroker.foreach {partitionAndReplica =>
-          try {
-            brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(partitionAndReplica.replica), partitionAndReplica.topic,
-              partitionAndReplica.partition, deletePartition = false)
-          } catch {
-            case e: IllegalStateException => {
-              // Resign if the controller is in an illegal state
-              error("Forcing the controller to resign")
-              brokerRequestBatch.clear()
-              controllerElector.resign()
-
-              throw e
-            }
-          }
+      // We group the change to 1000 partitions to avoid holding the controller lock for too long.
+      leadersOnBroker.grouped(1000).foreach { leaderGroup =>
+        inLock(controllerContext.controllerLock) {
+          // If the broker leads the topic partitions, transition all the leaders and update isr. Updates zk and
+          // notifies all affected brokers
+          partitionStateMachine.handleStateChanges(leaderGroup, OnlinePartition,
+            controlledShutdownPartitionLeaderSelector)
         }
-        brokerRequestBatch.sendRequestsToBrokers(epoch)
-        // If the broker is a follower of the partitions, updates the isr in ZK and notifies the current leaders
-        replicaStateMachine.handleStateChanges(followersOnBroker, OfflineReplica)
+      }
+
+      followersOnBroker.grouped(1000).foreach { followerGroup =>
+        inLock(controllerContext.controllerLock) {
+          // If the broker is a follower of the partitions, updates the isr in ZK and notifies the current leaders
+          replicaStateMachine.handleStateChanges(followerGroup, OfflineReplica)
+        }
       }
 
       def replicatedPartitionsBrokerLeads() = inLock(controllerContext.controllerLock) {
@@ -825,16 +815,19 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     controllerContext.controllerChannelManager.startup()
   }
 
+  /**
+   * The method reads leader and ISR info from zookeeper. It is used before invoking state changes to make sure the
+   * controller is using the up-to-date information.
+   */
   def refreshLeaderAndIsrFromZk(topicAndPartitions: Set[TopicAndPartition]): Map[TopicAndPartition, ZkLeaderAndIsrReadResult] = {
     val leaderAndIsrReadResults = ReplicationUtils.asyncGetLeaderIsrAndEpochForPartitions(zkUtils, topicAndPartitions)
     leaderAndIsrReadResults.foreach { case (tap, leaderAndIsrReadResult) =>
       leaderAndIsrReadResult.leaderIsrAndControllerEpochOpt match {
         case Some(leaderIsrAndControllerEpoch) =>
           if (leaderIsrAndControllerEpoch.controllerEpoch > epoch)
-            throw new StateChangeFailedException(s"Leader and isr path written by another controller. This probably" +
+            throw new IllegalStateException(s"Leader and isr path written by another controller. This probably" +
               s"means the current controller with epoch $epoch went through a soft failure and another " +
-              s"controller was elected with epoch ${leaderIsrAndControllerEpoch.controllerEpoch}. Aborting state " +
-              s"change by this controller")
+              s"controller was elected with epoch ${leaderIsrAndControllerEpoch.controllerEpoch}.")
         case None =>
       }
       leaderAndIsrReadResult.exceptionOpt match {
