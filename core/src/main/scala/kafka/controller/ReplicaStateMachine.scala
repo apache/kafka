@@ -140,7 +140,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
             debug(s"The following replicas are still waiting for state change: $remainingReplicas.")
         } while (!remainingReplicas.isEmpty)
 
-      }catch {
+      } catch {
         case e: Throwable => error("Error while moving some replicas to %s state".format(targetState), e)
       }
     }
