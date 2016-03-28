@@ -24,15 +24,15 @@ import kafka.utils._
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.Utils
 import org.junit.{After, Before, Test}
+import org.junit.Assert._
+
 import java.util.Properties
 import java.io.File
 
-import org.apache.kafka.common.utils.Utils
-
 import scala.util.Random
 import scala.collection._
-import org.junit.Assert._
 
 class OffsetCommitTest extends ZooKeeperTestHarness {
   val random: Random = new Random()

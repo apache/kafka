@@ -18,18 +18,15 @@ package kafka.server
 
 import kafka.log._
 import java.io.File
-
-import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.utils.{Utils, MockTime => JMockTime}
 import org.easymock.EasyMock
 import org.junit._
 import org.junit.Assert._
 import kafka.common._
 import kafka.cluster.Replica
-import kafka.utils.{CoreUtils, KafkaScheduler, MockTime, SystemTime, TestUtils, ZkUtils}
+import kafka.utils.{KafkaScheduler, MockTime, SystemTime, TestUtils, ZkUtils}
 import java.util.concurrent.atomic.AtomicBoolean
-
-import org.apache.kafka.common.utils.{Utils, MockTime => JMockTime}
 
 class HighwatermarkPersistenceTest {
 

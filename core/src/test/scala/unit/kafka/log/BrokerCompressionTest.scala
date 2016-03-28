@@ -25,11 +25,9 @@ import org.junit.Assert._
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
-import java.util.{Collection, Properties}
-
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.utils.Utils
-
+import java.util.{Collection, Properties}
 import scala.collection.JavaConversions._
 
 @RunWith(value = classOf[Parameterized])
