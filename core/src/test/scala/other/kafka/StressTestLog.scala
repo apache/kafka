@@ -19,11 +19,12 @@ package kafka
 
 import java.util.Properties
 import java.util.concurrent.atomic._
-import kafka.common._
+
 import kafka.message._
 import kafka.log._
 import kafka.utils._
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
+import org.apache.kafka.common.utils.Utils
 
 /**
  * A stress test that instantiates a log and then runs continual appends against it from one thread and continual reads against it
@@ -55,7 +56,7 @@ object StressTestLog {
         running.set(false)
         writer.join()
         reader.join()
-        CoreUtils.rm(dir)
+        Utils.delete(dir)
       }
     })
 
