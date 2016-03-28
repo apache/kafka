@@ -87,7 +87,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     servers.foreach(_.shutdown())
-    servers.foreach(_.config.logDirs.foreach(CoreUtils.rm(_)))
+    servers.foreach(server => CoreUtils.rm(server.config.logDirs))
     super.tearDown
   }
   

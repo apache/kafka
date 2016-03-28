@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.TimestampType
 
 import scala.collection.JavaConversions
 import com.yammer.metrics.core.Gauge
+import org.apache.kafka.common.utils.Utils
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, Message.NoTimestamp, NoCompressionCodec, NoCompressionCodec, -1, -1, false)
@@ -714,7 +715,7 @@ class Log(val dir: File,
       removeLogMetrics()
       logSegments.foreach(_.delete())
       segments.clear()
-      CoreUtils.rm(dir)
+      Utils.delete(dir)
     }
   }
 
