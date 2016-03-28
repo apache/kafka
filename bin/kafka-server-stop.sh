@@ -19,6 +19,6 @@ if [ -z "$PIDS" ]; then
   echo "No kafka server to stop"
   exit 1
 else 
-  kill -TERM $PIDS
+  kill -s TERM $PIDS
 fi
 
