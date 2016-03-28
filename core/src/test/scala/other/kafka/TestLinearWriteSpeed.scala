@@ -21,11 +21,14 @@ import java.io._
 import java.nio._
 import java.nio.channels._
 import java.util.{Properties, Random}
+
 import kafka.log._
 import kafka.utils._
 import kafka.message._
+
 import scala.math._
 import joptsimple._
+import org.apache.kafka.common.utils.Utils
 
 /**
  * This test does linear writes using either a kafka log or a file and measures throughput and latency.
@@ -196,7 +199,7 @@ object TestLinearWriteSpeed {
   }
   
   class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: ByteBufferMessageSet) extends Writable {
-    CoreUtils.rm(dir)
+    Utils.delete(dir)
     val log = new Log(dir, config, 0L, scheduler, SystemTime)
     def write(): Int = {
       log.append(messages, true)
@@ -204,7 +207,7 @@ object TestLinearWriteSpeed {
     }
     def close() {
       log.close()
-      CoreUtils.rm(log.dir)
+      Utils.delete(log.dir)
     }
   }
   

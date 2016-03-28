@@ -40,7 +40,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     assertTrue(pathExists)
 
     server.shutdown()
-    CoreUtils.rm(server.config.logDirs)
+    CoreUtils.delete(server.config.logDirs)
   }
 
   @Test
@@ -66,7 +66,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     assertEquals(brokerRegistration, zkUtils.readData(ZkUtils.BrokerIdsPath + "/" + brokerId)._1)
 
     server1.shutdown()
-    CoreUtils.rm(server1.config.logDirs)
+    CoreUtils.delete(server1.config.logDirs)
   }
 
   @Test
@@ -80,6 +80,6 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     assertEquals(brokerId, server.metadataCache.getAliveBrokers.head.id)
 
     server.shutdown()
-    CoreUtils.rm(server.config.logDirs)
+    CoreUtils.delete(server.config.logDirs)
   }
 }
