@@ -270,8 +270,10 @@ import java.util.regex.Pattern;
  *
  * Once assigned, you can call {@link #poll(long) poll} in a loop, just as in the preceding examples to consume
  * records. The group that the consumer specifies is still used for committing offsets, but now the set of partitions
- * will only be changed if the consumer specifies new partitions in another call to {@link #assign(Collection) assign},
- * and no attempt at failure detection will be made.
+ * will only change with another call to {@link #assign(Collection) assign}. Manual partition assignment does
+ * not use group coordination, so consumer failures will not cause assigned partitions to be rebalanced. Each consumer
+ * acts independently even if it shares a groupId with another consumer. To avoid offset commit conflicts, you should
+ * usually ensure that the groupId is unique for each consumer instance.
  * <p>
  * Note that it isn't possible to mix manual partition assignment with dynamic partition assignment though
  * topic subscription.
