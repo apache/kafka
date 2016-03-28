@@ -17,11 +17,11 @@
 
 package kafka.api
 
-import java.io.{File}
+import java.io.File
 import javax.security.auth.login.Configuration
 
-import kafka.utils.{JaasTestUtils,TestUtils}
-import org.apache.hadoop.minikdc.MiniKdc
+import kafka.security.minikdc.MiniKdc
+import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.kerberos.LoginManager
 
@@ -39,8 +39,8 @@ case object Both extends SaslSetupMode
  * currently to setup a keytab and jaas files.
  */
 trait SaslSetup {
-  private val workDir = new File(System.getProperty("test.dir", "build/tmp/test-workDir"))
-  private val kdcConf = MiniKdc.createConf()
+  private val workDir = TestUtils.tempDir()
+  private val kdcConf = MiniKdc.createConfig
   private val kdc = new MiniKdc(kdcConf, workDir)
 
   def startSasl(mode: SaslSetupMode = Both) {
