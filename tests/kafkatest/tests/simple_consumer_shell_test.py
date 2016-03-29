@@ -44,14 +44,13 @@ class SimpleConsumerShellTest(Test):
     def setUp(self):
         self.zk.start()
 
-    def start_kafka(self, security_protocol, interbroker_security_protocol):
+    def start_kafka(self):
         self.kafka = KafkaService(
             self.test_context, self.num_brokers,
-            self.zk, security_protocol=security_protocol,
-            interbroker_security_protocol=interbroker_security_protocol, topics=self.topics)
+            self.zk, topics=self.topics)
         self.kafka.start()
 
-    def start_producer(self):
+    def run_producer(self):
         # This will produce to kafka cluster
         self.producer = VerifiableProducer(self.test_context, num_nodes=1, kafka=self.kafka, topic=TOPIC, throughput=1000, max_messages=MAX_MESSAGES)
         self.producer.start()
@@ -62,13 +61,13 @@ class SimpleConsumerShellTest(Test):
         self.simple_consumer_shell = SimpleConsumerShell(self.test_context, 1, self.kafka, TOPIC)
         self.simple_consumer_shell.start()
 
-    def test_simple_consumer_shell(self, security_protocol='PLAINTEXT'):
+    def test_simple_consumer_shell(self):
         """
         Tests if SimpleConsumerShell is fetching expected records
         :return: None
         """
-        self.start_kafka(security_protocol, security_protocol)
-        self.start_producer()
+        self.start_kafka()
+        self.run_producer()
         self.start_simple_consumer_shell()
 
         # Assert that SimpleConsumerShell is fetching expected number of messages

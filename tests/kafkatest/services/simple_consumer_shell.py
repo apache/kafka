@@ -16,7 +16,6 @@
 from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.security.security_config import SecurityConfig
 
 
 class SimpleConsumerShell(BackgroundThreadService):
@@ -27,20 +26,17 @@ class SimpleConsumerShell(BackgroundThreadService):
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, partition=0, security_protocol="PLAINTEXT"):
+    def __init__(self, context, num_nodes, kafka, topic, partition=0):
         super(SimpleConsumerShell, self).__init__(context, num_nodes)
 
         self.kafka = kafka
         self.topic = topic
         self.partition = partition
-        self.security_protocol = security_protocol
-        self.security_config = SecurityConfig(security_protocol)
         self.output = ""
 
     def _worker(self, idx, node):
         cmd = self.start_cmd(node)
         self.logger.debug("SimpleConsumerShell %d command: %s" % (idx, cmd))
-        self.security_config.setup_node(node)
         self.output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):
@@ -50,7 +46,7 @@ class SimpleConsumerShell(BackgroundThreadService):
     def start_cmd(self, node):
         cmd = "/opt/%s/bin/" % kafka_dir(node)
         cmd += "kafka-run-class.sh kafka.tools.SimpleConsumerShell"
-        cmd += " --topic %s --broker-list %s --partition %s --no-wait-at-logend" % (self.topic, self.kafka.bootstrap_servers(self.security_protocol), self.partition)
+        cmd += " --topic %s --broker-list %s --partition %s --no-wait-at-logend" % (self.topic, self.kafka.bootstrap_servers(), self.partition)
 
         cmd += " 2>> /mnt/get_simple_consumer_shell.log | tee -a /mnt/get_simple_consumer_shell.log &"
         return cmd
