@@ -350,8 +350,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             for (K key : cacheDirtyKeys) {
                 RocksDBCacheEntry entry = cache.get(key);
 
-                assert entry.isDirty;
-
                 entry.isDirty = false;
 
                 byte[] rawKey = serdes.rawKey(key);
