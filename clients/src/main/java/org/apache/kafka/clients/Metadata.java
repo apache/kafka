@@ -43,8 +43,17 @@ public final class Metadata {
     private int version;
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
+    /**
+     * KAFKA-3428: Cluster class is assumed to be safe for concurrent access. To allow high concurrency on fetch(), 
+     * which returns the pointer to cluster, this method is not synchronized and safety is assured by cluster being a volatile pointer.
+     */
     private volatile Cluster cluster;
     private boolean needUpdate;
+    /**
+     * KAFKA-3428
+     * synchronization policy: topics is updated only within Metadata synchronized methods. The read queries to topics however
+     * are not protected by external locks and topics must use an implementation that is safe to do reads concurrent with updates.
+     */
     private final Set<String> topics;
     private final List<Listener> listeners;
     private boolean needMetadataForAllTopics;
@@ -70,6 +79,7 @@ public final class Metadata {
         this.version = 0;
         this.cluster = Cluster.empty();
         this.needUpdate = false;
+        // KAFKA-3428: using concurrent set since reads to topics can be concurrent with writes.
         this.topics = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
         this.listeners = new ArrayList<>();
         this.needMetadataForAllTopics = false;
@@ -77,6 +87,8 @@ public final class Metadata {
 
     /**
      * Get the current cluster info without blocking
+     * KAFKA-3428: fetch is not a syncrhonizaed method. Safe concurrent access is assured by cluster being a volatile field
+     * and the Cluster class being safe for concurrent acccess (KAFKA-3432)
      */
     public Cluster fetch() {
         return this.cluster;
@@ -147,6 +159,11 @@ public final class Metadata {
 
     /**
      * Check if a topic is already in the topic set.
+     *
+     * KAFKA-3428: this method is not synchronized to allow for high concurrency. Safety is assured by 
+     * i) topics being a final field, and
+     * ii) topics using an implementation that is safe for reads being performed conrrent with updates.
+     *
      * @param topic topic to check
      * @return true if the topic exists, false otherwise
      */
@@ -167,10 +184,7 @@ public final class Metadata {
             listener.onMetadataUpdate(cluster);
 
         // Do this after notifying listeners as subscribed topics' list can be changed by listeners
-        final Set<String> topicsCopy = topics();
-        this.cluster = this.needMetadataForAllTopics ? 
-            getClusterForCurrentTopics(cluster, topicsCopy) : 
-            cluster;
+        this.cluster = this.needMetadataForAllTopics ? getClusterForCurrentTopics(cluster) : cluster;
 
         notifyAll();
         log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
@@ -241,15 +255,15 @@ public final class Metadata {
         void onMetadataUpdate(Cluster cluster);
     }
 
-    private Cluster getClusterForCurrentTopics(Cluster cluster, final Set<String> topicsCopy) {
+    private Cluster getClusterForCurrentTopics(Cluster cluster) {
         Set<String> unauthorizedTopics = new HashSet<>();
         Collection<PartitionInfo> partitionInfos = new ArrayList<>();
         List<Node> nodes = Collections.emptyList();
         if (cluster != null) {
             unauthorizedTopics.addAll(cluster.unauthorizedTopics());
-            unauthorizedTopics.retainAll(topicsCopy);
+            unauthorizedTopics.retainAll(this.topics);
 
-            for (String topic : topicsCopy) {
+            for (String topic : this.topics) {
                 partitionInfos.addAll(cluster.partitionsForTopic(topic));
             }
             nodes = cluster.nodes();
