@@ -352,6 +352,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
                 assert entry.isDirty;
 
+                entry.isDirty = false;
+
                 byte[] rawKey = serdes.rawKey(key);
 
                 if (entry.value != null) {
