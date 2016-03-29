@@ -126,7 +126,7 @@ import java.util.regex.Pattern;
  * See <a href="#rebalancecallback">Storing Offsets Outside Kafka</a> for more details
  * <p>
  * It is also possible for the consumer to <a href="#manualassignment">manually assign</a> specific partitions
- * (similar to the older "simple" consumer) using {@link #assign(Collection)}. In that case, dynamic partition
+ * (similar to the older "simple" consumer) using {@link #assign(Collection)}. In this case, dynamic partition
  * assignment and consumer group coordination will be disabled.
  *
  * <h3>Usage Examples</h3>
@@ -275,8 +275,8 @@ import java.util.regex.Pattern;
  * acts independently even if it shares a groupId with another consumer. To avoid offset commit conflicts, you should
  * usually ensure that the groupId is unique for each consumer instance.
  * <p>
- * Note that it isn't possible to mix manual partition assignment with dynamic partition assignment though
- * topic subscription.
+ * Note that it isn't possible to mix manual partition assignment (i.e. using {@link #assign(Collection) assign})
+ * with dynamic partition assignment through topic subscription (i.e. using {@link #subscribe(Collection) subscribe}).
  *
  * <h4><a name="rebalancecallback">Storing Offsets Outside Kafka</h4>
  *
