@@ -132,7 +132,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               leaderAndIsrReadResults(TopicAndPartition(r.topic, r.partition)).leaderIsrAndControllerEpochOpt
             handleStateChange(r, leaderIsrAndControllerEpochOpt, targetState, callbacks)
           })
-          leaderAndIsrUpdateBatch.writeLeaderAndIsrUpdateToZk(controller.epoch)
+          leaderAndIsrUpdateBatch.writeLeaderAndIsrUpdateToZk(controller.epoch, Some(e => controller.isValidController))
           brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
           remainingTopicAndPartitions.retain(leaderAndIsrUpdateBatch.containsPartition(_))
           remainingReplicas.retain(r => leaderAndIsrUpdateBatch.containsPartition(TopicAndPartition(r.topic, r.partition)))

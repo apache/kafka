@@ -219,6 +219,8 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     "id_%d-host_%s-port_%d".format(config.brokerId, controllerListener.get.host, controllerListener.get.port)
   }
 
+  def isValidController = zkUtils.getController == config.brokerId
+
   /**
    * On clean shutdown, the controller first determines the partitions that the
    * shutting down broker leads, and moves leadership of those partitions to another broker

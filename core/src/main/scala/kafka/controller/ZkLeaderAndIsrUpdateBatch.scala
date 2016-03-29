@@ -58,8 +58,8 @@ class ZkLeaderAndIsrUpdateBatch(zkUtils: ZkUtils) {
     leaderAndIsrUpdates(topicAndPartition)
   }
 
-  def writeLeaderAndIsrUpdateToZk(controllerEpoch: Int) =
-    ReplicationUtils.asyncUpdateLeaderAndIsr(zkUtils, this, controllerEpoch)
+  def writeLeaderAndIsrUpdateToZk(controllerEpoch: Int, retryOnException: Option[Exception => Boolean] = None) =
+    ReplicationUtils.asyncUpdateLeaderAndIsr(zkUtils, this, controllerEpoch, retryOnException)
 }
 
 /**

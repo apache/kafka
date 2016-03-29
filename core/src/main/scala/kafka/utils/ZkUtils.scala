@@ -33,7 +33,7 @@ import org.I0Itec.zkclient.{IZkConnection, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.zookeeper.AsyncCallback.{DataCallback, StatCallback, StringCallback}
-import org.apache.zookeeper.KeeperException.Code
+import org.apache.zookeeper.KeeperException.{ConnectionLossException, SessionExpiredException, Code}
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
 
@@ -478,11 +478,12 @@ class ZkUtils(val zkClient: ZkClient,
   def asyncConditionalUpdatePersistentPath(path: String,
                                            data: String,
                                            expectVersion: Int,
-                                           resultHandler: (Boolean, Int) => Unit) = {
+                                           resultHandler: (Boolean, Int) => Unit,
+                                           retryOnException: Option[Exception => Boolean] = None) = {
     val callbackWithData = new ZkWriteCallbackWithData(data, expectVersion) {
       override def handle(updateSucceeded: Boolean, newZkVersion: Int) = resultHandler(updateSucceeded, newZkVersion)
     }
-    zkClient.asyncWriteDataAndReturnStat(path, data, callbackWithData, expectVersion)
+    zkClient.asyncWriteDataAndReturnStat(path, data, callbackWithData, expectVersion, retryOnException)
   }
 
   /**
@@ -1147,14 +1148,21 @@ private[kafka] class ZkClient(zkConnection: IZkConnection, connectionTimeout: In
   def asyncWriteDataAndReturnStat(path: String,
                                   datat: String,
                                   callbackWithData: StatCallback,
-                                  expectedVersion: Int) = {
+                                  expectedVersion: Int,
+                                  retryOnException: Option[Exception => Boolean] = None) = {
     val data: Array[Byte] = ZKStringSerializer.serialize(datat)
-    retryUntilConnected(new Callable[Object] {
-      def call: Object = {
+    var continue = true
+    do {
+      try {
         _connection.asInstanceOf[ZkConnection].getZookeeper.setData(path, data, expectedVersion, callbackWithData, null)
-        null
+        continue = false
+      } catch {
+        case e: Exception =>
+          if (!retryOnException.getOrElse((e: Exception) => true)(e))
+            throw e
+          waitUntilConnected()
       }
-    })
+    } while (continue)
   }
   
   def asyncReadData(path: String, callback: DataCallback) {

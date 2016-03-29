@@ -49,7 +49,8 @@ object ReplicationUtils extends Logging {
    */
   def asyncUpdateLeaderAndIsr(zkUtils: ZkUtils,
                               leaderAndIsrUpdateBatch: ZkLeaderAndIsrUpdateBatch,
-                              controllerEpoch: Int) = {
+                              controllerEpoch: Int,
+                              retryOnException: Option[Exception => Boolean] = None) = {
     val unprocessedUpdates = new CountDownLatch(leaderAndIsrUpdateBatch.size)
     leaderAndIsrUpdateBatch.leaderAndIsrUpdates.foreach { case (tp, update) => {
       val path = getTopicPartitionLeaderAndIsrPath(tp.topic, tp.partition)
@@ -72,7 +73,7 @@ object ReplicationUtils extends Logging {
           } finally {
             unprocessedUpdates.countDown()
           }
-        })
+        }, retryOnException)
     }}
     unprocessedUpdates.await()
   }

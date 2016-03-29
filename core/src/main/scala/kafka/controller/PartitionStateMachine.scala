@@ -147,7 +147,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             targetState, leaderSelector, callbacks)
         }
         // Make sure we update zk first because the callbacks will fill in the BrokerRequestBatch
-        leaderAndIsrUpdateBatch.writeLeaderAndIsrUpdateToZk(controller.epoch)
+        leaderAndIsrUpdateBatch.writeLeaderAndIsrUpdateToZk(controller.epoch, Some(e => controller.isValidController))
         brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
         remainingParititions.retain(leaderAndIsrUpdateBatch.containsPartition(_))
         if (!remainingParititions.isEmpty)
