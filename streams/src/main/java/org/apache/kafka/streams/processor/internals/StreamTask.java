@@ -167,11 +167,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 this.currNode = recordInfo.node();
                 TopicPartition partition = recordInfo.partition();
 
-                log.debug("Start processing one record [" + currRecord + "]");
+                log.debug("Start processing one record [{}]", currRecord);
 
                 this.currNode.process(currRecord.key(), currRecord.value());
 
-                log.debug("Completed processing one record [" + currRecord + "]");
+                log.debug("Completed processing one record [{}]", currRecord);
 
                 // update the consumed offset map after processing is done
                 consumedOffsets.put(partition, currRecord.offset());
