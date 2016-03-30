@@ -234,7 +234,7 @@ public class Selector implements Selectable {
 
                 try {
                 	boolean passiveClose = false;
-                	
+
                     /* complete any connections that have finished their handshake */
                     if (key.isConnectable()) {
                         channel.finishConnect();
@@ -249,8 +249,8 @@ public class Selector implements Selectable {
                             transmissions.receive = new NetworkReceive(transmissions.id);
                         long bytesRead = transmissions.receive.readFrom(channel);
                         if (bytesRead < 0) {
-                        	//Reached EOF between receives, treat as passive close
-                        	passiveClose = true;
+                            //Reached EOF between receives, treat as passive close
+                            passiveClose = true;
                         } else if (transmissions.receive.complete()) {
                             transmissions.receive.payload().rewind();
                             this.completedReceives.add(transmissions.receive);
