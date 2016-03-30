@@ -233,6 +233,8 @@ public class Selector implements Selectable {
                 sensors.maybeRegisterNodeMetrics(transmissions.id);
 
                 try {
+                	boolean passiveClose = false;
+                	
                     /* complete any connections that have finished their handshake */
                     if (key.isConnectable()) {
                         channel.finishConnect();
@@ -245,8 +247,11 @@ public class Selector implements Selectable {
                     if (key.isReadable()) {
                         if (!transmissions.hasReceive())
                             transmissions.receive = new NetworkReceive(transmissions.id);
-                        transmissions.receive.readFrom(channel);
-                        if (transmissions.receive.complete()) {
+                        long bytesRead = transmissions.receive.readFrom(channel);
+                        if (bytesRead < 0) {
+                        	//Reached EOF between receives, treat as passive close
+                        	passiveClose = true;
+                        } else if (transmissions.receive.complete()) {
                             transmissions.receive.payload().rewind();
                             this.completedReceives.add(transmissions.receive);
                             this.sensors.recordBytesReceived(transmissions.id, transmissions.receive.payload().limit());
@@ -255,7 +260,7 @@ public class Selector implements Selectable {
                     }
 
                     /* write to any sockets that have space in their buffer and for which we have data */
-                    if (key.isWritable()) {
+                    if (!passiveClose && key.isWritable()) {
                         transmissions.send.writeTo(channel);
                         if (transmissions.send.remaining() <= 0) {
                             this.completedSends.add(transmissions.send);
@@ -266,7 +271,7 @@ public class Selector implements Selectable {
                     }
 
                     /* cancel any defunct sockets */
-                    if (!key.isValid())
+                    if (passiveClose || !key.isValid())
                         close(key);
                 } catch (IOException e) {
                     InetAddress remoteAddress = null;
