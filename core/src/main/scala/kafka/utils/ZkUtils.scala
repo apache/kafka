@@ -17,8 +17,7 @@
 
 package kafka.utils
 
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.{ConcurrentHashMap, Callable, CountDownLatch}
+import java.util.concurrent.{Callable, CountDownLatch}
 
 import kafka.admin._
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0, LeaderAndIsr}
@@ -34,7 +33,7 @@ import org.I0Itec.zkclient.{IZkConnection, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.zookeeper.AsyncCallback.{DataCallback, StatCallback, StringCallback}
-import org.apache.zookeeper.KeeperException.{ConnectionLossException, SessionExpiredException, Code}
+import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
 
