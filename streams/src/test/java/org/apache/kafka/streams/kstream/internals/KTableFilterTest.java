@@ -53,7 +53,7 @@ public class KTableFilterTest {
                 return (value % 2) == 0;
             }
         });
-        KTable<String, Integer> table3 = table1.filterOut(new Predicate<String, Integer>() {
+        KTable<String, Integer> table3 = table1.filterNot(new Predicate<String, Integer>() {
             @Override
             public boolean test(String key, Integer value) {
                 return (value % 2) == 0;
@@ -95,7 +95,7 @@ public class KTableFilterTest {
                             return (value % 2) == 0;
                         }
                     });
-            KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterOut(
+            KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
                     new Predicate<String, Integer>() {
                         @Override
                         public boolean test(String key, Integer value) {

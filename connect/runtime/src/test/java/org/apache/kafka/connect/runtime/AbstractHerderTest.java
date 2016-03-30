@@ -114,5 +114,4 @@ public class AbstractHerderTest extends EasyMockSupport {
 
         verifyAll();
     }
-
 }

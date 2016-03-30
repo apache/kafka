@@ -43,7 +43,7 @@ public interface KStream<K, V> {
      *
      * @param predicate     the instance of {@link Predicate}
      */
-    KStream<K, V> filterOut(Predicate<K, V> predicate);
+    KStream<K, V> filterNot(Predicate<K, V> predicate);
 
     /**
      * Create a new instance of {@link KStream} by transforming each element in this stream into a different element in the new stream.

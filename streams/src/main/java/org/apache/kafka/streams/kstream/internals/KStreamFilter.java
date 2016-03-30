@@ -25,11 +25,11 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 class KStreamFilter<K, V> implements ProcessorSupplier<K, V> {
 
     private final Predicate<K, V> predicate;
-    private final boolean filterOut;
+    private final boolean filterNot;
 
-    public KStreamFilter(Predicate<K, V> predicate, boolean filterOut) {
+    public KStreamFilter(Predicate<K, V> predicate, boolean filterNot) {
         this.predicate = predicate;
-        this.filterOut = filterOut;
+        this.filterNot = filterNot;
     }
 
     @Override
@@ -40,7 +40,7 @@ class KStreamFilter<K, V> implements ProcessorSupplier<K, V> {
     private class KStreamFilterProcessor extends AbstractProcessor<K, V> {
         @Override
         public void process(K key, V value) {
-            if (filterOut ^ predicate.test(key, value)) {
+            if (filterNot ^ predicate.test(key, value)) {
                 context().forward(key, value);
             }
         }
