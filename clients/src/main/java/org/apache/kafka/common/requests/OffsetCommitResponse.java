@@ -97,6 +97,11 @@ public class OffsetCommitResponse extends AbstractRequestResponse {
         return responseData;
     }
 
+    public static OffsetCommitResponse parse(ByteBuffer buffer, int version) {
+        Schema schema = ProtoUtils.responseSchema(ApiKeys.OFFSET_COMMIT.id, version);
+        return new OffsetCommitResponse(schema.read(buffer));
+    }
+
     public static OffsetCommitResponse parse(ByteBuffer buffer) {
         return new OffsetCommitResponse(CURRENT_SCHEMA.read(buffer));
     }

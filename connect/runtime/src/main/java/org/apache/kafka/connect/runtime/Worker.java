@@ -189,6 +189,12 @@ public class Worker {
         return SinkConnector.class.isAssignableFrom(workerConnector.delegate.getClass());
     }
 
+    public Connector getConnector(String connType) {
+        Class<? extends Connector> connectorClass = getConnectorClass(connType);
+        return instantiateConnector(connectorClass);
+    }
+
+    @SuppressWarnings("unchecked")
     private Class<? extends Connector> getConnectorClass(String connectorAlias) {
         // Avoid the classpath scan if the full class name was provided
         try {

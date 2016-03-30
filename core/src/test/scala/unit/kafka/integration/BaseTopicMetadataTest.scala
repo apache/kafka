@@ -18,10 +18,9 @@
 package kafka.integration
 
 import java.io.File
-import java.nio.ByteBuffer
 
 import kafka.admin.AdminUtils
-import kafka.api.{TopicMetadataRequest, TopicMetadataResponse}
+import kafka.api.TopicMetadataResponse
 import kafka.client.ClientUtils
 import kafka.cluster.{Broker, BrokerEndPoint}
 import kafka.server.{KafkaConfig, KafkaServer, NotRunning}
@@ -61,23 +60,6 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
   override def tearDown() {
     server1.shutdown()
     super.tearDown()
-  }
-
-  @Test
-  def testTopicMetadataRequest {
-    // create topic
-    val topic = "test"
-    AdminUtils.createTopic(zkUtils, topic, 1, 1)
-
-    // create a topic metadata request
-    val topicMetadataRequest = new TopicMetadataRequest(List(topic), 0)
-
-    val serializedMetadataRequest = ByteBuffer.allocate(topicMetadataRequest.sizeInBytes + 2)
-    topicMetadataRequest.writeTo(serializedMetadataRequest)
-    serializedMetadataRequest.rewind()
-    val deserializedMetadataRequest = TopicMetadataRequest.readFrom(serializedMetadataRequest)
-
-    assertEquals(topicMetadataRequest, deserializedMetadataRequest)
   }
 
   @Test

@@ -78,10 +78,10 @@ class TestUpgrade(ProduceConsumeValidateTest):
         - Start producer and consumer in the background
         - Perform two-phase rolling upgrade
             - First phase: upgrade brokers to 0.10 with inter.broker.protocol.version set to
-            from_kafka_version and message.format.version set to from_kafka_version
+            from_kafka_version and log.message.format.version set to from_kafka_version
             - Second phase: remove inter.broker.protocol.version config with rolling bounce; if
-            to_message_format_version is set to 0.9, set message.format.version to
-            to_message_format_version, otherwise remove message.format.version config
+            to_message_format_version is set to 0.9, set log.message.format.version to
+            to_message_format_version, otherwise remove log.message.format.version config
         - Finally, validate that every message acked by the producer was consumed by the consumer
         """
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk,

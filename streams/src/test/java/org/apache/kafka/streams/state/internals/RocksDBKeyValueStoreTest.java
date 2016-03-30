@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -35,11 +33,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
         StateStoreSupplier supplier;
         if (useContextSerdes) {
-            Serializer<K> keySer = (Serializer<K>) context.keySerializer();
-            Deserializer<K> keyDeser = (Deserializer<K>) context.keyDeserializer();
-            Serializer<V> valSer = (Serializer<V>) context.valueSerializer();
-            Deserializer<V> valDeser = (Deserializer<V>) context.valueDeserializer();
-            supplier = Stores.create("my-store").withKeys(keySer, keyDeser).withValues(valSer, valDeser).persistent().build();
+            supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde()).persistent().build();
         } else {
             supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass).persistent().build();
         }

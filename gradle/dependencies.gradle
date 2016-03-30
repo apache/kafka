@@ -41,7 +41,7 @@ versions += [
   scalaParserCombinators: "1.0.4",
   slf4j: "1.7.18",
   snappy: "1.1.2.1",
-  zkclient: "0.7",
+  zkclient: "0.8",
   zookeeper: "3.4.6",
 ]
 
@@ -72,6 +72,7 @@ libs += [
   jacksonJaxrsJsonProvider: "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$versions.jackson",
   jettyServer: "org.eclipse.jetty:jetty-server:$versions.jetty",
   jettyServlet: "org.eclipse.jetty:jetty-servlet:$versions.jetty",
+  jettyServlets: "org.eclipse.jetty:jetty-servlets:$versions.jetty",
   jerseyContainerServlet: "org.glassfish.jersey.containers:jersey-container-servlet:$versions.jersey",
   junit: "junit:junit:$versions.junit",
   joptSimple: "net.sf.jopt-simple:jopt-simple:$versions.jopt",

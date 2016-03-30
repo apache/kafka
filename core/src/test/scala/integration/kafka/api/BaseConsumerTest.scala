@@ -13,23 +13,20 @@
 package kafka.api
 
 import java.util
-
 import kafka.coordinator.GroupCoordinator
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
-
 import kafka.utils.{TestUtils, Logging, ShutdownableThread}
 import kafka.server.KafkaConfig
-
 import java.util.ArrayList
 import org.junit.Assert._
 import org.junit.{Before, Test}
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
+import org.apache.kafka.common.internals.TopicConstants
 
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
@@ -84,7 +81,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
     // shouldn't make progress until poll is invoked
     Thread.sleep(10)
-    assertEquals(0, commitCallback.count)
+    assertEquals(0, commitCallback.successCount)
     awaitCommitCallback(this.consumers(0), commitCallback)
   }
 
@@ -102,7 +99,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     val rebalanceListener = new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
         // keep partitions paused in this test so that we can verify the commits based on specific seeks
-        partitions.asScala.foreach(consumer0.pause(_))
+        consumer0.pause(partitions)
       }
 
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {}
@@ -148,7 +145,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     assertEquals(3, this.consumers(0).committed(tp).offset)
     assertNull(this.consumers(0).committed(tp2))
 
-    // positions should not change
+    // Positions should not change
     assertEquals(pos1, this.consumers(0).position(tp))
     assertEquals(pos2, this.consumers(0).position(tp2))
     this.consumers(0).commitSync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(5L))).asJava)
@@ -196,7 +193,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     // get metadata for the topic
     var parts: Seq[PartitionInfo] = null
     while (parts == null)
-      parts = consumer0.partitionsFor(GroupCoordinator.GroupMetadataTopicName).asScala
+      parts = consumer0.partitionsFor(TopicConstants.GROUP_METADATA_TOPIC_NAME).asScala
     assertEquals(1, parts.size)
     assertNotNull(parts(0).leader())
 
@@ -247,7 +244,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     sendRecords(5)
     consumer0.subscribe(List(topic).asJava)
     consumeAndVerifyRecords(consumer = consumer0, numRecords = 5, startingOffset = 0)
-    consumer0.pause(tp)
+    consumer0.pause(List(tp).asJava)
 
     // subscribe to a new topic to trigger a rebalance
     consumer0.subscribe(List("topic2").asJava)
@@ -333,18 +330,26 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     records
   }
 
-  protected def awaitCommitCallback[K, V](consumer: Consumer[K, V], commitCallback: CountConsumerCommitCallback): Unit = {
-    val startCount = commitCallback.count
+  protected def awaitCommitCallback[K, V](consumer: Consumer[K, V],
+                                          commitCallback: CountConsumerCommitCallback,
+                                          count: Int = 1): Unit = {
+    val startCount = commitCallback.successCount
     val started = System.currentTimeMillis()
-    while (commitCallback.count == startCount && System.currentTimeMillis() - started < 10000)
+    while (commitCallback.successCount < startCount + count && System.currentTimeMillis() - started < 10000)
       consumer.poll(50)
-    assertEquals(startCount + 1, commitCallback.count)
+    assertEquals(startCount + count, commitCallback.successCount)
   }
 
   protected class CountConsumerCommitCallback extends OffsetCommitCallback {
-    var count = 0
+    var successCount = 0
+    var failCount = 0
 
-    override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = count += 1
+    override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = {
+      if (exception == null)
+        successCount += 1
+      else
+        failCount += 1
+    }
   }
 
   protected class ConsumerAssignmentPoller(consumer: Consumer[Array[Byte], Array[Byte]],

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -24,7 +25,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
@@ -67,8 +68,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private final WriteOptions wOptions;
     private final FlushOptions fOptions;
 
-    private ProcessorContext context;
-    private Serdes<K, V> serdes;
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
+
+    private StateSerdes<K, V> serdes;
     protected File dbDir;
     private RocksDB db;
 
@@ -92,14 +95,15 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         return this;
     }
 
-    public RocksDBStore(String name, Serdes<K, V> serdes) {
-        this(name, DB_FILE_DIR, serdes);
+    public RocksDBStore(String name, Serde<K> keySerde, Serde<V> valueSerde) {
+        this(name, DB_FILE_DIR, keySerde, valueSerde);
     }
 
-    public RocksDBStore(String name, String parentDir, Serdes<K, V> serdes) {
+    public RocksDBStore(String name, String parentDir, Serde<K> keySerde, Serde<V> valueSerde) {
         this.name = name;
         this.parentDir = parentDir;
-        this.serdes = serdes;
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
 
         // initialize the rocksdb options
         BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
@@ -136,15 +140,20 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
     }
 
+    @SuppressWarnings("unchecked")
     public void openDB(ProcessorContext context) {
-        this.context = context;
-        this.dbDir = new File(new File(this.context.stateDir(), parentDir), this.name);
+        // we need to construct the serde while opening DB since
+        // it is also triggered by windowed DB segments without initialization
+        this.serdes = new StateSerdes<>(name,
+                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+
+        this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
     }
 
-    @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
-        // first open the DB dir
+        // open the DB dir
         openDB(context);
 
         this.changeLogger = this.loggingEnabled ? new RawStoreChangeLogger(name, context) : null;
@@ -156,7 +165,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                         public void apply(K key, RocksDBCacheEntry entry) {
                             // flush all the dirty entries to RocksDB if this evicted entry is dirty
                             if (entry.isDirty) {
-                                flush();
+                                flushCache();
                             }
                         }
                     });
@@ -217,7 +226,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             RocksDBCacheEntry entry = cache.get(key);
 
             if (entry == null) {
-                byte[] rawKey = serdes.rawKey(key);
                 V value = serdes.valueFrom(getInternal(serdes.rawKey(key)));
                 cache.put(key, new RocksDBCacheEntry(value));
 
@@ -242,8 +250,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public void put(K key, V value) {
         if (cache != null) {
-            cache.put(key, new RocksDBCacheEntry(value, true));
             cacheDirtyKeys.add(key);
+            cache.put(key, new RocksDBCacheEntry(value, true));
         } else {
             byte[] rawKey = serdes.rawKey(key);
             byte[] rawValue = serdes.rawValue(value);
@@ -289,7 +297,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             put(entry.key, entry.value);
     }
 
-    // this function is only called in flush()
+    // this function is only called in flushCache()
     private void putAllInternal(List<KeyValue<byte[], byte[]>> entries) {
         WriteBatch batch = new WriteBatch();
 
@@ -315,7 +323,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public KeyValueIterator<K, V> range(K from, K to) {
         // we need to flush the cache if necessary before returning the iterator
         if (cache != null)
-            flush();
+            flushCache();
 
         return new RocksDBRangeIterator<K, V>(db.newIterator(), serdes, from, to);
     }
@@ -324,15 +332,14 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public KeyValueIterator<K, V> all() {
         // we need to flush the cache if necessary before returning the iterator
         if (cache != null)
-            flush();
+            flushCache();
 
         RocksIterator innerIter = db.newIterator();
         innerIter.seekToFirst();
         return new RocksDbIterator<K, V>(innerIter, serdes);
     }
 
-    @Override
-    public void flush() {
+    private void flushCache() {
         // flush of the cache entries if necessary
         if (cache != null) {
             List<KeyValue<byte[], byte[]>> putBatch = new ArrayList<>(cache.keys.size());
@@ -341,7 +348,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             for (K key : cacheDirtyKeys) {
                 RocksDBCacheEntry entry = cache.get(key);
 
-                assert entry.isDirty;
+                entry.isDirty = false;
 
                 byte[] rawKey = serdes.rawKey(key);
 
@@ -377,10 +384,17 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             cacheDirtyKeys.clear();
         }
 
-        flushInternal();
-
         if (loggingEnabled)
             changeLogger.logChange(getter);
+    }
+
+    @Override
+    public void flush() {
+        // flush of the cache entries if necessary
+        flushCache();
+
+        // flush RocksDB
+        flushInternal();
     }
 
     public void flushInternal() {
@@ -399,9 +413,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private static class RocksDbIterator<K, V> implements KeyValueIterator<K, V> {
         private final RocksIterator iter;
-        private final Serdes<K, V> serdes;
+        private final StateSerdes<K, V> serdes;
 
-        public RocksDbIterator(RocksIterator iter, Serdes<K, V> serdes) {
+        public RocksDbIterator(RocksIterator iter, StateSerdes<K, V> serdes) {
             this.iter = iter;
             this.serdes = serdes;
         }
@@ -463,7 +477,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         private final Comparator<byte[]> comparator = new LexicographicComparator();
         byte[] rawToKey;
 
-        public RocksDBRangeIterator(RocksIterator iter, Serdes<K, V> serdes,
+        public RocksDBRangeIterator(RocksIterator iter, StateSerdes<K, V> serdes,
                                     K from, K to) {
             super(iter, serdes);
             iter.seek(serdes.rawKey(from));

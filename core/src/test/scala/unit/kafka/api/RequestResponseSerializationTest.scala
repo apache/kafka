@@ -145,14 +145,6 @@ object SerializationTestUtils {
     )
   }
 
-  def createTestTopicMetadataRequest: TopicMetadataRequest = {
-    new TopicMetadataRequest(1, 1, "client 1", Seq(topic1, topic2))
-  }
-
-  def createTestTopicMetadataResponse: TopicMetadataResponse = {
-    new TopicMetadataResponse(brokers.map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)).toSeq, Seq(topicmetaData1, topicmetaData2), 1)
-  }
-
   def createTestOffsetCommitRequestV2: OffsetCommitRequest = {
     new OffsetCommitRequest(
       groupId = "group 1",
@@ -217,8 +209,6 @@ class RequestResponseSerializationTest extends JUnitSuite {
   private val fetchRequest = SerializationTestUtils.createTestFetchRequest
   private val offsetRequest = SerializationTestUtils.createTestOffsetRequest
   private val offsetResponse = SerializationTestUtils.createTestOffsetResponse
-  private val topicMetadataRequest = SerializationTestUtils.createTestTopicMetadataRequest
-  private val topicMetadataResponse = SerializationTestUtils.createTestTopicMetadataResponse
   private val offsetCommitRequestV0 = SerializationTestUtils.createTestOffsetCommitRequestV0
   private val offsetCommitRequestV1 = SerializationTestUtils.createTestOffsetCommitRequestV1
   private val offsetCommitRequestV2 = SerializationTestUtils.createTestOffsetCommitRequestV2
@@ -234,8 +224,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
 
     val requestsAndResponses =
       collection.immutable.Seq(producerRequest, producerResponse,
-                               fetchRequest, offsetRequest, offsetResponse, topicMetadataRequest,
-                               topicMetadataResponse,
+                               fetchRequest, offsetRequest, offsetResponse,
                                offsetCommitRequestV0, offsetCommitRequestV1, offsetCommitRequestV2,
                                offsetCommitResponse, offsetFetchRequest, offsetFetchResponse,
                                consumerMetadataRequest, consumerMetadataResponse,

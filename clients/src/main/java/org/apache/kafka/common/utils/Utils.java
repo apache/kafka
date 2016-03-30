@@ -442,13 +442,8 @@ public class Utils {
      */
     public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
         Properties props = new Properties();
-        InputStream propStream = null;
-        try {
-            propStream = new FileInputStream(filename);
+        try (InputStream propStream = new FileInputStream(filename)) {
             props.load(propStream);
-        } finally {
-            if (propStream != null)
-                propStream.close();
         }
         return props;
     }
@@ -540,16 +535,13 @@ public class Utils {
      */
     public static String readFileAsString(String path, Charset charset) throws IOException {
         if (charset == null) charset = Charset.defaultCharset();
-        FileInputStream stream = new FileInputStream(new File(path));
-        String result = new String();
-        try {
+
+        try (FileInputStream stream = new FileInputStream(new File(path))) {
             FileChannel fc = stream.getChannel();
             MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
-            result = charset.decode(bb).toString();
-        } finally {
-            stream.close();
+            return charset.decode(bb).toString();
         }
-        return result;
+
     }
 
     public static String readFileAsString(String path) throws IOException {
@@ -578,6 +570,7 @@ public class Utils {
      * @param <T> the type of element
      * @return Set
      */
+    @SafeVarargs
     public static <T> Set<T> mkSet(T... elems) {
         return new HashSet<>(Arrays.asList(elems));
     }
@@ -588,6 +581,7 @@ public class Utils {
      * @param <T> the type of element
      * @return List
      */
+    @SafeVarargs
     public static <T> List<T> mkList(T... elems) {
         return Arrays.asList(elems);
     }

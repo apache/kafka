@@ -34,6 +34,7 @@ public class AbstractHerderTest extends EasyMockSupport {
 
     @Test
     public void connectorStatus() {
+        Worker worker = null;
         String workerId = "workerId";
         String connector = "connector";
         int generation = 5;
@@ -42,8 +43,8 @@ public class AbstractHerderTest extends EasyMockSupport {
         StatusBackingStore store = strictMock(StatusBackingStore.class);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(StatusBackingStore.class, String.class)
-                .withArgs(store, workerId)
+                .withConstructor(Worker.class, StatusBackingStore.class, String.class)
+                .withArgs(worker, store, workerId)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -76,14 +77,15 @@ public class AbstractHerderTest extends EasyMockSupport {
 
     @Test
     public void taskStatus() {
+        Worker worker = null;
         ConnectorTaskId taskId = new ConnectorTaskId("connector", 0);
         String workerId = "workerId";
 
         StatusBackingStore store = strictMock(StatusBackingStore.class);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(StatusBackingStore.class, String.class)
-                .withArgs(store, workerId)
+                .withConstructor(Worker.class, StatusBackingStore.class, String.class)
+                .withArgs(worker, store, workerId)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -112,5 +114,4 @@ public class AbstractHerderTest extends EasyMockSupport {
 
         verifyAll();
     }
-
 }

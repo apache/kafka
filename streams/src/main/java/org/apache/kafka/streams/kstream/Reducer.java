@@ -20,7 +20,7 @@ package org.apache.kafka.streams.kstream;
 /**
  * The Reducer interface for combining two values of the same type into a new value.
  *
- * @param <V> Value type.
+ * @param <V>   value type
  */
 public interface Reducer<V> {
 

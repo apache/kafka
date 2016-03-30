@@ -42,6 +42,7 @@ object ClientUtils extends Logging{
    * @param producerConfig The producer's config
    * @return topic metadata response
    */
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.10.0.0")
   def fetchTopicMetadata(topics: Set[String], brokers: Seq[BrokerEndPoint], producerConfig: ProducerConfig, correlationId: Int): TopicMetadataResponse = {
     var fetchMetaDataSucceeded: Boolean = false
     var i: Int = 0

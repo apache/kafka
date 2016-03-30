@@ -14,15 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.internals;
 
-package org.apache.kafka.streams.processor.internals;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.processor.TimestampExtractor;
+public final class TopicConstants {
 
-public class WallclockTimestampExtractor implements TimestampExtractor {
-    @Override
-    public long extract(ConsumerRecord<Object, Object> record) {
-        return System.currentTimeMillis();
+    //avoid instantiation
+    private TopicConstants() {
     }
+
+    // TODO: we store both group metadata and offset data here despite the topic name being offsets only
+    public static final String GROUP_METADATA_TOPIC_NAME = "__consumer_offsets";
+    public static final Collection<String> INTERNAL_TOPICS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(GROUP_METADATA_TOPIC_NAME)));
 }

@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -56,6 +57,7 @@ import static org.junit.Assert.assertEquals;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(RestServer.class)
 @PowerMockIgnore("javax.management.*")
+@SuppressWarnings("unchecked")
 public class ConnectorsResourceTest {
     // Note trailing / and that we do *not* use LEADER_URL to construct our reference values. This checks that we handle
     // URL construction properly, avoiding //, which will mess up routing in the REST server
@@ -81,7 +83,6 @@ public class ConnectorsResourceTest {
         TASK_INFOS.add(new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 0), TASK_CONFIGS.get(0)));
         TASK_INFOS.add(new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 1), TASK_CONFIGS.get(1)));
     }
-
 
     @Mock
     private Herder herder;
@@ -171,6 +172,8 @@ public class ConnectorsResourceTest {
         connectorsResource.createConnector(body);
 
         PowerMock.verifyAll();
+
+
     }
 
     @Test(expected = AlreadyExistsException.class)

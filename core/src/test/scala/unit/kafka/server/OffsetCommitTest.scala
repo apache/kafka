@@ -19,21 +19,20 @@ package kafka.server
 
 import kafka.api.{GroupCoordinatorRequest, OffsetCommitRequest, OffsetFetchRequest}
 import kafka.consumer.SimpleConsumer
-import kafka.common.{OffsetMetadata, OffsetMetadataAndError, OffsetAndMetadata, TopicAndPartition}
+import kafka.common.{OffsetAndMetadata, OffsetMetadata, OffsetMetadataAndError, TopicAndPartition}
 import kafka.utils._
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.Errors
-
+import org.apache.kafka.common.utils.Utils
 import org.junit.{After, Before, Test}
+import org.junit.Assert._
 
 import java.util.Properties
 import java.io.File
 
 import scala.util.Random
 import scala.collection._
-
-import org.junit.Assert._
 
 class OffsetCommitTest extends ZooKeeperTestHarness {
   val random: Random = new Random()
@@ -71,7 +70,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
   override def tearDown() {
     simpleConsumer.close
     server.shutdown
-    CoreUtils.rm(logDir)
+    Utils.delete(logDir)
     super.tearDown()
   }
 

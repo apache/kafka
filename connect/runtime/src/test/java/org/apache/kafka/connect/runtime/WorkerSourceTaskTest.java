@@ -207,6 +207,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
 
+
         PowerMock.replayAll();
 
         workerTask.initialize(EMPTY_TASK_PROPS);
@@ -253,7 +254,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         PowerMock.verifyAll();
     }
-
+    
     @Test
     public void testSendRecordsConvertsData() throws Exception {
         createWorkerTask();
@@ -365,6 +366,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         return latch;
     }
 
+    @SuppressWarnings("unchecked")
     private void expectSendRecordSyncFailure(Throwable error) throws InterruptedException {
         expectConvertKeyValue(false);
 
@@ -420,6 +422,13 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             expect.andStubAnswer(expectResponse);
         else
             expect.andAnswer(expectResponse);
+
+        // 3. As a result of a successful producer send callback, we'll notify the source task of the record commit
+        sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class));
+        if (anyTimes)
+            EasyMock.expectLastCall().anyTimes();
+        else
+            EasyMock.expectLastCall();
 
         return sent;
     }

@@ -49,7 +49,6 @@ import java.util.Set;
 public class StandaloneHerder extends AbstractHerder {
     private static final Logger log = LoggerFactory.getLogger(StandaloneHerder.class);
 
-    private final Worker worker;
     private HashMap<String, ConnectorState> connectors = new HashMap<>();
 
     public StandaloneHerder(Worker worker) {
@@ -60,8 +59,7 @@ public class StandaloneHerder extends AbstractHerder {
     StandaloneHerder(String workerId,
                      Worker worker,
                      StatusBackingStore statusBackingStore) {
-        super(statusBackingStore, workerId);
-        this.worker = worker;
+        super(worker, statusBackingStore, workerId);
     }
 
     public synchronized void start() {

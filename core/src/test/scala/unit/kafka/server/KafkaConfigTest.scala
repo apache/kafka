@@ -283,14 +283,14 @@ class KafkaConfigTest {
 
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2.0")
     // We need to set the message format version to make the configuration valid.
-    props.put(KafkaConfig.MessageFormatVersionProp, "0.8.2.0")
+    props.put(KafkaConfig.LogMessageFormatVersionProp, "0.8.2.0")
     val conf2 = KafkaConfig.fromProps(props)
     assertEquals(KAFKA_0_8_2, conf2.interBrokerProtocolVersion)
 
     // check that 0.8.2.0 is the same as 0.8.2.1
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2.1")
     // We need to set the message format version to make the configuration valid
-    props.put(KafkaConfig.MessageFormatVersionProp, "0.8.2.1")
+    props.put(KafkaConfig.LogMessageFormatVersionProp, "0.8.2.1")
     val conf3 = KafkaConfig.fromProps(props)
     assertEquals(KAFKA_0_8_2, conf3.interBrokerProtocolVersion)
 
@@ -533,7 +533,7 @@ class KafkaConfigTest {
         case KafkaConfig.MetricNumSamplesProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.MetricSampleWindowMsProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.MetricReporterClassesProp => // ignore string
-
+        case KafkaConfig.RackProp => // ignore string
         //SSL Configs
         case KafkaConfig.PrincipalBuilderClassProp =>
         case KafkaConfig.SslProtocolProp => // ignore string

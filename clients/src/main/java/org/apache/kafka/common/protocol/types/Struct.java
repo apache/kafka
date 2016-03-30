@@ -311,7 +311,10 @@ public class Struct {
                 for (Object arrayItem: arrayObject)
                     result = prime * result + arrayItem.hashCode();
             } else {
-                result = prime * result + this.get(f).hashCode();
+                Object field = this.get(f);
+                if (field != null) {
+                    result = prime * result + field.hashCode();
+                }
             }
         }
         return result;
@@ -330,11 +333,13 @@ public class Struct {
             return false;
         for (int i = 0; i < this.values.length; i++) {
             Field f = this.schema.get(i);
-            Boolean result;
+            boolean result;
             if (f.type() instanceof ArrayOf) {
-                result = Arrays.equals((Object []) this.get(f), (Object []) other.get(f));
+                result = Arrays.equals((Object[]) this.get(f), (Object[]) other.get(f));
             } else {
-                result = this.get(f).equals(other.get(f));
+                Object thisField = this.get(f);
+                Object otherField = other.get(f);
+                result = (thisField == null && otherField == null) || thisField.equals(otherField);
             }
             if (!result)
                 return false;

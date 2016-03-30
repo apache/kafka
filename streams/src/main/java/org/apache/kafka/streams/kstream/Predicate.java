@@ -20,8 +20,8 @@ package org.apache.kafka.streams.kstream;
 /**
  * The Predicate interface represents a predicate (boolean-valued function) of a key-value pair.
  *
- * @param <K> Key type.
- * @param <V> Value type.
+ * @param <K>   key type
+ * @param <V>   value type
  */
 public interface Predicate<K, V> {
 

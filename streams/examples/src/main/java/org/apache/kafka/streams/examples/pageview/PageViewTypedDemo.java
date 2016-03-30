@@ -17,12 +17,11 @@
 
 package org.apache.kafka.streams.examples.pageview;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.HoppingWindows;
@@ -50,7 +49,7 @@ import java.util.Properties;
  * Before running this example you must create the source topic (e.g. via bin/kafka-topics.sh --create ...)
  * and write some data to it (e.g. via bin-kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
  */
-public class PageViewTypedJob {
+public class PageViewTypedDemo {
 
     // POJO classes
     static public class PageView {
@@ -82,51 +81,62 @@ public class PageViewTypedJob {
 
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
-        props.put(StreamsConfig.JOB_ID_CONFIG, "streams-pageview-typed");
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-typed");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
-        props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonPOJOSerializer.class);
-        props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonPOJODeserializer.class);
         props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
-        props.put(StreamsConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        final Serializer<String> stringSerializer = new StringSerializer();
-        final Deserializer<String> stringDeserializer = new StringDeserializer();
-        final Serializer<Long> longSerializer = new LongSerializer();
-        final Deserializer<Long> longDeserializer = new LongDeserializer();
-
         // TODO: the following can be removed with a serialization factory
         Map<String, Object> serdeProps = new HashMap<>();
+
+        final Serializer<PageView> pageViewSerializer = new JsonPOJOSerializer<>();
+        serdeProps.put("JsonPOJOClass", PageView.class);
+        pageViewSerializer.configure(serdeProps, false);
 
         final Deserializer<PageView> pageViewDeserializer = new JsonPOJODeserializer<>();
         serdeProps.put("JsonPOJOClass", PageView.class);
         pageViewDeserializer.configure(serdeProps, false);
 
-        final Deserializer<UserProfile> userProfileDeserializer = new JsonPOJODeserializer<>();
-        serdeProps.put("JsonPOJOClass", UserProfile.class);
-        userProfileDeserializer.configure(serdeProps, false);
+        final Serde<PageView> pageViewSerde = Serdes.serdeFrom(pageViewSerializer, pageViewDeserializer);
 
         final Serializer<UserProfile> userProfileSerializer = new JsonPOJOSerializer<>();
         serdeProps.put("JsonPOJOClass", UserProfile.class);
         userProfileSerializer.configure(serdeProps, false);
 
+        final Deserializer<UserProfile> userProfileDeserializer = new JsonPOJODeserializer<>();
+        serdeProps.put("JsonPOJOClass", UserProfile.class);
+        userProfileDeserializer.configure(serdeProps, false);
+
+        final Serde<UserProfile> userProfileSerde = Serdes.serdeFrom(userProfileSerializer, userProfileDeserializer);
+
         final Serializer<WindowedPageViewByRegion> wPageViewByRegionSerializer = new JsonPOJOSerializer<>();
         serdeProps.put("JsonPOJOClass", WindowedPageViewByRegion.class);
         wPageViewByRegionSerializer.configure(serdeProps, false);
+
+        final Deserializer<WindowedPageViewByRegion> wPageViewByRegionDeserializer = new JsonPOJODeserializer<>();
+        serdeProps.put("JsonPOJOClass", WindowedPageViewByRegion.class);
+        wPageViewByRegionDeserializer.configure(serdeProps, false);
+
+        final Serde<WindowedPageViewByRegion> wPageViewByRegionSerde = Serdes.serdeFrom(wPageViewByRegionSerializer, wPageViewByRegionDeserializer);
 
         final Serializer<RegionCount> regionCountSerializer = new JsonPOJOSerializer<>();
         serdeProps.put("JsonPOJOClass", RegionCount.class);
         regionCountSerializer.configure(serdeProps, false);
 
-        KStream<String, PageView> views = builder.stream(stringDeserializer, pageViewDeserializer, "streams-pageview-input");
+        final Deserializer<RegionCount> regionCountDeserializer = new JsonPOJODeserializer<>();
+        serdeProps.put("JsonPOJOClass", RegionCount.class);
+        regionCountDeserializer.configure(serdeProps, false);
 
-        KTable<String, UserProfile> users = builder.table(stringSerializer, userProfileSerializer, stringDeserializer, userProfileDeserializer, "streams-userprofile-input");
+        final Serde<RegionCount> regionCountSerde = Serdes.serdeFrom(regionCountSerializer, regionCountDeserializer);
+
+        KStream<String, PageView> views = builder.stream(Serdes.String(), pageViewSerde, "streams-pageview-input");
+
+        KTable<String, UserProfile> users = builder.table(Serdes.String(), userProfileSerde, "streams-userprofile-input");
 
         KStream<WindowedPageViewByRegion, RegionCount> regionCount = views
                 .leftJoin(users, new ValueJoiner<PageView, UserProfile, PageViewByRegion>() {
@@ -150,9 +160,7 @@ public class PageViewTypedJob {
                         return new KeyValue<>(viewRegion.region, viewRegion);
                     }
                 })
-                .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000),
-                        stringSerializer, longSerializer,
-                        stringDeserializer, longDeserializer)
+                .countByKey(HoppingWindows.of("GeoPageViewsWindow").with(7 * 24 * 60 * 60 * 1000), Serdes.String())
                 // TODO: we can merge ths toStream().map(...) with a single toStream(...)
                 .toStream()
                 .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<WindowedPageViewByRegion, RegionCount>>() {
@@ -171,12 +179,12 @@ public class PageViewTypedJob {
                 });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-typed-output", wPageViewByRegionSerializer, regionCountSerializer);
+        regionCount.to(wPageViewByRegionSerde, regionCountSerde, "streams-pageviewstats-typed-output");
 
         KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
 
-        // usually the streaming job would be ever running,
+        // usually the stream application would be running forever,
         // in this example we just let it run for some time and stop since the input data is finite.
         Thread.sleep(5000L);
 

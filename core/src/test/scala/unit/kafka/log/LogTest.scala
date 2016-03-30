@@ -19,7 +19,6 @@ package kafka.log
 
 import java.io._
 import java.util.Properties
-import java.util.concurrent.atomic._
 
 import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException}
 import kafka.api.ApiVersion
@@ -30,6 +29,7 @@ import org.junit.{After, Before, Test}
 import kafka.message._
 import kafka.utils._
 import kafka.server.KafkaConfig
+import org.apache.kafka.common.utils.Utils
 
 class LogTest extends JUnitSuite {
 
@@ -47,7 +47,7 @@ class LogTest extends JUnitSuite {
 
   @After
   def tearDown() {
-    CoreUtils.rm(tmpDir)
+    Utils.delete(tmpDir)
   }
 
   def createEmptyLogs(dir: File, offsets: Int*) {
@@ -321,7 +321,7 @@ class LogTest extends JUnitSuite {
       for(i <- 0 until messagesToAppend)
         log.append(TestUtils.singleMessageSet(i.toString.getBytes))
 
-      var currOffset = log.logEndOffset
+      val currOffset = log.logEndOffset
       assertEquals(currOffset, messagesToAppend)
 
       // time goes by; the log file is deleted
@@ -765,6 +765,19 @@ class LogTest extends JUnitSuite {
     assertTrue("Message payload should be null.", messageSet.head.message.isNull)
   }
 
+  @Test(expected = classOf[IllegalArgumentException])
+  def testAppendWithOutOfOrderOffsetsThrowsException() {
+    val log = new Log(logDir,
+      LogConfig(),
+      recoveryPoint = 0L,
+      time.scheduler,
+      time)
+    val messages = (0 until 2).map(id => new Message(id.toString.getBytes)).toArray
+    messages.foreach(message => log.append(new ByteBufferMessageSet(message)))
+    val invalidMessage = new ByteBufferMessageSet(new Message(1.toString.getBytes))
+    log.append(invalidMessage, assignOffsets = false)
+  }
+
   @Test
   def testCorruptLog() {
     // append some messages to create some segments
@@ -797,7 +810,7 @@ class LogTest extends JUnitSuite {
       log = new Log(logDir, config, recoveryPoint, time.scheduler, time)
       assertEquals(numMessages, log.logEndOffset)
       assertEquals("Messages in the log after recovery should be the same.", messages, log.logSegments.flatMap(_.log.iterator.toList))
-      CoreUtils.rm(logDir)
+      Utils.delete(logDir)
     }
   }
 
@@ -836,9 +849,9 @@ class LogTest extends JUnitSuite {
 
   @Test
   def testParseTopicPartitionName() {
-    val topic: String = "test_topic"
-    val partition:String = "143"
-    val dir: File = new File(logDir + topicPartitionName(topic, partition))
+    val topic = "test_topic"
+    val partition = "143"
+    val dir = new File(logDir + topicPartitionName(topic, partition))
     val topicAndPartition = Log.parseTopicPartitionName(dir)
     assertEquals(topic, topicAndPartition.asTuple._1)
     assertEquals(partition.toInt, topicAndPartition.asTuple._2)
@@ -847,8 +860,8 @@ class LogTest extends JUnitSuite {
   @Test
   def testParseTopicPartitionNameForEmptyName() {
     try {
-      val dir: File = new File("")
-      val topicAndPartition = Log.parseTopicPartitionName(dir)
+      val dir = new File("")
+      Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
       case e: Exception => // its GOOD!
@@ -859,7 +872,7 @@ class LogTest extends JUnitSuite {
   def testParseTopicPartitionNameForNull() {
     try {
       val dir: File = null
-      val topicAndPartition = Log.parseTopicPartitionName(dir)
+      Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir)
     } catch {
       case e: Exception => // its GOOD!
@@ -868,11 +881,11 @@ class LogTest extends JUnitSuite {
 
   @Test
   def testParseTopicPartitionNameForMissingSeparator() {
-    val topic: String = "test_topic"
-    val partition:String = "1999"
-    val dir: File = new File(logDir + File.separator + topic + partition)
+    val topic = "test_topic"
+    val partition = "1999"
+    val dir = new File(logDir + File.separator + topic + partition)
     try {
-      val topicAndPartition = Log.parseTopicPartitionName(dir)
+      Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
       case e: Exception => // its GOOD!
@@ -881,11 +894,11 @@ class LogTest extends JUnitSuite {
 
   @Test
   def testParseTopicPartitionNameForMissingTopic() {
-    val topic: String = ""
-    val partition:String = "1999"
-    val dir: File = new File(logDir + topicPartitionName(topic, partition))
+    val topic = ""
+    val partition = "1999"
+    val dir = new File(logDir + topicPartitionName(topic, partition))
     try {
-      val topicAndPartition = Log.parseTopicPartitionName(dir)
+      Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
       case e: Exception => // its GOOD!
@@ -894,18 +907,18 @@ class LogTest extends JUnitSuite {
 
   @Test
   def testParseTopicPartitionNameForMissingPartition() {
-    val topic: String = "test_topic"
-    val partition:String = ""
-    val dir: File = new File(logDir + topicPartitionName(topic, partition))
+    val topic = "test_topic"
+    val partition = ""
+    val dir = new File(logDir + topicPartitionName(topic, partition))
     try {
-      val topicAndPartition = Log.parseTopicPartitionName(dir)
+      Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
       case e: Exception => // its GOOD!
     }
   }
 
-  def topicPartitionName(topic: String, partition: String): String = {
+  def topicPartitionName(topic: String, partition: String): String =
     File.separator + topic + "-" + partition
-  }
+
 }

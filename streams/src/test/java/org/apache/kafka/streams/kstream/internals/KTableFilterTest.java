@@ -17,12 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -40,10 +36,8 @@ import static org.junit.Assert.assertNull;
 
 public class KTableFilterTest {
 
-    private final Serializer<String> strSerializer = new StringSerializer();
-    private final Deserializer<String> strDeserializer = new StringDeserializer();
-    private final Serializer<Integer> intSerializer = new IntegerSerializer();
-    private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
+    final private Serde<Integer> intSerde = new Serdes.IntegerSerde();
+    final private Serde<String> stringSerde = new Serdes.StringSerde();
 
     @Test
     public void testKTable() {
@@ -51,7 +45,7 @@ public class KTableFilterTest {
 
         String topic1 = "topic1";
 
-        KTable<String, Integer> table1 = builder.table(strSerializer, intSerializer, strDeserializer, intDeserializer, topic1);
+        KTable<String, Integer> table1 = builder.table(stringSerde, intSerde, topic1);
 
         KTable<String, Integer> table2 = table1.filter(new Predicate<String, Integer>() {
             @Override
@@ -59,7 +53,7 @@ public class KTableFilterTest {
                 return (value % 2) == 0;
             }
         });
-        KTable<String, Integer> table3 = table1.filterOut(new Predicate<String, Integer>() {
+        KTable<String, Integer> table3 = table1.filterNot(new Predicate<String, Integer>() {
             @Override
             public boolean test(String key, Integer value) {
                 return (value % 2) == 0;
@@ -93,7 +87,7 @@ public class KTableFilterTest {
             String topic1 = "topic1";
 
             KTableImpl<String, Integer, Integer> table1 =
-                    (KTableImpl<String, Integer, Integer>) builder.table(strSerializer, intSerializer, strDeserializer, intDeserializer, topic1);
+                    (KTableImpl<String, Integer, Integer>) builder.table(stringSerde, intSerde, topic1);
             KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
                     new Predicate<String, Integer>() {
                         @Override
@@ -101,7 +95,7 @@ public class KTableFilterTest {
                             return (value % 2) == 0;
                         }
                     });
-            KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterOut(
+            KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
                     new Predicate<String, Integer>() {
                         @Override
                         public boolean test(String key, Integer value) {
@@ -112,7 +106,7 @@ public class KTableFilterTest {
             KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
             KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
 
             KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
             KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
@@ -178,7 +172,7 @@ public class KTableFilterTest {
             String topic1 = "topic1";
 
             KTableImpl<String, Integer, Integer> table1 =
-                    (KTableImpl<String, Integer, Integer>) builder.table(strSerializer, intSerializer, strDeserializer, intDeserializer, topic1);
+                    (KTableImpl<String, Integer, Integer>) builder.table(stringSerde, intSerde, topic1);
             KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
                     new Predicate<String, Integer>() {
                         @Override
@@ -193,7 +187,7 @@ public class KTableFilterTest {
             builder.addProcessor("proc1", proc1, table1.name);
             builder.addProcessor("proc2", proc2, table2.name);
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
 
             driver.process(topic1, "A", 1);
             driver.process(topic1, "B", 1);
@@ -233,7 +227,7 @@ public class KTableFilterTest {
             String topic1 = "topic1";
 
             KTableImpl<String, Integer, Integer> table1 =
-                    (KTableImpl<String, Integer, Integer>) builder.table(strSerializer, intSerializer, strDeserializer, intDeserializer, topic1);
+                    (KTableImpl<String, Integer, Integer>) builder.table(stringSerde, intSerde, topic1);
             KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
                     new Predicate<String, Integer>() {
                         @Override
@@ -250,7 +244,7 @@ public class KTableFilterTest {
             builder.addProcessor("proc1", proc1, table1.name);
             builder.addProcessor("proc2", proc2, table2.name);
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
 
             driver.process(topic1, "A", 1);
             driver.process(topic1, "B", 1);

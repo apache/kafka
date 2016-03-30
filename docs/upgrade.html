@@ -21,12 +21,17 @@
 0.10.0.0 has <a href="#upgrade_10_breaking">potential breaking changes</a> (please review before upgrading) and
 there may be a <a href="#upgrade_10_performance_impact">performance impact during the upgrade</a>. Because new protocols
 are introduced, it is important to upgrade your Kafka clusters before upgrading your clients.
+<p/>
+<b>Notes to clients with version 0.9.0.0: </b>Due to a bug introduced in 0.9.0.0,
+clients that depend on ZooKeeper (old Scala high-level Consumer and MirrorMaker if used with the old consumer) will not
+work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9.0.1 <b>before</b> brokers are upgraded to
+0.10.0.x. This step is not necessary for 0.8.X or 0.9.0.1 clients.
 
 <p><b>For a rolling upgrade:</b></p>
 
 <ol>
     <li> Update server.properties file on all brokers and add the following property: inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2 or 0.9.0.0).
-         We recommend that users set message.format.version=CURRENT_KAFKA_VERSION as well to avoid a performance regression
+         We recommend that users set log.message.format.version=CURRENT_KAFKA_VERSION as well to avoid a performance regression
          during upgrade. See <a href="#upgrade_10_performance_impact">potential performance impact during upgrade</a> for the details.
     </li>
     <li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
@@ -41,7 +46,7 @@ are introduced, it is important to upgrade your Kafka clusters before upgrading 
 <h5><a id="upgrade_10_performance_impact" href="#upgrade_10_performance_impact">Potential performance impact during upgrade to 0.10.0.0</a></h5>
 <p>
     The message format in 0.10.0 includes a new timestamp field and uses relative offsets for compressed messages.
-    The on disk message format can be configured through message.format.version in the server.properties file.
+    The on disk message format can be configured through log.message.format.version in the server.properties file.
     The default on-disk message format is 0.10.0. If a consumer client is on a version before 0.10.0.0, it only understands
     message formats before 0.10.0. In this case, the broker is able to convert messages from the 0.10.0 format to an earlier format
     before sending the response to the consumer on an older version. However, the broker can't use zero-copy transfer in this case.
@@ -59,7 +64,7 @@ are introduced, it is important to upgrade your Kafka clusters before upgrading 
     is set to 0.10.0, one should not change it back to an earlier format as it may break consumers on versions before 0.10.0.0.
 </p>
 
-<h5><a id="upgrade_10_breaking" href="#upgrade_10_breaking">potential breaking changes in 0.10.0.0</a></h5>
+<h5><a id="upgrade_10_breaking" href="#upgrade_10_breaking">Potential breaking changes in 0.10.0.0</a></h5>
 <ul>
     <li> Starting from Kafka 0.10.0.0, the message format version in Kafka is represented as the Kafka version. For example, message format 0.9.0 refers to the highest message version supported by Kafka 0.9.0. </li>
     <li> Message format 0.10.0 has been introduced and it is used by default. It includes a timestamp field in the messages and relative offsets are used for compressed messages. </li>
@@ -73,6 +78,17 @@ are introduced, it is important to upgrade your Kafka clusters before upgrading 
     <li> MessageFormatter's package was changed from <code>kafka.tools</code> to <code>kafka.common</code> </li>
     <li> MessageReader's package was changed from <code>kafka.tools</code> to <code>kafka.common</code> </li>
     <li> MirrorMakerMessageHandler no longer exposes the <code>handle(record: MessageAndMetadata[Array[Byte], Array[Byte]])</code> method as it was never called. </li>
+    <li> The 0.7 KafkaMigrationTool is no longer packaged with Kafka. If you need to migrate from 0.7 to 0.10.0, please migrate to 0.8 first and then follow the documented upgrade process to upgrade from 0.8 to 0.10.0. </li>
+    <li> The new consumer has standardized its APIs to accept <code>java.util.Collection</code> as the sequence type for method parameters. Existing code may have to be updated to work with the 0.10.0 client library. </li>
+</ul>
+
+<h5><a id="upgrade_10_notable" href="#upgrade_10_notable">Notable changes in 0.10.0.0</a></h5>
+
+<ul>
+    <li> The default value of the configuration parameter <code>receive.buffer.bytes</code> is now 64K for the new consumer.</li>
+    <li> The new consumer now exposes the configuration parameter <code>exclude.internal.topics</code> to restrict internal topics (such as the consumer offsets topic) from accidentally being included in regular expression subscriptions. By default, it is enabled.</li>
+    <li> The old Scala producer has been deprecated. Users should migrate their code to the Java producer included in the kafka-clients JAR as soon as possible. </li>
+    <li> The new consumer API has been marked stable. </li>
 </ul>
 
 <h4><a id="upgrade_9" href="#upgrade_9">Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.9.0.0</a></h4>

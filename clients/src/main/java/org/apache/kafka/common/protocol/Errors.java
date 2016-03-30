@@ -117,7 +117,8 @@ public enum Errors {
     UNKNOWN_MEMBER_ID(25,
             new UnknownMemberIdException("The coordinator is not aware of this member.")),
     INVALID_SESSION_TIMEOUT(26,
-            new InvalidSessionTimeoutException("The session timeout is not within an acceptable range.")),
+            new InvalidSessionTimeoutException("The session timeout is not within the range allowed by the broker " +
+                    "(as configured by group.min.session.timeout.ms and group.max.session.timeout.ms).")),
     REBALANCE_IN_PROGRESS(27,
             new RebalanceInProgressException("The group is rebalancing, so a rejoin is needed.")),
     INVALID_COMMIT_OFFSET_SIZE(28,
