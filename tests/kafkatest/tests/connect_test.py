@@ -58,7 +58,7 @@ class ConnectStandaloneFileTest(Test):
     @parametrize(converter="org.apache.kafka.connect.json.JsonConverter", schemas=True)
     @parametrize(converter="org.apache.kafka.connect.json.JsonConverter", schemas=False)
     @parametrize(converter="org.apache.kafka.connect.storage.StringConverter", schemas=None)
-    @matrix(security_protocol=SecurityConfig.ALL_PROTOCOLS)
+    @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL])
     def test_file_source_and_sink(self, converter="org.apache.kafka.connect.json.JsonConverter", schemas=True, security_protocol='PLAINTEXT'):
         assert converter != None, "converter type must be set"
         # Template parameters

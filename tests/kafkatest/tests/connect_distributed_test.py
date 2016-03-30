@@ -74,7 +74,7 @@ class ConnectDistributedTest(Test):
         self.kafka.start()
 
 
-    @matrix(security_protocol=SecurityConfig.ALL_PROTOCOLS)
+    @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL])
     def test_file_source_and_sink(self, security_protocol):
         """
         Tests that a basic file connector works across clean rolling bounces. This validates that the connector is
