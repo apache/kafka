@@ -23,6 +23,7 @@ import java.util.Properties
 import kafka.common._
 import kafka.message._
 import kafka.utils._
+import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Test}
 import org.scalatest.junit.JUnitSuite
@@ -47,7 +48,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
   @After
   def teardown() {
-    CoreUtils.rm(tmpdir)
+    Utils.delete(tmpdir)
   }
 
   /**

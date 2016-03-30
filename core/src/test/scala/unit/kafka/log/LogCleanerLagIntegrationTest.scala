@@ -24,6 +24,7 @@ import kafka.common.TopicAndPartition
 import kafka.message._
 import kafka.utils._
 import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit._
 import org.junit.runner.RunWith
@@ -134,7 +135,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
   @After
   def teardown() {
     time.scheduler.shutdown()
-    CoreUtils.rm(logDir)
+    Utils.delete(logDir)
   }
 
   /* create a cleaner instance and logs with the given parameters */
