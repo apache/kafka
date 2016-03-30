@@ -70,5 +70,5 @@ class ReplicaVerificationTool(BackgroundThreadService):
         return cmd
 
     def clean_node(self, node):
-        node.account.kill_process("java", clean_shutdown=False, allow_fail=False)
+        node.account.kill_process("ReplicaVerificationTool", clean_shutdown=False, allow_fail=False)
         node.account.ssh("rm -rf /mnt/replica_verification_tool.log", allow_fail=False)
