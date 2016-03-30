@@ -558,7 +558,8 @@ public class NetworkClient implements KafkaClient {
             if (requestKey == ApiKeys.METADATA) {
                 Cluster cluster = metadata.fetch();
                 if (cluster.isBootstrapConfigured()) {
-                    Node node = cluster.nodesById(request.request().destination());
+                    int nodeId = Integer.parseInt(request.request().destination());
+                    Node node = cluster.nodesById(nodeId);
                     if (node != null)
                         log.warn("Bootstrap broker {}:{} disconnected", node.host(), node.port());
                 }

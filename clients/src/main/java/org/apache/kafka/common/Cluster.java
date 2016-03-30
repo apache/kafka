@@ -35,8 +35,8 @@ public final class Cluster {
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
     private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
-    private final Map<String, List<PartitionInfo>> partitionsByNodeId;
-    private final Map<String, Node> nodesById;
+    private final Map<Integer, List<PartitionInfo>> partitionsByNode;
+    private final Map<Integer, Node> nodesById;
 
     /**
      * Create a new cluster with the given nodes and partitions
@@ -59,10 +59,9 @@ public final class Cluster {
         List<Node> copy = new ArrayList<>(nodes);
         Collections.shuffle(copy);
         this.nodes = Collections.unmodifiableList(copy);
-
         this.nodesById = new HashMap<>();
         for (Node node: nodes)
-            this.nodesById.put(node.idString(), node);
+            this.nodesById.put(node.id(), node);
 
         // index the partitions by topic/partition for quick lookup
         this.partitionsByTopicPartition = new HashMap<>(partitions.size());
@@ -73,9 +72,9 @@ public final class Cluster {
         // unmodifiable so we can hand them out in user-facing apis without risk
         // of the client modifying the contents
         HashMap<String, List<PartitionInfo>> partsForTopic = new HashMap<>();
-        HashMap<String, List<PartitionInfo>> partsForNode = new HashMap<>();
+        HashMap<Integer, List<PartitionInfo>> partsForNode = new HashMap<>();
         for (Node n : this.nodes) {
-            partsForNode.put(n.idString(), new ArrayList<PartitionInfo>());
+            partsForNode.put(n.id(), new ArrayList<PartitionInfo>());
         }
         for (PartitionInfo p : partitions) {
             if (!partsForTopic.containsKey(p.topic()))
@@ -101,9 +100,9 @@ public final class Cluster {
             }
             this.availablePartitionsByTopic.put(topic, Collections.unmodifiableList(availablePartitions));
         }
-        this.partitionsByNodeId = new HashMap<>(partsForNode.size());
-        for (Map.Entry<String, List<PartitionInfo>> entry : partsForNode.entrySet())
-            this.partitionsByNodeId.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
+        this.partitionsByNode = new HashMap<>(partsForNode.size());
+        for (Map.Entry<Integer, List<PartitionInfo>> entry : partsForNode.entrySet())
+            this.partitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
 
         this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
     }
@@ -146,11 +145,11 @@ public final class Cluster {
 
     /**
      * Get the node by the node id
-     * @param nodeId The id of the node
+     * @param id The id of the node
      * @return The node, or null if no such node exists
      */
-    public Node nodesById(String nodeId) {
-        return this.nodesById.get(nodeId);
+    public Node nodesById(int id) {
+        return this.nodesById.get(id);
     }
 
     /**
@@ -198,8 +197,8 @@ public final class Cluster {
      * @param nodeId The node id
      * @return A list of partitions
      */
-    public List<PartitionInfo> partitionsForNode(String nodeId) {
-        return this.partitionsByNodeId.get(nodeId);
+    public List<PartitionInfo> partitionsForNode(int nodeId) {
+        return this.partitionsByNode.get(nodeId);
     }
 
     /**

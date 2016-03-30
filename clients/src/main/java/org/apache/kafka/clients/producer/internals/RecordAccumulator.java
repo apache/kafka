@@ -360,7 +360,7 @@ public final class RecordAccumulator {
         Map<Integer, List<RecordBatch>> batches = new HashMap<Integer, List<RecordBatch>>();
         for (Node node : nodes) {
             int size = 0;
-            List<PartitionInfo> parts = cluster.partitionsForNode(node.idString());
+            List<PartitionInfo> parts = cluster.partitionsForNode(node.id());
             List<RecordBatch> ready = new ArrayList<RecordBatch>();
             /* to make starvation less likely this loop doesn't start at 0 */
             int start = drainIndex = drainIndex % parts.size();
