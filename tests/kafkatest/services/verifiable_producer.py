@@ -160,6 +160,8 @@ class VerifiableProducer(BackgroundThreadService):
             cmd += " --throughput %s" % str(self.throughput)
         if self.message_validator == is_int_with_prefix:
             cmd += " --value-prefix %s" % str(idx)
+        if self.acks is not None:
+            cmd += " --acks %s\n" % str(self.acks)
 
         cmd += " --producer.config %s" % VerifiableProducer.CONFIG_FILE
         cmd += " 2>> %s | tee -a %s &" % (VerifiableProducer.STDOUT_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)

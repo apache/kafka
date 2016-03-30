@@ -78,11 +78,12 @@ class ReplicaVerificationToolTest(Test):
         self.start_replica_verification_tool(security_protocol)
         self.start_producer(max_messages=10, acks=-1, timeout=15)
         # Verify that there is no lag in replicas and is correctly reported by ReplicaVerificationTool
-        wait_until(lambda: self.replica_verifier.num_lags() == 0 and self.replica_verifier.num_zero_lags() > 0, timeout_sec=10,
-                   err_msg="Timed out waiting to reach expected num of replica lags.")
+        wait_until(lambda: self.replica_verifier.get_max_lag_for_partition(TOPIC, 0) == 0, timeout_sec=10,
+                   err_msg="Timed out waiting to reach zero replica lags.")
         self.stop_producer()
 
+        self.replica_verifier.reset_partition_lags()
         self.start_producer(max_messages=1000, acks=0, timeout=5)
-        # Verify that there is no lag in replicas and is correctly reported by ReplicaVerificationTool
-        wait_until(lambda: self.replica_verifier.num_lags() > 0, timeout_sec=10,
-                   err_msg="Timed out waiting to reach expected num of replica lags.")
+        # Verify that there is lag in replicas and is correctly reported by ReplicaVerificationTool
+        wait_until(lambda: self.replica_verifier.get_max_lag_for_partition(TOPIC, 0) > 0, timeout_sec=10,
+                   err_msg="Timed out waiting to reach non-zero number of replica lags.")

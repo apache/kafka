@@ -36,28 +36,30 @@ class ReplicaVerificationTool(BackgroundThreadService):
         self.report_interval_ms = report_interval_ms
         self.security_protocol = security_protocol
         self.security_config = SecurityConfig(security_protocol)
-        self.lagged_values = []
-        self.zero_lagged_values = []
+        self.partition_max_lag = {}
 
     def _worker(self, idx, node):
         cmd = self.start_cmd(node)
         self.logger.debug("ReplicaVerificationTool %d command: %s" % (idx, cmd))
         self.security_config.setup_node(node)
         for line in node.account.ssh_capture(cmd):
-            lag = re.search('.*max lag is (.+?) for partition', line)
-            if lag:
-                if int(lag.group(1)) > 0:
-                    self.logger.info("Appending to lags: %s" % line)
-                    self.lagged_values.append(line)
+            parsed = re.search('.*max lag is (.+?) for partition \[(.+?)\] at', line)
+            if parsed:
+                lag = int(parsed.group(1))
+                topic_partition = parsed.group(2)
+                if self.partition_max_lag.get(topic_partition) is None:
+                    self.logger.debug("Setting max lag for {} as {}".format(topic_partition, lag))
+                    self.partition_max_lag[topic_partition] = lag
                 else:
-                    self.logger.info("Appending to zero lags: %s" % line)
-                    self.zero_lagged_values.append(line)
+                    if self.partition_max_lag[topic_partition] < lag:
+                        self.logger.debug("Updating max lag for {} as {}".format(topic_partition, lag))
+                        self.partition_max_lag[topic_partition] = lag
 
-    def num_lags(self):
-        return len(self.lagged_values)
+    def get_max_lag_for_partition(self, topic, partition):
+        return self.partition_max_lag[topic + ',' + str(partition)]
 
-    def num_zero_lags(self):
-        return len(self.zero_lagged_values)
+    def reset_partition_lags(self):
+        self.partition_max_lag.clear()
 
     def start_cmd(self, node):
         cmd = "/opt/%s/bin/" % kafka_dir(node)
@@ -67,16 +69,6 @@ class ReplicaVerificationTool(BackgroundThreadService):
         cmd += " 2>> /mnt/replica_verification_tool.log | tee -a /mnt/replica_verification_tool.log &"
         return cmd
 
-    def stop_node(self, node):
-        node.account.kill_process("ReplicaVerificationTool", allow_fail=False)
-        if self.worker_threads is None:
-            return
-
-        # block until the corresponding thread exits
-        if len(self.worker_threads) >= self.idx(node):
-            # Need to guard this because stop is preemptively called before the worker threads are added and started
-            self.worker_threads[self.idx(node) - 1].join()
-
     def clean_node(self, node):
-        node.account.kill_process("ReplicaVerificationTool", clean_shutdown=False, allow_fail=False)
+        node.account.kill_process("java", clean_shutdown=False, allow_fail=False)
         node.account.ssh("rm -rf /mnt/replica_verification_tool.log", allow_fail=False)
