@@ -17,8 +17,11 @@
 
 package kafka.controller
 
+import java.util.concurrent.CountDownLatch
+
 import kafka.api.LeaderAndIsr
 import kafka.common.TopicAndPartition
+import kafka.utils.ReplicationUtils.trace
 import kafka.utils.{ReplicationUtils, ZkUtils}
 
 /**
@@ -49,7 +52,7 @@ class ZkLeaderAndIsrUpdateBatch(zkUtils: ZkUtils) {
     leaderAndIsrUpdates -= topicAndPartition
   }
 
-  def size = this synchronized(leaderAndIsrUpdates.size)
+  def incompleteUpdates = this synchronized(leaderAndIsrUpdates.size)
 
   def containsPartition(topicAndPartition: TopicAndPartition): Boolean =
     leaderAndIsrUpdates.contains(topicAndPartition)
@@ -58,8 +61,8 @@ class ZkLeaderAndIsrUpdateBatch(zkUtils: ZkUtils) {
     leaderAndIsrUpdates(topicAndPartition)
   }
 
-  def writeLeaderAndIsrUpdateToZk(controllerEpoch: Int, retryOnException: Option[Exception => Boolean] = None) =
-    ReplicationUtils.asyncUpdateLeaderAndIsr(zkUtils, this, controllerEpoch, retryOnException)
+  def writeLeaderAndIsrUpdateToZk(controllerEpoch: Int, preConditionCheckerOpt: Option[() => Boolean] = None) =
+    ReplicationUtils.asyncUpdateLeaderAndIsr(zkUtils, this, controllerEpoch, preConditionCheckerOpt)
 }
 
 /**

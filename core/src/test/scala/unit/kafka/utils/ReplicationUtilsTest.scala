@@ -112,7 +112,7 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     leaderAndIsrUpdateBatch.writeLeaderAndIsrUpdateToZk(controllerEpoch)
     assertTrue(updateSucceeded4)
     assertEquals(2, newZkVersion4)
-    assertEquals(0, leaderAndIsrUpdateBatch.size)
+    assertEquals(0, leaderAndIsrUpdateBatch.incompleteUpdates)
 
     // Test mismatched zkversion with same data
     var updateSucceeded5 = false
@@ -127,7 +127,7 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     leaderAndIsrUpdateBatch.writeLeaderAndIsrUpdateToZk(controllerEpoch)
     assertFalse(updateSucceeded5)
     assertEquals(-1, newZkVersion5)
-    assertEquals(1, leaderAndIsrUpdateBatch.size)
+    assertEquals(1, leaderAndIsrUpdateBatch.incompleteUpdates)
     assertTrue(leaderAndIsrUpdateBatch.containsPartition(topicAndPartition))
 
     // Test mismatched zkversion with different data
@@ -143,7 +143,7 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     leaderAndIsrUpdateBatch.writeLeaderAndIsrUpdateToZk(controllerEpoch)
     assertFalse(updateSucceeded6)
     assertEquals(-1, newZkVersion6)
-    assertEquals(1, leaderAndIsrUpdateBatch.size)
+    assertEquals(1, leaderAndIsrUpdateBatch.incompleteUpdates)
     assertTrue(leaderAndIsrUpdateBatch.containsPartition(topicAndPartition))
   }
 

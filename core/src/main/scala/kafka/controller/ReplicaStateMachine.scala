@@ -132,12 +132,23 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               leaderAndIsrReadResults(TopicAndPartition(r.topic, r.partition)).leaderIsrAndControllerEpochOpt
             handleStateChange(r, leaderIsrAndControllerEpochOpt, targetState, callbacks)
           })
-          leaderAndIsrUpdateBatch.writeLeaderAndIsrUpdateToZk(controller.epoch, Some(e => controller.isValidController))
+          try {
+            leaderAndIsrUpdateBatch.writeLeaderAndIsrUpdateToZk(controller.epoch, Some(() => controller.isValidController))
+          } catch {
+            // the exception thrown here is likely because of the zk disconnection or session expiration. In this case
+            // we swallow the error and retry. For the LeaderAndIsr updates that has been sent but not acked yet, they
+            // might be updated again, but that does not hurt.
+            case e: Throwable => error("Error while updating LeaderAndIsr in zookeeper.", e)
+          }
           brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
           remainingTopicAndPartitions.retain(leaderAndIsrUpdateBatch.containsPartition(_))
           remainingReplicas.retain(r => leaderAndIsrUpdateBatch.containsPartition(TopicAndPartition(r.topic, r.partition)))
-          if (!remainingReplicas.isEmpty)
+          if (!remainingReplicas.isEmpty) {
             debug(s"The following replicas are still waiting for state change: $remainingReplicas.")
+            if (!controller.isValidController)
+              throw new StateChangeFailedException(s"Controller ${controller.config.brokerId} epoch ${controller.epoch}" +
+                s" is no longer the valid controller.")
+          }
         } while (!remainingReplicas.isEmpty)
 
       } catch {

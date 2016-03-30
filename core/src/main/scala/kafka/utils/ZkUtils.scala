@@ -17,7 +17,8 @@
 
 package kafka.utils
 
-import java.util.concurrent.{Callable, CountDownLatch}
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{ConcurrentHashMap, Callable, CountDownLatch}
 
 import kafka.admin._
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0, LeaderAndIsr}
@@ -473,17 +474,18 @@ class ZkUtils(val zkClient: ZkClient,
    * @param data The data to write
    * @param expectVersion The expected zkVersion
    * @param resultHandler A method that takes (updateSucceeded, newZkVersion) as argument. This method will be fired
-   *                      as a callback when
+   *                      as a callback when the update finishes.
+   * @param zkOpt the zookeeper session to use for this update.
    */
   def asyncConditionalUpdatePersistentPath(path: String,
                                            data: String,
                                            expectVersion: Int,
                                            resultHandler: (Boolean, Int) => Unit,
-                                           retryOnException: Option[Exception => Boolean] = None) = {
+                                           zkOpt: Option[ZooKeeper] = None) = {
     val callbackWithData = new ZkWriteCallbackWithData(data, expectVersion) {
       override def handle(updateSucceeded: Boolean, newZkVersion: Int) = resultHandler(updateSucceeded, newZkVersion)
     }
-    zkClient.asyncWriteDataAndReturnStat(path, data, callbackWithData, expectVersion, retryOnException)
+    zkClient.asyncWriteDataAndReturnStat(path, data, callbackWithData, expectVersion, zkOpt)
   }
 
   /**
@@ -886,6 +888,13 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
+  def withCurrentSession(preconditionChecker: Option[() => Boolean] = None)(f: ZooKeeper => Unit) {
+    val currentZk = zkClient.currentZk
+    if (!preconditionChecker.fold(true)(f => f()))
+      throw new IllegalStateException("The pre-check failed.")
+    f(currentZk)
+  }
+
   def close() {
     if(zkClient != null) {
       zkClient.close()
@@ -1149,20 +1158,10 @@ private[kafka] class ZkClient(zkConnection: IZkConnection, connectionTimeout: In
                                   datat: String,
                                   callbackWithData: StatCallback,
                                   expectedVersion: Int,
-                                  retryOnException: Option[Exception => Boolean] = None) = {
+                                  zkOpt: Option[ZooKeeper] = None) = {
     val data: Array[Byte] = ZKStringSerializer.serialize(datat)
-    var continue = true
-    do {
-      try {
-        _connection.asInstanceOf[ZkConnection].getZookeeper.setData(path, data, expectedVersion, callbackWithData, null)
-        continue = false
-      } catch {
-        case e: Exception =>
-          if (!retryOnException.getOrElse((e: Exception) => true)(e))
-            throw e
-          waitUntilConnected()
-      }
-    } while (continue)
+    var zk = zkOpt.getOrElse(currentZk)
+    zk.setData(path, data, expectedVersion, callbackWithData, null)
   }
   
   def asyncReadData(path: String, callback: DataCallback) {
@@ -1173,6 +1172,8 @@ private[kafka] class ZkClient(zkConnection: IZkConnection, connectionTimeout: In
       }
     })
   }
+
+  def currentZk = _connection.asInstanceOf[ZkConnection].getZookeeper
 }
 
 private[kafka] abstract class ZkReadCallback extends DataCallback {

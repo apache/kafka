@@ -21,8 +21,9 @@ import java.util.concurrent.CountDownLatch
 
 import kafka.api.LeaderAndIsr
 import kafka.common.TopicAndPartition
-import kafka.controller.{ZkLeaderAndIsrReadResult, ZkLeaderAndIsrUpdateResult, ZkLeaderAndIsrUpdateBatch, IsrChangeNotificationListener, LeaderIsrAndControllerEpoch}
+import kafka.controller.{ZkLeaderAndIsrUpdate, ZkLeaderAndIsrReadResult, ZkLeaderAndIsrUpdateResult, ZkLeaderAndIsrUpdateBatch, IsrChangeNotificationListener, LeaderIsrAndControllerEpoch}
 import kafka.utils.ZkUtils._
+import org.apache.zookeeper.ZooKeeper
 import org.apache.zookeeper.data.Stat
 
 import scala.collection._
@@ -42,39 +43,54 @@ object ReplicationUtils extends Logging {
   }
 
   /**
+   * This method asynchronously updates the leader and ISR information in a LeaderAndIsrUpdateBatch. It will block waiting
+   * until all the updates finish.
+   *
+   * The method takes an optional precondition check method and makes sure the precondition is met before updating the
+   * leader and ISR. This is useful for the controller. When the controller updates leader and ISR in zookeeper, it is
+   * important that the controller remains the controller during the entire update process. To guarantee that, this
+   * method first take the current ZooKeeper session, and then check if the current broker is the controller. If it
+   * is valid then this method will use the current ZK session for all the updates.
+   *
+   * During the leader and ISR update, if the zookeeper connection is lost or ZooKeeper session expired, the current
+   * ZooKeeper session will throw exception. We propagate the exception to caller and let the caller to decide
+   * whether to continue or abort.
+   *
    * Unlike the synchronous leader and isr update call which takes an optional checker function, the async leader and
-   * isr update call does not verify if the leader and isr data is the same or not. The update will fail even if the
+   * ISR update call does not verify if the leader and isr data is the same or not. The update will fail even if the
    * data are the same but the zk version mismatch. We do this because we cannot read data in the zookeeper event
    * thread.
    */
   def asyncUpdateLeaderAndIsr(zkUtils: ZkUtils,
                               leaderAndIsrUpdateBatch: ZkLeaderAndIsrUpdateBatch,
                               controllerEpoch: Int,
-                              retryOnException: Option[Exception => Boolean] = None) = {
-    val unprocessedUpdates = new CountDownLatch(leaderAndIsrUpdateBatch.size)
-    leaderAndIsrUpdateBatch.leaderAndIsrUpdates.foreach { case (tp, update) => {
-      val path = getTopicPartitionLeaderAndIsrPath(tp.topic, tp.partition)
-      val newLeaderAndIsr = update.newLeaderAndIsr
-      val newLeaderData = zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
-      zkUtils.asyncConditionalUpdatePersistentPath(path, newLeaderData, update.expectZkVersion,
-        (updateSucceeded, updatedZkVersion) => {
-          // Remove the successfully updated partitions
-          // We do not handle failure and retry to make Zookeeper EventThread light weighted. The caller is
-          // responsible to check if the update batch is finished or retry is needed.
-          try {
-            trace(s"Received LeaderAndIsr update callback of update $newLeaderAndIsr for $tp. " +
-              s"UpdateSucceeded = $updateSucceeded")
-            if (updateSucceeded) {
-              leaderAndIsrUpdateBatch.completeLeaderAndIsrUpdate(tp)
-              update.onSuccessCallbacks.foreach { case onSuccess =>
-                onSuccess(tp, new ZkLeaderAndIsrUpdateResult(newLeaderAndIsr, updatedZkVersion))
+                              preconditionCheckerOpt: Option[() => Boolean] = None) = {
+    val unprocessedUpdates = new CountDownLatch(leaderAndIsrUpdateBatch.incompleteUpdates)
+    zkUtils.withCurrentSession(preconditionCheckerOpt) { zk =>
+      leaderAndIsrUpdateBatch.leaderAndIsrUpdates.foreach { case (tp, update) => {
+        val path = getTopicPartitionLeaderAndIsrPath(tp.topic, tp.partition)
+        val newLeaderAndIsr = update.newLeaderAndIsr
+        val newLeaderData = zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
+        zkUtils.asyncConditionalUpdatePersistentPath(path, newLeaderData, update.expectZkVersion,
+          (updateSucceeded, updatedZkVersion) => {
+            // Remove the successfully updated partitions
+            // We do not handle failure and retry to make Zookeeper EventThread light weighted. The caller is
+            // responsible to check if the update batch is finished or retry is needed.
+            try {
+              trace(s"Received LeaderAndIsr update callback of update $newLeaderAndIsr for $tp. " +
+                s"UpdateSucceeded = $updateSucceeded")
+              if (updateSucceeded) {
+                leaderAndIsrUpdateBatch.completeLeaderAndIsrUpdate(tp)
+                update.onSuccessCallbacks.foreach { case onSuccess =>
+                  onSuccess(tp, new ZkLeaderAndIsrUpdateResult(newLeaderAndIsr, updatedZkVersion))
+                }
               }
+            } finally {
+              unprocessedUpdates.countDown()
             }
-          } finally {
-            unprocessedUpdates.countDown()
-          }
-        }, retryOnException)
-    }}
+          }, Some(zk))
+      }}
+    }
     unprocessedUpdates.await()
   }
 
