@@ -341,6 +341,8 @@ public class Selector implements Selectable {
                     this.disconnected.add(channel.id());
                 }
             } catch (ClosedByInterruptException e) {
+                close(channel);
+                this.disconnected.add(channel.id());
                 throw new InterruptException(e.toString());
             } catch (Exception e) {
                 String desc = channel.socketDescription();
