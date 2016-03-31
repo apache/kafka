@@ -23,6 +23,8 @@ ext {
 }
 
 versions += [
+  apacheda: "1.0.0-M33",
+  apacheds: "2.0.0-M21",
   argparse4j: "0.5.0",
   bcpkix: "1.54",
   hadoop: "2.7.2",
@@ -65,8 +67,16 @@ versions["baseScala"] = versions.scala.substring(0, versions.scala.lastIndexOf("
 
 libs += [
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
+  apacheda: "org.apache.directory.api:api-all:$versions.apacheda",
+  apachedsCoreApi: "org.apache.directory.server:apacheds-core-api:$versions.apacheds",
+  apachedsInterceptorKerberos: "org.apache.directory.server:apacheds-interceptor-kerberos:$versions.apacheds",
+  apachedsProtocolShared: "org.apache.directory.server:apacheds-protocol-shared:$versions.apacheds",
+  apachedsProtocolKerberos: "org.apache.directory.server:apacheds-protocol-kerberos:$versions.apacheds",
+  apachedsProtocolLdap: "org.apache.directory.server:apacheds-protocol-ldap:$versions.apacheds",
+  apachedsLdifPartition: "org.apache.directory.server:apacheds-ldif-partition:$versions.apacheds",
+  apachedsMavibotPartition: "org.apache.directory.server:apacheds-mavibot-partition:$versions.apacheds",
+  apachedsJdbmPartition: "org.apache.directory.server:apacheds-jdbm-partition:$versions.apacheds",
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
-  hadoopMiniKdc: "org.apache.hadoop:hadoop-minikdc:$versions.hadoop",
   easymock: "org.easymock:easymock:$versions.easymock",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonJaxrsJsonProvider: "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$versions.jackson",

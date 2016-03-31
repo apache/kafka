@@ -338,7 +338,17 @@ project(':core') {
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix
     testCompile libs.easymock
-    testCompile libs.hadoopMiniKdc
+    testCompile(libs.apacheda) {
+      exclude group: 'xml-apis', module: 'xml-apis'
+    }
+    testCompile libs.apachedsCoreApi
+    testCompile libs.apachedsInterceptorKerberos
+    testCompile libs.apachedsProtocolShared
+    testCompile libs.apachedsProtocolKerberos
+    testCompile libs.apachedsProtocolLdap
+    testCompile libs.apachedsLdifPartition
+    testCompile libs.apachedsMavibotPartition
+    testCompile libs.apachedsJdbmPartition
     testCompile libs.junit
     testCompile libs.scalaTest
   }
@@ -368,6 +378,9 @@ project(':core') {
     duplicatesStrategy 'exclude'
   }
 
+  systemTestLibs {
+    dependsOn testJar
+  }
 
   task genProtocolErrorDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
