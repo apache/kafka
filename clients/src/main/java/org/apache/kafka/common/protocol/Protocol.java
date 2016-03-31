@@ -100,8 +100,7 @@ public class Protocol {
                                                       new Field("host", STRING, "The hostname of the broker."),
                                                       new Field("port", INT32,
                                                         "The port on which the broker accepts requests."),
-                                                      new Field("rack", NULLABLE_STRING, "The rack of the broker."),
-                                                      new Field("is_controller", BOOLEAN, "The rack of the broker."));
+                                                      new Field("rack", NULLABLE_STRING, "The rack of the broker."));
 
     public static final Schema PARTITION_METADATA_V1 = PARTITION_METADATA_V0;
 
@@ -116,8 +115,9 @@ public class Protocol {
 
     public static final Schema METADATA_RESPONSE_V1 = new Schema(new Field("brokers", new ArrayOf(METADATA_BROKER_V1),
                                                                     "Host and port information for all brokers."),
-                                                                 new Field("topic_metadata",
-                                                                     new ArrayOf(TOPIC_METADATA_V1)));
+                                                                 new Field("controllerId", INT32,
+                                                                     "The broker id of the controller broker."),
+                                                                 new Field("topic_metadata", new ArrayOf(TOPIC_METADATA_V1)));
 
     public static final Schema[] METADATA_REQUEST = new Schema[] {METADATA_REQUEST_V0, METADATA_REQUEST_V1};
     public static final Schema[] METADATA_RESPONSE = new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1};

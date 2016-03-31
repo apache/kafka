@@ -28,7 +28,7 @@ import kafka.common.{BrokerEndPointNotAvailableException, Topic, TopicAndPartiti
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch}
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.UpdateMetadataRequest.PartitionState
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
@@ -153,8 +153,8 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  def isController(brokerId: Int): Boolean = {
-    controllerId.exists(_ == brokerId)
+  def getControllerId: Int = {
+    controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
   }
 
   def isMarkedForDeletion(topic: String): Boolean = {

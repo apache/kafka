@@ -730,10 +730,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val responseHeader = new ResponseHeader(request.header.correlationId)
 
     val responseBody = new MetadataResponse(
-      brokers.map { b =>
-        val isController = metadataCache.isController(b.id)
-        b.getNode(request.securityProtocol, isController)
-      }.asJava,
+      brokers.map(_.getNode(request.securityProtocol)).asJava,
+      metadataCache.getControllerId,
       completeTopicMetadata.asJava,
       request.header.apiVersion()
     )

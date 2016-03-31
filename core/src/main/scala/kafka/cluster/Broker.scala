@@ -120,10 +120,10 @@ case class Broker(id: Int, endPoints: collection.Map[SecurityProtocol, EndPoint]
     this(bep.id, bep.host, bep.port, protocol)
   }
 
-  def getNode(protocolType: SecurityProtocol, isController: Boolean = false): Node = {
+  def getNode(protocolType: SecurityProtocol): Node = {
     val endpoint = endPoints.getOrElse(protocolType,
       throw new BrokerEndPointNotAvailableException(s"End point with security protocol $protocolType not found for broker $id"))
-    new Node(id, endpoint.host, endpoint.port, rack.orNull, isController)
+    new Node(id, endpoint.host, endpoint.port, rack.orNull)
   }
 
   def getBrokerEndPoint(protocolType: SecurityProtocol): BrokerEndPoint = {

@@ -40,7 +40,9 @@ public class MetadataResponse extends AbstractRequestResponse {
     private static final String HOST_KEY_NAME = "host";
     private static final String PORT_KEY_NAME = "port";
     private static final String RACK_KEY_NAME = "rack";
-    private static final String IS_CONTROLLER_KEY_NAME = "is_controller";
+
+    private static final String CONTROLLER_ID_KEY_NAME = "controllerId";
+    public static final int NO_CONTROLLER_ID = -1;
 
     // topic level field names
     private static final String TOPIC_ERROR_CODE_KEY_NAME = "topic_error_code";
@@ -75,22 +77,24 @@ public class MetadataResponse extends AbstractRequestResponse {
     private static final String ISR_KEY_NAME = "isr";
 
     private final Collection<Node> brokers;
+    private final Node controller;
     private final List<TopicMetadata> topicMetadata;
 
     /**
      * Constructor for the latest version
      */
-    public MetadataResponse(List<Node> brokers, List<TopicMetadata> topicMetadata) {
-        this(brokers, topicMetadata, CURRENT_VERSION);
+    public MetadataResponse(List<Node> brokers, int controllerId, List<TopicMetadata> topicMetadata) {
+        this(brokers, controllerId, topicMetadata, CURRENT_VERSION);
     }
 
     /**
      * Constructor for a specific version
      */
-    public MetadataResponse(List<Node> brokers, List<TopicMetadata> topicMetadata, int version) {
+    public MetadataResponse(List<Node> brokers, int controllerId, List<TopicMetadata> topicMetadata, int version) {
         super(new Struct(ProtoUtils.responseSchema(ApiKeys.METADATA.id, version)));
 
         this.brokers = brokers;
+        this.controller = getControllerNode(controllerId, brokers);
         this.topicMetadata = topicMetadata;
 
         List<Struct> brokerArray = new ArrayList<>();
@@ -101,11 +105,12 @@ public class MetadataResponse extends AbstractRequestResponse {
             broker.set(PORT_KEY_NAME, node.port());
             if (broker.hasField(RACK_KEY_NAME))
                 broker.set(RACK_KEY_NAME, node.rack());
-            if (broker.hasField(IS_CONTROLLER_KEY_NAME))
-                broker.set(IS_CONTROLLER_KEY_NAME, node.isController());
             brokerArray.add(broker);
         }
         struct.set(BROKERS_KEY_NAME, brokerArray.toArray());
+
+        if (struct.hasField(CONTROLLER_ID_KEY_NAME))
+            struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
 
         List<Struct> topicMetadataArray = new ArrayList<>(topicMetadata.size());
         for (TopicMetadata metadata : topicMetadata) {
@@ -151,9 +156,12 @@ public class MetadataResponse extends AbstractRequestResponse {
             String host = broker.getString(HOST_KEY_NAME);
             int port = broker.getInt(PORT_KEY_NAME);
             String rack =  broker.hasField(RACK_KEY_NAME) ? broker.getString(RACK_KEY_NAME) : null;
-            boolean isController = broker.hasField(IS_CONTROLLER_KEY_NAME) ? broker.getBoolean(IS_CONTROLLER_KEY_NAME) : false;
-            brokers.put(nodeId, new Node(nodeId, host, port, rack, isController));
+            brokers.put(nodeId, new Node(nodeId, host, port, rack));
         }
+
+        int controllerId = NO_CONTROLLER_ID;
+        if (struct.hasField(CONTROLLER_ID_KEY_NAME))
+            controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
 
         List<TopicMetadata> topicMetadata = new ArrayList<>();
         Object[] topicInfos = (Object[]) struct.get(TOPIC_METADATA_KEY_NAME);
@@ -188,7 +196,19 @@ public class MetadataResponse extends AbstractRequestResponse {
         }
 
         this.brokers = brokers.values();
+        this.controller = getControllerNode(controllerId, brokers.values());
         this.topicMetadata = topicMetadata;
+    }
+
+    private Node getControllerNode(int controllerId, Collection<Node> brokers) {
+        Node controller = null;
+        for (Node broker : brokers) {
+            if (broker.id() == controllerId) {
+                controller = broker;
+                break;
+            }
+        }
+        return controller;
     }
 
     /**
@@ -244,18 +264,15 @@ public class MetadataResponse extends AbstractRequestResponse {
         return topicMetadata;
     }
 
+    public boolean hasController() {
+        return controller != null;
+    }
+
     /**
-     * Get all the controller node returned in metadata response
+     * The controller node returned in metadata response
      * @return the controller node or null if it doesn't exist
      */
     public Node controller() {
-        Node controller = null;
-        for (Node broker : brokers) {
-            if (broker.isController()) {
-                controller = broker;
-                break;
-            }
-        }
         return controller;
     }
 

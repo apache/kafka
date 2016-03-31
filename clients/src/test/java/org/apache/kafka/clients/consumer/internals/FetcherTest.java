@@ -571,7 +571,7 @@ public class FetcherTest {
         }
 
         MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topic, false, false, partitionsMetadata);
-        return new MetadataResponse(cluster.nodes(), Arrays.asList(topicMetadata));
+        return new MetadataResponse(cluster.nodes(), MetadataResponse.NO_CONTROLLER_ID, Arrays.asList(topicMetadata));
     }
 
     private Fetcher<byte[], byte[]> createFetcher(int maxPollRecords,

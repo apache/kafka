@@ -24,24 +24,18 @@ public class Node {
     private final String host;
     private final int port;
     private final String rack;
-    private final boolean isController;
 
     public Node(int id, String host, int port) {
-        this(id, host, port, null, false);
+        this(id, host, port, null);
     }
 
     public Node(int id, String host, int port, String rack) {
-        this(id, host, port, rack, false);
-    }
-
-    public Node(int id, String host, int port, String rack, Boolean isController) {
         super();
         this.id = id;
         this.idString = Integer.toString(id);
         this.host = host;
         this.port = port;
         this.rack = rack;
-        this.isController = isController;
     }
 
     public static Node noNode() {
@@ -100,13 +94,6 @@ public class Node {
         return rack;
     }
 
-    /**
-     * True if this node is the controller node
-     */
-    public boolean isController() {
-        return isController;
-    }
-
     @Override
     public int hashCode() {
         final int prime = 31;
@@ -115,7 +102,6 @@ public class Node {
         result = prime * result + id;
         result = prime * result + port;
         result = prime * result + ((rack == null) ? 0 : rack.hashCode());
-        result = prime * result + (isController ? 1 : 0);
         return result;
     }
 
@@ -142,14 +128,12 @@ public class Node {
                 return false;
         } else if (!rack.equals(other.rack))
             return false;
-        if (isController != other.isController)
-            return false;
         return true;
     }
 
     @Override
     public String toString() {
-        return host + ":" + port + " (id: " + idString + " rack: " + rack + " isController: " + isController + ")";
+        return host + ":" + port + " (id: " + idString + " rack: " + rack + ")";
     }
 
 }
