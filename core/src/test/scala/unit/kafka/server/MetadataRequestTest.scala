@@ -39,8 +39,8 @@ class MetadataRequestTest extends BaseRequestTest {
     props.map(KafkaConfig.fromProps)
   }
 
-  private def allMetadataRequest = new MetadataRequest(List[String]().asJava)
-  private def nullMetadataRequest = new MetadataRequest()
+  private def allMetadataRequest = new MetadataRequest(null, true)
+  private def noMetadataRequest = new MetadataRequest(List[String]().asJava)
 
   @Before
   override def setUp() {
@@ -130,12 +130,12 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testNullTopicsRequest() {
+  def testNoTopicsRequest() {
     // create some topics
     TestUtils.createTopic(zkUtils, "t1", 3, 2, servers)
     TestUtils.createTopic(zkUtils, "t2", 3, 2, servers)
 
-    val metadataResponse = sendMetadatRequest(nullMetadataRequest, 1)
+    val metadataResponse = sendMetadatRequest(noMetadataRequest, 1)
     assertTrue("Response should have no errors", metadataResponse.errors().isEmpty)
     assertTrue("Response should have no topics", metadataResponse.topicMetadata().isEmpty)
   }

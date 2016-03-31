@@ -683,44 +683,48 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleTopicMetadataRequest(request: RequestChannel.Request) {
     val metadataRequest = request.body.asInstanceOf[MetadataRequest]
+    val requestVersion = request.header.apiVersion()
 
-    val completeTopicMetadata =
-      if(metadataRequest.hasTopics) {
-        val topics = metadataRequest.topics.asScala.toSet
-        var (authorizedTopics, unauthorizedTopics) = if (metadataRequest.topics.isEmpty) {
-          //if topics is empty -> fetch all topics metadata but filter out the topic response that are not authorized
-          val authorized = metadataCache.getAllTopics()
-            .filter(topic => authorize(request.session, Describe, new Resource(Topic, topic)))
-          (authorized, mutable.Set[String]())
-        } else {
-          topics.partition(topic => authorize(request.session, Describe, new Resource(Topic, topic)))
-        }
+    val topics =
+      // Handle old metadata request logic. Version 0 has no way to specify "no topics".
+      if (requestVersion == 0) {
+        if (metadataRequest.topics() == null || metadataRequest.topics().isEmpty)
+          metadataCache.getAllTopics()
+        else
+          metadataRequest.topics.asScala.toSet
+      } else {
+        if (metadataRequest.allTopics())
+          metadataCache.getAllTopics()
+        else
+          metadataRequest.topics.asScala.toSet
+      }
 
-        if (authorizedTopics.nonEmpty) {
-          val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
-          if (config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
-            authorizer.foreach { az =>
-              if (!az.authorize(request.session, Create, Resource.ClusterResource)) {
-                authorizedTopics --= nonExistingTopics
-                unauthorizedTopics ++= nonExistingTopics
-              }
-            }
+    var (authorizedTopics, unauthorizedTopics) =
+      topics.partition(topic => authorize(request.session, Describe, new Resource(Topic, topic)))
+
+    if (authorizedTopics.nonEmpty) {
+      val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
+      if (config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
+        authorizer.foreach { az =>
+          if (!az.authorize(request.session, Create, Resource.ClusterResource)) {
+            authorizedTopics --= nonExistingTopics
+            unauthorizedTopics ++= nonExistingTopics
           }
         }
-
-        val unauthorizedTopicMetadata = unauthorizedTopics.map(topic =>
-          new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic,
-            common.Topic.isInternal(topic), metadataCache.isMarkedForDeletion(topic), java.util.Collections.emptyList()))
-
-        val topicMetadata = if (authorizedTopics.isEmpty)
-          Seq.empty[MetadataResponse.TopicMetadata]
-        else
-          getTopicMetadata(authorizedTopics, request.securityProtocol)
-
-        topicMetadata ++ unauthorizedTopicMetadata
-      } else {
-        Seq[MetadataResponse.TopicMetadata]()
       }
+    }
+
+    val unauthorizedTopicMetadata = unauthorizedTopics.map(topic =>
+      new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic,
+        common.Topic.isInternal(topic), metadataCache.isMarkedForDeletion(topic), java.util.Collections.emptyList()))
+
+    val topicMetadata =
+      if (authorizedTopics.isEmpty)
+        Seq.empty[MetadataResponse.TopicMetadata]
+      else
+        getTopicMetadata(authorizedTopics, request.securityProtocol)
+
+    val completeTopicMetadata = topicMetadata ++ unauthorizedTopicMetadata
 
     val brokers = metadataCache.getAliveBrokers
 

@@ -182,7 +182,7 @@ public class Fetcher<K, V> {
      * @return The map of topics with their partition information
      */
     public Map<String, List<PartitionInfo>> getAllTopicMetadata(long timeout) {
-        return getTopicMetadata(null, timeout);
+        return getTopicMetadata(Collections.<String>emptyList(), true, timeout);
     }
 
     /**
@@ -192,15 +192,15 @@ public class Fetcher<K, V> {
      * @param timeout time for which getting topic metadata is attempted
      * @return The map of topics with their partition information
      */
-    public Map<String, List<PartitionInfo>> getTopicMetadata(List<String> topics, long timeout) {
-        if (topics != null && topics.isEmpty())
+    public Map<String, List<PartitionInfo>> getTopicMetadata(List<String> topics, boolean allTopics, long timeout) {
+        if (!allTopics && topics.isEmpty())
             return Collections.emptyMap();
 
         long start = time.milliseconds();
         long remaining = timeout;
 
         do {
-            RequestFuture<ClientResponse> future = sendMetadataRequest(topics);
+            RequestFuture<ClientResponse> future = sendMetadataRequest(topics, allTopics);
             client.poll(future, remaining);
 
             if (future.failed() && !future.isRetriable())
@@ -265,14 +265,12 @@ public class Fetcher<K, V> {
      * Send Metadata Request to least loaded node in Kafka cluster asynchronously
      * @return A future that indicates result of sent metadata request
      */
-    private RequestFuture<ClientResponse> sendMetadataRequest(List<String> topics) {
-        if (topics == null)
-            topics = Collections.emptyList();
+    private RequestFuture<ClientResponse> sendMetadataRequest(List<String> topics, boolean allTopics) {
         final Node node = client.leastLoadedNode();
         if (node == null)
             return RequestFuture.noBrokersAvailable();
         else
-            return client.send(node, ApiKeys.METADATA, new MetadataRequest(topics));
+            return client.send(node, ApiKeys.METADATA, new MetadataRequest(topics, allTopics));
     }
 
     /**

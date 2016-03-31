@@ -952,7 +952,7 @@ object TestUtils extends Logging {
     )
 
     val values = (0 until numMessages).map(x => s"test-$x")
-    
+
     val futures = values.map { value =>
       producer.send(new ProducerRecord(topic, null, null, value.getBytes))
     }
@@ -1115,7 +1115,7 @@ object TestUtils extends Logging {
       }
     } catch {
       case ie: InterruptedException => failWithTimeout()
-      case e => exceptions += e
+      case e: Throwable => exceptions += e
     } finally {
       threadPool.shutdownNow()
     }
