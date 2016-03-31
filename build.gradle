@@ -26,12 +26,15 @@ buildscript {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar:grgit:1.5.0"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.12.0'
+    classpath 'org.scoverage:gradle-scoverage:2.0.1'
   }
 }
 
 allprojects {
   apply plugin: 'idea'
   apply plugin: 'eclipse'
+  apply plugin: "jacoco"
+
   repositories {
     mavenCentral()
   }
@@ -249,7 +252,49 @@ subprojects {
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
+
+  // Ignore core since its a scala project
+  if (it.path != ':core') {
+    // NOTE: Gradles Jacoco plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
+    // may report 0 coverage, since the source was modified after initial instrumentation.
+    // See https://github.com/jacoco/jacoco/issues/51
+    jacocoTestReport {
+      dependsOn tasks.test
+      sourceSets sourceSets.main
+      reports {
+        html.enabled = true
+        xml.enabled = true
+        csv.enabled = false
+      }
+    }
+  }
 }
+
+// Aggregates all jacoco results into the root project directory
+task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
+  def javaProjects = subprojects.findAll { it.path != ':core' }
+
+  description = 'Generates an aggregate report from all subprojects'
+  dependsOn(javaProjects.test)
+
+  additionalSourceDirs = files(javaProjects.sourceSets.main.allSource.srcDirs)
+  sourceDirectories = files(javaProjects.sourceSets.main.allSource.srcDirs)
+  classDirectories =  files(javaProjects.sourceSets.main.output)
+  executionData = files(javaProjects.jacocoTestReport.executionData)
+
+  reports {
+    html.enabled = true
+    xml.enabled = true
+  }
+
+  // workaround to ignore projects that don't have any tests at all
+  onlyIf = { true }
+  doFirst {
+    executionData = files(executionData.findAll { it.exists() })
+  }
+}
+
+task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportScoverage'])
 
 for ( sv in ['2_10', '2_11'] ) {
   String svInDot = sv.replaceAll( "_", ".")
@@ -320,6 +365,7 @@ project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
   apply plugin: 'scala'
+  apply plugin: "org.scoverage"
   archivesBaseName = "kafka_${versions.baseScala}"
 
   dependencies {
@@ -351,7 +397,20 @@ project(':core') {
     testCompile libs.apachedsJdbmPartition
     testCompile libs.junit
     testCompile libs.scalaTest
+
+    scoverage libs.scoveragePlugin
+    scoverage libs.scoverageRuntime
   }
+
+  jacocoTestReport.enabled = false
+  scoverage {
+    reportDir = file("${rootProject.buildDir}/scoverage")
+    highlighting = false
+  }
+  checkScoverage {
+    minimumRate = 0.0
+  }
+  checkScoverage.shouldRunAfter('test')
 
   configurations {
     // manually excludes some unnecessary dependencies
