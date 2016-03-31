@@ -322,18 +322,20 @@ class Partition(val topic: String,
 
         val minIsr = leaderReplica.log.get.config.minInSyncReplicas
 
-        if (leaderReplica.highWatermark.messageOffset >= requiredOffset ) {
-          /*
-          * The topic may be configured not to accept messages if there are not enough replicas in ISR
-          * in this scenario the request was already appended locally and then added to the purgatory before the ISR was shrunk
-          */
-          if (minIsr <= curInSyncReplicas.size) {
-            (true, Errors.NONE.code)
-          } else {
-            (true, Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND.code)
-          }
-        } else
+        if (numAcks >= minIsr) {
+          // Regardless to high watermark, at least there are enough number of followers which already caught up
+          // until requiredOffset, meaning this request can be considered to have enough number of replicas
+          // already.
+          (true, Errors.NONE.code)
+        } else if (curInSyncReplicas.size >= minIsr) {
+          // Some followers are not yet fetched until requiredOffset but still in ISR because of
+          // replica.lag.time.max.ms. Need to wait more a bit to see whether they will catch up.
           (false, Errors.NONE.code)
+        } else {
+          // There's not enough number of followers in ISR so it's impossible to satisfy required minimum number
+          // of ISRs at the moment.
+          (false, Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND.code)
+        }
       case None =>
         (false, Errors.NOT_LEADER_FOR_PARTITION.code)
     }
