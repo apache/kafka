@@ -350,9 +350,12 @@ public class StreamThread extends Thread {
                     requiresPoll = requiresPoll || task.requiresPoll();
 
                     sensors.processTimeSensor.record(time.milliseconds() - startProcess);
-                }
 
-                maybePunctuate();
+                    maybePunctuate(task);
+
+                    if (task.commitNeeded())
+                        commitOne(task, time.milliseconds());
+                }
 
                 // if pollTimeMs has passed since the last poll, we poll to respond to a possible rebalance
                 // even when we paused all partitions.
@@ -424,18 +427,16 @@ public class StreamThread extends Thread {
         return true;
     }
 
-    private void maybePunctuate() {
-        for (StreamTask task : activeTasks.values()) {
-            try {
-                long now = time.milliseconds();
+    private void maybePunctuate(StreamTask task) {
+        try {
+            long now = time.milliseconds();
 
-                if (task.maybePunctuate(now))
-                    sensors.punctuateTimeSensor.record(time.milliseconds() - now);
+            if (task.maybePunctuate(now))
+                sensors.punctuateTimeSensor.record(time.milliseconds() - now);
 
-            } catch (KafkaException e) {
-                log.error("Failed to punctuate active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
-                throw e;
-            }
+        } catch (KafkaException e) {
+            log.error("Failed to punctuate active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+            throw e;
         }
     }
 
@@ -449,16 +450,6 @@ public class StreamThread extends Thread {
             lastCommit = now;
 
             processStandbyRecords = true;
-        } else {
-            for (StreamTask task : activeTasks.values()) {
-                try {
-                    if (task.commitNeeded())
-                        commitOne(task, time.milliseconds());
-                } catch (KafkaException e) {
-                    log.error("Failed to commit active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
-                    throw e;
-                }
-            }
         }
     }
 
