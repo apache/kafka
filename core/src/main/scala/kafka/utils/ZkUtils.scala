@@ -1166,7 +1166,7 @@ private[kafka] class ZkClient(zkConnection: IZkConnection, connectionTimeout: In
   def asyncReadData(path: String, callback: DataCallback) {
     retryUntilConnected(new Callable[Object] {
       def call: Object = {
-        _connection.asInstanceOf[ZkConnection].getZookeeper.getData(path, false, callback, null)
+        currentZk.getData(path, false, callback, null)
         null
       }
     })
@@ -1197,14 +1197,14 @@ private[kafka] abstract class ZkWriteCallbackWithData(val data: String,
   override def processResult(rc: Int, path: String, ctx: Object, stat: Stat) {
     val code = Code.get(rc)
     trace(s"Received return code $code for update of zk path $path")
-    val (updateSucceeded, newZkVesion) = code match {
+    val (updateSucceeded, newZkVersion) = code match {
       case Code.OK => (true, stat.getVersion)
       case _ =>
         warn("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
           expectVersion, KeeperException.create(code).getMessage))
         (false, -1)
     }
-    handle(updateSucceeded, newZkVesion)
+    handle(updateSucceeded, newZkVersion)
   }
 
   def handle(updateSucceeded: Boolean, newZkVersion: Int)
