@@ -92,7 +92,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
-    val socket = new Socket("localhost", server.boundPort(protocol))
+    val socket = new Socket("localhost", s.boundPort(protocol))
     sockets += socket
     socket
   }
@@ -211,16 +211,23 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testMaxConnectionsPerIPOverrides() {
-    val overrideNum = 6
-    val overrides = Map("localhost" -> overrideNum)
+  def testMaxConnectionsPerIpOverrides() {
+    val overrideNum = server.config.maxConnectionsPerIp + 1
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    overrideProps.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$overrideNum")
     val serverMetrics = new Metrics()
-    val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime())
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime())
     try {
       overrideServer.startup()
-      // make the maximum allowable number of connections and then leak them
-      val conns = ((0 until overrideNum).map(i => connect(overrideServer)))
+      // make the maximum allowable number of connections
+      val conns = (0 until overrideNum).map(_ => connect(overrideServer))
+
+      // it should succeed
+      val serializedBytes = producerRequestBytes
+      sendRequest(conns.last, serializedBytes)
+      val request = overrideServer.requestChannel.receiveRequest(2000)
+      assertNotNull(request)
+
       // now try one more (should fail)
       val conn = connect(overrideServer)
       conn.setSoTimeout(3000)
