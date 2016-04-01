@@ -17,9 +17,10 @@
 
 package kafka.zk
 
-import java.util.ArrayList
-import java.util.Collection
+import java.lang.Iterable
 import javax.security.auth.login.Configuration
+
+import scala.collection.JavaConverters._
 
 import kafka.consumer.ConsumerConfig
 import kafka.utils.ZkUtils
@@ -30,26 +31,24 @@ import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.WatchedEvent
 import org.apache.zookeeper.Watcher
 import org.apache.zookeeper.ZooDefs.Ids
-import org.I0Itec.zkclient.exception.{ZkException,ZkNodeExistsException}
+import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.junit.{After, Before, Test, Assert}
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
-import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized
+import org.junit.runners.Parameterized.Parameters
+import org.junit.runner.RunWith
 
 object ZKEphemeralTest {
+
   @Parameters
-  def enableSecurityOptions: Collection[Array[java.lang.Boolean]] = {
-    val list = new ArrayList[Array[java.lang.Boolean]]()
-    list.add(Array(true))
-    list.add(Array(false))
-    list
-  }
+  def enableSecurityOptions: Iterable[Array[java.lang.Boolean]] =
+    Seq[Array[java.lang.Boolean]](Array(true), Array(false)).asJava
+
 }
 
 @RunWith(value = classOf[Parameterized])
 class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
-  val jaasFile: String = kafka.utils.JaasTestUtils.genZkFile
-  val authProvider: String = "zookeeper.authProvider.1"
+  val jaasFile = kafka.utils.JaasTestUtils.writeZkFile()
+  val authProvider = "zookeeper.authProvider.1"
   var zkSessionTimeoutMs = 1000
   
   @Before
@@ -103,17 +102,14 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
    */
   @Test
   def testZkWatchedEphemeral = {
-    var path = "/zwe-test"
-    testCreation(path)
-    path = "/zwe-test-parent/zwe-test"
-    testCreation(path)
+    testCreation("/zwe-test")
+    testCreation("/zwe-test-parent/zwe-test")
   }
  
   private def testCreation(path: String) {
     val zk = zkUtils.zkConnection.getZookeeper
     val zwe = new ZKCheckedEphemeral(path, "", zk, JaasUtils.isZkSecurityEnabled())
     var created = false
-    var counter = 10
 
     zk.exists(path, new Watcher() {
       def process(event: WatchedEvent) {
@@ -140,19 +136,19 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
     //Creates a second session
     val (zkClient2, zkConnection2) = ZkUtils.createZkClientAndConnection(zkConnect, zkSessionTimeoutMs, zkConnectionTimeout)
     val zk2 = zkConnection2.getZookeeper
-    var zwe = new ZKCheckedEphemeral(path, "", zk2, JaasUtils.isZkSecurityEnabled())
+    val zwe = new ZKCheckedEphemeral(path, "", zk2, JaasUtils.isZkSecurityEnabled())
 
     // Creates znode for path in the first session
     zk1.create(path, Array[Byte](), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
     
     //Bootstraps the ZKWatchedEphemeral object
-    var gotException = false;
-    try {
-      zwe.create()
-    } catch {
-      case e: ZkNodeExistsException =>
-        gotException = true
-    }
+    val gotException =
+      try {
+        zwe.create()
+        false
+      } catch {
+        case e: ZkNodeExistsException => true
+      }
     Assert.assertTrue(gotException)
     zkClient2.close()
   }
@@ -168,15 +164,15 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
     // Creates znode for path in the first session
     zk.create(path, Array[Byte](), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
     
-    var zwe = new ZKCheckedEphemeral(path, "", zk, JaasUtils.isZkSecurityEnabled())
+    val zwe = new ZKCheckedEphemeral(path, "", zk, JaasUtils.isZkSecurityEnabled())
     //Bootstraps the ZKWatchedEphemeral object
-    var gotException = false;
-    try {
-      zwe.create()
-    } catch {
-      case e: ZkNodeExistsException =>
-        gotException = true
-    }
+    val gotException =
+      try {
+        zwe.create()
+        false
+      } catch {
+        case e: ZkNodeExistsException => true
+      }
     Assert.assertFalse(gotException)
   }
 }
