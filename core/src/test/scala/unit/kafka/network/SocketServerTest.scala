@@ -39,7 +39,6 @@ import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 
-import scala.collection.Map
 import scala.collection.mutable.ArrayBuffer
 
 class SocketServerTest extends JUnitSuite {
@@ -81,7 +80,7 @@ class SocketServerTest extends JUnitSuite {
 
   /* A simple request handler that just echos back the response */
   def processRequest(channel: RequestChannel) {
-    val request = channel.receiveRequest
+    val request = channel.receiveRequest()
     val byteBuffer = ByteBuffer.allocate(request.header.sizeOf + request.body.sizeOf)
     request.header.writeTo(byteBuffer)
     request.body.writeTo(byteBuffer)
@@ -239,16 +238,16 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testSslSocketServer(): Unit = {
+  def testSslSocketServer() {
     val trustStoreFile = File.createTempFile("truststore", ".jks")
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
       trustStoreFile = Some(trustStoreFile))
     overrideProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
 
     val serverMetrics = new Metrics
-    val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime)
-    overrideServer.startup()
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime)
     try {
+      overrideServer.startup()
       val sslContext = SSLContext.getInstance("TLSv1.2")
       sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
       val socketFactory = sslContext.getSocketFactory
@@ -281,11 +280,59 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testSessionPrincipal(): Unit = {
+  def testSessionPrincipal() {
     val socket = connect()
     val bytes = new Array[Byte](40)
     sendRequest(socket, bytes, Some(0))
     assertEquals(KafkaPrincipal.ANONYMOUS, server.requestChannel.receiveRequest().session.principal)
+  }
+
+  /* Test that we update request metrics if the client closes the connection while the broker response is in flight. */
+  @Test
+  def testClientDisconnectionUpdatesRequestMetrics() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    val serverMetrics = new Metrics
+    var conn: Socket = null
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, new SystemTime) {
+      override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, protocol: SecurityProtocol): Processor = {
+        new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
+          config.connectionsMaxIdleMs, protocol, config.values, metrics) {
+          override protected[network] def sendResponse(response: RequestChannel.Response) {
+            conn.close()
+            super.sendResponse(response)
+          }
+        }
+      }
+    }
+    try {
+      overrideServer.startup()
+      conn = connect(overrideServer, protocol = SecurityProtocol.PLAINTEXT)
+      val serializedBytes = producerRequestBytes
+      sendRequest(conn, serializedBytes)
+
+      val channel = overrideServer.requestChannel
+      val request = channel.receiveRequest()
+
+      val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.requestId).name)
+
+      def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
+
+      val expectedTotalTimeCount = totalTimeHistCount() + 1
+
+      // send a large buffer to ensure that the broker detects the client disconnection while writing to the socket channel.
+      // On Mac OS X, the initial write seems to always succeed and it is able to write up to 102400 bytes on the initial
+      // write. If the buffer is smaller than this, the write is considered complete and the disconnection is not
+      // detected. If the buffer is larger than 102400 bytes, a second write is attempted and it fails with an
+      // IOException.
+      val send = new NetworkSend(request.connectionId, ByteBuffer.allocate(550000))
+      channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
+      TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
+        s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
+
+    } finally {
+      overrideServer.shutdown()
+      serverMetrics.close()
+    }
   }
 
 }
