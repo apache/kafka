@@ -40,6 +40,7 @@ import org.junit._
 import org.scalatest.junit.JUnitSuite
 
 import scala.collection.Map
+import scala.collection.mutable.ArrayBuffer
 
 class SocketServerTest extends JUnitSuite {
   val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
@@ -55,6 +56,7 @@ class SocketServerTest extends JUnitSuite {
   val metrics = new Metrics
   val server = new SocketServer(config, metrics, new SystemTime)
   server.startup()
+  val sockets = new ArrayBuffer[Socket]
 
   def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None) {
     val outgoing = new DataOutputStream(socket.getOutputStream)
@@ -89,13 +91,18 @@ class SocketServerTest extends JUnitSuite {
     channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
   }
 
-  def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) =
-    new Socket("localhost", server.boundPort(protocol))
+  def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
+    val socket = new Socket("localhost", server.boundPort(protocol))
+    sockets += socket
+    socket
+  }
 
   @After
-  def cleanup() {
+  def tearDown() {
     metrics.close()
     server.shutdown()
+    sockets.foreach(_.close())
+    sockets.clear()
   }
 
   private def producerRequestBytes: Array[Byte] = {
@@ -183,7 +190,7 @@ class SocketServerTest extends JUnitSuite {
 
   @Test
   def testMaxConnectionsPerIp() {
-    // make the maximum allowable number of connections and then leak them
+    // make the maximum allowable number of connections
     val conns = (0 until server.config.maxConnectionsPerIp).map(_ => connect())
     // now try one more (should fail)
     val conn = connect()
@@ -201,8 +208,6 @@ class SocketServerTest extends JUnitSuite {
     sendRequest(conn2, serializedBytes)
     val request = server.requestChannel.receiveRequest(2000)
     assertNotNull(request)
-    conn2.close()
-    conns.tail.foreach(_.close())
   }
 
   @Test
@@ -220,8 +225,6 @@ class SocketServerTest extends JUnitSuite {
       val conn = connect(overrideServer)
       conn.setSoTimeout(3000)
       assertEquals(-1, conn.getInputStream.read())
-      conn.close()
-      conns.foreach(_.close())
     } finally {
       overrideServer.shutdown()
       serverMetrics.close()
@@ -276,7 +279,6 @@ class SocketServerTest extends JUnitSuite {
     val bytes = new Array[Byte](40)
     sendRequest(socket, bytes, Some(0))
     assertEquals(KafkaPrincipal.ANONYMOUS, server.requestChannel.receiveRequest().session.principal)
-    socket.close()
   }
 
 }
