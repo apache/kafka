@@ -551,7 +551,7 @@ public class Selector implements Selectable {
      * checks if there are any staged receives and adds to completedReceives
      */
     private void addToCompletedReceives() {
-        if (this.stagedReceives.size() > 0) {
+        if (!this.stagedReceives.isEmpty()) {
             Iterator<Map.Entry<KafkaChannel, Deque<NetworkReceive>>> iter = this.stagedReceives.entrySet().iterator();
             while (iter.hasNext()) {
                 Map.Entry<KafkaChannel, Deque<NetworkReceive>> entry = iter.next();
@@ -561,7 +561,7 @@ public class Selector implements Selectable {
                     NetworkReceive networkReceive = deque.poll();
                     this.completedReceives.add(networkReceive);
                     this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
-                    if (deque.size() == 0)
+                    if (deque.isEmpty())
                         iter.remove();
                 }
             }
