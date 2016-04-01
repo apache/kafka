@@ -21,9 +21,8 @@ import java.io._
 import java.nio._
 import java.nio.file.Files
 import java.nio.channels._
-import java.util
-import java.util.concurrent.{Callable, TimeUnit, Executors}
-import java.util.{Collections, Random, Properties}
+import java.util.concurrent.{Callable, Executors, TimeUnit}
+import java.util.{Collections, Properties, Random}
 import java.security.cert.X509Certificate
 import javax.net.ssl.X509TrustManager
 import charset.Charset
@@ -52,6 +51,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
+import org.apache.kafka.common.utils.Utils
 
 import scala.collection.Map
 import scala.collection.JavaConversions._
@@ -100,7 +100,7 @@ object TestUtils extends Logging {
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
       override def run() = {
-        CoreUtils.rm(f)
+        Utils.delete(f)
       }
     })
     f
@@ -1115,7 +1115,7 @@ object TestUtils extends Logging {
       }
     } catch {
       case ie: InterruptedException => failWithTimeout()
-      case e => exceptions += e
+      case e: Throwable => exceptions += e
     } finally {
       threadPool.shutdownNow()
     }

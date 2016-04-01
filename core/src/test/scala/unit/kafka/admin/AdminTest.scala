@@ -22,13 +22,15 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert._
 import org.junit.Test
 import java.util.Properties
+
 import kafka.utils._
 import kafka.log._
 import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.{Logging, ZkUtils, TestUtils}
-import kafka.common.{TopicExistsException, TopicAndPartition}
-import kafka.server.{ConfigType, KafkaServer, KafkaConfig}
+import kafka.utils.{Logging, TestUtils, ZkUtils}
+import kafka.common.{TopicAndPartition, TopicExistsException}
+import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
 import java.io.File
+
 import TestUtils._
 
 import scala.collection.{Map, immutable}
@@ -418,7 +420,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       assertEquals(newConfig, configInZk)
     } finally {
       server.shutdown()
-      server.config.logDirs.foreach(CoreUtils.rm(_))
+      CoreUtils.delete(server.config.logDirs)
     }
   }
 
@@ -449,7 +451,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       assertEquals(new Quota(2000, true), server.apis.quotaManagers(ApiKeys.FETCH.id).quota(clientId))
     } finally {
       server.shutdown()
-      server.config.logDirs.foreach(CoreUtils.rm(_))
+      CoreUtils.delete(server.config.logDirs)
     }
   }
 
