@@ -98,9 +98,7 @@ class Log(@volatile var dir: File,
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
-  if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
     loadSegments()
-  }
 
   /* Calculate the offset of the next message */
   @volatile var nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset, activeSegment.size.toInt)
@@ -242,9 +240,11 @@ class Log(@volatile var dir: File,
                                      initFileSize = this.initFileSize(),
                                      preallocate = config.preallocate))
     } else {
+      if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
         recoverLog()
         // reset the index size of the currently active log segment to allow more entries
         activeSegment.index.resize(config.maxIndexSize)
+      }
     }
 
   }
@@ -778,7 +778,12 @@ class Log(@volatile var dir: File,
   /**
    * The active segment that is currently taking appends
    */
-  def activeSegment = segments.lastEntry.getValue
+  def activeSegment: LogSegment = {
+    if (segments.size() > 0)
+      segments.lastEntry.getValue
+    else
+      null
+  }
 
   /**
    * All the log segments in this log ordered from oldest to newest
@@ -963,19 +968,17 @@ object Log {
    * Parse the topic and partition out of the directory name of a log
    */
   def parseTopicPartitionName(dir: File): TopicAndPartition = {
-    val name: String = dir.getName
+    var name: String = dir.getName
     if (name == null || name.isEmpty || !name.contains('-')) {
       throwException(dir)
     }
-    val index = name.indexOf('-')
-    val topic: String = name.substring(0, index)
-    val partition = if(name.endsWith(DeleteDirSuffix)) {
-      val partitionIndex = name.lastIndexOf("-")
-      name.substring(index + 1, partitionIndex)
-    } else {
-      name.substring(index + 1)
-    }
 
+    if (name.endsWith(DeleteDirSuffix)) {
+      name = name.substring(0, name.indexOf('.'))
+    }
+    val index = name.lastIndexOf('-')
+    val topic: String = name.substring(0, index)
+    val partition: String = name.substring(index + 1)
     if (topic.length < 1 || partition.length < 1) {
       throwException(dir)
     }
