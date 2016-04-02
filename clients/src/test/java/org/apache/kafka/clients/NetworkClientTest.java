@@ -53,11 +53,12 @@ public class NetworkClientTest {
     private Cluster cluster = TestUtils.singletonCluster("test", nodeId);
     private Node node = cluster.nodes().get(0);
     private long reconnectBackoffMsTest = 10 * 1000;
-    private NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest, 
+
+    private NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, new ConstantReconnectAttemptPolicy(reconnectBackoffMsTest),
             64 * 1024, 64 * 1024, requestTimeoutMs, time);
     
     private NetworkClient clientWithStaticNodes = new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
-            "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs, time);
+            "mock-static", Integer.MAX_VALUE, new ConstantReconnectAttemptPolicy(0), 64 * 1024, 64 * 1024, requestTimeoutMs, time);
 
     @Before
     public void setup() {

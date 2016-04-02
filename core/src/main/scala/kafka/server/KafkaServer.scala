@@ -31,7 +31,7 @@ import java.io.{IOException, File}
 
 import kafka.security.auth.Authorizer
 import kafka.utils._
-import org.apache.kafka.clients.{ManualMetadataUpdater, ClientRequest, NetworkClient}
+import org.apache.kafka.clients.{ManualMetadataUpdater, ClientRequest, NetworkClient, ConstantReconnectAttemptPolicy}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, NetworkReceive, Selector, Mode}
@@ -341,7 +341,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           metadataUpdater,
           config.brokerId.toString,
           1,
-          0,
+          new ConstantReconnectAttemptPolicy(0),
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           config.requestTimeoutMs,

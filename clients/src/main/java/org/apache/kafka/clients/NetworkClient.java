@@ -84,25 +84,25 @@ public class NetworkClient implements KafkaClient {
                          Metadata metadata,
                          String clientId,
                          int maxInFlightRequestsPerConnection,
-                         long reconnectBackoffMs,
+                         ReconnectAttemptPolicy reconnectAttemptPolicy,
                          int socketSendBuffer,
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time) {
         this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
-                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time);
+                reconnectAttemptPolicy, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time);
     }
 
     public NetworkClient(Selectable selector,
                          MetadataUpdater metadataUpdater,
                          String clientId,
                          int maxInFlightRequestsPerConnection,
-                         long reconnectBackoffMs,
+                         ReconnectAttemptPolicy reconnectAttemptPolicy,
                          int socketSendBuffer,
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time) {
-        this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
+        this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection, reconnectAttemptPolicy,
                 socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time);
     }
 
@@ -111,7 +111,7 @@ public class NetworkClient implements KafkaClient {
                           Selectable selector,
                           String clientId,
                           int maxInFlightRequestsPerConnection,
-                          long reconnectBackoffMs,
+                          ReconnectAttemptPolicy reconnectAttemptPolicy,
                           int socketSendBuffer,
                           int socketReceiveBuffer, 
                           int requestTimeoutMs,
@@ -131,7 +131,7 @@ public class NetworkClient implements KafkaClient {
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs);
+        this.connectionStates = new ClusterConnectionStates(reconnectAttemptPolicy);
         this.socketSendBuffer = socketSendBuffer;
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
@@ -456,7 +456,7 @@ public class NetworkClient implements KafkaClient {
      */
     private void handleDisconnections(List<ClientResponse> responses, long now) {
         for (String node : this.selector.disconnected()) {
-            log.debug("Node {} disconnected.", node);
+            log.warn("Node {} disconnected.", node);
             processDisconnection(responses, node, now);
         }
         // we got a disconnect so we should probably refresh our metadata and see if that broker is dead
@@ -500,7 +500,7 @@ public class NetworkClient implements KafkaClient {
             connectionStates.disconnected(nodeConnectionId, now);
             /* maybe the problem is our metadata, update it */
             metadataUpdater.requestUpdate();
-            log.debug("Error connecting to node {} at {}:{}:", node.id(), node.host(), node.port(), e);
+            log.warn("Error connecting to node {} at {}:{}:", node.id(), node.host(), node.port(), e);
         }
     }
 

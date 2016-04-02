@@ -127,6 +127,23 @@ public class DistributedConfig extends WorkerConfig {
                         atLeast(0L),
                         ConfigDef.Importance.LOW,
                         CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
+                .define(CommonClientConfigs.RECONNECT_ATTEMPTS_POLICY_CLASS_CONFIG,
+                        ConfigDef.Type.CLASS,
+                        "org.apache.kafka.clients.ConstantReconnectAttemptPolicy",
+                        ConfigDef.Importance.HIGH,
+                        CommonClientConfigs.RECONNECT_ATTEMPTS_POLICY_CLASS_DOC)
+                .define(CommonClientConfigs.RECONNECT_EXPONENTIAL_BASE_DELAY_MS_CONFIG,
+                        ConfigDef.Type.LONG,
+                        50L,
+                        atLeast(0L),
+                        ConfigDef.Importance.LOW,
+                        CommonClientConfigs.RECONNECT_EXPONENTIAL_BASE_DELAY_MS_DOC)
+                .define(CommonClientConfigs.RECONNECT_EXPONENTIAL_MAX_DELAY_MS_CONFIG,
+                        ConfigDef.Type.LONG,
+                        5000L,
+                        atLeast(0L),
+                        ConfigDef.Importance.LOW,
+                        CommonClientConfigs.RECONNECT_EXPONENTIAL_MAX_DELAY_MS_DOC)
                 .define(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
                         ConfigDef.Type.LONG,
                         100L,

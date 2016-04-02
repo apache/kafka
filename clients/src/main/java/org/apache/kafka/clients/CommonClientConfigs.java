@@ -49,6 +49,15 @@ public class CommonClientConfigs {
     public static final String RECONNECT_BACKOFF_MS_CONFIG = "reconnect.backoff.ms";
     public static final String RECONNECT_BACKOFF_MS_DOC = "The amount of time to wait before attempting to reconnect to a given host. This avoids repeatedly connecting to a host in a tight loop. This backoff applies to all requests sent by the consumer to the broker.";
 
+    public static final String RECONNECT_ATTEMPTS_POLICY_CLASS_CONFIG = "reconnect.attempts.policy.class";
+    public static final String RECONNECT_ATTEMPTS_POLICY_CLASS_DOC = "The policy used to determine the amount of time to wait before attempting to reconnect to a given host. ";
+
+    public static final String RECONNECT_EXPONENTIAL_BASE_DELAY_MS_CONFIG = "reconnect.exponential.baseDelayMs";
+    public static final String RECONNECT_EXPONENTIAL_BASE_DELAY_MS_DOC = "The amount of time to wait before attempting a first reconnection to a given host.";
+
+    public static final String RECONNECT_EXPONENTIAL_MAX_DELAY_MS_CONFIG = "reconnect.exponential.maxDelayMs";
+    public static final String RECONNECT_EXPONENTIAL_MAX_DELAY_MS_DOC = "The maximum amount of time to wait before attempting to reconnect to a given host.";
+
     public static final String RETRY_BACKOFF_MS_CONFIG = "retry.backoff.ms";
     public static final String RETRY_BACKOFF_MS_DOC = "The amount of time to wait before attempting to retry a failed fetch request to a given topic partition. This avoids repeated fetching-and-failing in a tight loop.";
 
