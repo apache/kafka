@@ -15,6 +15,7 @@
 
 
 from ducktape.utils.util import wait_until
+from ducktape.mark import matrix
 from ducktape.tests.test import Test
 from kafkatest.services.verifiable_producer import VerifiableProducer
 
@@ -69,7 +70,8 @@ class GetOffsetShellTest(Test):
                                         consumer_timeout_ms=1000, new_consumer=enable_new_consumer)
         self.consumer.start()
 
-    def test_get_offset_shell(self, security_protocol='PLAINTEXT'):
+    @matrix(old_producer=[True, False])
+    def test_get_offset_shell(self, old_producer=False, security_protocol='PLAINTEXT'):
         """
         Tests if GetOffsetShell is getting offsets correctly
         :return: None
@@ -78,7 +80,7 @@ class GetOffsetShellTest(Test):
         self.start_producer()
 
         # Assert that offset fetched without any consumers consuming is 0
-        assert self.kafka.get_offset_shell(TOPIC, None, 1000, 1, -1), "%s:%s:%s" % (TOPIC, NUM_PARTITIONS - 1, 0)
+        assert self.kafka.get_offset_shell(TOPIC, None, 1000, 1, -1, old_producer), "%s:%s:%s" % (TOPIC, NUM_PARTITIONS - 1, 0)
 
         self.start_consumer(security_protocol)
 
@@ -87,5 +89,5 @@ class GetOffsetShellTest(Test):
         wait_until(lambda: self.consumer.alive(node), timeout_sec=10, backoff_sec=.2, err_msg="Consumer was too slow to start")
 
         # Assert that offset is correctly indicated by GetOffsetShell tool
-        wait_until(lambda: "%s:%s:%s" % (TOPIC, NUM_PARTITIONS - 1, MAX_MESSAGES) in self.kafka.get_offset_shell(TOPIC, None, 1000, 1, -1), timeout_sec=10,
+        wait_until(lambda: "%s:%s:%s" % (TOPIC, NUM_PARTITIONS - 1, MAX_MESSAGES) in self.kafka.get_offset_shell(TOPIC, None, 1000, 1, -1, old_producer), timeout_sec=10,
                    err_msg="Timed out waiting to reach expected offset.")
