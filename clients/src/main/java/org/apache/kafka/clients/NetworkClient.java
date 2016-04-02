@@ -390,7 +390,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * Iterate over all the inflight requests and expire any requests that have exceeded the configured the requestTimeout.
+     * Iterate over all the inflight requests and expire any requests that have exceeded the configured requestTimeout.
      * The connection to the node associated with the request will be terminated and will be treated as a disconnection.
      *
      * @param responses The list of responses to update
