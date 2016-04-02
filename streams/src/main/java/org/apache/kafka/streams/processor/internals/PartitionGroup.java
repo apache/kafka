@@ -49,6 +49,10 @@ public class PartitionGroup {
         public TopicPartition partition() {
             return queue.partition();
         }
+
+        public RecordQueue queue() {
+            return queue;
+        }
     }
 
     // since task is thread-safe, we do not need to synchronize on local variables
@@ -88,7 +92,7 @@ public class PartitionGroup {
             // get the first record from this queue.
             record = queue.poll();
 
-            if (queue.size() > 0) {
+            if (!queue.isEmpty()) {
                 queuesByTime.offer(queue);
             }
         }
