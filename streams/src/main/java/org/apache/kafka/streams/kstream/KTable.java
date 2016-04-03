@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 
 /**
  * KTable is an abstraction of a <i>changelog stream</i> from a primary-keyed table.
@@ -54,7 +55,7 @@ public interface KTable<K, V> {
 
     /**
      * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic
-     * using default serializers and deserializers.
+     * using default serializers and deserializers and producer's {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner}.
      * This is equivalent to calling {@link #to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(String)}.
      *
      * @param topic         the topic name
@@ -62,35 +63,87 @@ public interface KTable<K, V> {
     KTable<K, V> through(String topic);
 
     /**
-     * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic.
+     * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic using default serializers
+     * and deserializers and a customizable {@link StreamPartitioner} to determine the distribution of records to partitions.
+     * This is equivalent to calling {@link #to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(String)}.
+     *
+     * @param partitioner  the function used to determine how records are distributed among partitions of the topic
+     *                     if not specified {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner} will be used
+     * @param topic        the topic name
+     */
+    KTable<K, V> through(StreamPartitioner<K, V> partitioner, String topic);
+
+    /**
+     * Materialize this stream to a topic using producer's {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner},
+     * also creates a new instance of {@link KTable} from the topic.
      * This is equivalent to calling {@link #to(Serde, Serde, String)} and
      * {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(Serde, Serde, String)}.
      *
-     * @param keySerde  key serde used to send key-value pairs,
-     *                  if not specified the default key serde defined in the configuration will be used
-     * @param valSerde  value serde used to send key-value pairs,
-     *                  if not specified the default value serde defined in the configuration will be used
-     * @param topic     the topic name
+     * @param keySerde     key serde used to send key-value pairs,
+     *                     if not specified the default key serde defined in the configuration will be used
+     * @param valSerde     value serde used to send key-value pairs,
+     *                     if not specified the default value serde defined in the configuration will be used
+     * @param topic        the topic name
      */
     KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic);
 
     /**
-     * Materialize this stream to a topic using default serializers specified in the config.
+     * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic
+     * using a customizable {@link StreamPartitioner} to determine the distribution of records to partitions.
+     * This is equivalent to calling {@link #to(Serde, Serde, StreamPartitioner, String)} and
+     * {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(Serde, Serde, String)}.
+     *
+     * @param keySerde     key serde used to send key-value pairs,
+     *                     if not specified the default key serde defined in the configuration will be used
+     * @param valSerde     value serde used to send key-value pairs,
+     *                     if not specified the default value serde defined in the configuration will be used
+     * @param partitioner  the function used to determine how records are distributed among partitions of the topic
+     *                     if not specified {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner} will be used
+     * @param topic        the topic name
+     */
+    KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic);
+
+    /**
+     * Materialize this stream to a topic using default serializers specified in the config
+     * and producer's {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner}.
      *
      * @param topic         the topic name
      */
     void to(String topic);
 
     /**
-     * Materialize this stream to a topic.
+     * Materialize this stream to a topic using default serializers specified in the config
+     * and a customizable {@link StreamPartitioner} to determine the distribution of records to partitions.
      *
-     * @param keySerde  key serde used to send key-value pairs,
-     *                  if not specified the default serde defined in the configs will be used
-     * @param valSerde  value serde used to send key-value pairs,
-     *                  if not specified the default serde defined in the configs will be used
-     * @param topic     the topic name
+     * @param partitioner  the function used to determine how records are distributed among partitions of the topic
+     *                     if not specified {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner} will be used
+     * @param topic        the topic name
+     */
+    void to(StreamPartitioner<K, V> partitioner, String topic);
+
+    /**
+     * Materialize this stream to a topic using producer's {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner}.
+     *
+     * @param keySerde     key serde used to send key-value pairs,
+     *                     if not specified the default serde defined in the configs will be used
+     * @param valSerde     value serde used to send key-value pairs,
+     *                     if not specified the default serde defined in the configs will be used
+     * @param topic        the topic name
      */
     void to(Serde<K> keySerde, Serde<V> valSerde, String topic);
+
+    /**
+     * Materialize this stream to a topic using a customizable {@link StreamPartitioner} to determine the distribution of records to partitions.
+     *
+     * @param keySerde     key serde used to send key-value pairs,
+     *                     if not specified the default serde defined in the configs will be used
+     * @param valSerde     value serde used to send key-value pairs,
+     *                     if not specified the default serde defined in the configs will be used
+     * @param partitioner  the function used to determine how records are distributed among partitions of the topic
+     *                     if not specified {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner} will be used
+     * @param topic        the topic name
+     */
+    void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic);
 
     /**
      * Convert this stream to a new instance of {@link KStream}.
