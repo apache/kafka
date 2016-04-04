@@ -17,6 +17,7 @@ import os
 import subprocess
 from ducktape.template import TemplateRenderer
 from kafkatest.services.security.minikdc import MiniKdc
+import itertools
 
 class Keytool(object):
 
@@ -182,12 +183,12 @@ class SecurityConfig(TemplateRenderer):
         """
         if self.security_protocol == SecurityConfig.PLAINTEXT:
             return ""
-        return "\n".join(prefix + key + "=" + value for key, value in self.properties.iteritems())
+        config_lines = (prefix + key + "=" + value for key, value in self.properties.iteritems())
+        # Extra blank lines ensure this can be appended/prepended safely
+        return "\n".join(itertools.chain([""], config_lines, [""]))
 
     def __str__(self):
         """
         Return properties as a string with line separators.
         """
         return self.props()
-
-
