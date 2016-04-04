@@ -49,7 +49,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * A {@link KafkaStreams} instance can co-ordinate with any other instances with the same application ID (whether in this same process, on other processes
  * on this machine, or on remote machines) as a single (possibly distributed) stream processing client. These instances will divide up the work
  * based on the assignment of the input topic partitions so that all partitions are being
- * consumed. If instances are added or failed, all instances will rebelance the partition assignment among themselves
+ * consumed. If instances are added or failed, all instances will rebalance the partition assignment among themselves
  * to balance processing load.
  * <p>
  * Internally the {@link KafkaStreams} instance contains a normal {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}
