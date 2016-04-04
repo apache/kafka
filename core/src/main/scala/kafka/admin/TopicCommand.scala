@@ -355,7 +355,7 @@ object TopicCommand extends Logging {
                            .describedAs("broker_id_for_part1_replica1 : broker_id_for_part1_replica2 , " +
                                         "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...")
                            .ofType(classOf[String])
-    val reportUnderReplicatedPartitionsOpt = parser.accepts("nder-replicated-partitionsu",
+    val reportUnderReplicatedPartitionsOpt = parser.accepts("under-replicated-partitions",
                                                             "if set when describing topics, only show under replicated partitions")
     val reportUnavailablePartitionsOpt = parser.accepts("unavailable-partitions",
                                                             "if set when describing topics, only show partitions whose leader is not available")
