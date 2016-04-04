@@ -179,7 +179,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
                 // after processing this record, if its partition queue's buffered size has been
                 // decreased to the threshold, we can then resume the consumption on this partition
-                if (partitionGroup.numBuffered(partition) == this.maxBufferedSize) {
+                if (recordInfo.queue().size() == this.maxBufferedSize) {
                     consumer.resume(singleton(partition));
                     requiresPoll = true;
                 }
@@ -320,13 +320,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
         ProcessorNode thisNode = currNode;
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            currNode = childNode;
-            try {
+        try {
+            for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+                currNode = childNode;
                 childNode.process(key, value);
-            } finally {
-                currNode = thisNode;
             }
+        } finally {
+            currNode = thisNode;
         }
     }
 

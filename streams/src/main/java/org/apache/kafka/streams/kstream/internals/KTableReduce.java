@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
@@ -61,6 +62,10 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
         @Override
         public void process(K key, Change<V> value) {
+            // the keys should never be null
+            if (key == null)
+                throw new StreamsException("Record key for KTable reduce operator with state " + storeName + " should not be null.");
+
             V oldAgg = store.get(key);
             V newAgg = oldAgg;
 
