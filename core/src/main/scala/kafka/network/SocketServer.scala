@@ -29,10 +29,8 @@ import com.yammer.metrics.core.Gauge
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
-import kafka.network.RequestChannel.{Response, ResponseAction}
 import kafka.server.KafkaConfig
 import kafka.utils._
-import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, LoginType, Mode, Selector => KSelector}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -382,10 +380,7 @@ private[kafka] class Processor(val id: Int,
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
-  private val channelBuilder = ChannelBuilders.create(protocol, Mode.SERVER, LoginType.SERVER, channelConfigs)
-  private val metricTags = new util.HashMap[String, String]()
-  metricTags.put("networkProcessor", id.toString)
-
+  private val metricTags = Map("networkProcessor" -> id.toString).asJava
 
   newGauge("IdlePercent",
     new Gauge[Double] {
@@ -404,7 +399,7 @@ private[kafka] class Processor(val id: Int,
     "socket-server",
     metricTags,
     false,
-    channelBuilder)
+    ChannelBuilders.create(protocol, Mode.SERVER, LoginType.SERVER, channelConfigs))
 
   override def run() {
     startupComplete()
