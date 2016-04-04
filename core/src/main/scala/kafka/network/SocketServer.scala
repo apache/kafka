@@ -34,7 +34,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, Selector => KSelector}
+import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, LoginType, Mode, Selector => KSelector}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.protocol.types.SchemaException
@@ -154,6 +154,9 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   /* For test usage */
   private[network] def connectionCount(address: InetAddress): Int =
     Option(connectionQuotas).fold(0)(_.get(address))
+
+  /* For test usage */
+  private[network] def processor(index: Int): Processor = processors(index)
 
 }
 
@@ -458,8 +461,16 @@ private[kafka] class Processor(val id: Int,
   /* `protected` for test usage */
   protected[network] def sendResponse(response: RequestChannel.Response) {
     trace(s"Socket server received response to send, registering for write and sending data: $response")
-    selector.send(response.responseSend)
-    inflightResponses += (response.request.connectionId -> response)
+    val channel = selector.channel(response.responseSend.destination)
+    // `channel` can be null if the selector closed the connection because it was idle for too long
+    if (channel == null) {
+      warn(s"Attempting to send response via channel for which there is no open connection, connection id $id")
+      response.request.updateRequestMetrics()
+    }
+    else {
+      selector.send(response.responseSend)
+      inflightResponses += (response.request.connectionId -> response)
+    }
   }
 
   private def poll() {
@@ -555,6 +566,9 @@ private[kafka] class Processor(val id: Int,
     selector.close()
   }
 
+  /* For test usage */
+  private[network] def channel(connectionId: String): Option[KafkaChannel] =
+    Option(selector.channel(connectionId))
 
   /**
    * Wakeup the thread for selection.

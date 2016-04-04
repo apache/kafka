@@ -82,6 +82,10 @@ class SocketServerTest extends JUnitSuite {
   def processRequest(channel: RequestChannel) {
     val request = channel.receiveRequest(2000)
     assertNotNull("receiveRequest timed out", request)
+    processRequest(channel, request)
+  }
+
+  def processRequest(channel: RequestChannel, request: RequestChannel.Request) {
     val byteBuffer = ByteBuffer.allocate(request.header.sizeOf + request.body.sizeOf)
     request.header.writeTo(byteBuffer)
     request.body.writeTo(byteBuffer)
@@ -315,9 +319,7 @@ class SocketServerTest extends JUnitSuite {
       val request = channel.receiveRequest(2000)
 
       val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.requestId).name)
-
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
-
       val expectedTotalTimeCount = totalTimeHistCount() + 1
 
       // send a large buffer to ensure that the broker detects the client disconnection while writing to the socket channel.
@@ -334,6 +336,44 @@ class SocketServerTest extends JUnitSuite {
       overrideServer.shutdown()
       serverMetrics.close()
     }
+  }
+
+  /*
+   * Test that we update request metrics if the channel has been removed from the selector when the broker calls
+   * `selector.send` (selector closes old connections, for example).
+   */
+  @Test
+  def testBrokerSendAfterChannelClosedUpdatesRequestMetrics() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    props.setProperty(KafkaConfig.ConnectionsMaxIdleMsProp, "100")
+    val serverMetrics = new Metrics
+    var conn: Socket = null
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, new SystemTime)
+    try {
+      overrideServer.startup()
+      conn = connect(overrideServer)
+      val serializedBytes = producerRequestBytes
+      sendRequest(conn, serializedBytes)
+      val channel = overrideServer.requestChannel
+      val request = channel.receiveRequest(2000)
+
+      TestUtils.waitUntilTrue(() => overrideServer.processor(request.processor).channel(request.connectionId).isEmpty,
+        s"Idle connection `${request.connectionId}` was not closed by selector")
+
+      val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.requestId).name)
+      def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
+      val expectedTotalTimeCount = totalTimeHistCount() + 1
+
+      processRequest(channel, request)
+
+      TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
+        s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
+
+    } finally {
+      overrideServer.shutdown()
+      serverMetrics.close()
+    }
+
   }
 
 }
