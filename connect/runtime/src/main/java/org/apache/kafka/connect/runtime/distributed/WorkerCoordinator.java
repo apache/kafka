@@ -257,13 +257,23 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
             Measurable numConnectors = new Measurable() {
                 public double measure(MetricConfig config, long now) {
-                    return assignmentSnapshot.connectors().size();
+		    if (assignmentSnapshot != null) {
+			return assignmentSnapshot.connectors().size();
+		    }
+		    else {
+			return 0.0;
+		    }
                 }
             };
 
             Measurable numTasks = new Measurable() {
                 public double measure(MetricConfig config, long now) {
-                    return assignmentSnapshot.tasks().size();
+		    if (assignmentSnapshot != null) {
+			return assignmentSnapshot.tasks().size();
+		    }
+		    else {
+			return 0.0;
+		    }
                 }
             };
 
