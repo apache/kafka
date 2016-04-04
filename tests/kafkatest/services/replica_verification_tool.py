@@ -36,7 +36,7 @@ class ReplicaVerificationTool(BackgroundThreadService):
         self.report_interval_ms = report_interval_ms
         self.security_protocol = security_protocol
         self.security_config = SecurityConfig(security_protocol)
-        self.partition_max_lag = {}
+        self.partition_lag = {}
 
     def _worker(self, idx, node):
         cmd = self.start_cmd(node)
@@ -47,19 +47,11 @@ class ReplicaVerificationTool(BackgroundThreadService):
             if parsed:
                 lag = int(parsed.group(1))
                 topic_partition = parsed.group(2)
-                if self.partition_max_lag.get(topic_partition) is None:
-                    self.logger.debug("Setting max lag for {} as {}".format(topic_partition, lag))
-                    self.partition_max_lag[topic_partition] = lag
-                else:
-                    if self.partition_max_lag[topic_partition] < lag:
-                        self.logger.debug("Updating max lag for {} as {}".format(topic_partition, lag))
-                        self.partition_max_lag[topic_partition] = lag
+                self.logger.debug("Setting max lag for {} as {}".format(topic_partition, lag))
+                self.partition_lag[topic_partition] = lag
 
-    def get_max_lag_for_partition(self, topic, partition):
-        return self.partition_max_lag[topic + ',' + str(partition)]
-
-    def reset_partition_lags(self):
-        self.partition_max_lag.clear()
+    def get_lag_for_partition(self, topic, partition):
+        return self.partition_lag[topic + ',' + str(partition)]
 
     def start_cmd(self, node):
         cmd = "/opt/%s/bin/" % kafka_dir(node)
