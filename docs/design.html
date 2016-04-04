@@ -300,7 +300,7 @@ Log compaction is a mechanism to give finer-grained per-record retention, rather
 <p>
 This retention policy can be set per-topic, so a single cluster can have some topics where retention is enforced by size or time and other topics where retention is enforced by compaction.
 <p>
-This functionality is inspired by one of LinkedIn's oldest and most successful pieces of infrastructure&mdash;a database changelog caching service called <a href="https://github.com/linkedin/databus">Databus</a>. Unlike most log-structured storage systems Kafka is built for subscription and organizes data for fast linear reads and writes. Unlike Databus, Kafka acts a source-of-truth store so it is useful even in situations where the upstream data source would not otherwise be replayable.
+This functionality is inspired by one of LinkedIn's oldest and most successful pieces of infrastructure&mdash;a database changelog caching service called <a href="https://github.com/linkedin/databus">Databus</a>. Unlike most log-structured storage systems Kafka is built for subscription and organizes data for fast linear reads and writes. Unlike Databus, Kafka acts as a source-of-truth store so it is useful even in situations where the upstream data source would not otherwise be replayable.
 
 <h4><a id="design_compactionbasics" href="#design_compactionbasics">Log Compaction Basics</a></h4>
 
