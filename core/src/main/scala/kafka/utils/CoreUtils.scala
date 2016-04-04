@@ -57,13 +57,14 @@ object CoreUtils extends Logging {
     }
 
   /**
-   * Create a daemon thread
-   * @param name The name of the thread
-   * @param fun The function to execute in the thread
-   * @return The unstarted thread
-   */
-  def daemonThread(name: String, fun: => Unit): Thread =
-    Utils.daemonThread(name, runnable(fun))
+    * Create a thread
+    * @param name The name of the thread
+    * @param daemon Whether the thread should block JVM shutdown
+    * @param fun The function to execute in the thread
+    * @return The unstarted thread
+    */
+  def newThread(name: String, daemon: Boolean)(fun: => Unit): Thread =
+    Utils.newThread(name, runnable(fun), daemon)
 
   /**
    * Do the given action and log any exceptions thrown without rethrowing them
