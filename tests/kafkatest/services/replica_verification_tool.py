@@ -43,6 +43,8 @@ class ReplicaVerificationTool(BackgroundThreadService):
         self.logger.debug("ReplicaVerificationTool %d command: %s" % (idx, cmd))
         self.security_config.setup_node(node)
         for line in node.account.ssh_capture(cmd):
+            self.logger.debug("Parsing line:{}".format(line))
+
             parsed = re.search('.*max lag is (.+?) for partition \[(.+?)\] at', line)
             if parsed:
                 lag = int(parsed.group(1))
@@ -51,7 +53,10 @@ class ReplicaVerificationTool(BackgroundThreadService):
                 self.partition_lag[topic_partition] = lag
 
     def get_lag_for_partition(self, topic, partition):
-        return self.partition_lag[topic + ',' + str(partition)]
+        topic_partition = topic + ',' + str(partition)
+        lag = self.partition_lag[topic_partition]
+        self.logger.debug("Retuning lag for {} as {}".format(topic_partition, lag))
+        return lag
 
     def start_cmd(self, node):
         cmd = "/opt/%s/bin/" % kafka_dir(node)
@@ -62,5 +67,5 @@ class ReplicaVerificationTool(BackgroundThreadService):
         return cmd
 
     def clean_node(self, node):
-        node.account.kill_process("ReplicaVerificationTool", clean_shutdown=False, allow_fail=False)
+        node.account.kill_process("java", allow_fail=True)
         node.account.ssh("rm -rf /mnt/replica_verification_tool.log", allow_fail=False)
