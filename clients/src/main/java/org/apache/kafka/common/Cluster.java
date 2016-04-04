@@ -60,7 +60,7 @@ public final class Cluster {
         Collections.shuffle(copy);
         this.nodes = Collections.unmodifiableList(copy);
         this.nodesById = new HashMap<>();
-        for (Node node: nodes)
+        for (Node node : nodes)
             this.nodesById.put(node.id(), node);
 
         // index the partitions by topic/partition for quick lookup
@@ -142,9 +142,9 @@ public final class Cluster {
     public List<Node> nodes() {
         return this.nodes;
     }
-
+    
     /**
-     * Get the node by the node id
+     * Get the node by the node id (or null if no such node exists)
      * @param id The id of the node
      * @return The node, or null if no such node exists
      */
