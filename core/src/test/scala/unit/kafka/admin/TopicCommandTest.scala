@@ -201,9 +201,9 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
                                               (topic, 2) ->(Some(12), Seq(12, 11, 10)))
     val partitionsDescription = new PartitionsDescription(topic, partitions, liveBrokers, topicAndPartitionToLeaderAndIsr)
 
-    val expected = "\tTopic: test-topic\tPartition: 0\tLeader: 10\tReplicas: 10,11,12\tIsr: 10,12,11" +
-                   "\tTopic: test-topic\tPartition: 1\tLeader: 11\tReplicas: 11,12,10\tIsr: 11,10,12" +
-                   "\tTopic: test-topic\tPartition: 2\tLeader: 12\tReplicas: 12,10,11\tIsr: 12,11,10"
+    val expected = "\tTopic: test-topic\tPartition: 0\tLeader: 10\tReplicas: 10,11,12\tIsr: 10,12,11\n" +
+                   "\tTopic: test-topic\tPartition: 1\tLeader: 11\tReplicas: 11,12,10\tIsr: 11,10,12\n" +
+                   "\tTopic: test-topic\tPartition: 2\tLeader: 12\tReplicas: 12,10,11\tIsr: 12,11,10\n"
     assertEquals(expected, partitionsDescription.describeAndPrint())
   }
 
@@ -219,9 +219,9 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
                                               (topic, 2) ->(None, Seq(12, 11, 10)))
     val partitionsDescription = new PartitionsDescription(topic, partitions, liveBrokers, topicAndPartitionToLeaderAndIsr)
 
-    val expected = "\tTopic: test-topic\tPartition: 0\tLeader: 10\tReplicas: 10,11,12\tIsr: 10,12,11" +
-                   "\tTopic: test-topic\tPartition: 1\tLeader: 11\tReplicas: 11,12,10\tIsr: 11,10,12" +
-                   "\tTopic: test-topic\tPartition: 2\tLeader: none\tReplicas: 12,10,11\tIsr: 12,11,10"
+    val expected = "\tTopic: test-topic\tPartition: 0\tLeader: 10\tReplicas: 10,11,12\tIsr: 10,12,11\n" +
+                   "\tTopic: test-topic\tPartition: 1\tLeader: 11\tReplicas: 11,12,10\tIsr: 11,10,12\n" +
+                   "\tTopic: test-topic\tPartition: 2\tLeader: none\tReplicas: 12,10,11\tIsr: 12,11,10\n"
     assertEquals(expected, partitionsDescription.describeAndPrint())
   }
 
@@ -237,9 +237,9 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
                                               (topic, 2) ->(Some(12), Seq(12, 11)))
     val partitionsDescription = new PartitionsDescription(topic, partitions, liveBrokers, topicAndPartitionToLeaderAndIsr)
 
-    val expected = "\tTopic: test-topic\tPartition: 0\tLeader: 10\tReplicas: 10,11,12\tIsr: 10,12,11" +
-                   "\tTopic: test-topic\tPartition: 1\tLeader: 11\tReplicas: 11,12,10\tIsr: 11,10,12" +
-                   "\tTopic: test-topic\tPartition: 2\tLeader: 12\tReplicas: 12,10,11\tIsr: 12,11"
+    val expected = "\tTopic: test-topic\tPartition: 0\tLeader: 10\tReplicas: 10,11,12\tIsr: 10,12,11\n" +
+                   "\tTopic: test-topic\tPartition: 1\tLeader: 11\tReplicas: 11,12,10\tIsr: 11,10,12\n" +
+                   "\tTopic: test-topic\tPartition: 2\tLeader: 12\tReplicas: 12,10,11\tIsr: 12,11\n"
     assertEquals(expected, partitionsDescription.describeAndPrint())
   }
 
@@ -255,7 +255,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
                                               (topic, 2) ->(Some(12), Seq(12, 11, 10)))
     val partitionsDescription = new UnderReplicatedPartitionsDescription(topic, partitions, liveBrokers, topicAndPartitionToLeaderAndIsr)
 
-    val expected = "\tTopic: test-topic\tPartition: 1\tLeader: 11\tReplicas: 11,12,10\tIsr: 11,10"
+    val expected = "\tTopic: test-topic\tPartition: 1\tLeader: 11\tReplicas: 11,12,10\tIsr: 11,10\n"
     assertEquals(expected, partitionsDescription.describeAndPrint())
   }
 
@@ -271,8 +271,8 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
                                               (topic, 2) ->(None, Seq(12, 11, 10)))
     val partitionsDescription = new UnavailablePartitionsDescription(topic, partitions, liveBrokers, topicAndPartitionToLeaderAndIsr)
 
-    val expected = "\tTopic: test-topic\tPartition: 0\tLeader: 10\tReplicas: 10,11,12\tIsr: 10,12,11" +
-                   "\tTopic: test-topic\tPartition: 2\tLeader: none\tReplicas: 12,10,11\tIsr: 12,11,10"
+    val expected = "\tTopic: test-topic\tPartition: 0\tLeader: 10\tReplicas: 10,11,12\tIsr: 10,12,11\n" +
+                   "\tTopic: test-topic\tPartition: 2\tLeader: none\tReplicas: 12,10,11\tIsr: 12,11,10\n"
     assertEquals(expected, partitionsDescription.describeAndPrint())
   }
 
@@ -284,7 +284,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
                           (2, Seq(12, 10, 11)))
     val configs: Properties = new Properties()
     configs.put("some_prop", "some_val")
-    val configDescription = TopicCommand.describeAndPrintConfig(topic, partitions, configs)
+    val configDescription = TopicCommand.printOverridenConfigs(topic, partitions, configs)
     val expected = "Topic:test-topic\tPartitionCount:3\tReplicationFactor:3\tConfigs:some_prop=some_val"
     assertEquals(expected, configDescription)
   }
