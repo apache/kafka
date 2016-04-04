@@ -80,7 +80,8 @@ class SocketServerTest extends JUnitSuite {
 
   /* A simple request handler that just echos back the response */
   def processRequest(channel: RequestChannel) {
-    val request = channel.receiveRequest()
+    val request = channel.receiveRequest(2000)
+    assertNotNull("receiveRequest timed out", request)
     val byteBuffer = ByteBuffer.allocate(request.header.sizeOf + request.body.sizeOf)
     request.header.writeTo(byteBuffer)
     request.body.writeTo(byteBuffer)
@@ -284,7 +285,7 @@ class SocketServerTest extends JUnitSuite {
     val socket = connect()
     val bytes = new Array[Byte](40)
     sendRequest(socket, bytes, Some(0))
-    assertEquals(KafkaPrincipal.ANONYMOUS, server.requestChannel.receiveRequest().session.principal)
+    assertEquals(KafkaPrincipal.ANONYMOUS, server.requestChannel.receiveRequest(2000).session.principal)
   }
 
   /* Test that we update request metrics if the client closes the connection while the broker response is in flight. */
@@ -306,12 +307,12 @@ class SocketServerTest extends JUnitSuite {
     }
     try {
       overrideServer.startup()
-      conn = connect(overrideServer, protocol = SecurityProtocol.PLAINTEXT)
+      conn = connect(overrideServer)
       val serializedBytes = producerRequestBytes
       sendRequest(conn, serializedBytes)
 
       val channel = overrideServer.requestChannel
-      val request = channel.receiveRequest()
+      val request = channel.receiveRequest(2000)
 
       val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.requestId).name)
 

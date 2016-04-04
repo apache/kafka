@@ -137,7 +137,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     }
   }
 
-  /* For test usage */
+  /* `protected` for test usage */
   protected[network] def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, protocol: SecurityProtocol): Processor = {
     new Processor(id,
       time,
@@ -473,7 +473,6 @@ private[kafka] class Processor(val id: Int,
     }
   }
 
-  /* `protected` for test usage */
   private def processCompletedReceives() {
     selector.completedReceives.asScala.foreach { receive =>
       try {
