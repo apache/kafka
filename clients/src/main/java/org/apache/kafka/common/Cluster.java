@@ -83,7 +83,7 @@ public final class Cluster {
             psTopic.add(p);
 
             if (p.leader() != null) {
-                List<PartitionInfo> psNode = Utils.notNull(partsForNode.get(p.leader().idString()));
+                List<PartitionInfo> psNode = Utils.notNull(partsForNode.get(p.leader().id()));
                 psNode.add(p);
             }
         }
@@ -148,7 +148,7 @@ public final class Cluster {
      * @param id The id of the node
      * @return The node, or null if no such node exists
      */
-    public Node nodesById(int id) {
+    public Node nodeById(int id) {
         return this.nodesById.get(id);
     }
 
