@@ -140,6 +140,9 @@ class ConsumerPerformanceService(PerformanceService):
             # This is only used for security settings
             cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
 
+        for key, value in self.settings.items():
+            cmd += " %s=%s" % (str(key), str(value))
+
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s" % {'stdout': ConsumerPerformanceService.STDOUT_CAPTURE,
                                                         'stderr': ConsumerPerformanceService.STDERR_CAPTURE}
         return cmd
