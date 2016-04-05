@@ -135,6 +135,20 @@ public interface Herder {
      */
     ConfigInfos validateConfigs(String connType, Map<String, String> connectorConfig);
 
+    /**
+     * Restart the task with the given id.
+     * @param id id of the task
+     * @param cb callback to invoke upon completion
+     */
+    void restartTask(ConnectorTaskId id, Callback<Void> cb);
+
+    /**
+     * Restart the connector.
+     * @param connName name of the connector
+     * @param cb callback to invoke upon completion
+     */
+    void restartConnector(String connName, Callback<Void> cb);
+
     class Created<T> {
         private final boolean created;
         private final T result;

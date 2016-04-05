@@ -18,9 +18,9 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.distributed.NotAssignedException;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -33,14 +33,6 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
@@ -50,8 +42,16 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.net.URI;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Path("/connectors")
 @Produces(MediaType.APPLICATION_JSON)
@@ -122,7 +122,7 @@ public class ConnectorsResource {
     @PUT
     @Path("/{connector}/config")
     public Response putConnectorConfig(final @PathParam("connector") String connector,
-                                   final Map<String, String> connectorConfig) throws Throwable {
+                                       final Map<String, String> connectorConfig) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.putConnectorConfig(connector, connectorConfig, true, cb);
         Herder.Created<ConnectorInfo> createdInfo = completeOrForwardRequest(cb, "/connectors/" + connector + "/config",
@@ -133,6 +133,17 @@ public class ConnectorsResource {
         else
             response = Response.ok();
         return response.entity(createdInfo.result()).build();
+    }
+
+    @POST
+    @Path("/{connector}/restart")
+    public void restartConnector(final @PathParam("connector") String connector,
+                                 final @QueryParam("forward") Boolean forward) throws Throwable {
+        FutureCallback<Void> cb = new FutureCallback<>();
+        herder.restartConnector(connector, cb);
+        boolean recursiveForward = forward == null || !forward;
+        if (forward == null || forward)
+            completeOrForwardRequest(cb, "/connectors/" + connector + "/restart?forward=" + recursiveForward, "POST", null);
     }
 
     @GET
@@ -160,6 +171,21 @@ public class ConnectorsResource {
         return herder.taskStatus(new ConnectorTaskId(connector, task));
     }
 
+    @POST
+    @Path("/{connector}/tasks/{task}/restart")
+    public void restartTask(@PathParam("connector") String connector,
+                            @PathParam("task") Integer task,
+                            @QueryParam("forward") Boolean forward) throws Throwable {
+        FutureCallback<Void> cb = new FutureCallback<>();
+        ConnectorTaskId taskId = new ConnectorTaskId(connector, task);
+        herder.restartTask(taskId, cb);
+
+        boolean recursiveForward = forward == null || !forward;
+
+        if (forward == null || forward)
+            completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart?forward=" + recursiveForward, "POST", null);
+    }
+
     @DELETE
     @Path("/{connector}")
     public void destroyConnector(final @PathParam("connector") String connector) throws Throwable {
@@ -176,14 +202,23 @@ public class ConnectorsResource {
         try {
             return cb.get(REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
-            if (e.getCause() instanceof NotLeaderException) {
-                NotLeaderException notLeaderError = (NotLeaderException) e.getCause();
-                String forwardUrl = RestServer.urlJoin(notLeaderError.leaderUrl(), path);
+            Throwable cause = e.getCause();
+            String forwardUrl = null;
+
+            if (cause instanceof NotLeaderException) {
+                NotLeaderException notLeaderError = (NotLeaderException) cause;
+                forwardUrl = RestServer.urlJoin(notLeaderError.leaderUrl(), path);
                 log.debug("Forwarding request to leader: {} {} {}", forwardUrl, method, body);
-                return translator.translate(RestServer.httpRequest(forwardUrl, method, body, resultType));
+            } else if (cause instanceof NotAssignedException) {
+                NotAssignedException notTaskOwnerError = (NotAssignedException) cause;
+                forwardUrl = RestServer.urlJoin(notTaskOwnerError.ownerUrl(), path);
+                log.debug("Forwarding request to task owner: {} {} {}", forwardUrl, method, body);
             }
 
-            throw e.getCause();
+            if (forwardUrl != null)
+                return translator.translate(RestServer.httpRequest(forwardUrl, method, body, resultType));
+
+            throw cause;
         } catch (TimeoutException e) {
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option

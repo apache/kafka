@@ -545,6 +545,67 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
+    public synchronized void restartConnector(final String connName, final Callback<Void> callback) {
+        addRequest(new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                if (!configState.connectors().contains(connName)) {
+                    callback.onCompletion(new NotFoundException("Unknown connector: " + connName), null);
+                    return null;
+                }
+
+                if (worker.ownsConnector(connName)) {
+                    try {
+                        worker.stopConnector(connName);
+                        startConnector(connName);
+                        callback.onCompletion(null, null);
+                    } catch (Throwable t) {
+                        callback.onCompletion(t, null);
+                    }
+                } else if (isLeader()) {
+                    callback.onCompletion(new NotAssignedException("Cannot restart connector since it is not assigned to this member", member.ownerUrl(connName)), null);
+                } else {
+                    callback.onCompletion(new NotLeaderException("Cannot restart connector since it is not assigned to this member", leaderUrl()), null);
+                }
+                return null;
+            }
+        }, forwardErrorCallback(callback));
+    }
+
+    @Override
+    public synchronized void restartTask(final ConnectorTaskId id, final Callback<Void> callback) {
+        addRequest(new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                if (!configState.connectors().contains(id.connector())) {
+                    callback.onCompletion(new NotFoundException("Unknown connector: " + id.connector()), null);
+                    return null;
+                }
+
+                if (configState.taskConfig(id) == null) {
+                    callback.onCompletion(new NotFoundException("Unknown task: " + id), null);
+                    return null;
+                }
+
+                if (worker.ownsTask(id)) {
+                    try {
+                        worker.stopAndAwaitTask(id);
+                        startTask(id);
+                        callback.onCompletion(null, null);
+                    } catch (Throwable t) {
+                        callback.onCompletion(t, null);
+                    }
+                } else if (isLeader()) {
+                    callback.onCompletion(new NotAssignedException("Cannot restart task since it is not assigned to this member", member.ownerUrl(id)), null);
+                } else {
+                    callback.onCompletion(new NotLeaderException("Cannot restart task since it is not assigned to this member", leaderUrl()), null);
+                }
+                return null;
+            }
+        }, forwardErrorCallback(callback));
+    }
+
+    @Override
     public int generation() {
         return generation;
     }
@@ -678,17 +739,22 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
         }
         for (ConnectorTaskId taskId : assignment.tasks()) {
-            try {
-                log.info("Starting task {}", taskId);
-                Map<String, String> configs = configState.taskConfig(taskId);
-                TaskConfig taskConfig = new TaskConfig(configs);
-                worker.startTask(taskId, taskConfig, this);
-            } catch (ConfigException e) {
-                log.error("Couldn't instantiate task " + taskId + " because it has an invalid task " +
-                        "configuration. This task will not execute until reconfigured.", e);
-            }
+            startTask(taskId);
         }
         log.info("Finished starting connectors and tasks");
+    }
+
+    private void startTask(ConnectorTaskId taskId) {
+        try {
+            log.info("Starting task {}", taskId);
+            Map<String, String> configs = configState.taskConfig(taskId);
+            TaskConfig taskConfig = new TaskConfig(configs);
+            worker.startTask(taskId, taskConfig, this);
+        } catch (ConfigException e) {
+            log.error("Couldn't instantiate task " + taskId + " because it has an invalid task " +
+                    "configuration. This task will not execute until reconfigured.", e);
+        }
+
     }
 
     // Helper for starting a connector with the given name, which will extract & parse the config, generate connector
