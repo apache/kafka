@@ -43,7 +43,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private static final Logger log = LoggerFactory.getLogger(StreamTask.class);
 
-    private static final ConsumerRecord<Object, Object> punctuatedRecord = new ConsumerRecord<>("__null_topic__", -1, -1L, null, null);
+    private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>("__null_topic__", -1, -1L, null, null);
 
     private final int maxBufferedSize;
 
@@ -218,7 +218,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             throw new IllegalStateException("Current node is not null");
 
         currNode = node;
-        currRecord = new StampedRecord(punctuatedRecord, timestamp);
+        currRecord = new StampedRecord(DUMMY_RECORD, timestamp);
 
         try {
             node.processor().punctuate(timestamp);
