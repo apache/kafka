@@ -31,7 +31,7 @@ public class ConsumerRecordTest {
         String key = "key";
         String value = "value";
 
-        ConsumerRecord record = new ConsumerRecord(topic, partition, offset, key, value);
+        ConsumerRecord<String, String> record = new ConsumerRecord<>(topic, partition, offset, key, value);
         assertEquals(topic, record.topic());
         assertEquals(partition, record.partition());
         assertEquals(offset, record.offset());
