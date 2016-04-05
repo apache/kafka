@@ -117,36 +117,39 @@ object RequestChannel extends Logging {
       if (apiRemoteCompleteTimeMs < 0)
         apiRemoteCompleteTimeMs = responseCompleteTimeMs
 
-      val requestQueueTime = (requestDequeueTimeMs - startTimeMs).max(0L)
-      val apiLocalTime = (apiLocalCompleteTimeMs - requestDequeueTimeMs).max(0L)
-      val apiRemoteTime = (apiRemoteCompleteTimeMs - apiLocalCompleteTimeMs).max(0L)
-      val apiThrottleTime = (responseCompleteTimeMs - apiRemoteCompleteTimeMs).max(0L)
-      val responseQueueTime = (responseDequeueTimeMs - responseCompleteTimeMs).max(0L)
-      val responseSendTime = (endTimeMs - responseDequeueTimeMs).max(0L)
+      val requestQueueTime = math.max(requestDequeueTimeMs - startTimeMs, 0)
+      val apiLocalTime = math.max(apiLocalCompleteTimeMs - requestDequeueTimeMs, 0)
+      val apiRemoteTime = math.max(apiRemoteCompleteTimeMs - apiLocalCompleteTimeMs, 0)
+      val apiThrottleTime = math.max(responseCompleteTimeMs - apiRemoteCompleteTimeMs, 0)
+      val responseQueueTime = math.max(responseDequeueTimeMs - responseCompleteTimeMs, 0)
+      val responseSendTime = math.max(endTimeMs - responseDequeueTimeMs, 0)
       val totalTime = endTimeMs - startTimeMs
-      var metricsList = List(RequestMetrics.metricsMap(ApiKeys.forId(requestId).name))
-      if (requestId == ApiKeys.FETCH.id) {
-        val isFromFollower = requestObj.asInstanceOf[FetchRequest].isFromFollower
-        metricsList ::= ( if (isFromFollower)
-                            RequestMetrics.metricsMap(RequestMetrics.followFetchMetricName)
-                          else
-                            RequestMetrics.metricsMap(RequestMetrics.consumerFetchMetricName) )
-      }
-      metricsList.foreach{
-        m => m.requestRate.mark()
-             m.requestQueueTimeHist.update(requestQueueTime)
-             m.localTimeHist.update(apiLocalTime)
-             m.remoteTimeHist.update(apiRemoteTime)
-             m.throttleTimeHist.update(apiThrottleTime)
-             m.responseQueueTimeHist.update(responseQueueTime)
-             m.responseSendTimeHist.update(responseSendTime)
-             m.totalTimeHist.update(totalTime)
+      val fetchMetricNames =
+        if (requestId == ApiKeys.FETCH.id) {
+          val isFromFollower = requestObj.asInstanceOf[FetchRequest].isFromFollower
+          Seq(
+            if (isFromFollower) RequestMetrics.followFetchMetricName
+            else RequestMetrics.consumerFetchMetricName
+          )
+        }
+        else Seq.empty
+      val metricNames = fetchMetricNames :+ ApiKeys.forId(requestId).name
+      metricNames.foreach { metricName =>
+        val m = RequestMetrics.metricsMap(metricName)
+        m.requestRate.mark()
+        m.requestQueueTimeHist.update(requestQueueTime)
+        m.localTimeHist.update(apiLocalTime)
+        m.remoteTimeHist.update(apiRemoteTime)
+        m.throttleTimeHist.update(apiThrottleTime)
+        m.responseQueueTimeHist.update(responseQueueTime)
+        m.responseSendTimeHist.update(responseSendTime)
+        m.totalTimeHist.update(totalTime)
       }
 
-      if(requestLogger.isTraceEnabled)
+      if (requestLogger.isTraceEnabled)
         requestLogger.trace("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
           .format(requestDesc(true), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
-      else if(requestLogger.isDebugEnabled)
+      else if (requestLogger.isDebugEnabled)
         requestLogger.debug("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
           .format(requestDesc(false), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
     }
