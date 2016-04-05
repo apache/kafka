@@ -42,6 +42,9 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.Stores;
 
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 import java.lang.reflect.Array;
 import java.util.HashSet;
 import java.util.Set;
@@ -77,6 +80,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public static final String OUTEROTHER_NAME = "KSTREAM-OUTEROTHER-";
 
     private static final String PROCESSOR_NAME = "KSTREAM-PROCESSOR-";
+
+    private static final String PRINTING_NAME = "KSTREAM-PRINTER-";
 
     private static final String REDUCE_NAME = "KSTREAM-REDUCE-";
 
@@ -244,6 +249,41 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
 
         topology.addSink(name, topic, keySerializer, valSerializer, partitioner, this.name);
+    }
+
+
+    @Override
+    public KStream<K, V> print() {
+        return print(null, null);
+    }
+
+    @Override
+    public KStream<K, V> print(Serde<?> keySerde, Serde<?> valSerde) {
+        String name = topology.newName(PRINTING_NAME);
+        topology.addProcessor(name, new KStreamPrinter<>(keySerde, valSerde), this.name);
+        return new KStreamImpl<>(topology, name, sourceNodes);
+    }
+
+
+    @Override
+    public KStream<K, V> writeAsText(String filePath) {
+        return writeAsText(filePath, null, null);
+    }
+
+    @Override
+    public KStream<K, V> writeAsText(String filePath, Serde<?> keySerde, Serde<?> valSerde) {
+        String name = topology.newName(PRINTING_NAME);
+
+        try {
+
+            PrintStream printStream = new PrintStream(new FileOutputStream(filePath));
+            topology.addProcessor(name, new KStreamPrinter<>(printStream, keySerde, valSerde), this.name);
+            return new KStreamImpl<>(topology, name, sourceNodes);
+
+        } catch (FileNotFoundException e) {
+            String message = "Unable to write stream to file at [" + filePath + "]";
+            throw new IllegalStateException(message, e);
+        }
     }
 
     @Override

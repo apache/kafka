@@ -89,6 +89,41 @@ public interface KTable<K, V> {
      */
     KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic);
 
+
+    /**
+     * Print the elements of this stream to System.out
+     */
+    KTable<K, V> print();
+
+    /**
+     * Print the elements of this stream to System.out
+     * @param keySerde key serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     */
+    KTable<K, V> print(Serde<?> keySerde, Serde<?> valSerde);
+
+    /**
+     * Write the elements of this stream to a file at the given path.
+     * @param filePath name of file to write to
+     *
+     */
+    KTable<K, V>  writeAsText(String filePath);
+
+    /**
+     *
+     * @param filePath name of file to write to
+     * @param keySerde key serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     */
+
+    KTable<K, V>  writeAsText(String filePath, Serde<?> keySerde, Serde<?> valSerde);
+
+
+
     /**
      * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic
      * using a customizable {@link StreamPartitioner} to determine the distribution of records to partitions.

@@ -35,6 +35,9 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.Stores;
 
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 import java.util.Collections;
 import java.util.Set;
 
@@ -65,6 +68,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public static final String MERGE_NAME = "KTABLE-MERGE-";
 
     public static final String OUTERTHIS_NAME = "KTABLE-OUTERTHIS-";
+
+    private static final String PRINTING_NAME = "KSTREAM-PRINTER-";
 
     public static final String OUTEROTHER_NAME = "KTABLE-OUTEROTHER-";
 
@@ -174,6 +179,37 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic) {
         this.toStream().to(keySerde, valSerde, partitioner, topic);
+    }
+
+    @Override
+    public KTable<K, V> print() {
+        return print(null, null);
+    }
+
+    @Override
+    public KTable<K, V> print(Serde<?> keySerde, Serde<?> valSerde) {
+        String name = topology.newName(PRINTING_NAME);
+        topology.addProcessor(name, new KStreamPrinter<>(keySerde, valSerde), this.name);
+        return new KTableImpl<K, S, V>(topology, name, this.processorSupplier, sourceNodes);
+    }
+
+
+    @Override
+    public KTable<K, V> writeAsText(String filePath) {
+        return writeAsText(filePath, null, null);
+    }
+
+    @Override
+    public KTable<K, V> writeAsText(String filePath, Serde<?> keySerde, Serde<?> valSerde) {
+        String name = topology.newName(PRINTING_NAME);
+        try {
+            PrintStream printStream = new PrintStream(new FileOutputStream(filePath));
+            topology.addProcessor(name, new KStreamPrinter<>(printStream, keySerde, valSerde), this.name);
+            return new KTableImpl<K, S, V>(topology, name, this.processorSupplier, sourceNodes);
+        } catch (FileNotFoundException e) {
+            String message = "Unable to write stream to file at [" + filePath + "]";
+            throw new IllegalStateException(message, e);
+        }
     }
 
     @Override
