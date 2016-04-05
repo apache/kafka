@@ -26,23 +26,23 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 public class KStreamTransform<K, V, K1, V1> implements ProcessorSupplier<K, V> {
 
-    private final TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier;
+    private final TransformerSupplier<K, V, K1, V1> transformerSupplier;
 
-    public KStreamTransform(TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier) {
+    public KStreamTransform(TransformerSupplier<K, V, K1, V1> transformerSupplier) {
         this.transformerSupplier = transformerSupplier;
     }
 
     @Override
     public Processor<K, V> get() {
-        return new KStreamTransformProcessor(transformerSupplier.get());
+        return new KStreamTransformProcessor<>(transformerSupplier.get());
     }
 
     public static class KStreamTransformProcessor<K1, V1, K2, V2> implements Processor<K1, V1> {
 
-        private final Transformer<K1, V1, KeyValue<K2, V2>> transformer;
+        private final Transformer<K1, V1, K2, V2> transformer;
         private ProcessorContext context;
 
-        public KStreamTransformProcessor(Transformer<K1, V1, KeyValue<K2, V2>> transformer) {
+        public KStreamTransformProcessor(Transformer<K1, V1, K2, V2> transformer) {
             this.transformer = transformer;
         }
 
@@ -60,7 +60,10 @@ public class KStreamTransform<K, V, K1, V1> implements ProcessorSupplier<K, V> {
 
         @Override
         public void punctuate(long timestamp) {
-            transformer.punctuate(timestamp);
+            KeyValue<K2, V2> pair = transformer.punctuate(timestamp);
+
+            if (pair != null)
+                context.forward(pair.key, pair.value);
         }
 
         @Override

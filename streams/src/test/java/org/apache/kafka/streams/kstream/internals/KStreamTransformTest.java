@@ -41,10 +41,10 @@ public class KStreamTransformTest {
     public void testTransform() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>> transformerSupplier =
-            new TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>>() {
-                public Transformer<Integer, Integer, KeyValue<Integer, Integer>> get() {
-                    return new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
+        TransformerSupplier<Integer, Integer, Integer, Integer> transformerSupplier =
+            new TransformerSupplier<Integer, Integer, Integer, Integer>() {
+                public Transformer<Integer, Integer, Integer, Integer> get() {
+                    return new Transformer<Integer, Integer, Integer, Integer>() {
 
                         private int total = 0;
 
@@ -59,7 +59,8 @@ public class KStreamTransformTest {
                         }
 
                         @Override
-                        public void punctuate(long timestamp) {
+                        public KeyValue<Integer, Integer> punctuate(long timestamp) {
+                            return null;
                         }
 
                         @Override

@@ -20,7 +20,7 @@ package org.apache.kafka.streams.kstream;
 /**
  * A transformer supplier which can create one or more {@link Transformer} instances.
  */
-public interface TransformerSupplier<K, V, R> {
+public interface TransformerSupplier<K, V, RK, RV> {
 
-    Transformer<K, V, R> get();
+    Transformer<K, V, RK, RV> get();
 }

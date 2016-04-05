@@ -58,7 +58,8 @@ public class KStreamTransformValuesTest {
                         }
 
                         @Override
-                        public void punctuate(long timestamp) {
+                        public Integer punctuate(long timestamp) {
+                            return null;
                         }
 
                         @Override
