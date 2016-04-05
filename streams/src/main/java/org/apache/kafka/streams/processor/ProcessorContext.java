@@ -115,29 +115,34 @@ public interface ProcessorContext {
     void commit();
 
     /**
-     * Returns the topic name of the current input record
+     * Returns the topic name of the current input record; could be null if it is not available (for example, it is from the punctuate call)
      *
      * @return the topic name
      */
     String topic();
 
     /**
-     * Returns the partition id of the current input record
+     * Returns the partition id of the current input record; could be -1 if it is not available (for example, it is from the punctuate call)
      *
      * @return the partition id
      */
     int partition();
 
     /**
-     * Returns the offset of the current input record
+     * Returns the offset of the current input record; could be -1 if it is not available (for example, it is from the punctuate call)
      *
      * @return the offset
      */
     long offset();
 
     /**
-     * Returns the timestamp of the current input record. The timestamp is extracted from
+     * Returns the current timestamp.
+     *
+     * If it is triggered while processing a record streamed from the source processor, timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
      * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord} by {@link TimestampExtractor}.
+     *
+     * If it is triggered while processing a record generated not from the source processor (for example, generated from the punctuate function), timestamp is defined as the current
+     * task's stream team, which is defined as the smallest among all its input stream partition timestamps.
      *
      * @return the timestamp
      */

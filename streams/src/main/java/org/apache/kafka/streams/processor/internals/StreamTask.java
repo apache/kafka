@@ -43,6 +43,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private static final Logger log = LoggerFactory.getLogger(StreamTask.class);
 
+    private static final ConsumerRecord<Object, Object> punctuatedRecord = new ConsumerRecord<>("__null_topic__", -1, -1L, null, null);
+
     private final int maxBufferedSize;
 
     private final PartitionGroup partitionGroup;
@@ -202,11 +204,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     /**
      * Possibly trigger registered punctuation functions if
-     * current time has reached the defined stamp
-     *
-     * @param timestamp
+     * current partition group timestamp has reached the defined stamp
      */
-    public boolean maybePunctuate(long timestamp) {
+    public boolean maybePunctuate() {
+        long timestamp = partitionGroup.timestamp();
+
         return punctuationQueue.mayPunctuate(timestamp, this);
     }
 
@@ -216,10 +218,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
             throw new IllegalStateException("Current node is not null");
 
         currNode = node;
+        currRecord = new StampedRecord(punctuatedRecord, timestamp);
+
         try {
             node.processor().punctuate(timestamp);
         } finally {
             currNode = null;
+            currRecord = null;
         }
     }
 

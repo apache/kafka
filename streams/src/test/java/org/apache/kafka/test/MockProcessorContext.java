@@ -143,7 +143,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public void schedule(long interval) {
-        throw new UnsupportedOperationException("schedule() not supported");
+        throw new UnsupportedOperationException("schedule() not supported.");
     }
 
     @Override
