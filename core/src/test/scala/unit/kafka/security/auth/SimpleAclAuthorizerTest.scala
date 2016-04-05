@@ -46,7 +46,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     props.put(SimpleAclAuthorizer.SuperUsersProp, superUsers)
-    props.put(SimpleAclAuthorizer.ZkMaxRetriesProp, Long.MaxValue.toString)
+    props.put(SimpleAclAuthorizer.ZkMaxRetriesProp, Int.MaxValue.toString)
 
     config = KafkaConfig.fromProps(props)
     simpleAclAuthorizer.configure(config.originals)
