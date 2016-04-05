@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.Stores;
 
 import java.util.Collections;
@@ -133,25 +134,46 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public KTable<K, V> through(Serde<K> keySerde,
                                 Serde<V> valSerde,
+                                StreamPartitioner<K, V> partitioner,
                                 String topic) {
-        to(keySerde, valSerde, topic);
+        to(keySerde, valSerde, partitioner, topic);
 
         return topology.table(keySerde, valSerde, topic);
     }
 
     @Override
+    public KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic) {
+        return through(keySerde, valSerde, null, topic);
+    }
+
+    @Override
+    public KTable<K, V> through(StreamPartitioner<K, V> partitioner, String topic) {
+        return through(null, null, partitioner, topic);
+    }
+
+    @Override
     public KTable<K, V> through(String topic) {
-        return through(null, null, topic);
+        return through(null, null, null, topic);
     }
 
     @Override
     public void to(String topic) {
-        to(null, null, topic);
+        to(null, null, null, topic);
+    }
+
+    @Override
+    public void to(StreamPartitioner<K, V> partitioner, String topic) {
+        to(null, null, partitioner, topic);
     }
 
     @Override
     public void to(Serde<K> keySerde, Serde<V> valSerde, String topic) {
-        this.toStream().to(keySerde, valSerde, topic);
+        this.toStream().to(keySerde, valSerde, null, topic);
+    }
+
+    @Override
+    public void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic) {
+        this.toStream().to(keySerde, valSerde, partitioner, topic);
     }
 
     @Override
