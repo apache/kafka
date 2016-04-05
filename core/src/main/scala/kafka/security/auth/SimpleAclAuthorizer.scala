@@ -40,6 +40,9 @@ object SimpleAclAuthorizer {
   val ZkConnectionTimeOutProp = "authorizer.zookeeper.connection.timeout.ms"
   val ZkSessionTimeOutProp = "authorizer.zookeeper.session.timeout.ms"
 
+  val ZkMaxRetriesProp = "authorizer.zookeeper.maximum.retries"
+  val defaultZkMaxRetries = 10
+
   //List of users that will be treated as super users and will have access to all the resources for all actions from all hosts, defaults to no super users.
   val SuperUsersProp = "super.users"
   //If set to true when no acls are found for a resource , authorizer allows access to everyone. Defaults to false.
@@ -79,7 +82,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   // The maximum number of times we should try to update the resource acls in zookeeper before failing;
   // This should never occur, but is a safeguard just in case.
-  private val maxUpdateRetries = 10
+  private var maxUpdateRetries = SimpleAclAuthorizer.defaultZkMaxRetries
 
   private val retryBackoffMs = 100
   private val retryBackoffJitterMs = 50
@@ -97,6 +100,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }.getOrElse(Set.empty[KafkaPrincipal])
 
     shouldAllowEveryoneIfNoAclIsFound = configs.get(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp).exists(_.toString.toBoolean)
+
+    maxUpdateRetries = configs.get(SimpleAclAuthorizer.ZkMaxRetriesProp).map(_.toString.toInt).getOrElse(SimpleAclAuthorizer.defaultZkMaxRetries)
 
     // Use `KafkaConfig` in order to get the default ZK config values if not present in `javaConfigs`. Note that this
     // means that `KafkaConfig.zkConnect` must always be set by the user (even if `SimpleAclAuthorizer.ZkUrlProp` is also
