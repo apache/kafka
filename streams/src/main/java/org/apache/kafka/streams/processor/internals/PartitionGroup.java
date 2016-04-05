@@ -135,17 +135,14 @@ public class PartitionGroup {
      * partition timestamp among all its partitions
      */
     public long timestamp() {
-        if (queuesByTime.isEmpty()) {
-            // if there is no data in all partitions, return the smallest of their last known times
-            long timestamp = Long.MAX_VALUE;
-            for (RecordQueue queue : partitionQueues.values()) {
-                if (timestamp > queue.timestamp())
-                    timestamp = queue.timestamp();
-            }
-            return timestamp;
-        } else {
-            return queuesByTime.peek().timestamp();
+        // we should always return the smallest timestamp of all partitions
+        // to avoid group partition time goes backward
+        long timestamp = Long.MAX_VALUE;
+        for (RecordQueue queue : partitionQueues.values()) {
+            if (timestamp > queue.timestamp())
+                timestamp = queue.timestamp();
         }
+        return timestamp;
     }
 
     public int numBuffered(TopicPartition partition) {
