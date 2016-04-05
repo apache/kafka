@@ -167,11 +167,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 this.currNode = recordInfo.node();
                 TopicPartition partition = recordInfo.partition();
 
-                log.debug("Start processing one record [" + currRecord + "]");
+                log.debug("Start processing one record [{}]", currRecord);
 
                 this.currNode.process(currRecord.key(), currRecord.value());
 
-                log.debug("Completed processing one record [" + currRecord + "]");
+                log.debug("Completed processing one record [{}]", currRecord);
 
                 // update the consumed offset map after processing is done
                 consumedOffsets.put(partition, currRecord.offset());
@@ -179,7 +179,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
                 // after processing this record, if its partition queue's buffered size has been
                 // decreased to the threshold, we can then resume the consumption on this partition
-                if (partitionGroup.numBuffered(partition) == this.maxBufferedSize) {
+                if (recordInfo.queue().size() == this.maxBufferedSize) {
                     consumer.resume(singleton(partition));
                     requiresPoll = true;
                 }
@@ -320,13 +320,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
         ProcessorNode thisNode = currNode;
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            currNode = childNode;
-            try {
+        try {
+            for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+                currNode = childNode;
                 childNode.process(key, value);
-            } finally {
-                currNode = thisNode;
             }
+        } finally {
+            currNode = thisNode;
         }
     }
 

@@ -19,7 +19,6 @@ package kafka.log
 
 import java.io._
 import java.util.Properties
-import java.util.concurrent.atomic._
 
 import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException}
 import kafka.api.ApiVersion
@@ -30,6 +29,7 @@ import org.junit.{After, Before, Test}
 import kafka.message._
 import kafka.utils._
 import kafka.server.KafkaConfig
+import org.apache.kafka.common.utils.Utils
 
 class LogTest extends JUnitSuite {
 
@@ -47,7 +47,7 @@ class LogTest extends JUnitSuite {
 
   @After
   def tearDown() {
-    CoreUtils.rm(tmpDir)
+    Utils.delete(tmpDir)
   }
 
   def createEmptyLogs(dir: File, offsets: Int*) {
@@ -810,7 +810,7 @@ class LogTest extends JUnitSuite {
       log = new Log(logDir, config, recoveryPoint, time.scheduler, time)
       assertEquals(numMessages, log.logEndOffset)
       assertEquals("Messages in the log after recovery should be the same.", messages, log.logSegments.flatMap(_.log.iterator.toList))
-      CoreUtils.rm(logDir)
+      Utils.delete(logDir)
     }
   }
 

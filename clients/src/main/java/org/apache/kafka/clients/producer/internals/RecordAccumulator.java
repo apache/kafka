@@ -218,14 +218,14 @@ public final class RecordAccumulator {
         int count = 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
             Deque<RecordBatch> dq = entry.getValue();
-            // We only check if the batch should be expired if the partition does not have a batch in flight.
-            // This is to avoid the later batches get expired when an earlier batch is still in progress.
-            // This protection only takes effect when user sets max.in.flight.request.per.connection=1.
-            // Otherwise the expiration order is not guranteed.
             TopicPartition tp = entry.getKey();
+            // We only check if the batch should be expired if the partition does not have a batch in flight.
+            // This is to prevent later batches from being expired while an earlier batch is still in progress.
+            // Note that `muted` is only ever populated if `max.in.flight.request.per.connection=1` so this protection
+            // is only active in this case. Otherwise the expiration order is not guaranteed.
             if (!muted.contains(tp)) {
                 synchronized (dq) {
-                    // iterate over the batches and expire them if they have stayed in accumulator for more than requestTimeOut
+                    // iterate over the batches and expire them if they have been in the accumulator for more than requestTimeOut
                     RecordBatch lastBatch = dq.peekLast();
                     Iterator<RecordBatch> batchIterator = dq.iterator();
                     while (batchIterator.hasNext()) {

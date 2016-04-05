@@ -24,6 +24,7 @@ import kafka.common._
 import kafka.server.OffsetCheckpoint
 import kafka.utils._
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
+import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -54,8 +55,8 @@ class LogManagerTest {
   def tearDown() {
     if(logManager != null)
       logManager.shutdown()
-    CoreUtils.rm(logDir)
-    logManager.logDirs.foreach(CoreUtils.rm(_))
+    Utils.delete(logDir)
+    logManager.logDirs.foreach(Utils.delete)
   }
 
   /**

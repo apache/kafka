@@ -96,8 +96,8 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
     server1.shutdown
     server2.shutdown
-    CoreUtils.rm(server1.config.logDirs)
-    CoreUtils.rm(server2.config.logDirs)
+    CoreUtils.delete(server1.config.logDirs)
+    CoreUtils.delete(server2.config.logDirs)
     super.tearDown()
   }
 
