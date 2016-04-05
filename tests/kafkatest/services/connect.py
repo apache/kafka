@@ -48,6 +48,7 @@ class ConnectServiceBase(Service):
     def __init__(self, context, num_nodes, kafka, files):
         super(ConnectServiceBase, self).__init__(context, num_nodes)
         self.kafka = kafka
+        self.security_config = kafka.security_config.client_config()
         self.files = files
 
     def pids(self, node):
@@ -89,6 +90,7 @@ class ConnectServiceBase(Service):
 
     def clean_node(self, node):
         node.account.kill_process("connect", clean_shutdown=False, allow_fail=True)
+        self.security_config.clean_node(node)
         node.account.ssh("rm -rf " + " ".join([self.CONFIG_FILE, self.LOG4J_CONFIG_FILE, self.PID_FILE, self.LOG_FILE, self.STDOUT_FILE, self.STDERR_FILE] + self.config_filenames() + self.files), allow_fail=False)
 
     def config_filenames(self):
@@ -153,6 +155,7 @@ class ConnectStandaloneService(ConnectServiceBase):
 
     def start_cmd(self, node, connector_configs):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
+        cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
         cmd += "/opt/%s/bin/connect-standalone.sh %s " % (kafka_dir(node), self.CONFIG_FILE)
         cmd += " ".join(connector_configs)
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
@@ -161,6 +164,7 @@ class ConnectStandaloneService(ConnectServiceBase):
     def start_node(self, node):
         node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
 
+        self.security_config.setup_node(node)
         node.account.create_file(self.CONFIG_FILE, self.config_template_func(node))
         node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('connect_log4j.properties', log_file=self.LOG_FILE))
         remote_connector_configs = []
@@ -190,6 +194,7 @@ class ConnectDistributedService(ConnectServiceBase):
 
     def start_cmd(self, node):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
+        cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
         cmd += "/opt/%s/bin/connect-distributed.sh %s " % (kafka_dir(node), self.CONFIG_FILE)
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
@@ -197,6 +202,7 @@ class ConnectDistributedService(ConnectServiceBase):
     def start_node(self, node):
         node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
 
+        self.security_config.setup_node(node)
         node.account.create_file(self.CONFIG_FILE, self.config_template_func(node))
         node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('connect_log4j.properties', log_file=self.LOG_FILE))
         if self.connector_config_templates:
