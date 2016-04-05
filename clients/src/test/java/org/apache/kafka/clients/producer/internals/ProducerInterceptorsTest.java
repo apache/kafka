@@ -177,7 +177,7 @@ public class ProducerInterceptorsTest {
         assertEquals(2, onErrorAckWithTopicPartitionSetCount);
 
         // if producer record does not contain partition, interceptor should get partition == -1
-        ProducerRecord<Integer, String> record2 = new ProducerRecord<>("test2", (Integer) null, 1, "value");
+        ProducerRecord<Integer, String> record2 = new ProducerRecord<>("test2", null, 1, "value");
         interceptors.onSendError(record2, null, new KafkaException("Test"));
         assertEquals(3, onErrorAckCount);
         assertEquals(3, onErrorAckWithTopicSetCount);
