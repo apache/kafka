@@ -18,7 +18,7 @@ from ducktape.mark import parametrize
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, KafkaVersion
+from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, LATEST_0_9, KafkaVersion
 from kafkatest.services.performance import ProducerPerformanceService, ConsumerPerformanceService, EndToEndLatencyService
 from kafkatest.services.performance import latency, compute_aggregate_throughput
 
@@ -36,9 +36,11 @@ class PerformanceServiceTest(Test):
         self.zk.start()
 
     @parametrize(version=str(LATEST_0_8_2))
+    @parametrize(version=str(LATEST_0_9), new_consumer=False)
+    @parametrize(version=str(LATEST_0_9), new_consumer=True)
     @parametrize(version=str(TRUNK), new_consumer=False)
     @parametrize(version=str(TRUNK), new_consumer=True)
-    def test_version(self, version=str(LATEST_0_8_2), new_consumer=False):
+    def test_version(self, version=str(LATEST_0_9), new_consumer=False):
         """
         Sanity check out producer performance service - verify that we can run the service with a small
         number of messages. The actual stats here are pretty meaningless since the number of messages is quite small.
