@@ -25,6 +25,8 @@ import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.serialization.JsonSerializer;
+import org.apache.kafka.common.serialization.JsonDeserializer;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;

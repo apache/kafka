@@ -91,6 +91,7 @@
 
     <subpackage name="serialization">
       <allow class="org.apache.kafka.common.errors.SerializationException" />
+      <allow pkg="com.fasterxml.jackson" />
     </subpackage>
   </subpackage>
 
@@ -208,7 +209,6 @@
     </subpackage>
 
     <subpackage name="json">
-      <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.common.serialization" />
       <allow pkg="org.apache.kafka.common.errors" />
       <allow pkg="org.apache.kafka.connect.storage" />

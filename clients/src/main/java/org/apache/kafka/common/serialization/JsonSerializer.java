@@ -14,50 +14,46 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
-package org.apache.kafka.connect.json;
+package org.apache.kafka.common.serialization;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Map;
 
 /**
- * JSON deserializer for Jackson's JsonNode tree model. Using the tree model allows it to work with arbitrarily
- * structured data without having associated Java classes. This deserializer also supports Connect schemas.
+ * Serialize Jackson JsonNode tree model objects to UTF-8 JSON. Using the tree model allows handling arbitrarily
+ * structured data without corresponding Java classes. This serializer also supports Connect schemas.
  */
-@Deprecated
-public class JsonDeserializer implements Deserializer<JsonNode> {
-    private ObjectMapper objectMapper = new ObjectMapper();
+public class JsonSerializer implements Serializer<JsonNode> {
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * Default constructor needed by Kafka
      */
-    public JsonDeserializer() {
+    public JsonSerializer() {
+
     }
 
     @Override
-    public void configure(Map<String, ?> props, boolean isKey) {
+    public void configure(Map<String, ?> config, boolean isKey) {
     }
 
     @Override
-    public JsonNode deserialize(String topic, byte[] bytes) {
-        if (bytes == null)
+    public byte[] serialize(String topic, JsonNode data) {
+        if (data == null)
             return null;
 
-        JsonNode data;
         try {
-            data = objectMapper.readTree(bytes);
+            return objectMapper.writeValueAsBytes(data);
         } catch (Exception e) {
-            throw new SerializationException(e);
+            throw new SerializationException("Error serializing JSON message", e);
         }
-
-        return data;
     }
 
     @Override
     public void close() {
-
     }
+
 }

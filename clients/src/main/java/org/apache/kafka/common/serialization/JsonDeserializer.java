@@ -14,12 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
-package org.apache.kafka.connect.json;
+
+package org.apache.kafka.common.serialization;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Map;
 
@@ -27,7 +27,6 @@ import java.util.Map;
  * JSON deserializer for Jackson's JsonNode tree model. Using the tree model allows it to work with arbitrarily
  * structured data without having associated Java classes. This deserializer also supports Connect schemas.
  */
-@Deprecated
 public class JsonDeserializer implements Deserializer<JsonNode> {
     private ObjectMapper objectMapper = new ObjectMapper();
 

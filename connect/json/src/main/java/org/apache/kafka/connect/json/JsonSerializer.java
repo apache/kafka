@@ -27,6 +27,7 @@ import java.util.Map;
  * Serialize Jackson JsonNode tree model objects to UTF-8 JSON. Using the tree model allows handling arbitrarily
  * structured data without corresponding Java classes. This serializer also supports Connect schemas.
  */
+@Deprecated
 public class JsonSerializer implements Serializer<JsonNode> {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
