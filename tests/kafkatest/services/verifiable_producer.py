@@ -73,25 +73,27 @@ class VerifiableProducer(BackgroundThreadService):
         self.acked_values = []
         self.not_acked_values = []
         self.produced_count = {}
-        self.prop_file = ""
+
+    def prop_file(self, idx):
+        prop_file = ""
+        self.security_config = self.kafka.security_config.client_config(self.prop_file)
+        prop_file += str(self.security_config)
+        if self.compression_types is not None:
+            compression_index = (idx - 1) % len(self.compression_types)
+            self.logger.info("VerifiableProducer (index = %d) will use compression type = %s", idx,
+                             self.compression_types[compression_index])
+            prop_file += "\ncompression.type=%s\n" % self.compression_types[compression_index]
+        return prop_file
 
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % VerifiableProducer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
-        producer_prop_file = self.prop_file
-        self.security_config = self.kafka.security_config.client_config(self.prop_file)
-        producer_prop_file += str(self.security_config)
         log_config = self.render('tools_log4j.properties', log_file=VerifiableProducer.LOG_FILE)
         node.account.create_file(VerifiableProducer.LOG4J_CONFIG, log_config)
 
         # Create and upload config file
-        if self.compression_types is not None:
-            compression_index = (idx - 1) % len(self.compression_types)
-            self.logger.info("VerifiableProducer (index = %d) will use compression type = %s", idx,
-                             self.compression_types[compression_index])
-            producer_prop_file += "\ncompression.type=%s\n" % self.compression_types[compression_index]
-
+        producer_prop_file = self.prop_file(idx)
         self.logger.info("verifiable_producer.properties:")
         self.logger.info(producer_prop_file)
         node.account.create_file(VerifiableProducer.CONFIG_FILE, producer_prop_file)
