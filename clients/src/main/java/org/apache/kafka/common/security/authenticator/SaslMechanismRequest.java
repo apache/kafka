@@ -53,12 +53,16 @@ public class SaslMechanismRequest {
         this.mechanism = mechanism;
     }
 
-    public SaslMechanismRequest(ByteBuffer buffer) {
-        Struct struct = CLIENT_MECHANISM.read(buffer);
-        short version = (short) struct.getShort(VERSION_KEY_NAME);
-        if (version != CLIENT_MECHANISM_V0)
-            throw new SchemaException("Unsupported client mechanism message version: " + version);
-        mechanism = (String) struct.getString(MECHANISM_KEY_NAME);
+    public SaslMechanismRequest(ByteBuffer buffer) throws SchemaException {
+        try {
+            Struct struct = CLIENT_MECHANISM.read(buffer);
+            short version = (short) struct.getShort(VERSION_KEY_NAME);
+            if (version != CLIENT_MECHANISM_V0)
+                throw new SchemaException("Unsupported client mechanism message version: " + version);
+            mechanism = (String) struct.getString(MECHANISM_KEY_NAME);
+        } catch (Exception e) {
+            throw new SchemaException("Buffer does not contain a valid SASL mechanism request: " + e);
+        }
     }
 
     public String mechanism() {

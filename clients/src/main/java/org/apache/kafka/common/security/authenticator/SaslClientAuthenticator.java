@@ -76,6 +76,7 @@ public class SaslClientAuthenticator implements Authenticator {
     private NetworkReceive netInBuffer;
     private NetworkSend netOutBuffer;
 
+    private SaslState pendingSaslState;
     private SaslState saslState;
 
     public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host) throws IOException {
@@ -185,8 +186,13 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     private void setSaslState(SaslState saslState) {
-        this.saslState = saslState;
-        LOG.debug("Set SASL client state to " + saslState);
+        if (netOutBuffer != null && !netOutBuffer.completed())
+            pendingSaslState = saslState;
+        else {
+            this.pendingSaslState = null;
+            this.saslState = saslState;
+            LOG.debug("Set SASL client state to " + saslState);
+        }
     }
 
     private void sendSaslToken(byte[] serverToken, boolean isInitial) throws IOException {
@@ -215,9 +221,11 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private boolean flushNetOutBufferAndUpdateInterestOps() throws IOException {
         boolean flushedCompletely = flushNetOutBuffer();
-        if (flushedCompletely)
+        if (flushedCompletely) {
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
-        else
+            if (pendingSaslState != null)
+                setSaslState(pendingSaslState);
+        } else
             transportLayer.addInterestOps(SelectionKey.OP_WRITE);
         return flushedCompletely;
     }

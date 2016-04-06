@@ -18,7 +18,6 @@
 package org.apache.kafka.common.security.authenticator;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +53,7 @@ import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 
 public class SaslServerAuthenticator implements Authenticator {
@@ -64,6 +64,7 @@ public class SaslServerAuthenticator implements Authenticator {
         INIT, AUTHENTICATE, COMPLETE, FAILED
     }
 
+    private SaslState pendingSaslState = null;
     private SaslState saslState = SaslState.INIT;
     private Set<String> enabledMechanisms = new HashSet<>();
     private String saslMechanism;
@@ -214,14 +215,14 @@ public class SaslServerAuthenticator implements Authenticator {
                             clientMechanism = mechanismRequest.mechanism();
                             if (enabledMechanisms.contains(clientMechanism)) {
                                 LOG.debug("Using SASL mechanism '{}' provided by client", clientMechanism);
-                                mechanismResponse = new SaslMechanismResponse((short) 0, Collections.<String>emptyList());
+                                mechanismResponse = new SaslMechanismResponse((short) 0, enabledMechanisms);
                             } else {
                                 LOG.debug("SASL mechanism '{}' provided by client is not supported", clientMechanism);
                                 mechanismResponse = new SaslMechanismResponse(SaslMechanismResponse.UNSUPPORTED_SASL_MECHANISM, enabledMechanisms);
                                 exception = new SaslException("Unsupported SASL mechanism " + clientMechanism);
                             }
                             clientToken = null;
-                        } catch (Exception e) {
+                        } catch (SchemaException e) {
                             if (LOG.isDebugEnabled()) {
                                 StringBuilder tokenBuilder = new StringBuilder();
                                 for (byte b : clientToken) {
@@ -261,6 +262,8 @@ public class SaslServerAuthenticator implements Authenticator {
                             netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(response));
                             flushNetOutBufferAndUpdateInterestOps();
                         }
+                        if (saslServer.isComplete())
+                            setSaslState(SaslState.COMPLETE);
                         break;
                     default:
                         break;
@@ -288,15 +291,22 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     private void setSaslState(SaslState saslState) {
-        this.saslState = saslState;
-        LOG.debug("Set SASL server state to " + saslState);
+        if (netOutBuffer != null && !netOutBuffer.completed())
+            pendingSaslState = saslState;
+        else {
+            this.pendingSaslState = null;
+            this.saslState = saslState;
+            LOG.debug("Set SASL server state to " + saslState);
+        }
     }
 
     private boolean flushNetOutBufferAndUpdateInterestOps() throws IOException {
         boolean flushedCompletely = flushNetOutBuffer();
-        if (flushedCompletely)
+        if (flushedCompletely) {
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
-        else
+            if (pendingSaslState != null)
+                setSaslState(pendingSaslState);
+        } else
             transportLayer.addInterestOps(SelectionKey.OP_WRITE);
         return flushedCompletely;
     }

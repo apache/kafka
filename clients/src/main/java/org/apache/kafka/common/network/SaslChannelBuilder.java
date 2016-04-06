@@ -55,14 +55,15 @@ public class SaslChannelBuilder implements ChannelBuilder {
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
-            String mechanism = (String) this.configs.get(SaslConfigs.SASL_MECHANISM);
-            if (mechanism == null)
-                throw new IllegalArgumentException("SASL mechanism not specified.");
-            boolean hasKerberos = mechanism.equals(SaslConfigs.GSSAPI_MECHANISM);
+            boolean hasKerberos;
             if (mode == Mode.SERVER) {
                 List<String> enabledMechanisms = (List<String>) this.configs.get(SaslConfigs.SASL_ENABLED_MECHANISMS);
-                if (enabledMechanisms != null && !hasKerberos)
-                    hasKerberos = enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM);
+                hasKerberos = enabledMechanisms == null || enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM);
+            } else {
+                String mechanism = (String) this.configs.get(SaslConfigs.SASL_MECHANISM);
+                if (mechanism == null)
+                    throw new IllegalArgumentException("SASL mechanism not specified.");
+                hasKerberos = mechanism.equals(SaslConfigs.GSSAPI_MECHANISM);
             }
 
             String defaultRealm;
