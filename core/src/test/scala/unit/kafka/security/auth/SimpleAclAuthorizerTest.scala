@@ -44,6 +44,10 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   override def setUp() {
     super.setUp()
 
+    // Increase maxUpdateRetries to avoid transient failures
+    simpleAclAuthorizer.maxUpdateRetries = Int.MaxValue
+    simpleAclAuthorizer2.maxUpdateRetries = Int.MaxValue
+
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     props.put(SimpleAclAuthorizer.SuperUsersProp, superUsers)
 
@@ -307,7 +311,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   def testHighConcurrencyModificationOfResourceAcls() {
     val commonResource = new Resource(Topic, "test")
 
-    val acls = (0 to 100).map { i =>
+    val acls = (0 to 50).map { i =>
       val useri = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, i.toString)
       new Acl(useri, Allow, WildCardHost, Read)
     }
