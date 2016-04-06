@@ -79,8 +79,9 @@ class VerifiableProducer(BackgroundThreadService):
         node.account.ssh("mkdir -p %s" % VerifiableProducer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
+        producer_prop_file = self.prop_file
         self.security_config = self.kafka.security_config.client_config(self.prop_file)
-        producer_prop_file = str(self.security_config)
+        producer_prop_file += str(self.security_config)
         log_config = self.render('tools_log4j.properties', log_file=VerifiableProducer.LOG_FILE)
         node.account.create_file(VerifiableProducer.LOG4J_CONFIG, log_config)
 
