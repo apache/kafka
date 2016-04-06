@@ -23,6 +23,7 @@ import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{BrokerTopicStats, FetchDataInfo, LogOffsetMetadata}
 import java.io.{File, IOException}
+import java.util
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.concurrent.atomic._
 import java.text.NumberFormat
@@ -130,6 +131,18 @@ class Log(val dir: File,
   newGauge("Size",
     new Gauge[Long] {
       def value = size
+    },
+    tags)
+
+  newGauge("LogSegments",
+    new Gauge[util.ArrayList[String]] {
+      def value = segmentsInfo
+    },
+    tags)
+
+  newGauge("Directory",
+    new Gauge[String] {
+      def value = dir.getAbsolutePath
     },
     tags)
 
@@ -291,6 +304,20 @@ class Log(val dir: File,
    * Take care! this is an O(n) operation.
    */
   def numberOfSegments: Int = segments.size
+
+
+  /**
+   * Returns compiled information about segments
+   */
+  def segmentsInfo: util.ArrayList[String] = {
+    val list = new util.ArrayList[String]()
+    logSegments.foreach(
+      seg => list.add("baseOffset=%s, created=%s, logSize=%s, indexSize=%s".format(
+        seg.baseOffset, seg.created, seg.size, seg.index.sizeInBytes()
+      ))
+    )
+    list
+  }
 
   /**
    * Close this log
@@ -888,6 +915,8 @@ class Log(val dir: File,
     removeMetric("LogStartOffset", tags)
     removeMetric("LogEndOffset", tags)
     removeMetric("Size", tags)
+    removeMetric("LogSegments", tags)
+    removeMetric("Directory", tags)
   }
   /**
    * Add the given segment to the segments in this log. If this segment replaces an existing segment, delete it.
