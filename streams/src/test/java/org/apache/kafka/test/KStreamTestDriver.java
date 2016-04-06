@@ -120,6 +120,22 @@ public class KStreamTestDriver {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    public <K, V> void forward(K key, V value, String childName) {
+        ProcessorNode thisNode = currNode;
+        try {
+            for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+                if (childNode.name().equals(childName)) {
+                    currNode = childNode;
+                    childNode.process(key, value);
+                    break;
+                }
+            }
+        } finally {
+            currNode = thisNode;
+        }
+    }
+
     public Map<String, StateStore> allStateStores() {
         return context.allStateStores();
     }

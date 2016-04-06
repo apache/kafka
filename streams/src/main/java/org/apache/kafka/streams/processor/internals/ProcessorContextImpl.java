@@ -168,6 +168,11 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     @Override
+    public <K, V> void forward(K key, V value, String childName) {
+        task.forward(key, value, childName);
+    }
+
+    @Override
     public void commit() {
         task.needCommit();
     }

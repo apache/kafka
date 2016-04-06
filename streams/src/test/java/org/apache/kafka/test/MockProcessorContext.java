@@ -159,6 +159,12 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
+    @SuppressWarnings("unchecked")
+    public <K, V> void forward(K key, V value, String childName) {
+        driver.forward(key, value, childName);
+    }
+
+    @Override
     public void commit() {
         throw new UnsupportedOperationException("commit() not supported.");
     }
