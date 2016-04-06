@@ -35,6 +35,8 @@ class PerformanceServiceTest(Test):
     def setUp(self):
         self.zk.start()
 
+    # We are keeping 0.8.2 here so that we don't inadvertently break support for it. Since this is just a sanity check,
+    # the overhead should be manageable.
     @parametrize(version=str(LATEST_0_8_2))
     @parametrize(version=str(LATEST_0_9), new_consumer=False)
     @parametrize(version=str(LATEST_0_9), new_consumer=True)
