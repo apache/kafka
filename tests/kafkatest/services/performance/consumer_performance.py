@@ -14,8 +14,9 @@
 # limitations under the License.
 
 from kafkatest.services.performance import PerformanceService
+from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, V_0_9_0_0
+from kafkatest.services.kafka.version import TRUNK, V_0_9_0_0
 
 import os
 
@@ -78,10 +79,12 @@ class ConsumerPerformanceService(PerformanceService):
         self.new_consumer = new_consumer
         self.settings = settings
 
-        if version < V_0_9_0_0 and self.new_consumer:
-            self.logger.warn("Version is %s where new_consumer is not available, but new_consumer is set to True. "\
-                             "Overriding new_consumer flag to False..." % str(version))
-            self.new_consumer = False
+        assert version >= V_0_9_0_0 or (not new_consumer), \
+            "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(version)
+
+        security_protocol = self.security_config.security_protocol
+        assert version >= V_0_9_0_0 or security_protocol == SecurityConfig.PLAINTEXT, \
+            "Security protocol %s is only supported if version >= 0.9.0.0, version %s" % (self.security_config, str(version))
 
         # These less-frequently used settings can be updated manually after instantiation
         self.fetch_size = None
@@ -136,7 +139,7 @@ class ConsumerPerformanceService(PerformanceService):
         for key, value in self.args.items():
             cmd += " --%s %s" % (key, value)
 
-        if node.version > LATEST_0_8_2:
+        if node.version >= V_0_9_0_0:
             # This is only used for security settings
             cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
 
@@ -149,7 +152,7 @@ class ConsumerPerformanceService(PerformanceService):
 
     def parse_results(self, line, version):
         parts = line.split(',')
-        if version > LATEST_0_8_2:
+        if version >= V_0_9_0_0:
             result = {
                 'total_mb': float(parts[2]),
                 'mbps': float(parts[3]),

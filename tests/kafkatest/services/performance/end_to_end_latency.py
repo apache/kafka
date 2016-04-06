@@ -17,7 +17,7 @@ from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
 
 from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
+from kafkatest.services.kafka.version import TRUNK, V_0_9_0_0
 
 
 class EndToEndLatencyService(PerformanceService):
@@ -33,6 +33,11 @@ class EndToEndLatencyService(PerformanceService):
         super(EndToEndLatencyService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
+
+        security_protocol = self.security_config.security_protocol
+        assert version >= V_0_9_0_0 or security_protocol == SecurityConfig.PLAINTEXT, \
+            "Security protocol %s is only supported if version >= 0.9.0.0, version %s" % (self.security_config, str(version))
+
         self.args = {
             'topic': topic,
             'num_records': num_records,
@@ -62,7 +67,7 @@ class EndToEndLatencyService(PerformanceService):
             'kafka_dir': kafka_dir(node)
         })
 
-        if node.version > LATEST_0_8_2:
+        if node.version >= V_0_9_0_0:
             """
             val brokerList = args(0)
             val topic = args(1)
