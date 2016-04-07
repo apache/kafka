@@ -431,8 +431,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Implementation of asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>.
-     * See {@link #send(ProducerRecord, Callback)} for details.
+     * Implementation of asynchronously send a record to a topic.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
         TopicPartition tp = null;
