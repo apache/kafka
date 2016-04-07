@@ -121,8 +121,6 @@ class ReplicaManager(val config: KafkaConfig,
   private val isrChangeSet: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]()
   private val lastIsrChangeMs = new AtomicLong(System.currentTimeMillis())
   private val lastIsrPropagationMs = new AtomicLong(System.currentTimeMillis())
-  private val topicsMarkedForDeletion: mutable.Set[String] = mutable.Set[String]()
-  private val topicsMarkedForDeleteListener = new TopicsMarkedForDeleteListener(localBrokerId, topicsMarkedForDeletion)
 
   val delayedProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
     purgatoryName = "Produce", config.brokerId, config.producerPurgatoryPurgeIntervalRequests)
@@ -215,8 +213,6 @@ class ReplicaManager(val config: KafkaConfig,
     // start ISR expiration thread
     scheduler.schedule("isr-expiration", maybeShrinkIsr, period = config.replicaLagTimeMaxMs, unit = TimeUnit.MILLISECONDS)
     scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges, period = 2500L, unit = TimeUnit.MILLISECONDS)
-    if (zkUtils != null)
-      zkUtils.zkClient.subscribeChildChanges(ZkUtils.DeleteTopicsPath, topicsMarkedForDeleteListener)
   }
 
   def stopReplica(topic: String, partitionId: Int, deletePartition: Boolean): Short  = {
@@ -585,7 +581,7 @@ class ReplicaManager(val config: KafkaConfig,
         stateChangeLogger.warn(stateControllerEpochErrorMessage)
         throw new ControllerMovedException(stateControllerEpochErrorMessage)
       } else {
-        metadataCache.updateCache(correlationId, updateMetadataRequest, topicsMarkedForDeletion)
+        metadataCache.updateCache(correlationId, updateMetadataRequest)
         controllerEpoch = updateMetadataRequest.controllerEpoch
       }
     }
@@ -899,29 +895,11 @@ class ReplicaManager(val config: KafkaConfig,
   // High watermark do not need to be checkpointed only when under unit tests
   def shutdown(checkpointHW: Boolean = true) {
     info("Shutting down")
-    if (zkUtils != null)
-      zkUtils.zkClient.unsubscribeChildChanges(ZkUtils.DeleteTopicsPath, topicsMarkedForDeleteListener)
     replicaFetcherManager.shutdown()
     delayedFetchPurgatory.shutdown()
     delayedProducePurgatory.shutdown()
     if (checkpointHW)
       checkpointHighWatermarks()
     info("Shut down completely")
-  }
-}
-
-/**
-  * Listener that updates the MetadataCache when the set of topics currently marked for deletion changes.
-  */
-class TopicsMarkedForDeleteListener( brokerId: Int, topicsMarkedForDeletion: mutable.Set[String]) extends IZkChildListener with Logging {
-  this.logIdent = s"[TopicsMarkedForDeleteListener on $brokerId]:"
-
-  /**
-    * Invoked when a topic is marked or un-marked for deletion
-    */
-  def handleChildChange(parentPath: String, children: java.util.List[String]) {
-    debug(s"Topics marked for deletion changed. Topics still makred for deletion are $children")
-    topicsMarkedForDeletion.clear()
-    topicsMarkedForDeletion ++= children.asScala
   }
 }

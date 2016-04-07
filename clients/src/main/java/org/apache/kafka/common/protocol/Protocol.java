@@ -108,8 +108,6 @@ public class Protocol {
                                                               new Field("topic", STRING, "The name of the topic"),
                                                               new Field("is_internal", BOOLEAN,
                                                                   "Indicates if the topic is considered a Kafka internal topic"),
-                                                              new Field("marked_for_deletion", BOOLEAN,
-                                                                  "Indicates if the topic is marked for deletion"),
                                                               new Field("partition_metadata", new ArrayOf(PARTITION_METADATA_V1),
                                                                 "Metadata for each partition of the topic."));
 

@@ -605,11 +605,10 @@ object AdminUtils extends Logging {
             new MetadataResponse.PartitionMetadata(Errors.forException(e), partition, leaderInfo, replicaInfo.asJava, isrInfo.asJava)
         }
       }
-      val isMarkedForDeletion = zkUtils.pathExists(getDeleteTopicPath(topic))
-      new MetadataResponse.TopicMetadata(Errors.NONE, topic, Topic.isInternal(topic), isMarkedForDeletion, partitionMetadata.toList.asJava)
+      new MetadataResponse.TopicMetadata(Errors.NONE, topic, Topic.isInternal(topic), partitionMetadata.asJava)
     } else {
       // topic doesn't exist, send appropriate error code
-      new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, Topic.isInternal(topic), false, java.util.Collections.emptyList())
+      new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, Topic.isInternal(topic), java.util.Collections.emptyList())
     }
   }
 

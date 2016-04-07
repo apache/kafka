@@ -58,7 +58,6 @@ public class MetadataResponse extends AbstractRequestResponse {
 
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String IS_INTERNAL_KEY_NAME = "is_internal";
-    private static final String MARKED_FOR_DELETION_KEY_NAME = "marked_for_deletion";
     private static final String PARTITION_METADATA_KEY_NAME = "partition_metadata";
 
     // partition level field names
@@ -117,8 +116,6 @@ public class MetadataResponse extends AbstractRequestResponse {
             Struct topicData = struct.instance(TOPIC_METADATA_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, metadata.topic);
             topicData.set(TOPIC_ERROR_CODE_KEY_NAME, metadata.error.code());
-            if (topicData.hasField(MARKED_FOR_DELETION_KEY_NAME))
-                topicData.set(MARKED_FOR_DELETION_KEY_NAME, metadata.markedForDeletion());
             if (topicData.hasField(IS_INTERNAL_KEY_NAME))
                 topicData.set(IS_INTERNAL_KEY_NAME, metadata.isInternal());
 
@@ -170,7 +167,6 @@ public class MetadataResponse extends AbstractRequestResponse {
             Errors topicError = Errors.forCode(topicInfo.getShort(TOPIC_ERROR_CODE_KEY_NAME));
             String topic = topicInfo.getString(TOPIC_KEY_NAME);
             boolean isInternal = topicInfo.hasField(IS_INTERNAL_KEY_NAME) ? topicInfo.getBoolean(IS_INTERNAL_KEY_NAME) : false;
-            boolean isMarkedForDeletion = topicInfo.hasField(MARKED_FOR_DELETION_KEY_NAME) ? topicInfo.getBoolean(MARKED_FOR_DELETION_KEY_NAME) : false;
 
             List<PartitionMetadata> partitionMetadata = new ArrayList<>();
 
@@ -192,7 +188,7 @@ public class MetadataResponse extends AbstractRequestResponse {
                 partitionMetadata.add(new PartitionMetadata(partitionError, partition, leaderNode, replicaNodes, isrNodes));
             }
 
-            topicMetadata.add(new TopicMetadata(topicError, topic, isInternal, isMarkedForDeletion, partitionMetadata));
+            topicMetadata.add(new TopicMetadata(topicError, topic, isInternal, partitionMetadata));
         }
 
         this.brokers = brokers.values();
@@ -288,18 +284,15 @@ public class MetadataResponse extends AbstractRequestResponse {
         private final Errors error;
         private final String topic;
         private final boolean isInternal;
-        private final boolean markedForDeletion;
         private final List<PartitionMetadata> partitionMetadata;
 
         public TopicMetadata(Errors error,
                              String topic,
                              boolean isInternal,
-                             boolean markedForDeletion,
                              List<PartitionMetadata> partitionMetadata) {
             this.error = error;
             this.topic = topic;
             this.isInternal = isInternal;
-            this.markedForDeletion = markedForDeletion;
             this.partitionMetadata = partitionMetadata;
         }
 
@@ -313,10 +306,6 @@ public class MetadataResponse extends AbstractRequestResponse {
 
         public boolean isInternal() {
             return isInternal;
-        }
-
-        public boolean markedForDeletion() {
-            return markedForDeletion;
         }
 
         public List<PartitionMetadata> partitionMetadata() {

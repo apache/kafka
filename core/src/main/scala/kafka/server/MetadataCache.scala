@@ -43,7 +43,6 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
   private var controllerId: Option[Int] = None
   private val aliveBrokers = mutable.Map[Int, Broker]()
   private val aliveNodes = mutable.Map[Int, collection.Map[SecurityProtocol, Node]]()
-  private var topicsMarkedForDeletion: Set[String] = Set()
   private val partitionMetadataLock = new ReentrantReadWriteLock()
 
   this.logIdent = "[Kafka Metadata Cache on broker %d] ".format(brokerId)
@@ -107,7 +106,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     inReadLock(partitionMetadataLock) {
       topics.toSeq.flatMap { topic =>
         getPartitionMetadata(topic, protocol).map { partitionMetadata =>
-          new MetadataResponse.TopicMetadata(Errors.NONE, topic, Topic.isInternal(topic), isMarkedForDeletion(topic), partitionMetadata.toBuffer.asJava)
+          new MetadataResponse.TopicMetadata(Errors.NONE, topic, Topic.isInternal(topic), partitionMetadata.toBuffer.asJava)
         }
       }
     }
@@ -156,11 +155,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
   }
 
-  def isMarkedForDeletion(topic: String): Boolean = {
-    topicsMarkedForDeletion.contains(topic)
-  }
-
-  def updateCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest, topicsMarkedForDeletion: Set[String]) {
+  def updateCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest) {
     inWriteLock(partitionMetadataLock) {
       controllerId =
         updateMetadataRequest.controllerId match {
@@ -196,7 +191,6 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
               updateMetadataRequest.controllerEpoch, correlationId))
         }
       }
-      this.topicsMarkedForDeletion = topicsMarkedForDeletion
     }
   }
 

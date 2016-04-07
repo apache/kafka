@@ -631,14 +631,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
         .format(topic, numPartitions, replicationFactor))
       new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, common.Topic.isInternal(topic),
-        metadataCache.isMarkedForDeletion(topic), java.util.Collections.emptyList())
+        java.util.Collections.emptyList())
     } catch {
       case e: TopicExistsException => // let it go, possibly another broker created this topic
         new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, common.Topic.isInternal(topic),
-          metadataCache.isMarkedForDeletion(topic), java.util.Collections.emptyList())
+          java.util.Collections.emptyList())
       case itex: InvalidTopicException =>
         new MetadataResponse.TopicMetadata(Errors.INVALID_TOPIC_EXCEPTION, topic, common.Topic.isInternal(topic),
-          metadataCache.isMarkedForDeletion(topic), java.util.Collections.emptyList())
+          java.util.Collections.emptyList())
     }
   }
 
@@ -671,7 +671,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           createTopic(topic, config.numPartitions, config.defaultReplicationFactor)
         } else {
           new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, common.Topic.isInternal(topic),
-            metadataCache.isMarkedForDeletion(topic), java.util.Collections.emptyList())
+            java.util.Collections.emptyList())
         }
       }
       topicResponses ++ responsesForNonExistentTopics
@@ -715,8 +715,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val unauthorizedTopicMetadata = unauthorizedTopics.map(topic =>
-      new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic,
-        common.Topic.isInternal(topic), metadataCache.isMarkedForDeletion(topic), java.util.Collections.emptyList()))
+      new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, common.Topic.isInternal(topic),
+        java.util.Collections.emptyList()))
 
     val topicMetadata =
       if (authorizedTopics.isEmpty)

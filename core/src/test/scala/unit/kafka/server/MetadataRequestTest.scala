@@ -17,8 +17,6 @@
 
 package kafka.server
 
-import kafka.admin.AdminUtils
-import kafka.coordinator.GroupCoordinator
 import kafka.utils.TestUtils
 import org.apache.kafka.common.internals.TopicConstants
 import org.apache.kafka.common.protocol.ApiKeys
@@ -49,7 +47,7 @@ class MetadataRequestTest extends BaseRequestTest {
 
   @Test
   def testControllerId() {
-    val metadataResponse = sendMetadatRequest(allMetadataRequest, 1)
+    val metadataResponse = sendMetadataRequest(allMetadataRequest, 1)
     val controllerServer = servers.find(_.kafkaController.isActive()).get
     val controllerId = controllerServer.apis.brokerId
 
@@ -60,7 +58,7 @@ class MetadataRequestTest extends BaseRequestTest {
     controllerServer.shutdown()
     controllerServer.startup()
 
-    val metadataResponse2 = sendMetadatRequest(allMetadataRequest, 1)
+    val metadataResponse2 = sendMetadataRequest(allMetadataRequest, 1)
     val controllerServer2 = servers.find(_.kafkaController.isActive()).get
     val controllerId2 = controllerServer2.apis.brokerId
 
@@ -71,43 +69,11 @@ class MetadataRequestTest extends BaseRequestTest {
 
   @Test
   def testRack() {
-    val metadataResponse = sendMetadatRequest(allMetadataRequest, 1)
+    val metadataResponse = sendMetadataRequest(allMetadataRequest, 1)
     // Validate rack matches whats set in generateConfigs() above
     metadataResponse.brokers().asScala.foreach { broker =>
       assertEquals("Rack information should match config", s"rack/${broker.id}", broker.rack())
     }
-  }
-
-  @Test
-  def testMarkedForDeletion() {
-    val deletedTopic = "deleted"
-    val notDeletedTopic = "notDeleted"
-
-    TestUtils.createTopic(zkUtils, deletedTopic, 3, 2, servers)
-    TestUtils.createTopic(zkUtils, notDeletedTopic, 3, 2, servers)
-
-    // Make sure topics don't get deleted to fast by preventing deletion
-    val controllerServer = servers.find(_.kafkaController.isActive()).get
-    controllerServer.kafkaController.deleteTopicManager.shutdown()
-
-    AdminUtils.deleteTopic(zkUtils, deletedTopic)
-
-    // Wait until all servers see the delete in the cache
-    TestUtils.waitUntilTrue(
-      () => servers.forall(_.metadataCache.isMarkedForDeletion(deletedTopic)),
-      "Delete event did not update the cache",
-      5000
-    )
-
-    val metadataResponse = sendMetadatRequest(allMetadataRequest, 1)
-    assertTrue("Response should have no errors", metadataResponse.errors().isEmpty)
-
-    val topicMetadata = metadataResponse.topicMetadata().asScala
-    val deletedMetadata = topicMetadata.find(_.topic == deletedTopic).get
-    val notDeletedMetadata = topicMetadata.find(_.topic == notDeletedTopic).get
-
-    assertTrue("deleted topic should show markedForDeletion", deletedMetadata.markedForDeletion)
-    assertFalse("notDeleted topic not should show markedForDeletion", notDeletedMetadata.markedForDeletion)
   }
 
   @Test
@@ -118,7 +84,7 @@ class MetadataRequestTest extends BaseRequestTest {
     TestUtils.createTopic(zkUtils, internalTopic, 3, 2, servers)
     TestUtils.createTopic(zkUtils, notInternalTopic, 3, 2, servers)
 
-    val metadataResponse = sendMetadatRequest(allMetadataRequest, 1)
+    val metadataResponse = sendMetadataRequest(allMetadataRequest, 1)
     assertTrue("Response should have no errors", metadataResponse.errors().isEmpty)
 
     val topicMetadata = metadataResponse.topicMetadata().asScala
@@ -135,12 +101,12 @@ class MetadataRequestTest extends BaseRequestTest {
     TestUtils.createTopic(zkUtils, "t1", 3, 2, servers)
     TestUtils.createTopic(zkUtils, "t2", 3, 2, servers)
 
-    val metadataResponse = sendMetadatRequest(noMetadataRequest, 1)
+    val metadataResponse = sendMetadataRequest(noMetadataRequest, 1)
     assertTrue("Response should have no errors", metadataResponse.errors().isEmpty)
     assertTrue("Response should have no topics", metadataResponse.topicMetadata().isEmpty)
   }
 
-  private def sendMetadatRequest(request: MetadataRequest, version: Short): MetadataResponse = {
+  private def sendMetadataRequest(request: MetadataRequest, version: Short): MetadataResponse = {
     val response = send(request, ApiKeys.METADATA, version)
     MetadataResponse.parse(response)
   }

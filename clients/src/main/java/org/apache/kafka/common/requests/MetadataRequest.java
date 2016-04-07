@@ -72,7 +72,7 @@ public class MetadataRequest extends AbstractRequest {
 
         if (topics != null) {
             for (String topic : topics)
-                topicMetadatas.add(new MetadataResponse.TopicMetadata(error, topic, false, false, partitions));
+                topicMetadatas.add(new MetadataResponse.TopicMetadata(error, topic, false, partitions));
         }
 
         switch (versionId) {
