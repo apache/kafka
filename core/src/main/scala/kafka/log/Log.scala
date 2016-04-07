@@ -32,6 +32,7 @@ import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeE
 import org.apache.kafka.common.record.TimestampType
 
 import scala.collection.JavaConversions
+import scala.collection.JavaConverters._
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.utils.Utils
 
@@ -135,8 +136,14 @@ class Log(val dir: File,
     tags)
 
   newGauge("LogSegments",
-    new Gauge[util.ArrayList[String]] {
-      def value = segmentsInfo
+    new Gauge[util.List[String]] {
+      def value = {
+        val list = logSegments.toSeq.map(
+          seg => s"baseOffset=${seg.baseOffset}, created=${seg.created}, logSize=${seg.size}, indexSize=${seg.index.sizeInBytes()}"
+        )
+        // Explicitly returning Java list to support JMX clients that don't have Scala runtime in the classpath
+        new util.ArrayList[String](list.asJava)
+      }
     },
     tags)
 
@@ -304,20 +311,6 @@ class Log(val dir: File,
    * Take care! this is an O(n) operation.
    */
   def numberOfSegments: Int = segments.size
-
-
-  /**
-   * Returns compiled information about segments
-   */
-  def segmentsInfo: util.ArrayList[String] = {
-    val list = new util.ArrayList[String]()
-    logSegments.foreach(
-      seg => list.add("baseOffset=%s, created=%s, logSize=%s, indexSize=%s".format(
-        seg.baseOffset, seg.created, seg.size, seg.index.sizeInBytes()
-      ))
-    )
-    list
-  }
 
   /**
    * Close this log
