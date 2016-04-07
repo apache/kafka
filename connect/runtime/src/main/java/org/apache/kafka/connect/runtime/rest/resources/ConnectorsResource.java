@@ -42,7 +42,6 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.net.URI;
@@ -137,13 +136,10 @@ public class ConnectorsResource {
 
     @POST
     @Path("/{connector}/restart")
-    public void restartConnector(final @PathParam("connector") String connector,
-                                 final @QueryParam("forward") Boolean forward) throws Throwable {
+    public void restartConnector(final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<Void> cb = new FutureCallback<>();
         herder.restartConnector(connector, cb);
-        boolean recursiveForward = forward == null || !forward;
-        if (forward == null || forward)
-            completeOrForwardRequest(cb, "/connectors/" + connector + "/restart?forward=" + recursiveForward, "POST", null);
+        completeOrForwardRequest(cb, "/connectors/" + connector + "/restart", "POST", null);
     }
 
     @GET
@@ -174,16 +170,11 @@ public class ConnectorsResource {
     @POST
     @Path("/{connector}/tasks/{task}/restart")
     public void restartTask(@PathParam("connector") String connector,
-                            @PathParam("task") Integer task,
-                            @QueryParam("forward") Boolean forward) throws Throwable {
+                            @PathParam("task") Integer task) throws Throwable {
         FutureCallback<Void> cb = new FutureCallback<>();
         ConnectorTaskId taskId = new ConnectorTaskId(connector, task);
         herder.restartTask(taskId, cb);
-
-        boolean recursiveForward = forward == null || !forward;
-
-        if (forward == null || forward)
-            completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart?forward=" + recursiveForward, "POST", null);
+        completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart", "POST", null);
     }
 
     @DELETE
