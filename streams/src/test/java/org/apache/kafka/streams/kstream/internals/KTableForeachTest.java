@@ -20,9 +20,9 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.junit.Test;
 import java.util.List;
@@ -31,7 +31,7 @@ import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 
-public class KStreamForeachTest {
+public class KTableForeachTest {
 
     final private String topicName = "topic";
 
@@ -66,8 +66,8 @@ public class KStreamForeachTest {
 
         // When
         KStreamBuilder builder = new KStreamBuilder();
-        KStream<Integer, String> stream = builder.stream(intSerde, stringSerde, topicName);
-        stream.foreach(action);
+        KTable<Integer, String> table = builder.table(intSerde, stringSerde, topicName);
+        table.foreach(action);
 
         // Then
         KStreamTestDriver driver = new KStreamTestDriver(builder);
