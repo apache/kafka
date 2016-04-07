@@ -676,6 +676,35 @@ public class ConfigDef {
         }
     }
 
+    public static String convertToString(Object parsedValue, Type type) {
+        if (parsedValue == null) {
+            return null;
+        }
+
+        if (type == null) {
+            return parsedValue.toString();
+        }
+
+        switch (type) {
+            case BOOLEAN:
+            case SHORT:
+            case INT:
+            case LONG:
+            case DOUBLE:
+            case STRING:
+            case PASSWORD:
+                return parsedValue.toString();
+            case LIST:
+                List<?> valueList = (List<?>) parsedValue;
+                return Utils.join(valueList, ",");
+            case CLASS:
+                Class<?> clazz = (Class<?>) parsedValue;
+                return clazz.getCanonicalName();
+            default:
+                throw new IllegalStateException("Unknown type.");
+        }
+    }
+
     /**
      * The config types
      */
