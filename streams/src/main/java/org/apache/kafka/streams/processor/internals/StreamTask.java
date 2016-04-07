@@ -345,16 +345,16 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, String childName) {
         ProcessorNode thisNode = currNode;
-        try {
-            for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-                if (childNode.name().equals(childName)) {
-                    currNode = childNode;
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            if (childNode.name().equals(childName)) {
+                currNode = childNode;
+                try {
                     childNode.process(key, value);
-                    break;
+                } finally {
+                    currNode = thisNode;
                 }
+                break;
             }
-        } finally {
-            currNode = thisNode;
         }
     }
 

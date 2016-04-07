@@ -111,10 +111,10 @@ public interface ProcessorContext {
     <K, V> void forward(K key, V value, int childIndex);
 
     /**
-     * Forwards a key/value pair to one of the downstream processors designated by childName
+     * Forwards a key/value pair to one of the downstream processors designated by the downstream processor name
      * @param key key
      * @param value value
-     * @param childName name of child
+     * @param childName name of downstream processor
      */
     <K, V> void forward(K key, V value, String childName);
 
