@@ -19,7 +19,7 @@ from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
-from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, V_0_9_0_0
+from kafkatest.services.kafka.version import TRUNK, V_0_9_0_0
 
 import os
 import subprocess
@@ -88,7 +88,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
 
         cmd = ""
 
-        if node.version <= LATEST_0_8_2:
+        if node.version < TRUNK:
             # In order to ensure more consistent configuration between versions, always use the ProducerPerformance
             # tool from trunk
             cmd += "for file in /opt/%s/tools/build/libs/kafka-tools*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % KAFKA_TRUNK
