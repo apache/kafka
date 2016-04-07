@@ -101,7 +101,7 @@ public interface KStream<K, V> {
     KStream<K, V> through(String topic);
 
     /**
-     * Perform an action for each element of {@link KStream}.
+     * Perform an action on each element of {@link KStream}.
      * Note that this is a terminal operation that returns void.
      *
      * @param action An action to perform on each element

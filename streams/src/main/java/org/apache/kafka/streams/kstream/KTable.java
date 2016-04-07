@@ -299,7 +299,7 @@ public interface KTable<K, V> {
     <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector, String name);
 
     /**
-     * Perform an action for each element of {@link KTable}.
+     * Perform an action on each element of {@link KTable}.
      * Note that this is a terminal operation that returns void.
      *
      * @param action An action to perform on each element
