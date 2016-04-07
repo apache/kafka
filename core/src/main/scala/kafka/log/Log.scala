@@ -138,9 +138,9 @@ class Log(val dir: File,
   newGauge("LogSegments",
     new Gauge[util.List[String]] {
       def value = {
-        val list = logSegments.toSeq.map(
-          seg => s"baseOffset=${seg.baseOffset}, created=${seg.created}, logSize=${seg.size}, indexSize=${seg.index.sizeInBytes()}"
-        )
+        val list = logSegments.toSeq.map { seg =>
+          s"baseOffset=${seg.baseOffset}, created=${seg.created}, logSize=${seg.size}, indexSize=${seg.index.sizeInBytes()}"
+        }
         // Explicitly returning Java list to support JMX clients that don't have Scala runtime in the classpath
         new util.ArrayList[String](list.asJava)
       }
