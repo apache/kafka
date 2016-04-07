@@ -17,7 +17,6 @@
 
 package kafka.log
 
-import java.io.File
 import kafka.utils._
 import kafka.message._
 import org.scalatest.junit.JUnitSuite
@@ -26,9 +25,9 @@ import org.junit.Assert._
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
-import java.util.{Properties, Collection, ArrayList}
-import kafka.server.KafkaConfig
 import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.utils.Utils
+import java.util.{Collection, Properties}
 import scala.collection.JavaConversions._
 
 @RunWith(value = classOf[Parameterized])
@@ -41,7 +40,7 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
 
   @After
   def tearDown() {
-    CoreUtils.rm(tmpDir)
+    Utils.delete(tmpDir)
   }
 
   /**

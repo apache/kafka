@@ -389,7 +389,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * Iterate over all the inflight requests and expire any requests that have exceeded the configured the requestTimeout.
+     * Iterate over all the inflight requests and expire any requests that have exceeded the configured requestTimeout.
      * The connection to the node associated with the request will be terminated and will be treated as a disconnection.
      *
      * @param responses The list of responses to update
@@ -555,6 +555,14 @@ public class NetworkClient implements KafkaClient {
             ApiKeys requestKey = ApiKeys.forId(request.request().header().apiKey());
 
             if (requestKey == ApiKeys.METADATA) {
+                Cluster cluster = metadata.fetch();
+                if (cluster.isBootstrapConfigured()) {
+                    int nodeId = Integer.parseInt(request.request().destination());
+                    Node node = cluster.nodeById(nodeId);
+                    if (node != null)
+                        log.warn("Bootstrap broker {}:{} disconnected", node.host(), node.port());
+                }
+
                 metadataFetchInProgress = false;
                 return true;
             }

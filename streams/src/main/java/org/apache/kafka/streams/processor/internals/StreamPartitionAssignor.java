@@ -226,6 +226,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
 
+        Map<TopicPartition, PartitionInfo> internalPartitionInfos = new HashMap<>();
+
         // if ZK is specified, prepare the internal source topic before calling partition grouper
         if (internalTopicManager != null) {
             log.debug("Starting to validate internal source topics in partition assignor.");
@@ -247,15 +249,21 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     partitions = streamThread.restoreConsumer.partitionsFor(topic);
                 } while (partitions == null || partitions.size() != numPartitions);
 
-                metadata.update(topic, partitions);
+                for (PartitionInfo partition : partitions)
+                    internalPartitionInfos.put(new TopicPartition(partition.topic(), partition.partition()), partition);
             }
 
             log.info("Completed validating internal source topics in partition assignor.");
         }
         internalSourceTopicToTaskIds.clear();
 
+        Cluster metadataWithInternalTopics = metadata;
+        if (internalTopicManager != null)
+            metadataWithInternalTopics = metadata.withPartitions(internalPartitionInfos);
+
         // get the tasks as partition groups from the partition grouper
-        Map<TaskId, Set<TopicPartition>> partitionsForTask = streamThread.partitionGrouper.partitionGroups(sourceTopicGroups, metadata);
+        Map<TaskId, Set<TopicPartition>> partitionsForTask = streamThread.partitionGrouper.partitionGroups(
+                sourceTopicGroups, metadataWithInternalTopics);
 
         // add tasks to state change log topic subscribers
         stateChangelogTopicToTaskIds = new HashMap<>();

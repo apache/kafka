@@ -22,7 +22,7 @@ import org.apache.kafka.common.internals.TopicConstants.INTERNAL_TOPICS
 
 object Topic {
   val legalChars = "[a-zA-Z0-9\\._\\-]"
-  private val maxNameLength = 255
+  private val maxNameLength = 249
   private val rgx = new Regex(legalChars + "+")
 
   def validate(topic: String) {

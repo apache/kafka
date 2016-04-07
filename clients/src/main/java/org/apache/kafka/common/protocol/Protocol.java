@@ -822,13 +822,13 @@ public class Protocol {
                 b.append(field.name);
                 b.append("] ");
                 Type innerType = ((ArrayOf) field.type).type();
-                if (innerType instanceof Schema && !subTypes.containsKey(field.name))
-                    subTypes.put(field.name, (Schema) innerType);
+                if (!subTypes.containsKey(field.name))
+                    subTypes.put(field.name, innerType);
             } else if (field.type instanceof Schema) {
                 b.append(field.name);
                 b.append(" ");
                 if (!subTypes.containsKey(field.name))
-                    subTypes.put(field.name, (Schema) field.type);
+                    subTypes.put(field.name, field.type);
             } else {
                 b.append(field.name);
                 b.append(" ");

@@ -104,7 +104,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     consumer.close()
     producer.close()
     server.shutdown()
-    CoreUtils.rm(server.config.logDirs)
+    CoreUtils.delete(server.config.logDirs)
     verifyNonDaemonThreadsStatus
   }
 
@@ -117,7 +117,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     server.startup()
     server.shutdown()
     server.awaitShutdown()
-    CoreUtils.rm(server.config.logDirs)
+    CoreUtils.delete(server.config.logDirs)
     verifyNonDaemonThreadsStatus
   }
 
@@ -145,7 +145,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
         server.shutdown()
       server.awaitShutdown()
     }
-    CoreUtils.rm(server.config.logDirs)
+    CoreUtils.delete(server.config.logDirs)
     verifyNonDaemonThreadsStatus
   }
 

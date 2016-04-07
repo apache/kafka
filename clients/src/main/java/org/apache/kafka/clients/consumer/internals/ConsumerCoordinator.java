@@ -110,7 +110,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         addMetadataListener();
 
-        this.autoCommitTask = autoCommitEnabled ? new AutoCommitTask(autoCommitIntervalMs) : null;
+        if (autoCommitEnabled) {
+            this.autoCommitTask = new AutoCommitTask(autoCommitIntervalMs);
+            this.autoCommitTask.reschedule();
+        } else {
+            this.autoCommitTask = null;
+        }
+
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
         this.excludeInternalTopics = excludeInternalTopics;
@@ -187,9 +193,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // give the assignor a chance to update internal state based on the received assignment
         assignor.onAssignment(assignment);
 
-        // restart the autocommit task if needed
+        // reschedule the auto commit starting from now
         if (autoCommitEnabled)
-            autoCommitTask.enable();
+            autoCommitTask.reschedule();
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.listener();
@@ -345,6 +351,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 cb.onComplete(offsets, e);
             }
         });
+
+        // ensure commit has a chance to be transmitted (without blocking on its completion)
+        // note that we allow delayed tasks to be executed in case heartbeats need to be sent
+        client.quickPoll(true);
     }
 
     /**
@@ -380,52 +390,36 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private class AutoCommitTask implements DelayedTask {
         private final long interval;
-        private boolean enabled = false;
-        private boolean requestInFlight = false;
 
         public AutoCommitTask(long interval) {
             this.interval = interval;
         }
 
-        public void enable() {
-            if (!enabled) {
-                // there shouldn't be any instances scheduled, but call unschedule anyway to ensure
-                // that this task is only ever scheduled once
-                client.unschedule(this);
-                this.enabled = true;
-
-                if (!requestInFlight) {
-                    long now = time.milliseconds();
-                    client.schedule(this, interval + now);
-                }
-            }
-        }
-
-        public void disable() {
-            this.enabled = false;
-            client.unschedule(this);
+        private void reschedule() {
+            client.schedule(this, time.milliseconds() + interval);
         }
 
         private void reschedule(long at) {
-            if (enabled)
-                client.schedule(this, at);
+            client.schedule(this, at);
         }
 
         public void run(final long now) {
-            if (!enabled)
-                return;
-
             if (coordinatorUnknown()) {
                 log.debug("Cannot auto-commit offsets for group {} since the coordinator is unknown", groupId);
-                client.schedule(this, now + retryBackoffMs);
+                reschedule(now + retryBackoffMs);
                 return;
             }
 
-            requestInFlight = true;
+            if (needRejoin()) {
+                // skip the commit when we're rejoining since we'll commit offsets synchronously
+                // before the revocation callback is invoked
+                reschedule(now + interval);
+                return;
+            }
+
             commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
                 @Override
                 public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                    requestInFlight = false;
                     if (exception == null) {
                         reschedule(now + interval);
                     } else if (exception instanceof SendFailedException) {
@@ -442,10 +436,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private void maybeAutoCommitOffsetsSync() {
         if (autoCommitEnabled) {
-            // disable periodic commits prior to committing synchronously. note that they will
-            // be re-enabled after a rebalance completes
-            autoCommitTask.disable();
-
             try {
                 commitOffsetsSync(subscriptions.allConsumed());
             } catch (WakeupException e) {

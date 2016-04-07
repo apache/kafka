@@ -52,7 +52,7 @@ public class KStreamImplTest {
                 public boolean test(String key, String value) {
                     return true;
                 }
-            }).filterOut(new Predicate<String, String>() {
+            }).filterNot(new Predicate<String, String>() {
                 @Override
                 public boolean test(String key, String value) {
                     return false;

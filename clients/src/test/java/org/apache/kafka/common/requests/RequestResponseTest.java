@@ -13,7 +13,6 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.BrokerEndPoint;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -378,9 +377,9 @@ public class RequestResponseTest {
         partitionStates.put(new TopicPartition("topic20", 1),
                 new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
-        Set<BrokerEndPoint> leaders = new HashSet<>(Arrays.asList(
-                new BrokerEndPoint(0, "test0", 1223),
-                new BrokerEndPoint(1, "test1", 1223)
+        Set<Node> leaders = new HashSet<>(Arrays.asList(
+                new Node(0, "test0", 1223),
+                new Node(1, "test1", 1223)
         ));
 
         return new LeaderAndIsrRequest(1, 10, partitionStates, leaders);
@@ -405,9 +404,9 @@ public class RequestResponseTest {
                 new UpdateMetadataRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
         if (version == 0) {
-            Set<BrokerEndPoint> liveBrokers = new HashSet<>(Arrays.asList(
-                    new BrokerEndPoint(0, "host1", 1223),
-                    new BrokerEndPoint(1, "host2", 1234)
+            Set<Node> liveBrokers = new HashSet<>(Arrays.asList(
+                    new Node(0, "host1", 1223),
+                    new Node(1, "host2", 1234)
             ));
 
             return new UpdateMetadataRequest(1, 10, liveBrokers, partitionStates);
