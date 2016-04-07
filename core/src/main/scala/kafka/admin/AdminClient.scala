@@ -23,7 +23,7 @@ import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture, SendFailedException}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
-import org.apache.kafka.common.errors.DisconnectException
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.types.Struct
@@ -49,7 +49,7 @@ class AdminClient(val time: Time,
 
     do {
       future = client.send(target, api, request)
-      client.poll(future)
+      client.poll(future, deadline - now)
 
       if (future.succeeded())
         return future.value().responseBody()
@@ -57,7 +57,10 @@ class AdminClient(val time: Time,
       now = time.milliseconds()
     } while (now < deadline && future.exception().isInstanceOf[SendFailedException])
 
-    throw future.exception()
+    if (future.failed())
+      throw future.exception()
+    else
+      throw new TimeoutException("Timeout expired while trying to send message.");
   }
 
   private def sendAnyNode(api: ApiKeys, request: AbstractRequest): Struct = {
