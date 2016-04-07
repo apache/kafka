@@ -58,9 +58,9 @@ public class ArrayOf extends Type {
     public Object read(ByteBuffer buffer) {
         int size = buffer.getInt();
         if (size < 0 && isNullable())
-			return null;
-		else if (size < 0)
-			throw new SchemaException("Array size " + size + " cannot be negative");
+            return null;
+        else if (size < 0)
+            throw new SchemaException("Array size " + size + " cannot be negative");
 
         if (size > buffer.remaining())
             throw new SchemaException("Error reading array of size " + size + ", only " + buffer.remaining() + " bytes available");
