@@ -423,7 +423,7 @@ class LogManager(val logDirs: Array[File],
     if (log.config.retentionMs < 0)
       return 0
     val startMs = time.milliseconds
-    log.deleteOldSegments(startMs - _.lastModified > log.config.retentionMs)
+    log.deleteOldSegments(startMs - _.largestTimestamp > log.config.retentionMs)
   }
 
   /**

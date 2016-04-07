@@ -159,31 +159,31 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     val compressedMessagesWithoutRecompression =
       getMessages(magicValue = Message.MagicValue_V1, timestamp = -1L, codec = DefaultCompressionCodec)
 
-    val (validatedMessages, _) = messages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
-                                                                           now = System.currentTimeMillis(),
-                                                                           sourceCodec = NoCompressionCodec,
-                                                                           targetCodec = NoCompressionCodec,
-                                                                           messageFormatVersion = 1,
-                                                                           messageTimestampType = TimestampType.LOG_APPEND_TIME,
-                                                                           messageTimestampDiffMaxMs = 1000L)
+    val validatedMessages = messages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
+                                                                      now = System.currentTimeMillis(),
+                                                                      sourceCodec = NoCompressionCodec,
+                                                                      targetCodec = NoCompressionCodec,
+                                                                      messageFormatVersion = 1,
+                                                                      messageTimestampType = TimestampType.LOG_APPEND_TIME,
+                                                                      messageTimestampDiffMaxMs = 1000L).validatedMessages
 
-    val (validatedCompressedMessages, _) =
+    val validatedCompressedMessages =
       compressedMessagesWithRecompresion.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
                                                                           now = System.currentTimeMillis(),
                                                                           sourceCodec = DefaultCompressionCodec,
                                                                           targetCodec = DefaultCompressionCodec,
                                                                           messageFormatVersion = 1,
                                                                           messageTimestampType = TimestampType.LOG_APPEND_TIME,
-                                                                          messageTimestampDiffMaxMs = 1000L)
+                                                                          messageTimestampDiffMaxMs = 1000L).validatedMessages
 
-    val (validatedCompressedMessagesWithoutRecompression, _) =
+    val validatedCompressedMessagesWithoutRecompression =
       compressedMessagesWithoutRecompression.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
                                                                               now = System.currentTimeMillis(),
                                                                               sourceCodec = DefaultCompressionCodec,
                                                                               targetCodec = DefaultCompressionCodec,
                                                                               messageFormatVersion = 1,
                                                                               messageTimestampType = TimestampType.LOG_APPEND_TIME,
-                                                                              messageTimestampDiffMaxMs = 1000L)
+                                                                              messageTimestampDiffMaxMs = 1000L).validatedMessages
 
     val now = System.currentTimeMillis()
     assertEquals("message set size should not change", messages.size, validatedMessages.size)
@@ -212,22 +212,22 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     val messages = getMessages(magicValue = Message.MagicValue_V1, timestamp = now, codec = NoCompressionCodec)
     val compressedMessages = getMessages(magicValue = Message.MagicValue_V1, timestamp = now, codec = DefaultCompressionCodec)
 
-    val (validatedMessages, _) = messages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
-                                                                           now = System.currentTimeMillis(),
-                                                                           sourceCodec = NoCompressionCodec,
-                                                                           targetCodec = NoCompressionCodec,
-                                                                           messageFormatVersion = 1,
-                                                                           messageTimestampType = TimestampType.CREATE_TIME,
-                                                                           messageTimestampDiffMaxMs = 1000L)
+    val validatedMessages = messages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
+                                                                      now = System.currentTimeMillis(),
+                                                                      sourceCodec = NoCompressionCodec,
+                                                                      targetCodec = NoCompressionCodec,
+                                                                      messageFormatVersion = 1,
+                                                                      messageTimestampType = TimestampType.CREATE_TIME,
+                                                                      messageTimestampDiffMaxMs = 1000L).validatedMessages
 
-    val (validatedCompressedMessages, _) =
+    val validatedCompressedMessages =
       compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(0),
                                                           now = System.currentTimeMillis(),
                                                           sourceCodec = DefaultCompressionCodec,
                                                           targetCodec = DefaultCompressionCodec,
                                                           messageFormatVersion = 1,
                                                           messageTimestampType = TimestampType.CREATE_TIME,
-                                                          messageTimestampDiffMaxMs = 1000L)
+                                                          messageTimestampDiffMaxMs = 1000L).validatedMessages
 
     for (messageAndOffset <- validatedMessages) {
       messageAndOffset.message.ensureValid()
@@ -287,7 +287,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                            targetCodec = NoCompressionCodec,
                                                            messageFormatVersion = 0,
                                                            messageTimestampType = TimestampType.CREATE_TIME,
-                                                           messageTimestampDiffMaxMs = 1000L)._1, offset)
+                                                           messageTimestampDiffMaxMs = 1000L).validatedMessages, offset)
 
     // check compressed messages
     checkOffsets(compressedMessages, 0)
@@ -297,7 +297,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                                      targetCodec = DefaultCompressionCodec,
                                                                      messageFormatVersion = 0,
                                                                      messageTimestampType = TimestampType.CREATE_TIME,
-                                                                     messageTimestampDiffMaxMs = 1000L)._1, offset)
+                                                                     messageTimestampDiffMaxMs = 1000L).validatedMessages, offset)
 
   }
 
@@ -310,22 +310,22 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     // check uncompressed offsets
     checkOffsets(messages, 0)
     val offset = 1234567
-    val (messageWithOffset, _) = messages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(offset),
-                                                                           now = System.currentTimeMillis(),
-                                                                           sourceCodec = NoCompressionCodec,
-                                                                           targetCodec = NoCompressionCodec,
-                                                                           messageTimestampType = TimestampType.CREATE_TIME,
-                                                                           messageTimestampDiffMaxMs = 5000L)
+    val messageWithOffset = messages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(offset),
+                                                                      now = System.currentTimeMillis(),
+                                                                      sourceCodec = NoCompressionCodec,
+                                                                      targetCodec = NoCompressionCodec,
+                                                                      messageTimestampType = TimestampType.CREATE_TIME,
+                                                                      messageTimestampDiffMaxMs = 5000L).validatedMessages
     checkOffsets(messageWithOffset, offset)
 
     // check compressed messages
     checkOffsets(compressedMessages, 0)
-    val (compressedMessagesWithOffset, _) = compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(offset),
-                                                                                                now = System.currentTimeMillis(),
-                                                                                                sourceCodec = DefaultCompressionCodec,
-                                                                                                targetCodec = DefaultCompressionCodec,
-                                                                                                messageTimestampType = TimestampType.CREATE_TIME,
-                                                                                                messageTimestampDiffMaxMs = 5000L)
+    val compressedMessagesWithOffset = compressedMessages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(offset),
+                                                                                           now = System.currentTimeMillis(),
+                                                                                           sourceCodec = DefaultCompressionCodec,
+                                                                                           targetCodec = DefaultCompressionCodec,
+                                                                                           messageTimestampType = TimestampType.CREATE_TIME,
+                                                                                           messageTimestampDiffMaxMs = 5000L).validatedMessages
     checkOffsets(compressedMessagesWithOffset, offset)
   }
 
@@ -343,7 +343,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                              targetCodec = NoCompressionCodec,
                                                              messageFormatVersion = 1,
                                                              messageTimestampType = TimestampType.LOG_APPEND_TIME,
-                                                             messageTimestampDiffMaxMs = 1000L)._1, offset)
+                                                             messageTimestampDiffMaxMs = 1000L).validatedMessages, offset)
 
     // check compressed messages
     checkOffsets(compressedMessagesV0, 0)
@@ -353,7 +353,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                                        targetCodec = DefaultCompressionCodec,
                                                                        messageFormatVersion = 1,
                                                                        messageTimestampType = TimestampType.LOG_APPEND_TIME,
-                                                                       messageTimestampDiffMaxMs = 1000L)._1, offset)
+                                                                       messageTimestampDiffMaxMs = 1000L).validatedMessages, offset)
 
     // Check down conversion
     val now = System.currentTimeMillis()
@@ -368,7 +368,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                              targetCodec = NoCompressionCodec,
                                                              messageFormatVersion = 0,
                                                              messageTimestampType = TimestampType.CREATE_TIME,
-                                                             messageTimestampDiffMaxMs = 5000L)._1, offset)
+                                                             messageTimestampDiffMaxMs = 5000L).validatedMessages, offset)
 
     // check compressed messages
     checkOffsets(compressedMessagesV1, 0)
@@ -378,7 +378,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                                        targetCodec = DefaultCompressionCodec,
                                                                        messageFormatVersion = 0,
                                                                        messageTimestampType = TimestampType.CREATE_TIME,
-                                                                       messageTimestampDiffMaxMs = 5000L)._1, offset)
+                                                                       messageTimestampDiffMaxMs = 5000L).validatedMessages, offset)
   }
 
   @Test
