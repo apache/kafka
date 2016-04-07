@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
@@ -55,8 +56,12 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
 
         @Override
         public void process(K key, V value) {
-            context().forward(key, value);
-            window.put(key, value);
+            // if the key is null, we do not need to put the record into window store
+            // since it will never be considered for join operations
+            if (key != null) {
+                context().forward(key, value);
+                window.put(key, value);
+            }
         }
     }
 
