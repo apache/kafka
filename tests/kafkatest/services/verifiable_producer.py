@@ -66,13 +66,16 @@ class VerifiableProducer(BackgroundThreadService):
         if self.compression_types is not None:
             assert len(self.compression_types) == num_nodes, "Specify one compression type per node"
 
-        self.security_config = self.kafka.security_config.client_config()
-
         for node in self.nodes:
             node.version = version
         self.acked_values = []
         self.not_acked_values = []
         self.produced_count = {}
+
+
+    @property
+    def security_config(self):
+        return self.kafka.security_config.client_config()
 
     def prop_file(self, node):
         idx = self.idx(node)
