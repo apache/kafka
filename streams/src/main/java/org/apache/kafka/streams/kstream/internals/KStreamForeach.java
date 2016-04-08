@@ -15,27 +15,30 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.kstream.internals;
 
-public class PunctuationSchedule extends Stamped<ProcessorNode> {
+import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-    final long interval;
+class KStreamForeach<K, V> implements ProcessorSupplier<K, V> {
 
-    public PunctuationSchedule(ProcessorNode node, long interval) {
-        this(node, 0, interval);
+    private final ForeachAction<K, V> action;
+
+    public KStreamForeach(ForeachAction<K, V> action) {
+        this.action = action;
     }
 
-    public PunctuationSchedule(ProcessorNode node, long time, long interval) {
-        super(node, time + interval);
-        this.interval = interval;
+    @Override
+    public Processor<K, V> get() {
+        return new KStreamForeachProcessor();
     }
 
-    public ProcessorNode node() {
-        return value;
+    private class KStreamForeachProcessor extends AbstractProcessor<K, V> {
+        @Override
+        public void process(K key, V value) {
+            action.apply(key, value);
+        }
     }
-
-    public PunctuationSchedule next() {
-        return new PunctuationSchedule(value, timestamp, interval);
-    }
-
 }

@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
+ * 
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -35,8 +35,8 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
-import org.junit.Assert.{assertEquals, assertTrue}
-import org.junit.Test
+import org.junit.Assert.{assertEquals, assertTrue, assertFalse}
+import org.junit.{Test, Before, After}
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
@@ -44,18 +44,28 @@ import scala.collection.Map
 class ReplicaManagerTest {
 
   val topic = "test-topic"
+  val time = new MockTime()
+  val jTime = new JMockTime
+  val metrics = new Metrics
+  var zkClient : ZkClient = _
+  var zkUtils : ZkUtils = _
+    
+  @Before
+  def setUp() {
+    zkClient = EasyMock.createMock(classOf[ZkClient])
+    zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
+  }
+  
+  @After
+  def tearDown() {
+    metrics.close();
+  }
 
   @Test
   def testHighWaterMarkDirectoryMapping() {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
-    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
-    EasyMock.replay(zkClient)
-    val zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val time = new MockTime()
-    val jTime = new JMockTime
-    val metrics = new Metrics
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false))
     try {
@@ -65,7 +75,6 @@ class ReplicaManagerTest {
     } finally {
       // shutdown the replica manager upon test completion
       rm.shutdown(false)
-      metrics.close()
     }
   }
 
@@ -74,13 +83,7 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
-    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
-    EasyMock.replay(zkClient)
-    val zkUtils = ZkUtils(zkClient, false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val time = new MockTime()
-    val jTime = new JMockTime
-    val metrics = new Metrics
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false))
     try {
@@ -90,7 +93,6 @@ class ReplicaManagerTest {
     } finally {
       // shutdown the replica manager upon test completion
       rm.shutdown(checkpointHW = false)
-      metrics.close()
     }
   }
 
@@ -98,13 +100,7 @@ class ReplicaManagerTest {
   def testIllegalRequiredAcks() {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
-    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
-    EasyMock.replay(zkClient)
-    val zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val time = new MockTime()
-    val jTime = new JMockTime
-    val metrics = new Metrics
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), Option(this.getClass.getName))
     try {
@@ -119,7 +115,6 @@ class ReplicaManagerTest {
         responseCallback = callback)
     } finally {
       rm.shutdown(checkpointHW = false)
-      metrics.close()
     }
 
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
@@ -130,13 +125,7 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
-    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
-    EasyMock.replay(zkClient)
-    val zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val time = new MockTime()
-    val jTime = new JMockTime
-    val metrics = new Metrics
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false))
 
@@ -196,7 +185,80 @@ class ReplicaManagerTest {
       assertTrue(fetchCallbackFired)
     } finally {
       rm.shutdown(checkpointHW = false)
-      metrics.close()
+    }
+  }
+  
+  @Test
+  def testFetchBeyondHighWatermarkNotAllowedForConsumer() {
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
+    props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
+    props.put("broker.id", Int.box(0))
+    val config = KafkaConfig.fromProps(props)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
+    val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
+      new AtomicBoolean(false), Option(this.getClass.getName))
+    try {
+      val aliveBrokers = Seq(new Broker(0, "host0", 0), new Broker(1, "host1", 1), new Broker(1, "host2", 2))
+      val metadataCache = EasyMock.createMock(classOf[MetadataCache])
+      EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
+      EasyMock.replay(metadataCache)
+      
+      val brokerList : java.util.List[Integer] = Seq[Integer](0, 1, 2).asJava
+      val brokerSet : java.util.Set[Integer] = Set[Integer](0, 1, 2).asJava
+      
+      val partition = rm.getOrCreatePartition(topic, 0)
+      partition.getOrCreateReplica(0)
+      
+      // Make this replica the leader.
+      val leaderAndIsrRequest1 = new LeaderAndIsrRequest(0, 0,
+        collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerSet)).asJava,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1), new Node(2, "host2", 2)).asJava)
+      rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, metadataCache, (_, _) => {})
+      rm.getLeaderReplicaIfLocal(topic, 0)
+
+      def produceCallback(responseStatus: Map[TopicPartition, PartitionResponse]) = {}
+      
+      // Append a message.
+      for(i <- 1 to 2)
+        rm.appendMessages(
+          timeout = 1000,
+          requiredAcks = -1,
+          internalTopicsAllowed = false,
+          messagesPerPartition = Map(new TopicPartition(topic, 0) -> new ByteBufferMessageSet(new Message("message %d".format(i).getBytes))),
+          responseCallback = produceCallback)
+      
+      var fetchCallbackFired = false
+      var fetchError = 0
+      def fetchCallback(responseStatus: Map[TopicAndPartition, FetchResponsePartitionData]) = {
+        fetchError = responseStatus.values.head.error
+        fetchCallbackFired = true
+      }
+      
+      // Fetch a message above the high watermark as a follower
+      rm.fetchMessages(
+        timeout = 1000,
+        replicaId = 1,
+        fetchMinBytes = 1,
+        fetchInfo = collection.immutable.Map(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
+        responseCallback = fetchCallback)
+        
+      
+      assertTrue(fetchCallbackFired)
+      assertEquals("Should not give an exception", Errors.NONE.code, fetchError)
+      fetchCallbackFired = false
+      
+      // Fetch a message above the high watermark as a consumer
+      rm.fetchMessages(
+        timeout = 1000,
+        replicaId = -1,
+        fetchMinBytes = 1,
+        fetchInfo = collection.immutable.Map(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
+        responseCallback = fetchCallback)
+          
+        assertTrue(fetchCallbackFired)
+        assertEquals("Should give OffsetOutOfRangeException", Errors.OFFSET_OUT_OF_RANGE.code, fetchError)
+    } finally {
+      rm.shutdown(checkpointHW = false)
     }
   }
 }
