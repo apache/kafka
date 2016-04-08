@@ -342,7 +342,7 @@ public class ConsumerCoordinatorTest {
 
         // prepare only the first half of the join and then trigger the wakeup
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE.code()));
-        client.wakeup();
+        consumerClient.wakeup();
 
         try {
             coordinator.ensurePartitionAssignment();
