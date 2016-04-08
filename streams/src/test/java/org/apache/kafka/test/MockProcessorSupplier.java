@@ -17,6 +17,7 @@
 
 package org.apache.kafka.test;
 
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -30,16 +31,28 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
     public final ArrayList<String> processed = new ArrayList<>();
     public final ArrayList<Long> punctuated = new ArrayList<>();
 
+    private final long scheduleInterval;
+
+    public MockProcessorSupplier() {
+        this(-1L);
+    }
+
+    public MockProcessorSupplier(long scheduleInterval) {
+        this.scheduleInterval = scheduleInterval;
+    }
+
     @Override
     public Processor<K, V> get() {
         return new MockProcessor();
     }
 
-    public class MockProcessor implements Processor<K, V> {
+    public class MockProcessor extends AbstractProcessor<K, V> {
 
         @Override
         public void init(ProcessorContext context) {
-            // do nothing
+            super.init(context);
+            if (scheduleInterval > 0L)
+                context.schedule(scheduleInterval);
         }
 
         @Override
@@ -49,21 +62,30 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
 
         @Override
         public void punctuate(long streamTime) {
+            assertEquals(streamTime, context().timestamp());
+            assertEquals(null, context().topic());
+            assertEquals(-1, context().partition());
+            assertEquals(-1L, context().offset());
+
             punctuated.add(streamTime);
         }
-
-        @Override
-        public void close() {
-            // do nothing
-        }
-
     }
 
-    public void checkAndClearResult(String... expected) {
+    public void checkAndClearProcessResult(String... expected) {
         assertEquals("the number of outputs:", expected.length, processed.size());
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals("output[" + i + "]:", expected[i], processed.get(i));
+        }
+
+        processed.clear();
+    }
+
+    public void checkAndClearPunctuateResult(long... expected) {
+        assertEquals("the number of outputs:", expected.length, punctuated.size());
+
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals("output[" + i + "]:", expected[i], (long) punctuated.get(i));
         }
 
         processed.clear();
