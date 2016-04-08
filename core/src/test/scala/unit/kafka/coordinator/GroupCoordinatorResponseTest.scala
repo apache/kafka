@@ -19,12 +19,12 @@ package kafka.coordinator
 
 import org.apache.kafka.common.record.Record
 import org.junit.Assert._
-import kafka.common.{OffsetAndMetadata, TopicAndPartition}
+import kafka.common.OffsetAndMetadata
 import kafka.message.{Message, MessageSet}
 import kafka.server.{ReplicaManager, KafkaConfig}
 import kafka.utils._
 import org.apache.kafka.common.utils.SystemTime
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{utils, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{OffsetCommitRequest, JoinGroupRequest}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -56,6 +56,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   val ConsumerMinSessionTimeout = 10
   val ConsumerMaxSessionTimeout = 1000
   val DefaultSessionTimeout = 500
+  var time: utils.Time = null
   var groupCoordinator: GroupCoordinator = null
   var replicaManager: ReplicaManager = null
   var scheduler: KafkaScheduler = null
@@ -87,7 +88,8 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     EasyMock.expect(zkUtils.getPartitionAssignmentForTopics(Seq(TopicConstants.GROUP_METADATA_TOPIC_NAME))).andReturn(ret)
     EasyMock.replay(zkUtils)
 
-    groupCoordinator = GroupCoordinator(KafkaConfig.fromProps(props), zkUtils, replicaManager, new SystemTime)
+    time = new SystemTime
+    groupCoordinator = GroupCoordinator(KafkaConfig.fromProps(props), zkUtils, replicaManager, time)
     groupCoordinator.startup()
 
     // add the partition into the owned partition list
@@ -277,6 +279,88 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
     val syncGroupErrorCode = syncGroupResult._2
     assertEquals(Errors.NONE.code, syncGroupErrorCode)
+
+    EasyMock.reset(replicaManager)
+    val heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)
+    assertEquals(Errors.NONE.code, heartbeatResult)
+  }
+
+  @Test
+  def testSessionTimeout() {
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols)
+    val assignedConsumerId = joinGroupResult.memberId
+    val generationId = joinGroupResult.generationId
+    val joinGroupErrorCode = joinGroupResult.errorCode
+    assertEquals(Errors.NONE.code, joinGroupErrorCode)
+
+    EasyMock.reset(replicaManager)
+    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
+    val syncGroupErrorCode = syncGroupResult._2
+    assertEquals(Errors.NONE.code, syncGroupErrorCode)
+
+    time.sleep(DefaultSessionTimeout + 100)
+
+    EasyMock.reset(replicaManager)
+    val heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)
+    assertEquals(Errors.UNKNOWN_MEMBER_ID.code, heartbeatResult)
+  }
+
+  @Test
+  def testHeartbeatMaintainsSession() {
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+    val sessionTimeout = 1000
+
+    val joinGroupResult = joinGroup(groupId, memberId, sessionTimeout, protocolType, protocols)
+    val assignedConsumerId = joinGroupResult.memberId
+    val generationId = joinGroupResult.generationId
+    val joinGroupErrorCode = joinGroupResult.errorCode
+    assertEquals(Errors.NONE.code, joinGroupErrorCode)
+
+    EasyMock.reset(replicaManager)
+    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
+    val syncGroupErrorCode = syncGroupResult._2
+    assertEquals(Errors.NONE.code, syncGroupErrorCode)
+
+    time.sleep(sessionTimeout/2)
+
+    EasyMock.reset(replicaManager)
+    var heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)
+    assertEquals(Errors.NONE.code, heartbeatResult)
+
+    time.sleep(sessionTimeout/2 + 100)
+
+    EasyMock.reset(replicaManager)
+    heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)
+    assertEquals(Errors.NONE.code, heartbeatResult)
+  }
+
+  @Test
+  def testCommitMaintainsSession() {
+    val sessionTimeout = 1000
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+    val tp = new TopicPartition("topic", 0)
+    val offset = OffsetAndMetadata(0)
+
+    val joinGroupResult = joinGroup(groupId, memberId, sessionTimeout, protocolType, protocols)
+    val assignedConsumerId = joinGroupResult.memberId
+    val generationId = joinGroupResult.generationId
+    val joinGroupErrorCode = joinGroupResult.errorCode
+    assertEquals(Errors.NONE.code, joinGroupErrorCode)
+
+    EasyMock.reset(replicaManager)
+    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
+    val syncGroupErrorCode = syncGroupResult._2
+    assertEquals(Errors.NONE.code, syncGroupErrorCode)
+
+    time.sleep(sessionTimeout/2)
+
+    EasyMock.reset(replicaManager)
+    val commitOffsetResult = commitOffsets(groupId, assignedConsumerId, generationId, immutable.Map(tp -> offset))
+    assertEquals(Errors.NONE.code, commitOffsetResult(tp))
+
+    time.sleep(sessionTimeout/2 + 100)
 
     EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)

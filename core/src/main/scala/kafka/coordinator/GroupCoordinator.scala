@@ -414,6 +414,8 @@ class GroupCoordinator(val brokerId: Int,
           } else if (generationId != group.generationId) {
             responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION.code))
           } else {
+            val member = group.get(memberId)
+            completeAndScheduleNextHeartbeatExpiration(group, member)
             delayedOffsetStore = Some(groupManager.prepareStoreOffsets(groupId, memberId, generationId,
               offsetMetadata, responseCallback))
           }
