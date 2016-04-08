@@ -108,37 +108,37 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
 
     @Override
     public StateStore getStateStore(String name) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("getStateStore() not supported.");
     }
 
     @Override
     public String topic() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("topic() not supported.");
     }
 
     @Override
     public int partition() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("partition() not supported.");
     }
 
     @Override
     public long offset() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("offset() not supported.");
     }
 
     @Override
     public long timestamp() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("timestamp() not supported.");
     }
 
     @Override
     public <K, V> void forward(K key, V value) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("forward() not supported.");
     }
 
     @Override
     public <K, V> void forward(K key, V value, int childIndex) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("forward() not supported.");
     }
 
     @Override
@@ -148,11 +148,11 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
 
     @Override
     public void commit() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("commit() not supported.");
     }
 
     @Override
     public void schedule(long interval) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("schedule() not supported.");
     }
 }
