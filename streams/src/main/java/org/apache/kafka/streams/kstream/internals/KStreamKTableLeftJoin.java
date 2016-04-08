@@ -55,7 +55,11 @@ class KStreamKTableLeftJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
         @Override
         public void process(K key, V1 value) {
-            context().forward(key, joiner.apply(value, valueGetter.get(key)));
+            // if the key is null, we do not need proceed joining
+            // the record with the table
+            if (key != null) {
+                context().forward(key, joiner.apply(value, valueGetter.get(key)));
+            }
         }
     }
 

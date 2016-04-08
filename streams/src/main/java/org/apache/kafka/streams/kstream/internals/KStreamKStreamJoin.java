@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
@@ -63,6 +64,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
         @Override
         public void process(K key, V1 value) {
+            // the keys should never be null
+            if (key == null)
+                throw new StreamsException("Record key for KStream-KStream join operator with other window state store " + otherWindowName + " should not be null.");
+
             boolean needOuterJoin = KStreamKStreamJoin.this.outer;
 
             long timeFrom = Math.max(0L, context().timestamp() - joinBeforeMs);

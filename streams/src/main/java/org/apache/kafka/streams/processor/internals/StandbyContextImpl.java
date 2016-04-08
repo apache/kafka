@@ -108,51 +108,51 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
 
     @Override
     public StateStore getStateStore(String name) {
-        throw new UnsupportedOperationException("getStateStore() not supported.");
+        throw new UnsupportedOperationException("this should not happen: getStateStore() not supported in standby tasks.");
     }
 
     @Override
     public String topic() {
-        throw new UnsupportedOperationException("topic() not supported.");
+        throw new UnsupportedOperationException("this should not happen: topic() not supported in standby tasks.");
     }
 
     @Override
     public int partition() {
-        throw new UnsupportedOperationException("partition() not supported.");
+        throw new UnsupportedOperationException("this should not happen: partition() not supported in standby tasks.");
     }
 
     @Override
     public long offset() {
-        throw new UnsupportedOperationException("offset() not supported.");
+        throw new UnsupportedOperationException("this should not happen: offset() not supported in standby tasks.");
     }
 
     @Override
     public long timestamp() {
-        throw new UnsupportedOperationException("timestamp() not supported.");
+        throw new UnsupportedOperationException("this should not happen: timestamp() not supported in standby tasks.");
     }
 
     @Override
     public <K, V> void forward(K key, V value) {
-        throw new UnsupportedOperationException("forward() not supported.");
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
     @Override
     public <K, V> void forward(K key, V value, int childIndex) {
-        throw new UnsupportedOperationException("forward() not supported.");
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
     @Override
     public <K, V> void forward(K key, V value, String childName) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
     @Override
     public void commit() {
-        throw new UnsupportedOperationException("commit() not supported.");
+        throw new UnsupportedOperationException("this should not happen: commit() not supported in standby tasks.");
     }
 
     @Override
     public void schedule(long interval) {
-        throw new UnsupportedOperationException("schedule() not supported.");
+        throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
     }
 }
