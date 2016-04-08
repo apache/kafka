@@ -241,7 +241,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     numPartitions = task.partition;
                 }
 
-                internalTopicManager.makeReady(topic, numPartitions);
+                internalTopicManager.makeReady(topic, numPartitions, false);
 
                 // wait until the topic metadata has been propagated to all brokers
                 List<PartitionInfo> partitions;
@@ -367,7 +367,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         numPartitions = task.partition + 1;
                 }
 
-                internalTopicManager.makeReady(topic, numPartitions);
+                internalTopicManager.makeReady(topic, numPartitions, true);
 
                 // wait until the topic metadata has been propagated to all brokers
                 List<PartitionInfo> partitions;
