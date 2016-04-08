@@ -25,6 +25,7 @@ import java.util.Queue;
 import java.util.Set;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -54,6 +55,7 @@ public class MockClient implements KafkaClient {
 
     }
 
+    private boolean wakeup = false;
     private final Time time;
     private int correlation = 0;
     private Node node = null;
@@ -123,6 +125,11 @@ public class MockClient implements KafkaClient {
             ClientResponse response = this.responses.poll();
             if (response.request().hasCallback())
                 response.request().callback().onComplete(response);
+        }
+
+        if (wakeup) {
+            wakeup = false;
+            throw new WakeupException();
         }
 
         return copy;
@@ -196,6 +203,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public void wakeup() {
+        wakeup = true;
     }
 
     @Override

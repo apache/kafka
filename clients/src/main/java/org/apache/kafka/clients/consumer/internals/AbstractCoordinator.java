@@ -218,13 +218,17 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             RequestFuture<ByteBuffer> future = sendJoinGroupRequest();
+            future.compose(new RequestFutureAdapter<ByteBuffer, Void>() {
+                @Override
+                public void onSuccess(ByteBuffer value, RequestFuture<Void> future) {
+                    onJoinComplete(generation, memberId, protocol, value);
+                    needsJoinPrepare = true;
+                    heartbeatTask.reset();
+                }
+            });
             client.poll(future);
 
-            if (future.succeeded()) {
-                onJoinComplete(generation, memberId, protocol, future.value());
-                needsJoinPrepare = true;
-                heartbeatTask.reset();
-            } else {
+            if (future.failed()) {
                 RuntimeException exception = future.exception();
                 if (exception instanceof UnknownMemberIdException ||
                         exception instanceof RebalanceInProgressException ||
