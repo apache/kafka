@@ -411,6 +411,13 @@ project(':core') {
     standardOutput = new File(generatedDocsDir, "kafka_config.html").newOutputStream()
   }
 
+  task genTestMetricsDocs(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    main = 'org.apache.kafka.common.metrics.SampleMetrics'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "sample_metrics.html").newOutputStream()
+  }
+
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
                                'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
                                ':connect:runtime:genConnectConfigDocs', ':streams:genStreamsConfigDocs'], type: Tar) {

@@ -1,0 +1,59 @@
+package org.apache.kafka.common;
+
+import java.util.HashSet;
+import java.util.Set;
+
+import org.apache.kafka.common.utils.Utils;
+
+/**
+ * @author jcheng
+ *
+ *         A template for a MetricName. It contains a name, group, and
+ *         description, as well as all the tags that will be used to create the
+ *         mBean name. Tag values are omitted from the template, but are filled
+ *         in at runtime with their specified values.
+ */
+public class MetricNameTemplate {
+    private final String name;
+    private final String group;
+    private final String description;
+    private Set<String> tags;
+
+    public MetricNameTemplate(String name, String group, String description, Set<String> tags) {
+        this.name = Utils.notNull(name);
+        this.group = Utils.notNull(group);
+        this.description = Utils.notNull(description);
+        this.tags = Utils.notNull(tags);
+    }
+    
+    public MetricNameTemplate(String name, String group, String description, String... keys) {
+        this(name, group, description, getTags(keys));
+    }
+
+    private static Set<String> getTags(String... keys) {
+        Set<String> tags = new HashSet<String>();
+
+        
+        for (int i = 0; i < keys.length; i++)
+            tags.add(keys[i]);
+
+        return tags;
+    }
+
+    public String name() {
+        return this.name;
+    }
+
+    public String group() {
+        return this.group;
+    }
+
+    public String description() {
+        return this.description;
+    }
+
+
+    public Set<String> tags() {
+        return tags;
+    }
+}
