@@ -79,7 +79,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   // The maximum number of times we should try to update the resource acls in zookeeper before failing;
   // This should never occur, but is a safeguard just in case.
-  private val maxUpdateRetries = 10
+  protected[auth] var maxUpdateRetries = 10
 
   private val retryBackoffMs = 100
   private val retryBackoffJitterMs = 50

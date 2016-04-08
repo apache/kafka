@@ -18,6 +18,7 @@ package org.apache.kafka.common.errors;
  * not yet been created.
  */
 public class GroupCoordinatorNotAvailableException extends RetriableException {
+    public static final GroupCoordinatorNotAvailableException INSTANCE = new GroupCoordinatorNotAvailableException();
 
     private static final long serialVersionUID = 1L;
 

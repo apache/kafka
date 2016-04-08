@@ -233,9 +233,7 @@ class ReplicaFetcherThread(name: String,
       else {
         val send = new RequestSend(sourceBroker.id.toString, header, request.toStruct)
         val clientRequest = new ClientRequest(time.milliseconds(), true, send, null)
-        networkClient.blockingSendAndReceive(clientRequest, socketTimeout)(time).getOrElse {
-          throw new SocketTimeoutException(s"No response received within $socketTimeout ms")
-        }
+        networkClient.blockingSendAndReceive(clientRequest)(time)
       }
     }
     catch {

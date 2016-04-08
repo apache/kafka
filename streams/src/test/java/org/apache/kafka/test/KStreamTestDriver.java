@@ -57,6 +57,7 @@ public class KStreamTestDriver {
         this.topology = builder.build("X", null);
         this.stateDir = stateDir;
         this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector());
+        this.context.setTime(0L);
 
         for (StateStoreSupplier stateStoreSupplier : topology.stateStoreSuppliers()) {
             StateStore store = stateStoreSupplier.get();
@@ -116,6 +117,22 @@ public class KStreamTestDriver {
             childNode.process(key, value);
         } finally {
             currNode = thisNode;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <K, V> void forward(K key, V value, String childName) {
+        ProcessorNode thisNode = currNode;
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            if (childNode.name().equals(childName)) {
+                currNode = childNode;
+                try {
+                    childNode.process(key, value);
+                } finally {
+                    currNode = thisNode;
+                }
+                break;
+            }
         }
     }
 

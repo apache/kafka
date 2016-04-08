@@ -29,6 +29,7 @@ import java.util.Set;
  */
 public final class Cluster {
 
+    private final boolean isBootstrapConfigured;
     private final List<Node> nodes;
     private final Set<String> unauthorizedTopics;
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
@@ -45,11 +46,19 @@ public final class Cluster {
     public Cluster(Collection<Node> nodes,
                    Collection<PartitionInfo> partitions,
                    Set<String> unauthorizedTopics) {
+        this(false, nodes, partitions, unauthorizedTopics);
+    }
+
+    private Cluster(boolean isBootstrapConfigured,
+                    Collection<Node> nodes,
+                    Collection<PartitionInfo> partitions,
+                    Set<String> unauthorizedTopics) {
+        this.isBootstrapConfigured = isBootstrapConfigured;
+
         // make a randomized, unmodifiable copy of the nodes
         List<Node> copy = new ArrayList<>(nodes);
         Collections.shuffle(copy);
         this.nodes = Collections.unmodifiableList(copy);
-        
         this.nodesById = new HashMap<>();
         for (Node node : nodes)
             this.nodesById.put(node.id(), node);
@@ -115,7 +124,7 @@ public final class Cluster {
         int nodeId = -1;
         for (InetSocketAddress address : addresses)
             nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
-        return new Cluster(nodes, new ArrayList<PartitionInfo>(0), Collections.<String>emptySet());
+        return new Cluster(true, nodes, new ArrayList<PartitionInfo>(0), Collections.<String>emptySet());
     }
 
     /**
@@ -212,6 +221,10 @@ public final class Cluster {
 
     public Set<String> unauthorizedTopics() {
         return unauthorizedTopics;
+    }
+
+    public boolean isBootstrapConfigured() {
+        return isBootstrapConfigured;
     }
 
     @Override
