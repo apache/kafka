@@ -152,6 +152,7 @@ public interface KTable<K, V> {
      */
     KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic);
 
+
     /**
      * Materialize this stream to a topic using default serializers specified in the config
      * and producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner}.

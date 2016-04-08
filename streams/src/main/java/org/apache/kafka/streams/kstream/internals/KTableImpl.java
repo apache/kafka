@@ -211,6 +211,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
     }
 
+
     @Override
     public KStream<K, V> toStream() {
         String name = topology.newName(TOSTREAM_NAME);

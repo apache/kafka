@@ -194,7 +194,7 @@ public interface KStream<K, V> {
 
     /**
      * Print the elements of this stream to System.out
-     * <p>
+     *
      * Implementors will need to override toString for keys and values that are not of
      * type String, Integer etc to get meaningful information.
      */
@@ -225,7 +225,9 @@ public interface KStream<K, V> {
      */
     void writeAsText(String filePath);
 
+
     /**
+     *
      * @param filePath name of file to write to
      * @param keySerde key serde used to send key-value pairs,
      *                 if not specified the default serde defined in the configs will be used
