@@ -182,15 +182,15 @@ public class KStreamWindowAggregateTest {
             driver.setTime(4L);
             driver.process(topic1, "A", "1");
 
-            proc1.checkAndClearResult(
+            proc1.checkAndClearProcessResult(
                     "[A@0]:0+1",
                     "[B@0]:0+2",
                     "[C@0]:0+3",
                     "[D@0]:0+4",
                     "[A@0]:0+1+1"
             );
-            proc2.checkAndClearResult();
-            proc3.checkAndClearResult(
+            proc2.checkAndClearProcessResult();
+            proc3.checkAndClearProcessResult(
                     "[A@0]:null",
                     "[B@0]:null",
                     "[C@0]:null",
@@ -209,15 +209,15 @@ public class KStreamWindowAggregateTest {
             driver.setTime(9L);
             driver.process(topic1, "C", "3");
 
-            proc1.checkAndClearResult(
+            proc1.checkAndClearProcessResult(
                     "[A@0]:0+1+1+1", "[A@5]:0+1",
                     "[B@0]:0+2+2", "[B@5]:0+2",
                     "[D@0]:0+4+4", "[D@5]:0+4",
                     "[B@0]:0+2+2+2", "[B@5]:0+2+2",
                     "[C@0]:0+3+3", "[C@5]:0+3"
             );
-            proc2.checkAndClearResult();
-            proc3.checkAndClearResult(
+            proc2.checkAndClearProcessResult();
+            proc3.checkAndClearProcessResult(
                     "[A@0]:null", "[A@5]:null",
                     "[B@0]:null", "[B@5]:null",
                     "[D@0]:null", "[D@5]:null",
@@ -236,15 +236,15 @@ public class KStreamWindowAggregateTest {
             driver.setTime(4L);
             driver.process(topic2, "A", "a");
 
-            proc1.checkAndClearResult();
-            proc2.checkAndClearResult(
+            proc1.checkAndClearProcessResult();
+            proc2.checkAndClearProcessResult(
                     "[A@0]:0+a",
                     "[B@0]:0+b",
                     "[C@0]:0+c",
                     "[D@0]:0+d",
                     "[A@0]:0+a+a"
             );
-            proc3.checkAndClearResult(
+            proc3.checkAndClearProcessResult(
                     "[A@0]:0+1+1+1%0+a",
                     "[B@0]:0+2+2+2%0+b",
                     "[C@0]:0+3+3%0+c",
@@ -262,15 +262,15 @@ public class KStreamWindowAggregateTest {
             driver.setTime(9L);
             driver.process(topic2, "C", "c");
 
-            proc1.checkAndClearResult();
-            proc2.checkAndClearResult(
+            proc1.checkAndClearProcessResult();
+            proc2.checkAndClearProcessResult(
                     "[A@0]:0+a+a+a", "[A@5]:0+a",
                     "[B@0]:0+b+b", "[B@5]:0+b",
                     "[D@0]:0+d+d", "[D@5]:0+d",
                     "[B@0]:0+b+b+b", "[B@5]:0+b+b",
                     "[C@0]:0+c+c", "[C@5]:0+c"
             );
-            proc3.checkAndClearResult(
+            proc3.checkAndClearProcessResult(
                     "[A@0]:0+1+1+1%0+a+a+a", "[A@5]:0+1%0+a",
                     "[B@0]:0+2+2+2%0+b+b", "[B@5]:0+2+2%0+b",
                     "[D@0]:0+4+4%0+d+d", "[D@5]:0+4%0+d",
