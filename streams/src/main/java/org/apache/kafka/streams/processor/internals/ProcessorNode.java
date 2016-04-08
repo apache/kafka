@@ -48,7 +48,7 @@ public class ProcessorNode<K, V> {
         return name;
     }
 
-    public final Processor processor() {
+    public final Processor<K, V> processor() {
         return processor;
     }
 

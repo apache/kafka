@@ -22,7 +22,7 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
     final long interval;
 
     public PunctuationSchedule(ProcessorNode node, long interval) {
-        this(node, System.currentTimeMillis(), interval);
+        this(node, 0, interval);
     }
 
     public PunctuationSchedule(ProcessorNode node, long time, long interval) {
