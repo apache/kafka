@@ -26,6 +26,7 @@ import java.io.File
 
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
+import org.apache.kafka.common.utils.Utils
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
@@ -94,7 +95,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     producer.close()
     for (server <- servers) {
       server.shutdown()
-      CoreUtils.rm(server.config.logDirs(0))
+      Utils.delete(new File(server.config.logDirs(0)))
     }
     super.tearDown()
   }

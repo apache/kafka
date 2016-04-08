@@ -143,7 +143,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public void schedule(long interval) {
-        throw new UnsupportedOperationException("schedule() not supported");
+        throw new UnsupportedOperationException("schedule() not supported.");
     }
 
     @Override
@@ -156,6 +156,12 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, int childIndex) {
         driver.forward(key, value, childIndex);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <K, V> void forward(K key, V value, String childName) {
+        driver.forward(key, value, childName);
     }
 
     @Override

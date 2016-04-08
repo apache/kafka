@@ -452,12 +452,13 @@ class ZkUtils(val zkClient: ZkClient,
     } catch {
       case e1: ZkBadVersionException =>
         optionalChecker match {
-          case Some(checker) => return checker(this, path, data)
-          case _ => debug("Checker method is not passed skipping zkData match")
+          case Some(checker) => checker(this, path, data)
+          case _ =>
+            debug("Checker method is not passed skipping zkData match")
+            warn("Conditional update of path %s with data %s and expected version %d failed due to %s"
+              .format(path, data,expectVersion, e1.getMessage))
+            (false, -1)
         }
-        warn("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
-          expectVersion, e1.getMessage))
-        (false, -1)
       case e2: Exception =>
         warn("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
           expectVersion, e2.getMessage))

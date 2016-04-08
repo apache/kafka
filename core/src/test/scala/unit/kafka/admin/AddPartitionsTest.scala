@@ -59,7 +59,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     servers.foreach(_.shutdown())
-    servers.foreach(server => CoreUtils.rm(server.config.logDirs))
+    servers.foreach(server => CoreUtils.delete(server.config.logDirs))
     super.tearDown()
   }
 

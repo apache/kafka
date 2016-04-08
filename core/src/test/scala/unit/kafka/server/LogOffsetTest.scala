@@ -30,6 +30,7 @@ import kafka.utils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -57,7 +58,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   override def tearDown() {
     simpleConsumer.close
     server.shutdown
-    CoreUtils.rm(logDir)
+    Utils.delete(logDir)
     super.tearDown()
   }
 

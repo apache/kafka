@@ -25,14 +25,13 @@ import java.util.{Collections, Properties}
 
 import com.yammer.metrics.core.Gauge
 import joptsimple.OptionParser
-import kafka.client.ClientUtils
 import kafka.consumer.{BaseConsumerRecord, ConsumerIterator, BaseConsumer, Blacklist, ConsumerConfig, ConsumerThreadId, ConsumerTimeoutException, TopicFilter, Whitelist, ZookeeperConsumerConnector}
 import kafka.javaapi.consumer.ConsumerRebalanceListener
-import kafka.message.MessageAndMetadata
 import kafka.metrics.KafkaMetricsGroup
 import kafka.serializer.DefaultDecoder
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging}
-import org.apache.kafka.clients.consumer.{OffsetAndMetadata, Consumer, ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.clients.consumer
+import org.apache.kafka.clients.consumer.{OffsetAndMetadata, Consumer, ConsumerRecord, KafkaConsumer, CommitFailedException}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
@@ -356,6 +355,12 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           // and re-throw to break the loop
           mirrorMakerConsumer.commit()
           throw e
+
+        case e: CommitFailedException =>
+          warn("Failed to commit offsets because the consumer group has rebalanced and assigned partitions to " +
+            "another instance. If you see this regularly, it could indicate that you need to either increase " +
+            s"the consumer's ${consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG} or reduce the number of records " +
+            s"handled on each iteration with ${consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG}")
       }
     } else {
       info("Exiting on send failure, skip committing offsets.")
@@ -422,10 +427,15 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         case t: Throwable =>
           fatal("Mirror maker thread failure due to ", t)
       } finally {
-        info("Flushing producer.")
-        producer.flush()
-        info("Committing consumer offsets.")
-        CoreUtils.swallow(commitOffsets(mirrorMakerConsumer))
+        CoreUtils.swallow {
+          info("Flushing producer.")
+          producer.flush()
+
+          // note that this commit is skipped if flush() fails which ensures that we don't lose messages
+          info("Committing consumer offsets.")
+          commitOffsets(mirrorMakerConsumer)
+        }
+
         info("Shutting down consumer connectors.")
         CoreUtils.swallow(mirrorMakerConsumer.stop())
         CoreUtils.swallow(mirrorMakerConsumer.cleanup())

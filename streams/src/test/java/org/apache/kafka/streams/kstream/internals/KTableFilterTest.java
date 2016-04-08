@@ -53,7 +53,7 @@ public class KTableFilterTest {
                 return (value % 2) == 0;
             }
         });
-        KTable<String, Integer> table3 = table1.filterOut(new Predicate<String, Integer>() {
+        KTable<String, Integer> table3 = table1.filterNot(new Predicate<String, Integer>() {
             @Override
             public boolean test(String key, Integer value) {
                 return (value % 2) == 0;
@@ -74,8 +74,8 @@ public class KTableFilterTest {
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
 
-        proc2.checkAndClearResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
-        proc3.checkAndClearResult("A:1", "B:null", "C:3", "D:null", "A:null", "B:null");
+        proc2.checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
+        proc3.checkAndClearProcessResult("A:1", "B:null", "C:3", "D:null", "A:null", "B:null");
     }
 
     @Test
@@ -95,7 +95,7 @@ public class KTableFilterTest {
                             return (value % 2) == 0;
                         }
                     });
-            KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterOut(
+            KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
                     new Predicate<String, Integer>() {
                         @Override
                         public boolean test(String key, Integer value) {
@@ -193,25 +193,25 @@ public class KTableFilterTest {
             driver.process(topic1, "B", 1);
             driver.process(topic1, "C", 1);
 
-            proc1.checkAndClearResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
-            proc2.checkAndClearResult("A:(null<-null)", "B:(null<-null)", "C:(null<-null)");
+            proc1.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+            proc2.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)", "C:(null<-null)");
 
             driver.process(topic1, "A", 2);
             driver.process(topic1, "B", 2);
 
-            proc1.checkAndClearResult("A:(2<-null)", "B:(2<-null)");
-            proc2.checkAndClearResult("A:(2<-null)", "B:(2<-null)");
+            proc1.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+            proc2.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
 
             driver.process(topic1, "A", 3);
 
-            proc1.checkAndClearResult("A:(3<-null)");
-            proc2.checkAndClearResult("A:(null<-null)");
+            proc1.checkAndClearProcessResult("A:(3<-null)");
+            proc2.checkAndClearProcessResult("A:(null<-null)");
 
             driver.process(topic1, "A", null);
             driver.process(topic1, "B", null);
 
-            proc1.checkAndClearResult("A:(null<-null)", "B:(null<-null)");
-            proc2.checkAndClearResult("A:(null<-null)", "B:(null<-null)");
+            proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
+            proc2.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
 
         } finally {
             Utils.delete(stateDir);
@@ -250,25 +250,25 @@ public class KTableFilterTest {
             driver.process(topic1, "B", 1);
             driver.process(topic1, "C", 1);
 
-            proc1.checkAndClearResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
-            proc2.checkAndClearResult("A:(null<-null)", "B:(null<-null)", "C:(null<-null)");
+            proc1.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+            proc2.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)", "C:(null<-null)");
 
             driver.process(topic1, "A", 2);
             driver.process(topic1, "B", 2);
 
-            proc1.checkAndClearResult("A:(2<-1)", "B:(2<-1)");
-            proc2.checkAndClearResult("A:(2<-null)", "B:(2<-null)");
+            proc1.checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
+            proc2.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
 
             driver.process(topic1, "A", 3);
 
-            proc1.checkAndClearResult("A:(3<-2)");
-            proc2.checkAndClearResult("A:(null<-2)");
+            proc1.checkAndClearProcessResult("A:(3<-2)");
+            proc2.checkAndClearProcessResult("A:(null<-2)");
 
             driver.process(topic1, "A", null);
             driver.process(topic1, "B", null);
 
-            proc1.checkAndClearResult("A:(null<-3)", "B:(null<-2)");
-            proc2.checkAndClearResult("A:(null<-null)", "B:(null<-2)");
+            proc1.checkAndClearProcessResult("A:(null<-3)", "B:(null<-2)");
+            proc2.checkAndClearProcessResult("A:(null<-null)", "B:(null<-2)");
 
         } finally {
             Utils.delete(stateDir);

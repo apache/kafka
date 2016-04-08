@@ -17,6 +17,7 @@ import os
 import subprocess
 from ducktape.template import TemplateRenderer
 from kafkatest.services.security.minikdc import MiniKdc
+import itertools
 
 class Keytool(object):
 
@@ -172,17 +173,22 @@ class SecurityConfig(TemplateRenderer):
         else:
             return ""
 
-    def __str__(self):
+    def props(self, prefix=''):
         """
-        Return properties as string with line separators.
+        Return properties as string with line separators, optionally with a prefix.
         This is used to append security config properties to
         a properties file.
+        :param prefix: prefix to add to each property
+        :return: a string containing line-separated properties
         """
+        if self.security_protocol == SecurityConfig.PLAINTEXT:
+            return ""
+        config_lines = (prefix + key + "=" + value for key, value in self.properties.iteritems())
+        # Extra blank lines ensure this can be appended/prepended safely
+        return "\n".join(itertools.chain([""], config_lines, [""]))
 
-        prop_str = ""
-        if self.security_protocol != SecurityConfig.PLAINTEXT:
-            for key, value in self.properties.items():
-                prop_str += ("\n" + key + "=" + value)
-            prop_str += "\n"
-        return prop_str
-
+    def __str__(self):
+        """
+        Return properties as a string with line separators.
+        """
+        return self.props()
