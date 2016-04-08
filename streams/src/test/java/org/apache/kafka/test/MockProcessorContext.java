@@ -171,7 +171,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public String topic() {
-        throw new UnsupportedOperationException("topic() not supported.");
+        return "mockTopic";
     }
 
     @Override

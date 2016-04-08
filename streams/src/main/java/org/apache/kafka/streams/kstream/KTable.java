@@ -92,8 +92,11 @@ public interface KTable<K, V> {
 
     /**
      * Print the elements of this stream to System.out
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
      */
-    KTable<K, V> print();
+    void print();
 
     /**
      * Print the elements of this stream to System.out
@@ -101,15 +104,20 @@ public interface KTable<K, V> {
      *                 if not specified the default serde defined in the configs will be used
      * @param valSerde value serde used to send key-value pairs,
      *                 if not specified the default serde defined in the configs will be used
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
      */
-    KTable<K, V> print(Serde<?> keySerde, Serde<?> valSerde);
+    void print(Serde<K> keySerde, Serde<V> valSerde);
 
     /**
      * Write the elements of this stream to a file at the given path.
      * @param filePath name of file to write to
      *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
      */
-    KTable<K, V>  writeAsText(String filePath);
+    void writeAsText(String filePath);
 
     /**
      *
@@ -118,9 +126,11 @@ public interface KTable<K, V> {
      *                 if not specified the default serde defined in the configs will be used
      * @param valSerde value serde used to send key-value pairs,
      *                 if not specified the default serde defined in the configs will be used
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
      */
-
-    KTable<K, V>  writeAsText(String filePath, Serde<?> keySerde, Serde<?> valSerde);
+    void  writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde);
 
 
 

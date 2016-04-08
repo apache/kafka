@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStream;
@@ -182,33 +183,31 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public KTable<K, V> print() {
-        return print(null, null);
+    public void print() {
+        print(null, null);
     }
 
     @Override
-    public KTable<K, V> print(Serde<?> keySerde, Serde<?> valSerde) {
+    public void print(Serde<K> keySerde, Serde<V> valSerde) {
         String name = topology.newName(PRINTING_NAME);
-        topology.addProcessor(name, new KStreamPrinter<>(keySerde, valSerde), this.name);
-        return new KTableImpl<K, S, V>(topology, name, this.processorSupplier, sourceNodes);
+        topology.addProcessor(name, new KeyValuePrinter<>(keySerde, valSerde), this.name);
     }
 
 
     @Override
-    public KTable<K, V> writeAsText(String filePath) {
-        return writeAsText(filePath, null, null);
+    public void writeAsText(String filePath) {
+        writeAsText(filePath, null, null);
     }
 
     @Override
-    public KTable<K, V> writeAsText(String filePath, Serde<?> keySerde, Serde<?> valSerde) {
+    public void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde) {
         String name = topology.newName(PRINTING_NAME);
         try {
             PrintStream printStream = new PrintStream(new FileOutputStream(filePath));
-            topology.addProcessor(name, new KStreamPrinter<>(printStream, keySerde, valSerde), this.name);
-            return new KTableImpl<K, S, V>(topology, name, this.processorSupplier, sourceNodes);
+            topology.addProcessor(name, new KeyValuePrinter<>(printStream, keySerde, valSerde), this.name);
         } catch (FileNotFoundException e) {
-            String message = "Unable to write stream to file at [" + filePath + "]";
-            throw new IllegalStateException(message, e);
+            String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
+            throw new TopologyBuilderException(message);
         }
     }
 

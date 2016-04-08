@@ -27,7 +27,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import java.io.PrintStream;
 
 
-class KStreamPrinter<K, V> implements ProcessorSupplier<K, V> {
+class KeyValuePrinter<K, V> implements ProcessorSupplier<K, V> {
 
     private final PrintStream printStream;
     private Serde<?> keySerde;
@@ -36,7 +36,7 @@ class KStreamPrinter<K, V> implements ProcessorSupplier<K, V> {
     private boolean notStandardOut;
 
 
-    KStreamPrinter(PrintStream printStream, Serde<?> keySerde, Serde<?> valueSerde) {
+    KeyValuePrinter(PrintStream printStream, Serde<?> keySerde, Serde<?> valueSerde) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         if (printStream == null) {
@@ -47,15 +47,15 @@ class KStreamPrinter<K, V> implements ProcessorSupplier<K, V> {
         }
     }
 
-    KStreamPrinter(PrintStream printStream) {
+    KeyValuePrinter(PrintStream printStream) {
         this(printStream, null, null);
     }
 
-    KStreamPrinter(Serde<?> keySerde, Serde<?> valueSerde) {
+    KeyValuePrinter(Serde<?> keySerde, Serde<?> valueSerde) {
         this(null, keySerde, valueSerde);
     }
 
-    KStreamPrinter() {
+    KeyValuePrinter() {
         this(null, null, null);
     }
 

@@ -35,7 +35,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
-public class KStreamPrinterProcessorTest {
+public class KeyValuePrinterProcessorTest {
 
     private String topicName = "topic";
     private Serde<String> stringSerde = Serdes.String();
@@ -48,7 +48,7 @@ public class KStreamPrinterProcessorTest {
     @Test
     public void testPrintKeyValueDefaultSerde() throws Exception {
 
-        KStreamPrinter<String, String> kStreamPrinter = new KStreamPrinter<>(printStream);
+        KeyValuePrinter<String, String> kStreamPrinter = new KeyValuePrinter<>(printStream);
         String[] suppliedKeys = {"foo", "bar", null};
         String[] suppliedValues = {"value1", "value2", "value3"};
         String[] expectedValues = {"foo , value1", "bar , value2", "null_key , value3"};
@@ -74,7 +74,7 @@ public class KStreamPrinterProcessorTest {
     public void testPrintKeyValueWithProvidedSerde() throws Exception {
 
         Serde<MockObject> mockObjectSerde = Serdes.serdeFrom(new MockSerializer(), new MockDeserializer());
-        KStreamPrinter<String, byte[]> kStreamPrinter = new KStreamPrinter<>(printStream, stringSerde, mockObjectSerde);
+        KeyValuePrinter<String, byte[]> kStreamPrinter = new KeyValuePrinter<>(printStream, stringSerde, mockObjectSerde);
         KStream<String, byte[]> stream = builder.stream(stringSerde, bytesSerde, topicName);
 
         stream.process(kStreamPrinter);
