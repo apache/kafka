@@ -142,6 +142,11 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     }
 
     @Override
+    public <K, V> void forward(K key, V value, String childName) {
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
+    }
+
+    @Override
     public void commit() {
         throw new UnsupportedOperationException("this should not happen: commit() not supported in standby tasks.");
     }

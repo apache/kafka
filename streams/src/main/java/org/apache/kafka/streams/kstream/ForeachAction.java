@@ -15,27 +15,21 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.kstream;
 
-public class PunctuationSchedule extends Stamped<ProcessorNode> {
 
-    final long interval;
 
-    public PunctuationSchedule(ProcessorNode node, long interval) {
-        this(node, 0, interval);
-    }
-
-    public PunctuationSchedule(ProcessorNode node, long time, long interval) {
-        super(node, time + interval);
-        this.interval = interval;
-    }
-
-    public ProcessorNode node() {
-        return value;
-    }
-
-    public PunctuationSchedule next() {
-        return new PunctuationSchedule(value, timestamp, interval);
-    }
-
+/**
+ * The ForeachAction interface for performing an action on a key-value pair.
+ * Note that this action is stateless. If stateful processing is required, consider
+ * using {@link KStream#transform(TransformerSupplier, String...)} or
+ * {@link KStream#process(ProcessorSupplier, String...)} instead.
+ *
+ * @param <K>   original key type
+ * @param <V>   original value type
+ */
+public interface ForeachAction<K, V> {
+    void apply(K key, V value);
 }
+
+

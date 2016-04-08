@@ -90,7 +90,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult();
+            processor.checkAndClearProcessResult();
 
             // push two items to the other stream. this should produce two items.
             // w1 = { 0:X0, 1:X1 }
@@ -102,7 +102,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+Y0", "1:X1+Y1");
+            processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
 
             // push all four items to the primary stream. this should produce two items.
             // w1 = { 0:X0, 1:X1 }
@@ -114,7 +114,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+Y0", "1:X1+Y1");
+            processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
 
             // push all items to the other stream. this should produce six items.
             // w1 = { 0:X1, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3 }
@@ -126,7 +126,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+YY0", "0:X0+YY0", "1:X1+YY1", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            processor.checkAndClearProcessResult("0:X0+YY0", "0:X0+YY0", "1:X1+YY1", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
 
             // push all four items to the primary stream. this should produce six items.
             // w1 = { 0:X1, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3 }
@@ -138,7 +138,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:XX0+Y0", "0:XX0+YY0", "1:XX1+Y1", "1:XX1+YY1", "2:XX2+YY2", "3:XX3+YY3");
+            processor.checkAndClearProcessResult("0:XX0+Y0", "0:XX0+YY0", "1:XX1+Y1", "1:XX1+YY1", "2:XX2+YY2", "3:XX3+YY3");
 
             // push two items to the other stream. this should produce six item.
             // w1 = { 0:X1, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3,  0:XX0, 1:XX1, 2:XX2, 3:XX3 }
@@ -150,7 +150,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic2, expectedKeys[i], "YYY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+YYY0", "0:X0+YYY0", "0:XX0+YYY0", "1:X1+YYY1", "1:X1+YYY1", "1:XX1+YYY1");
+            processor.checkAndClearProcessResult("0:X0+YYY0", "0:X0+YYY0", "0:XX0+YYY0", "1:X1+YYY1", "1:X1+YYY1", "1:XX1+YYY1");
 
         } finally {
             Utils.delete(baseDir);
@@ -195,7 +195,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+null", "1:X1+null");
+            processor.checkAndClearProcessResult("0:X0+null", "1:X1+null");
 
             // push two items to the other stream. this should produce two items.
             // w1 = { 0:X0, 1:X1 }
@@ -207,7 +207,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+Y0", "1:X1+Y1");
+            processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
 
             // push all four items to the primary stream. this should produce four items.
             // w1 = { 0:X0, 1:X1 }
@@ -219,7 +219,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+Y0", "1:X1+Y1", "2:X2+null", "3:X3+null");
+            processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1", "2:X2+null", "3:X3+null");
 
             // push all items to the other stream. this should produce six items.
             // w1 = { 0:X1, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3 }
@@ -231,7 +231,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+YY0", "0:X0+YY0", "1:X1+YY1", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            processor.checkAndClearProcessResult("0:X0+YY0", "0:X0+YY0", "1:X1+YY1", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
 
             // push all four items to the primary stream. this should produce six items.
             // w1 = { 0:X1, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3 }
@@ -243,7 +243,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:XX0+Y0", "0:XX0+YY0", "1:XX1+Y1", "1:XX1+YY1", "2:XX2+YY2", "3:XX3+YY3");
+            processor.checkAndClearProcessResult("0:XX0+Y0", "0:XX0+YY0", "1:XX1+Y1", "1:XX1+YY1", "2:XX2+YY2", "3:XX3+YY3");
 
             // push two items to the other stream. this should produce six item.
             // w1 = { 0:X1, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3,  0:XX0, 1:XX1, 2:XX2, 3:XX3 }
@@ -255,7 +255,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic2, expectedKeys[i], "YYY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+YYY0", "0:X0+YYY0", "0:XX0+YYY0", "1:X1+YYY1", "1:X1+YYY1", "1:XX1+YYY1");
+            processor.checkAndClearProcessResult("0:X0+YYY0", "0:X0+YYY0", "0:XX0+YYY0", "1:X1+YYY1", "1:X1+YYY1", "1:XX1+YYY1");
 
         } finally {
             Utils.delete(baseDir);
@@ -302,7 +302,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult();
+            processor.checkAndClearProcessResult();
 
             // push two items to the other stream. this should produce two items.
             // w1 = { 0:X0, 1:X1 }
@@ -314,7 +314,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+Y0", "1:X1+Y1");
+            processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
 
             // clear logically
             time = 1000L;
@@ -323,7 +323,7 @@ public class KStreamKStreamJoinTest {
                 driver.setTime(time + i);
                 driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
             }
-            processor.checkAndClearResult();
+            processor.checkAndClearProcessResult();
 
             // gradually expires items in w1
             // w1 = { 0:X0, 1:X1, 2:X2, 3:X3 }
@@ -335,35 +335,35 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            processor.checkAndClearProcessResult("1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("2:X2+YY2", "3:X3+YY3");
+            processor.checkAndClearProcessResult("2:X2+YY2", "3:X3+YY3");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("3:X3+YY3");
+            processor.checkAndClearProcessResult("3:X3+YY3");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult();
+            processor.checkAndClearProcessResult();
 
             // go back to the time before expiration
 
@@ -373,35 +373,35 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult();
+            processor.checkAndClearProcessResult();
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+YY0");
+            processor.checkAndClearProcessResult("0:X0+YY0");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+YY0", "1:X1+YY1");
+            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2");
+            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
 
             // clear (logically)
             time = 2000L;
@@ -411,7 +411,7 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult();
+            processor.checkAndClearProcessResult();
 
             // gradually expires items in w2
             // w2 = { 0:Y0, 1:Y1, 2:Y2, 3:Y3 }
@@ -422,35 +422,35 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
+            processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
+            processor.checkAndClearProcessResult("1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("2:XX2+Y2", "3:XX3+Y3");
+            processor.checkAndClearProcessResult("2:XX2+Y2", "3:XX3+Y3");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("3:XX3+Y3");
+            processor.checkAndClearProcessResult("3:XX3+Y3");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult();
+            processor.checkAndClearProcessResult();
 
             // go back to the time before expiration
 
@@ -460,35 +460,35 @@ public class KStreamKStreamJoinTest {
                 driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult();
+            processor.checkAndClearProcessResult();
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:XX0+Y0");
+            processor.checkAndClearProcessResult("0:XX0+Y0");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:XX0+Y0", "1:XX1+Y1");
+            processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2");
+            processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2");
 
             driver.setTime(++time);
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
+            processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
 
         } finally {
             Utils.delete(baseDir);

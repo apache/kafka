@@ -297,4 +297,12 @@ public interface KTable<K, V> {
      * @param <K1>          the key type of the aggregated {@link KTable}
      */
     <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector, String name);
+
+    /**
+     * Perform an action on each element of {@link KTable}.
+     * Note that this is a terminal operation that returns void.
+     *
+     * @param action An action to perform on each element
+     */
+    void foreach(ForeachAction<K, V> action);
 }

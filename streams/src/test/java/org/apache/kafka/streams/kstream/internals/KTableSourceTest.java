@@ -131,21 +131,21 @@ public class KTableSourceTest {
             driver.process(topic1, "B", "01");
             driver.process(topic1, "C", "01");
 
-            proc1.checkAndClearResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
+            proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
 
             driver.process(topic1, "A", "02");
             driver.process(topic1, "B", "02");
 
-            proc1.checkAndClearResult("A:(02<-null)", "B:(02<-null)");
+            proc1.checkAndClearProcessResult("A:(02<-null)", "B:(02<-null)");
 
             driver.process(topic1, "A", "03");
 
-            proc1.checkAndClearResult("A:(03<-null)");
+            proc1.checkAndClearProcessResult("A:(03<-null)");
 
             driver.process(topic1, "A", null);
             driver.process(topic1, "B", null);
 
-            proc1.checkAndClearResult("A:(null<-null)", "B:(null<-null)");
+            proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
 
         } finally {
             Utils.delete(stateDir);
@@ -176,21 +176,21 @@ public class KTableSourceTest {
             driver.process(topic1, "B", "01");
             driver.process(topic1, "C", "01");
 
-            proc1.checkAndClearResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
+            proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
 
             driver.process(topic1, "A", "02");
             driver.process(topic1, "B", "02");
 
-            proc1.checkAndClearResult("A:(02<-01)", "B:(02<-01)");
+            proc1.checkAndClearProcessResult("A:(02<-01)", "B:(02<-01)");
 
             driver.process(topic1, "A", "03");
 
-            proc1.checkAndClearResult("A:(03<-02)");
+            proc1.checkAndClearProcessResult("A:(03<-02)");
 
             driver.process(topic1, "A", null);
             driver.process(topic1, "B", null);
 
-            proc1.checkAndClearResult("A:(null<-03)", "B:(null<-02)");
+            proc1.checkAndClearProcessResult("A:(null<-03)", "B:(null<-02)");
 
         } finally {
             Utils.delete(stateDir);

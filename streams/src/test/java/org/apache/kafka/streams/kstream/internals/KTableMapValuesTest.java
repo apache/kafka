@@ -223,20 +223,20 @@ public class KTableMapValuesTest {
             driver.process(topic1, "B", "01");
             driver.process(topic1, "C", "01");
 
-            proc.checkAndClearResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+            proc.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
 
             driver.process(topic1, "A", "02");
             driver.process(topic1, "B", "02");
 
-            proc.checkAndClearResult("A:(2<-null)", "B:(2<-null)");
+            proc.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
 
             driver.process(topic1, "A", "03");
 
-            proc.checkAndClearResult("A:(3<-null)");
+            proc.checkAndClearProcessResult("A:(3<-null)");
 
             driver.process(topic1, "A", null);
 
-            proc.checkAndClearResult("A:(null<-null)");
+            proc.checkAndClearProcessResult("A:(null<-null)");
 
         } finally {
             Utils.delete(stateDir);
@@ -276,20 +276,20 @@ public class KTableMapValuesTest {
             driver.process(topic1, "B", "01");
             driver.process(topic1, "C", "01");
 
-            proc.checkAndClearResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+            proc.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
 
             driver.process(topic1, "A", "02");
             driver.process(topic1, "B", "02");
 
-            proc.checkAndClearResult("A:(2<-1)", "B:(2<-1)");
+            proc.checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
 
             driver.process(topic1, "A", "03");
 
-            proc.checkAndClearResult("A:(3<-2)");
+            proc.checkAndClearProcessResult("A:(3<-2)");
 
             driver.process(topic1, "A", null);
 
-            proc.checkAndClearResult("A:(null<-3)");
+            proc.checkAndClearProcessResult("A:(null<-3)");
 
         } finally {
             Utils.delete(stateDir);
