@@ -179,7 +179,6 @@ class VerifiableConsumer(BackgroundThreadService):
         for line in node.account.ssh_capture(cmd):
             event = self.try_parse_json(line.strip())
             if event is not None:
-                self.logger.debug("Event received (%s): %s", idx, event)
                 with self.lock:
                     name = event["name"]
                     if name == "shutdown_complete":
