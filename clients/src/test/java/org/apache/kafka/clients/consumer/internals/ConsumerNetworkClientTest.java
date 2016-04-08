@@ -27,6 +27,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -40,7 +42,7 @@ public class ConsumerNetworkClientTest {
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
-    private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100);
+    private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
 
     @Test
     public void send() {
@@ -104,6 +106,65 @@ public class ConsumerNetworkClientTest {
         assertTrue(future.isDone());
     }
 
+    @Test
+    public void sendExpiry() throws InterruptedException {
+        long unsentExpiryMs = 10;
+        final AtomicBoolean isReady = new AtomicBoolean();
+        final AtomicBoolean disconnected = new AtomicBoolean();
+        client = new MockClient(time) {
+            @Override
+            public boolean ready(Node node, long now) {
+                if (isReady.get())
+                    return super.ready(node, now);
+                else
+                    return false;
+            }
+            @Override
+            public boolean connectionFailed(Node node) {
+                return disconnected.get();
+            }
+        };
+        // Queue first send, sleep long enough for this to expire and then queue second send
+        consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, unsentExpiryMs);
+        RequestFuture<ClientResponse> future1 = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        assertEquals(1, consumerClient.pendingRequestCount());
+        assertEquals(1, consumerClient.pendingRequestCount(node));
+        assertFalse(future1.isDone());
+
+        time.sleep(unsentExpiryMs + 1);
+        RequestFuture<ClientResponse> future2 = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        assertEquals(2, consumerClient.pendingRequestCount());
+        assertEquals(2, consumerClient.pendingRequestCount(node));
+        assertFalse(future2.isDone());
+
+        // First send should have expired and second send still pending
+        consumerClient.poll(0);
+        assertTrue(future1.isDone());
+        assertFalse(future1.succeeded());
+        assertEquals(1, consumerClient.pendingRequestCount());
+        assertEquals(1, consumerClient.pendingRequestCount(node));
+        assertFalse(future2.isDone());
+
+        // Enable send, the un-expired send should succeed on poll
+        isReady.set(true);
+        client.prepareResponse(heartbeatResponse(Errors.NONE.code()));
+        consumerClient.poll(future2);
+        ClientResponse clientResponse = future2.value();
+        HeartbeatResponse response = new HeartbeatResponse(clientResponse.responseBody());
+        assertEquals(Errors.NONE.code(), response.errorCode());
+
+        // Disable ready flag to delay send and queue another send. Disconnection should remove pending send
+        isReady.set(false);
+        RequestFuture<ClientResponse> future3 = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        assertEquals(1, consumerClient.pendingRequestCount());
+        assertEquals(1, consumerClient.pendingRequestCount(node));
+        disconnected.set(true);
+        consumerClient.poll(0);
+        assertTrue(future3.isDone());
+        assertFalse(future3.succeeded());
+        assertEquals(0, consumerClient.pendingRequestCount());
+        assertEquals(0, consumerClient.pendingRequestCount(node));
+    }
 
     private HeartbeatRequest heartbeatRequest() {
         return new HeartbeatRequest("group", 1, "memberId");

@@ -13,14 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.tests.kafka_test import KafkaTest
+from ducktape.tests.test import Test
+
+from kafkatest.services.zookeeper import ZookeeperService
+from kafkatest.services.kafka import KafkaService
 from kafkatest.services.connect import ConnectStandaloneService
 from kafkatest.services.console_consumer import ConsoleConsumer
+from kafkatest.services.security.security_config import SecurityConfig
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize
+from ducktape.mark import parametrize, matrix
 import hashlib, subprocess, json
 
-class ConnectStandaloneFileTest(KafkaTest):
+class ConnectStandaloneFileTest(Test):
     """
     Simple test of Kafka Connect that produces data from a file in one
     standalone process and consumes it on another, validating the output is
@@ -42,23 +46,38 @@ class ConnectStandaloneFileTest(KafkaTest):
     SCHEMA = { "type": "string", "optional": False }
 
     def __init__(self, test_context):
-        super(ConnectStandaloneFileTest, self).__init__(test_context, num_zk=1, num_brokers=1, topics={
+        super(ConnectStandaloneFileTest, self).__init__(test_context)
+        self.num_zk = 1
+        self.num_brokers = 1
+        self.topics = {
             'test' : { 'partitions': 1, 'replication-factor': 1 }
-        })
+        }
 
-        self.source = ConnectStandaloneService(test_context, self.kafka, [self.INPUT_FILE, self.OFFSETS_FILE])
-        self.sink = ConnectStandaloneService(test_context, self.kafka, [self.OUTPUT_FILE, self.OFFSETS_FILE])
-        self.consumer_validator = ConsoleConsumer(test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=1000)
+        self.zk = ZookeeperService(test_context, self.num_zk)
 
     @parametrize(converter="org.apache.kafka.connect.json.JsonConverter", schemas=True)
     @parametrize(converter="org.apache.kafka.connect.json.JsonConverter", schemas=False)
     @parametrize(converter="org.apache.kafka.connect.storage.StringConverter", schemas=None)
-    def test_file_source_and_sink(self, converter="org.apache.kafka.connect.json.JsonConverter", schemas=True):
+    @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL])
+    def test_file_source_and_sink(self, converter="org.apache.kafka.connect.json.JsonConverter", schemas=True, security_protocol='PLAINTEXT'):
         assert converter != None, "converter type must be set"
         # Template parameters
         self.key_converter = converter
         self.value_converter = converter
         self.schemas = schemas
+
+        self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,
+                                  security_protocol=security_protocol, interbroker_security_protocol=security_protocol,
+                                  topics=self.topics)
+
+        self.source = ConnectStandaloneService(self.test_context, self.kafka, [self.INPUT_FILE, self.OFFSETS_FILE])
+        self.sink = ConnectStandaloneService(self.test_context, self.kafka, [self.OUTPUT_FILE, self.OFFSETS_FILE])
+        self.consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC,
+                                                  consumer_timeout_ms=1000, new_consumer=True)
+
+
+        self.zk.start()
+        self.kafka.start()
 
         self.source.set_configs(lambda node: self.render("connect-standalone.properties", node=node), [self.render("connect-file-source.properties")])
         self.sink.set_configs(lambda node: self.render("connect-standalone.properties", node=node), [self.render("connect-file-sink.properties")])

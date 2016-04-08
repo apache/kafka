@@ -39,7 +39,7 @@ import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 
-import scala.collection.Map
+import scala.collection.mutable.ArrayBuffer
 
 class SocketServerTest extends JUnitSuite {
   val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
@@ -55,6 +55,7 @@ class SocketServerTest extends JUnitSuite {
   val metrics = new Metrics
   val server = new SocketServer(config, metrics, new SystemTime)
   server.startup()
+  val sockets = new ArrayBuffer[Socket]
 
   def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None) {
     val outgoing = new DataOutputStream(socket.getOutputStream)
@@ -79,7 +80,12 @@ class SocketServerTest extends JUnitSuite {
 
   /* A simple request handler that just echos back the response */
   def processRequest(channel: RequestChannel) {
-    val request = channel.receiveRequest
+    val request = channel.receiveRequest(2000)
+    assertNotNull("receiveRequest timed out", request)
+    processRequest(channel, request)
+  }
+
+  def processRequest(channel: RequestChannel, request: RequestChannel.Request) {
     val byteBuffer = ByteBuffer.allocate(request.header.sizeOf + request.body.sizeOf)
     request.header.writeTo(byteBuffer)
     request.body.writeTo(byteBuffer)
@@ -89,13 +95,18 @@ class SocketServerTest extends JUnitSuite {
     channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
   }
 
-  def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) =
-    new Socket("localhost", server.boundPort(protocol))
+  def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
+    val socket = new Socket("localhost", s.boundPort(protocol))
+    sockets += socket
+    socket
+  }
 
   @After
-  def cleanup() {
+  def tearDown() {
     metrics.close()
     server.shutdown()
+    sockets.foreach(_.close())
+    sockets.clear()
   }
 
   private def producerRequestBytes: Array[Byte] = {
@@ -183,7 +194,7 @@ class SocketServerTest extends JUnitSuite {
 
   @Test
   def testMaxConnectionsPerIp() {
-    // make the maximum allowable number of connections and then leak them
+    // make the maximum allowable number of connections
     val conns = (0 until server.config.maxConnectionsPerIp).map(_ => connect())
     // now try one more (should fail)
     val conn = connect()
@@ -201,27 +212,30 @@ class SocketServerTest extends JUnitSuite {
     sendRequest(conn2, serializedBytes)
     val request = server.requestChannel.receiveRequest(2000)
     assertNotNull(request)
-    conn2.close()
-    conns.tail.foreach(_.close())
   }
 
   @Test
-  def testMaxConnectionsPerIPOverrides() {
-    val overrideNum = 6
-    val overrides = Map("localhost" -> overrideNum)
+  def testMaxConnectionsPerIpOverrides() {
+    val overrideNum = server.config.maxConnectionsPerIp + 1
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    overrideProps.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$overrideNum")
     val serverMetrics = new Metrics()
-    val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime())
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime())
     try {
       overrideServer.startup()
-      // make the maximum allowable number of connections and then leak them
-      val conns = ((0 until overrideNum).map(i => connect(overrideServer)))
+      // make the maximum allowable number of connections
+      val conns = (0 until overrideNum).map(_ => connect(overrideServer))
+
+      // it should succeed
+      val serializedBytes = producerRequestBytes
+      sendRequest(conns.last, serializedBytes)
+      val request = overrideServer.requestChannel.receiveRequest(2000)
+      assertNotNull(request)
+
       // now try one more (should fail)
       val conn = connect(overrideServer)
       conn.setSoTimeout(3000)
       assertEquals(-1, conn.getInputStream.read())
-      conn.close()
-      conns.foreach(_.close())
     } finally {
       overrideServer.shutdown()
       serverMetrics.close()
@@ -229,16 +243,16 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testSslSocketServer(): Unit = {
+  def testSslSocketServer() {
     val trustStoreFile = File.createTempFile("truststore", ".jks")
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
       trustStoreFile = Some(trustStoreFile))
     overrideProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
 
     val serverMetrics = new Metrics
-    val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime)
-    overrideServer.startup()
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime)
     try {
+      overrideServer.startup()
       val sslContext = SSLContext.getInstance("TLSv1.2")
       sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
       val socketFactory = sslContext.getSocketFactory
@@ -271,12 +285,95 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testSessionPrincipal(): Unit = {
+  def testSessionPrincipal() {
     val socket = connect()
     val bytes = new Array[Byte](40)
     sendRequest(socket, bytes, Some(0))
-    assertEquals(KafkaPrincipal.ANONYMOUS, server.requestChannel.receiveRequest().session.principal)
-    socket.close()
+    assertEquals(KafkaPrincipal.ANONYMOUS, server.requestChannel.receiveRequest(2000).session.principal)
+  }
+
+  /* Test that we update request metrics if the client closes the connection while the broker response is in flight. */
+  @Test
+  def testClientDisconnectionUpdatesRequestMetrics() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    val serverMetrics = new Metrics
+    var conn: Socket = null
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, new SystemTime) {
+      override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, protocol: SecurityProtocol): Processor = {
+        new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
+          config.connectionsMaxIdleMs, protocol, config.values, metrics) {
+          override protected[network] def sendResponse(response: RequestChannel.Response) {
+            conn.close()
+            super.sendResponse(response)
+          }
+        }
+      }
+    }
+    try {
+      overrideServer.startup()
+      conn = connect(overrideServer)
+      val serializedBytes = producerRequestBytes
+      sendRequest(conn, serializedBytes)
+
+      val channel = overrideServer.requestChannel
+      val request = channel.receiveRequest(2000)
+
+      val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.requestId).name)
+      def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
+      val expectedTotalTimeCount = totalTimeHistCount() + 1
+
+      // send a large buffer to ensure that the broker detects the client disconnection while writing to the socket channel.
+      // On Mac OS X, the initial write seems to always succeed and it is able to write up to 102400 bytes on the initial
+      // write. If the buffer is smaller than this, the write is considered complete and the disconnection is not
+      // detected. If the buffer is larger than 102400 bytes, a second write is attempted and it fails with an
+      // IOException.
+      val send = new NetworkSend(request.connectionId, ByteBuffer.allocate(550000))
+      channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
+      TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
+        s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
+
+    } finally {
+      overrideServer.shutdown()
+      serverMetrics.close()
+    }
+  }
+
+  /*
+   * Test that we update request metrics if the channel has been removed from the selector when the broker calls
+   * `selector.send` (selector closes old connections, for example).
+   */
+  @Test
+  def testBrokerSendAfterChannelClosedUpdatesRequestMetrics() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    props.setProperty(KafkaConfig.ConnectionsMaxIdleMsProp, "100")
+    val serverMetrics = new Metrics
+    var conn: Socket = null
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, new SystemTime)
+    try {
+      overrideServer.startup()
+      conn = connect(overrideServer)
+      val serializedBytes = producerRequestBytes
+      sendRequest(conn, serializedBytes)
+      val channel = overrideServer.requestChannel
+      val request = channel.receiveRequest(2000)
+
+      TestUtils.waitUntilTrue(() => overrideServer.processor(request.processor).channel(request.connectionId).isEmpty,
+        s"Idle connection `${request.connectionId}` was not closed by selector")
+
+      val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.requestId).name)
+      def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
+      val expectedTotalTimeCount = totalTimeHistCount() + 1
+
+      processRequest(channel, request)
+
+      TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
+        s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
+
+    } finally {
+      overrideServer.shutdown()
+      serverMetrics.close()
+    }
+
   }
 
 }

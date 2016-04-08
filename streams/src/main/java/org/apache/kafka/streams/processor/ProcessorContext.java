@@ -106,8 +106,17 @@ public interface ProcessorContext {
      * Forwards a key/value pair to one of the downstream processors designated by childIndex
      * @param key key
      * @param value value
+     * @param childIndex index in list of children of this node
      */
     <K, V> void forward(K key, V value, int childIndex);
+
+    /**
+     * Forwards a key/value pair to one of the downstream processors designated by the downstream processor name
+     * @param key key
+     * @param value value
+     * @param childName name of downstream processor
+     */
+    <K, V> void forward(K key, V value, String childName);
 
     /**
      * Requests a commit
@@ -115,21 +124,24 @@ public interface ProcessorContext {
     void commit();
 
     /**
-     * Returns the topic name of the current input record; could be null if it is not available (for example, it is from the punctuate call)
+     * Returns the topic name of the current input record; could be null if it is not
+     * available (for example, if this method is invoked from the punctuate call)
      *
      * @return the topic name
      */
     String topic();
 
     /**
-     * Returns the partition id of the current input record; could be -1 if it is not available (for example, it is from the punctuate call)
+     * Returns the partition id of the current input record; could be -1 if it is not
+     * available (for example, if this method is invoked from the punctuate call)
      *
      * @return the partition id
      */
     int partition();
 
     /**
-     * Returns the offset of the current input record; could be -1 if it is not available (for example, it is from the punctuate call)
+     * Returns the offset of the current input record; could be -1 if it is not
+     * available (for example, if this method is invoked from the punctuate call)
      *
      * @return the offset
      */
@@ -141,8 +153,9 @@ public interface ProcessorContext {
      * If it is triggered while processing a record streamed from the source processor, timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
      * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord} by {@link TimestampExtractor}.
      *
-     * If it is triggered while processing a record generated not from the source processor (for example, generated from the punctuate function), timestamp is defined as the current
-     * task's stream team, which is defined as the smallest among all its input stream partition timestamps.
+     * If it is triggered while processing a record generated not from the source processor (for example,
+     * if this method is invoked from the punctuate call), timestamp is defined as the current
+     * task's stream time, which is defined as the smallest among all its input stream partition timestamps.
      *
      * @return the timestamp
      */
