@@ -52,12 +52,8 @@ class VerifiableProducer(BackgroundThreadService):
                num_nodes = 1
                * is_int_with_prefix recommended if num_nodes > 1, because otherwise each producer
                will produce exactly same messages, and validation may miss missing messages.
-        :param compression_types: If None, all producers will not use compression; or a list of one or
-        more compression types (including "none"). Each producer will pick a compression type
-        from the list in round-robin fashion. Example: compression_types = ["none", "snappy"] and
-        num_nodes = 3, then producer 1 and 2 will not use compression, and producer 3 will use
-        compression type = snappy. If in this example, num_nodes is 1, then first (and only)
-        producer will not use compression.
+        :param compression_types: If None, all producers will not use compression; or a list of
+        compression types, one per producer (could be "none").
         """
         super(VerifiableProducer, self).__init__(context, num_nodes)
 
@@ -67,6 +63,8 @@ class VerifiableProducer(BackgroundThreadService):
         self.throughput = throughput
         self.message_validator = message_validator
         self.compression_types = compression_types
+        if self.compression_types is not None:
+            assert len(self.compression_types) == num_nodes, "Specify one compression type per node"
 
         self.security_config = self.kafka.security_config.client_config()
 
@@ -80,7 +78,7 @@ class VerifiableProducer(BackgroundThreadService):
         idx = self.idx(node)
         prop_file = str(self.security_config)
         if self.compression_types is not None:
-            compression_index = (idx - 1) % len(self.compression_types)
+            compression_index = idx - 1
             self.logger.info("VerifiableProducer (index = %d) will use compression type = %s", idx,
                              self.compression_types[compression_index])
             prop_file += "\ncompression.type=%s\n" % self.compression_types[compression_index]
