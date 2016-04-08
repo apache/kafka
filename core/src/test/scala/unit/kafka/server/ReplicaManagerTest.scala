@@ -36,7 +36,7 @@ import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
 import org.junit.Assert.{assertEquals, assertTrue, assertFalse}
-import org.junit.Test
+import org.junit.{Test, Before, After}
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
@@ -44,17 +44,28 @@ import scala.collection.Map
 class ReplicaManagerTest {
 
   val topic = "test-topic"
+  val time = new MockTime()
+  val jTime = new JMockTime
+  val metrics = new Metrics
+  var zkClient : ZkClient = _
+  var zkUtils : ZkUtils = _
+    
+  @Before
+  def setUp() {
+    zkClient = EasyMock.createMock(classOf[ZkClient])
+    zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
+  }
+  
+  @After
+  def tearDown() {
+    metrics.close();
+  }
 
   @Test
   def testHighWaterMarkDirectoryMapping() {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
-    val zkClient = EasyMock.createMock(classOf[ZkClient])
-    val zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val time = new MockTime()
-    val jTime = new JMockTime
-    val metrics = new Metrics
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false))
     try {
@@ -64,7 +75,6 @@ class ReplicaManagerTest {
     } finally {
       // shutdown the replica manager upon test completion
       rm.shutdown(false)
-      metrics.close()
     }
   }
 
@@ -73,12 +83,7 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
-    val zkClient = EasyMock.createMock(classOf[ZkClient])
-    val zkUtils = ZkUtils(zkClient, false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val time = new MockTime()
-    val jTime = new JMockTime
-    val metrics = new Metrics
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false))
     try {
@@ -88,7 +93,6 @@ class ReplicaManagerTest {
     } finally {
       // shutdown the replica manager upon test completion
       rm.shutdown(checkpointHW = false)
-      metrics.close()
     }
   }
 
@@ -96,12 +100,7 @@ class ReplicaManagerTest {
   def testIllegalRequiredAcks() {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
-    val zkClient = EasyMock.createMock(classOf[ZkClient])
-    val zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val time = new MockTime()
-    val jTime = new JMockTime
-    val metrics = new Metrics
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), Option(this.getClass.getName))
     try {
@@ -116,7 +115,6 @@ class ReplicaManagerTest {
         responseCallback = callback)
     } finally {
       rm.shutdown(checkpointHW = false)
-      metrics.close()
     }
 
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
@@ -127,12 +125,7 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
-    val zkClient = EasyMock.createMock(classOf[ZkClient])
-    val zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val time = new MockTime()
-    val jTime = new JMockTime
-    val metrics = new Metrics
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false))
 
@@ -192,7 +185,6 @@ class ReplicaManagerTest {
       assertTrue(fetchCallbackFired)
     } finally {
       rm.shutdown(checkpointHW = false)
-      metrics.close()
     }
   }
   
@@ -202,12 +194,7 @@ class ReplicaManagerTest {
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     props.put("broker.id", Int.box(0))
     val config = KafkaConfig.fromProps(props)
-    val zkClient = EasyMock.createMock(classOf[ZkClient])
-    val zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val time = new MockTime()
-    val jTime = new JMockTime
-    val metrics = new Metrics
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), Option(this.getClass.getName))
     try {
@@ -272,7 +259,6 @@ class ReplicaManagerTest {
         assertEquals("Should give OffsetOutOfRangeException", Errors.OFFSET_OUT_OF_RANGE.code, fetchError)
     } finally {
       rm.shutdown(checkpointHW = false)
-      metrics.close()
     }
   }
 }
