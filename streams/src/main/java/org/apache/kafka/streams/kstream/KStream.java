@@ -101,6 +101,14 @@ public interface KStream<K, V> {
     KStream<K, V> through(String topic);
 
     /**
+     * Perform an action on each element of {@link KStream}.
+     * Note that this is a terminal operation that returns void.
+     *
+     * @param action An action to perform on each element
+     */
+    void foreach(ForeachAction<K, V> action);
+
+    /**
      * Materialize this stream to a topic, also creates a new instance of {@link KStream} from the topic
      * using default serializers and deserializers and a customizable {@link StreamPartitioner} to determine the distribution of records to partitions.
      * This is equivalent to calling {@link #to(StreamPartitioner, String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#stream(String...)}.
