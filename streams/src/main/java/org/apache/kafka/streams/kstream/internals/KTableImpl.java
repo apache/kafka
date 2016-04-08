@@ -145,9 +145,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public void foreach(ForeachAction<K, V> action) {
+    public void foreach(final ForeachAction<K, V> action) {
         String name = topology.newName(FOREACH_NAME);
-        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableForeach<>(this, action);
+        KStreamForeach<K, Change<V>> processorSupplier = new KStreamForeach(new ForeachAction<K, Change<V>>() {
+            @Override
+            public void apply(K key, Change<V> value) {
+                action.apply(key, value.newValue);
+            }
+        });
         topology.addProcessor(name, processorSupplier, this.name);
     }
 
