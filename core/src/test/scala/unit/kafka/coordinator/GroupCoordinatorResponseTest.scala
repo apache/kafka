@@ -296,8 +296,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, joinGroupErrorCode)
 
     EasyMock.reset(replicaManager)
-    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
-    val syncGroupErrorCode = syncGroupResult._2
+    val (_, syncGroupErrorCode) = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
     assertEquals(Errors.NONE.code, syncGroupErrorCode)
 
     time.sleep(DefaultSessionTimeout + 100)
@@ -319,17 +318,16 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, joinGroupErrorCode)
 
     EasyMock.reset(replicaManager)
-    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
-    val syncGroupErrorCode = syncGroupResult._2
+    val (_, syncGroupErrorCode) = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
     assertEquals(Errors.NONE.code, syncGroupErrorCode)
 
-    time.sleep(sessionTimeout/2)
+    time.sleep(sessionTimeout / 2)
 
     EasyMock.reset(replicaManager)
     var heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)
     assertEquals(Errors.NONE.code, heartbeatResult)
 
-    time.sleep(sessionTimeout/2 + 100)
+    time.sleep(sessionTimeout / 2 + 100)
 
     EasyMock.reset(replicaManager)
     heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)
@@ -350,17 +348,16 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, joinGroupErrorCode)
 
     EasyMock.reset(replicaManager)
-    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
-    val syncGroupErrorCode = syncGroupResult._2
+    val (_, syncGroupErrorCode) = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
     assertEquals(Errors.NONE.code, syncGroupErrorCode)
 
-    time.sleep(sessionTimeout/2)
+    time.sleep(sessionTimeout / 2)
 
     EasyMock.reset(replicaManager)
     val commitOffsetResult = commitOffsets(groupId, assignedConsumerId, generationId, immutable.Map(tp -> offset))
     assertEquals(Errors.NONE.code, commitOffsetResult(tp))
 
-    time.sleep(sessionTimeout/2 + 100)
+    time.sleep(sessionTimeout / 2 + 100)
 
     EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)
