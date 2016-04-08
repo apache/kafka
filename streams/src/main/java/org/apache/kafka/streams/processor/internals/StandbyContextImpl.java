@@ -142,6 +142,11 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     }
 
     @Override
+    public <K, V> void forward(K key, V value, String childName) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public void commit() {
         throw new UnsupportedOperationException();
     }

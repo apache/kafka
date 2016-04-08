@@ -476,7 +476,7 @@ public class Utils {
      * @param daemon Should the thread block JVM shutdown?
      * @return The unstarted thread
      */
-    public static Thread newThread(String name, Runnable runnable, Boolean daemon) {
+    public static Thread newThread(String name, Runnable runnable, boolean daemon) {
         Thread thread = new Thread(runnable, name);
         thread.setDaemon(daemon);
         thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {

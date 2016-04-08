@@ -120,7 +120,7 @@ public class Worker {
         producer = new KafkaProducer<>(producerProps);
 
         offsetBackingStore.start();
-        sourceTaskOffsetCommitter = new SourceTaskOffsetCommitter(time, config);
+        sourceTaskOffsetCommitter = new SourceTaskOffsetCommitter(config);
 
         log.info("Worker started");
     }
