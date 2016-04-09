@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 /**
@@ -25,10 +24,9 @@ import org.apache.kafka.streams.processor.ProcessorContext;
  *
  * @param <K>   key type
  * @param <V>   value type
- * @param <RK>   return key type
- * @param <RV>   return value type
+ * @param <R>   return type
  */
-public interface Transformer<K, V, RK, RV> {
+public interface Transformer<K, V, R> {
 
     /**
      * Initialize this transformer with the given context. The framework ensures this is called once per processor when the topology
@@ -48,16 +46,16 @@ public interface Transformer<K, V, RK, RV> {
      * @param value the value for the message
      * @return new value; if null no key-value pair will be forwarded to down stream
      */
-    KeyValue<RK, RV> transform(K key, V value);
+    R transform(K key, V value);
 
     /**
-     * Perform any periodic operations and possibly generate a new key and value, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
+     * Perform any periodic operations and possibly generate a key, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
      * during {@link #init(ProcessorContext) initialization}.
      *
      * @param timestamp the stream time when this method is being called
-     * @return new value; if null no key-value pair will be forwarded to down stream
+     * @return new value; if null it will not be forwarded to down stream
      */
-    KeyValue<RK, RV> punctuate(long timestamp);
+    R punctuate(long timestamp);
 
     /**
      * Close this processor and clean up any resources.

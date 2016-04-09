@@ -47,10 +47,11 @@ public interface ValueTransformer<V, R> {
     R transform(V value);
 
     /**
-     * Perform any periodic operations and possibly return a new value with null key, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
+     * Perform any periodic operations and possibly return a new value, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
      * during {@link #init(ProcessorContext) initialization}.
      *
      * @param timestamp the stream time when this method is being called
+     * @return new value; if null it will not be forwarded to down stream
      */
     R punctuate(long timestamp);
 

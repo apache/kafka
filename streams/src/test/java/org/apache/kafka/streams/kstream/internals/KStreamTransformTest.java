@@ -41,10 +41,10 @@ public class KStreamTransformTest {
     public void testTransform() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        TransformerSupplier<Integer, Integer, Integer, Integer> transformerSupplier =
-            new TransformerSupplier<Integer, Integer, Integer, Integer>() {
-                public Transformer<Integer, Integer, Integer, Integer> get() {
-                    return new Transformer<Integer, Integer, Integer, Integer>() {
+        TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>> transformerSupplier =
+            new TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>>() {
+                public Transformer<Integer, Integer, KeyValue<Integer, Integer>> get() {
+                    return new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
 
                         private int total = 0;
 
@@ -60,7 +60,7 @@ public class KStreamTransformTest {
 
                         @Override
                         public KeyValue<Integer, Integer> punctuate(long timestamp) {
-                            return null;
+                            return KeyValue.pair(-1, (int) timestamp);
                         }
 
                         @Override
@@ -81,9 +81,12 @@ public class KStreamTransformTest {
             driver.process(topicName, expectedKeys[i], expectedKeys[i] * 10);
         }
 
-        assertEquals(4, processor.processed.size());
+        driver.punctuate(2);
+        driver.punctuate(3);
 
-        String[] expected = {"2:10", "20:110", "200:1110", "2000:11110"};
+        assertEquals(6, processor.processed.size());
+
+        String[] expected = {"2:10", "20:110", "200:1110", "2000:11110", "-1:2", "-1:3"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));
