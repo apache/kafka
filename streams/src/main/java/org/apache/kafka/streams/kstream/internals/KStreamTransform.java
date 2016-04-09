@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -37,7 +38,7 @@ public class KStreamTransform<K, V, K1, V1> implements ProcessorSupplier<K, V> {
         return new KStreamTransformProcessor<>(transformerSupplier.get());
     }
 
-    public static class KStreamTransformProcessor<K1, V1, K2, V2> implements Processor<K1, V1> {
+    public static class KStreamTransformProcessor<K1, V1, K2, V2> extends AbstractProcessor<K1, V1> {
 
         private final Transformer<K1, V1, K2, V2> transformer;
         private ProcessorContext context;
@@ -48,8 +49,8 @@ public class KStreamTransform<K, V, K1, V1> implements ProcessorSupplier<K, V> {
 
         @Override
         public void init(ProcessorContext context) {
+            super.init(context);
             transformer.init(context);
-            this.context = context;
         }
 
         @Override
