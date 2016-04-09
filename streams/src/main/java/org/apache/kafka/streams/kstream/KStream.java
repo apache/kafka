@@ -201,6 +201,54 @@ public interface KStream<K, V> {
     void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic);
 
     /**
+     * Print the elements of this stream to System.out
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void print();
+
+
+    /**
+     * Print the elements of this stream to System.out
+     *
+     * @param keySerde key serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     *
+     *                 Implementors will need to override toString for keys and values that are not of
+     *                 type String, Integer etc to get meaningful information.
+     */
+    void print(Serde<K> keySerde, Serde<V> valSerde);
+
+
+    /**
+     * Write the elements of this stream to a file at the given path.
+     *
+     * @param filePath name of file to write to
+     *
+     *                 Implementors will need to override toString for keys and values that are not of
+     *                 type String, Integer etc to get meaningful information.
+     */
+    void writeAsText(String filePath);
+
+
+    /**
+     *
+     * @param filePath name of file to write to
+     * @param keySerde key serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     *
+     *                 Implementors will need to override toString for keys and values that are not of
+     *                 type String, Integer etc to get meaningful information.
+     */
+
+    void writeAsText(String filePath, Serde<?> keySerde, Serde<?> valSerde);
+
+    /**
      * Create a new {@link KStream} instance by applying a {@link org.apache.kafka.streams.kstream.Transformer} to all elements in this stream, one element at a time.
      *
      * @param transformerSupplier   the instance of {@link TransformerSupplier} that generates {@link org.apache.kafka.streams.kstream.Transformer}

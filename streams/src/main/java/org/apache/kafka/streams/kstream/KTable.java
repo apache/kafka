@@ -89,6 +89,51 @@ public interface KTable<K, V> {
      */
     KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic);
 
+
+    /**
+     * Print the elements of this stream to System.out
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void print();
+
+    /**
+     * Print the elements of this stream to System.out
+     * @param keySerde key serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void print(Serde<K> keySerde, Serde<V> valSerde);
+
+    /**
+     * Write the elements of this stream to a file at the given path.
+     * @param filePath name of file to write to
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void writeAsText(String filePath);
+
+    /**
+     *
+     * @param filePath name of file to write to
+     * @param keySerde key serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void  writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde);
+
+
+
     /**
      * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic
      * using a customizable {@link StreamPartitioner} to determine the distribution of records to partitions.
@@ -106,6 +151,7 @@ public interface KTable<K, V> {
      * @param topic        the topic name
      */
     KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic);
+
 
     /**
      * Materialize this stream to a topic using default serializers specified in the config
