@@ -123,7 +123,7 @@ private[timer] class TimingWheel(tickMs: Long, wheelSize: Int, startMs: Long, ta
   }
 
   def add(timerTaskEntry: TimerTaskEntry): Boolean = {
-    val expiration = timerTaskEntry.timerTask.expirationMs
+    val expiration = timerTaskEntry.expirationMs
 
     if (timerTaskEntry.cancelled) {
       // Cancelled

@@ -16,14 +16,52 @@
  */
 package kafka.utils.timer
 
-import java.util.concurrent.{DelayQueue, ExecutorService, TimeUnit}
+import java.util.concurrent.{DelayQueue, Executors, ThreadFactory, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.utils.threadsafe
+import org.apache.kafka.common.utils.Utils
+
+trait Timer {
+  /**
+    * Add a new task to this executor. It will be executed after the task's delay
+    * (beginning from the time of submission)
+    * @param timerTask the task to add
+    */
+  def add(timerTask: TimerTask): Unit
+
+  /**
+    * Advance the internal clock, executing any tasks whose expiration has been
+    * reached within the duration of the passed timeout.
+    * @param timeoutMs
+    * @return whether or not any tasks were executed
+    */
+  def advanceClock(timeoutMs: Long): Boolean
+
+  /**
+    * Get the number of tasks pending execution
+    * @return the number of tasks
+    */
+  def size(): Int
+
+  /**
+    * Shutdown the timer service, leaving pending tasks unexecuted
+    */
+  def shutdown(): Unit
+}
 
 @threadsafe
-class Timer(taskExecutor: ExecutorService, tickMs: Long = 1, wheelSize: Int = 20, startMs: Long = System.currentTimeMillis) {
+class SystemTimer(executorName: String,
+                  tickMs: Long = 1,
+                  wheelSize: Int = 20,
+                  startMs: Long = System.currentTimeMillis) extends Timer {
+
+  // timeout timer
+  private[this] val taskExecutor = Executors.newFixedThreadPool(1, new ThreadFactory() {
+    def newThread(runnable: Runnable): Thread =
+      Utils.newThread("executor-"+executorName, runnable, false)
+  })
 
   private[this] val delayQueue = new DelayQueue[TimerTaskList]()
   private[this] val taskCounter = new AtomicInteger(0)
@@ -43,7 +81,7 @@ class Timer(taskExecutor: ExecutorService, tickMs: Long = 1, wheelSize: Int = 20
   def add(timerTask: TimerTask): Unit = {
     readLock.lock()
     try {
-      addTimerTaskEntry(new TimerTaskEntry(timerTask))
+      addTimerTaskEntry(new TimerTaskEntry(timerTask, timerTask.delayMs + System.currentTimeMillis()))
     } finally {
       readLock.unlock()
     }
@@ -83,5 +121,10 @@ class Timer(taskExecutor: ExecutorService, tickMs: Long = 1, wheelSize: Int = 20
   }
 
   def size(): Int = taskCounter.get
+
+  override def shutdown() {
+    taskExecutor.shutdown()
+  }
+
 }
 

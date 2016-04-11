@@ -51,6 +51,8 @@ class GroupCoordinator(val brokerId: Int,
                        val groupConfig: GroupConfig,
                        val offsetConfig: OffsetConfig,
                        val groupManager: GroupMetadataManager,
+                       val heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
+                       val joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
                        time: Time) extends Logging {
   type JoinCallback = JoinGroupResult => Unit
   type SyncCallback = (Array[Byte], Short) => Unit
@@ -58,9 +60,6 @@ class GroupCoordinator(val brokerId: Int,
   this.logIdent = "[GroupCoordinator " + brokerId + "]: "
 
   private val isActive = new AtomicBoolean(false)
-
-  private var heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat] = null
-  private var joinPurgatory: DelayedOperationPurgatory[DelayedJoin] = null
 
   def offsetsTopicConfigs: Properties = {
     val props = new Properties
@@ -80,8 +79,6 @@ class GroupCoordinator(val brokerId: Int,
    */
   def startup() {
     info("Starting up.")
-    heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", brokerId)
-    joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", brokerId)
     isActive.set(true)
     info("Startup complete.")
   }
@@ -731,6 +728,17 @@ object GroupCoordinator {
             zkUtils: ZkUtils,
             replicaManager: ReplicaManager,
             time: Time): GroupCoordinator = {
+    val heartbeatPurgatory = DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
+    val joinPurgatory = DelayedOperationPurgatory[DelayedJoin]("Rebalance", config.brokerId)
+    apply(config, zkUtils, replicaManager, heartbeatPurgatory, joinPurgatory, time)
+  }
+
+  def apply(config: KafkaConfig,
+            zkUtils: ZkUtils,
+            replicaManager: ReplicaManager,
+            heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
+            joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
+            time: Time): GroupCoordinator = {
     val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
       offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
@@ -743,7 +751,7 @@ object GroupCoordinator {
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 
     val groupManager = new GroupMetadataManager(config.brokerId, offsetConfig, replicaManager, zkUtils, time)
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupManager, time)
+    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupManager, heartbeatPurgatory, joinPurgatory, time)
   }
 
 }
