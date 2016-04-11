@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 import scala.collection.JavaConverters._
 
+import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.errors.InvalidTimestampException
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
@@ -55,7 +56,7 @@ object ByteBufferMessageSet {
       var offset = -1L
       val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
       messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = magicAndTimestamp.magic) { outputStream =>
-        val output = new DataOutputStream(CompressionFactory(compressionCodec, outputStream))
+        val output = new DataOutputStream(CompressionFactory(compressionCodec, magicAndTimestamp.magic, outputStream))
         try {
           for (message <- messages) {
             offset = offsetAssigner.nextAbsoluteOffset()
@@ -95,7 +96,7 @@ object ByteBufferMessageSet {
       if (wrapperMessage.payload == null)
         throw new KafkaException(s"Message payload is null: $wrapperMessage")
       val inputStream = new ByteBufferBackedInputStream(wrapperMessage.payload)
-      val compressed = new DataInputStream(CompressionFactory(wrapperMessage.compressionCodec, inputStream))
+      val compressed = new DataInputStream(CompressionFactory(wrapperMessage.compressionCodec, wrapperMessage.magic, inputStream))
       var lastInnerOffset = -1L
 
       val messageAndOffsets = if (wrapperMessageAndOffset.message.magic > MagicValue_V0) {
@@ -107,7 +108,7 @@ object ByteBufferMessageSet {
           case eofe: EOFException =>
             compressed.close()
           case ioe: IOException =>
-            throw new KafkaException(ioe)
+            throw new CorruptRecordException(ioe)
         }
         Some(innerMessageAndOffsets)
       } else None
