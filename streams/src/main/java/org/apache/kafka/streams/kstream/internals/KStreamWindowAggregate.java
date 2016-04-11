@@ -72,6 +72,11 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
         @Override
         public void process(K key, V value) {
+            // if the key is null, we do not need proceed aggregating the record
+            // the record with the table
+            if (key == null)
+                return;
+
             // first get the matching windows
             long timestamp = context().timestamp();
             Map<Long, W> matchedWindows = windows.windowsFor(timestamp);

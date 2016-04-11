@@ -30,6 +30,8 @@ import java.io.File;
 
 public class ProcessorContextImpl implements ProcessorContext, RecordCollector.Supplier {
 
+    public static final String NONEXIST_TOPIC = "__null_topic__";
+
     private final TaskId id;
     private final StreamTask task;
     private final StreamsMetrics metrics;
@@ -118,7 +120,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         if (node == null)
             throw new TopologyBuilderException("Accessing from an unknown node");
 
-        // TODO: restore this once we fix the ValueGetter initialiation issue
+        // TODO: restore this once we fix the ValueGetter initialization issue
         //if (!node.stateStores.contains(name))
         //    throw new TopologyBuilderException("Processor " + node.name() + " has no access to StateStore " + name);
 
@@ -130,7 +132,12 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         if (task.record() == null)
             throw new IllegalStateException("This should not happen as topic() should only be called while a record is processed");
 
-        return task.record().topic();
+        String topic = task.record().topic();
+
+        if (topic.equals(NONEXIST_TOPIC))
+            return null;
+        else
+            return topic;
     }
 
     @Override
@@ -165,6 +172,11 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     @Override
     public <K, V> void forward(K key, V value, int childIndex) {
         task.forward(key, value, childIndex);
+    }
+
+    @Override
+    public <K, V> void forward(K key, V value, String childName) {
+        task.forward(key, value, childName);
     }
 
     @Override

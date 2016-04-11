@@ -87,6 +87,21 @@ public class KStreamTestDriver {
         }
     }
 
+    public void punctuate(long timestamp) {
+        setTime(timestamp);
+
+        for (ProcessorNode processor : topology.processors()) {
+            if (processor.processor() != null) {
+                currNode = processor;
+                try {
+                    processor.processor().punctuate(timestamp);
+                } finally {
+                    currNode = null;
+                }
+            }
+        }
+    }
+
     public void setTime(long timestamp) {
         context.setTime(timestamp);
     }
@@ -117,6 +132,22 @@ public class KStreamTestDriver {
             childNode.process(key, value);
         } finally {
             currNode = thisNode;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <K, V> void forward(K key, V value, String childName) {
+        ProcessorNode thisNode = currNode;
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            if (childNode.name().equals(childName)) {
+                currNode = childNode;
+                try {
+                    childNode.process(key, value);
+                } finally {
+                    currNode = thisNode;
+                }
+                break;
+            }
         }
     }
 

@@ -66,6 +66,12 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 self.await_all_members(consumer)
                 self.await_consumed_messages(consumer)
 
+    def setup_consumer(self, topic, **kwargs):
+        # collect verifiable consumer events since this makes debugging much easier
+        consumer = super(OffsetValidationTest, self).setup_consumer(topic, **kwargs)
+        self.mark_for_collect(consumer, 'verifiable_consumer_stdout')
+        return consumer
+
     def test_broker_rolling_bounce(self):
         """
         Verify correct consumer behavior when the brokers are consecutively restarted.

@@ -19,12 +19,14 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Reducer;
@@ -35,6 +37,9 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.Stores;
 
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 import java.util.Collections;
 import java.util.Set;
 
@@ -68,6 +73,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     public static final String OUTEROTHER_NAME = "KTABLE-OUTEROTHER-";
 
+    private static final String PRINTING_NAME = "KSTREAM-PRINTER-";
+
     private static final String REDUCE_NAME = "KTABLE-REDUCE-";
 
     private static final String SELECT_NAME = "KTABLE-SELECT-";
@@ -75,6 +82,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public static final String SOURCE_NAME = "KTABLE-SOURCE-";
 
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
+
+    private static final String FOREACH_NAME = "KTABLE-FOREACH-";
 
     public final ProcessorSupplier<?, ?> processorSupplier;
 
@@ -132,6 +141,36 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
+    public void print() {
+        print(null, null);
+    }
+
+    @Override
+    public void print(Serde<K> keySerde, Serde<V> valSerde) {
+        String name = topology.newName(PRINTING_NAME);
+        topology.addProcessor(name, new KeyValuePrinter<>(keySerde, valSerde), this.name);
+    }
+
+
+    @Override
+    public void writeAsText(String filePath) {
+        writeAsText(filePath, null, null);
+    }
+
+    @Override
+    public void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde) {
+        String name = topology.newName(PRINTING_NAME);
+        try {
+            PrintStream printStream = new PrintStream(new FileOutputStream(filePath));
+            topology.addProcessor(name, new KeyValuePrinter<>(printStream, keySerde, valSerde), this.name);
+        } catch (FileNotFoundException e) {
+            String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
+            throw new TopologyBuilderException(message);
+        }
+    }
+
+
+    @Override
     public KTable<K, V> through(Serde<K> keySerde,
                                 Serde<V> valSerde,
                                 StreamPartitioner<K, V> partitioner,
@@ -139,6 +178,18 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         to(keySerde, valSerde, partitioner, topic);
 
         return topology.table(keySerde, valSerde, topic);
+    }
+
+    @Override
+    public void foreach(final ForeachAction<K, V> action) {
+        String name = topology.newName(FOREACH_NAME);
+        KStreamForeach<K, Change<V>> processorSupplier = new KStreamForeach<>(new ForeachAction<K, Change<V>>() {
+            @Override
+            public void apply(K key, Change<V> value) {
+                action.apply(key, value.newValue);
+            }
+        });
+        topology.addProcessor(name, processorSupplier, this.name);
     }
 
     @Override
