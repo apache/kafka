@@ -53,6 +53,49 @@ public interface KTable<K, V> {
      */
     <V1> KTable<K, V1> mapValues(ValueMapper<V, V1> mapper);
 
+
+    /**
+     * Print the elements of this stream to System.out
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void print();
+
+    /**
+     * Print the elements of this stream to System.out
+     * @param keySerde key serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void print(Serde<K> keySerde, Serde<V> valSerde);
+
+    /**
+     * Write the elements of this stream to a file at the given path.
+     * @param filePath name of file to write to
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void writeAsText(String filePath);
+
+    /**
+     *
+     * @param filePath name of file to write to
+     * @param keySerde key serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void  writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde);
+
     /**
      * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic
      * using default serializers and deserializers and producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner}.
