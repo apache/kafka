@@ -157,6 +157,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         writeAsText(filePath, null, null);
     }
 
+    /**
+     * @throws TopologyBuilderException
+     */
     @Override
     public void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde) {
         String name = topology.newName(PRINTING_NAME);

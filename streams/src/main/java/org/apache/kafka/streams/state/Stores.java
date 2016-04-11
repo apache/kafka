@@ -36,6 +36,7 @@ public class Stores {
      *
      * @param name the name of the store
      * @return the factory that can be used to specify other options or configurations for the store; never null
+     * @throws IllegalArgumentException
      */
     public static StoreFactory create(final String name) {
         return new StoreFactory() {

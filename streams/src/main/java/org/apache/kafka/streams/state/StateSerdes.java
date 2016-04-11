@@ -46,6 +46,7 @@ public final class StateSerdes<K, V> {
      * @param stateName     the name of the state
      * @param keySerde      the serde for keys; cannot be null
      * @param valueSerde    the serde for values; cannot be null
+     * @throws IllegalArgumentException
      */
     @SuppressWarnings("unchecked")
     public StateSerdes(String stateName,

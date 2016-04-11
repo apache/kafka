@@ -145,6 +145,9 @@ public class PartitionGroup {
         return timestamp;
     }
 
+    /**
+     * @throws IllegalStateException
+     */
     public int numBuffered(TopicPartition partition) {
         RecordQueue recordQueue = partitionQueues.get(partition);
 

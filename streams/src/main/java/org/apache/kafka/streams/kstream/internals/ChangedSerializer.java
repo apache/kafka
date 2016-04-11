@@ -38,6 +38,9 @@ public class ChangedSerializer<T> implements Serializer<Change<T>> {
         // do nothing
     }
 
+    /**
+     * @throws StreamsException
+     */
     @Override
     public byte[] serialize(String topic, Change<T> data) {
         byte[] serializedKey;

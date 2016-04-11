@@ -105,6 +105,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return metrics;
     }
 
+    /**
+     * @throws IllegalStateException
+     */
     @Override
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (initialized)
@@ -113,6 +116,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         stateMgr.register(store, loggingEnabled, stateRestoreCallback);
     }
 
+    /**
+     * @throws TopologyBuilderException
+     */
     @Override
     public StateStore getStateStore(String name) {
         ProcessorNode node = task.node();
@@ -127,6 +133,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return stateMgr.getStore(name);
     }
 
+    /**
+     * @throws IllegalStateException
+     */
     @Override
     public String topic() {
         if (task.record() == null)
@@ -140,6 +149,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
             return topic;
     }
 
+    /**
+     * @throws IllegalStateException
+     */
     @Override
     public int partition() {
         if (task.record() == null)
@@ -148,6 +160,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return task.record().partition();
     }
 
+    /**
+     * @throws IllegalStateException
+     */
     @Override
     public long offset() {
         if (this.task.record() == null)
@@ -156,6 +171,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return this.task.record().offset();
     }
 
+    /**
+     * @throws IllegalStateException
+     */
     @Override
     public long timestamp() {
         if (task.record() == null)

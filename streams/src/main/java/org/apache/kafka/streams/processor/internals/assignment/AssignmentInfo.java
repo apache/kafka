@@ -54,6 +54,9 @@ public class AssignmentInfo {
         this.standbyTasks = standbyTasks;
     }
 
+    /**
+     * @throws TaskAssignmentException
+     */
     public ByteBuffer encode() {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(baos);
@@ -96,6 +99,9 @@ public class AssignmentInfo {
         }
     }
 
+    /**
+     * @throws TaskAssignmentException
+     */
     public static AssignmentInfo decode(ByteBuffer data) {
         // ensure we are at the beginning of the ByteBuffer
         data.rewind();

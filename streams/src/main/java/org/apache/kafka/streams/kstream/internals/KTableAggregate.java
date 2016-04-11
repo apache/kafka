@@ -63,6 +63,9 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
         }
 
+        /**
+         * @throws StreamsException
+         */
         @Override
         public void process(K key, Change<V> value) {
             // the keys should never be null

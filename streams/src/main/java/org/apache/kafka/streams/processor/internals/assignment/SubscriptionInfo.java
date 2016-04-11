@@ -49,6 +49,9 @@ public class SubscriptionInfo {
         this.standbyTasks = standbyTasks;
     }
 
+    /**
+     * @throws TaskAssignmentException
+     */
     public ByteBuffer encode() {
         if (version == CURRENT_VERSION) {
             ByteBuffer buf = ByteBuffer.allocate(4 /* version */ + 16 /* process id */ + 4 + prevTasks.size() * 8 + 4 + standbyTasks.size() * 8);
@@ -78,6 +81,9 @@ public class SubscriptionInfo {
         }
     }
 
+    /**
+     * @throws TaskAssignmentException
+     */
     public static SubscriptionInfo decode(ByteBuffer data) {
         // ensure we are at the beginning of the ByteBuffer
         data.rewind();

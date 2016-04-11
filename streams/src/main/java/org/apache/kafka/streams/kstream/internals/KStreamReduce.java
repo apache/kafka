@@ -58,6 +58,9 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
         }
 
+        /**
+         * @throws StreamsException
+         */
         @Override
         public void process(K key, V value) {
             // the keys should never be null

@@ -239,6 +239,8 @@ public class StreamThread extends Thread {
 
     /**
      * Execute the stream processors
+     * @throws KafkaException
+     * @throws Exception
      */
     @Override
     public void run() {
@@ -760,6 +762,9 @@ public class StreamThread extends Thread {
             sensor.record((endNs - startNs) / 1000000, endNs);
         }
 
+        /**
+         * @throws IllegalArgumentException
+         */
         @Override
         public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
             // extract the additional tags if there are any

@@ -55,11 +55,17 @@ public class OffsetCheckpoint {
     private final File file;
     private final Object lock;
 
+    /**
+     * @throws IOException
+     */
     public OffsetCheckpoint(File file) throws IOException {
         this.file = file;
         this.lock = new Object();
     }
 
+    /**
+     * @throws IOException
+     */
     public void write(Map<TopicPartition, Long> offsets) throws IOException {
         synchronized (lock) {
             // write to temp file and then swap with the existing file
@@ -84,11 +90,17 @@ public class OffsetCheckpoint {
         }
     }
 
+    /**
+     * @throws IOException
+     */
     private void writeIntLine(BufferedWriter writer, int number) throws IOException {
         writer.write(Integer.toString(number));
         writer.newLine();
     }
 
+    /**
+     * @throws IOException
+     */
     private void writeEntry(BufferedWriter writer, TopicPartition part, long offset) throws IOException {
         writer.write(part.topic());
         writer.write(' ');
@@ -98,6 +110,10 @@ public class OffsetCheckpoint {
         writer.newLine();
     }
 
+
+    /**
+     * @throws IOException
+     */
     public Map<TopicPartition, Long> read() throws IOException {
         synchronized (lock) {
             BufferedReader reader;
@@ -141,6 +157,9 @@ public class OffsetCheckpoint {
         }
     }
 
+    /**
+     * @throws IOException
+     */
     private int readInt(BufferedReader reader) throws IOException {
         String line = reader.readLine();
         if (line == null)
@@ -148,6 +167,9 @@ public class OffsetCheckpoint {
         return Integer.parseInt(line);
     }
 
+    /**
+     * @throws IOException
+     */
     public void delete() throws IOException {
         file.delete();
     }

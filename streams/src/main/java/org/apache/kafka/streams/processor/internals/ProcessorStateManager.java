@@ -67,6 +67,9 @@ public class ProcessorStateManager {
     private final boolean isStandby;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
 
+    /**
+     * @throws IOException
+     */
     public ProcessorStateManager(String applicationId, int defaultPartition, Collection<TopicPartition> sources, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
         this.applicationId = applicationId;
         this.defaultPartition = defaultPartition;
@@ -110,6 +113,9 @@ public class ProcessorStateManager {
         return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
     }
 
+    /**
+     * @throws IOException
+     */
     public static FileLock lockStateDirectory(File stateDir) throws IOException {
         return lockStateDirectory(stateDir, 0);
     }
@@ -143,6 +149,10 @@ public class ProcessorStateManager {
         return this.baseDir;
     }
 
+    /**
+     * @throws IllegalArgumentException
+     * @throws StreamsException
+     */
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
@@ -313,6 +323,9 @@ public class ProcessorStateManager {
         }
     }
 
+    /**
+     * @throws IOException
+     */
     public void close(Map<TopicPartition, Long> ackedOffsets) throws IOException {
         try {
             if (!stores.isEmpty()) {

@@ -212,6 +212,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         return punctuationQueue.mayPunctuate(timestamp, this);
     }
 
+    /**
+     * @throws IllegalStateException
+     */
     @Override
     public void punctuate(ProcessorNode node, long timestamp) {
         if (currNode != null)
@@ -280,6 +283,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * Schedules a punctuation for the processor
      *
      * @param interval  the interval in milliseconds
+     * @throws IllegalStateException
      */
     public void schedule(long interval) {
         if (currNode == null)
@@ -288,6 +292,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         punctuationQueue.schedule(new PunctuationSchedule(currNode, interval));
     }
 
+    /**
+     * @throws RuntimeException
+     */
     @Override
     public void close() {
         this.partitionGroup.close();

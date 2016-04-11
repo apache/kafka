@@ -41,6 +41,9 @@ public class TaskId implements Comparable<TaskId> {
         return topicGroupId + "_" + partition;
     }
 
+    /**
+     * @throws TaskIdFormatException
+     */
     public static TaskId parse(String string) {
         int index = string.indexOf('_');
         if (index <= 0 || index + 1 >= string.length()) throw new TaskIdFormatException(string);
@@ -55,11 +58,17 @@ public class TaskId implements Comparable<TaskId> {
         }
     }
 
+    /**
+     * @throws IOException
+     */
     public void writeTo(DataOutputStream out) throws IOException {
         out.writeInt(topicGroupId);
         out.writeInt(partition);
     }
 
+    /**
+     * @throws IOException
+     */
     public static TaskId readFrom(DataInputStream in) throws IOException {
         return new TaskId(in.readInt(), in.readInt());
     }

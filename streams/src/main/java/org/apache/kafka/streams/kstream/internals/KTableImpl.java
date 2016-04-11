@@ -157,6 +157,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         writeAsText(filePath, null, null);
     }
 
+    /**
+     * @throws TopologyBuilderException
+     */
     @Override
     public void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde) {
         String name = topology.newName(PRINTING_NAME);

@@ -86,6 +86,9 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
             return false;
         }
 
+        /**
+         * @throws NoSuchElementException
+         */
         @Override
         public KeyValue<Long, V> next() {
             if (index >= iterators.length)

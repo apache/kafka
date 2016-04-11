@@ -221,6 +221,7 @@ public class TopologyBuilder {
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param topics the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
+     * @throws TopologyBuilderException
      */
     public final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
         if (nodeFactories.containsKey(name))
@@ -328,6 +329,7 @@ public class TopologyBuilder {
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
+     * @throws TopologyBuilderException
      */
     public final <K, V> TopologyBuilder addSink(String name, String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, StreamPartitioner<K, V> partitioner, String... parentNames) {
         if (nodeFactories.containsKey(name))
@@ -359,6 +361,7 @@ public class TopologyBuilder {
      * @param parentNames the name of one or more source or processor nodes whose output messages this processor should receive
      * and process
      * @return this builder instance so methods can be chained together; never null
+     * @throws TopologyBuilderException
      */
     public final TopologyBuilder addProcessor(String name, ProcessorSupplier supplier, String... parentNames) {
         if (nodeFactories.containsKey(name))
@@ -386,6 +389,7 @@ public class TopologyBuilder {
      *
      * @param supplier the supplier used to obtain this state store {@link StateStore} instance
      * @return this builder instance so methods can be chained together; never null
+     * @throws TopologyBuilderException
      */
     public final TopologyBuilder addStateStore(StateStoreSupplier supplier, boolean isInternal, String... processorNames) {
         if (stateFactories.containsKey(supplier.name())) {
@@ -438,6 +442,7 @@ public class TopologyBuilder {
      *
      * @param processorNames the name of the processors
      * @return this builder instance so methods can be chained together; never null
+     * @throws TopologyBuilderException
      */
     public final TopologyBuilder connectProcessors(String... processorNames) {
         if (processorNames.length < 2)

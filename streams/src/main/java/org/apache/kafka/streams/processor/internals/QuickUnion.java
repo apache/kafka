@@ -32,6 +32,9 @@ public class QuickUnion<T> {
         return ids.containsKey(id);
     }
 
+    /**
+     * @throws NoSuchElementException
+     */
     public T root(T id) {
         T current = id;
         T parent = ids.get(current);

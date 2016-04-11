@@ -28,6 +28,9 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
 
     private final String windowName;
 
+    /**
+     * @throws TopologyBuilderException
+     */
     KStreamJoinWindow(String windowName, long windowSizeMs, long retentionPeriodMs) {
         this.windowName = windowName;
 

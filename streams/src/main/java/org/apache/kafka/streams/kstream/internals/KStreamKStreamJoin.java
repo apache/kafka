@@ -62,6 +62,9 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             otherWindow = (WindowStore<K, V2>) context.getStateStore(otherWindowName);
         }
 
+        /**
+         * @throws StreamsException
+         */
         @Override
         public void process(K key, V1 value) {
             // the keys should never be null

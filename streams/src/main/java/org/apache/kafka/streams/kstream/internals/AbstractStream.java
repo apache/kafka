@@ -36,6 +36,9 @@ public abstract class AbstractStream<K> {
         this.sourceNodes = sourceNodes;
     }
 
+    /**
+     * @throws TopologyBuilderException
+     */
     protected Set<String> ensureJoinableWith(AbstractStream<K> other) {
         Set<String> thisSourceNodes = sourceNodes;
         Set<String> otherSourceNodes = other.sourceNodes;

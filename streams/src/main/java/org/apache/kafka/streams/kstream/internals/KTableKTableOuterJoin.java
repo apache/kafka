@@ -60,6 +60,9 @@ class KTableKTableOuterJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
             valueGetter.init(context);
         }
 
+        /**
+         * @throws StreamsException
+         */
         @Override
         public void process(K key, Change<V1> change) {
             // the keys should never be null

@@ -51,6 +51,9 @@ public class InternalTopicManager {
 
     private class ZKStringSerializer implements ZkSerializer {
 
+        /**
+         * @throws AssertionError
+         */
         @Override
         public byte[] serialize(Object data) {
             try {
@@ -60,6 +63,9 @@ public class InternalTopicManager {
             }
         }
 
+        /**
+         * @throws UnsupportedEncodingException
+         */
         @Override
         public Object deserialize(byte[] bytes) {
             try {

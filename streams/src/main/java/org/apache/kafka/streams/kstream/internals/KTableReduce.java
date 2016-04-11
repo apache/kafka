@@ -60,6 +60,9 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
         }
 
+        /**
+         * @throws StreamsException
+         */
         @Override
         public void process(K key, Change<V> value) {
             // the keys should never be null
