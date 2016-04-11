@@ -48,7 +48,7 @@ public class InternalTopicManager {
     private static final String ZK_DELETE_TOPIC_PATH = "/admin/delete_topics";
     private static final String ZK_ENTITY_CONFIG_PATH = "/config/topics";
     // TODO: the following LogConfig dependency should be removed after KIP-4
-    private static final String CLEANUPPOLICYPROP = "cleanup.policy";
+    private static final String CLEANUP_POLICY_PROP = "cleanup.policy";
     private static final String COMPACT = "compact";
 
     private final ZkClient zkClient;
@@ -160,6 +160,7 @@ public class InternalTopicManager {
     private void createTopic(String topic, int numPartitions, int replicationFactor, boolean compactTopic) throws ZkNodeExistsException {
         log.debug("Creating topic {} with {} partitions from ZK in partition assignor.", topic, numPartitions);
         Properties prop = new Properties();
+        ObjectMapper mapper = new ObjectMapper();
         List<Integer> brokers = getBrokers();
         int numBrokers = brokers.size();
         if (numBrokers < replicationFactor) {
@@ -179,12 +180,11 @@ public class InternalTopicManager {
         }
         // write out config first just like in AdminUtils.scala createOrUpdateTopicPartitionAssignmentPathInZK()
         if (compactTopic) {
-            prop.put(CLEANUPPOLICYPROP, COMPACT);
+            prop.put(CLEANUP_POLICY_PROP, COMPACT);
             try {
                 Map<String, Object> dataMap = new HashMap<>();
                 dataMap.put("version", 1);
                 dataMap.put("config", prop);
-                ObjectMapper mapper = new ObjectMapper();
                 String data = mapper.writeValueAsString(dataMap);
                 zkClient.createPersistent(ZK_ENTITY_CONFIG_PATH + "/" + topic, data, ZooDefs.Ids.OPEN_ACL_UNSAFE);
             } catch (JsonProcessingException e) {
@@ -197,8 +197,6 @@ public class InternalTopicManager {
             Map<String, Object> dataMap = new HashMap<>();
             dataMap.put("version", 1);
             dataMap.put("partitions", assignment);
-
-            ObjectMapper mapper = new ObjectMapper();
             String data = mapper.writeValueAsString(dataMap);
 
             zkClient.createPersistent(ZK_TOPIC_PATH + "/" + topic, data, ZooDefs.Ids.OPEN_ACL_UNSAFE);
