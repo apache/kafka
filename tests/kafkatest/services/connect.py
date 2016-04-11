@@ -13,12 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+import os.path
+import random
+import signal
+
+import requests
+from ducktape.errors import DucktapeError
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
-from ducktape.errors import DucktapeError
 
-from kafkatest.services.kafka.directory import kafka_dir
-import signal, random, requests, os.path, json
+from kafkatest.directory_layout.kafka_path import kafka_home
+
 
 class ConnectServiceBase(Service):
     """Base class for Kafka Connect services providing some common settings and functionality"""
@@ -156,7 +162,7 @@ class ConnectStandaloneService(ConnectServiceBase):
     def start_cmd(self, node, connector_configs):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
-        cmd += "/opt/%s/bin/connect-standalone.sh %s " % (kafka_dir(node), self.CONFIG_FILE)
+        cmd += "/opt/%s/bin/connect-standalone.sh %s " % (kafka_home(node), self.CONFIG_FILE)
         cmd += " ".join(connector_configs)
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
@@ -195,7 +201,7 @@ class ConnectDistributedService(ConnectServiceBase):
     def start_cmd(self, node):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
-        cmd += "/opt/%s/bin/connect-distributed.sh %s " % (kafka_dir(node), self.CONFIG_FILE)
+        cmd += "/opt/%s/bin/connect-distributed.sh %s " % (kafka_home(node), self.CONFIG_FILE)
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
 

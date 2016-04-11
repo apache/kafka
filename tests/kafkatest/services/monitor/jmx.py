@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.directory_layout.kafka_path import kafka_home
 
 class JmxMixin(object):
     """This mixin helps existing service subclasses start JmxTool on their worker nodes and collect jmx stats.
@@ -39,7 +39,7 @@ class JmxMixin(object):
             return
 
         cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.JmxTool " \
-              "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % (kafka_dir(node), self.jmx_port)
+              "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % (kafka_home(node), self.jmx_port)
         for jmx_object_name in self.jmx_object_names:
             cmd += " --object-name %s" % jmx_object_name
         for jmx_attribute in self.jmx_attributes:

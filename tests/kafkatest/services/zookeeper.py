@@ -14,15 +14,14 @@
 # limitations under the License.
 
 
-from ducktape.services.service import Service
-
-from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
-
+import re
 import subprocess
 import time
-import re
+
+from ducktape.services.service import Service
+
+from kafkatest.directory_layout.kafka_path import kafka_home, KAFKA_TRUNK
+from kafkatest.services.security.security_config import SecurityConfig
 
 
 class ZookeeperService(Service):
@@ -73,7 +72,7 @@ class ZookeeperService(Service):
         node.account.create_file("/mnt/zookeeper.properties", config_file)
 
         start_cmd = "export KAFKA_OPTS=\"%s\";" % self.kafka_opts 
-        start_cmd += "/opt/%s/bin/zookeeper-server-start.sh " % kafka_dir(node)
+        start_cmd += "/opt/%s/bin/zookeeper-server-start.sh " % kafka_home(node)
         start_cmd += "/mnt/zookeeper.properties 1>> %(path)s 2>> %(path)s &" % self.logs["zk_log"]
         node.account.ssh(start_cmd)
 
@@ -111,7 +110,7 @@ class ZookeeperService(Service):
     # the use of ZooKeeper ACLs.
     #
     def zookeeper_migration(self, node, zk_acl):
-        la_migra_cmd = "/opt/%s/bin/zookeeper-security-migration.sh --zookeeper.acl=%s --zookeeper.connect=%s" % (kafka_dir(node), zk_acl, self.connect_setting())
+        la_migra_cmd = "/opt/%s/bin/zookeeper-security-migration.sh --zookeeper.acl=%s --zookeeper.connect=%s" % (kafka_home(node), zk_acl, self.connect_setting())
         node.account.ssh(la_migra_cmd)
 
     def query(self, path):

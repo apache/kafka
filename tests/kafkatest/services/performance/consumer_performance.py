@@ -17,6 +17,7 @@ from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.kafka.directory import kafka_dir
 from kafkatest.services.kafka.version import TRUNK, V_0_9_0_0
+from kafkatest.directory_layout.kafka_path import kafka_home
 
 import os
 
@@ -135,7 +136,7 @@ class ConsumerPerformanceService(PerformanceService):
         cmd = "export LOG_DIR=%s;" % ConsumerPerformanceService.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % ConsumerPerformanceService.LOG4J_CONFIG
-        cmd += " /opt/%s/bin/kafka-consumer-perf-test.sh" % kafka_dir(node)
+        cmd += " /opt/%s/bin/kafka-consumer-perf-test.sh" % kafka_home(node)
         for key, value in self.args.items():
             cmd += " --%s %s" % (key, value)
 

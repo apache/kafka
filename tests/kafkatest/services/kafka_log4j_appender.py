@@ -15,7 +15,7 @@
 
 from ducktape.services.background_thread import BackgroundThreadService
 
-from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.directory_layout.kafka_path import kafka_home
 from kafkatest.services.security.security_config import SecurityConfig
 
 
@@ -43,7 +43,7 @@ class KafkaLog4jAppender(BackgroundThreadService):
         node.account.ssh(cmd)
 
     def start_cmd(self, node):
-        cmd = "/opt/%s/bin/" % kafka_dir(node)
+        cmd = "/opt/%s/bin/" % kafka_home(node)
         cmd += "kafka-run-class.sh org.apache.kafka.tools.VerifiableLog4jAppender"
         cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_protocol))
 

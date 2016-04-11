@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from kafkatest.directory_layout.kafka_path import kafka_home
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
 
-from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.kafka.version import TRUNK, V_0_9_0_0
+from kafkatest.services.kafka.version import TRUNK, V_0_9_0_0, V_0_10_0_0
 
 import os
 
@@ -77,7 +77,7 @@ class EndToEndLatencyService(PerformanceService):
             'zk_connect': self.kafka.zk.connect_setting(),
             'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'config_file': EndToEndLatencyService.CONFIG_FILE,
-            'kafka_dir': kafka_dir(node)
+            'kafka_dir': kafka_home(node)
         })
 
         cmd = "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % EndToEndLatencyService.LOG4J_CONFIG
@@ -104,7 +104,7 @@ class EndToEndLatencyService(PerformanceService):
         if node.version >= V_0_9_0_0:
             client_config += "compression_type=%(compression_type)s" % self.args
         node.account.create_file(EndToEndLatencyService.CONFIG_FILE, client_config)
-        
+
         self.security_config.setup_node(node)
 
         cmd = self.start_cmd(node)

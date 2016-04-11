@@ -15,7 +15,7 @@
 
 from ducktape.services.background_thread import BackgroundThreadService
 
-from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.directory_layout.kafka_path import kafka_home
 
 
 class SimpleConsumerShell(BackgroundThreadService):
@@ -45,7 +45,7 @@ class SimpleConsumerShell(BackgroundThreadService):
         self.logger.debug(self.output)
 
     def start_cmd(self, node):
-        cmd = "/opt/%s/bin/" % kafka_dir(node)
+        cmd = "/opt/%s/bin/" % kafka_home(node)
         cmd += "kafka-run-class.sh kafka.tools.SimpleConsumerShell"
         cmd += " --topic %s --broker-list %s --partition %s --no-wait-at-logend" % (self.topic, self.kafka.bootstrap_servers(), self.partition)
 
