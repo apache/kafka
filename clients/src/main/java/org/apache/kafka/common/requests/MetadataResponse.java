@@ -178,13 +178,22 @@ public class MetadataResponse extends AbstractRequestResponse {
                 int leader = partitionInfo.getInt(LEADER_KEY_NAME);
                 Node leaderNode = leader == -1 ? null : brokers.get(leader);
                 Object[] replicas = (Object[]) partitionInfo.get(REPLICAS_KEY_NAME);
+
                 List<Node> replicaNodes = new ArrayList<>(replicas.length);
                 for (Object replicaNodeId : replicas)
-                    replicaNodes.add(brokers.get(replicaNodeId));
+                    if (brokers.containsKey(replicaNodeId))
+                        replicaNodes.add(brokers.get(replicaNodeId));
+                    else
+                        replicaNodes.add(new Node((int) replicaNodeId, "", -1));
+
                 Object[] isr = (Object[]) partitionInfo.get(ISR_KEY_NAME);
                 List<Node> isrNodes = new ArrayList<>(isr.length);
                 for (Object isrNode : isr)
-                    isrNodes.add(brokers.get(isrNode));
+                    if (brokers.containsKey(isrNode))
+                        isrNodes.add(brokers.get(isrNode));
+                    else
+                        isrNodes.add(new Node((int) isrNode, "", -1));
+
                 partitionMetadata.add(new PartitionMetadata(partitionError, partition, leaderNode, replicaNodes, isrNodes));
             }
 

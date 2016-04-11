@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.internals.TopicConstants
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -106,8 +106,51 @@ class MetadataRequestTest extends BaseRequestTest {
     assertTrue("Response should have no topics", metadataResponse.topicMetadata().isEmpty)
   }
 
+  @Test
+  def testReplicaDownResponse() {
+    val replicaDownTopic = "replicaDown"
+    val replicaCount = 3
+
+    // create a topic with 3 replicas
+    TestUtils.createTopic(zkUtils, replicaDownTopic, 1, replicaCount, servers)
+
+    // Kill a replica node that is not the leader
+    val metadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava), 1)
+    val partitionMetadata = metadataResponse.topicMetadata().asScala.head.partitionMetadata().asScala.head
+    val downNode = servers.find { server =>
+      val serverId = server.apis.brokerId
+      val leaderId = partitionMetadata.leader.id()
+      val replicaIds = partitionMetadata.replicas().asScala.map(_.id())
+      serverId != leaderId && replicaIds.contains(serverId)
+    }.get
+    downNode.shutdown()
+
+    TestUtils.waitUntilTrue({ () =>
+      val response = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava), 1)
+      val metadata = response.topicMetadata().asScala.head.partitionMetadata().asScala.head
+      val replica = metadata.replicas.asScala.find(_.id == downNode.apis.brokerId).get
+      replica.host() == "" & replica.port() == -1
+    }, "Replica was not found down", 5000)
+
+    // Validate version 0 still filters unavailable replicas and contains error
+    val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava), 0)
+    assertTrue("Response should have no errors", v0MetadataResponse.errors().isEmpty)
+    assertTrue("Response should have one topic", v0MetadataResponse.topicMetadata().size() == 1)
+    val v0PartitionMetadata = v0MetadataResponse.topicMetadata().asScala.head.partitionMetadata().asScala.head
+    assertTrue("PartitionMetadata should have an error", v0PartitionMetadata.error() == Errors.REPLICA_NOT_AVAILABLE)
+    assertTrue(s"Response should have ${replicaCount - 1} replicas", v0PartitionMetadata.replicas().size() == replicaCount - 1)
+
+    // Validate version 1 returns unavailable replicas with no error
+    val v1MetadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava), 1)
+    assertTrue("Response should have no errors", v1MetadataResponse.errors().isEmpty)
+    assertTrue("Response should have one topic", v1MetadataResponse.topicMetadata().size() == 1)
+    val v1PartitionMetadata = v1MetadataResponse.topicMetadata().asScala.head.partitionMetadata().asScala.head
+    assertTrue("PartitionMetadata should have no errors", v1PartitionMetadata.error() == Errors.NONE)
+    assertTrue(s"Response should have $replicaCount replicas", v1PartitionMetadata.replicas().size() == replicaCount)
+  }
+
   private def sendMetadataRequest(request: MetadataRequest, version: Short): MetadataResponse = {
     val response = send(request, ApiKeys.METADATA, version)
-    MetadataResponse.parse(response)
+    MetadataResponse.parse(response, version)
   }
 }

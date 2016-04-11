@@ -39,7 +39,10 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   }
 
   def socketServer = {
-    servers.head.socketServer
+    servers.find { server =>
+      val state = server.brokerState.currentState
+      state != NotRunning.state && state != BrokerShuttingDown.state
+    }.get.socketServer
   }
 
   private def connect(s: SocketServer = socketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Socket = {
