@@ -86,8 +86,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     private static final String REDUCE_NAME = "KSTREAM-REDUCE-";
 
-    private static final String SELECT_NAME = "KSTREAM-SELECT-";
-
     public static final String SINK_NAME = "KSTREAM-SINK-";
 
     public static final String SOURCE_NAME = "KSTREAM-SOURCE-";
@@ -243,7 +241,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public void foreach(ForeachAction<K, V> action) {
         String name = topology.newName(FOREACH_NAME);
 
-        topology.addProcessor(name, new KStreamForeach(action), this.name);
+        topology.addProcessor(name, new KStreamForeach<>(action), this.name);
     }
     public KStream<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic) {
         return through(keySerde, valSerde, null, topic);

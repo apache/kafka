@@ -27,18 +27,18 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
 
     private final ValueTransformerSupplier<V, R> valueTransformerSupplier;
 
-    public KStreamTransformValues(ValueTransformerSupplier valueTransformerSupplier) {
+    public KStreamTransformValues(ValueTransformerSupplier<V, R> valueTransformerSupplier) {
         this.valueTransformerSupplier = valueTransformerSupplier;
     }
 
     @Override
     public Processor<K, V> get() {
-        return new KStreamTransformValuesProcessor(valueTransformerSupplier.get());
+        return new KStreamTransformValuesProcessor<>(valueTransformerSupplier.get());
     }
 
     public static class KStreamTransformValuesProcessor<K, V, R> implements Processor<K, V> {
 
-        private final ValueTransformer valueTransformer;
+        private final ValueTransformer<V, R> valueTransformer;
         private ProcessorContext context;
 
         public KStreamTransformValuesProcessor(ValueTransformer<V, R> valueTransformer) {
@@ -58,7 +58,10 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
 
         @Override
         public void punctuate(long timestamp) {
-            valueTransformer.punctuate(timestamp);
+            R ret = valueTransformer.punctuate(timestamp);
+
+            if (ret != null)
+                context.forward(null, ret);
         }
 
         @Override
