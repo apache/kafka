@@ -50,7 +50,7 @@ import com.yammer.metrics.core.Gauge
 abstract class DelayedOperation(override val delayMs: Long) extends TimerTask with Logging {
 
   private val completed = new AtomicBoolean(false)
-5
+
   /*
    * Force completing the delayed operation, if not already completed.
    * This function can be triggered when
@@ -114,7 +114,7 @@ object DelayedOperationPurgatory {
                                    brokerId: Int = 0,
                                    purgeInterval: Int = 1000): DelayedOperationPurgatory[T] = {
     val timer = new SystemTimer(purgatoryName)
-    new DelayedOperationPurgatory[T](purgatoryName, timer, brokerId, purgeInterval, true)
+    new DelayedOperationPurgatory[T](purgatoryName, timer, brokerId, purgeInterval)
   }
 
 }
