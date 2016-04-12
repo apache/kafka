@@ -62,7 +62,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         }
 
         /**
-         * @throws StreamsException
+         * @throws StreamsException if key is null
          */
         @Override
         public void process(K key, V value) {

@@ -239,8 +239,8 @@ public class StreamThread extends Thread {
 
     /**
      * Execute the stream processors
-     * @throws KafkaException
-     * @throws Exception
+     * @throws KafkaException for any Kafka-related exceptions
+     * @throws Exception for any other non-Kafka exceptions
      */
     @Override
     public void run() {
@@ -763,7 +763,7 @@ public class StreamThread extends Thread {
         }
 
         /**
-         * @throws IllegalArgumentException
+         * @throws IllegalArgumentException if tags is not constructed in key-value pairs
          */
         @Override
         public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {

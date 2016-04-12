@@ -50,7 +50,7 @@ public class SubscriptionInfo {
     }
 
     /**
-     * @throws TaskAssignmentException
+     * @throws TaskAssignmentException if method fails to encode the data
      */
     public ByteBuffer encode() {
         if (version == CURRENT_VERSION) {
@@ -82,7 +82,7 @@ public class SubscriptionInfo {
     }
 
     /**
-     * @throws TaskAssignmentException
+     * @throws TaskAssignmentException if method fails to decode the data
      */
     public static SubscriptionInfo decode(ByteBuffer data) {
         // ensure we are at the beginning of the ByteBuffer

@@ -158,7 +158,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     /**
-     * @throws TopologyBuilderException
+     * @throws TopologyBuilderException if file is not found
      */
     @Override
     public void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde) {

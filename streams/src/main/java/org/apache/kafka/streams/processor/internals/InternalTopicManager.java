@@ -52,7 +52,7 @@ public class InternalTopicManager {
     private class ZKStringSerializer implements ZkSerializer {
 
         /**
-         * @throws AssertionError
+         * @throws AssertionError if the byte String encoding type is not supported
          */
         @Override
         public byte[] serialize(Object data) {
@@ -64,7 +64,7 @@ public class InternalTopicManager {
         }
 
         /**
-         * @throws UnsupportedEncodingException
+         * @throws AssertionError if the byte String encoding type is not supported
          */
         @Override
         public Object deserialize(byte[] bytes) {

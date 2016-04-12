@@ -45,7 +45,7 @@ public abstract class AbstractTask {
     protected ProcessorContext processorContext;
 
     /**
-     * @throws ProcessorStateException
+     * @throws ProcessorStateException if the state manager cannot be created
      */
     protected AbstractTask(TaskId id,
                            String applicationId,
@@ -105,7 +105,7 @@ public abstract class AbstractTask {
     public abstract void commit();
 
     /**
-     * @throws ProcessorStateException
+     * @throws ProcessorStateException if there is an error while closing the state manager
      */
     public void close() {
         try {

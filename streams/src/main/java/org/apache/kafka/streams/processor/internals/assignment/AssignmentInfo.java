@@ -55,7 +55,8 @@ public class AssignmentInfo {
     }
 
     /**
-     * @throws TaskAssignmentException
+     * @throws TaskAssignmentException if method fails to encode the data, e.g., if there is an
+     * IO exception during encoding
      */
     public ByteBuffer encode() {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -100,7 +101,7 @@ public class AssignmentInfo {
     }
 
     /**
-     * @throws TaskAssignmentException
+     * @throws TaskAssignmentException if method fails to decode the data or if the data version is unknown
      */
     public static AssignmentInfo decode(ByteBuffer data) {
         // ensure we are at the beginning of the ByteBuffer

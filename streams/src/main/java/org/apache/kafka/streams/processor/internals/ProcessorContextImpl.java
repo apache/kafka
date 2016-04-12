@@ -106,7 +106,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     /**
-     * @throws IllegalStateException
+     * @throws IllegalStateException if this method is called before {@link #initialized()}
      */
     @Override
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
@@ -117,7 +117,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     /**
-     * @throws TopologyBuilderException
+     * @throws TopologyBuilderException if an attempt is made to access this state store from an unknown node
      */
     @Override
     public StateStore getStateStore(String name) {
@@ -134,7 +134,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     /**
-     * @throws IllegalStateException
+     * @throws IllegalStateException if the task's record is null
      */
     @Override
     public String topic() {
@@ -150,7 +150,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     /**
-     * @throws IllegalStateException
+     * @throws IllegalStateException if the task's record is null
      */
     @Override
     public int partition() {
@@ -161,7 +161,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     /**
-     * @throws IllegalStateException
+     * @throws IllegalStateException if the task's record is null
      */
     @Override
     public long offset() {
@@ -172,7 +172,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     /**
-     * @throws IllegalStateException
+     * @throws IllegalStateException if the task's record is null
      */
     @Override
     public long timestamp() {

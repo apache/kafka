@@ -63,7 +63,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
         }
 
         /**
-         * @throws StreamsException
+         * @throws StreamsException if key is null
          */
         @Override
         public void process(K key, V1 value) {

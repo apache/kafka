@@ -213,7 +213,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     /**
-     * @throws IllegalStateException
+     * @throws IllegalStateException if the current node is not null
      */
     @Override
     public void punctuate(ProcessorNode node, long timestamp) {
@@ -283,7 +283,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * Schedules a punctuation for the processor
      *
      * @param interval  the interval in milliseconds
-     * @throws IllegalStateException
+     * @throws IllegalStateException if the current node is not null
      */
     public void schedule(long interval) {
         if (currNode == null)
@@ -293,7 +293,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     /**
-     * @throws RuntimeException
+     * @throws RuntimeException if an error happens during closing of processor nodes
      */
     @Override
     public void close() {

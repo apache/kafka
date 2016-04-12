@@ -61,7 +61,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
         }
 
         /**
-         * @throws StreamsException
+         * @throws StreamsException if key is null
          */
         @Override
         public void process(K key, Change<V> value) {

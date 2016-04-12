@@ -87,7 +87,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
 
         /**
-         * @throws NoSuchElementException
+         * @throws NoSuchElementException if no next element exists
          */
         @Override
         public KeyValue<Long, V> next() {

@@ -41,7 +41,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException if this method adds a child to a sink node
      */
     @Override
     public void addChild(ProcessorNode<?, ?> child) {

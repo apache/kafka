@@ -158,7 +158,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     /**
-     * @throws TopologyBuilderException
+     * @throws TopologyBuilderException if file is not found
      */
     @Override
     public void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde) {

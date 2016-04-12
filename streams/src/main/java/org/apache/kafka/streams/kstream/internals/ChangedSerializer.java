@@ -39,7 +39,8 @@ public class ChangedSerializer<T> implements Serializer<Change<T>> {
     }
 
     /**
-     * @throws StreamsException
+     * @throws StreamsException if both old and new values of data are null, or if
+     * both values are not null
      */
     @Override
     public byte[] serialize(String topic, Change<T> data) {

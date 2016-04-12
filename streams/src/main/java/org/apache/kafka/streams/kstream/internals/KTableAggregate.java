@@ -64,7 +64,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
         }
 
         /**
-         * @throws StreamsException
+         * @throws StreamsException if key is null
          */
         @Override
         public void process(K key, Change<V> value) {

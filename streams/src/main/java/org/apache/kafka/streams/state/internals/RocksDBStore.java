@@ -398,7 +398,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     /**
-     * @throws ProcessorStateException
+     * @throws ProcessorStateException if flushing failed because of any internal store exceptions
      */
     public void flushInternal() {
         try {
@@ -437,7 +437,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
 
         /**
-         * @throws NoSuchElementException
+         * @throws NoSuchElementException if no next element exist
          */
         @Override
         public KeyValue<K, V> next() {

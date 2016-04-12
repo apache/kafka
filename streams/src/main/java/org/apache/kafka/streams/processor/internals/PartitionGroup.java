@@ -146,7 +146,7 @@ public class PartitionGroup {
     }
 
     /**
-     * @throws IllegalStateException
+     * @throws IllegalStateException if the record's partition does not belong to this partition group
      */
     public int numBuffered(TopicPartition partition) {
         RecordQueue recordQueue = partitionQueues.get(partition);

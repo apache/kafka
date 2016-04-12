@@ -70,7 +70,7 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
     }
 
     /**
-     * @throws StreamsException
+     * @throws StreamsException if no metadata can be received for a topic
      */
     protected int maxNumPartitions(Cluster metadata, Set<String> topics) {
         int maxNumPartitions = 0;

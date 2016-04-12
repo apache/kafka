@@ -29,7 +29,7 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
     private final String windowName;
 
     /**
-     * @throws TopologyBuilderException
+     * @throws TopologyBuilderException if retention period of the join window is less than expected
      */
     KStreamJoinWindow(String windowName, long windowSizeMs, long retentionPeriodMs) {
         this.windowName = windowName;

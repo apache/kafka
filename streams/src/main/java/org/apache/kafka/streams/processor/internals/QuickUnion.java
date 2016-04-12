@@ -33,7 +33,7 @@ public class QuickUnion<T> {
     }
 
     /**
-     * @throws NoSuchElementException
+     * @throws NoSuchElementException if the parent of this node is null
      */
     public T root(T id) {
         T current = id;

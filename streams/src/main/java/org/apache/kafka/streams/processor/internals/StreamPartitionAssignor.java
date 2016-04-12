@@ -96,7 +96,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
      * since the former needs later's cached metadata while sending subscriptions,
      * and the latter needs former's returned assignment when adding tasks.
-     * @throws KafkaException
+     * @throws KafkaException if the stream thread is not specified
      */
     @Override
     public void configure(Map<String, ?> configs) {
@@ -384,7 +384,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     }
 
     /**
-     * @throws TaskAssignmentException
+     * @throws TaskAssignmentException if there is no task id for one of the partitions specified
      */
     @Override
     public void onAssignment(Assignment assignment) {

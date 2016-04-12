@@ -58,7 +58,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
     }
 
     /**
-     * @throws IllegalStateException
+     * @throws IllegalStateException since this method should never be called
      */
     @Override
     public void enableSendingOldValues() {
@@ -78,7 +78,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
     private class KTableMapProcessor extends AbstractProcessor<K, Change<V>> {
 
         /**
-         * @throws StreamsException
+         * @throws StreamsException if key is null
          */
         @Override
         public void process(K key, Change<V> change) {

@@ -64,7 +64,7 @@ public class OffsetCheckpoint {
     }
 
     /**
-     * @throws IOException
+     * @throws IOException if any file operation fails with an IO exception
      */
     public void write(Map<TopicPartition, Long> offsets) throws IOException {
         synchronized (lock) {
@@ -91,7 +91,7 @@ public class OffsetCheckpoint {
     }
 
     /**
-     * @throws IOException
+     * @throws IOException if file write operations failed with any IO exception
      */
     private void writeIntLine(BufferedWriter writer, int number) throws IOException {
         writer.write(Integer.toString(number));
@@ -99,7 +99,7 @@ public class OffsetCheckpoint {
     }
 
     /**
-     * @throws IOException
+     * @throws IOException if file write operations failed with any IO exception
      */
     private void writeEntry(BufferedWriter writer, TopicPartition part, long offset) throws IOException {
         writer.write(part.topic());
@@ -112,7 +112,8 @@ public class OffsetCheckpoint {
 
 
     /**
-     * @throws IOException
+     * @throws IOException if any file operation fails with an IO exception
+     * @throws IllegalArgumentException if the offset checkpoint version is unknown
      */
     public Map<TopicPartition, Long> read() throws IOException {
         synchronized (lock) {
@@ -158,7 +159,7 @@ public class OffsetCheckpoint {
     }
 
     /**
-     * @throws IOException
+     * @throws IOException if file read ended prematurely
      */
     private int readInt(BufferedReader reader) throws IOException {
         String line = reader.readLine();
@@ -168,7 +169,7 @@ public class OffsetCheckpoint {
     }
 
     /**
-     * @throws IOException
+     * @throws IOException if there is any IO exception during delete
      */
     public void delete() throws IOException {
         file.delete();
