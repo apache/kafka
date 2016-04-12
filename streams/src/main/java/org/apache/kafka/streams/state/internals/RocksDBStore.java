@@ -397,6 +397,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         flushInternal();
     }
 
+    /**
+     * @throws ProcessorStateException if flushing failed because of any internal store exceptions
+     */
     public void flushInternal() {
         try {
             db.flush(fOptions);
@@ -433,6 +436,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return iter.isValid();
         }
 
+        /**
+         * @throws NoSuchElementException if no next element exist
+         */
         @Override
         public KeyValue<K, V> next() {
             if (!hasNext())
@@ -443,6 +449,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return entry;
         }
 
+        /**
+         * @throws UnsupportedOperationException
+         */
         @Override
         public void remove() {
             throw new UnsupportedOperationException("RocksDB iterator does not support remove");

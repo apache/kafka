@@ -50,6 +50,10 @@ public class Stores {
                                 return new InMemoryKeyValueFactory<K, V>() {
                                     private int capacity = Integer.MAX_VALUE;
 
+                                    /**
+                                     * @param capacity the maximum capacity of the in-memory cache; should be one less than a power of 2
+                                     * @throws IllegalArgumentException if the capacity of the store is zero or negative
+                                     */
                                     @Override
                                     public InMemoryKeyValueFactory<K, V> maxEntries(int capacity) {
                                         if (capacity < 1) throw new IllegalArgumentException("The capacity must be positive");

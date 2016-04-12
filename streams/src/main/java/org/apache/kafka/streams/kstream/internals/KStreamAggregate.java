@@ -61,6 +61,9 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
         }
 
+        /**
+         * @throws StreamsException if key is null
+         */
         @Override
         public void process(K key, V value) {
             // the keys should never be null

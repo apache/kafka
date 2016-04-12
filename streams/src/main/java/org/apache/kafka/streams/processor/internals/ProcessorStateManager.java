@@ -67,6 +67,9 @@ public class ProcessorStateManager {
     private final boolean isStandby;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
 
+    /**
+     * @throws IOException if any error happens while creating or locking the state directory
+     */
     public ProcessorStateManager(String applicationId, int defaultPartition, Collection<TopicPartition> sources, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
         this.applicationId = applicationId;
         this.defaultPartition = defaultPartition;
@@ -110,6 +113,9 @@ public class ProcessorStateManager {
         return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
     }
 
+    /**
+     * @throws IOException if any error happens when locking the state directory
+     */
     public static FileLock lockStateDirectory(File stateDir) throws IOException {
         return lockStateDirectory(stateDir, 0);
     }
@@ -143,6 +149,11 @@ public class ProcessorStateManager {
         return this.baseDir;
     }
 
+    /**
+     * @throws IllegalArgumentException if the store name has already been registered or if it is not a valid name
+     * (e.g., when it conflicts with the names of internal topics, like the checkpoint file name)
+     * @throws StreamsException if the store's change log does not contain the partition
+     */
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
@@ -313,6 +324,9 @@ public class ProcessorStateManager {
         }
     }
 
+    /**
+     * @throws IOException if any error happens when flushing or closing the state stores
+     */
     public void close(Map<TopicPartition, Long> ackedOffsets) throws IOException {
         try {
             if (!stores.isEmpty()) {

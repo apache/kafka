@@ -138,6 +138,7 @@ public class KafkaStreams {
 
     /**
      * Start the stream instance by starting all its threads.
+     * @throws IllegalStateException if process was already started
      */
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
@@ -157,6 +158,7 @@ public class KafkaStreams {
     /**
      * Shutdown this stream instance by signaling all the threads to stop,
      * and then wait for them to join.
+     * @throws IllegalStateException if process has not started yet
      */
     public synchronized void close() {
         log.debug("Stopping Kafka Stream process");

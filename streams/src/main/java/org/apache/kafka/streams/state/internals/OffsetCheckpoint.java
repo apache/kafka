@@ -55,11 +55,17 @@ public class OffsetCheckpoint {
     private final File file;
     private final Object lock;
 
+    /**
+     * @throws IOException
+     */
     public OffsetCheckpoint(File file) throws IOException {
         this.file = file;
         this.lock = new Object();
     }
 
+    /**
+     * @throws IOException if any file operation fails with an IO exception
+     */
     public void write(Map<TopicPartition, Long> offsets) throws IOException {
         synchronized (lock) {
             // write to temp file and then swap with the existing file
@@ -84,11 +90,17 @@ public class OffsetCheckpoint {
         }
     }
 
+    /**
+     * @throws IOException if file write operations failed with any IO exception
+     */
     private void writeIntLine(BufferedWriter writer, int number) throws IOException {
         writer.write(Integer.toString(number));
         writer.newLine();
     }
 
+    /**
+     * @throws IOException if file write operations failed with any IO exception
+     */
     private void writeEntry(BufferedWriter writer, TopicPartition part, long offset) throws IOException {
         writer.write(part.topic());
         writer.write(' ');
@@ -98,6 +110,11 @@ public class OffsetCheckpoint {
         writer.newLine();
     }
 
+
+    /**
+     * @throws IOException if any file operation fails with an IO exception
+     * @throws IllegalArgumentException if the offset checkpoint version is unknown
+     */
     public Map<TopicPartition, Long> read() throws IOException {
         synchronized (lock) {
             BufferedReader reader;
@@ -141,6 +158,9 @@ public class OffsetCheckpoint {
         }
     }
 
+    /**
+     * @throws IOException if file read ended prematurely
+     */
     private int readInt(BufferedReader reader) throws IOException {
         String line = reader.readLine();
         if (line == null)
@@ -148,6 +168,9 @@ public class OffsetCheckpoint {
         return Integer.parseInt(line);
     }
 
+    /**
+     * @throws IOException if there is any IO exception during delete
+     */
     public void delete() throws IOException {
         file.delete();
     }

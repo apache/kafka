@@ -105,6 +105,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return metrics;
     }
 
+    /**
+     * @throws IllegalStateException if this method is called before {@link #initialized()}
+     */
     @Override
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (initialized)
@@ -113,6 +116,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         stateMgr.register(store, loggingEnabled, stateRestoreCallback);
     }
 
+    /**
+     * @throws TopologyBuilderException if an attempt is made to access this state store from an unknown node
+     */
     @Override
     public StateStore getStateStore(String name) {
         ProcessorNode node = task.node();
@@ -127,6 +133,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return stateMgr.getStore(name);
     }
 
+    /**
+     * @throws IllegalStateException if the task's record is null
+     */
     @Override
     public String topic() {
         if (task.record() == null)
@@ -140,6 +149,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
             return topic;
     }
 
+    /**
+     * @throws IllegalStateException if the task's record is null
+     */
     @Override
     public int partition() {
         if (task.record() == null)
@@ -148,6 +160,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return task.record().partition();
     }
 
+    /**
+     * @throws IllegalStateException if the task's record is null
+     */
     @Override
     public long offset() {
         if (this.task.record() == null)
@@ -156,6 +171,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return this.task.record().offset();
     }
 
+    /**
+     * @throws IllegalStateException if the task's record is null
+     */
     @Override
     public long timestamp() {
         if (task.record() == null)
