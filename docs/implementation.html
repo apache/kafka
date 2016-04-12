@@ -90,7 +90,7 @@ class SimpleConsumer {
    * Get a list of valid offsets (up to maxSize) before the given time.
    * The result is a list of offsets, in descending order.
    * @param time: time in millisecs,
-   *              if set to OffsetRequest$.MODULE$.LATIEST_TIME(), get from the latest offset available.
+   *              if set to OffsetRequest$.MODULE$.LATEST_TIME(), get from the latest offset available.
    *              if set to OffsetRequest$.MODULE$.EARLIEST_TIME(), get from the earliest offset available.
    */
   public long[] getOffsetsBefore(String topic, int partition, long time, int maxNumOffsets);
@@ -292,7 +292,7 @@ Since the broker registers itself in ZooKeeper using ephemeral znodes, this regi
 </p>
 <h4><a id="impl_zktopic" href="#impl_zktopic">Broker Topic Registry</a></h4>
 <pre>
-/brokers/topics/[topic]/[0...N] --> nPartions (ephemeral node)
+/brokers/topics/[topic]/[0...N] --> nPartitions (ephemeral node)
 </pre>
 
 <p>
