@@ -245,6 +245,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamForeach(action), this.name);
     }
+
+    @Override
     public KStream<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic) {
         return through(keySerde, valSerde, null, topic);
     }
