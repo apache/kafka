@@ -27,7 +27,6 @@ versions += [
   apacheds: "2.0.0-M21",
   argparse4j: "0.5.0",
   bcpkix: "1.54",
-  hadoop: "2.7.2",
   easymock: "3.4",
   jackson: "2.6.3",
   jetty: "9.2.15.v20160210",
