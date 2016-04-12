@@ -28,7 +28,7 @@ DEFAULT_KAFKA_INSTALL_ROOT = "/opt"
 PATH_RESOLVER_KEY = "kafka-path-resolver"
 
 
-class KafkaTestPathResolver(PathResolver):
+class KafkaSystemTestPathResolver(PathResolver):
     """Path resolver for Kafka system tests which assumes the following layout:
 
         /opt/kafka-trunk        # Current version of kafka under test
@@ -37,7 +37,7 @@ class KafkaTestPathResolver(PathResolver):
         ...
     """
     def __init__(self, context):
-        super(KafkaTestPathResolver, self).__init__(context)
+        super(KafkaSystemTestPathResolver, self).__init__(context)
         self.project_name = "kafka"
 
     def script_path(self, script_name, version):
@@ -83,7 +83,7 @@ def script_path(context, script_name, node=None):
             path_resolver_class = getattr(cluster_mod, resolver_class_name)
             path_resolver = path_resolver_class(context)
         else:
-            path_resolver = KafkaTestPathResolver(context)
+            path_resolver = KafkaSystemTestPathResolver(context)
 
         if node is None or not hasattr(node, "version"):
             version = None
