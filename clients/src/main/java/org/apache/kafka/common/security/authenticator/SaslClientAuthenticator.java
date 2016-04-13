@@ -39,14 +39,27 @@ import javax.security.sasl.SaslClient;
 import javax.security.sasl.SaslException;
 
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.ProtoUtils;
+import org.apache.kafka.common.protocol.types.SchemaException;
+import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.RequestSend;
+import org.apache.kafka.common.requests.ResponseHeader;
+import org.apache.kafka.common.requests.SaslHandshakeRequest;
+import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,7 +67,7 @@ import org.slf4j.LoggerFactory;
 public class SaslClientAuthenticator implements Authenticator {
 
     public enum SaslState {
-        SEND_MECHANISM, RECEIVE_MECHANISM_RESPONSE, INITIAL, INTERMEDIATE, COMPLETE, FAILED
+        SEND_HANDSHAKE_REQUEST, RECEIVE_HANDSHAKE_RESPONSE, INITIAL, INTERMEDIATE, COMPLETE, FAILED
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(SaslClientAuthenticator.class);
@@ -78,12 +91,15 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private SaslState pendingSaslState;
     private SaslState saslState;
+    private int correlationId;
+    private RequestHeader currentRequestHeader;
 
     public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host) throws IOException {
         this.node = node;
         this.subject = subject;
         this.host = host;
         this.servicePrincipal = servicePrincipal;
+        this.correlationId = -1;
     }
 
     public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) throws KafkaException {
@@ -95,7 +111,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 throw new IllegalArgumentException("SASL mechanism not specified");
             // Since 0.9.0.x servers expect to see GSSAPI packets without mechanism being sent first, send
             // mechanism to server only for non-GSSAPI.
-            setSaslState(mechanism.equals(SaslConfigs.GSSAPI_MECHANISM) ? SaslState.INITIAL : SaslState.SEND_MECHANISM);
+            setSaslState(mechanism.equals(SaslConfigs.GSSAPI_MECHANISM) ? SaslState.INITIAL : SaslState.SEND_HANDSHAKE_REQUEST);
 
             // determine client principal from subject.
             if (!subject.getPrincipals().isEmpty()) {
@@ -140,29 +156,27 @@ public class SaslClientAuthenticator implements Authenticator {
             return;
 
         switch (saslState) {
-            case SEND_MECHANISM:
-                send(new SaslMechanismRequest(mechanism).toByteBuffer());
-                setSaslState(SaslState.RECEIVE_MECHANISM_RESPONSE);
+            case SEND_HANDSHAKE_REQUEST:
+                String clientId = (String) configs.get(CommonClientConfigs.CLIENT_ID_CONFIG);
+                currentRequestHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id, clientId, correlationId++);
+                SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest(mechanism);
+                send(RequestSend.serialize(currentRequestHeader, handshakeRequest.toStruct()));
+                setSaslState(SaslState.RECEIVE_HANDSHAKE_RESPONSE);
                 break;
-            case RECEIVE_MECHANISM_RESPONSE:
+            case RECEIVE_HANDSHAKE_RESPONSE:
                 byte[] responseBytes = receiveBytes();
                 if (responseBytes == null)
                     break;
                 else {
-                    SaslMechanismResponse response;
                     try {
-                        response = new SaslMechanismResponse(ByteBuffer.wrap(responseBytes));
+                        handleKafkaResponse(currentRequestHeader, responseBytes);
+                        currentRequestHeader = null;
                     } catch (Exception e) {
-                        LOG.debug("Invalid SASL mechanism response, server may be using GSSAPI");
-                        throw new SaslException("Invalid SASL mechanism response", e);
+                        setSaslState(SaslState.FAILED);
+                        throw e;
                     }
-                    if (response.errorCode() == SaslMechanismResponse.UNSUPPORTED_SASL_MECHANISM)
-                        throw new SaslException(String.format("Client saslMechanism '%s' not enabled in the server, enabled mechanisms are %s", mechanism, response.enabledMechanisms()));
-                    else if (response.errorCode() != 0)
-                        throw new SaslException(String.format("Unknown error code %d, client mechanism is %s, enabled mechanisms are %s", response.errorCode(), mechanism, response.enabledMechanisms()));
-                    else
-                        setSaslState(SaslState.INITIAL);
-                        // Fall through and start SASL authentication using the configured client mechanism
+                    setSaslState(SaslState.INITIAL);
+                    // Fall through and start SASL authentication using the configured client mechanism
                 }
             case INITIAL:
                 sendSaslToken(new byte[0], true);
@@ -295,6 +309,40 @@ public class SaslClientAuthenticator implements Authenticator {
             netOutBuffer.writeTo(transportLayer);
         }
         return netOutBuffer.completed();
+    }
+
+    private void handleKafkaResponse(RequestHeader requestHeader, byte[] responseBytes) {
+        ByteBuffer responseBuffer = ByteBuffer.wrap(responseBytes);
+        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
+        if (responseHeader.correlationId() != requestHeader.correlationId()) {
+            throw new IllegalStateException("Correlation id for response (" + responseHeader.correlationId()
+                    + ") does not match request (" + requestHeader.correlationId() + ")");
+        }
+        Struct struct;
+        try {
+            struct = ProtoUtils.responseSchema(requestHeader.apiKey(), requestHeader.apiVersion()).read(responseBuffer);
+        } catch (SchemaException e) {
+            LOG.debug("Invalid SASL mechanism response, server may be expecting only GSSAPI tokens");
+            throw new AuthenticationException("Invalid SASL mechanism response", e);
+        }
+        ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
+        switch (apiKey) {
+            case SASL_HANDSHAKE:
+                handleSaslHandshakeResponse(new SaslHandshakeResponse(struct));
+                break;
+            default:
+                throw new IllegalStateException("Unexpected API key during handshake: " + apiKey);
+        }
+    }
+
+    private void handleSaslHandshakeResponse(SaslHandshakeResponse response) {
+        if (response.errorCode() == Errors.UNSUPPORTED_SASL_MECHANISM.code()) {
+            throw new UnsupportedSaslMechanismException(String.format("Client saslMechanism '%s' not enabled in the server, enabled mechanisms are %s",
+                    mechanism, response.enabledMechanisms()));
+        } else if (response.errorCode() != 0) {
+            throw new AuthenticationException(String.format("Unknown error code %d, client mechanism is %s, enabled mechanisms are %s",
+                    response.errorCode(), mechanism, response.enabledMechanisms()));
+        }
     }
 
     public static class ClientCallbackHandler implements AuthCallbackHandler {

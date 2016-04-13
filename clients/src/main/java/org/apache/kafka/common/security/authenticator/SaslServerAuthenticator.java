@@ -48,12 +48,24 @@ import org.slf4j.LoggerFactory;
 import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.AbstractRequestResponse;
+import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.ResponseHeader;
+import org.apache.kafka.common.requests.ResponseSend;
+import org.apache.kafka.common.requests.SaslHandshakeRequest;
+import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 
 public class SaslServerAuthenticator implements Authenticator {
@@ -110,9 +122,6 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     private void createSaslServer(String mechanism) throws IOException {
-        if (!enabledMechanisms.contains(mechanism)) {
-            throw new KafkaException("Client SASL mechanism \"" + mechanism + "\" not enabled in server, enabled mechanisms are " + enabledMechanisms);
-        }
         this.saslMechanism = mechanism;
         callbackHandler.configure(configs, Mode.SERVER, subject, saslMechanism);
         if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
@@ -207,55 +216,10 @@ public class SaslServerAuthenticator implements Authenticator {
             try {
                 switch (saslState) {
                     case INIT:
-                        String clientMechanism = null;
-                        SaslMechanismResponse mechanismResponse = null;
-                        SaslException exception = null;
-                        try {
-                            SaslMechanismRequest mechanismRequest = new SaslMechanismRequest(ByteBuffer.wrap(clientToken));
-                            clientMechanism = mechanismRequest.mechanism();
-                            if (enabledMechanisms.contains(clientMechanism)) {
-                                LOG.debug("Using SASL mechanism '{}' provided by client", clientMechanism);
-                                mechanismResponse = new SaslMechanismResponse((short) 0, enabledMechanisms);
-                            } else {
-                                LOG.debug("SASL mechanism '{}' provided by client is not supported", clientMechanism);
-                                mechanismResponse = new SaslMechanismResponse(SaslMechanismResponse.UNSUPPORTED_SASL_MECHANISM, enabledMechanisms);
-                                exception = new SaslException("Unsupported SASL mechanism " + clientMechanism);
-                            }
-                            clientToken = null;
-                        } catch (SchemaException e) {
-                            if (LOG.isDebugEnabled()) {
-                                StringBuilder tokenBuilder = new StringBuilder();
-                                for (byte b : clientToken) {
-                                    tokenBuilder.append(String.format("%02x", b));
-                                    if (tokenBuilder.length() >= 20)
-                                         break;
-                                }
-                                LOG.debug("Received client packet of length {} starting with bytes 0x{}, process as GSSAPI packet", clientToken.length, tokenBuilder);
-                            }
-                            if (enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM)) {
-                                clientMechanism = SaslConfigs.GSSAPI_MECHANISM;
-                                LOG.debug("First client packet is not a SASL mechanism request, using default mechanism GSSAPI");
-                            } else {
-                                exception = new SaslException("Exception handling first SASL packet from client, GSSAPI is not supported by server", e);
-                                mechanismResponse = new SaslMechanismResponse((short) 101, enabledMechanisms);
-                            }
-                        }
-                        if (mechanismResponse != null) {
-                            netOutBuffer = new NetworkSend(node, mechanismResponse.toByteBuffer());
-                            flushNetOutBufferAndUpdateInterestOps();
-                        }
-                        if (exception == null) {
-                            createSaslServer(clientMechanism);
-                            setSaslState(SaslState.AUTHENTICATE);
-                        } else {
-                            setSaslState(SaslState.FAILED);
-                            throw exception;
-                        }
-                        // If client provided a mechanism, start SASL authentication with next client token.
-                        // For default GSSAPI, fall through to authenticate using the client token as the first GSSAPI packet.
-                        // This is required for interoperability with 0.9.0.x clients which do not send mechanism request
-                        if (clientToken == null)
+                        if (handleKafkaRequest(clientToken))
                             break;
+                        // For default GSSAPI, fall through to authenticate using the client token as the first GSSAPI packet.
+                        // This is required for interoperability with 0.9.0.x clients which do not send handshake request
                     case AUTHENTICATE:
                         byte[] response = saslServer.evaluateResponse(clientToken);
                         if (response != null) {
@@ -315,5 +279,64 @@ public class SaslServerAuthenticator implements Authenticator {
         if (!netOutBuffer.completed())
             netOutBuffer.writeTo(transportLayer);
         return netOutBuffer.completed();
+    }
+
+    private boolean handleKafkaRequest(byte[] requestBytes) throws IOException, AuthenticationException {
+        boolean isKafkaRequest = false;
+        String clientMechanism = null;
+        try {
+            ByteBuffer requestBuffer = ByteBuffer.wrap(requestBytes);
+            RequestHeader requestHeader = RequestHeader.parse(requestBuffer);
+            AbstractRequest request = AbstractRequest.getRequest(requestHeader.apiKey(), requestHeader.apiVersion(), requestBuffer);
+            isKafkaRequest = true;
+
+            ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
+            switch (apiKey) {
+                case SASL_HANDSHAKE:
+                    clientMechanism = handleHandshakeRequest(requestHeader, (SaslHandshakeRequest) request);
+                    break;
+                default:
+                    throw new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL handshake.");
+            }
+        } catch (SchemaException e) {
+            if (LOG.isDebugEnabled()) {
+                StringBuilder tokenBuilder = new StringBuilder();
+                for (byte b : requestBytes) {
+                    tokenBuilder.append(String.format("%02x", b));
+                    if (tokenBuilder.length() >= 20)
+                         break;
+                }
+                LOG.debug("Received client packet of length {} starting with bytes 0x{}, process as GSSAPI packet", requestBytes.length, tokenBuilder);
+            }
+            if (enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM)) {
+                LOG.debug("First client packet is not a SASL mechanism request, using default mechanism GSSAPI");
+                clientMechanism = SaslConfigs.GSSAPI_MECHANISM;
+            } else
+                throw new UnsupportedSaslMechanismException("Exception handling first SASL packet from client, GSSAPI is not supported by server", e);
+        }
+        if (clientMechanism != null) {
+            createSaslServer(clientMechanism);
+            setSaslState(SaslState.AUTHENTICATE);
+        }
+        return isKafkaRequest;
+    }
+
+    private String handleHandshakeRequest(RequestHeader requestHeader, SaslHandshakeRequest handshakeRequest) throws IOException, UnsupportedSaslMechanismException {
+        String clientMechanism = handshakeRequest.mechanism();
+        if (enabledMechanisms.contains(clientMechanism)) {
+            LOG.debug("Using SASL mechanism '{}' provided by client", clientMechanism);
+            sendKafkaResponse(requestHeader, new SaslHandshakeResponse((short) 0, enabledMechanisms));
+            return clientMechanism;
+        } else {
+            LOG.debug("SASL mechanism '{}' requested by client is not supported", clientMechanism);
+            sendKafkaResponse(requestHeader, new SaslHandshakeResponse(Errors.UNSUPPORTED_SASL_MECHANISM.code(), enabledMechanisms));
+            throw new UnsupportedSaslMechanismException("Unsupported SASL mechanism " + clientMechanism);
+        }
+    }
+
+    private void sendKafkaResponse(RequestHeader requestHeader, AbstractRequestResponse response) throws IOException {
+        ResponseHeader responseHeader = new ResponseHeader(requestHeader.correlationId());
+        netOutBuffer = new NetworkSend(node, ResponseSend.serialize(responseHeader, response.toStruct()));
+        flushNetOutBufferAndUpdateInterestOps();
     }
 }
