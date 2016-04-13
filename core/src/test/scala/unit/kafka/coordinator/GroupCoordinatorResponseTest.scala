@@ -57,8 +57,6 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   val ConsumerMaxSessionTimeout = 1000
   val DefaultSessionTimeout = 500
   var timer: MockTimer = null
-  var heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat] = null
-  var joinPurgatory: DelayedOperationPurgatory[DelayedJoin] = null
   var groupCoordinator: GroupCoordinator = null
   var replicaManager: ReplicaManager = null
   var scheduler: KafkaScheduler = null
@@ -94,8 +92,8 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
     val config = KafkaConfig.fromProps(props)
 
-    heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
-    joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
+    val heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
+    val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
     groupCoordinator = GroupCoordinator(config, zkUtils, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time)
     groupCoordinator.startup()
