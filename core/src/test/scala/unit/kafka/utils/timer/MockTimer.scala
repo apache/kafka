@@ -16,12 +16,13 @@
   */
 package kafka.utils.timer
 
-import org.apache.kafka.common.utils.Time
+import kafka.utils.MockTime
 
 import scala.collection.mutable
 
-class MockTimer(time: Time) extends Timer {
+class MockTimer extends Timer {
 
+  val time = new MockTime
   private val taskQueue = mutable.PriorityQueue[TimerTaskEntry]()
 
   def add(timerTask: TimerTask) {
@@ -32,34 +33,24 @@ class MockTimer(time: Time) extends Timer {
   }
 
   def advanceClock(timeoutMs: Long): Boolean = {
-    var remaining = timeoutMs
+    time.sleep(timeoutMs)
+
     var executed = false
+    val now = time.milliseconds
 
-    do {
-      val now = time.milliseconds
-      while (taskQueue.nonEmpty && now > taskQueue.head.expirationMs) {
-        val taskEntry = taskQueue.dequeue()
-        if (!taskEntry.cancelled) {
-          val task = taskEntry.timerTask
-          task.run()
-          executed = true
-        }
+    while (taskQueue.nonEmpty && now > taskQueue.head.expirationMs) {
+      val taskEntry = taskQueue.dequeue()
+      if (!taskEntry.cancelled) {
+        val task = taskEntry.timerTask
+        task.run()
+        executed = true
       }
-
-      if (taskQueue.nonEmpty) {
-        val sleepDuration = Math.min(remaining, taskQueue.head.expirationMs - now)
-        time.sleep(sleepDuration)
-        remaining -= sleepDuration
-      } else {
-        time.sleep(remaining)
-        remaining = 0
-      }
-    } while (remaining > 0)
+    }
 
     executed
   }
 
-  def size(): Int = taskQueue.size
+  def size: Int = taskQueue.size
 
   override def shutdown(): Unit = {}
 

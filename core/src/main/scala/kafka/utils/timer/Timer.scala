@@ -43,7 +43,7 @@ trait Timer {
     * Get the number of tasks pending execution
     * @return the number of tasks
     */
-  def size(): Int
+  def size: Int
 
   /**
     * Shutdown the timer service, leaving pending tasks unexecuted
@@ -120,7 +120,7 @@ class SystemTimer(executorName: String,
     }
   }
 
-  def size(): Int = taskCounter.get
+  def size: Int = taskCounter.get
 
   override def shutdown() {
     taskExecutor.shutdown()
