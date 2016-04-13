@@ -147,6 +147,63 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         return new Subscription(new ArrayList<>(topics), data.encode());
     }
 
+    /**
+     * Internal helper function that creates a Kafka topic
+     * @param topicToTaskIds Map that contains the topic names to be created
+     * @param compactTopic If true, the topic should be a compacted topic. This is used for
+     *                     change log topics usually.
+     * @param outPartitionInfo If true, compute and return all partitions created
+     * @param postPartitionPhase If true, the computation for calculating the number of partitions
+     *                           is slightly different. Set to true after the initial topic-to-partition
+     *                           assignment.
+     * @return
+     */
+    private Map<TopicPartition, PartitionInfo> prepareTopic(Map<String, Set<TaskId>> topicToTaskIds,
+                                                            boolean compactTopic,
+                                                            boolean outPartitionInfo,
+                                                            boolean postPartitionPhase) {
+        Map<TopicPartition, PartitionInfo> partitionInfos = new HashMap<>();
+        // if ZK is specified, prepare the internal source topic before calling partition grouper
+        if (internalTopicManager != null) {
+            log.debug("Starting to validate internal topics in partition assignor.");
+
+            for (Map.Entry<String, Set<TaskId>> entry : topicToTaskIds.entrySet()) {
+                String topic = entry.getKey();
+                int numPartitions = 0;
+                if (postPartitionPhase) {
+                    // the expected number of partitions is the max value of TaskId.partition + 1
+                    for (TaskId task : entry.getValue()) {
+                        if (numPartitions < task.partition + 1)
+                            numPartitions = task.partition + 1;
+                    }
+                } else {
+                    // should have size 1 only
+                    numPartitions = -1;
+                    for (TaskId task : entry.getValue()) {
+                        numPartitions = task.partition;
+                    }
+                }
+
+                internalTopicManager.makeReady(topic, numPartitions, compactTopic);
+
+                // wait until the topic metadata has been propagated to all brokers
+                List<PartitionInfo> partitions;
+                do {
+                    partitions = streamThread.restoreConsumer.partitionsFor(topic);
+                } while (partitions == null || partitions.size() != numPartitions);
+
+                if (outPartitionInfo) {
+                    for (PartitionInfo partition : partitions)
+                        partitionInfos.put(new TopicPartition(partition.topic(), partition.partition()), partition);
+                }
+            }
+
+            log.info("Completed validating internal topics in partition assignor.");
+        }
+
+        return partitionInfos;
+    }
+
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
         // This assigns tasks to consumer clients in two steps.
@@ -227,35 +284,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
 
-        Map<TopicPartition, PartitionInfo> internalPartitionInfos = new HashMap<>();
-
-        // if ZK is specified, prepare the internal source topic before calling partition grouper
-        if (internalTopicManager != null) {
-            log.debug("Starting to validate internal source topics in partition assignor.");
-
-            for (Map.Entry<String, Set<TaskId>> entry : internalSourceTopicToTaskIds.entrySet()) {
-                String topic = entry.getKey();
-
-                // should have size 1 only
-                int numPartitions = -1;
-                for (TaskId task : entry.getValue()) {
-                    numPartitions = task.partition;
-                }
-
-                internalTopicManager.makeReady(topic, numPartitions);
-
-                // wait until the topic metadata has been propagated to all brokers
-                List<PartitionInfo> partitions;
-                do {
-                    partitions = streamThread.restoreConsumer.partitionsFor(topic);
-                } while (partitions == null || partitions.size() != numPartitions);
-
-                for (PartitionInfo partition : partitions)
-                    internalPartitionInfos.put(new TopicPartition(partition.topic(), partition.partition()), partition);
-            }
-
-            log.info("Completed validating internal source topics in partition assignor.");
-        }
+        Map<TopicPartition, PartitionInfo> internalPartitionInfos = prepareTopic(internalSourceTopicToTaskIds, false, true, false);
         internalSourceTopicToTaskIds.clear();
 
         Cluster metadataWithInternalTopics = metadata;
@@ -350,35 +379,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
 
-        // if ZK is specified, validate the internal source topics and the state changelog topics
-        if (internalTopicManager != null) {
-            log.debug("Starting to validate changelog topics in partition assignor.");
-
-            Map<String, Set<TaskId>> topicToTaskIds = new HashMap<>();
-            topicToTaskIds.putAll(stateChangelogTopicToTaskIds);
-            topicToTaskIds.putAll(internalSourceTopicToTaskIds);
-
-            for (Map.Entry<String, Set<TaskId>> entry : topicToTaskIds.entrySet()) {
-                String topic = entry.getKey();
-
-                // the expected number of partitions is the max value of TaskId.partition + 1
-                int numPartitions = 0;
-                for (TaskId task : entry.getValue()) {
-                    if (numPartitions < task.partition + 1)
-                        numPartitions = task.partition + 1;
-                }
-
-                internalTopicManager.makeReady(topic, numPartitions);
-
-                // wait until the topic metadata has been propagated to all brokers
-                List<PartitionInfo> partitions;
-                do {
-                    partitions = streamThread.restoreConsumer.partitionsFor(topic);
-                } while (partitions == null || partitions.size() != numPartitions);
-            }
-
-            log.info("Completed validating changelog topics in partition assignor.");
-        }
+        // if ZK is specified, validate the internal topics again
+        prepareTopic(internalSourceTopicToTaskIds, false /* compactTopic */, false, true);
+        // change log topics should be compacted
+        prepareTopic(stateChangelogTopicToTaskIds, true /* compactTopic */, false, true);
 
         return assignment;
     }

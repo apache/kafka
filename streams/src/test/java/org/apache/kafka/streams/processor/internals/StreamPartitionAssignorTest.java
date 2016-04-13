@@ -556,7 +556,7 @@ public class StreamPartitionAssignorTest {
         }
 
         @Override
-        public void makeReady(String topic, int numPartitions) {
+        public void makeReady(String topic, int numPartitions, boolean compactTopic) {
             readyTopics.put(topic, numPartitions);
 
             List<PartitionInfo> partitions = new ArrayList<>();
