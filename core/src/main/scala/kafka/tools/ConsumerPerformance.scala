@@ -19,8 +19,6 @@ package kafka.tools
 
 import java.util
 
-import org.apache.kafka.common.TopicPartition
-
 import scala.collection.JavaConversions._
 import java.util.concurrent.atomic.AtomicLong
 import java.nio.channels.ClosedByInterruptException
@@ -85,10 +83,9 @@ object ConsumerPerformance {
         thread.start
       for (thread <- threadList)
         thread.join
-      if(consumerTimeout.get())
-	endMs = System.currentTimeMillis - consumerConfig.consumerTimeoutMs
-      else
-	endMs = System.currentTimeMillis
+      endMs =
+        if (consumerTimeout.get()) System.currentTimeMillis - consumerConfig.consumerTimeoutMs
+        else System.currentTimeMillis
       consumerConnector.shutdown()
     }
     val elapsedSecs = (endMs - startMs) / 1000.0
@@ -279,9 +276,8 @@ object ConsumerPerformance {
       } catch {
         case _: InterruptedException =>
         case _: ClosedByInterruptException =>
-        case _: ConsumerTimeoutException => {
-          consumerTimeout.set(true);
-        }
+        case _: ConsumerTimeoutException =>
+          consumerTimeout.set(true)
         case e: Throwable => e.printStackTrace()
       }
       totalMessagesRead.addAndGet(messagesRead)
