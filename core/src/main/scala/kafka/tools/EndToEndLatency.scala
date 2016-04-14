@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.JavaConversions._
+import scala.util.Random
 
 
 /**
@@ -95,9 +96,10 @@ object EndToEndLatency {
 
     var totalTime = 0.0
     val latencies = new Array[Long](numMessages)
+    val random = new Random(0)
 
     for (i <- 0 until numMessages) {
-      val message = randomBytesOfLen(messageLen)
+      val message = randomBytesOfLen(random, messageLen)
       val begin = System.nanoTime
 
       //Send message (of random bytes) synchronously then immediately poll for it
@@ -145,7 +147,7 @@ object EndToEndLatency {
     finalise()
   }
 
-  def randomBytesOfLen(len: Int): Array[Byte] = {
-    Array.fill(len)((scala.util.Random.nextInt(26) + 65).toByte)
+  def randomBytesOfLen(random: Random, len: Int): Array[Byte] = {
+    Array.fill(len)((random.nextInt(26) + 65).toByte)
   }
 }
