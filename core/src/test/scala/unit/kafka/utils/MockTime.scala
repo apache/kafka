@@ -19,6 +19,8 @@ package kafka.utils
 
 import java.util.concurrent._
 
+import org.apache.kafka.common.utils
+
 /**
  * A class used for unit testing things which depend on the Time interface.
  * 
@@ -46,4 +48,14 @@ class MockTime(@volatile private var currentMs: Long) extends Time {
   
   override def toString() = "MockTime(%d)".format(milliseconds)
 
+}
+
+object MockTime {
+  implicit def toCommonTime(time: MockTime): utils.Time = new utils.Time {
+    override def nanoseconds(): Long = time.nanoseconds
+
+    override def milliseconds(): Long = time.milliseconds
+
+    override def sleep(ms: Long): Unit = time.sleep(ms)
+  }
 }
