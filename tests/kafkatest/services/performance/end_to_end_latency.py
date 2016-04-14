@@ -17,7 +17,7 @@ from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
 
 from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.kafka.version import TRUNK, V_0_9_0_0
+from kafkatest.services.kafka.version import TRUNK, V_0_9_0_0, V_0_10_0_0
 
 
 class EndToEndLatencyService(PerformanceService):
@@ -29,7 +29,7 @@ class EndToEndLatencyService(PerformanceService):
             "collect_default": True},
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, num_records, version=TRUNK, consumer_fetch_max_wait=100, acks=1):
+    def __init__(self, context, num_nodes, kafka, topic, num_records, compression_type="none", version=TRUNK, acks=1):
         super(EndToEndLatencyService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
@@ -37,12 +37,14 @@ class EndToEndLatencyService(PerformanceService):
         security_protocol = self.security_config.security_protocol
         assert version >= V_0_9_0_0 or security_protocol == SecurityConfig.PLAINTEXT, \
             "Security protocol %s is only supported if version >= 0.9.0.0, version %s" % (self.security_config, str(version))
+        assert version >= TRUNK or compression_type == "none", \
+            "Compression type %s is only supported in trunk, version %s" % (compression_type, str(version))
 
         self.args = {
             'topic': topic,
             'num_records': num_records,
-            'consumer_fetch_max_wait': consumer_fetch_max_wait,
             'acks': acks,
+            'compression_type': compression_type,
             'kafka_opts': self.security_config.kafka_opts,
             'message_bytes': EndToEndLatencyService.MESSAGE_BYTES
         }
@@ -68,26 +70,12 @@ class EndToEndLatencyService(PerformanceService):
         })
 
         if node.version >= V_0_9_0_0:
-            """
-            val brokerList = args(0)
-            val topic = args(1)
-            val numMessages = args(2).toInt
-            val producerAcks = args(3)
-            val messageLen = args(4).toInt
-            """
-
             cmd = "KAFKA_OPTS=%(kafka_opts)s /opt/%(kafka_dir)s/bin/kafka-run-class.sh kafka.tools.EndToEndLatency " % args
-            cmd += "%(bootstrap_servers)s %(topic)s %(num_records)d %(acks)d %(message_bytes)d %(security_config_file)s" % args
+            cmd_args = "%(bootstrap_servers)s %(topic)s %(num_records)d %(acks)d %(message_bytes)d %(security_config_file)s"
+            if node.version >= V_0_10_0_0:
+                cmd_args += " %(compression_type)s"
+            cmd += cmd_args % args
         else:
-            """
-            val brokerList = args(0)
-            val zkConnect = args(1)
-            val topic = args(2)
-            val numMessages = args(3).toInt
-            val consumerFetchMaxWait = args(4).toInt
-            val producerAcks = args(5).toInt
-            """
-
             # Set fetch max wait to 0 to match behavior in later versions
             cmd = "KAFKA_OPTS=%(kafka_opts)s /opt/%(kafka_dir)s/bin/kafka-run-class.sh kafka.tools.TestEndToEndLatency " % args
             cmd += "%(bootstrap_servers)s %(zk_connect)s %(topic)s %(num_records)d 0 %(acks)d" % args
