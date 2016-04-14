@@ -42,8 +42,8 @@ object EndToEndLatency {
   private val timeout: Long = 60000
 
   def main(args: Array[String]) {
-    if (args.length != 5 && args.length != 6) {
-      System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] ssl_properties_file")
+    if (args.length > 7) {
+      System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] properties_file compression_type")
       System.exit(1)
     }
 
@@ -52,12 +52,15 @@ object EndToEndLatency {
     val numMessages = args(2).toInt
     val producerAcks = args(3)
     val messageLen = args(4).toInt
-    val sslPropsFile = if (args.length == 6) args(5) else ""
+    val propsFile = if (args.length > 5) Some(args(5)) else None
+    val compressionType = if (args.length > 6) Some(args(6)) else None
 
     if (!List("1", "all").contains(producerAcks))
       throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all")
 
-    val consumerProps = if (sslPropsFile.equals("")) new Properties() else Utils.loadProps(sslPropsFile)
+    def loadProps: Properties = propsFile.map(Utils.loadProps).getOrElse(new Properties())
+
+    val consumerProps = loadProps
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-" + System.currentTimeMillis())
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -69,13 +72,14 @@ object EndToEndLatency {
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
     consumer.subscribe(List(topic))
 
-    val producerProps = if (sslPropsFile.equals("")) new Properties() else Utils.loadProps(sslPropsFile)
+    val producerProps = loadProps
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0") //ensure writes are synchronous
     producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
     producerProps.put(ProducerConfig.ACKS_CONFIG, producerAcks.toString)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    compressionType.foreach(producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, _))
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
     def finalise() {
