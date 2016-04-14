@@ -17,6 +17,8 @@
 
 package kafka.message
 
+import java.util.Locale
+
 object CompressionCodec {
   def getCompressionCodec(codec: Int): CompressionCodec = {
     codec match {
@@ -28,7 +30,7 @@ object CompressionCodec {
     }
   }
   def getCompressionCodec(name: String): CompressionCodec = {
-    name.toLowerCase match {
+    name.toLowerCase(Locale.ROOT) match {
       case NoCompressionCodec.name => NoCompressionCodec
       case GZIPCompressionCodec.name => GZIPCompressionCodec
       case SnappyCompressionCodec.name => SnappyCompressionCodec
@@ -43,10 +45,10 @@ object BrokerCompressionCodec {
   val brokerCompressionCodecs = List(UncompressedCodec, SnappyCompressionCodec, LZ4CompressionCodec, GZIPCompressionCodec, ProducerCompressionCodec)
   val brokerCompressionOptions = brokerCompressionCodecs.map(codec => codec.name)
 
-  def isValid(compressionType: String): Boolean = brokerCompressionOptions.contains(compressionType.toLowerCase())
+  def isValid(compressionType: String): Boolean = brokerCompressionOptions.contains(compressionType.toLowerCase(Locale.ROOT))
 
   def getCompressionCodec(compressionType: String): CompressionCodec = {
-    compressionType.toLowerCase match {
+    compressionType.toLowerCase(Locale.ROOT) match {
       case UncompressedCodec.name => NoCompressionCodec
       case _ => CompressionCodec.getCompressionCodec(compressionType)
     }

@@ -20,6 +20,7 @@ package kafka.utils
 
 import org.apache.log4j.{Logger, Level, LogManager}
 import java.util
+import java.util.Locale
 
 
 object Log4jController {
@@ -81,7 +82,7 @@ private class Log4jController extends Log4jControllerMBean {
   def setLogLevel(loggerName: String, level: String) = {
     val log = newLogger(loggerName)
     if (!loggerName.trim.isEmpty && !level.trim.isEmpty && log != null) {
-      log.setLevel(Level.toLevel(level.toUpperCase))
+      log.setLevel(Level.toLevel(level.toUpperCase(Locale.ROOT)))
       true
     }
     else false
