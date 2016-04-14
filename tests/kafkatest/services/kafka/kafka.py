@@ -27,10 +27,10 @@ from ducktape.utils.util import wait_until
 from config import KafkaConfig
 from kafkatest.directory_layout.kafka_path import script_path
 from kafkatest.services.kafka import config_property
-from kafkatest.services.kafka.version import TRUNK
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.security_config import SecurityConfig
+from kafkatest.version.version import TRUNK
 
 Port = collections.namedtuple('Port', ['name', 'number', 'open'])
 

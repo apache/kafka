@@ -22,8 +22,8 @@ import time
 from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.directory_layout.kafka_path import kafka_home, KAFKA_TRUNK
-from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
 from kafkatest.utils import is_int, is_int_with_prefix
+from kafkatest.version.version import TRUNK, LATEST_0_8_2
 
 
 class VerifiableProducer(BackgroundThreadService):

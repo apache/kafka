@@ -14,15 +14,15 @@
 # limitations under the License.
 
 
+from ducktape.mark import parametrize
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize
 
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.version import LATEST_0_8_2, LATEST_0_9, TRUNK, KafkaVersion
 from kafkatest.services.verifiable_producer import VerifiableProducer
+from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.utils import is_version
+from kafkatest.version.version import LATEST_0_8_2, LATEST_0_9, TRUNK, KafkaVersion
 
 
 class TestVerifiableProducer(Test):

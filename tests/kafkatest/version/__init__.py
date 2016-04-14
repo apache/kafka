@@ -13,23 +13,3 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-class PathResolver(object):
-    def __init__(self, context, project=None):
-        self.context = context
-        self.project = project
-
-    def script(self, script_name, project=None, node_or_version=None):
-        raise NotImplementedError("Subclasses must implement")
-
-    def bin(self, project=None, node_or_version=None):
-        raise NotImplementedError("Subclasses must implement")
-
-    def home(self, project=None, node_or_version=None):
-        raise NotImplementedError("Subclasses must implement")
-
-    def jar(self, project=None, node_or_version=None):
-        raise NotImplementedError("Subclasses must implement")
-
-    def scratch_space(self, service_instance):
-        raise NotImplementedError("Subclasses must implement")
