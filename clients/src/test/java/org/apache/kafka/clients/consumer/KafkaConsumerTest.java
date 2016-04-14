@@ -77,6 +77,8 @@ public class KafkaConsumerTest {
         consumer.unsubscribe();
         Assert.assertTrue(consumer.subscription().isEmpty());
         Assert.assertTrue(consumer.assignment().isEmpty());
+
+        consumer.close();
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -129,6 +131,8 @@ public class KafkaConsumerTest {
 
         consumer.unsubscribe();
         Assert.assertTrue(consumer.paused().isEmpty());
+
+        consumer.close();
     }
 
     private KafkaConsumer<byte[], byte[]> newConsumer() {
