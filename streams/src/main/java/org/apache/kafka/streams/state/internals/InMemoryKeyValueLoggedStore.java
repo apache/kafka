@@ -68,8 +68,9 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     private void init() {
         ProcessorContext context = initContext;
         StateStore root = initRoot;
-
-
+        if (initContext == null || root == null) {
+            return;
+        }
 
         this.changeLogger = new StoreChangeLogger<>(storeName, context, serdes);
 
