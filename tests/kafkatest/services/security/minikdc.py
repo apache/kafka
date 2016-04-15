@@ -23,6 +23,7 @@ from tempfile import mkstemp
 from ducktape.services.service import Service
 
 from kafkatest.directory_layout.kafka_path import create_path_resolver
+from kafkatest.version.version import get_version
 
 
 
@@ -71,7 +72,7 @@ class MiniKdc(Service):
 
         jar_paths = self.core_jar_paths(node, "dependant-testlibs") + self.core_jar_paths(node, "libs")
         classpath = ":".join(jar_paths)
-        cmd = "CLASSPATH=%s %s kafka.security.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (classpath, self.path.script("kafka-run-class.sh", node_or_version=node), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
+        cmd = "CLASSPATH=%s %s kafka.security.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (classpath, self.path.script("kafka-run-class.sh", get_version(node)), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
         self.logger.debug("Attempting to start MiniKdc on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log(MiniKdc.LOG_FILE) as monitor:
             node.account.ssh(cmd)
@@ -84,7 +85,7 @@ class MiniKdc(Service):
         self.replace_in_file(MiniKdc.LOCAL_KRB5CONF_FILE, '0.0.0.0', node.account.hostname)
 
     def core_jar_paths(self, node, lib_dir_name):
-        lib_dir = "%s/core/build/%s" % (self.path.home(node_or_version=node), lib_dir_name)
+        lib_dir = "%s/core/build/%s" % (self.path.home(get_version(node)), lib_dir_name)
         jars = node.account.ssh_capture("ls " + lib_dir)
         return [os.path.join(lib_dir, jar.strip()) for jar in jars]
 

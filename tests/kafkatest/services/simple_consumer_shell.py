@@ -16,6 +16,7 @@
 from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.directory_layout.kafka_path import create_path_resolver
+from kafkatest.version.version import get_version
 
 
 class SimpleConsumerShell(BackgroundThreadService):
@@ -33,6 +34,7 @@ class SimpleConsumerShell(BackgroundThreadService):
         self.topic = topic
         self.partition = partition
         self.output = ""
+        self.path = create_path_resolver(self.context)
         self.stop_timeout_sec = stop_timeout_sec
 
     def _worker(self, idx, node):
@@ -45,7 +47,7 @@ class SimpleConsumerShell(BackgroundThreadService):
         self.logger.debug(self.output)
 
     def start_cmd(self, node):
-        cmd = self.path.script("kafka-run-class.sh", node_or_version=node)
+        cmd = self.path.script("kafka-run-class.sh", get_version(node))
         cmd += " kafka.tools.SimpleConsumerShell"
         cmd += " --topic %s --broker-list %s --partition %s --no-wait-at-logend" % (self.topic, self.kafka.bootstrap_servers(), self.partition)
 

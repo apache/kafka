@@ -23,7 +23,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.directory_layout.kafka_path import create_path_resolver
 from kafkatest.utils import is_int, is_int_with_prefix
-from kafkatest.version.version import TRUNK, LATEST_0_8_2
+from kafkatest.version.version import TRUNK, LATEST_0_8_2, get_version
 
 
 class VerifiableProducer(BackgroundThreadService):
@@ -149,7 +149,7 @@ class VerifiableProducer(BackgroundThreadService):
                         self.clean_shutdown_nodes.add(node)
 
     def start_cmd(self, node, idx):
-        kafka_trunk_home = self.path.home(node_or_version=TRUNK)
+        kafka_trunk_home = self.path.home(TRUNK)
         cmd = ""
         if node.version <= LATEST_0_8_2:
             # 0.8.2.X releases do not have VerifiableProducer.java, so cheat and add
@@ -161,7 +161,7 @@ class VerifiableProducer(BackgroundThreadService):
         cmd += "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
-        cmd += " " + self.path.script("kafka-run-class.sh", node_or_version=node)
+        cmd += " " + self.path.script("kafka-run-class.sh", get_version(node))
         cmd += " org.apache.kafka.tools.VerifiableProducer"
         cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol))
         if self.max_messages > 0:

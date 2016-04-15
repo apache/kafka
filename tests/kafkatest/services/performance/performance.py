@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from ducktape.services.background_thread import BackgroundThreadService
+from kafkatest.directory_layout.kafka_path import create_path_resolver
 
 
 class PerformanceService(BackgroundThreadService):
@@ -23,6 +24,7 @@ class PerformanceService(BackgroundThreadService):
         self.results = [None] * self.num_nodes
         self.stats = [[] for x in range(self.num_nodes)]
         self.stop_timeout_sec = stop_timeout_sec
+        self.path = create_path_resolver(self.context)
 
     def stop_node(self, node):
         node.account.kill_process("java", clean_shutdown=True, allow_fail=True)

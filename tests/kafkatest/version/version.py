@@ -54,6 +54,15 @@ class KafkaVersion(LooseVersion):
             return LooseVersion.__str__(self)
 
 
+def get_version(node=None):
+    """Return the version attached to the given node.
+    Default to trunk if node or node.version is undefined (aka None)
+    """
+    if node is not None and hasattr(node, "version") and node.version is not None:
+        return node.version
+    else:
+        return TRUNK
+
 TRUNK = KafkaVersion("trunk")
 
 # 0.8.2.X versions

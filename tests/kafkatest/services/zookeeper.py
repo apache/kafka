@@ -21,7 +21,7 @@ import time
 from ducktape.services.service import Service
 
 from kafkatest.directory_layout.kafka_path import create_path_resolver
-from kafkatest.version.version import TRUNK
+from kafkatest.version.version import TRUNK, get_version
 from kafkatest.services.security.security_config import SecurityConfig
 
 
@@ -75,7 +75,7 @@ class ZookeeperService(Service):
         node.account.create_file("/mnt/zookeeper.properties", config_file)
 
         start_cmd = "export KAFKA_OPTS=\"%s\";" % self.kafka_opts 
-        start_cmd += "%s " % self.path.script("zookeeper-server-start.sh", node_or_version=node)
+        start_cmd += "%s " % self.path.script("zookeeper-server-start.sh", get_version(node))
         start_cmd += "/mnt/zookeeper.properties 1>> %(path)s 2>> %(path)s &" % self.logs["zk_log"]
         node.account.ssh(start_cmd)
 
@@ -114,14 +114,14 @@ class ZookeeperService(Service):
     #
     def zookeeper_migration(self, node, zk_acl):
         la_migra_cmd = "%s --zookeeper.acl=%s --zookeeper.connect=%s" % \
-                       (self.path.script("zookeeper-security-migration.sh", node_or_version=node), zk_acl, self.connect_setting())
+                       (self.path.script("zookeeper-security-migration.sh", get_version(node)), zk_acl, self.connect_setting())
         node.account.ssh(la_migra_cmd)
 
     def query(self, path):
         """
         Queries zookeeper for data associated with 'path' and returns all fields in the schema
         """
-        kafka_run_class = self.path.script("kafka-run-class.sh", node_or_version=TRUNK)
+        kafka_run_class = self.path.script("kafka-run-class.sh", TRUNK)
         cmd = "%s kafka.tools.ZooKeeperMainWrapper -server %s get %s" % \
               (kafka_run_class, self.connect_setting(), path)
         self.logger.debug(cmd)

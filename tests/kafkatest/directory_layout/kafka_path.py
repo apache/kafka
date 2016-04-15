@@ -13,14 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .path_resolver import PathResolver
+from kafkatest.directory_layout.path_resolver import PathResolver
 from kafkatest.version.version import TRUNK
 
 import importlib
 import os
-
-from distutils.version import LooseVersion
-
 
 
 # TODO - describe how overriding can work
@@ -33,6 +30,33 @@ DEFAULT_SCRATCH_ROOT = "/mnt"
 DEFAULT_KAFKA_INSTALL_ROOT = "/opt"
 KAFKA_PATH_RESOLVER_KEY = "kafka-path-resolver"
 DEFAULT_KAFKA_PATH_RESOLVER = "kafkatest.directory_layout.kafka_path.KafkaSystemTestPathResolver"
+
+
+JARS = {
+    "trunk": {
+        "core": ["core/build/*/*.jar"],
+        "tools": ["tools/build/libs/kafka-tools*.jar", "tools/build/dependant-libs*/*.jar"]
+    }
+}
+
+
+"""
+core jars
+
+def core_jar_paths(self, node, lib_dir_name):
+    lib_dir = "%s/core/build/%s" % home, lib_dir_name)
+    jars = node.account.ssh_capture("ls " + lib_dir)
+    return [os.path.join(lib_dir, jar.strip()) for jar in jars]
+"""
+
+
+"""
+tools jars - used in verifiable producer
+
+cmd += "for file in %s/tools/build/libs/kafka-tools*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % kafka_trunk_home
+cmd += "for file in %s/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % kafka_trunk_home
+cmd += "export CLASSPATH; "
+"""
 
 
 def create_path_resolver(context, project="kafka"):
@@ -67,51 +91,22 @@ class KafkaSystemTestPathResolver(PathResolver):
         ...
     """
     def __init__(self, context, project="kafka"):
-        super(KafkaSystemTestPathResolver, self).__init__(context, project)
-        assert project is not None
-        self.project = project
+        super(KafkaSystemTestPathResolver, self).__init__(context, project=project)
 
-    def _version(self, project=None, node_or_version=None):
-        """Get the version attached to the given node, if present.
-        Special-case for kafka - default version here is TRUNK
-        """
-
-        if isinstance(node_or_version, LooseVersion):
-            return node_or_version
-
-        # Assume it's a node
-        node = node_or_version
-        if node is not None and hasattr(node, "version"):
-            return node.version
-        elif project == "kafka":
-            # default version for kafka is "trunk"
-            return TRUNK
-        else:
-            return None
-
-    def home(self, project=None, node_or_version=None):
-        project = project or self.project
-        version = self._version(project, node_or_version)
-
-        home_dir = project
+    def home(self, version=TRUNK):
+        home_dir = self.project
         if version is not None:
             home_dir += "-%s" % str(version)
 
         return os.path.join(DEFAULT_KAFKA_INSTALL_ROOT, home_dir)
 
-    def bin(self, project=None, node_or_version=None):
-        project = project or self.project
-        version = self._version(project, node_or_version)
+    def bin(self, version=TRUNK):
+        return os.path.join(self.home(version), "bin")
 
-        return os.path.join(self.home(project, version), "bin")
+    def script(self, script_name, version=TRUNK):
+        return os.path.join(self.bin(version), script_name)
 
-    def script(self, script_name, project=None, node_or_version=None):
-        project = project or self.project
-        version = self._version(project, node_or_version)
-
-        return os.path.join(self.bin(project, version), script_name)
-
-    def jar(self, project=None, node_or_version=None):
+    def jar(self, jar_name, version=TRUNK):
         raise NotImplementedError("KafkaSystemTestPathResolver currently does not support the jar method")
 
     def scratch_space(self, service_instance):

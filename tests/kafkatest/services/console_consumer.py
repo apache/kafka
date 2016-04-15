@@ -21,6 +21,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import create_path_resolver
+from kafkatest.version.version import get_version
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.version.version import TRUNK, LATEST_0_8_2, LATEST_0_9, V_0_10_0_0
 
@@ -165,7 +166,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         args['config_file'] = ConsoleConsumer.CONFIG_FILE
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['jmx_port'] = self.jmx_port
-        args['console_consumer'] = self.path.script("kafka-console-consumer.sh", node_or_version=node)
+        args['console_consumer'] = self.path.script("kafka-console-consumer.sh", get_version(node))
         args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
         args['kafka_opts'] = self.security_config.kafka_opts
 

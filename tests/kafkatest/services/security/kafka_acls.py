@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from kafkatest.directory_layout.kafka_path import create_path_resolver
+from kafkatest.version.version import get_version
 
 class ACLs():
 
@@ -36,7 +37,7 @@ class ACLs():
         self.acls_command(node, ACLs.consume_acl(setting, topic, group, client_principal))
 
     def acls_command(self, node, properties):
-        cmd = "%s %s" % (self.path.script("kafka-acls.sh", node_or_version=node), properties)
+        cmd = "%s %s" % (self.path.script("kafka-acls.sh", get_version(node)), properties)
         node.account.ssh(cmd)
 
     @staticmethod

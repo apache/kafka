@@ -15,20 +15,20 @@
 
 
 class PathResolver(object):
-    def __init__(self, context, project=None):
+    def __init__(self, context, project):
         self.context = context
         self.project = project
 
-    def script(self, script_name, project=None, node_or_version=None):
+    def script(self, script_name, version=None):
         raise NotImplementedError("Subclasses must implement")
 
-    def bin(self, project=None, node_or_version=None):
+    def bin(self, version=None):
         raise NotImplementedError("Subclasses must implement")
 
-    def home(self, project=None, node_or_version=None):
+    def home(self, version=None):
         raise NotImplementedError("Subclasses must implement")
 
-    def jar(self, project=None, node_or_version=None):
+    def jar(self, jar_name, version=None):
         raise NotImplementedError("Subclasses must implement")
 
     def scratch_space(self, service_instance):
