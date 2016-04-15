@@ -47,7 +47,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
-public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
+public class RocksDBStore<K, V> extends KeyValueStore<K, V> {
 
     private static final int TTL_NOT_USED = -1;
 
@@ -250,6 +250,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public void put(K key, V value) {
         if (cache != null) {
+            // first check if the key is an array
+            checkKeyIsArray(key);
+
             cacheDirtyKeys.add(key);
             cache.put(key, new RocksDBCacheEntry(value, true));
         } else {
@@ -348,14 +351,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             for (K key : cacheDirtyKeys) {
                 RocksDBCacheEntry entry = cache.get(key);
 
-                entry.isDirty = false;
+                if (entry != null) {
+                    entry.isDirty = false;
 
-                byte[] rawKey = serdes.rawKey(key);
+                    byte[] rawKey = serdes.rawKey(key);
 
-                if (entry.value != null) {
-                    putBatch.add(new KeyValue<>(rawKey, serdes.rawValue(entry.value)));
-                } else {
-                    deleteBatch.add(rawKey);
+                    if (entry.value != null) {
+                        putBatch.add(new KeyValue<>(rawKey, serdes.rawValue(entry.value)));
+                    } else {
+                        deleteBatch.add(rawKey);
+                    }
                 }
             }
 

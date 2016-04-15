@@ -66,7 +66,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         return new MeteredKeyValueStore<>(new MemoryStore<K, V>(name, keySerde, valueSerde).enableLogging(), "in-memory-state", time);
     }
 
-    private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
+    private static class MemoryStore<K, V> extends KeyValueStore<K, V> {
         private final String name;
         private final Serde<K> keySerde;
         private final Serde<V> valueSerde;
@@ -76,6 +76,9 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
             this.name = name;
             this.keySerde = keySerde;
             this.valueSerde = valueSerde;
+
+            // TODO: when we have serde associated with class types, we can
+            // improve this situation by passing the comparator here.
             this.map = new TreeMap<>();
         }
 
@@ -106,6 +109,8 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
         @Override
         public void put(K key, V value) {
+            checkKeyIsArray(key);
+
             this.map.put(key, value);
         }
 

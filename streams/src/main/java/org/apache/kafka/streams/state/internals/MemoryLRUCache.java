@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
+public class MemoryLRUCache<K, V> extends KeyValueStore<K, V> {
 
     public interface EldestEntryRemovalListener<K, V> {
         void apply(K key, V value);
@@ -98,6 +98,8 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void put(K key, V value) {
+        checkKeyIsArray(key);
+
         this.map.put(key, value);
         this.keys.add(key);
     }

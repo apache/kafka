@@ -36,7 +36,7 @@ import java.util.List;
  * @param <K>
  * @param <V>
  */
-public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
+public class MeteredKeyValueStore<K, V> extends KeyValueStore<K, V> {
 
     protected final KeyValueStore<K, V> inner;
     protected final String metricScope;

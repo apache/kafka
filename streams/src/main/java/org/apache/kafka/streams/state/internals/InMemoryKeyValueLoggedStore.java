@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
-public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
+public class InMemoryKeyValueLoggedStore<K, V> extends KeyValueStore<K, V> {
 
     private final KeyValueStore<K, V> inner;
     private final Serde<K> keySerde;
