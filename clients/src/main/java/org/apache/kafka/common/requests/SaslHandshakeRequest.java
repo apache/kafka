@@ -35,9 +35,8 @@ import org.apache.kafka.common.protocol.types.Struct;
  * For interoperability with Kafka 0.9.0.x, mechanism flow may be omitted when using GSSAPI. Hence
  * this request should not conflict with the first GSSAPI client packet. For GSSAPI, the first context
  * establishment packet starts with byte 0x60 (APPLICATION-0 tag) followed by a variable-length encoded size.
- * This mechanism request starts with a two-byte version currently set to zero, followed by a mechanism name,
- * making it easy to distinguish from a GSSAPI packet. To avoid conflicts and simplify debugging, version numbers
- * with 0x60 in the first byte should be avoided.
+ * This handshake request starts with a request header two-byte API key set to 17, followed by a mechanism name,
+ * making it easy to distinguish from a GSSAPI packet.
  */
 public class SaslHandshakeRequest extends AbstractRequest {
 
