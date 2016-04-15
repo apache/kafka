@@ -86,6 +86,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     private static final String REDUCE_NAME = "KSTREAM-REDUCE-";
 
+    private static final String KEY_SELECT_NAME = "KSTREAM-KEY-SELECT-";
+
     public static final String SINK_NAME = "KSTREAM-SINK-";
 
     public static final String SOURCE_NAME = "KSTREAM-SOURCE-";
@@ -117,6 +119,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamFilter<>(predicate, true), this.name);
 
+        return new KStreamImpl<>(topology, name, sourceNodes);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <K1> KStream<K1, V> selectKey(KStreamKeySelector<V, K1> selector) {
+        String name = topology.newName(KEY_SELECT_NAME);
+        topology.addProcessor(name, new KStreamKeySelect(selector), this.name);
         return new KStreamImpl<>(topology, name, sourceNodes);
     }
 

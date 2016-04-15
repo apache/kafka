@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.internals.KTableKeyMapper;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 /**
@@ -201,6 +202,15 @@ public interface KTable<K, V> {
      * Convert this stream to a new instance of {@link KStream}.
      */
     KStream<K, V> toStream();
+
+
+    /**
+     * Convert this stream to a new instance of {@link KStream} using the given {@link KTableKeyMapper} to map the
+     * key to a new type
+     * @param kTableKeyMapper the instance of {@link KTableKeyMapper} to change the key type.
+     * @param <K1>  the key type of the new stream
+     */
+    <K1> KStream<K1, V> toStream(KTableKeyMapper<K, K1> kTableKeyMapper);
 
     /**
      * Combine values of this stream with another {@link KTable} stream's elements of the same key using Inner Join.

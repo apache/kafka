@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.internals.KStreamKeySelector;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
@@ -45,6 +46,16 @@ public interface KStream<K, V> {
      * @param predicate     the instance of {@link Predicate}
      */
     KStream<K, V> filterNot(Predicate<K, V> predicate);
+
+
+    /**
+     * Create a key type from the values.  This method is designed for use before performing
+     * aggregation-by-key operations on an original stream containing null keys .
+     *
+     * @param selector  the instance of {@link KStreamKeySelector}
+     * @param <K1>   the new key type on the stream
+     */
+    <K1> KStream<K1, V> selectKey(KStreamKeySelector<V, K1> selector);
 
     /**
      * Create a new instance of {@link KStream} by transforming each element in this stream into a different element in the new stream.
