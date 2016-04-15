@@ -25,7 +25,7 @@ Kafka Connect features include:
     <li><b>Distributed and standalone modes</b> - scale up to a large, centrally managed service supporting an entire organization or scale down to development, testing, and small production deployments</li>
     <li><b>REST interface</b> - submit and manage connectors to your Kafka Connect cluster via an easy to use REST API</li>
     <li><b>Automatic offset management</b> - with just a little information from connectors, Kafka Connect can manage the offset commit process automatically so connector developers do not need to worry about this error prone part of connector development</li>
-    <li><b>Distributed and scalable by default</b> - Kafka Connect builds on the existing </li>
+    <li><b>Distributed and scalable by default</b> - Kafka Connect builds on the existing group management protocol. More workers can be added to scale up Kafka Connect cluster.</li>
     <li><b>Streaming/batch integration</b> - leveraging Kafka's existing capabilities, Kafka Connect is an ideal solution for bridging streaming and batch data systems</li>
 </ul>
 
@@ -257,7 +257,7 @@ public abstract void put(Collection&lt;SinkRecord&gt; records);
 public abstract void flush(Map&lt;TopicPartition, Long&gt; offsets);
 </pre>
 
-The <code>SinkTask</code> documentation contains full details, but this interface is nearly as simple as the the <code>SourceTask</code>. The <code>put()</code> method should contain most of the implementation, accepting sets of <code>SinkRecords</code>, performing any required translation, and storing them in the destination system. This method does not need to ensure the data has been fully written to the destination system before returning. In fact, in many cases internal buffering will be useful so an entire batch of records can be sent at once, reducing the overhead of inserting events into the downstream data store. The <code>SinkRecords</code> contain essentially the same information as <code>SourceRecords</code>: Kafka topic, partition, offset and the event key and value.
+The <code>SinkTask</code> documentation contains full details, but this interface is nearly as simple as the <code>SourceTask</code>. The <code>put()</code> method should contain most of the implementation, accepting sets of <code>SinkRecords</code>, performing any required translation, and storing them in the destination system. This method does not need to ensure the data has been fully written to the destination system before returning. In fact, in many cases internal buffering will be useful so an entire batch of records can be sent at once, reducing the overhead of inserting events into the downstream data store. The <code>SinkRecords</code> contain essentially the same information as <code>SourceRecords</code>: Kafka topic, partition, offset and the event key and value.
 
 The <code>flush()</code> method is used during the offset commit process, which allows tasks to recover from failures and resume from a safe point such that no events will be missed. The method should push any outstanding data to the destination system and then block until the write has been acknowledged. The <code>offsets</code> parameter can often be ignored, but is useful in some cases where implementations want to store offset information in the destination store to provide exactly-once
 delivery. For example, an HDFS connector could do this and use atomic move operations to make sure the <code>flush()</code> operation atomically commits the data and offsets to a final location in HDFS.
@@ -309,15 +309,15 @@ The API documentation provides a complete reference, but here is a simple exampl
 
 <pre>
 Schema schema = SchemaBuilder.struct().name(NAME)
-                    .field("name", Schema.STRING_SCHEMA)
-                    .field("age", Schema.INT_SCHEMA)
-                    .field("admin", new SchemaBuilder.boolean().defaultValue(false).build())
-                    .build();
+    .field("name", Schema.STRING_SCHEMA)
+    .field("age", Schema.INT_SCHEMA)
+    .field("admin", new SchemaBuilder.boolean().defaultValue(false).build())
+    .build();
 
 Struct struct = new Struct(schema)
-                           .put("name", "Barbara Liskov")
-                           .put("age", 75)
-                           .build();
+    .put("name", "Barbara Liskov")
+    .put("age", 75)
+    .build();
 </pre>
 
 If you are implementing a source connector, you'll need to decide when and how to create schemas. Where possible, you should avoid recomputing them as much as possible. For example, if your connector is guaranteed to have a fixed schema, create it statically and reuse a single instance.
