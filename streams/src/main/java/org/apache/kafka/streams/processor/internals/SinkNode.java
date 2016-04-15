@@ -40,6 +40,9 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         this.partitioner = partitioner;
     }
 
+    /**
+     * @throws UnsupportedOperationException if this method adds a child to a sink node
+     */
     @Override
     public void addChild(ProcessorNode<?, ?> child) {
         throw new UnsupportedOperationException("sink node does not allow addChild");

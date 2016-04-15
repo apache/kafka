@@ -14,8 +14,9 @@
 # limitations under the License.
 
 from kafkatest.services.performance import PerformanceService
-from kafkatest.services.kafka.directory import kafka_dir
 from kafkatest.services.security.security_config import SecurityConfig
+from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.services.kafka.version import TRUNK, V_0_9_0_0
 
 import os
 
@@ -69,7 +70,7 @@ class ConsumerPerformanceService(PerformanceService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, messages, new_consumer=False, settings={}):
+    def __init__(self, context, num_nodes, kafka, topic, messages, version=TRUNK, new_consumer=False, settings={}):
         super(ConsumerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
@@ -78,6 +79,13 @@ class ConsumerPerformanceService(PerformanceService):
         self.new_consumer = new_consumer
         self.settings = settings
 
+        assert version >= V_0_9_0_0 or (not new_consumer), \
+            "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(version)
+
+        security_protocol = self.security_config.security_protocol
+        assert version >= V_0_9_0_0 or security_protocol == SecurityConfig.PLAINTEXT, \
+            "Security protocol %s is only supported if version >= 0.9.0.0, version %s" % (self.security_config, str(version))
+
         # These less-frequently used settings can be updated manually after instantiation
         self.fetch_size = None
         self.socket_buffer_size = None
@@ -85,6 +93,9 @@ class ConsumerPerformanceService(PerformanceService):
         self.num_fetch_threads = None
         self.group = None
         self.from_latest = None
+
+        for node in self.nodes:
+            node.version = version
 
     @property
     def args(self):
@@ -127,7 +138,10 @@ class ConsumerPerformanceService(PerformanceService):
         cmd += " /opt/%s/bin/kafka-consumer-perf-test.sh" % kafka_dir(node)
         for key, value in self.args.items():
             cmd += " --%s %s" % (key, value)
-        cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
+
+        if node.version >= V_0_9_0_0:
+            # This is only used for security settings
+            cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
 
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))
@@ -135,6 +149,22 @@ class ConsumerPerformanceService(PerformanceService):
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s" % {'stdout': ConsumerPerformanceService.STDOUT_CAPTURE,
                                                         'stderr': ConsumerPerformanceService.STDERR_CAPTURE}
         return cmd
+
+    def parse_results(self, line, version):
+        parts = line.split(',')
+        if version >= V_0_9_0_0:
+            result = {
+                'total_mb': float(parts[2]),
+                'mbps': float(parts[3]),
+                'records_per_sec': float(parts[5]),
+            }
+        else:
+            result = {
+                'total_mb': float(parts[3]),
+                'mbps': float(parts[4]),
+                'records_per_sec': float(parts[6]),
+            }
+        return result
 
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % ConsumerPerformanceService.PERSISTENT_ROOT, allow_fail=False)
@@ -149,11 +179,6 @@ class ConsumerPerformanceService(PerformanceService):
         last = None
         for line in node.account.ssh_capture(cmd):
             last = line
-        # Parse and save the last line's information
-        parts = last.split(',')
 
-        self.results[idx-1] = {
-            'total_mb': float(parts[2]),
-            'mbps': float(parts[3]),
-            'records_per_sec': float(parts[5]),
-        }
+        # Parse and save the last line's information
+        self.results[idx-1] = self.parse_results(last, node.version)

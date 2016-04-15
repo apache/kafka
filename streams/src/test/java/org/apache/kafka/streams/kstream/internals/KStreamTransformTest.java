@@ -59,7 +59,8 @@ public class KStreamTransformTest {
                         }
 
                         @Override
-                        public void punctuate(long timestamp) {
+                        public KeyValue<Integer, Integer> punctuate(long timestamp) {
+                            return KeyValue.pair(-1, (int) timestamp);
                         }
 
                         @Override
@@ -80,9 +81,12 @@ public class KStreamTransformTest {
             driver.process(topicName, expectedKeys[i], expectedKeys[i] * 10);
         }
 
-        assertEquals(4, processor.processed.size());
+        driver.punctuate(2);
+        driver.punctuate(3);
 
-        String[] expected = {"2:10", "20:110", "200:1110", "2000:11110"};
+        assertEquals(6, processor.processed.size());
+
+        String[] expected = {"2:10", "20:110", "200:1110", "2000:11110", "-1:2", "-1:3"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));

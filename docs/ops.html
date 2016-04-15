@@ -70,7 +70,7 @@ Instructions for changing the replication factor of a topic can be found <a href
 
 <h4><a id="basic_ops_restarting" href="#basic_ops_restarting">Graceful shutdown</a></h4>
 
-The Kafka cluster will automatically detect any broker shutdown or failure and elect new leaders for the partitions on that machine. This will occur whether a server fails or it is brought down intentionally for maintenance or configuration changes. For the latter cases Kafka supports a more graceful mechanism for stoping a server than just killing it.
+The Kafka cluster will automatically detect any broker shutdown or failure and elect new leaders for the partitions on that machine. This will occur whether a server fails or it is brought down intentionally for maintenance or configuration changes. For the latter cases Kafka supports a more graceful mechanism for stopping a server than just killing it.
 
 When a server is stopped gracefully it has two optimizations it will take advantage of:
 <ol>
@@ -138,7 +138,7 @@ Note, however, after 0.9.0, the kafka.tools.ConsumerOffsetChecker tool is deprec
 
 <h4><a id="basic_ops_consumer_group" href="#basic_ops_consumer_group">Managing Consumer Groups</a></h4>
 
-With the ConumserGroupCommand tool, we can list, delete, or describe consumer groups. For example, to list all consumer groups across all topics:
+With the ConsumerGroupCommand tool, we can list, delete, or describe consumer groups. For example, to list all consumer groups across all topics:
 
 <pre>
  &gt; bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --list
@@ -156,7 +156,7 @@ test-consumer-group            test-foo                       0          1      
 </pre>
 
 
-When youre using the <a href="https://cwiki.apache.org/confluence/display/KAFKA/Consumer+Client+Re-Design">new consumer-groups API</a> where the broker handles coordination of partition handling and rebalance, you can manage the groups with the "--new-consumer" flags:
+When you're using the <a href="https://cwiki.apache.org/confluence/display/KAFKA/Consumer+Client+Re-Design">new consumer-groups API</a> where the broker handles coordination of partition handling and rebalance, you can manage the groups with the "--new-consumer" flags:
 
 <pre>
  &gt; bin/kafka-consumer-groups.sh --new-consumer --bootstrap-server broker1:9092 --list

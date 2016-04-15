@@ -87,6 +87,21 @@ public class KStreamTestDriver {
         }
     }
 
+    public void punctuate(long timestamp) {
+        setTime(timestamp);
+
+        for (ProcessorNode processor : topology.processors()) {
+            if (processor.processor() != null) {
+                currNode = processor;
+                try {
+                    processor.processor().punctuate(timestamp);
+                } finally {
+                    currNode = null;
+                }
+            }
+        }
+    }
+
     public void setTime(long timestamp) {
         context.setTime(timestamp);
     }

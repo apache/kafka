@@ -32,7 +32,7 @@ public interface Transformer<K, V, R> {
      * Initialize this transformer with the given context. The framework ensures this is called once per processor when the topology
      * that contains it is initialized.
      * <p>
-     * If this tranformer is to be {@link #punctuate(long) called periodically} by the framework, then this method should
+     * If this transformer is to be {@link #punctuate(long) called periodically} by the framework, then this method should
      * {@link ProcessorContext#schedule(long) schedule itself} with the provided context.
      *
      * @param context the context; may not be null
@@ -44,17 +44,18 @@ public interface Transformer<K, V, R> {
      *
      * @param key the key for the message
      * @param value the value for the message
-     * @return new value
+     * @return new value; if null no key-value pair will be forwarded to down stream
      */
     R transform(K key, V value);
 
     /**
-     * Perform any periodic operations, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
+     * Perform any periodic operations and possibly generate a key, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
      * during {@link #init(ProcessorContext) initialization}.
      *
      * @param timestamp the stream time when this method is being called
+     * @return new value; if null it will not be forwarded to down stream
      */
-    void punctuate(long timestamp);
+    R punctuate(long timestamp);
 
     /**
      * Close this processor and clean up any resources.

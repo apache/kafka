@@ -711,13 +711,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         Integer partition = record.partition();
         if (partition != null) {
             List<PartitionInfo> partitions = cluster.partitionsForTopic(record.topic());
-            int numPartitions = partitions.size();
+            int lastPartition = partitions.size() - 1;
             // they have given us a partition, use it
-            if (partition < 0 || partition >= numPartitions)
-                throw new IllegalArgumentException("Invalid partition given with record: " + partition
-                                                   + " is not in the range [0..."
-                                                   + numPartitions
-                                                   + "].");
+            if (partition < 0 || partition > lastPartition) {
+                throw new IllegalArgumentException(String.format("Invalid partition given with record: %d is not in the range [0...%d].", partition, lastPartition));
+            }
             return partition;
         }
         return this.partitioner.partition(record.topic(), record.key(), serializedKey, record.value(), serializedValue,

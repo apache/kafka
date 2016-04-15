@@ -60,6 +60,9 @@ class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, 
             valueGetter.init(context);
         }
 
+        /**
+         * @throws StreamsException if key is null
+         */
         @Override
         public void process(K key, Change<V1> change) {
             // the keys should never be null

@@ -57,7 +57,8 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
 
         @Override
         public void process(K key, V value) {
-            processed.add(key + ":" + value);
+            processed.add((key == null ? "null" : key) + ":" +
+                    (value == null ? "null" : value));
         }
 
         @Override
