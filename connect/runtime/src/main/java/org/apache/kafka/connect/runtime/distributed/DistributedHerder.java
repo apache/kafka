@@ -739,22 +739,21 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
         }
         for (ConnectorTaskId taskId : assignment.tasks()) {
-            startTask(taskId);
+            try {
+                startTask(taskId);
+            } catch (ConfigException e) {
+                log.error("Couldn't instantiate task " + taskId + " because it has an invalid task " +
+                        "configuration. This task will not execute until reconfigured.", e);
+            }
         }
         log.info("Finished starting connectors and tasks");
     }
 
     private void startTask(ConnectorTaskId taskId) {
-        try {
-            log.info("Starting task {}", taskId);
-            Map<String, String> configs = configState.taskConfig(taskId);
-            TaskConfig taskConfig = new TaskConfig(configs);
-            worker.startTask(taskId, taskConfig, this);
-        } catch (ConfigException e) {
-            log.error("Couldn't instantiate task " + taskId + " because it has an invalid task " +
-                    "configuration. This task will not execute until reconfigured.", e);
-        }
-
+        log.info("Starting task {}", taskId);
+        Map<String, String> configs = configState.taskConfig(taskId);
+        TaskConfig taskConfig = new TaskConfig(configs);
+        worker.startTask(taskId, taskConfig, this);
     }
 
     // Helper for starting a connector with the given name, which will extract & parse the config, generate connector
