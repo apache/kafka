@@ -549,7 +549,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         addRequest(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
-                if (!configState.connectors().contains(connName)) {
+                // if config is up to date, we can check if this is a valid connector task. otherwise, we let the
+                // request either be handled locally or forwarded to its target
+                if (isConfigSynced() && !configState.connectors().contains(connName)) {
                     callback.onCompletion(new NotFoundException("Unknown connector: " + connName), null);
                     return null;
                 }
@@ -577,14 +579,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         addRequest(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
-                if (!configState.connectors().contains(id.connector())) {
-                    callback.onCompletion(new NotFoundException("Unknown connector: " + id.connector()), null);
-                    return null;
-                }
+                // if config is up to date, we can check if this is a valid connector task. otherwise, we let the
+                // request either be handled locally or forwarded to its target
+                if (isConfigSynced()) {
+                    if (!configState.connectors().contains(id.connector())) {
+                        callback.onCompletion(new NotFoundException("Unknown connector: " + id.connector()), null);
+                        return null;
+                    }
 
-                if (configState.taskConfig(id) == null) {
-                    callback.onCompletion(new NotFoundException("Unknown task: " + id), null);
-                    return null;
+                    if (configState.taskConfig(id) == null) {
+                        callback.onCompletion(new NotFoundException("Unknown task: " + id), null);
+                        return null;
+                    }
                 }
 
                 if (worker.ownsTask(id)) {
@@ -856,10 +862,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
+    private boolean isConfigSynced() {
+        return assignment != null && configState.offset() == assignment.offset();
+    }
+
     // Common handling for requests that get config data. Checks if we are in sync with the current config, which allows
     // us to answer requests directly. If we are not, handles invoking the callback with the appropriate error.
     private boolean checkConfigSynced(Callback<?> callback) {
-        if (assignment == null || configState.offset() != assignment.offset()) {
+        if (!isConfigSynced()) {
             if (!isLeader())
                 callback.onCompletion(new NotLeaderException("Cannot get config data because config is not in sync and this is not the leader", leaderUrl()), null);
             else

@@ -510,6 +510,13 @@ public class DistributedHerderTest {
 
     @Test
     public void testRestartUnknownTask() throws Exception {
+        // get the initial assignment
+        EasyMock.expect(member.memberId()).andStubReturn("member");
+        expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
         member.wakeup();
         PowerMock.expectLastCall();
         member.ensureActive();
@@ -520,7 +527,8 @@ public class DistributedHerderTest {
         PowerMock.replayAll();
 
         FutureCallback<Void> callback = new FutureCallback<>();
-        herder.restartTask(TASK0, callback);
+        herder.tick();
+        herder.restartTask(new ConnectorTaskId("blah", 0), callback);
         herder.tick();
 
         try {
