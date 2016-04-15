@@ -463,7 +463,7 @@ public class DistributedHerderTest {
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof NotAssignedException);
             NotAssignedException notAssignedException = (NotAssignedException) e.getCause();
-            assertEquals(ownerUrl, notAssignedException.ownerUrl());
+            assertEquals(ownerUrl, notAssignedException.forwardUrl());
         }
 
         PowerMock.verifyAll();
@@ -601,7 +601,7 @@ public class DistributedHerderTest {
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof NotAssignedException);
             NotAssignedException notAssignedException = (NotAssignedException) e.getCause();
-            assertEquals(ownerUrl, notAssignedException.ownerUrl());
+            assertEquals(ownerUrl, notAssignedException.forwardUrl());
         }
 
         PowerMock.verifyAll();

@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * <p/>
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,14 +16,32 @@
  **/
 package org.apache.kafka.connect.runtime.distributed;
 
-/**
- * Thrown when a request intended for the owner of a task or connector is received by a worker which doesn't
- * own it (typically the leader).
- */
-public class NotAssignedException extends RequestTargetException {
+import org.apache.kafka.connect.errors.ConnectException;
 
-    public NotAssignedException(String message, String ownerUrl) {
-        super(message, ownerUrl);
+/**
+ * Raised when a request has been received by a worker which cannot handle it,
+ * but can forward it to the right target
+ */
+public class RequestTargetException extends ConnectException {
+    private final String forwardUrl;
+
+    public RequestTargetException(String s, String forwardUrl) {
+        super(s);
+        this.forwardUrl = forwardUrl;
+    }
+
+    public RequestTargetException(String s, Throwable throwable, String forwardUrl) {
+        super(s, throwable);
+        this.forwardUrl = forwardUrl;
+    }
+
+    public RequestTargetException(Throwable throwable, String forwardUrl) {
+        super(throwable);
+        this.forwardUrl = forwardUrl;
+    }
+
+    public String forwardUrl() {
+        return forwardUrl;
     }
 
 }
