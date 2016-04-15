@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.ConfigKey;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -230,16 +231,18 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             configValueMap.put(configName, configValue);
             if (!configKeys.containsKey(configName)) {
                 configValue.addErrorMessage("Configuration is not defined: " + configName);
-                configInfoList.add(new ConfigInfo(null, convertConfigValue(configValue)));
+                configInfoList.add(new ConfigInfo(null, convertConfigValue(configValue, null)));
             }
         }
 
-        for (String configName: configKeys.keySet()) {
-            ConfigKeyInfo configKeyInfo = convertConfigKey(configKeys.get(configName));
+        for (Map.Entry<String, ConfigKey> entry : configKeys.entrySet()) {
+            String configName = entry.getKey();
+            ConfigKeyInfo configKeyInfo = convertConfigKey(entry.getValue());
+            Type type = entry.getValue().type;
             ConfigValueInfo configValueInfo = null;
             if (configValueMap.containsKey(configName)) {
                 ConfigValue configValue = configValueMap.get(configName);
-                configValueInfo = convertConfigValue(configValue);
+                configValueInfo = convertConfigValue(configValue, type);
                 errorCount += configValue.errorMessages().size();
             }
             configInfoList.add(new ConfigInfo(configKeyInfo, configValueInfo));
@@ -249,11 +252,16 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     private static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
         String name = configKey.name;
-        String type = configKey.type.name();
-        Object defaultValue = configKey.defaultValue;
+        Type type = configKey.type;
+        String typeName = configKey.type.name();
+
         boolean required = false;
-        if (defaultValue == ConfigDef.NO_DEFAULT_VALUE) {
+        String defaultValue;
+        if (configKey.defaultValue == ConfigDef.NO_DEFAULT_VALUE) {
+            defaultValue = (String) configKey.defaultValue;
             required = true;
+        } else {
+            defaultValue = ConfigDef.convertToString(configKey.defaultValue, type);
         }
         String importance = configKey.importance.name();
         String documentation = configKey.documentation;
@@ -262,11 +270,23 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         String width = configKey.width.name();
         String displayName = configKey.displayName;
         List<String> dependents = configKey.dependents;
-        return new ConfigKeyInfo(name, type, required, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents);
+        return new ConfigKeyInfo(name, typeName, required, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents);
     }
 
-    private static ConfigValueInfo convertConfigValue(ConfigValue configValue) {
-        return new ConfigValueInfo(configValue.name(), configValue.value(), configValue.recommendedValues(), configValue.errorMessages(), configValue.visible());
+    private static ConfigValueInfo convertConfigValue(ConfigValue configValue, Type type) {
+        String value = ConfigDef.convertToString(configValue.value(), type);
+        List<String> recommendedValues = new LinkedList<>();
+
+        if (type == Type.LIST) {
+            for (Object object: configValue.recommendedValues()) {
+                recommendedValues.add(ConfigDef.convertToString(object, Type.STRING));
+            }
+        } else {
+            for (Object object : configValue.recommendedValues()) {
+                recommendedValues.add(ConfigDef.convertToString(object, type));
+            }
+        }
+        return new ConfigValueInfo(configValue.name(), value, recommendedValues, configValue.errorMessages(), configValue.visible());
     }
 
     private Connector getConnector(String connType) {

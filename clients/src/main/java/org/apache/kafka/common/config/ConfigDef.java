@@ -538,19 +538,18 @@ public class ConfigDef {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void validate(String name, Map<String, Object> parsed, Map<String, ConfigValue> configs) {
         if (!configKeys.containsKey(name)) {
             return;
         }
         ConfigKey key = configKeys.get(name);
         ConfigValue config = configs.get(name);
-        Object value = parsed.get(name);
         List<Object> recommendedValues;
         if (key.recommender != null) {
             try {
                 recommendedValues = key.recommender.validValues(name, parsed);
                 List<Object> originalRecommendedValues = config.recommendedValues();
-
                 if (!originalRecommendedValues.isEmpty()) {
                     Set<Object> originalRecommendedValueSet = new HashSet<>(originalRecommendedValues);
                     Iterator<Object> it = recommendedValues.iterator();
@@ -562,9 +561,6 @@ public class ConfigDef {
                     }
                 }
                 config.recommendedValues(recommendedValues);
-                if (value != null && !recommendedValues.isEmpty() && !recommendedValues.contains(value)) {
-                    config.addErrorMessage("Invalid value for configuration " + key.name);
-                }
                 config.visible(key.recommender.visible(name, parsed));
             } catch (ConfigException e) {
                 config.addErrorMessage(e.getMessage());
@@ -673,6 +669,35 @@ public class ConfigDef {
             throw new ConfigException(name, value, "Not a number of type " + type);
         } catch (ClassNotFoundException e) {
             throw new ConfigException(name, value, "Class " + value + " could not be found.");
+        }
+    }
+
+    public static String convertToString(Object parsedValue, Type type) {
+        if (parsedValue == null) {
+            return null;
+        }
+
+        if (type == null) {
+            return parsedValue.toString();
+        }
+
+        switch (type) {
+            case BOOLEAN:
+            case SHORT:
+            case INT:
+            case LONG:
+            case DOUBLE:
+            case STRING:
+            case PASSWORD:
+                return parsedValue.toString();
+            case LIST:
+                List<?> valueList = (List<?>) parsedValue;
+                return Utils.join(valueList, ",");
+            case CLASS:
+                Class<?> clazz = (Class<?>) parsedValue;
+                return clazz.getCanonicalName();
+            default:
+                throw new IllegalStateException("Unknown type.");
         }
     }
 
