@@ -803,7 +803,7 @@ class ZkUtils(val zkClient: ZkClient,
         createParentPath(BrokerSequenceIdPath, acls)
         try {
           zkClient.createPersistent(BrokerSequenceIdPath, "", acls)
-          0
+          1
         } catch {
           case e: ZkNodeExistsException =>
             val stat = zkClient.writeDataReturnStat(BrokerSequenceIdPath, "", -1)
