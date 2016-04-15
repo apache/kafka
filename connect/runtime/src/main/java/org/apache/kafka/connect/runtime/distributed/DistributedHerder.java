@@ -846,7 +846,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         @Override
                         public void run() {
                             try {
-                                String reconfigUrl = RestServer.urlBuild(leaderUrl(), "/connectors/" + connName + "/tasks");
+                                String reconfigUrl = RestServer.urlJoin(leaderUrl(), "/connectors/" + connName + "/tasks");
                                 RestServer.httpRequest(reconfigUrl, "POST", taskProps, null);
                                 cb.onCompletion(null, null);
                             } catch (ConnectException e) {
