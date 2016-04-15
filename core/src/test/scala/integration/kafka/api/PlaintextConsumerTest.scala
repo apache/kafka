@@ -35,6 +35,7 @@ import org.junit.Test
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
+import java.util.Locale
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -606,7 +607,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     for (i <- 0 until numRecords) {
       val record = records.get(i)
       assertEquals(s"key $i", new String(record.key()))
-      assertEquals(s"value $i$appendStr".toUpperCase, new String(record.value()))
+      assertEquals(s"value $i$appendStr".toUpperCase(Locale.getDefault), new String(record.value()))
     }
 
     // commit sync and verify onCommit is called
