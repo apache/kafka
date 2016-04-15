@@ -235,9 +235,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             }
         }
 
-        for (String configName: configKeys.keySet()) {
-            ConfigKeyInfo configKeyInfo = convertConfigKey(configKeys.get(configName));
-            Type type = configKeys.get(configName).type;
+        for (Map.Entry<String, ConfigKey> entry : configKeys.entrySet()) {
+            String configName = entry.getKey();
+            ConfigKeyInfo configKeyInfo = convertConfigKey(entry.getValue());
+            Type type = entry.getValue().type;
             ConfigValueInfo configValueInfo = null;
             if (configValueMap.containsKey(configName)) {
                 ConfigValue configValue = configValueMap.get(configName);

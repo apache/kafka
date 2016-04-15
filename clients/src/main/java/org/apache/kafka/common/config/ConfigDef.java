@@ -545,7 +545,6 @@ public class ConfigDef {
         }
         ConfigKey key = configKeys.get(name);
         ConfigValue config = configs.get(name);
-        Object value = parsed.get(name);
         List<Object> recommendedValues;
         if (key.recommender != null) {
             try {
@@ -562,19 +561,6 @@ public class ConfigDef {
                     }
                 }
                 config.recommendedValues(recommendedValues);
-                if (value != null && !recommendedValues.isEmpty()) {
-                    // Special handling of LIST type here, we need to make sure
-                    // every value in the list is valid.
-                    if (value instanceof List<?>) {
-                        List<Object> list = (List<Object>) value;
-                        for (Object entry : list) {
-                            checkWithRecommendedValue(entry, recommendedValues, key, config);
-                        }
-                    } else {
-                        checkWithRecommendedValue(value, recommendedValues, key, config);
-                    }
-
-                }
                 config.visible(key.recommender.visible(name, parsed));
             } catch (ConfigException e) {
                 config.addErrorMessage(e.getMessage());
@@ -584,12 +570,6 @@ public class ConfigDef {
         configs.put(name, config);
         for (String dependent: key.dependents) {
             validate(dependent, parsed, configs);
-        }
-    }
-
-    private void checkWithRecommendedValue(Object value, List<Object> recommendedValues, ConfigKey key, ConfigValue config) {
-        if (value != null && !recommendedValues.isEmpty() && !recommendedValues.contains(value)) {
-            config.addErrorMessage("Invalid value " + value.toString() + " for configuration " + key.name);
         }
     }
 
