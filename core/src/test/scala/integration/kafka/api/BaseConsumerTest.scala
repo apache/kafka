@@ -13,7 +13,6 @@
 package kafka.api
 
 import java.util
-import kafka.coordinator.GroupCoordinator
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
@@ -92,6 +91,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
 
     val numRecords = 10000
     sendRecords(numRecords)
@@ -184,6 +184,8 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
     consumer0.subscribe(List(topic).asJava, listener)
 
     // the initial subscription should cause a callback execution
@@ -209,8 +211,6 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
     // only expect one revocation since revoke is not invoked on initial membership
     assertEquals(2, listener.callsToRevoked)
-
-    consumer0.close()
   }
 
   @Test
@@ -219,20 +219,17 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
 
-    try {
-      val listener = new TestConsumerReassignmentListener()
-      consumer0.subscribe(List(topic).asJava, listener)
+    val listener = new TestConsumerReassignmentListener()
+    consumer0.subscribe(List(topic).asJava, listener)
 
-      // the initial subscription should cause a callback execution
-      while (listener.callsToAssigned == 0)
-        consumer0.poll(50)
+    // the initial subscription should cause a callback execution
+    while (listener.callsToAssigned == 0)
+      consumer0.poll(50)
 
-      consumer0.subscribe(List[String]().asJava)
-      assertEquals(0, consumer0.assignment.size())
-    } finally {
-      consumer0.close()
-    }
+    consumer0.subscribe(List[String]().asJava)
+    assertEquals(0, consumer0.assignment.size())
   }
 
   @Test
@@ -240,6 +237,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
 
     sendRecords(5)
     consumer0.subscribe(List(topic).asJava)
