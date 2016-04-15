@@ -30,13 +30,11 @@ public class WindowStoreUtils {
     private static final int TIMESTAMP_SIZE = 8;
 
     /** Inner byte array serde used for segments */
-    public static final Serde<byte[]> INNER_SERDE = Serdes.ByteArray();
-
-    /** Inner byte array state serde used for segments */
-    public static final StateSerdes<byte[], byte[]> INNER_SERDES = new StateSerdes<>("", INNER_SERDE, INNER_SERDE);
+    public static final Serde<ByteBuffer> INNER_KEY_SERDE = Serdes.ByteBuffer();
+    public static final Serde<byte[]> INNER_VALUE_SERDE = Serdes.ByteArray();
 
     @SuppressWarnings("unchecked")
-    public static final KeyValueIterator<byte[], byte[]>[] NO_ITERATORS = (KeyValueIterator<byte[], byte[]>[]) new KeyValueIterator[0];
+    public static final KeyValueIterator<ByteBuffer, byte[]>[] NO_ITERATORS = (KeyValueIterator<ByteBuffer, byte[]>[]) new KeyValueIterator[0];
 
     public static <K> byte[] toBinaryKey(K key, final long timestamp, final int seqnum, StateSerdes<K, ?> serdes) {
         byte[] serializedKey = serdes.rawKey(key);

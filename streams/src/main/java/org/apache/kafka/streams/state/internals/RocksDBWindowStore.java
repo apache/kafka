@@ -33,6 +33,7 @@ import org.apache.kafka.streams.state.WindowStoreUtils;
 
 
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,11 +49,12 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     private static final long USE_CURRENT_TIMESTAMP = -1L;
 
-    private static class Segment extends RocksDBStore<byte[], byte[]> {
+    // use the ByteBuffer wrapper for underlying rocksDB keys since they are used for hashing data structures
+    private static class Segment extends RocksDBStore<ByteBuffer, byte[]> {
         public final long id;
 
         Segment(String segmentName, String windowName, long id) {
-            super(segmentName, windowName, WindowStoreUtils.INNER_SERDE, WindowStoreUtils.INNER_SERDE);
+            super(segmentName, windowName, WindowStoreUtils.INNER_KEY_SERDE, WindowStoreUtils.INNER_VALUE_SERDE);
             this.id = id;
         }
 
@@ -63,14 +65,14 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     private static class RocksDBWindowStoreIterator<V> implements WindowStoreIterator<V> {
         private final StateSerdes<?, V> serdes;
-        private final KeyValueIterator<byte[], byte[]>[] iterators;
+        private final KeyValueIterator<ByteBuffer, byte[]>[] iterators;
         private int index = 0;
 
         RocksDBWindowStoreIterator(StateSerdes<?, V> serdes) {
             this(serdes, WindowStoreUtils.NO_ITERATORS);
         }
 
-        RocksDBWindowStoreIterator(StateSerdes<?, V> serdes, KeyValueIterator<byte[], byte[]>[] iterators) {
+        RocksDBWindowStoreIterator(StateSerdes<?, V> serdes, KeyValueIterator<ByteBuffer, byte[]>[] iterators) {
             this.serdes = serdes;
             this.iterators = iterators;
         }
@@ -94,9 +96,9 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
             if (index >= iterators.length)
                 throw new NoSuchElementException();
 
-            KeyValue<byte[], byte[]> kv = iterators[index].next();
+            KeyValue<ByteBuffer, byte[]> kv = iterators[index].next();
 
-            return new KeyValue<>(WindowStoreUtils.timestampFromBinaryKey(kv.key),
+            return new KeyValue<>(WindowStoreUtils.timestampFromBinaryKey(kv.key.array()),
                                   serdes.valueFrom(kv.value));
         }
 
@@ -108,7 +110,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
         @Override
         public void close() {
-            for (KeyValueIterator<byte[], byte[]> iterator : iterators) {
+            for (KeyValueIterator<ByteBuffer, byte[]> iterator : iterators) {
                 iterator.close();
             }
         }
@@ -184,7 +186,10 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         context.register(root, loggingEnabled, new StateRestoreCallback() {
             @Override
             public void restore(byte[] key, byte[] value) {
-                putInternal(key, value);
+                // if the value is null, it means that this record has already been
+                // deleted while it was captured in the changelog, hence we do not need to put any more.
+                if (value != null)
+                    putInternal(key, value);
             }
         });
 
@@ -281,7 +286,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
             if (retainDuplicates)
                 seqnum = (seqnum + 1) & 0x7FFFFFFF;
             byte[] binaryKey = WindowStoreUtils.toBinaryKey(key, timestamp, seqnum, serdes);
-            segment.put(binaryKey, serdes.rawValue(value));
+            segment.put(ByteBuffer.wrap(binaryKey), serdes.rawValue(value));
             return binaryKey;
         } else {
             return null;
@@ -300,7 +305,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         // If the record is within the retention period, put it in the store.
         Segment segment = getSegment(segmentId);
         if (segment != null)
-            segment.put(binaryKey, binaryValue);
+            segment.put(ByteBuffer.wrap(binaryKey), binaryValue);
     }
 
     private byte[] getInternal(byte[] binaryKey) {
@@ -308,7 +313,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
         Segment segment = getSegment(segmentId);
         if (segment != null) {
-            return segment.get(binaryKey);
+            return segment.get(ByteBuffer.wrap(binaryKey));
         } else {
             return null;
         }
@@ -323,12 +328,12 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         byte[] binaryFrom = WindowStoreUtils.toBinaryKey(key, timeFrom, 0, serdes);
         byte[] binaryTo = WindowStoreUtils.toBinaryKey(key, timeTo, Integer.MAX_VALUE, serdes);
 
-        ArrayList<KeyValueIterator<byte[], byte[]>> iterators = new ArrayList<>();
+        ArrayList<KeyValueIterator<ByteBuffer, byte[]>> iterators = new ArrayList<>();
 
         for (long segmentId = segFrom; segmentId <= segTo; segmentId++) {
             Segment segment = getSegment(segmentId);
             if (segment != null)
-                iterators.add(segment.range(binaryFrom, binaryTo));
+                iterators.add(segment.range(ByteBuffer.wrap(binaryFrom), ByteBuffer.wrap(binaryTo)));
         }
 
         if (iterators.size() > 0) {

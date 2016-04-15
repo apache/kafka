@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -169,7 +170,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                             }
                         }
                     });
-
 
             this.cacheDirtyKeys = new HashSet<>();
         } else {
@@ -325,7 +325,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         if (cache != null)
             flushCache();
 
-        return new RocksDBRangeIterator<K, V>(db.newIterator(), serdes, from, to);
+        return new RocksDBRangeIterator<>(db.newIterator(), serdes, from, to);
     }
 
     @Override
@@ -336,7 +336,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         RocksIterator innerIter = db.newIterator();
         innerIter.seekToFirst();
-        return new RocksDbIterator<K, V>(innerIter, serdes);
+        return new RocksDbIterator<>(innerIter, serdes);
     }
 
     private void flushCache() {
@@ -464,30 +464,14 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     }
 
-    private static class LexicographicComparator implements Comparator<byte[]> {
-
-        @Override
-        public int compare(byte[] left, byte[] right) {
-            for (int i = 0, j = 0; i < left.length && j < right.length; i++, j++) {
-                int leftByte = left[i] & 0xff;
-                int rightByte = right[j] & 0xff;
-                if (leftByte != rightByte) {
-                    return leftByte - rightByte;
-                }
-            }
-            return left.length - right.length;
-        }
-    }
-
     private static class RocksDBRangeIterator<K, V> extends RocksDbIterator<K, V> {
         // RocksDB's JNI interface does not expose getters/setters that allow the
         // comparator to be pluggable, and the default is lexicographic, so it's
         // safe to just force lexicographic comparator here for now.
-        private final Comparator<byte[]> comparator = new LexicographicComparator();
+        private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
         byte[] rawToKey;
 
-        public RocksDBRangeIterator(RocksIterator iter, StateSerdes<K, V> serdes,
-                                    K from, K to) {
+        public RocksDBRangeIterator(RocksIterator iter, StateSerdes<K, V> serdes, K from, K to) {
             super(iter, serdes);
             iter.seek(serdes.rawKey(from));
             this.rawToKey = serdes.rawKey(to);

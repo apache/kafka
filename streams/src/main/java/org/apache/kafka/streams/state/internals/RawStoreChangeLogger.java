@@ -17,40 +17,29 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.WindowStoreUtils;
+import org.apache.kafka.streams.state.StateSerdes;
 
-import java.util.Comparator;
 import java.util.TreeSet;
 
 public class RawStoreChangeLogger extends StoreChangeLogger<byte[], byte[]> {
 
-    private class ByteArrayComparator implements Comparator<byte[]> {
-        @Override
-        public int compare(byte[] left, byte[] right) {
-            for (int i = 0, j = 0; i < left.length && j < right.length; i++, j++) {
-                int a = left[i] & 0xff;
-                int b = right[j] & 0xff;
-
-                if (a != b)
-                    return a - b;
-            }
-            return left.length - right.length;
-        }
-    }
+    public static final StateSerdes<byte[], byte[]> RAW_SERDES = new StateSerdes<>("", Serdes.ByteArray(), Serdes.ByteArray());
 
     public RawStoreChangeLogger(String storeName, ProcessorContext context) {
         this(storeName, context, DEFAULT_WRITE_BATCH_SIZE, DEFAULT_WRITE_BATCH_SIZE);
     }
 
     public RawStoreChangeLogger(String storeName, ProcessorContext context, int maxDirty, int maxRemoved) {
-        super(storeName, context, context.taskId().partition, WindowStoreUtils.INNER_SERDES, maxDirty, maxRemoved);
+        super(storeName, context, context.taskId().partition, RAW_SERDES, maxDirty, maxRemoved);
         init();
     }
 
     @Override
     public void init() {
-        this.dirty = new TreeSet<>(new ByteArrayComparator());
-        this.removed = new TreeSet<>(new ByteArrayComparator());
+        this.dirty = new TreeSet<>(Bytes.BYTES_LEXICO_COMPARATOR);
+        this.removed = new TreeSet<>(Bytes.BYTES_LEXICO_COMPARATOR);
     }
 }
