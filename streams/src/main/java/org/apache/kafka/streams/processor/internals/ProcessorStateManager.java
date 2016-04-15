@@ -66,6 +66,7 @@ public class ProcessorStateManager {
     private final Map<TopicPartition, Long> offsetLimits;
     private final boolean isStandby;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
+    private final Map<String, StateRestoreCallback> activeRestoreCallbacks; // used for active tasks, keyed by state topic name
 
     /**
      * @throws IOException if any error happens while creating or locking the state directory
@@ -84,6 +85,7 @@ public class ProcessorStateManager {
         this.restoredOffsets = new HashMap<>();
         this.isStandby = isStandby;
         this.restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
+        this.activeRestoreCallbacks = new HashMap<String, StateRestoreCallback>();
         this.offsetLimits = new HashMap<>();
 
         // create the state directory for this task if missing (we won't create the parent directory)
@@ -150,21 +152,9 @@ public class ProcessorStateManager {
     }
 
     /**
-     * @throws IllegalArgumentException if the store name has already been registered or if it is not a valid name
-     * (e.g., when it conflicts with the names of internal topics, like the checkpoint file name)
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
-        if (store.name().equals(CHECKPOINT_FILE_NAME))
-            throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
-
-        if (this.stores.containsKey(store.name()))
-            throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
-
-        if (loggingEnabled)
-            this.loggingEnabled.add(store.name());
-
-        // check that the underlying change log topic exist or not
+    protected void maybeGetPartitions(StateStore store, boolean loggingEnabled) {
         String topic;
         if (loggingEnabled)
             topic = storeChangelogTopic(this.applicationId, store.name());
@@ -194,13 +184,38 @@ public class ProcessorStateManager {
         if (partitionNotFound)
             throw new StreamsException("Store " + store.name() + "'s change log (" + topic + ") does not contain partition " + partition);
 
+        if (!isStandby) {
+            restoreActiveState(topic, activeRestoreCallbacks.get(topic));
+        }
+    }
+
+    /**
+     * @throws IllegalArgumentException if the store name has already been registered or if it is not a valid name
+     * (e.g., when it conflicts with the names of internal topics, like the checkpoint file name)
+     */
+    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
+        if (store.name().equals(CHECKPOINT_FILE_NAME))
+            throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
+
+        if (this.stores.containsKey(store.name()))
+            throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
+
+        if (loggingEnabled)
+            this.loggingEnabled.add(store.name());
+
+        // check that the underlying change log topic exist or not
+        String topic;
+        if (loggingEnabled)
+            topic = storeChangelogTopic(this.applicationId, store.name());
+        else topic = store.name();
+
         this.stores.put(store.name(), store);
 
         if (isStandby) {
             if (store.persistent())
                 restoreCallbacks.put(topic, stateRestoreCallback);
         } else {
-            restoreActiveState(topic, stateRestoreCallback);
+            activeRestoreCallbacks.put(topic, stateRestoreCallback);
         }
     }
 
@@ -313,7 +328,11 @@ public class ProcessorStateManager {
     }
 
     public StateStore getStore(String name) {
-        return stores.get(name);
+        StateStore store = stores.get(name);
+        if (store != null) {
+            maybeGetPartitions(store, loggingEnabled.contains(name));
+        }
+        return store;
     }
 
     public void flush() {
