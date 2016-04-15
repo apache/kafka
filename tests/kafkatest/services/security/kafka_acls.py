@@ -13,12 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.directory_layout.kafka_path import kafka_home
+from kafkatest.directory_layout.kafka_path import create_path_resolver
 
 class ACLs():
 
-    def __init__(self):
-        pass
+    def __init__(self, context):
+        self.context = context
+        self.path = create_path_resolver(self.context)
 
     def set_acls(self, protocol, kafka, zk, topic, group):
         node = kafka.nodes[0]
@@ -35,7 +36,7 @@ class ACLs():
         self.acls_command(node, ACLs.consume_acl(setting, topic, group, client_principal))
 
     def acls_command(self, node, properties):
-        cmd = "/opt/%s/bin/kafka-acls.sh %s" % (kafka_home(node), properties)
+        cmd = "%s %s" % (self.path.script("kafka-acls.sh", node_or_version=node), properties)
         node.account.ssh(cmd)
 
     @staticmethod

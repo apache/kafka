@@ -34,7 +34,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         super(TestSecurityRollingUpgrade, self).__init__(test_context=test_context)
 
     def setUp(self):
-        self.acls = ACLs()
+        self.acls = ACLs(self.context)
         self.topic = "test_topic"
         self.group = "group"
         self.producer_throughput = 100

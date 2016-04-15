@@ -15,7 +15,7 @@
 
 from ducktape.utils.util import wait_until
 
-from kafkatest.directory_layout.kafka_path import kafka_home
+from kafkatest.directory_layout.kafka_path import create_path_resolver
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
@@ -85,7 +85,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'jmx_port': self.jmx_port,
             'client_id': self.client_id,
-            'kafka_directory': kafka_home(node)
+            'kafka_run_class': self.path.script("kafka-run-class.sh", node_or_version=node)
             })
 
         cmd = ""
@@ -98,7 +98,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             cmd += "export CLASSPATH; "
 
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ProducerPerformanceService.LOG4J_CONFIG
-        cmd += "JMX_PORT=%(jmx_port)d KAFKA_OPTS=%(kafka_opts)s /opt/%(kafka_directory)s/bin/kafka-run-class.sh org.apache.kafka.tools.ProducerPerformance " \
+        cmd += "JMX_PORT=%(jmx_port)d KAFKA_OPTS=%(kafka_opts)s %(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
               "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
 
         self.security_config.setup_node(node)

@@ -21,7 +21,7 @@ import time
 
 from ducktape.services.background_thread import BackgroundThreadService
 
-from kafkatest.directory_layout.kafka_path import kafka_home, KAFKA_TRUNK
+from kafkatest.directory_layout.kafka_path import create_path_resolver
 from kafkatest.utils import is_int, is_int_with_prefix
 from kafkatest.version.version import TRUNK, LATEST_0_8_2
 
@@ -73,6 +73,7 @@ class VerifiableProducer(BackgroundThreadService):
         self.acked_values = []
         self.not_acked_values = []
         self.produced_count = {}
+        self.path = create_path_resolver(self.context)
         self.clean_shutdown_nodes = set()
         self.acks = acks
         self.stop_timeout_sec = stop_timeout_sec
@@ -148,20 +149,21 @@ class VerifiableProducer(BackgroundThreadService):
                         self.clean_shutdown_nodes.add(node)
 
     def start_cmd(self, node, idx):
-
+        kafka_trunk_home = self.path.home(node_or_version=TRUNK)
         cmd = ""
         if node.version <= LATEST_0_8_2:
             # 0.8.2.X releases do not have VerifiableProducer.java, so cheat and add
             # the tools jar from trunk to the classpath
-            cmd += "for file in /opt/%s/tools/build/libs/kafka-tools*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % KAFKA_TRUNK
-            cmd += "for file in /opt/%s/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % KAFKA_TRUNK
+            cmd += "for file in %s/tools/build/libs/kafka-tools*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % kafka_trunk_home
+            cmd += "for file in %s/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % kafka_trunk_home
             cmd += "export CLASSPATH; "
 
         cmd += "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
-        cmd += "/opt/" + kafka_home(node) + "/bin/kafka-run-class.sh org.apache.kafka.tools.VerifiableProducer" \
-              " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol))
+        cmd += " " + self.path.script("kafka-run-class.sh", node_or_version=node)
+        cmd += " org.apache.kafka.tools.VerifiableProducer"
+        cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol))
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
         if self.throughput > 0:

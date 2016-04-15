@@ -22,7 +22,7 @@ from tempfile import mkstemp
 
 from ducktape.services.service import Service
 
-from kafkatest.directory_layout.kafka_path import kafka_home
+from kafkatest.directory_layout.kafka_path import create_path_resolver
 
 
 
@@ -42,10 +42,11 @@ class MiniKdc(Service):
     LOCAL_KEYTAB_FILE = "/tmp/" + str(uuid.uuid4().get_hex()) + "_keytab"
     LOCAL_KRB5CONF_FILE = "/tmp/" + str(uuid.uuid4().get_hex()) + "_krb5.conf"
 
-    def __init__(self, context, kafka_nodes, extra_principals = ""):
+    def __init__(self, context, kafka_nodes, extra_principals=""):
         super(MiniKdc, self).__init__(context, 1)
         self.kafka_nodes = kafka_nodes
         self.extra_principals = extra_principals
+        self.path = create_path_resolver(self.context)
 
     def replace_in_file(self, file_path, pattern, subst):
         fh, abs_path = mkstemp()
@@ -70,7 +71,7 @@ class MiniKdc(Service):
 
         jar_paths = self.core_jar_paths(node, "dependant-testlibs") + self.core_jar_paths(node, "libs")
         classpath = ":".join(jar_paths)
-        cmd = "CLASSPATH=%s /opt/%s/bin/kafka-run-class.sh kafka.security.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (classpath, kafka_home(node), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
+        cmd = "CLASSPATH=%s %s kafka.security.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (classpath, self.path.script("kafka-run-class.sh", node_or_version=node), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
         self.logger.debug("Attempting to start MiniKdc on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log(MiniKdc.LOG_FILE) as monitor:
             node.account.ssh(cmd)
@@ -79,11 +80,11 @@ class MiniKdc(Service):
         node.account.scp_from(MiniKdc.KEYTAB_FILE, MiniKdc.LOCAL_KEYTAB_FILE)
         node.account.scp_from(MiniKdc.KRB5CONF_FILE, MiniKdc.LOCAL_KRB5CONF_FILE)
 
-        #KDC is set to bind openly (via 0.0.0.0). Change krb5.conf to hold the specific KDC address
+        # KDC is set to bind openly (via 0.0.0.0). Change krb5.conf to hold the specific KDC address
         self.replace_in_file(MiniKdc.LOCAL_KRB5CONF_FILE, '0.0.0.0', node.account.hostname)
 
     def core_jar_paths(self, node, lib_dir_name):
-        lib_dir = "/opt/%s/core/build/%s" % (kafka_home(node), lib_dir_name)
+        lib_dir = "%s/core/build/%s" % (self.path.home(node_or_version=node), lib_dir_name)
         jars = node.account.ssh_capture("ls " + lib_dir)
         return [os.path.join(lib_dir, jar.strip()) for jar in jars]
 

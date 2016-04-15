@@ -15,7 +15,7 @@
 
 from ducktape.services.background_thread import BackgroundThreadService
 
-from kafkatest.directory_layout.kafka_path import kafka_home
+from kafkatest.directory_layout.kafka_path import create_path_resolver
 from kafkatest.services.security.security_config import SecurityConfig
 
 
@@ -35,6 +35,7 @@ class KafkaLog4jAppender(BackgroundThreadService):
         self.max_messages = max_messages
         self.security_protocol = security_protocol
         self.security_config = SecurityConfig(security_protocol)
+        self.path = create_path_resolver(self.context)
 
     def _worker(self, idx, node):
         cmd = self.start_cmd(node)
@@ -43,8 +44,8 @@ class KafkaLog4jAppender(BackgroundThreadService):
         node.account.ssh(cmd)
 
     def start_cmd(self, node):
-        cmd = "/opt/%s/bin/" % kafka_home(node)
-        cmd += "kafka-run-class.sh org.apache.kafka.tools.VerifiableLog4jAppender"
+        cmd = self.path.script("kafka-run-class.sh", node_or_version=node)
+        cmd += " org.apache.kafka.tools.VerifiableLog4jAppender"
         cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_protocol))
 
         if self.max_messages > 0:

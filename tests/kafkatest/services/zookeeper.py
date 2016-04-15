@@ -20,7 +20,8 @@ import time
 
 from ducktape.services.service import Service
 
-from kafkatest.directory_layout.kafka_path import kafka_home, KAFKA_TRUNK
+from kafkatest.directory_layout.kafka_path import create_path_resolver
+from kafkatest.version.version import TRUNK
 from kafkatest.services.security.security_config import SecurityConfig
 
 
@@ -42,6 +43,8 @@ class ZookeeperService(Service):
         self.kafka_opts = ""
         self.zk_sasl = zk_sasl
         super(ZookeeperService, self).__init__(context, num_nodes)
+
+        self.path = create_path_resolver(self.context)
 
     @property
     def security_config(self):
@@ -72,7 +75,7 @@ class ZookeeperService(Service):
         node.account.create_file("/mnt/zookeeper.properties", config_file)
 
         start_cmd = "export KAFKA_OPTS=\"%s\";" % self.kafka_opts 
-        start_cmd += "/opt/%s/bin/zookeeper-server-start.sh " % kafka_home(node)
+        start_cmd += "%s " % self.path.script("zookeeper-server-start.sh", node_or_version=node)
         start_cmd += "/mnt/zookeeper.properties 1>> %(path)s 2>> %(path)s &" % self.logs["zk_log"]
         node.account.ssh(start_cmd)
 
@@ -110,16 +113,17 @@ class ZookeeperService(Service):
     # the use of ZooKeeper ACLs.
     #
     def zookeeper_migration(self, node, zk_acl):
-        la_migra_cmd = "/opt/%s/bin/zookeeper-security-migration.sh --zookeeper.acl=%s --zookeeper.connect=%s" % (kafka_home(node), zk_acl, self.connect_setting())
+        la_migra_cmd = "%s --zookeeper.acl=%s --zookeeper.connect=%s" % \
+                       (self.path.script("zookeeper-security-migration.sh", node_or_version=node), zk_acl, self.connect_setting())
         node.account.ssh(la_migra_cmd)
 
     def query(self, path):
         """
         Queries zookeeper for data associated with 'path' and returns all fields in the schema
         """
-        kafka_dir = KAFKA_TRUNK
-        cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.ZooKeeperMainWrapper -server %s get %s" % \
-              (kafka_dir, self.connect_setting(), path)
+        kafka_run_class = self.path.script("kafka-run-class.sh", node_or_version=TRUNK)
+        cmd = "%s kafka.tools.ZooKeeperMainWrapper -server %s get %s" % \
+              (kafka_run_class, self.connect_setting(), path)
         self.logger.debug(cmd)
 
         node = self.nodes[0]

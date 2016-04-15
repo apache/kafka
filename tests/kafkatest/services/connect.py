@@ -23,7 +23,7 @@ from ducktape.errors import DucktapeError
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
-from kafkatest.directory_layout.kafka_path import kafka_home
+from kafkatest.directory_layout.kafka_path import create_path_resolver
 
 
 class ConnectServiceBase(Service):
@@ -56,6 +56,7 @@ class ConnectServiceBase(Service):
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
         self.files = files
+        self.path = create_path_resolver(self.context)
 
     def pids(self, node):
         """Return process ids for Kafka Connect processes."""
@@ -162,7 +163,7 @@ class ConnectStandaloneService(ConnectServiceBase):
     def start_cmd(self, node, connector_configs):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
-        cmd += "/opt/%s/bin/connect-standalone.sh %s " % (kafka_home(node), self.CONFIG_FILE)
+        cmd += "%s %s " % (self.path.script("connect-standalone.sh", node_or_version=node), self.CONFIG_FILE)
         cmd += " ".join(connector_configs)
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
@@ -201,7 +202,7 @@ class ConnectDistributedService(ConnectServiceBase):
     def start_cmd(self, node):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
-        cmd += "/opt/%s/bin/connect-distributed.sh %s " % (kafka_home(node), self.CONFIG_FILE)
+        cmd += "%s %s " % (self.path.script("connect-distributed.sh", node_or_version=node), self.CONFIG_FILE)
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
 
