@@ -233,15 +233,16 @@ public class ConfigDefTest {
 
     @Test
     public void testValidate() {
+        int d = 10;
         Map<String, ConfigValue> expected = new HashMap<>();
         String errorMessageB = "Missing required configuration \"b\" which has no default value.";
         String errorMessageC = "Missing required configuration \"c\" which has no default value.";
-        String errorMessageD = "Invalid value for configuration d";
+        String errorMessageD = "Invalid value " + d + " for configuration d";
 
         ConfigValue configA = new ConfigValue("a", 1, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
         ConfigValue configB = new ConfigValue("b", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageB, errorMessageB));
         ConfigValue configC = new ConfigValue("c", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageC));
-        ConfigValue configD = new ConfigValue("d", 10, Arrays.<Object>asList(1, 2, 3), Arrays.asList(errorMessageD));
+        ConfigValue configD = new ConfigValue("d", d, Arrays.<Object>asList(1, 2, 3), Arrays.asList(errorMessageD));
 
         expected.put("a", configA);
         expected.put("b", configB);

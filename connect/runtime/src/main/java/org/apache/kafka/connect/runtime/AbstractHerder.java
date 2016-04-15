@@ -275,8 +275,15 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     private static ConfigValueInfo convertConfigValue(ConfigValue configValue, Type type) {
         String value = ConfigDef.convertToString(configValue.value(), type);
         List<String> recommendedValues = new LinkedList<>();
-        for (Object object: configValue.recommendedValues()) {
-            recommendedValues.add(ConfigDef.convertToString(object, type));
+
+        if (type == Type.LIST) {
+            for (Object object: configValue.recommendedValues()) {
+                recommendedValues.add(ConfigDef.convertToString(object, Type.STRING));
+            }
+        } else {
+            for (Object object : configValue.recommendedValues()) {
+                recommendedValues.add(ConfigDef.convertToString(object, type));
+            }
         }
         return new ConfigValueInfo(configValue.name(), value, recommendedValues, configValue.errorMessages(), configValue.visible());
     }

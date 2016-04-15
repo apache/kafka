@@ -538,6 +538,7 @@ public class ConfigDef {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void validate(String name, Map<String, Object> parsed, Map<String, ConfigValue> configs) {
         if (!configKeys.containsKey(name)) {
             return;
@@ -550,7 +551,6 @@ public class ConfigDef {
             try {
                 recommendedValues = key.recommender.validValues(name, parsed);
                 List<Object> originalRecommendedValues = config.recommendedValues();
-
                 if (!originalRecommendedValues.isEmpty()) {
                     Set<Object> originalRecommendedValueSet = new HashSet<>(originalRecommendedValues);
                     Iterator<Object> it = recommendedValues.iterator();
@@ -562,8 +562,18 @@ public class ConfigDef {
                     }
                 }
                 config.recommendedValues(recommendedValues);
-                if (value != null && !recommendedValues.isEmpty() && !recommendedValues.contains(value)) {
-                    config.addErrorMessage("Invalid value for configuration " + key.name);
+                if (value != null && !recommendedValues.isEmpty()) {
+                    // Special handling of LIST type here, we need to make sure
+                    // every value in the list is valid.
+                    if (value instanceof List<?>) {
+                        List<Object> list = (List<Object>) value;
+                        for (Object entry : list) {
+                            checkWithRecommendedValue(entry, recommendedValues, key, config);
+                        }
+                    } else {
+                        checkWithRecommendedValue(value, recommendedValues, key, config);
+                    }
+
                 }
                 config.visible(key.recommender.visible(name, parsed));
             } catch (ConfigException e) {
@@ -574,6 +584,12 @@ public class ConfigDef {
         configs.put(name, config);
         for (String dependent: key.dependents) {
             validate(dependent, parsed, configs);
+        }
+    }
+
+    private void checkWithRecommendedValue(Object value, List<Object> recommendedValues, ConfigKey key, ConfigValue config) {
+        if (value != null && !recommendedValues.isEmpty() && !recommendedValues.contains(value)) {
+            config.addErrorMessage("Invalid value " + value.toString() + " for configuration " + key.name);
         }
     }
 
