@@ -104,8 +104,6 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
                 inner.put(serdes.keyFrom(key), serdes.valueFrom(value));
             }
         });
-
-        return;
     }
 
     @Override

@@ -219,7 +219,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 putInternal(key, value);
             }
         });
-        return;
     }
 
     private RocksDB openDB(File dir, Options options, int ttl) {

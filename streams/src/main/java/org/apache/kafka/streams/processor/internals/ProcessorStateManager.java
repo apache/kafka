@@ -65,8 +65,7 @@ public class ProcessorStateManager {
     private final Map<TopicPartition, Long> checkpointedOffsets;
     private final Map<TopicPartition, Long> offsetLimits;
     private final boolean isStandby;
-    private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
-    private final Map<String, StateRestoreCallback> activeRestoreCallbacks; // used for active tasks, keyed by state topic name
+    private final Map<String, StateRestoreCallback> restoreCallbacks; // used for one of active OR standby tasks, keyed by state topic name
 
     /**
      * @throws IOException if any error happens while creating or locking the state directory
@@ -84,8 +83,7 @@ public class ProcessorStateManager {
         this.restoreConsumer = restoreConsumer;
         this.restoredOffsets = new HashMap<>();
         this.isStandby = isStandby;
-        this.restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
-        this.activeRestoreCallbacks = new HashMap<String, StateRestoreCallback>();
+        this.restoreCallbacks = new HashMap<String, StateRestoreCallback>();
         this.offsetLimits = new HashMap<>();
 
         // create the state directory for this task if missing (we won't create the parent directory)
@@ -185,7 +183,7 @@ public class ProcessorStateManager {
             throw new StreamsException("Store " + store.name() + "'s change log (" + topic + ") does not contain partition " + partition);
 
         if (!isStandby) {
-            restoreActiveState(topic, activeRestoreCallbacks.get(topic));
+            restoreActiveState(topic, restoreCallbacks.get(topic));
         }
     }
 
@@ -203,7 +201,7 @@ public class ProcessorStateManager {
         if (loggingEnabled)
             this.loggingEnabled.add(store.name());
 
-        // check that the underlying change log topic exist or not
+        // check that the underlying change log topic exists or not
         String topic;
         if (loggingEnabled)
             topic = storeChangelogTopic(this.applicationId, store.name());
@@ -215,7 +213,7 @@ public class ProcessorStateManager {
             if (store.persistent())
                 restoreCallbacks.put(topic, stateRestoreCallback);
         } else {
-            activeRestoreCallbacks.put(topic, stateRestoreCallback);
+            restoreCallbacks.put(topic, stateRestoreCallback);
         }
     }
 
