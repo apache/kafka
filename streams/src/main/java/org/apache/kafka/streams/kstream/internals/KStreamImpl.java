@@ -123,9 +123,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <K1> KStream<K1, V> selectKey(KeyValueMapper<K, V, KeyValue<K1, V>> mapper) {
+    @SuppressWarnings("unchecked")
+    public <K1> KStream<K1, V> selectKey(final KeyValueMapper<K, V, K1> mapper) {
         String name = topology.newName(KEY_SELECT_NAME);
-        topology.addProcessor(name, new KStreamMap<>(mapper), this.name);
+        topology.addProcessor(name, new KStreamMap<>(new KeyValueMapper<K, V, KeyValue<K1, V>>() {
+            @Override
+            public KeyValue<K1, V> apply(K key, V value) {
+                return new KeyValue(mapper.apply(key, value), value);
+            }
+        }), this.name);
         return new KStreamImpl<>(topology, name, sourceNodes);
     }
 

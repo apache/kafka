@@ -245,7 +245,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1> KStream<K1, V> toStream(KeyValueMapper<K, V, KeyValue<K1, V>> mapper) {
+    public <K1> KStream<K1, V> toStream(KeyValueMapper<K, V, K1> mapper) {
         return toStream().selectKey(mapper);
     }
 

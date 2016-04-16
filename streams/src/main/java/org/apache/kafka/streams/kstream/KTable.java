@@ -203,13 +203,13 @@ public interface KTable<K, V> {
     KStream<K, V> toStream();
 
     /**
-     *  Convert this stream to a new instance of {@link KStream} using the given {@link KeyValueMapper} to map the
-     *  key to a new type
+     *  Convert this stream to a new instance of {@link KStream} using the given {@link KeyValueMapper} to select
+     *  the new key.
      *
      * @param mapper  @param mapper  the instance of {@link KeyValueMapper}
      * @param <K1> the new key type
      */
-    <K1> KStream<K1, V> toStream(KeyValueMapper<K, V, KeyValue<K1, V>> mapper);
+    <K1> KStream<K1, V> toStream(KeyValueMapper<K, V, K1> mapper);
 
     /**
      * Combine values of this stream with another {@link KTable} stream's elements of the same key using Inner Join.

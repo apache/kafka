@@ -21,7 +21,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -51,11 +50,10 @@ public class KStreamSelectKeyTest {
         keyMap.put(3, "THREE");
 
 
-        KeyValueMapper<String, Integer, KeyValue<String, Integer>> selector = new KeyValueMapper<String, Integer, KeyValue<String, Integer>>() {
+        KeyValueMapper<String, Integer, String> selector = new KeyValueMapper<String, Integer, String>() {
             @Override
-            public KeyValue<String, Integer> apply(String key, Integer value) {
-                String newKey = keyMap.get(value);
-                return new KeyValue<>(newKey, value);
+            public String apply(String key, Integer value) {
+                return keyMap.get(value);
             }
         };
 

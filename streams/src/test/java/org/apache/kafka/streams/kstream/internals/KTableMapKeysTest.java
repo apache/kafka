@@ -20,7 +20,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -52,11 +51,10 @@ public class KTableMapKeysTest {
         keyMap.put(2, "TWO");
         keyMap.put(3, "THREE");
 
-        KeyValueMapper<Integer, String, KeyValue<String, String>> keyMapper = new KeyValueMapper<Integer, String, KeyValue<String, String>>() {
+        KeyValueMapper<Integer, String, String> keyMapper = new KeyValueMapper<Integer, String, String>() {
             @Override
-            public KeyValue<String, String> apply(Integer key, String value) {
-                String newKey = keyMap.get(key);
-                return new KeyValue<>(newKey, value);
+            public  String apply(Integer key, String value) {
+                return keyMap.get(key);
             }
         };
 
