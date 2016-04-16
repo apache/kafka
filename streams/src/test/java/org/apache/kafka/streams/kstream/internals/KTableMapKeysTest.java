@@ -43,7 +43,7 @@ public class KTableMapKeysTest {
     public void testMapKeysConvertingToStream() {
         final KStreamBuilder builder = new KStreamBuilder();
 
-        String topic1 = "topic1";
+        String topic1 = "topic_map_keys";
 
         KTable<Integer, String> table1 = builder.table(integerSerde, stringSerde, topic1);
 

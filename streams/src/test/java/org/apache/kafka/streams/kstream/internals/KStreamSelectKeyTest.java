@@ -36,7 +36,7 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamSelectKeyTest {
 
-    private String topicName = "topic";
+    private String topicName = "topic_key_select";
 
     final private Serde<Integer> integerSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
