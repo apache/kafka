@@ -21,8 +21,10 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
@@ -32,7 +34,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
-public class KStreamKeySelectTest {
+public class KStreamSelectKeyTest {
 
     private String topicName = "topic";
 
@@ -40,7 +42,7 @@ public class KStreamKeySelectTest {
     final private Serde<String> stringSerde = Serdes.String();
 
     @Test
-    public void testKeySelect() {
+    public void testSelectKey() {
         KStreamBuilder builder = new KStreamBuilder();
 
         final Map<Integer, String> keyMap = new HashMap<>();
@@ -48,11 +50,12 @@ public class KStreamKeySelectTest {
         keyMap.put(2, "TWO");
         keyMap.put(3, "THREE");
 
-        KStreamKeySelector<Integer, String> selector = new KStreamKeySelector<Integer, String>() {
 
+        KeyValueMapper<String, Integer, KeyValue<String, Integer>> selector = new KeyValueMapper<String, Integer, KeyValue<String, Integer>>() {
             @Override
-            public String apply(Integer value) {
-                return keyMap.get(value);
+            public KeyValue<String, Integer> apply(String key, Integer value) {
+                String newKey = keyMap.get(value);
+                return new KeyValue<>(newKey, value);
             }
         };
 

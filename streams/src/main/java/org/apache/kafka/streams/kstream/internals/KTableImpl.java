@@ -65,8 +65,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     public static final String LEFTOTHER_NAME = "KTABLE-LEFTOTHER-";
 
-    private static final String MAPKEY_NAME = "KTABLE-MAPKEY-";
-
     private static final String MAPVALUES_NAME = "KTABLE-MAPVALUES-";
 
     public static final String MERGE_NAME = "KTABLE-MERGE-";
@@ -247,20 +245,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1> KStream<K1, V> toStream(KTableKeyMapper<K, K1> kTableKeyMapper) {
-        String toStreamName = topology.newName(TOSTREAM_NAME);
-        String mapKeyName = topology.newName(MAPKEY_NAME);
-
-        topology.addProcessor(toStreamName, new KStreamMapValues<K, Change<V>, V>(new ValueMapper<Change<V>, V>() {
-            @Override
-            public V apply(Change<V> change) {
-                return change.newValue;
-            }
-        }), this.name);
-        topology.addProcessor(mapKeyName, new KTableMapKeys<K, V, K1>(kTableKeyMapper), toStreamName);
-
-        return new KStreamImpl<>(topology, mapKeyName, sourceNodes);
-
+    public <K1> KStream<K1, V> toStream(KeyValueMapper<K, V, KeyValue<K1, V>> mapper) {
+        return toStream().selectKey(mapper);
     }
 
     @SuppressWarnings("unchecked")
