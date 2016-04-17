@@ -19,20 +19,18 @@ package org.apache.kafka.common.utils;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
 
 /**
  * Utility class that handles byte arrays.
  *
- * Its implementation is inspired by Apache Hive, org.apache.hadoop.hbase.util.Bytes
+ * Its implementation is inspired by com.google.common.primitives.UnsignedBytes
  */
 public class Bytes {
 
     /** When we encode strings, we always specify UTF8 encoding */
-    private static final String UTF8_ENCODING = "UTF-8";
-
-    /** When we encode strings, we always specify UTF8 encoding */
-    private static final Charset UTF8_CHARSET = Charset.forName(UTF8_ENCODING);
+    private static final Charset UTF8_CHARSET = StandardCharsets.UTF_8;
 
     /**
      * A byte array comparator based on lexicograpic ordering.
