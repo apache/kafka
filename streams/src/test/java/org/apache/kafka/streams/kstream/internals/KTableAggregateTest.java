@@ -72,10 +72,8 @@ public class KTableAggregateTest {
             String topic1 = "topic1";
 
             KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
-            KTable<String, String> table2 = table1.aggregate(new StringInit(), new StringAdd(), new StringRemove(),
-                    new NoOpKeyValueMapper<String, String>(),
-                    stringSerde,
-                    stringSerde,
+            KTable<String, String> table2 = table1.groupBy(new NoOpKeyValueMapper<String, String>(), stringSerde, stringSerde, "topic1-grouped")
+                    .aggregate(new StringInit(), new StringAdd(), new StringRemove(), 
                     stringSerde,
                     "topic1-Canonized");
 

@@ -242,113 +242,28 @@ public interface KTable<K, V> {
     <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
-     * Combine updating values of this stream by the selected key into a new instance of {@link KTable}.
-     *
-     * @param adder             the instance of {@link Reducer} for addition
-     * @param subtractor        the instance of {@link Reducer} for subtraction
-     * @param selector          the instance of {@link KeyValueMapper} that select the aggregate key
-     * @param keySerde          key serdes for materializing the aggregated table,
-     *                          if not specified the default serdes defined in the configs will be used
-     * @param valueSerde        value serdes for materializing the aggregated table,
-     *                          if not specified the default serdes defined in the configs will be used
-     * @param name              the name of the resulted {@link KTable}
-     * @param <K1>              the key type of the aggregated {@link KTable}
-     * @param <V1>              the value type of the aggregated {@link KTable}
-     */
-    <K1, V1> KTable<K1, V1> reduce(Reducer<V1> adder,
-                                   Reducer<V1> subtractor,
-                                   KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                   Serde<K1> keySerde,
-                                   Serde<V1> valueSerde,
-                                   String name);
-
-    /**
-     * Combine updating values of this stream by the selected key into a new instance of {@link KTable}
-     * using default serializers and deserializers.
-     *
-     * @param adder         the instance of {@link Reducer} for addition
-     * @param subtractor    the instance of {@link Reducer} for subtraction
-     * @param selector      the instance of {@link KeyValueMapper} that select the aggregate key
-     * @param name          the name of the resulted {@link KTable}
-     * @param <K1>          the key type of the aggregated {@link KTable}
-     * @param <V1>          the value type of the aggregated {@link KTable}
-     */
-    <K1, V1> KTable<K1, V1> reduce(Reducer<V1> adder,
-                                   Reducer<V1> subtractor,
-                                   KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                   String name);
-
-    /**
-     * Aggregate updating values of this stream by the selected key into a new instance of {@link KTable}.
-     *
-     * @param initializer   the instance of {@link Initializer}
-     * @param adder         the instance of {@link Aggregator} for addition
-     * @param substractor   the instance of {@link Aggregator} for subtraction
-     * @param selector      the instance of {@link KeyValueMapper} that select the aggregate key
-     * @param keySerde      key serdes for materializing this stream and the aggregated table,
-     *                      if not specified the default serdes defined in the configs will be used
-     * @param valueSerde    value serdes for materializing this stream,
-     *                      if not specified the default serdes defined in the configs will be used
-     * @param aggValueSerde value serdes for materializing the aggregated table,
-     *                      if not specified the default serdes defined in the configs will be used
-     * @param name          the name of the resulted table
-     * @param <K1>          the key type of this {@link KTable}
-     * @param <V1>          the value type of this {@link KTable}
-     * @param <T>           the value type of the aggregated {@link KTable}
-     */
-    <K1, V1, T> KTable<K1, T> aggregate(Initializer<T> initializer,
-                                        Aggregator<K1, V1, T> adder,
-                                        Aggregator<K1, V1, T> substractor,
-                                        KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                        Serde<K1> keySerde,
-                                        Serde<V1> valueSerde,
-                                        Serde<T> aggValueSerde,
-                                        String name);
-
-    /**
-     * Aggregate updating values of this stream by the selected key into a new instance of {@link KTable}
-     * using default serializers and deserializers.
-     *
-     * @param initializer   the instance of {@link Initializer}
-     * @param adder         the instance of {@link Aggregator} for addition
-     * @param substractor   the instance of {@link Aggregator} for subtraction
-     * @param selector      the instance of {@link KeyValueMapper} that select the aggregate key
-     * @param name          the name of the resulted {@link KTable}
-     * @param <K1>          the key type of the aggregated {@link KTable}
-     * @param <V1>          the value type of the aggregated {@link KTable}
-     * @param <T>           the value type of the aggregated {@link KTable}
-     */
-    <K1, V1, T> KTable<K1, T> aggregate(Initializer<T> initializer,
-                                        Aggregator<K1, V1, T> adder,
-                                        Aggregator<K1, V1, T> substractor,
-                                        KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                        String name);
-
-    /**
-     * Count number of records of this stream by the selected key into a new instance of {@link KTable}.
-     *
-     * @param selector      the instance of {@link KeyValueMapper} that select the aggregate key
+     * Groups this {@link KTable} via the provided {@link KeyValueMapper}.
+     * 
+     * @param selector      the instance of {@link KeyValueMapper} that select the grouping key
      * @param keySerde      key serdes for materializing this stream,
      *                      if not specified the default serdes defined in the configs will be used
      * @param valueSerde    value serdes for materializing this stream,
      *                      if not specified the default serdes defined in the configs will be used
-     * @param name          the name of the resulted table
-     * @param <K1>          the key type of the aggregated {@link KTable}
+     * @param name          the name of the resulted {@link KGroupedTable}
+     * @param <K1>          the key type of the {@link KGroupedTable}
+     * @param <V1>          the value type of the {@link KGroupedTable}
      */
-    <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector,
-                                Serde<K1> keySerde,
-                                Serde<V> valueSerde,
-                                String name);
+    <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, Serde<K1> keySerde, Serde<V1> valueSerde, String name);
 
     /**
-     * Count number of records of this stream by the selected key into a new instance of {@link KTable}
-     * using default serializers and deserializers.
+     * Groups this {@link KTable} via the provided {@link KeyValueMapper} usind default serializers and deserializers.
      *
-     * @param selector      the instance of {@link KeyValueMapper} that select the aggregate key
-     * @param name          the name of the resulted {@link KTable}
-     * @param <K1>          the key type of the aggregated {@link KTable}
+     * @param selector      the instance of {@link KeyValueMapper} that select the grouping key
+     * @param name          the name of the resulted {@link KGroupedTable}
+     * @param <K1>          the key type of the {@link KGroupedTable}
+     * @param <V1>          the value type of the {@link KGroupedTable}
      */
-    <K1> KTable<K1, Long> count(KeyValueMapper<K, V, K1> selector, String name);
+    <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name);
 
     /**
      * Perform an action on each element of {@link KTable}.
