@@ -229,7 +229,7 @@ public class ProcessorStateManagerTest {
             ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, 1, noPartitions, baseDir, new MockRestoreConsumer(), false);
             try {
                 stateMgr.register(mockStateStore, true, mockStateStore.stateRestoreCallback);
-                stateMgr.maybeGetPartitions(mockStateStore, true);
+                stateMgr.checkTopicExits(mockStateStore, true);
             } finally {
                 stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
             }
@@ -275,7 +275,7 @@ public class ProcessorStateManagerTest {
                 }
 
                 stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
-                stateMgr.maybeGetPartitions(persistentStore, true);
+                stateMgr.checkTopicExits(persistentStore, true);
                 assertEquals(new TopicPartition(persistentStoreTopicName, 2), restoreConsumer.assignedPartition);
                 assertEquals(lastCheckpointedOffset, restoreConsumer.seekOffset);
                 assertFalse(restoreConsumer.seekToBeginingCalled);
@@ -328,7 +328,7 @@ public class ProcessorStateManagerTest {
                 }
 
                 stateMgr.register(nonPersistentStore, true, nonPersistentStore.stateRestoreCallback);
-                stateMgr.maybeGetPartitions(nonPersistentStore, true);
+                stateMgr.checkTopicExits(nonPersistentStore, true);
                 assertEquals(new TopicPartition(nonPersistentStoreTopicName, 2), restoreConsumer.assignedPartition);
                 assertEquals(0L, restoreConsumer.seekOffset);
                 assertTrue(restoreConsumer.seekToBeginingCalled);

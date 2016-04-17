@@ -111,8 +111,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // initialize the topology with its own context
         this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics);
 
-        // initialize the state stores
-        initializeStateStores();
+        // register the state stores
+        registerStateStores();
 
         // initialize the task by initializing all its processor nodes in the topology
         for (ProcessorNode node : this.topology.processors()) {

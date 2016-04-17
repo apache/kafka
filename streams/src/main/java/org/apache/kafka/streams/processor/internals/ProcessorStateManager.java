@@ -150,14 +150,16 @@ public class ProcessorStateManager {
     }
 
     /**
+     * Checks that the underlying change log topic exists
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    protected void maybeGetPartitions(StateStore store, boolean loggingEnabled) {
+    protected void checkTopicExits(StateStore store, boolean loggingEnabled) {
         String topic;
         if (loggingEnabled)
             topic = storeChangelogTopic(this.applicationId, store.name());
         else topic = store.name();
 
+        // check that the underlying change log topic exists or not
         // block until the partition is ready for this state changelog topic or time has elapsed
         int partition = getPartition(topic);
         boolean partitionNotFound = true;
@@ -188,6 +190,7 @@ public class ProcessorStateManager {
     }
 
     /**
+     * Registers the state stores with the system
      * @throws IllegalArgumentException if the store name has already been registered or if it is not a valid name
      * (e.g., when it conflicts with the names of internal topics, like the checkpoint file name)
      */
@@ -201,7 +204,6 @@ public class ProcessorStateManager {
         if (loggingEnabled)
             this.loggingEnabled.add(store.name());
 
-        // check that the underlying change log topic exists or not
         String topic;
         if (loggingEnabled)
             topic = storeChangelogTopic(this.applicationId, store.name());
@@ -328,7 +330,7 @@ public class ProcessorStateManager {
     public StateStore getStore(String name) {
         StateStore store = stores.get(name);
         if (store != null) {
-            maybeGetPartitions(store, loggingEnabled.contains(name));
+            checkTopicExits(store, loggingEnabled.contains(name));
         }
         return store;
     }

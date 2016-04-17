@@ -60,12 +60,16 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
 
     private void maybeInitialize() {
         if (!isInitialized) {
-            init();
+            initBackend();
             isInitialized = true;
         }
     }
 
-    private void init() {
+    /**
+     * Initializes the backend (log, DB, etc) of the state store.
+     * This is usually an expensive call.
+     */
+    private void initBackend() {
         ProcessorContext context = initContext;
         StateStore root = initRoot;
         if (initContext == null || root == null) {
@@ -85,6 +89,12 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
         };
     }
 
+    /**
+     * Registers the state store. However it does not initialize their backends yet (e.g.,
+     * open database etc.), since that is done lazily in the {@link #initBackend()} method
+     * @param context Processor context
+     * @param root State store
+     */
     @Override
     @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
