@@ -244,6 +244,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return new KStreamImpl<>(topology, name, sourceNodes);
     }
 
+    @Override
+    public <K1> KStream<K1, V> toStream(KeyValueMapper<K, V, K1> mapper) {
+        return toStream().selectKey(mapper);
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
