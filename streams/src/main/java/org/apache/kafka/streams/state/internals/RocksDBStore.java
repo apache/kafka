@@ -83,9 +83,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private StoreChangeLogger<byte[], byte[]> changeLogger;
     private StoreChangeLogger.ValueGetter<byte[], byte[]> getter;
 
-    private boolean isInitialized = false;
-    private ProcessorContext initContext;
-    private StateStore initRoot;
 
     public KeyValueStore<K, V> enableLogging() {
         loggingEnabled = true;
@@ -129,17 +126,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         fOptions = new FlushOptions();
         fOptions.setWaitForFlush(true);
 
-        isInitialized = false;
-        initContext = null;
-        initRoot = null;
     }
 
-    private void maybeInitialize() {
-        if (!isInitialized) {
-            initBackend();
-            isInitialized = true;
-        }
-    }
 
     private class RocksDBCacheEntry {
         public V value;
@@ -168,15 +156,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     /**
-     * Initializes the backend (log, DB, etc) of the state store.
-     * This is usually an expensive call.
+     * Initializes the state store
+     * @param context Processor context
+     * @param root State store
      */
-    private void initBackend() {
-        ProcessorContext context = initContext;
-        StateStore root = initRoot;
-        if (initContext == null || root == null) {
-            return;
-        }
+    public void init(ProcessorContext context, StateStore root) {
         // open the DB dir
         openDB(context);
 
@@ -184,15 +168,15 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         if (this.cacheSize > 0) {
             this.cache = new MemoryLRUCache<K, RocksDBCacheEntry>(name, cacheSize)
-                    .whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<K, RocksDBCacheEntry>() {
-                        @Override
-                        public void apply(K key, RocksDBCacheEntry entry) {
-                            // flush all the dirty entries to RocksDB if this evicted entry is dirty
-                            if (entry.isDirty) {
-                                flushCache();
-                            }
+                .whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<K, RocksDBCacheEntry>() {
+                    @Override
+                    public void apply(K key, RocksDBCacheEntry entry) {
+                        // flush all the dirty entries to RocksDB if this evicted entry is dirty
+                        if (entry.isDirty) {
+                            flushCache();
                         }
-                    });
+                    }
+                });
 
 
             this.cacheDirtyKeys = new HashSet<>();
@@ -200,7 +184,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             this.cache = null;
             this.cacheDirtyKeys = null;
         }
-
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
@@ -210,19 +193,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 return getInternal(key);
             }
         };
-    }
 
-    /**
-     * Registers the state store. However it does not initialize their backends yet (e.g.,
-     * open database etc.), since that is done lazily in the {@link #initBackend()} method
-     * @param context Processor context
-     * @param root State store
-     */
-    public void init(ProcessorContext context, StateStore root) {
-        initContext = context;
-        initRoot = root;
-
-        context.register(root, loggingEnabled, new StateRestoreCallback() {
+        context.initStore(root, loggingEnabled, new StateRestoreCallback() {
 
             @Override
             public void restore(byte[] key, byte[] value) {
@@ -258,7 +230,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public V get(K key) {
-        maybeInitialize();
         if (cache != null) {
             RocksDBCacheEntry entry = cache.get(key);
 
@@ -276,7 +247,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     private byte[] getInternal(byte[] rawKey) {
-        maybeInitialize();
         try {
             return this.db.get(rawKey);
         } catch (RocksDBException e) {
@@ -287,7 +257,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void put(K key, V value) {
-        maybeInitialize();
         if (cache != null) {
             cacheDirtyKeys.add(key);
             cache.put(key, new RocksDBCacheEntry(value, true));
@@ -305,7 +274,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public V putIfAbsent(K key, V value) {
-        maybeInitialize();
         V originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
@@ -314,7 +282,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     private void putInternal(byte[] rawKey, byte[] rawValue) {
-        maybeInitialize();
         if (rawValue == null) {
             try {
                 db.remove(wOptions, rawKey);
@@ -334,7 +301,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void putAll(List<KeyValue<K, V>> entries) {
-        maybeInitialize();
         for (KeyValue<K, V> entry : entries)
             put(entry.key, entry.value);
     }
@@ -356,7 +322,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public V delete(K key) {
-        maybeInitialize();
         V value = get(key);
         put(key, null);
         return value;
@@ -364,7 +329,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
-        maybeInitialize();
         // we need to flush the cache if necessary before returning the iterator
         if (cache != null)
             flushCache();
@@ -374,7 +338,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public KeyValueIterator<K, V> all() {
-        maybeInitialize();
         // we need to flush the cache if necessary before returning the iterator
         if (cache != null)
             flushCache();
@@ -385,7 +348,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     private void flushCache() {
-        maybeInitialize();
         // flush of the cache entries if necessary
         if (cache != null) {
             List<KeyValue<byte[], byte[]>> putBatch = new ArrayList<>(cache.keys.size());
@@ -436,7 +398,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void flush() {
-        maybeInitialize();
         // flush of the cache entries if necessary
         flushCache();
 
@@ -448,7 +409,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
      * @throws ProcessorStateException if flushing failed because of any internal store exceptions
      */
     public void flushInternal() {
-        maybeInitialize();
         try {
             db.flush(fOptions);
         } catch (RocksDBException e) {
@@ -458,7 +418,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void close() {
-        maybeInitialize();
         flush();
         db.close();
     }

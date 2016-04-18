@@ -72,11 +72,17 @@ public interface ProcessorContext {
     StreamsMetrics metrics();
 
     /**
-     * Registers and possibly restores the specified storage engine.
+     * Registers but does not restores the specified storage engine.
      *
      * @param store the storage engine
      */
-    void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback);
+    void registerStore(StateStore store);
+
+    /**
+     * Restores and initializes the storage engine. Note this call assumes that the
+     * storage engine is already registered through {@link #registerStore(StateStore)}
+     */
+    void initStore(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback);
 
     /**
      * Get the state store given the store name.

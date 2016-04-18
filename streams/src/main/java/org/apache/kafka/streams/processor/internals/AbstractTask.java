@@ -81,6 +81,21 @@ public abstract class AbstractTask {
 
         for (StateStoreSupplier stateStoreSupplier : this.topology.stateStoreSuppliers()) {
             StateStore store = stateStoreSupplier.get();
+            this.processorContext.registerStore(store);
+        }
+    }
+
+    /**
+     * Registers all state stores for this task and initializes them.
+     * Note: used by standby tasks only
+     */
+    protected void registerAndinitializeStateStores() {
+        // set initial offset limits
+        initializeOffsetLimits();
+
+        for (StateStoreSupplier stateStoreSupplier : this.topology.stateStoreSuppliers()) {
+            StateStore store = stateStoreSupplier.get();
+            this.processorContext.registerStore(store);
             store.init(this.processorContext, store);
         }
     }

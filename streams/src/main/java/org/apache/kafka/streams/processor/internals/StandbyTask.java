@@ -61,7 +61,7 @@ public class StandbyTask extends AbstractTask {
         // initialize the topology with its own context
         this.processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
 
-        registerStateStores();
+        registerAndinitializeStateStores();
 
         ((StandbyContextImpl) this.processorContext).initialized();
 

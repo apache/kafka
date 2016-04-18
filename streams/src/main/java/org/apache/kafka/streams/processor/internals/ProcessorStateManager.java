@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -59,13 +60,15 @@ public class ProcessorStateManager {
     private final File baseDir;
     private final FileLock directoryLock;
     private final Map<String, StateStore> stores;
+    private final Map<String, ProcessorContext> storeContext;
+    private final Set<String> storeInitialized;
     private final Set<String> loggingEnabled;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Map<TopicPartition, Long> restoredOffsets;
     private final Map<TopicPartition, Long> checkpointedOffsets;
     private final Map<TopicPartition, Long> offsetLimits;
     private final boolean isStandby;
-    private final Map<String, StateRestoreCallback> restoreCallbacks; // used for one of active OR standby tasks, keyed by state topic name
+    private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
 
     /**
      * @throws IOException if any error happens while creating or locking the state directory
@@ -83,9 +86,10 @@ public class ProcessorStateManager {
         this.restoreConsumer = restoreConsumer;
         this.restoredOffsets = new HashMap<>();
         this.isStandby = isStandby;
-        this.restoreCallbacks = new HashMap<String, StateRestoreCallback>();
+        this.restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.offsetLimits = new HashMap<>();
-
+        this.storeContext = new HashMap<>();
+        this.storeInitialized = new HashSet<>();
         // create the state directory for this task if missing (we won't create the parent directory)
         createStateDirectory(baseDir);
 
@@ -153,11 +157,7 @@ public class ProcessorStateManager {
      * Checks that the underlying change log topic exists
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    protected void checkTopicExits(StateStore store, boolean loggingEnabled) {
-        String topic;
-        if (loggingEnabled)
-            topic = storeChangelogTopic(this.applicationId, store.name());
-        else topic = store.name();
+    private void checkTopicExits(String topic) {
 
         // check that the underlying change log topic exists or not
         // block until the partition is ready for this state changelog topic or time has elapsed
@@ -182,41 +182,66 @@ public class ProcessorStateManager {
         } while (partitionNotFound && System.currentTimeMillis() < startTime + waitTime);
 
         if (partitionNotFound)
-            throw new StreamsException("Store " + store.name() + "'s change log (" + topic + ") does not contain partition " + partition);
+            throw new StreamsException("Change log (" + topic + ") does not contain partition " + partition);
 
-        if (!isStandby) {
-            restoreActiveState(topic, restoreCallbacks.get(topic));
-        }
     }
+
 
     /**
      * Registers the state stores with the system
      * @throws IllegalArgumentException if the store name has already been registered or if it is not a valid name
      * (e.g., when it conflicts with the names of internal topics, like the checkpoint file name)
      */
-    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
+    public void registerStore(StateStore store, ProcessorContext context) {
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
 
         if (this.stores.containsKey(store.name()))
             throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
+        if (this.storeContext.containsKey(store.name())) {
+            throw new IllegalArgumentException("Store's context " + store.name() + " has already been registered.");
+        }
 
-        if (loggingEnabled)
-            this.loggingEnabled.add(store.name());
+        this.stores.put(store.name(), store);
+        this.storeContext.put(store.name(), context);
+    }
+
+    /**
+     * Initializes the store, potentially restoring state
+     * @throws IllegalArgumentException if the store name has already been registered or if it is not a valid name
+     * (e.g., when it conflicts with the names of internal topics, like the checkpoint file name)
+     * @throws StreamsException if the store's change log does not contain the partition
+     */
+    public void initStore(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
+
+        if (!this.stores.containsKey(store.name()))
+            throw new IllegalArgumentException("Store " + store.name() + " has not been registered yet.");
+        if (this.storeInitialized.contains(store.name()))
+            throw new IllegalArgumentException("Store " + store.name() + " has already been initialized.");
 
         String topic;
         if (loggingEnabled)
             topic = storeChangelogTopic(this.applicationId, store.name());
         else topic = store.name();
 
-        this.stores.put(store.name(), store);
+        if (loggingEnabled)
+            this.loggingEnabled.add(store.name());
+
+        try {
+            checkTopicExits(topic);
+        } catch (StreamsException e) {
+            this.stores.remove(store.name());
+            this.storeContext.remove(store.name());
+            throw e;
+        }
 
         if (isStandby) {
             if (store.persistent())
                 restoreCallbacks.put(topic, stateRestoreCallback);
         } else {
-            restoreCallbacks.put(topic, stateRestoreCallback);
+            restoreActiveState(topic, stateRestoreCallback);
         }
+        this.storeInitialized.add(store.name());
     }
 
     private void restoreActiveState(String topicName, StateRestoreCallback stateRestoreCallback) {
@@ -329,8 +354,8 @@ public class ProcessorStateManager {
 
     public StateStore getStore(String name) {
         StateStore store = stores.get(name);
-        if (store != null) {
-            checkTopicExits(store, loggingEnabled.contains(name));
+        if (store != null && !this.storeInitialized.contains(store.name())) {
+            store.init(storeContext.get(name), store);
         }
         return store;
     }
@@ -338,8 +363,11 @@ public class ProcessorStateManager {
     public void flush() {
         if (!this.stores.isEmpty()) {
             log.debug("Flushing stores.");
-            for (StateStore store : this.stores.values())
-                store.flush();
+            for (StateStore store : this.stores.values()) {
+                if (this.storeInitialized.contains(store.name())) {
+                    store.flush();
+                }
+            }
         }
     }
 
