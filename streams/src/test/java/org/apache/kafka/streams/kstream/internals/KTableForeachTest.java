@@ -61,7 +61,7 @@ public class KTableForeachTest {
             new ForeachAction<Integer, String>() {
                 @Override
                 public void apply(Integer key, String value) {
-                    actualRecords.add(new KeyValue<>(key * 2, value.toUpperCase(Locale.getDefault())));
+                    actualRecords.add(new KeyValue<>(key * 2, value.toUpperCase(Locale.ROOT)));
                 }
             };
 

@@ -43,7 +43,7 @@ public class KStreamFlatMapValuesTest {
                 @Override
                 public Iterable<String> apply(String value) {
                     ArrayList<String> result = new ArrayList<String>();
-                    result.add(value.toLowerCase(Locale.getDefault()));
+                    result.add(value.toLowerCase(Locale.ROOT));
                     result.add(value);
                     return result;
                 }

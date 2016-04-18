@@ -60,7 +60,7 @@ public class MockConsumerInterceptor implements ConsumerInterceptor<String, Stri
                                              record.timestamp(), record.timestampType(),
                                              record.checksum(), record.serializedKeySize(),
                                              record.serializedValueSize(),
-                                             record.key(), record.value().toUpperCase(Locale.getDefault())));
+                                             record.key(), record.value().toUpperCase(Locale.ROOT)));
             }
             recordMap.put(tp, lst);
         }

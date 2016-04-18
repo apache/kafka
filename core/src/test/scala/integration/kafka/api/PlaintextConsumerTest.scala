@@ -607,7 +607,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     for (i <- 0 until numRecords) {
       val record = records.get(i)
       assertEquals(s"key $i", new String(record.key()))
-      assertEquals(s"value $i$appendStr".toUpperCase(Locale.getDefault), new String(record.value()))
+      assertEquals(s"value $i$appendStr".toUpperCase(Locale.ROOT), new String(record.value()))
     }
 
     // commit sync and verify onCommit is called
