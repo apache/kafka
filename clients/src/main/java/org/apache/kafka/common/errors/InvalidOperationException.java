@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,25 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.security.auth
 
-import kafka.common.KafkaException
-import org.junit.{Test, Assert}
-import org.scalatest.junit.JUnitSuite
+package org.apache.kafka.common.errors;
 
-class PermissionTypeTest extends JUnitSuite {
+/**
+ * Throw when an invalid operation is being performed on a resource.
+ */
+public class InvalidOperationException extends AuthorizationException {
 
-  @Test
-  def testFromString(): Unit = {
-    val permissionType = PermissionType.fromString("Allow")
-    Assert.assertEquals(Allow, permissionType)
+    private static final long serialVersionUID = 1L;
 
-    try {
-      PermissionType.fromString("badName")
-      fail("Expected exception on invalid PermissionType name.")
-    } catch {
-      case e: KafkaException => // expected
+    public InvalidOperationException(String message) {
+        super(message);
     }
-  }
+
+    public InvalidOperationException(String message, Throwable cause) {
+        super(message, cause);
+    }
 
 }

@@ -23,18 +23,17 @@ import java.util.concurrent.ExecutionException
 
 import kafka.admin.AclCommand
 import kafka.common.TopicAndPartition
-import kafka.security.auth._
+import kafka.security.auth.SimpleAclAuthorizer
 import kafka.server._
 import kafka.utils._
-
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, ConsumerConfig}
-import org.apache.kafka.clients.producer.{ProducerRecord, ProducerConfig}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.{TopicPartition}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord}
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.errors.{GroupAuthorizationException,TopicAuthorizationException}
+import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
+import org.apache.kafka.common.security.auth._
 import org.junit.Assert._
-import org.junit.{Test, After, Before}
+import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
 
@@ -81,9 +80,9 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   protected def kafkaServerSaslMechanisms = List("GSSAPI")
   override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, Some(kafkaServerSaslMechanisms)))
 
-  val topicResource = new Resource(Topic, topic)
-  val groupResource = new Resource(Group, group)
-  val clusterResource = Resource.ClusterResource
+  val topicResource = new Resource(ResourceType.TOPIC, topic)
+  val groupResource = new Resource(ResourceType.GROUP, group)
+  val clusterResource = Resource.CLUSTER_RESOURCE
 
   // Arguments to AclCommand to set ACLs. There are three definitions here:
   // 1- Provides read and write access to topic
@@ -120,12 +119,12 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                           s"--group=$group",
                                           s"--operation=Read",
                                           s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def ClusterActionAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
-  def TopicBrokerReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, Read))
-  def GroupReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
-  def TopicReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
-  def TopicWriteAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Write))
-  def TopicDescribeAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Describe))
+  def ClusterActionAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), PermissionType.ALLOW, Acl.WILDCARD_HOST, Operation.CLUSTER_ACTION))
+  def TopicBrokerReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), PermissionType.ALLOW, Acl.WILDCARD_HOST, Operation.READ))
+  def GroupReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), PermissionType.ALLOW, Acl.WILDCARD_HOST, Operation.READ))
+  def TopicReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), PermissionType.ALLOW, Acl.WILDCARD_HOST, Operation.READ))
+  def TopicWriteAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), PermissionType.ALLOW, Acl.WILDCARD_HOST, Operation.WRITE))
+  def TopicDescribeAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), PermissionType.ALLOW, Acl.WILDCARD_HOST, Operation.DESCRIBE))
   // The next two configuration parameters enable ZooKeeper secure ACLs
   // and sets the Kafka authorizer, both necessary to enable security.
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
@@ -150,7 +149,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     super.setUp
     AclCommand.main(topicBrokerReadAclArgs)
     servers.foreach( s =>
-      TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*"))
+      TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(ResourceType.TOPIC, "*"))
     )
     // create the test topic with all the brokers as replicas
     TestUtils.createTopic(zkUtils, topic, 1, 3, this.servers)

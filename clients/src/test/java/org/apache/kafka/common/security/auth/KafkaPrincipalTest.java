@@ -26,7 +26,7 @@ public class KafkaPrincipalTest {
         String name = "name" + KafkaPrincipal.SEPARATOR + "with" + KafkaPrincipal.SEPARATOR + "in" + KafkaPrincipal.SEPARATOR + "it";
 
         KafkaPrincipal principal = KafkaPrincipal.fromString(KafkaPrincipal.USER_TYPE + KafkaPrincipal.SEPARATOR + name);
-        Assert.assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
+        Assert.assertEquals(KafkaPrincipal.USER_TYPE, principal.principalType());
         Assert.assertEquals(name, principal.getName());
     }
 

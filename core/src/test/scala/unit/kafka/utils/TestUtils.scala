@@ -19,14 +19,12 @@ package kafka.utils
 
 import java.io._
 import java.nio._
-import java.nio.file.Files
 import java.nio.channels._
 import java.util.concurrent.{Callable, Executors, TimeUnit}
-import java.util.{Collections, Properties, Random}
+import java.util.{Properties, Random}
 import java.security.cert.X509Certificate
 import javax.net.ssl.X509TrustManager
 import charset.Charset
-import kafka.security.auth.{Acl, Authorizer, Resource}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.test.TestSslUtils
@@ -44,12 +42,11 @@ import kafka.log._
 import kafka.utils.ZkUtils._
 import org.junit.Assert._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, KafkaConsumer, RangeAssignor}
+import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.network.Mode
-import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.security.auth.{Acl, Authorizer, Resource}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
-import org.apache.kafka.common.utils.Utils
 
 import scala.collection.Map
 import scala.collection.JavaConversions._
@@ -1093,8 +1090,8 @@ object TestUtils extends Logging {
   }
 
   def waitAndVerifyAcls(expected: Set[Acl], authorizer: Authorizer, resource: Resource) = {
-    TestUtils.waitUntilTrue(() => authorizer.getAcls(resource) == expected,
-      s"expected acls $expected but got ${authorizer.getAcls(resource)}", waitTime = 10000)
+    TestUtils.waitUntilTrue(() => authorizer.acls(resource).toSet == expected,
+      s"expected acls $expected but got ${authorizer.acls(resource).toSet}", waitTime = 10000)
   }
 
   /**

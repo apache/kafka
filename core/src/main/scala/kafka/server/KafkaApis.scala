@@ -31,21 +31,20 @@ import kafka.coordinator.{GroupCoordinator, JoinGroupResult}
 import kafka.log._
 import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
 import kafka.network._
-import kafka.network.RequestChannel.{Response, Session}
-import kafka.security.auth.{Authorizer, ClusterAction, Create, Describe, Group, Operation, Read, Resource, Topic, Write}
+import kafka.network.RequestChannel.Response
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidTopicException, NotLeaderForPartitionException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol, SecurityProtocol}
-import org.apache.kafka.common.requests.{ApiVersionsResponse, DescribeGroupsRequest, DescribeGroupsResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsResponse, ListOffsetRequest, ListOffsetResponse, MetadataRequest, MetadataResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, ProduceRequest, ProduceResponse, ResponseHeader, ResponseSend, StopReplicaRequest, StopReplicaResponse, SyncGroupRequest, SyncGroupResponse, UpdateMetadataRequest, UpdateMetadataResponse}
+import org.apache.kafka.common.requests.{GroupCoordinatorRequest, GroupCoordinatorResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, ControlledShutdownRequest => _, ControlledShutdownResponse => _, FetchRequest => _, FetchResponse => _, _}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.internals.TopicConstants
+import org.apache.kafka.common.security.auth._
 
 import scala.collection._
 import scala.collection.JavaConverters._
-import org.apache.kafka.common.requests.SaslHandshakeResponse
 
 /**
  * Logic to handle the various Kafka requests
@@ -139,8 +138,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       val responseHeader = new ResponseHeader(correlationId)
-      val leaderAndIsrResponse =
-        if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+      val leaderAndIsrResponse=
+        if (authorize(new Session(request.session.principal, request.session.clientAddress), Operation.CLUSTER_ACTION, Resource.CLUSTER_RESOURCE)) {
           val result = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, metadataCache, onLeadershipChange)
           new LeaderAndIsrResponse(result.errorCode, result.responseMap.mapValues(new JShort(_)).asJava)
         } else {
@@ -164,7 +163,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val responseHeader = new ResponseHeader(request.header.correlationId)
     val response =
-      if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+      if (authorize(new Session(request.session.principal, request.session.clientAddress), Operation.CLUSTER_ACTION, Resource.CLUSTER_RESOURCE)) {
         val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
         new StopReplicaResponse(error, result.asInstanceOf[Map[TopicPartition, JShort]].asJava)
       } else {
@@ -181,7 +180,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val updateMetadataRequest = request.body.asInstanceOf[UpdateMetadataRequest]
 
     val updateMetadataResponse =
-      if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+      if (authorize(new Session(request.session.principal, request.session.clientAddress), Operation.CLUSTER_ACTION, Resource.CLUSTER_RESOURCE)) {
         replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest, metadataCache)
         new UpdateMetadataResponse(Errors.NONE.code)
       } else {
@@ -215,7 +214,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetCommitRequest = request.body.asInstanceOf[OffsetCommitRequest]
 
     // reject the request if not authorized to the group
-    if (!authorize(request.session, Read, new Resource(Group, offsetCommitRequest.groupId))) {
+    if (!authorize(new Session(request.session.principal, request.session.clientAddress), Operation.READ, new Resource(ResourceType.GROUP, offsetCommitRequest.groupId))) {
       val errorCode = new JShort(Errors.GROUP_AUTHORIZATION_FAILED.code)
       val results = offsetCommitRequest.offsetData.keySet.asScala.map { topicPartition =>
         (topicPartition, errorCode)
@@ -230,8 +229,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       val filteredRequestInfo = offsetCommitRequest.offsetData.asScala.toMap -- invalidRequestsInfo.keys
 
-      val (authorizedRequestInfo, unauthorizedRequestInfo) = filteredRequestInfo.partition {
-        case (topicPartition, offsetMetadata) => authorize(request.session, Read, new Resource(Topic, topicPartition.topic))
+      val (authorizedRequestInfo, unauthorizedRequestInfo) =  filteredRequestInfo.partition {
+        case (topicPartition, offsetMetadata) => authorize(new Session(request.session.principal, request.session.clientAddress), Operation.READ, new Resource(ResourceType.TOPIC, topicPartition.topic))
       }
 
       // the callback for sending an offset commit response
@@ -328,7 +327,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val numBytesAppended = request.header.sizeOf + produceRequest.sizeOf
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) = produceRequest.partitionRecords.asScala.partition {
-      case (topicPartition, _) => authorize(request.session, Write, new Resource(Topic, topicPartition.topic))
+      case (topicPartition, _) => authorize(new Session(request.session.principal, request.session.clientAddress), Operation.WRITE, new Resource(ResourceType.TOPIC, topicPartition.topic))
     }
 
     // the callback for sending a produce response
@@ -422,8 +421,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleFetchRequest(request: RequestChannel.Request) {
     val fetchRequest = request.requestObj.asInstanceOf[FetchRequest]
 
-    val (authorizedRequestInfo, unauthorizedRequestInfo) = fetchRequest.requestInfo.partition {
-      case (topicAndPartition, _) => authorize(request.session, Read, new Resource(Topic, topicAndPartition.topic))
+    val (authorizedRequestInfo, unauthorizedRequestInfo) =  fetchRequest.requestInfo.partition {
+      case (topicAndPartition, _) => authorize(new Session(request.session.principal, request.session.clientAddress), Operation.READ, new Resource(ResourceType.TOPIC, topicAndPartition.topic))
     }
 
     val unauthorizedPartitionData = unauthorizedRequestInfo.mapValues { _ =>
@@ -511,7 +510,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetRequest = request.body.asInstanceOf[ListOffsetRequest]
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) = offsetRequest.offsetData.asScala.partition {
-      case (topicPartition, _) => authorize(request.session, Describe, new Resource(Topic, topicPartition.topic))
+      case (topicPartition, _) => authorize(new Session(request.session.principal, request.session.clientAddress), Operation.DESCRIBE, new Resource(ResourceType.TOPIC, topicPartition.topic))
     }
 
     val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ =>
@@ -699,13 +698,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
     var (authorizedTopics, unauthorizedTopics) =
-      topics.partition(topic => authorize(request.session, Describe, new Resource(Topic, topic)))
+      topics.partition(topic => authorize(new Session(request.session.principal, request.session.clientAddress), Operation.DESCRIBE, new Resource(ResourceType.TOPIC, topic)))
 
     if (authorizedTopics.nonEmpty) {
       val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
       if (config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
         authorizer.foreach { az =>
-          if (!az.authorize(request.session, Create, Resource.ClusterResource)) {
+          if (!az.authorize(new Session(request.session.principal, request.session.clientAddress), Operation.CREATE, Resource.CLUSTER_RESOURCE)) {
             authorizedTopics --= nonExistingTopics
             unauthorizedTopics ++= nonExistingTopics
           }
@@ -754,13 +753,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val responseHeader = new ResponseHeader(header.correlationId)
     val offsetFetchResponse =
     // reject the request if not authorized to the group
-    if (!authorize(request.session, Read, new Resource(Group, offsetFetchRequest.groupId))) {
+    if (!authorize(new Session(request.session.principal, request.session.clientAddress), Operation.READ, new Resource(ResourceType.GROUP, offsetFetchRequest.groupId))) {
       val unauthorizedGroupResponse = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.GROUP_AUTHORIZATION_FAILED.code)
       val results = offsetFetchRequest.partitions.asScala.map { topicPartition => (topicPartition, unauthorizedGroupResponse)}.toMap
       new OffsetFetchResponse(results.asJava)
     } else {
       val (authorizedTopicPartitions, unauthorizedTopicPartitions) = offsetFetchRequest.partitions.asScala.partition { topicPartition =>
-        authorize(request.session, Describe, new Resource(Topic, topicPartition.topic))
+        authorize(new Session(request.session.principal, request.session.clientAddress), Operation.DESCRIBE, new Resource(ResourceType.TOPIC, topicPartition.topic))
       }
       val unauthorizedTopicResponse = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.TOPIC_AUTHORIZATION_FAILED.code)
       val unauthorizedStatus = unauthorizedTopicPartitions.map(topicPartition => (topicPartition, unauthorizedTopicResponse)).toMap
@@ -808,7 +807,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val groupCoordinatorRequest = request.body.asInstanceOf[GroupCoordinatorRequest]
     val responseHeader = new ResponseHeader(request.header.correlationId)
 
-    if (!authorize(request.session, Describe, new Resource(Group, groupCoordinatorRequest.groupId))) {
+    if (!authorize(new Session(request.session.principal, request.session.clientAddress), Operation.DESCRIBE, new Resource(ResourceType.GROUP, groupCoordinatorRequest.groupId))) {
       val responseBody = new GroupCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED.code, Node.noNode)
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     } else {
@@ -844,7 +843,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val groups = describeRequest.groupIds().asScala.map {
       case groupId =>
-        if (!authorize(request.session, Describe, new Resource(Group, groupId))) {
+        if (!authorize(new Session(request.session.principal, request.session.clientAddress), Operation.DESCRIBE, new Resource(ResourceType.GROUP, groupId))) {
           groupId -> DescribeGroupsResponse.GroupMetadata.forError(Errors.GROUP_AUTHORIZATION_FAILED)
         } else {
           val (error, summary) = coordinator.handleDescribeGroup(groupId)
@@ -864,7 +863,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleListGroupsRequest(request: RequestChannel.Request) {
     val responseHeader = new ResponseHeader(request.header.correlationId)
-    val responseBody = if (!authorize(request.session, Describe, Resource.ClusterResource)) {
+    val responseBody = if (!authorize(new Session(request.session.principal, request.session.clientAddress), Operation.DESCRIBE, Resource.CLUSTER_RESOURCE)) {
       ListGroupsResponse.fromError(Errors.CLUSTER_AUTHORIZATION_FAILED)
     } else {
       val (error, groups) = coordinator.handleListGroups()
@@ -891,7 +890,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     }
 
-    if (!authorize(request.session, Read, new Resource(Group, joinGroupRequest.groupId()))) {
+    if (!authorize(new Session(request.session.principal, request.session.clientAddress), Operation.READ, new Resource(ResourceType.GROUP, joinGroupRequest.groupId()))) {
       val responseBody = new JoinGroupResponse(
         Errors.GROUP_AUTHORIZATION_FAILED.code,
         JoinGroupResponse.UNKNOWN_GENERATION_ID,
@@ -927,7 +926,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     }
 
-    if (!authorize(request.session, Read, new Resource(Group, syncGroupRequest.groupId()))) {
+    if (!authorize(new Session(request.session.principal, request.session.clientAddress), Operation.READ, new Resource(ResourceType.GROUP, syncGroupRequest.groupId()))) {
       sendResponseCallback(Array[Byte](), Errors.GROUP_AUTHORIZATION_FAILED.code)
     } else {
       coordinator.handleSyncGroup(
@@ -952,7 +951,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, response)))
     }
 
-    if (!authorize(request.session, Read, new Resource(Group, heartbeatRequest.groupId))) {
+    if (!authorize(new Session(request.session.principal, request.session.clientAddress), Operation.READ, new Resource(ResourceType.GROUP, heartbeatRequest.groupId))) {
       val heartbeatResponse = new HeartbeatResponse(Errors.GROUP_AUTHORIZATION_FAILED.code)
       requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, respHeader, heartbeatResponse)))
     }
@@ -1003,7 +1002,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, response)))
     }
 
-    if (!authorize(request.session, Read, new Resource(Group, leaveGroupRequest.groupId))) {
+    if (!authorize(new Session(request.session.principal, request.session.clientAddress), Operation.READ, new Resource(ResourceType.GROUP, leaveGroupRequest.groupId))) {
       val leaveGroupResponse = new LeaveGroupResponse(Errors.GROUP_AUTHORIZATION_FAILED.code)
       requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, respHeader, leaveGroupResponse)))
     } else {
@@ -1044,7 +1043,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {
-    if (!authorize(request.session, ClusterAction, Resource.ClusterResource))
+    if (!authorize(new Session(request.session.principal, request.session.clientAddress), Operation.CLUSTER_ACTION, Resource.CLUSTER_RESOURCE))
       throw new ClusterAuthorizationException(s"Request $request is not authorized.")
   }
 }

@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
-import kafka.security.auth.Resource
 import kafka.utils.Json
 import kafka.utils.Logging
 import kafka.utils.SystemTime
@@ -28,7 +27,8 @@ import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection._
 import kafka.admin.AdminUtils
-import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
+import org.I0Itec.zkclient.{IZkChildListener, IZkStateListener, ZkClient}
+import org.apache.kafka.common.security.auth.Resource
 
 
 /**

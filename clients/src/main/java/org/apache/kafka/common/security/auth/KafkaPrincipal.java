@@ -77,7 +77,7 @@ public class KafkaPrincipal implements Principal {
         return name;
     }
 
-    public String getPrincipalType() {
+    public String principalType() {
         return principalType;
     }
 }
