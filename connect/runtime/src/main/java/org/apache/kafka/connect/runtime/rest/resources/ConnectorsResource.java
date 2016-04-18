@@ -149,16 +149,18 @@ public class ConnectorsResource {
         completeOrForwardRequest(cb, "/connectors/" + connector + "/restart", "POST", null, forward);
     }
 
-    @POST
+    @PUT
     @Path("/{connector}/pause")
-    public void pauseConnector(@PathParam("connector") String connector) {
+    public Response pauseConnector(@PathParam("connector") String connector) {
         herder.pauseConnector(connector);
+        return Response.accepted().build();
     }
 
-    @POST
+    @PUT
     @Path("/{connector}/resume")
-    public void resumeConnector(@PathParam("connector") String connector) {
+    public Response resumeConnector(@PathParam("connector") String connector) {
         herder.resumeConnector(connector);
+        return Response.accepted().build();
     }
 
     @GET
