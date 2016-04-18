@@ -549,9 +549,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         addRequest(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
-                // if config is up to date, we can check if this is a valid connector task. otherwise, we let the
-                // request either be handled locally or forwarded to its target
-                if (isConfigSynced() && !configState.connectors().contains(connName)) {
+                // if config is out of sync, then a rebalance is likely to begin shortly, so rather than risking
+                // a stale response, we return an error and let the user retry
+                if (!isConfigSynced()) {
+                    throw new StaleConfigException("Cannot complete request because config is out of sync");
+                }
+
+                if (!configState.connectors().contains(connName)) {
                     callback.onCompletion(new NotFoundException("Unknown connector: " + connName), null);
                     return null;
                 }
@@ -579,18 +583,20 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         addRequest(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
-                // if config is up to date, we can check if this is a valid connector task. otherwise, we let the
-                // request either be handled locally or forwarded to its target
-                if (isConfigSynced()) {
-                    if (!configState.connectors().contains(id.connector())) {
-                        callback.onCompletion(new NotFoundException("Unknown connector: " + id.connector()), null);
-                        return null;
-                    }
+                // if config is out of sync, then a rebalance is likely to begin shortly, so rather than risking
+                // a stale response, we return an error and let the user retry
+                if (!isConfigSynced()) {
+                    throw new StaleConfigException("Cannot complete request because config is out of sync");
+                }
 
-                    if (configState.taskConfig(id) == null) {
-                        callback.onCompletion(new NotFoundException("Unknown task: " + id), null);
-                        return null;
-                    }
+                if (!configState.connectors().contains(id.connector())) {
+                    callback.onCompletion(new NotFoundException("Unknown connector: " + id.connector()), null);
+                    return null;
+                }
+
+                if (configState.taskConfig(id) == null) {
+                    callback.onCompletion(new NotFoundException("Unknown task: " + id), null);
+                    return null;
                 }
 
                 if (worker.ownsTask(id)) {
