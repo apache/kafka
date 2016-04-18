@@ -232,7 +232,7 @@ public class ConnectorsResource {
                 }
             } else if (cause instanceof StaleConfigException) {
                 throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
-                        "Cannot complete request because of a conflicting operation (e.g. worker rebalance)");
+                        "Cannot complete request momentarily due to stale configuration (typically caused by a concurrent config change)");
             }
 
             throw cause;
