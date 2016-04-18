@@ -88,10 +88,10 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
 
     @Override
     public synchronized void removeConnectorConfig(String connector) {
-        connectors.remove(connector);
+        ConnectorState state = connectors.remove(connector);
 
-        if (updateListener != null)
-            updateListener.onConnectorConfigUpdate(connector);
+        if (updateListener != null && state != null)
+            updateListener.onConnectorConfigRemove(connector);
     }
 
     @Override

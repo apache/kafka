@@ -99,6 +99,12 @@ public interface ConfigBackingStore {
 
     interface UpdateListener {
         /**
+         * Invoked when a connector configuration has been removed
+         * @param connector name of the connector
+         */
+        void onConnectorConfigRemove(String connector);
+
+        /**
          * Invoked when a connector configuration has been updated.
          * @param connector name of the connector
          */

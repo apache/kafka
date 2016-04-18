@@ -232,9 +232,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 // However, if connectors were added or removed, work needs to be rebalanced since we have more work
                 // items to distribute among workers.
                 ClusterConfigState newConfigState = configBackingStore.snapshot();
-                if (!newConfigState.connectors().equals(configState.connectors()))
-                    needsReconfigRebalance = true;
                 configState = newConfigState;
+
                 if (needsReconfigRebalance) {
                     // Task reconfigs require a rebalance. Request the rebalance, clean out state, and then restart
                     // this loop, which will then ensure the rebalance occurs without any other requests being
@@ -360,7 +359,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 new Callable<Void>() {
                     @Override
                     public Void call() throws Exception {
-                        if (!checkConfigSynced(callback))
+                        if (checkRebalanceNeeded(callback))
                             return null;
 
                         callback.onCompletion(null, configState.connectors());
@@ -379,7 +378,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 new Callable<Void>() {
                     @Override
                     public Void call() throws Exception {
-                        if (!checkConfigSynced(callback))
+                        if (checkRebalanceNeeded(callback))
                             return null;
 
                         if (!configState.contains(connName)) {
@@ -497,7 +496,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 new Callable<Void>() {
                     @Override
                     public Void call() throws Exception {
-                        if (!checkConfigSynced(callback))
+                        if (checkRebalanceNeeded(callback))
                             return null;
 
                         if (!configState.contains(connName)) {
@@ -545,11 +544,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         addRequest(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
-                // if config is out of sync, then a rebalance is likely to begin shortly, so rather than risking
-                // a stale response, we return an error and let the user retry
-                if (!isConfigSynced()) {
-                    throw new StaleConfigException("Cannot complete request because config is out of sync");
-                }
+                if (checkRebalanceNeeded(callback))
+                    return null;
 
                 if (!configState.connectors().contains(connName)) {
                     callback.onCompletion(new NotFoundException("Unknown connector: " + connName), null);
@@ -579,11 +575,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         addRequest(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
-                // if config is out of sync, then a rebalance is likely to begin shortly, so rather than risking
-                // a stale response, we return an error and let the user retry
-                if (!isConfigSynced()) {
-                    throw new StaleConfigException("Cannot complete request because config is out of sync");
-                }
+                if (checkRebalanceNeeded(callback))
+                    return null;
 
                 if (!configState.connectors().contains(id.connector())) {
                     callback.onCompletion(new NotFoundException("Unknown connector: " + id.connector()), null);
@@ -871,21 +864,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    private boolean isConfigSynced() {
-        return assignment != null && configState.offset() == assignment.offset();
-    }
-
-    // Common handling for requests that get config data. Checks if we are in sync with the current config, which allows
-    // us to answer requests directly. If we are not, handles invoking the callback with the appropriate error.
-    private boolean checkConfigSynced(Callback<?> callback) {
-        if (!isConfigSynced()) {
-            if (!isLeader())
-                callback.onCompletion(new NotLeaderException("Cannot get config data because config is not in sync and this is not the leader", leaderUrl()), null);
-            else
-                callback.onCompletion(new ConnectException("Cannot get config data because this is the leader node, but it does not have the most up to date configs"), null);
-            return false;
+    private boolean checkRebalanceNeeded(Callback<?> callback) {
+        // Raise an error if we are expecting a rebalance to begin. This prevents us from forwarding requests
+        // based on stale leadership or assignment information
+        if (needsReconfigRebalance) {
+            callback.onCompletion(new RebalanceNeededException("Request cannot be completed because a rebalance is expected"), null);
+            return true;
         }
-        return true;
+        return false;
     }
 
     private void addRequest(Callable<Void> action, Callback<Void> callback) {
@@ -901,6 +887,19 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     public class ConfigUpdateListener implements ConfigBackingStore.UpdateListener {
         @Override
+        public void onConnectorConfigRemove(String connector) {
+            log.info("Connector {} config removed", connector);
+
+            synchronized (DistributedHerder.this) {
+                // rebalance after connector removal to ensure that existing tasks are balanced among workers
+                if (configState.contains(connector))
+                    needsReconfigRebalance = true;
+                connectorConfigUpdates.add(connector);
+            }
+            member.wakeup();
+        }
+
+        @Override
         public void onConnectorConfigUpdate(String connector) {
             log.info("Connector {} config updated", connector);
 
@@ -908,6 +907,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             // to be bounced. However, this callback may also indicate a connector *addition*, which does require
             // a rebalance, so we need to be careful about what operation we request.
             synchronized (DistributedHerder.this) {
+                if (!configState.contains(connector))
+                    needsReconfigRebalance = true;
                 connectorConfigUpdates.add(connector);
             }
             member.wakeup();

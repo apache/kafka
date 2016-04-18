@@ -475,11 +475,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     updateListener.onConnectorTargetStateChange(connectorName);
             } else if (record.key().startsWith(CONNECTOR_PREFIX)) {
                 String connectorName = record.key().substring(CONNECTOR_PREFIX.length());
+                boolean removed = false;
                 synchronized (lock) {
                     if (value.value() == null) {
                         // Connector deletion will be written as a null value
                         log.info("Removed connector " + connectorName + " due to null configuration. This is usually intentional and does not indicate an issue.");
                         connectorConfigs.remove(connectorName);
+                        removed = true;
                     } else {
                         // Connector configs can be applied and callbacks invoked immediately
                         if (!(value.value() instanceof Map)) {
@@ -499,8 +501,12 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                             connectorTargetStates.put(connectorName, TargetState.STARTED);
                     }
                 }
-                if (!starting)
-                    updateListener.onConnectorConfigUpdate(connectorName);
+                if (!starting) {
+                    if (removed)
+                        updateListener.onConnectorConfigRemove(connectorName);
+                    else
+                        updateListener.onConnectorConfigUpdate(connectorName);
+                }
             } else if (record.key().startsWith(TASK_PREFIX)) {
                 synchronized (lock) {
                     ConnectorTaskId taskId = parseTaskId(record.key());

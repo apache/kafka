@@ -182,7 +182,7 @@ public class KafkaConfigBackingStoreTest {
         // Config deletion
         expectConvertWriteAndRead(
                 CONNECTOR_CONFIG_KEYS.get(1), KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, null, null, null);
-        configUpdateListener.onConnectorConfigUpdate(CONNECTOR_IDS.get(1));
+        configUpdateListener.onConnectorConfigRemove(CONNECTOR_IDS.get(1));
         EasyMock.expectLastCall();
 
         // Target state deletion

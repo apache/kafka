@@ -309,6 +309,11 @@ public class StandaloneHerder extends AbstractHerder {
     private class ConfigUpdateListener implements ConfigBackingStore.UpdateListener {
 
         @Override
+        public void onConnectorConfigRemove(String connector) {
+            configState = configBackingStore.snapshot();
+        }
+
+        @Override
         public void onConnectorConfigUpdate(String connector) {
             // TODO: move connector configuration update handling here to be consistent with
             //       the semantics of the config backing store
