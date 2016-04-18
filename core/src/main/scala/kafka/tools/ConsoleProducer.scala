@@ -305,6 +305,7 @@ object ConsoleProducer {
 
     override def readMessage() = {
       lineNumber += 1
+      print(">")
       (reader.readLine(), parseKey) match {
         case (null, _) => null
         case (line, true) =>
