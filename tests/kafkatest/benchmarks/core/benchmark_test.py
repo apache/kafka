@@ -68,9 +68,10 @@ class Benchmark(Test):
     @parametrize(acks=1, topic=TOPIC_REP_THREE)
     @parametrize(acks=-1, topic=TOPIC_REP_THREE)
     @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=3)
-    @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], security_protocol=['PLAINTEXT', 'SSL'])
-    def test_producer_throughput(self, acks, topic, num_producers=1, message_size=DEFAULT_RECORD_SIZE, security_protocol='PLAINTEXT',
-                                 client_version=str(TRUNK), broker_version=str(TRUNK)):
+    @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none", "snappy"], security_protocol=['PLAINTEXT', 'SSL'])
+    def test_producer_throughput(self, acks, topic, num_producers=1, message_size=DEFAULT_RECORD_SIZE,
+                                 compression_type="none", security_protocol='PLAINTEXT', client_version=str(TRUNK),
+                                 broker_version=str(TRUNK)):
         """
         Setup: 1 node zk + 3 node kafka cluster
         Produce ~128MB worth of messages to a topic with 6 partitions. Required acks, topic replication factor,
@@ -91,15 +92,17 @@ class Benchmark(Test):
             num_records=nrecords, record_size=message_size,  throughput=-1, version=client_version,
             settings={
                 'acks': acks,
+                'compression.type': compression_type,
                 'batch.size': self.batch_size,
                 'buffer.memory': self.buffer_memory})
         self.producer.run()
         return compute_aggregate_throughput(self.producer)
 
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
-    def test_long_term_producer_throughput(self, security_protocol, interbroker_security_protocol=None,
-                                           client_version=str(TRUNK), broker_version=str(TRUNK)):
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
+    def test_long_term_producer_throughput(self, compression_type="none", security_protocol='PLAINTEXT',
+                                           interbroker_security_protocol=None, client_version=str(TRUNK),
+                                           broker_version=str(TRUNK)):
         """
         Setup: 1 node zk + 3 node kafka cluster
         Produce 10e6 100 byte messages to a topic with 6 partitions, replication-factor 3, and acks=1.
@@ -117,7 +120,12 @@ class Benchmark(Test):
         self.producer = ProducerPerformanceService(
             self.test_context, 1, self.kafka,
             topic=TOPIC_REP_THREE, num_records=self.msgs_large, record_size=DEFAULT_RECORD_SIZE,
-            throughput=-1, version=client_version, settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory},
+            throughput=-1, version=client_version, settings={
+                'acks': 1,
+                'compression.type': compression_type,
+                'batch.size': self.batch_size,
+                'buffer.memory': self.buffer_memory
+            },
             intermediate_stats=True
         )
         self.producer.run()
@@ -146,9 +154,10 @@ class Benchmark(Test):
         return data
 
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    @matrix(security_protocol=['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'])
-    def test_end_to_end_latency(self, security_protocol, interbroker_security_protocol=None,
-                                client_version=str(TRUNK), broker_version=str(TRUNK)):
+    @matrix(security_protocol=['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'], compression_type=["none", "snappy"])
+    def test_end_to_end_latency(self, compression_type="none", security_protocol="PLAINTEXT",
+                                interbroker_security_protocol=None, client_version=str(TRUNK),
+                                broker_version=str(TRUNK)):
         """
         Setup: 1 node zk + 3 node kafka cluster
         Produce (acks = 1) and consume 10e3 messages to a topic with 6 partitions and replication-factor 3,
@@ -167,15 +176,17 @@ class Benchmark(Test):
         self.logger.info("BENCHMARK: End to end latency")
         self.perf = EndToEndLatencyService(
             self.test_context, 1, self.kafka,
-            topic=TOPIC_REP_THREE, num_records=10000, version=client_version
+            topic=TOPIC_REP_THREE, num_records=10000,
+            compression_type=compression_type, version=client_version
         )
         self.perf.run()
         return latency(self.perf.results[0]['latency_50th_ms'],  self.perf.results[0]['latency_99th_ms'], self.perf.results[0]['latency_999th_ms'])
 
     @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
-    def test_producer_and_consumer(self, security_protocol, interbroker_security_protocol=None, new_consumer=True,
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
+    def test_producer_and_consumer(self, compression_type="none", security_protocol="PLAINTEXT",
+                                   interbroker_security_protocol=None, new_consumer=True,
                                    client_version=str(TRUNK), broker_version=str(TRUNK)):
         """
         Setup: 1 node zk + 3 node kafka cluster
@@ -198,7 +209,12 @@ class Benchmark(Test):
             self.test_context, 1, self.kafka,
             topic=TOPIC_REP_THREE,
             num_records=num_records, record_size=DEFAULT_RECORD_SIZE, throughput=-1, version=client_version,
-            settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory}
+            settings={
+                'acks': 1,
+                'compression.type': compression_type,
+                'batch.size': self.batch_size,
+                'buffer.memory': self.buffer_memory
+            }
         )
         self.consumer = ConsumerPerformanceService(
             self.test_context, 1, self.kafka, topic=TOPIC_REP_THREE, new_consumer=new_consumer, messages=num_records)
@@ -216,8 +232,9 @@ class Benchmark(Test):
 
     @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
-    def test_consumer_throughput(self, security_protocol, interbroker_security_protocol=None, new_consumer=True, num_consumers=1,
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
+    def test_consumer_throughput(self, compression_type="none", security_protocol="PLAINTEXT",
+                                 interbroker_security_protocol=None, new_consumer=True, num_consumers=1,
                                  client_version=str(TRUNK), broker_version=str(TRUNK)):
         """
         Consume 10e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
@@ -236,7 +253,12 @@ class Benchmark(Test):
             self.test_context, 1, self.kafka,
             topic=TOPIC_REP_THREE,
             num_records=num_records, record_size=DEFAULT_RECORD_SIZE, throughput=-1, version=client_version,
-            settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory}
+            settings={
+                'acks': 1,
+                'compression.type': compression_type,
+                'batch.size': self.batch_size,
+                'buffer.memory': self.buffer_memory
+            }
         )
         self.producer.run()
 
