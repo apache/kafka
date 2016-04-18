@@ -242,6 +242,9 @@ public class Worker {
         return names.substring(0, names.toString().length() - 2);
     }
 
+    public boolean ownsTask(ConnectorTaskId taskId) {
+        return tasks.containsKey(taskId);
+    }
 
     private static Connector instantiateConnector(Class<? extends Connector> connClass) {
         try {
@@ -413,6 +416,10 @@ public class Worker {
 
     public String workerId() {
         return workerId;
+    }
+
+    public boolean ownsConnector(String connName) {
+        return this.connectors.containsKey(connName);
     }
 
     private static class WorkerConnector  {

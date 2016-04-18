@@ -21,6 +21,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
+import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.TaskConfig;
@@ -56,10 +57,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(DistributedHerder.class)
@@ -310,6 +314,303 @@ public class DistributedHerderTest {
 
         herder.putConnectorConfig(CONN1, null, true, putConnectorCallback);
         herder.tick();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartConnector() throws Exception {
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andStubReturn(TASK_CONFIGS);
+
+        // get the initial assignment
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        expectRebalance(1, Collections.singletonList(CONN1), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+        worker.startConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject(),
+                EasyMock.eq(herder));
+        PowerMock.expectLastCall();
+
+        // now handle the connector restart
+        member.wakeup();
+        PowerMock.expectLastCall();
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        EasyMock.expect(worker.ownsConnector(CONN1)).andReturn(true);
+
+        worker.stopConnector(CONN1);
+        PowerMock.expectLastCall();
+        worker.startConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject(),
+                EasyMock.eq(herder));
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.tick();
+        FutureCallback<Void> callback = new FutureCallback<>();
+        herder.restartConnector(CONN1, callback);
+        herder.tick();
+        callback.get(1000L, TimeUnit.MILLISECONDS);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartUnknownConnector() throws Exception {
+        // get the initial assignment
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+
+        // now handle the connector restart
+        member.wakeup();
+        PowerMock.expectLastCall();
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.tick();
+        FutureCallback<Void> callback = new FutureCallback<>();
+        herder.restartConnector(CONN2, callback);
+        herder.tick();
+        try {
+            callback.get(1000L, TimeUnit.MILLISECONDS);
+            fail("Expected NotLeaderException to be raised");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof NotFoundException);
+        }
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartConnectorRedirectToLeader() throws Exception {
+        // get the initial assignment
+        EasyMock.expect(member.memberId()).andStubReturn("member");
+        expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        // now handle the connector restart
+        member.wakeup();
+        PowerMock.expectLastCall();
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        EasyMock.expect(worker.ownsConnector(CONN1)).andReturn(false);
+
+        PowerMock.replayAll();
+
+        herder.tick();
+        FutureCallback<Void> callback = new FutureCallback<>();
+        herder.restartConnector(CONN1, callback);
+        herder.tick();
+
+        try {
+            callback.get(1000L, TimeUnit.MILLISECONDS);
+            fail("Expected NotLeaderException to be raised");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof NotLeaderException);
+        }
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartConnectorRedirectToOwner() throws Exception {
+        // get the initial assignment
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        // now handle the connector restart
+        member.wakeup();
+        PowerMock.expectLastCall();
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        String ownerUrl = "ownerUrl";
+        EasyMock.expect(worker.ownsConnector(CONN1)).andReturn(false);
+        EasyMock.expect(member.ownerUrl(CONN1)).andReturn(ownerUrl);
+
+        PowerMock.replayAll();
+
+        herder.tick();
+        FutureCallback<Void> callback = new FutureCallback<>();
+        herder.restartConnector(CONN1, callback);
+        herder.tick();
+
+        try {
+            callback.get(1000L, TimeUnit.MILLISECONDS);
+            fail("Expected NotLeaderException to be raised");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof NotAssignedException);
+            NotAssignedException notAssignedException = (NotAssignedException) e.getCause();
+            assertEquals(ownerUrl, notAssignedException.forwardUrl());
+        }
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartTask() throws Exception {
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andStubReturn(TASK_CONFIGS);
+
+        // get the initial assignment
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        expectRebalance(1, Collections.<String>emptyList(), Collections.singletonList(TASK0));
+        expectPostRebalanceCatchup(SNAPSHOT);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+        worker.startTask(EasyMock.eq(TASK0), EasyMock.<TaskConfig>anyObject(), EasyMock.eq(herder));
+        PowerMock.expectLastCall();
+
+        // now handle the task restart
+        member.wakeup();
+        PowerMock.expectLastCall();
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        EasyMock.expect(worker.ownsTask(TASK0)).andReturn(true);
+
+        worker.stopAndAwaitTask(TASK0);
+        PowerMock.expectLastCall();
+        worker.startTask(EasyMock.eq(TASK0), EasyMock.<TaskConfig>anyObject(), EasyMock.eq(herder));
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.tick();
+        FutureCallback<Void> callback = new FutureCallback<>();
+        herder.restartTask(TASK0, callback);
+        herder.tick();
+        callback.get(1000L, TimeUnit.MILLISECONDS);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartUnknownTask() throws Exception {
+        // get the initial assignment
+        EasyMock.expect(member.memberId()).andStubReturn("member");
+        expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        member.wakeup();
+        PowerMock.expectLastCall();
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        FutureCallback<Void> callback = new FutureCallback<>();
+        herder.tick();
+        herder.restartTask(new ConnectorTaskId("blah", 0), callback);
+        herder.tick();
+
+        try {
+            callback.get(1000L, TimeUnit.MILLISECONDS);
+            fail("Expected NotLeaderException to be raised");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof NotFoundException);
+        }
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartTaskRedirectToLeader() throws Exception {
+        // get the initial assignment
+        EasyMock.expect(member.memberId()).andStubReturn("member");
+        expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        // now handle the task restart
+        EasyMock.expect(worker.ownsTask(TASK0)).andReturn(false);
+        member.wakeup();
+        PowerMock.expectLastCall();
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.tick();
+        FutureCallback<Void> callback = new FutureCallback<>();
+        herder.restartTask(TASK0, callback);
+        herder.tick();
+
+        try {
+            callback.get(1000L, TimeUnit.MILLISECONDS);
+            fail("Expected NotLeaderException to be raised");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof NotLeaderException);
+        }
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartTaskRedirectToOwner() throws Exception {
+        // get the initial assignment
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        // now handle the task restart
+        String ownerUrl = "ownerUrl";
+        EasyMock.expect(worker.ownsTask(TASK0)).andReturn(false);
+        EasyMock.expect(member.ownerUrl(TASK0)).andReturn(ownerUrl);
+        member.wakeup();
+        PowerMock.expectLastCall();
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.tick();
+        FutureCallback<Void> callback = new FutureCallback<>();
+        herder.restartTask(TASK0, callback);
+        herder.tick();
+
+        try {
+            callback.get(1000L, TimeUnit.MILLISECONDS);
+            fail("Expected NotLeaderException to be raised");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof NotAssignedException);
+            NotAssignedException notAssignedException = (NotAssignedException) e.getCause();
+            assertEquals(ownerUrl, notAssignedException.forwardUrl());
+        }
 
         PowerMock.verifyAll();
     }

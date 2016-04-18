@@ -545,6 +545,79 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
+    public synchronized void restartConnector(final String connName, final Callback<Void> callback) {
+        addRequest(new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                // if config is out of sync, then a rebalance is likely to begin shortly, so rather than risking
+                // a stale response, we return an error and let the user retry
+                if (!isConfigSynced()) {
+                    throw new StaleConfigException("Cannot complete request because config is out of sync");
+                }
+
+                if (!configState.connectors().contains(connName)) {
+                    callback.onCompletion(new NotFoundException("Unknown connector: " + connName), null);
+                    return null;
+                }
+
+                if (worker.ownsConnector(connName)) {
+                    try {
+                        worker.stopConnector(connName);
+                        startConnector(connName);
+                        callback.onCompletion(null, null);
+                    } catch (Throwable t) {
+                        callback.onCompletion(t, null);
+                    }
+                } else if (isLeader()) {
+                    callback.onCompletion(new NotAssignedException("Cannot restart connector since it is not assigned to this member", member.ownerUrl(connName)), null);
+                } else {
+                    callback.onCompletion(new NotLeaderException("Cannot restart connector since it is not assigned to this member", leaderUrl()), null);
+                }
+                return null;
+            }
+        }, forwardErrorCallback(callback));
+    }
+
+    @Override
+    public synchronized void restartTask(final ConnectorTaskId id, final Callback<Void> callback) {
+        addRequest(new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                // if config is out of sync, then a rebalance is likely to begin shortly, so rather than risking
+                // a stale response, we return an error and let the user retry
+                if (!isConfigSynced()) {
+                    throw new StaleConfigException("Cannot complete request because config is out of sync");
+                }
+
+                if (!configState.connectors().contains(id.connector())) {
+                    callback.onCompletion(new NotFoundException("Unknown connector: " + id.connector()), null);
+                    return null;
+                }
+
+                if (configState.taskConfig(id) == null) {
+                    callback.onCompletion(new NotFoundException("Unknown task: " + id), null);
+                    return null;
+                }
+
+                if (worker.ownsTask(id)) {
+                    try {
+                        worker.stopAndAwaitTask(id);
+                        startTask(id);
+                        callback.onCompletion(null, null);
+                    } catch (Throwable t) {
+                        callback.onCompletion(t, null);
+                    }
+                } else if (isLeader()) {
+                    callback.onCompletion(new NotAssignedException("Cannot restart task since it is not assigned to this member", member.ownerUrl(id)), null);
+                } else {
+                    callback.onCompletion(new NotLeaderException("Cannot restart task since it is not assigned to this member", leaderUrl()), null);
+                }
+                return null;
+            }
+        }, forwardErrorCallback(callback));
+    }
+
+    @Override
     public int generation() {
         return generation;
     }
@@ -679,16 +752,20 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
         for (ConnectorTaskId taskId : assignment.tasks()) {
             try {
-                log.info("Starting task {}", taskId);
-                Map<String, String> configs = configState.taskConfig(taskId);
-                TaskConfig taskConfig = new TaskConfig(configs);
-                worker.startTask(taskId, taskConfig, this);
+                startTask(taskId);
             } catch (ConfigException e) {
                 log.error("Couldn't instantiate task " + taskId + " because it has an invalid task " +
                         "configuration. This task will not execute until reconfigured.", e);
             }
         }
         log.info("Finished starting connectors and tasks");
+    }
+
+    private void startTask(ConnectorTaskId taskId) {
+        log.info("Starting task {}", taskId);
+        Map<String, String> configs = configState.taskConfig(taskId);
+        TaskConfig taskConfig = new TaskConfig(configs);
+        worker.startTask(taskId, taskConfig, this);
     }
 
     // Helper for starting a connector with the given name, which will extract & parse the config, generate connector
@@ -791,10 +868,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
+    private boolean isConfigSynced() {
+        return assignment != null && configState.offset() == assignment.offset();
+    }
+
     // Common handling for requests that get config data. Checks if we are in sync with the current config, which allows
     // us to answer requests directly. If we are not, handles invoking the callback with the appropriate error.
     private boolean checkConfigSynced(Callback<?> callback) {
-        if (assignment == null || configState.offset() != assignment.offset()) {
+        if (!isConfigSynced()) {
             if (!isLeader())
                 callback.onCompletion(new NotLeaderException("Cannot get config data because config is not in sync and this is not the leader", leaderUrl()), null);
             else
