@@ -27,7 +27,7 @@ public class Count extends SampledStat {
 
     @Override
     protected void update(Sample sample, MetricConfig config, double value, long now) {
-        sample.value += 1.0;
+        sample.value += value;
     }
 
     @Override
