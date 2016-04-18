@@ -86,14 +86,17 @@ public abstract class Windows<W extends Window> {
         return this;
     }
 
+    // TODO?
     public long emitEveryMs() {
         return this.emitDurationMs;
     }
 
+    // TODO?
     public long maintainMs() {
         return this.maintainDurationMs;
     }
 
+    // TODO?
     protected String newName(String prefix) {
         return prefix + String.format("%010d", NAME_INDEX.getAndIncrement());
     }

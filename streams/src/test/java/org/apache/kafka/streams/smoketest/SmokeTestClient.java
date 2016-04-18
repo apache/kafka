@@ -213,7 +213,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                 new KeyValueMapper<Windowed<String>, Long, KeyValue<String, Long>>() {
                     @Override
                     public KeyValue<String, Long> apply(Windowed<String> key, Long value) {
-                        return new KeyValue<>(key.value() + "@" + key.window().start(), value);
+                        return new KeyValue<>(key.key() + "@" + key.window().start(), value);
                     }
                 }
         ).to(stringSerde, longSerde, "wcnt");

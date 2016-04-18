@@ -18,9 +18,8 @@
 package org.apache.kafka.streams.kstream;
 
 
-
 /**
- * The ForeachAction interface for performing an action on a key-value pair.
+ * The {@link ForeachAction} interface for performing an action on a key-value pair.
  * Note that this action is stateless. If stateful processing is required, consider
  * using {@link KStream#transform(TransformerSupplier, String...)} or
  * {@link KStream#process(ProcessorSupplier, String...)} instead.
@@ -29,6 +28,13 @@ package org.apache.kafka.streams.kstream;
  * @param <V>   original value type
  */
 public interface ForeachAction<K, V> {
+
+    /**
+     * Perform an action for each message of a stream.
+     *
+     * @param key    the key of the message
+     * @param value  the value of the message
+     */
     void apply(K key, V value);
 }
 

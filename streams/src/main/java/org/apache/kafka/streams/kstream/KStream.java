@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 /**
- * KStream is an abstraction of a <i>record stream</i> of key-value pairs.
+ * {@link KStream} is an abstraction of a <i>record stream</i> of key-value pairs. TODO extend
  *
  * @param <K> Type of keys
  * @param <V> Type of values

@@ -26,10 +26,10 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 public interface TimestampExtractor {
 
     /**
-     * Extracts a timestamp from a message
+     * Extracts a timestamp from a message.
      *
-     * @param record ConsumerRecord
-     * @return timestamp
+     * @param record  a message
+     * @return        the timestamp of the message
      */
     long extract(ConsumerRecord<Object, Object> record);
 }

@@ -29,14 +29,31 @@ import java.util.Objects;
  */
 public class KeyValue<K, V> {
 
+    /** The key of the key-value pair. */
     public final K key;
+    /** The value of the key-value pair. */
     public final V value;
 
+    /**
+     * Create a new key-value pair.
+     *
+     * @param key    the key
+     * @param value  the value
+     */
     public KeyValue(K key, V value) {
         this.key = key;
         this.value = value;
     }
 
+    /**
+     * Create a new key-value pair.
+     *
+     * @param key    the key
+     * @param value  the value
+     * @param <K>    the type of the key
+     * @param <V>    the type of the value
+     * @return       a new typed key value pair
+     */
     public static <K, V> KeyValue<K, V> pair(K key, V value) {
         return new KeyValue<>(key, value);
     }

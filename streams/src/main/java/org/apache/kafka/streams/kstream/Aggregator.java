@@ -18,7 +18,7 @@
 package org.apache.kafka.streams.kstream;
 
 /**
- * The Aggregator interface for aggregating values of the given key.
+ * The {@link Aggregator} interface for aggregating values of the given key.
  *
  * @param <K>   key type
  * @param <V>   original value type
@@ -26,5 +26,14 @@ package org.apache.kafka.streams.kstream;
  */
 public interface Aggregator<K, V, T> {
 
+    /**
+     * Compute a new aggregate for the message with the given key and value and the current aggregate (ie,
+     * {@link #apply(Object, Object, Object)} "increments" an aggregate with another message).
+     *
+     * @param aggKey     the key of the message
+     * @param value      the value of the message
+     * @param aggregate  the current aggregate value
+     * @return           the new aggregate value
+     */
     T apply(K aggKey, V value, T aggregate);
 }

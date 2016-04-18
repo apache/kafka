@@ -157,7 +157,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
         @SuppressWarnings("unchecked")
         @Override
         public V get(Windowed<K> windowedKey) {
-            K key = windowedKey.value();
+            K key = windowedKey.key();
             W window = (W) windowedKey.window();
 
             // this iterator should only contain one element

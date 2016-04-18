@@ -18,12 +18,19 @@
 package org.apache.kafka.streams.kstream;
 
 /**
- * The Predicate interface represents a predicate (boolean-valued function) of a key-value pair.
+ * The {@link Predicate} interface represents a predicate (boolean-valued function) of a key-value pair.
  *
  * @param <K>   key type
  * @param <V>   value type
  */
 public interface Predicate<K, V> {
 
+    /**
+     * Test if the message with the given key and value satisfies the predicate.
+     *
+     * @param key    the key of the message
+     * @param value  the value of the message
+     * @return       return {@code true} if the key-value pair satisfies the predicate&mdash;{@code false} otherwise
+     */
     boolean test(K key, V value);
 }

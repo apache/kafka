@@ -28,6 +28,13 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
  * built-in <i>CreateTime</i> timestamp (see KIP-32: Add timestamps to Kafka message for details).
  */
 public class WallclockTimestampExtractor implements TimestampExtractor {
+
+    /**
+     * Return the current wall clock time as timestamp.
+     *
+     * @param record  a message
+     * @return        the current wall clock time
+     */
     @Override
     public long extract(ConsumerRecord<Object, Object> record) {
         return System.currentTimeMillis();

@@ -23,7 +23,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.processor.StateStore;
 
 /**
- * A windowed store interface extending {@link StateStore}
+ * A windowed store interface extending {@link StateStore}.
  *
  * @param <K> Type of keys
  * @param <V> Type of values
