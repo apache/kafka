@@ -72,7 +72,7 @@ public interface ProcessorContext {
     StreamsMetrics metrics();
 
     /**
-     * Registers but does not restores the specified storage engine.
+     * Registers but does not restore the specified storage engine.
      *
      * @param store the storage engine
      */
