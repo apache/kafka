@@ -112,7 +112,7 @@ public class ConsumerCoordinatorTest {
         this.partitionAssignor.clear();
 
         client.setNode(node);
-        this.coordinator = buildCoordinator(metrics, assignors, ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, autoCommitEnabled);
+        this.coordinator = buildCoordinator(metrics, assignors, ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, autoCommitEnabled);
     }
 
     @After
@@ -733,7 +733,7 @@ public class ConsumerCoordinatorTest {
         final String consumerId = "consumer";
 
         ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
-                ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, true);
+                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true);
 
         subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
         subscriptions.needReassignment();
@@ -759,7 +759,7 @@ public class ConsumerCoordinatorTest {
         final String consumerId = "consumer";
 
         ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
-                ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, true);
+                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true);
 
         subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
         subscriptions.needReassignment();
@@ -787,7 +787,7 @@ public class ConsumerCoordinatorTest {
     @Test
     public void testAutoCommitManualAssignment() {
         ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
-                ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, true);
+                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true);
 
         subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.seek(tp, 100);
@@ -805,7 +805,7 @@ public class ConsumerCoordinatorTest {
     @Test
     public void testAutoCommitManualAssignmentCoordinatorUnknown() {
         ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
-                ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, true);
+                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true);
 
         subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.seek(tp, 100);
@@ -1094,7 +1094,7 @@ public class ConsumerCoordinatorTest {
 
         try (Metrics metrics = new Metrics(time)) {
             ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(roundRobin, range),
-                    ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, false);
+                    ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, false);
             List<ProtocolMetadata> metadata = coordinator.metadata();
             assertEquals(2, metadata.size());
             assertEquals(roundRobin.name(), metadata.get(0).name());
@@ -1103,7 +1103,7 @@ public class ConsumerCoordinatorTest {
 
         try (Metrics metrics = new Metrics(time)) {
             ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(range, roundRobin),
-                    ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, false);
+                    ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, false);
             List<ProtocolMetadata> metadata = coordinator.metadata();
             assertEquals(2, metadata.size());
             assertEquals(range.name(), metadata.get(0).name());
