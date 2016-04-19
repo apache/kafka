@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util.Properties
-
 import kafka.api.ApiVersion
 import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
@@ -32,6 +31,7 @@ import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, SslConfigs}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.security.auth.DefaultPrincipalBuilder
 
 import scala.collection.{JavaConverters, Map, immutable}
 import JavaConverters._
@@ -162,7 +162,7 @@ object Defaults {
   val MetricReporterClasses = ""
 
   /** ********* SSL configuration ***********/
-  val PrincipalBuilderClass = SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS
+  val PrincipalBuilderClass = classOf[DefaultPrincipalBuilder]
   val SslProtocol = SslConfigs.DEFAULT_SSL_PROTOCOL
   val SslEnabledProtocols = SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS
   val SslKeystoreType = SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE
