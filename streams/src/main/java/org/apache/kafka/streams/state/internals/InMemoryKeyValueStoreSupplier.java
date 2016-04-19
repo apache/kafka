@@ -35,6 +35,8 @@ import java.util.TreeMap;
 /**
  * An in-memory key-value store based on a TreeMap.
  *
+ * Note that array typed keys may result in incorrect behavior for ordering.
+ *
  * @param <K> The key type
  * @param <V> The value type
  *
@@ -63,10 +65,10 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        return new MeteredKeyValueStore<>(new MemoryStore<K, V>(name, keySerde, valueSerde).enableLogging(), "in-memory-state", time);
+        return new MeteredKeyValueStore<>(new MemoryStore<>(name, keySerde, valueSerde).enableLogging(), "in-memory-state", time);
     }
 
-    private static class MemoryStore<K, V> extends KeyValueStore<K, V> {
+    private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
         private final String name;
         private final Serde<K> keySerde;
         private final Serde<V> valueSerde;
@@ -109,8 +111,6 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
         @Override
         public void put(K key, V value) {
-            checkKeyIsArray(key);
-
             this.map.put(key, value);
         }
 
@@ -136,12 +136,12 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
         @Override
         public KeyValueIterator<K, V> range(K from, K to) {
-            return new MemoryStoreIterator<K, V>(this.map.subMap(from, true, to, false).entrySet().iterator());
+            return new MemoryStoreIterator<>(this.map.subMap(from, true, to, false).entrySet().iterator());
         }
 
         @Override
         public KeyValueIterator<K, V> all() {
-            return new MemoryStoreIterator<K, V>(this.map.entrySet().iterator());
+            return new MemoryStoreIterator<>(this.map.entrySet().iterator());
         }
 
         @Override

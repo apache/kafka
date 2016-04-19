@@ -47,7 +47,17 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
-public class RocksDBStore<K, V> extends KeyValueStore<K, V> {
+/**
+ * A persistent key-value store based on RocksDB.
+ *
+ * Note that array typed keys may result in incorrect caching behavior.
+ *
+ * @param <K> The key type
+ * @param <V> The value type
+ *
+ * @see org.apache.kafka.streams.state.Stores#create(String)
+ */
+public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private static final int TTL_NOT_USED = -1;
 
@@ -250,9 +260,6 @@ public class RocksDBStore<K, V> extends KeyValueStore<K, V> {
     @Override
     public void put(K key, V value) {
         if (cache != null) {
-            // first check if the key is an array
-            checkKeyIsArray(key);
-
             cacheDirtyKeys.add(key);
             cache.put(key, new RocksDBCacheEntry(value, true));
         } else {

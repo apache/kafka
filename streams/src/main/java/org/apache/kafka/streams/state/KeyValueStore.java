@@ -21,7 +21,6 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 
 import java.util.List;
@@ -33,17 +32,7 @@ import java.util.List;
  * @param <V> The value type
  */
 @InterfaceStability.Unstable
-public abstract class KeyValueStore<K, V> implements StateStore {
-
-    private boolean checked = false;
-
-    public void checkKeyIsArray(K key) {
-        if (!checked && key.getClass().isArray()) {
-            throw new StreamsException("KeyValueStore cannot support array keys.");
-        } else {
-            checked = true;
-        }
-    }
+public interface KeyValueStore<K, V> extends StateStore {
 
     /**
      * Get the value corresponding to this key
@@ -52,7 +41,7 @@ public abstract class KeyValueStore<K, V> implements StateStore {
      * @return The value or null if no value is found.
      * @throws NullPointerException If null is used for key.
      */
-    public abstract V get(K key);
+    V get(K key);
 
     /**
      * Update the value associated with this key
@@ -61,7 +50,7 @@ public abstract class KeyValueStore<K, V> implements StateStore {
      * @param value The value
      * @throws NullPointerException If null is used for key or value.
      */
-    public abstract void put(K key, V value);
+    void put(K key, V value);
 
     /**
      * Update the value associated with this key, unless a value
@@ -72,7 +61,7 @@ public abstract class KeyValueStore<K, V> implements StateStore {
      * @return The old value or null if there is no such key.
      * @throws NullPointerException If null is used for key or value.
      */
-    public abstract V putIfAbsent(K key, V value);
+    V putIfAbsent(K key, V value);
 
     /**
      * Update all the given key/value pairs
@@ -80,7 +69,7 @@ public abstract class KeyValueStore<K, V> implements StateStore {
      * @param entries A list of entries to put into the store.
      * @throws NullPointerException If null is used for any key or value.
      */
-    public abstract void putAll(List<KeyValue<K, V>> entries);
+    void putAll(List<KeyValue<K, V>> entries);
 
     /**
      * Delete the value from the store (if there is one)
@@ -89,7 +78,7 @@ public abstract class KeyValueStore<K, V> implements StateStore {
      * @return The old value or null if there is no such key.
      * @throws NullPointerException If null is used for key.
      */
-    public abstract V delete(K key);
+    V delete(K key);
 
     /**
      * Get an iterator over a given range of keys. This iterator MUST be closed after use.
@@ -99,12 +88,13 @@ public abstract class KeyValueStore<K, V> implements StateStore {
      * @return The iterator for this range.
      * @throws NullPointerException If null is used for from or to.
      */
-    public abstract KeyValueIterator<K, V> range(K from, K to);
+    KeyValueIterator<K, V> range(K from, K to);
 
     /**
      * Return an iterator over all keys in the database. This iterator MUST be closed after use.
      *
      * @return An iterator of all key/value pairs in the store.
      */
-    public abstract KeyValueIterator<K, V> all();
+    KeyValueIterator<K, V> all();
+
 }
