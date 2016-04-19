@@ -110,6 +110,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         // initialize the topology with its own context
         this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics);
+        stateMgr.setContext(this.processorContext);
 
         // register the state stores
         registerStateStores();

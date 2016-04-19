@@ -117,7 +117,7 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
         if (initialized)
             throw new IllegalStateException("Can only create state stores during initialization.");
 
-        stateMgr.registerStore(store, this);
+        stateMgr.registerStore(store);
     }
 
     /**

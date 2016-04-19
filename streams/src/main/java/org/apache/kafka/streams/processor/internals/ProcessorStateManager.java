@@ -60,7 +60,7 @@ public class ProcessorStateManager {
     private final File baseDir;
     private final FileLock directoryLock;
     private final Map<String, StateStore> stores;
-    private final Map<String, ProcessorContext> storeContext;
+    private ProcessorContext processorContext;
     private final Set<String> storeInitialized;
     private final Set<String> loggingEnabled;
     private final Consumer<byte[], byte[]> restoreConsumer;
@@ -88,7 +88,7 @@ public class ProcessorStateManager {
         this.isStandby = isStandby;
         this.restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.offsetLimits = new HashMap<>();
-        this.storeContext = new HashMap<>();
+        this.processorContext = null;
         this.storeInitialized = new HashSet<>();
         // create the state directory for this task if missing (we won't create the parent directory)
         createStateDirectory(baseDir);
@@ -107,6 +107,9 @@ public class ProcessorStateManager {
         checkpoint.delete();
     }
 
+    public void setContext(ProcessorContext processorContext) {
+        this.processorContext = processorContext;
+    }
     private static void createStateDirectory(File stateDir) throws IOException {
         if (!stateDir.exists()) {
             stateDir.mkdir();
@@ -192,18 +195,14 @@ public class ProcessorStateManager {
      * @throws IllegalArgumentException if the store name has already been registered or if it is not a valid name
      * (e.g., when it conflicts with the names of internal topics, like the checkpoint file name)
      */
-    public void registerStore(StateStore store, ProcessorContext context) {
+    public void registerStore(StateStore store) {
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
 
         if (this.stores.containsKey(store.name()))
             throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
-        if (this.storeContext.containsKey(store.name())) {
-            throw new IllegalArgumentException("Store's context " + store.name() + " has already been registered.");
-        }
 
         this.stores.put(store.name(), store);
-        this.storeContext.put(store.name(), context);
     }
 
     /**
@@ -231,7 +230,6 @@ public class ProcessorStateManager {
             checkTopicExits(topic);
         } catch (StreamsException e) {
             this.stores.remove(store.name());
-            this.storeContext.remove(store.name());
             throw e;
         }
 
@@ -355,7 +353,7 @@ public class ProcessorStateManager {
     public StateStore getStore(String name) {
         StateStore store = stores.get(name);
         if (store != null && !this.storeInitialized.contains(store.name())) {
-            store.init(storeContext.get(name), store);
+            store.init(processorContext, store);
         }
         return store;
     }
