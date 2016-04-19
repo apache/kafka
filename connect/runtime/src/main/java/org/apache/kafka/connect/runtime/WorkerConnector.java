@@ -87,7 +87,7 @@ public class WorkerConnector {
                     connector.start(config);
                     statusListener.onStartup(connName);
                     this.state = State.STARTED;
-                    break;
+                    return;
 
                 default:
                     throw new IllegalArgumentException("Cannot start connector in state " + state);

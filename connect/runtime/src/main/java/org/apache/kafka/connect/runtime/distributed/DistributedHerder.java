@@ -231,8 +231,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 // Connector reconfigs only need local updates since there is no coordination between workers required.
                 // However, if connectors were added or removed, work needs to be rebalanced since we have more work
                 // items to distribute among workers.
-                ClusterConfigState newConfigState = configBackingStore.snapshot();
-                configState = newConfigState;
+                configState = configBackingStore.snapshot();
 
                 if (needsReconfigRebalance) {
                     // Task reconfigs require a rebalance. Request the rebalance, clean out state, and then restart

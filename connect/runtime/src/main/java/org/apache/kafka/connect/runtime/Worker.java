@@ -131,10 +131,10 @@ public class Worker {
         long limit = started + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
 
         for (Map.Entry<String, WorkerConnector> entry : connectors.entrySet()) {
-            WorkerConnector conn = entry.getValue();
+            WorkerConnector workerConnector = entry.getValue();
             log.warn("Shutting down connector {} uncleanly; herder should have shut down connectors before the" +
                     "Worker is stopped.", entry.getKey());
-            conn.shutdown();
+            workerConnector.shutdown();
         }
 
         Collection<ConnectorTaskId> taskIds = tasks.keySet();
@@ -156,6 +156,7 @@ public class Worker {
      * @param connConfig connector configuration
      * @param ctx context for the connector
      * @param statusListener listener for notifications of connector status changes
+     * @param initialState the initial target state that the connector should be initialized to
      */
     public void startConnector(ConnectorConfig connConfig,
                                ConnectorContext ctx,
@@ -303,6 +304,7 @@ public class Worker {
      * @param id Globally unique ID for this task.
      * @param taskConfig the parsed task configuration
      * @param statusListener listener for notifications of task status changes
+     * @param initialState the initial target state that the task should be initialized to
      */
     public void startTask(ConnectorTaskId id,
                           TaskConfig taskConfig,
