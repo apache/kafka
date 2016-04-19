@@ -233,6 +233,8 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         statusBackingStore.stop();
         PowerMock.expectLastCall();
+        worker.stop();
+        PowerMock.expectLastCall();
 
         PowerMock.replayAll();
 

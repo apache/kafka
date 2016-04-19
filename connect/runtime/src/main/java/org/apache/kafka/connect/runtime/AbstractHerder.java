@@ -98,6 +98,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected abstract int generation();
 
     protected void startServices() {
+        this.worker.start();
         this.statusBackingStore.start();
         this.configBackingStore.start();
     }
@@ -105,6 +106,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected void stopServices() {
         this.statusBackingStore.stop();
         this.configBackingStore.stop();
+        this.worker.stop();
     }
 
     @Override

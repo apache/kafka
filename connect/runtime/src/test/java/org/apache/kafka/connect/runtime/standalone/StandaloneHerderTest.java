@@ -320,6 +320,8 @@ public class StandaloneHerderTest {
 
         statusBackingStore.stop();
         EasyMock.expectLastCall();
+        worker.stop();
+        EasyMock.expectLastCall();
 
         PowerMock.replayAll();
 

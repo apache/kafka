@@ -81,7 +81,7 @@ public class ConnectDistributed {
 
         DistributedHerder herder = new DistributedHerder(config, time, worker, statusBackingStore, configBackingStore,
                 advertisedUrl.toString());
-        final Connect connect = new Connect(worker, herder, rest);
+        final Connect connect = new Connect(herder, rest);
         try {
             connect.start();
         } catch (Exception e) {
