@@ -78,6 +78,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *     by a single node at a time. Most importantly, this includes writing updated configurations for connectors and tasks,
  *     (and therefore, also for creating, destroy, and scaling up/down connectors).
  * </p>
+ * <p>
+ *     The DistributedHerder uses a single thread for most of its processing. This includes processing
+ *     config changes, handling task rebalances and serving requests from the HTTP layer. The latter are pushed
+ *     into a queue until the thread has time to handle them. A consequence of this is that requests can get blocked
+ *     behind a worker rebalance. When the herder knows that a rebalance is expected, it typically returns an error
+ *     immediately to the request, but this is not always possible (in particular when another worker has requested
+ *     the rebalance). Similar to handling HTTP requests, config changes which are observed asynchronously by polling
+ *     the config log are batched for handling in the work thread.
+ * </p>
  */
 public class DistributedHerder extends AbstractHerder implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(DistributedHerder.class);
