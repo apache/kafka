@@ -150,7 +150,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
             workerTask.iteration();
         }
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         // Verify contents match expected values, i.e. that they were translated properly. With max
@@ -196,7 +195,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         // Commit finishes synchronously for testing so we can check this immediately
         assertEquals(0, workerTask.commitFailures());
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         assertEquals(2, capturedRecords.getValues().size());
@@ -236,7 +234,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         assertEquals(1, workerTask.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         PowerMock.verifyAll();
@@ -277,7 +274,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         assertEquals(1, workerTask.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         PowerMock.verifyAll();
@@ -309,7 +305,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         assertEquals(1, workerTask.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         PowerMock.verifyAll();
@@ -345,7 +340,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         assertEquals(1, workerTask.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         PowerMock.verifyAll();
@@ -414,7 +408,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerTask.iteration();
         workerTask.iteration();
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         PowerMock.verifyAll();
@@ -458,7 +451,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerTask.iteration();
         workerTask.iteration();
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         PowerMock.verifyAll();

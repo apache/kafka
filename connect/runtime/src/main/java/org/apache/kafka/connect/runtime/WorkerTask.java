@@ -31,14 +31,19 @@ import java.util.concurrent.atomic.AtomicReference;
  * Handles processing for an individual task. This interface only provides the basic methods
  * used by {@link Worker} to manage the tasks. Implementations combine a user-specified Task with
  * Kafka to create a data flow.
+ *
+ * Note on locking: since the task runs in its own thread, special care must be taken to ensure
+ * that state transitions are reported correctly, in particular since some state transitions are
+ * asynchronous (e.g. pause/resume). For example, change the state to paused could cause a race
+ * if the task fails at the same time. To protect from these cases, we synchronize status updates
+ * using the WorkerTask's monitor.
  */
 abstract class WorkerTask implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(WorkerTask.class);
 
     protected final ConnectorTaskId id;
-    private final AtomicBoolean stopping;
-    private final AtomicBoolean running;
-    private final AtomicBoolean cancelled;
+    private final AtomicBoolean stopping;   // indicates whether the Worker has asked the task to stop
+    private final AtomicBoolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
     private final CountDownLatch shutdownLatch;
     private final TaskStatus.Listener statusListener;
     private final AtomicReference<TargetState> targetState;
@@ -48,7 +53,6 @@ abstract class WorkerTask implements Runnable {
                       TargetState initialState) {
         this.id = id;
         this.stopping = new AtomicBoolean(false);
-        this.running = new AtomicBoolean(false);
         this.cancelled = new AtomicBoolean(false);
         this.shutdownLatch = new CountDownLatch(1);
         this.statusListener = statusListener;
@@ -70,9 +74,7 @@ abstract class WorkerTask implements Runnable {
      * shutdown. Use #{@link #awaitStop} to block until completion.
      */
     public void stop() {
-        synchronized (stopping) {
-            this.stopping.set(true);
-        }
+        this.stopping.set(true);
     }
 
     /**
@@ -90,9 +92,6 @@ abstract class WorkerTask implements Runnable {
      * @return true if successful, false if the timeout was reached
      */
     public boolean awaitStop(long timeoutMs) {
-        if (!running.get())
-            return true;
-
         try {
             return shutdownLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
@@ -108,10 +107,6 @@ abstract class WorkerTask implements Runnable {
         return stopping.get();
     }
 
-    protected boolean isStopped() {
-        return !running.get();
-    }
-
     private void doClose() {
         try {
             close();
@@ -122,17 +117,16 @@ abstract class WorkerTask implements Runnable {
     }
 
     private void doRun() {
-        if (!this.running.compareAndSet(false, true))
-            throw new IllegalStateException("The task cannot be started while still running");
-
         try {
-            if (stopping.get())
-                return;
+            synchronized (this) {
+                if (stopping.get())
+                    return;
 
-            if (targetState.get() == TargetState.PAUSED)
-                statusListener.onPause(id);
-            else
-                statusListener.onStartup(id);
+                if (targetState.get() == TargetState.PAUSED)
+                    statusListener.onPause(id);
+                else
+                    statusListener.onStartup(id);
+            }
 
             execute();
         } catch (Throwable t) {
@@ -145,16 +139,20 @@ abstract class WorkerTask implements Runnable {
     }
 
     private void onShutdown() {
-        synchronized (stopping) {
-            stopping.set(false);
+        synchronized (this) {
+            stopping.set(true);
+            // if we were cancelled, skip the status update since the task may have already been
+            // started somewhere else
             if (!cancelled.get())
                 statusListener.onShutdown(id);
         }
     }
 
     private void onFailure(Throwable t) {
-        synchronized (stopping) {
-            stopping.set(false);
+        synchronized (this) {
+            stopping.set(true);
+            // if we were cancelled, skip the status update since the task may have already been
+            // started somewhere else
             if (!cancelled.get())
                 statusListener.onFailure(id, t);
         }
@@ -171,7 +169,6 @@ abstract class WorkerTask implements Runnable {
             if (t instanceof Error)
                 throw t;
         } finally {
-            running.set(false);
             shutdownLatch.countDown();
         }
     }
@@ -181,32 +178,26 @@ abstract class WorkerTask implements Runnable {
     }
 
     protected void awaitUnpause(long timeoutMs) throws InterruptedException {
-        synchronized (targetState) {
+        synchronized (this) {
             if (targetState.get() != TargetState.PAUSED) return;
-            this.targetState.wait(timeoutMs);
+            this.wait(timeoutMs);
         }
-    }
-
-    private void resume() {
-        synchronized (targetState) {
-            statusListener.onResume(id);
-            this.targetState.notifyAll();
-        }
-    }
-
-    private void pause() {
-        statusListener.onPause(id);
     }
 
     public void transitionTo(TargetState state) {
-        synchronized (stopping) {
+        synchronized (this) {
+            // ignore the state change if we are stopping
+            if (stopping.get())
+                return;
+
             TargetState oldState = this.targetState.getAndSet(state);
-            if (state != oldState && !stopping.get()) {
-                if (state == TargetState.PAUSED)
-                    pause();
-                else if (state == TargetState.STARTED)
-                    resume();
-                else
+            if (state != oldState) {
+                if (state == TargetState.PAUSED) {
+                    statusListener.onPause(id);
+                } else if (state == TargetState.STARTED) {
+                    statusListener.onResume(id);
+                    this.notifyAll();
+                } else
                     throw new IllegalArgumentException("Unhandled target state " + state);
             }
         }

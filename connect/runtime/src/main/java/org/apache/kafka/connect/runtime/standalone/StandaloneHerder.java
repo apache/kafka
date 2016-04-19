@@ -50,7 +50,7 @@ import java.util.Map;
 public class StandaloneHerder extends AbstractHerder {
     private static final Logger log = LoggerFactory.getLogger(StandaloneHerder.class);
 
-    private volatile ClusterConfigState configState;
+    private ClusterConfigState configState;
 
     public StandaloneHerder(Worker worker) {
         this(worker, worker.workerId(), new MemoryStatusBackingStore(), new MemoryConfigBackingStore());
@@ -310,28 +310,37 @@ public class StandaloneHerder extends AbstractHerder {
 
         @Override
         public void onConnectorConfigRemove(String connector) {
-            configState = configBackingStore.snapshot();
+            synchronized (StandaloneHerder.this) {
+                configState = configBackingStore.snapshot();
+            }
         }
 
         @Override
         public void onConnectorConfigUpdate(String connector) {
             // TODO: move connector configuration update handling here to be consistent with
             //       the semantics of the config backing store
-            configState = configBackingStore.snapshot();
+
+            synchronized (StandaloneHerder.this) {
+                configState = configBackingStore.snapshot();
+            }
         }
 
         @Override
         public void onTaskConfigUpdate(Collection<ConnectorTaskId> tasks) {
-            configState = configBackingStore.snapshot();
+            synchronized (StandaloneHerder.this) {
+                configState = configBackingStore.snapshot();
+            }
         }
 
         @Override
         public void onConnectorTargetStateChange(String connector) {
-            configState = configBackingStore.snapshot();
-            TargetState targetState = configState.targetState(connector);
-            worker.setTargetState(connector, targetState);
-            if (targetState == TargetState.STARTED)
-                updateConnectorTasks(connector);
+            synchronized (StandaloneHerder.this) {
+                configState = configBackingStore.snapshot();
+                TargetState targetState = configState.targetState(connector);
+                worker.setTargetState(connector, targetState);
+                if (targetState == TargetState.STARTED)
+                    updateConnectorTasks(connector);
+            }
         }
     }
 

@@ -24,6 +24,12 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+/**
+ * Container for Connector tasks which is responsible for managing their lifecycle (e.g. handling startup,
+ * shutdown, pausing, etc.).
+ *
+ * Note that this class is NOT thread-safe.
+ */
 public class WorkerConnector {
     private static final Logger log = LoggerFactory.getLogger(WorkerConnector.class);
 
@@ -50,7 +56,7 @@ public class WorkerConnector {
         this.state = State.INIT;
     }
 
-    public synchronized void initialize(Map<String, String> config) {
+    public void initialize(Map<String, String> config) {
         log.debug("Initializing connector {} with config {}", connName, config);
 
         this.config = config;
@@ -119,7 +125,7 @@ public class WorkerConnector {
         }
     }
 
-    public synchronized void shutdown() {
+    public void shutdown() {
         try {
             if (state == State.STARTED)
                 connector.stop();
@@ -132,7 +138,7 @@ public class WorkerConnector {
         }
     }
 
-    public synchronized void transitionTo(TargetState targetState) {
+    public void transitionTo(TargetState targetState) {
         log.debug("Transition connector {} to {}", connName, targetState);
         if (targetState == TargetState.PAUSED) {
             pause();
