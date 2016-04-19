@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
@@ -45,13 +44,11 @@ import java.util.concurrent.TimeUnit;
 class SourceTaskOffsetCommitter {
     private static final Logger log = LoggerFactory.getLogger(SourceTaskOffsetCommitter.class);
 
-    private Time time;
     private WorkerConfig config;
     private ScheduledExecutorService commitExecutorService = null;
-    private HashMap<ConnectorTaskId, ScheduledCommitTask> committers = new HashMap<>();
+    private final HashMap<ConnectorTaskId, ScheduledCommitTask> committers = new HashMap<>();
 
-    SourceTaskOffsetCommitter(Time time, WorkerConfig config) {
-        this.time = time;
+    SourceTaskOffsetCommitter(WorkerConfig config) {
         this.config = config;
         commitExecutorService = Executors.newSingleThreadScheduledExecutor();
     }
@@ -96,7 +93,7 @@ class SourceTaskOffsetCommitter {
         }
     }
 
-    public void commit(ConnectorTaskId id, WorkerSourceTask workerTask) {
+    private void commit(ConnectorTaskId id, WorkerSourceTask workerTask) {
         final ScheduledCommitTask task;
         synchronized (committers) {
             task = committers.get(id);

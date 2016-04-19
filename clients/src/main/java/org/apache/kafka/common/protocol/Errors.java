@@ -48,6 +48,7 @@ import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -116,7 +117,8 @@ public enum Errors {
     UNKNOWN_MEMBER_ID(25,
             new UnknownMemberIdException("The coordinator is not aware of this member.")),
     INVALID_SESSION_TIMEOUT(26,
-            new InvalidSessionTimeoutException("The session timeout is not within an acceptable range.")),
+            new InvalidSessionTimeoutException("The session timeout is not within the range allowed by the broker " +
+                    "(as configured by group.min.session.timeout.ms and group.max.session.timeout.ms).")),
     REBALANCE_IN_PROGRESS(27,
             new RebalanceInProgressException("The group is rebalancing, so a rejoin is needed.")),
     INVALID_COMMIT_OFFSET_SIZE(28,
@@ -182,6 +184,16 @@ public enum Errors {
     }
 
     /**
+     * Get a friendly description of the error (if one is available).
+     * @return the error message
+     */
+    public String message() {
+        if (exception != null)
+            return exception.getMessage();
+        return toString();
+    }
+
+    /**
      * Throw the exception if there is one
      */
     public static Errors forCode(short code) {
@@ -207,5 +219,38 @@ public enum Errors {
             clazz = clazz.getSuperclass();
         }
         return UNKNOWN;
+    }
+
+    private static String toHtml() {
+        final StringBuilder b = new StringBuilder();
+        b.append("<table class=\"data-table\"><tbody>\n");
+        b.append("<tr>");
+        b.append("<th>Error</th>\n");
+        b.append("<th>Code</th>\n");
+        b.append("<th>Retriable</th>\n");
+        b.append("<th>Description</th>\n");
+        b.append("</tr>\n");
+        for (Errors error : Errors.values()) {
+            b.append("<tr>");
+            b.append("<td>");
+            b.append(error.name());
+            b.append("</td>");
+            b.append("<td>");
+            b.append(error.code());
+            b.append("</td>");
+            b.append("<td>");
+            b.append(error.exception() != null && error.exception() instanceof RetriableException ? "True" : "False");
+            b.append("</td>");
+            b.append("<td>");
+            b.append(error.exception() != null ? error.exception().getMessage() : "");
+            b.append("</td>");
+            b.append("</tr>\n");
+        }
+        b.append("</table>\n");
+        return b.toString();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(toHtml());
     }
 }

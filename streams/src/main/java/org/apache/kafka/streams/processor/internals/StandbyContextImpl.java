@@ -17,49 +17,40 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 
 public class StandbyContextImpl implements ProcessorContext, RecordCollector.Supplier {
 
-    private static final Logger log = LoggerFactory.getLogger(StandbyContextImpl.class);
-
     private final TaskId id;
-    private final String jobId;
+    private final String applicationId;
     private final StreamsMetrics metrics;
     private final ProcessorStateManager stateMgr;
 
-    private final Serializer<?> keySerializer;
-    private final Serializer<?> valSerializer;
-    private final Deserializer<?> keyDeserializer;
-    private final Deserializer<?> valDeserializer;
+    private final Serde<?> keySerde;
+    private final Serde<?> valSerde;
 
     private boolean initialized;
 
     public StandbyContextImpl(TaskId id,
-                              String jobId,
+                              String applicationId,
                               StreamsConfig config,
                               ProcessorStateManager stateMgr,
                               StreamsMetrics metrics) {
         this.id = id;
-        this.jobId = jobId;
+        this.applicationId = applicationId;
         this.metrics = metrics;
         this.stateMgr = stateMgr;
 
-        this.keySerializer = config.keySerializer();
-        this.valSerializer = config.valueSerializer();
-        this.keyDeserializer = config.keyDeserializer();
-        this.valDeserializer = config.valueDeserializer();
+        this.keySerde = config.keySerde();
+        this.valSerde = config.valueSerde();
 
         this.initialized = false;
     }
@@ -78,8 +69,8 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     }
 
     @Override
-    public String jobId() {
-        return jobId;
+    public String applicationId() {
+        return applicationId;
     }
 
     @Override
@@ -88,23 +79,13 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     }
 
     @Override
-    public Serializer<?> keySerializer() {
-        return this.keySerializer;
+    public Serde<?> keySerde() {
+        return this.keySerde;
     }
 
     @Override
-    public Serializer<?> valueSerializer() {
-        return this.valSerializer;
-    }
-
-    @Override
-    public Deserializer<?> keyDeserializer() {
-        return this.keyDeserializer;
-    }
-
-    @Override
-    public Deserializer<?> valueDeserializer() {
-        return this.valDeserializer;
+    public Serde<?> valueSerde() {
+        return this.valSerde;
     }
 
     @Override
@@ -117,6 +98,9 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
         return metrics;
     }
 
+    /**
+     * @throws IllegalStateException
+     */
     @Override
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (initialized)
@@ -125,48 +109,83 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
         stateMgr.register(store, loggingEnabled, stateRestoreCallback);
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public StateStore getStateStore(String name) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: getStateStore() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public String topic() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: topic() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public int partition() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: partition() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public long offset() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: offset() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public long timestamp() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: timestamp() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public <K, V> void forward(K key, V value) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public <K, V> void forward(K key, V value, int childIndex) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
+    @Override
+    public <K, V> void forward(K key, V value, String childName) {
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public void commit() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: commit() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public void schedule(long interval) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
     }
 }

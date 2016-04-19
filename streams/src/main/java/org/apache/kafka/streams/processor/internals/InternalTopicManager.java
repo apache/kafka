@@ -36,6 +36,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 public class InternalTopicManager {
 
@@ -45,12 +46,19 @@ public class InternalTopicManager {
     private static final String ZK_TOPIC_PATH = "/brokers/topics";
     private static final String ZK_BROKER_PATH = "/brokers/ids";
     private static final String ZK_DELETE_TOPIC_PATH = "/admin/delete_topics";
+    private static final String ZK_ENTITY_CONFIG_PATH = "/config/topics";
+    // TODO: the following LogConfig dependency should be removed after KIP-4
+    private static final String CLEANUP_POLICY_PROP = "cleanup.policy";
+    private static final String COMPACT = "compact";
 
     private final ZkClient zkClient;
     private final int replicationFactor;
 
     private class ZKStringSerializer implements ZkSerializer {
 
+        /**
+         * @throws AssertionError if the byte String encoding type is not supported
+         */
         @Override
         public byte[] serialize(Object data) {
             try {
@@ -60,6 +68,9 @@ public class InternalTopicManager {
             }
         }
 
+        /**
+         * @throws AssertionError if the byte String encoding type is not supported
+         */
         @Override
         public Object deserialize(byte[] bytes) {
             try {
@@ -73,12 +84,17 @@ public class InternalTopicManager {
         }
     }
 
+    public InternalTopicManager() {
+        this.zkClient = null;
+        this.replicationFactor = 0;
+    }
+
     public InternalTopicManager(String zkConnect, int replicationFactor) {
         this.zkClient = new ZkClient(zkConnect, 30 * 1000, 30 * 1000, new ZKStringSerializer());
         this.replicationFactor = replicationFactor;
     }
 
-    public void makeReady(String topic, int numPartitions) {
+    public void makeReady(String topic, int numPartitions, boolean compactTopic) {
         boolean topicNotReady = true;
 
         while (topicNotReady) {
@@ -86,7 +102,7 @@ public class InternalTopicManager {
 
             if (topicMetadata == null) {
                 try {
-                    createTopic(topic, numPartitions, replicationFactor);
+                    createTopic(topic, numPartitions, replicationFactor, compactTopic);
                 } catch (ZkNodeExistsException e) {
                     // ignore and continue
                 }
@@ -125,7 +141,7 @@ public class InternalTopicManager {
     }
 
     @SuppressWarnings("unchecked")
-    public Map<Integer, List<Integer>> getTopicMetadata(String topic) {
+    private Map<Integer, List<Integer>> getTopicMetadata(String topic) {
         String data = zkClient.readData(ZK_TOPIC_PATH + "/" + topic, true);
 
         if (data == null) return null;
@@ -147,9 +163,10 @@ public class InternalTopicManager {
         }
     }
 
-    public void createTopic(String topic, int numPartitions, int replicationFactor) throws ZkNodeExistsException {
+    private void createTopic(String topic, int numPartitions, int replicationFactor, boolean compactTopic) throws ZkNodeExistsException {
         log.debug("Creating topic {} with {} partitions from ZK in partition assignor.", topic, numPartitions);
-
+        Properties prop = new Properties();
+        ObjectMapper mapper = new ObjectMapper();
         List<Integer> brokers = getBrokers();
         int numBrokers = brokers.size();
         if (numBrokers < replicationFactor) {
@@ -167,14 +184,25 @@ public class InternalTopicManager {
             }
             assignment.put(i, brokerList);
         }
+        // write out config first just like in AdminUtils.scala createOrUpdateTopicPartitionAssignmentPathInZK()
+        if (compactTopic) {
+            prop.put(CLEANUP_POLICY_PROP, COMPACT);
+            try {
+                Map<String, Object> dataMap = new HashMap<>();
+                dataMap.put("version", 1);
+                dataMap.put("config", prop);
+                String data = mapper.writeValueAsString(dataMap);
+                zkClient.createPersistent(ZK_ENTITY_CONFIG_PATH + "/" + topic, data, ZooDefs.Ids.OPEN_ACL_UNSAFE);
+            } catch (JsonProcessingException e) {
+                throw new StreamsException("Error while creating topic config in ZK for internal topic " + topic, e);
+            }
+        }
 
         // try to write to ZK with open ACL
         try {
             Map<String, Object> dataMap = new HashMap<>();
             dataMap.put("version", 1);
             dataMap.put("partitions", assignment);
-
-            ObjectMapper mapper = new ObjectMapper();
             String data = mapper.writeValueAsString(dataMap);
 
             zkClient.createPersistent(ZK_TOPIC_PATH + "/" + topic, data, ZooDefs.Ids.OPEN_ACL_UNSAFE);
@@ -183,13 +211,13 @@ public class InternalTopicManager {
         }
     }
 
-    public void deleteTopic(String topic) throws ZkNodeExistsException {
+    private void deleteTopic(String topic) throws ZkNodeExistsException {
         log.debug("Deleting topic {} from ZK in partition assignor.", topic);
 
         zkClient.createPersistent(ZK_DELETE_TOPIC_PATH + "/" + topic, "", ZooDefs.Ids.OPEN_ACL_UNSAFE);
     }
 
-    public void addPartitions(String topic, int numPartitions, int replicationFactor, Map<Integer, List<Integer>> existingAssignment) {
+    private void addPartitions(String topic, int numPartitions, int replicationFactor, Map<Integer, List<Integer>> existingAssignment) {
         log.debug("Adding {} partitions topic {} from ZK with existing partitions assigned as {} in partition assignor.", topic, numPartitions, existingAssignment);
 
         List<Integer> brokers = getBrokers();

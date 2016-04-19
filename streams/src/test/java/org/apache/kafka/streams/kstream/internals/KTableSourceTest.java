@@ -17,10 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -38,8 +36,7 @@ import static org.junit.Assert.assertTrue;
 
 public class KTableSourceTest {
 
-    private final Serializer<String> strSerializer = new StringSerializer();
-    private final Deserializer<String> strDeserializer = new StringDeserializer();
+    final private Serde<String> stringSerde = new Serdes.StringSerde();
 
     @Test
     public void testKTable() {
@@ -47,7 +44,7 @@ public class KTableSourceTest {
 
         String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
+        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
 
         MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
@@ -72,12 +69,11 @@ public class KTableSourceTest {
 
             String topic1 = "topic1";
 
-            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>)
-                    builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
+            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
 
             KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
 
             KTableValueGetter<String, String> getter1 = getterSupplier1.get();
             getter1.init(driver.context());
@@ -123,34 +119,33 @@ public class KTableSourceTest {
 
             String topic1 = "topic1";
 
-            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>)
-                    builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
+            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
 
             MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
 
             builder.addProcessor("proc1", proc1, table1.name);
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
 
             driver.process(topic1, "A", "01");
             driver.process(topic1, "B", "01");
             driver.process(topic1, "C", "01");
 
-            proc1.checkAndClearResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
+            proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
 
             driver.process(topic1, "A", "02");
             driver.process(topic1, "B", "02");
 
-            proc1.checkAndClearResult("A:(02<-null)", "B:(02<-null)");
+            proc1.checkAndClearProcessResult("A:(02<-null)", "B:(02<-null)");
 
             driver.process(topic1, "A", "03");
 
-            proc1.checkAndClearResult("A:(03<-null)");
+            proc1.checkAndClearProcessResult("A:(03<-null)");
 
             driver.process(topic1, "A", null);
             driver.process(topic1, "B", null);
 
-            proc1.checkAndClearResult("A:(null<-null)", "B:(null<-null)");
+            proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
 
         } finally {
             Utils.delete(stateDir);
@@ -165,8 +160,7 @@ public class KTableSourceTest {
 
             String topic1 = "topic1";
 
-            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>)
-                    builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
+            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
 
             table1.enableSendingOldValues();
 
@@ -176,27 +170,27 @@ public class KTableSourceTest {
 
             builder.addProcessor("proc1", proc1, table1.name);
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
 
             driver.process(topic1, "A", "01");
             driver.process(topic1, "B", "01");
             driver.process(topic1, "C", "01");
 
-            proc1.checkAndClearResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
+            proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
 
             driver.process(topic1, "A", "02");
             driver.process(topic1, "B", "02");
 
-            proc1.checkAndClearResult("A:(02<-01)", "B:(02<-01)");
+            proc1.checkAndClearProcessResult("A:(02<-01)", "B:(02<-01)");
 
             driver.process(topic1, "A", "03");
 
-            proc1.checkAndClearResult("A:(03<-02)");
+            proc1.checkAndClearProcessResult("A:(03<-02)");
 
             driver.process(topic1, "A", null);
             driver.process(topic1, "B", null);
 
-            proc1.checkAndClearResult("A:(null<-03)", "B:(null<-02)");
+            proc1.checkAndClearProcessResult("A:(null<-03)", "B:(null<-02)");
 
         } finally {
             Utils.delete(stateDir);

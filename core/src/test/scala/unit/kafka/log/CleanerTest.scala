@@ -49,7 +49,7 @@ class CleanerTest extends JUnitSuite {
   
   @After
   def teardown() {
-    CoreUtils.rm(tmpdir)
+    Utils.delete(tmpdir)
   }
   
   /**

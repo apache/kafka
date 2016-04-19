@@ -19,6 +19,12 @@ package org.apache.kafka.common.protocol;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.Type;
+
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.INT16;
@@ -172,7 +178,7 @@ public class Protocol {
                                                                                          INT64,
                                                                                          "Message offset to be committed."),
                                                                                new Field("metadata",
-                                                                                         STRING,
+                                                                                         NULLABLE_STRING,
                                                                                          "Any associated metadata the client wants to keep."));
 
     public static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V1 = new Schema(new Field("partition",
@@ -185,7 +191,7 @@ public class Protocol {
                                                                                          INT64,
                                                                                          "Timestamp of the commit"),
                                                                                new Field("metadata",
-                                                                                         STRING,
+                                                                                         NULLABLE_STRING,
                                                                                          "Any associated metadata the client wants to keep."));
 
     public static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V2 = new Schema(new Field("partition",
@@ -195,7 +201,7 @@ public class Protocol {
                                                                                          INT64,
                                                                                          "Message offset to be committed."),
                                                                                new Field("metadata",
-                                                                                         STRING,
+                                                                                         NULLABLE_STRING,
                                                                                          "Any associated metadata the client wants to keep."));
 
     public static final Schema OFFSET_COMMIT_REQUEST_TOPIC_V0 = new Schema(new Field("topic",
@@ -308,7 +314,7 @@ public class Protocol {
                                                                                          INT64,
                                                                                          "Last committed message offset."),
                                                                                new Field("metadata",
-                                                                                         STRING,
+                                                                                         NULLABLE_STRING,
                                                                                          "Any associated metadata the client wants to keep."),
                                                                                new Field("error_code", INT16));
 
@@ -691,8 +697,26 @@ public class Protocol {
 
     public static final Schema UPDATE_METADATA_RESPONSE_V1 = UPDATE_METADATA_RESPONSE_V0;
 
-    public static final Schema[] UPDATE_METADATA_REQUEST = new Schema[] {UPDATE_METADATA_REQUEST_V0, UPDATE_METADATA_REQUEST_V1};
-    public static final Schema[] UPDATE_METADATA_RESPONSE = new Schema[] {UPDATE_METADATA_RESPONSE_V0, UPDATE_METADATA_RESPONSE_V1};
+    public static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V2 = UPDATE_METADATA_REQUEST_PARTITION_STATE_V1;
+
+    public static final Schema UPDATE_METADATA_REQUEST_END_POINT_V2 = UPDATE_METADATA_REQUEST_END_POINT_V1;
+
+    public static final Schema UPDATE_METADATA_REQUEST_BROKER_V2 =
+                    new Schema(new Field("id", INT32, "The broker id."),
+                               new Field("end_points", new ArrayOf(UPDATE_METADATA_REQUEST_END_POINT_V2)),
+                               new Field("rack", NULLABLE_STRING, "The rack"));
+
+    public static final Schema UPDATE_METADATA_REQUEST_V2 =
+            new Schema(new Field("controller_id", INT32, "The controller id."),
+                       new Field("controller_epoch", INT32, "The controller epoch."),
+                       new Field("partition_states", new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V2)),
+                       new Field("live_brokers", new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V2)));
+
+    public static final Schema UPDATE_METADATA_RESPONSE_V2 = UPDATE_METADATA_RESPONSE_V1;
+
+
+    public static final Schema[] UPDATE_METADATA_REQUEST = new Schema[] {UPDATE_METADATA_REQUEST_V0, UPDATE_METADATA_REQUEST_V1, UPDATE_METADATA_REQUEST_V2};
+    public static final Schema[] UPDATE_METADATA_RESPONSE = new Schema[] {UPDATE_METADATA_RESPONSE_V0, UPDATE_METADATA_RESPONSE_V1, UPDATE_METADATA_RESPONSE_V2};
 
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
@@ -748,6 +772,166 @@ public class Protocol {
             if (REQUESTS[api.id].length != RESPONSES[api.id].length)
                 throw new IllegalStateException(REQUESTS[api.id].length + " request versions for api " + api.name
                         + " but " + RESPONSES[api.id].length + " response versions.");
+    }
+
+    private static String indentString(int size) {
+        StringBuilder b = new StringBuilder(size);
+        for (int i = 0; i < size; i++)
+            b.append(" ");
+        return b.toString();
+    }
+
+    private static void schemaToBnfHtml(Schema schema, StringBuilder b, int indentSize) {
+        final String indentStr = indentString(indentSize);
+        final Map<String, Type> subTypes = new LinkedHashMap<>();
+
+        // Top level fields
+        for (Field field: schema.fields()) {
+            if (field.type instanceof ArrayOf) {
+                b.append("[");
+                b.append(field.name);
+                b.append("] ");
+                Type innerType = ((ArrayOf) field.type).type();
+                if (!subTypes.containsKey(field.name))
+                    subTypes.put(field.name, innerType);
+            } else if (field.type instanceof Schema) {
+                b.append(field.name);
+                b.append(" ");
+                if (!subTypes.containsKey(field.name))
+                    subTypes.put(field.name, field.type);
+            } else {
+                b.append(field.name);
+                b.append(" ");
+                if (!subTypes.containsKey(field.name))
+                    subTypes.put(field.name, field.type);
+            }
+        }
+        b.append("\n");
+
+        // Sub Types/Schemas
+        for (Map.Entry<String, Type> entry: subTypes.entrySet()) {
+            if (entry.getValue() instanceof Schema) {
+                // Complex Schema Type
+                b.append(indentStr);
+                b.append(entry.getKey());
+                b.append(" => ");
+                schemaToBnfHtml((Schema) entry.getValue(), b, indentSize + 2);
+            } else {
+                // Standard Field Type
+                b.append(indentStr);
+                b.append(entry.getKey());
+                b.append(" => ");
+                b.append(entry.getValue());
+                b.append("\n");
+            }
+        }
+    }
+
+    private static void populateSchemaFields(Schema schema, Set<Field> fields) {
+        for (Field field: schema.fields()) {
+            fields.add(field);
+            if (field.type instanceof ArrayOf) {
+                Type innerType = ((ArrayOf) field.type).type();
+                if (innerType instanceof Schema)
+                    populateSchemaFields((Schema) innerType, fields);
+            } else if (field.type instanceof Schema)
+                populateSchemaFields((Schema) field.type, fields);
+        }
+    }
+
+    private static void schemaToFieldTableHtml(Schema schema, StringBuilder b) {
+        Set<Field> fields = new LinkedHashSet<>();
+        populateSchemaFields(schema, fields);
+
+        b.append("<table class=\"data-table\"><tbody>\n");
+        b.append("<tr>");
+        b.append("<th>Field</th>\n");
+        b.append("<th>Description</th>\n");
+        b.append("</tr>");
+        for (Field field : fields) {
+            b.append("<tr>\n");
+            b.append("<td>");
+            b.append(field.name);
+            b.append("</td>");
+            b.append("<td>");
+            b.append(field.doc);
+            b.append("</td>");
+            b.append("</tr>\n");
+        }
+        b.append("</table>\n");
+    }
+
+    public static String toHtml() {
+        final StringBuilder b = new StringBuilder();
+        b.append("<h5>Headers:</h5>\n");
+
+        b.append("<pre>");
+        b.append("Request Header => ");
+        schemaToBnfHtml(REQUEST_HEADER, b, 2);
+        b.append("</pre>\n");
+        schemaToFieldTableHtml(REQUEST_HEADER, b);
+
+        b.append("<pre>");
+        b.append("Response Header => ");
+        schemaToBnfHtml(RESPONSE_HEADER, b, 2);
+        b.append("</pre>\n");
+        schemaToFieldTableHtml(RESPONSE_HEADER, b);
+
+        for (ApiKeys key : ApiKeys.values()) {
+            // Key
+            b.append("<h5>");
+            b.append(key.name);
+            b.append(" API (Key: ");
+            b.append(key.id);
+            b.append("):</h5>\n\n");
+            // Requests
+            b.append("<b>Requests:</b><br>\n");
+            Schema[] requests = REQUESTS[key.id];
+            for (int i = 0; i < requests.length; i++) {
+                Schema schema = requests[i];
+                // Schema
+                if (schema != null) {
+                    b.append("<p>");
+                    // Version header
+                    b.append("<pre>");
+                    b.append(key.name);
+                    b.append(" Request (Version: ");
+                    b.append(i);
+                    b.append(") => ");
+                    schemaToBnfHtml(requests[i], b, 2);
+                    b.append("</pre>");
+                    schemaToFieldTableHtml(requests[i], b);
+                }
+                b.append("</p>\n");
+            }
+
+            // Responses
+            b.append("<b>Responses:</b><br>\n");
+            Schema[] responses = RESPONSES[key.id];
+            for (int i = 0; i < responses.length; i++) {
+                Schema schema = responses[i];
+                // Schema
+                if (schema != null) {
+                    b.append("<p>");
+                    // Version header
+                    b.append("<pre>");
+                    b.append(key.name);
+                    b.append(" Response (Version: ");
+                    b.append(i);
+                    b.append(") => ");
+                    schemaToBnfHtml(responses[i], b, 2);
+                    b.append("</pre>");
+                    schemaToFieldTableHtml(responses[i], b);
+                }
+                b.append("</p>\n");
+            }
+        }
+
+        return b.toString();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(toHtml());
     }
 
 }

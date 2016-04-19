@@ -215,13 +215,14 @@ public class Fetcher<K, V> {
                     throw new TopicAuthorizationException(unauthorizedTopics);
 
                 boolean shouldRetry = false;
-                if (!response.errors().isEmpty()) {
+                Map<String, Errors> errors = response.errors();
+                if (!errors.isEmpty()) {
                     // if there were errors, we need to check whether they were fatal or whether
                     // we should just retry
 
-                    log.debug("Topic metadata fetch included errors: {}", response.errors());
+                    log.debug("Topic metadata fetch included errors: {}", errors);
 
-                    for (Map.Entry<String, Errors> errorEntry : response.errors().entrySet()) {
+                    for (Map.Entry<String, Errors> errorEntry : errors.entrySet()) {
                         String topic = errorEntry.getKey();
                         Errors error = errorEntry.getValue();
 
@@ -501,12 +502,12 @@ public class Fetcher<K, V> {
             future.complete(offset);
         } else if (errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()
                 || errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
-            log.warn("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
+            log.debug("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
                     topicPartition);
             future.raise(Errors.forCode(errorCode));
         } else {
-            log.error("Attempt to fetch offsets for partition {} failed due to: {}",
-                    topicPartition, Errors.forCode(errorCode).exception().getMessage());
+            log.warn("Attempt to fetch offsets for partition {} failed due to: {}",
+                    topicPartition, Errors.forCode(errorCode).message());
             future.raise(new StaleMetadataException());
         }
     }
@@ -652,8 +653,8 @@ public class Fetcher<K, V> {
 
             return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
                                         timestamp, timestampType, logEntry.record().checksum(),
-                                        keyByteArray == null ? -1 : keyByteArray.length,
-                                        valueByteArray == null ? -1 : valueByteArray.length,
+                                        keyByteArray == null ? ConsumerRecord.NULL_SIZE : keyByteArray.length,
+                                        valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
                                         key, value);
         } catch (KafkaException e) {
             throw e;

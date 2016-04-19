@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.errors.StreamsException;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -37,10 +38,27 @@ public class ChangedSerializer<T> implements Serializer<Change<T>> {
         // do nothing
     }
 
+    /**
+     * @throws StreamsException if both old and new values of data are null, or if
+     * both values are not null
+     */
     @Override
     public byte[] serialize(String topic, Change<T> data) {
+        byte[] serializedKey;
+
         // only one of the old / new values would be not null
-        byte[] serializedKey = inner.serialize(topic, data.newValue != null ? data.newValue : data.oldValue);
+        if (data.newValue != null) {
+            if (data.oldValue != null)
+                throw new StreamsException("Both old and new values are not null (" + data.oldValue
+                        + " : " + data.newValue + ") in ChangeSerializer, which is not allowed.");
+
+            serializedKey = inner.serialize(topic, data.newValue);
+        } else {
+            if (data.oldValue == null)
+                throw new StreamsException("Both old and new values are null in ChangeSerializer, which is not allowed.");
+
+            serializedKey = inner.serialize(topic, data.oldValue);
+        }
 
         ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + NEWFLAG_SIZE);
         buf.put(serializedKey);

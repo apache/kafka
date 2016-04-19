@@ -29,12 +29,12 @@ public class JsonTimestampExtractor implements TimestampExtractor {
 
     @Override
     public long extract(ConsumerRecord<Object, Object> record) {
-        if (record.value() instanceof PageViewTypedJob.PageView) {
-            return ((PageViewTypedJob.PageView) record.value()).timestamp;
+        if (record.value() instanceof PageViewTypedDemo.PageView) {
+            return ((PageViewTypedDemo.PageView) record.value()).timestamp;
         }
 
-        if (record.value() instanceof PageViewTypedJob.UserProfile) {
-            return ((PageViewTypedJob.UserProfile) record.value()).timestamp;
+        if (record.value() instanceof PageViewTypedDemo.UserProfile) {
+            return ((PageViewTypedDemo.UserProfile) record.value()).timestamp;
         }
 
         if (record.value() instanceof JsonNode) {

@@ -77,17 +77,15 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
     // The following method does nothing by default, but
     // if the test case requires setting up a cluster ACL,
     // then it needs to be implemented.
-    setClusterAcl match {
-      case Some(f) =>
-        f()
-      case None => // Nothing to do
-    }
+    setClusterAcl.foreach(_.apply)
   }
 
   @After
   override def tearDown() {
-    servers.foreach(_.shutdown())
-    servers.foreach(_.config.logDirs.foreach(CoreUtils.rm(_)))
+    if (servers != null) {
+      servers.foreach(_.shutdown())
+      servers.foreach(server => CoreUtils.delete(server.config.logDirs))
+    }
     super.tearDown
   }
   

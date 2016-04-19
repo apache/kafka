@@ -49,6 +49,10 @@ public class PartitionGroup {
         public TopicPartition partition() {
             return queue.partition();
         }
+
+        public RecordQueue queue() {
+            return queue;
+        }
     }
 
     // since task is thread-safe, we do not need to synchronize on local variables
@@ -88,7 +92,7 @@ public class PartitionGroup {
             // get the first record from this queue.
             record = queue.poll();
 
-            if (queue.size() > 0) {
+            if (!queue.isEmpty()) {
                 queuesByTime.offer(queue);
             }
         }
@@ -131,19 +135,19 @@ public class PartitionGroup {
      * partition timestamp among all its partitions
      */
     public long timestamp() {
-        if (queuesByTime.isEmpty()) {
-            // if there is no data in all partitions, return the smallest of their last known times
-            long timestamp = Long.MAX_VALUE;
-            for (RecordQueue queue : partitionQueues.values()) {
-                if (timestamp > queue.timestamp())
-                    timestamp = queue.timestamp();
-            }
-            return timestamp;
-        } else {
-            return queuesByTime.peek().timestamp();
+        // we should always return the smallest timestamp of all partitions
+        // to avoid group partition time goes backward
+        long timestamp = Long.MAX_VALUE;
+        for (RecordQueue queue : partitionQueues.values()) {
+            if (timestamp > queue.timestamp())
+                timestamp = queue.timestamp();
         }
+        return timestamp;
     }
 
+    /**
+     * @throws IllegalStateException if the record's partition does not belong to this partition group
+     */
     public int numBuffered(TopicPartition partition) {
         RecordQueue recordQueue = partitionQueues.get(partition);
 

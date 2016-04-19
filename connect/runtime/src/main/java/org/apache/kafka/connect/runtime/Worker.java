@@ -120,7 +120,7 @@ public class Worker {
         producer = new KafkaProducer<>(producerProps);
 
         offsetBackingStore.start();
-        sourceTaskOffsetCommitter = new SourceTaskOffsetCommitter(time, config);
+        sourceTaskOffsetCommitter = new SourceTaskOffsetCommitter(config);
 
         log.info("Worker started");
     }
@@ -189,6 +189,12 @@ public class Worker {
         return SinkConnector.class.isAssignableFrom(workerConnector.delegate.getClass());
     }
 
+    public Connector getConnector(String connType) {
+        Class<? extends Connector> connectorClass = getConnectorClass(connType);
+        return instantiateConnector(connectorClass);
+    }
+
+    @SuppressWarnings("unchecked")
     private Class<? extends Connector> getConnectorClass(String connectorAlias) {
         // Avoid the classpath scan if the full class name was provided
         try {
@@ -236,6 +242,9 @@ public class Worker {
         return names.substring(0, names.toString().length() - 2);
     }
 
+    public boolean ownsTask(ConnectorTaskId taskId) {
+        return tasks.containsKey(taskId);
+    }
 
     private static Connector instantiateConnector(Class<? extends Connector> connClass) {
         try {
@@ -407,6 +416,10 @@ public class Worker {
 
     public String workerId() {
         return workerId;
+    }
+
+    public boolean ownsConnector(String connName) {
+        return this.connectors.containsKey(connName);
     }
 
     private static class WorkerConnector  {

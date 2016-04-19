@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -36,7 +36,7 @@ public class StoreChangeLogger<K, V> {
     // TODO: these values should be configurable
     protected static final int DEFAULT_WRITE_BATCH_SIZE = 100;
 
-    protected final Serdes<K, V> serialization;
+    protected final StateSerdes<K, V> serialization;
 
     private final String topic;
     private final int partition;
@@ -47,17 +47,17 @@ public class StoreChangeLogger<K, V> {
     protected Set<K> dirty;
     protected Set<K> removed;
 
-    public StoreChangeLogger(String storeName, ProcessorContext context, Serdes<K, V> serialization) {
+    public StoreChangeLogger(String storeName, ProcessorContext context, StateSerdes<K, V> serialization) {
         this(storeName, context, serialization, DEFAULT_WRITE_BATCH_SIZE, DEFAULT_WRITE_BATCH_SIZE);
     }
 
-    public StoreChangeLogger(String storeName, ProcessorContext context, Serdes<K, V> serialization, int maxDirty, int maxRemoved) {
+    public StoreChangeLogger(String storeName, ProcessorContext context, StateSerdes<K, V> serialization, int maxDirty, int maxRemoved) {
         this(storeName, context, context.taskId().partition, serialization, maxDirty, maxRemoved);
         init();
     }
 
-    protected StoreChangeLogger(String storeName, ProcessorContext context, int partition, Serdes<K, V> serialization, int maxDirty, int maxRemoved) {
-        this.topic = ProcessorStateManager.storeChangelogTopic(context.jobId(), storeName);
+    protected StoreChangeLogger(String storeName, ProcessorContext context, int partition, StateSerdes<K, V> serialization, int maxDirty, int maxRemoved) {
+        this.topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
         this.context = context;
         this.partition = partition;
         this.serialization = serialization;

@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -34,6 +35,8 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
+import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.internals.TopicConstants;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -63,6 +66,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -74,11 +78,11 @@ public class ConsumerCoordinatorTest {
     private String topicName = "test";
     private String groupId = "test-group";
     private TopicPartition tp = new TopicPartition(topicName, 0);
-    private int sessionTimeoutMs = 10;
-    private int heartbeatIntervalMs = 2;
+    private int sessionTimeoutMs = 10000;
+    private int heartbeatIntervalMs = 5000;
     private long retryBackoffMs = 100;
     private boolean autoCommitEnabled = false;
-    private long autoCommitIntervalMs = 5000;
+    private long autoCommitIntervalMs = 2000;
     private MockPartitionAssignor partitionAssignor = new MockPartitionAssignor();
     private List<PartitionAssignor> assignors = Arrays.<PartitionAssignor>asList(partitionAssignor);
     private MockTime time;
@@ -100,14 +104,14 @@ public class ConsumerCoordinatorTest {
         this.subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
         this.metadata = new Metadata(0, Long.MAX_VALUE);
         this.metadata.update(cluster, time.milliseconds());
-        this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100);
+        this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.defaultOffsetCommitCallback = new MockCommitCallback();
         this.partitionAssignor.clear();
 
         client.setNode(node);
-        this.coordinator = buildCoordinator(metrics, assignors);
+        this.coordinator = buildCoordinator(metrics, assignors, ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, autoCommitEnabled);
     }
 
     @After
@@ -263,7 +267,7 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test(expected = ApiException.class)
-    public void testJoinGroupInvalidGroupId() {
+    public void testJoinGroupInvalidGroupId() { 
         final String consumerId = "leader";
 
         subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
@@ -309,6 +313,45 @@ public class ConsumerCoordinatorTest {
                         sync.groupAssignment().containsKey(consumerId);
             }
         }, syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+        coordinator.ensurePartitionAssignment();
+
+        assertFalse(subscriptions.partitionAssignmentNeeded());
+        assertEquals(Collections.singleton(tp), subscriptions.assignedPartitions());
+        assertEquals(1, rebalanceListener.revokedCount);
+        assertEquals(Collections.emptySet(), rebalanceListener.revoked);
+        assertEquals(1, rebalanceListener.assignedCount);
+        assertEquals(Collections.singleton(tp), rebalanceListener.assigned);
+    }
+
+    @Test
+    public void testWakeupDuringJoin() {
+        final String consumerId = "leader";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        // ensure metadata is up-to-date for leader
+        metadata.setTopics(Arrays.asList(topicName));
+        metadata.update(cluster, time.milliseconds());
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        Map<String, List<String>> memberSubscriptions = Collections.singletonMap(consumerId, Arrays.asList(topicName));
+        partitionAssignor.prepare(Collections.singletonMap(consumerId, Arrays.asList(tp)));
+
+        // prepare only the first half of the join and then trigger the wakeup
+        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE.code()));
+        consumerClient.wakeup();
+
+        try {
+            coordinator.ensurePartitionAssignment();
+        } catch (WakeupException e) {
+            // ignore
+        }
+
+        // now complete the second half
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
         coordinator.ensurePartitionAssignment();
 
         assertFalse(subscriptions.partitionAssignmentNeeded());
@@ -509,7 +552,7 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testMetadataChangeTriggersRebalance() {
+    public void testMetadataChangeTriggersRebalance() { 
         final String consumerId = "consumer";
 
         subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
@@ -532,6 +575,25 @@ public class ConsumerCoordinatorTest {
         assertTrue(subscriptions.partitionAssignmentNeeded());
     }
 
+    @Test
+    public void testExcludeInternalTopicsConfigOption() { 
+        subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
+
+        metadata.update(TestUtils.singletonCluster(TopicConstants.GROUP_METADATA_TOPIC_NAME, 2), time.milliseconds());
+
+        assertFalse(subscriptions.partitionAssignmentNeeded());
+    }
+
+    @Test
+    public void testIncludeInternalTopicsConfigOption() {
+        coordinator = buildCoordinator(new Metrics(), assignors, false, false);
+        subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
+
+        metadata.update(TestUtils.singletonCluster(TopicConstants.GROUP_METADATA_TOPIC_NAME, 2), time.milliseconds());
+
+        assertTrue(subscriptions.partitionAssignmentNeeded());
+    }
+    
     @Test
     public void testRejoinGroup() {
         subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
@@ -605,8 +667,108 @@ public class ConsumerCoordinatorTest {
 
         AtomicBoolean success = new AtomicBoolean(false);
         coordinator.commitOffsetsAsync(Collections.singletonMap(tp, new OffsetAndMetadata(100L)), callback(success));
-        consumerClient.poll(0);
         assertTrue(success.get());
+
+        assertEquals(100L, subscriptions.committed(tp).offset());
+    }
+
+    @Test
+    public void testAutoCommitDynamicAssignment() {
+        final String consumerId = "consumer";
+
+        ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
+                ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, true);
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+        coordinator.ensurePartitionAssignment();
+
+        subscriptions.seek(tp, 100);
+
+        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.NONE.code())));
+        time.sleep(autoCommitIntervalMs);
+        consumerClient.poll(0);
+
+        assertEquals(100L, subscriptions.committed(tp).offset());
+    }
+
+    @Test
+    public void testAutoCommitDynamicAssignmentRebalance() {
+        final String consumerId = "consumer";
+
+        ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
+                ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, true);
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        // haven't joined, so should not cause a commit
+        time.sleep(autoCommitIntervalMs);
+        consumerClient.poll(0);
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+        coordinator.ensurePartitionAssignment();
+
+        subscriptions.seek(tp, 100);
+
+        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.NONE.code())));
+        time.sleep(autoCommitIntervalMs);
+        consumerClient.poll(0);
+
+        assertEquals(100L, subscriptions.committed(tp).offset());
+    }
+
+    @Test
+    public void testAutoCommitManualAssignment() {
+        ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
+                ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, true);
+
+        subscriptions.assignFromUser(Arrays.asList(tp));
+        subscriptions.seek(tp, 100);
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.NONE.code())));
+        time.sleep(autoCommitIntervalMs);
+        consumerClient.poll(0);
+
+        assertEquals(100L, subscriptions.committed(tp).offset());
+    }
+
+    @Test
+    public void testAutoCommitManualAssignmentCoordinatorUnknown() {
+        ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
+                ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, true);
+
+        subscriptions.assignFromUser(Arrays.asList(tp));
+        subscriptions.seek(tp, 100);
+
+        // no commit initially since coordinator is unknown
+        consumerClient.poll(0);
+        time.sleep(autoCommitIntervalMs);
+        consumerClient.poll(0);
+
+        assertNull(subscriptions.committed(tp));
+
+        // now find the coordinator
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        // sleep only for the retry backoff
+        time.sleep(retryBackoffMs);
+        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.NONE.code())));
+        consumerClient.poll(0);
 
         assertEquals(100L, subscriptions.committed(tp).offset());
     }
@@ -622,7 +784,6 @@ public class ConsumerCoordinatorTest {
 
         AtomicBoolean success = new AtomicBoolean(false);
         coordinator.commitOffsetsAsync(Collections.singletonMap(tp, new OffsetAndMetadata(100L, "hello")), callback(success));
-        consumerClient.poll(0);
         assertTrue(success.get());
 
         assertEquals(100L, subscriptions.committed(tp).offset());
@@ -636,7 +797,6 @@ public class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorKnown();
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.NONE.code())));
         coordinator.commitOffsetsAsync(Collections.singletonMap(tp, new OffsetAndMetadata(100L)), null);
-        consumerClient.poll(0);
         assertEquals(invokedBeforeTest + 1, defaultOffsetCommitCallback.invoked);
         assertNull(defaultOffsetCommitCallback.exception);
     }
@@ -671,7 +831,6 @@ public class ConsumerCoordinatorTest {
 
         AtomicBoolean success = new AtomicBoolean(false);
         coordinator.commitOffsetsAsync(Collections.singletonMap(tp, new OffsetAndMetadata(100L)), callback(success));
-        consumerClient.poll(0);
         assertTrue(success.get());
     }
 
@@ -682,7 +841,6 @@ public class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorKnown();
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code())));
         coordinator.commitOffsetsAsync(Collections.singletonMap(tp, new OffsetAndMetadata(100L)), null);
-        consumerClient.poll(0);
         assertEquals(invokedBeforeTest + 1, defaultOffsetCommitCallback.invoked);
         assertEquals(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.exception(), defaultOffsetCommitCallback.exception);
     }
@@ -696,7 +854,6 @@ public class ConsumerCoordinatorTest {
         MockCommitCallback cb = new MockCommitCallback();
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code())));
         coordinator.commitOffsetsAsync(Collections.singletonMap(tp, new OffsetAndMetadata(100L)), cb);
-        consumerClient.poll(0);
 
         assertTrue(coordinator.coordinatorUnknown());
         assertEquals(1, cb.invoked);
@@ -712,7 +869,6 @@ public class ConsumerCoordinatorTest {
         MockCommitCallback cb = new MockCommitCallback();
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.NOT_COORDINATOR_FOR_GROUP.code())));
         coordinator.commitOffsetsAsync(Collections.singletonMap(tp, new OffsetAndMetadata(100L)), cb);
-        consumerClient.poll(0);
 
         assertTrue(coordinator.coordinatorUnknown());
         assertEquals(1, cb.invoked);
@@ -728,7 +884,6 @@ public class ConsumerCoordinatorTest {
         MockCommitCallback cb = new MockCommitCallback();
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.NONE.code())), true);
         coordinator.commitOffsetsAsync(Collections.singletonMap(tp, new OffsetAndMetadata(100L)), cb);
-        consumerClient.poll(0);
 
         assertTrue(coordinator.coordinatorUnknown());
         assertEquals(1, cb.invoked);
@@ -882,7 +1037,8 @@ public class ConsumerCoordinatorTest {
         RangeAssignor range = new RangeAssignor();
 
         try (Metrics metrics = new Metrics(time)) {
-            ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(roundRobin, range));
+            ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(roundRobin, range),
+                    ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, false);
             List<ProtocolMetadata> metadata = coordinator.metadata();
             assertEquals(2, metadata.size());
             assertEquals(roundRobin.name(), metadata.get(0).name());
@@ -890,7 +1046,8 @@ public class ConsumerCoordinatorTest {
         }
 
         try (Metrics metrics = new Metrics(time)) {
-            ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(range, roundRobin));
+            ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(range, roundRobin),
+                    ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_DEFAULT, false);
             List<ProtocolMetadata> metadata = coordinator.metadata();
             assertEquals(2, metadata.size());
             assertEquals(range.name(), metadata.get(0).name());
@@ -898,7 +1055,10 @@ public class ConsumerCoordinatorTest {
         }
     }
 
-    private ConsumerCoordinator buildCoordinator(Metrics metrics, List<PartitionAssignor> assignors) {
+    private ConsumerCoordinator buildCoordinator(Metrics metrics,
+                                                 List<PartitionAssignor> assignors,
+                                                 boolean excludeInternalTopics,
+                                                 boolean autoCommitEnabled) {
         return new ConsumerCoordinator(
                 consumerClient,
                 groupId,
@@ -914,7 +1074,8 @@ public class ConsumerCoordinatorTest {
                 defaultOffsetCommitCallback,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
-                null);
+                null,
+                excludeInternalTopics);
     }
 
     private Struct consumerMetadataResponse(Node node, short error) {

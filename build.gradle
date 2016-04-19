@@ -26,12 +26,15 @@ buildscript {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar:grgit:1.5.0"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.12.0'
+    classpath 'org.scoverage:gradle-scoverage:2.0.1'
   }
 }
 
 allprojects {
   apply plugin: 'idea'
   apply plugin: 'eclipse'
+  apply plugin: "jacoco"
+
   repositories {
     mavenCentral()
   }
@@ -70,6 +73,7 @@ ext {
 
   userShowStandardStreams = project.hasProperty("showStandardStreams") ? showStandardStreams : null
 
+  generatedDocsDir = new File("${project.rootDir}/docs/generated")
 }
 
 apply from: "$rootDir/gradle/dependencies.gradle"
@@ -101,6 +105,12 @@ subprojects {
   apply plugin: 'checkstyle'
 
   sourceCompatibility = 1.7
+
+  compileJava {
+    options.encoding = 'UTF-8'
+    // Add unchecked once we drop support for Java 7 as @SuppressWarnings("unchecked") is too buggy in Java 7
+    options.compilerArgs << "-Xlint:deprecation"
+  }
 
   if (JavaVersion.current().isJava8Compatible()) {
     tasks.withType(Javadoc) {
@@ -219,6 +229,18 @@ subprojects {
   tasks.withType(ScalaCompile) {
     scalaCompileOptions.useAnt = false
 
+    scalaCompileOptions.additionalParameters = [
+      "-deprecation",
+      "-unchecked",
+      "-encoding", "utf8",
+      "-target:jvm-${sourceCompatibility}".toString(),
+      "-Xlog-reflective-calls",
+      "-feature",
+      "-language:postfixOps",
+      "-language:implicitConversions",
+      "-language:existentials"
+    ]
+
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'
       jvmArgs = ['-XX:MaxPermSize=512m', '-Xss2m']
@@ -230,7 +252,49 @@ subprojects {
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
+
+  // Ignore core since its a scala project
+  if (it.path != ':core') {
+    // NOTE: Gradles Jacoco plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
+    // may report 0 coverage, since the source was modified after initial instrumentation.
+    // See https://github.com/jacoco/jacoco/issues/51
+    jacocoTestReport {
+      dependsOn tasks.test
+      sourceSets sourceSets.main
+      reports {
+        html.enabled = true
+        xml.enabled = true
+        csv.enabled = false
+      }
+    }
+  }
 }
+
+// Aggregates all jacoco results into the root project directory
+task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
+  def javaProjects = subprojects.findAll { it.path != ':core' }
+
+  description = 'Generates an aggregate report from all subprojects'
+  dependsOn(javaProjects.test)
+
+  additionalSourceDirs = files(javaProjects.sourceSets.main.allSource.srcDirs)
+  sourceDirectories = files(javaProjects.sourceSets.main.allSource.srcDirs)
+  classDirectories =  files(javaProjects.sourceSets.main.output)
+  executionData = files(javaProjects.jacocoTestReport.executionData)
+
+  reports {
+    html.enabled = true
+    xml.enabled = true
+  }
+
+  // workaround to ignore projects that don't have any tests at all
+  onlyIf = { true }
+  doFirst {
+    executionData = files(executionData.findAll { it.exists() })
+  }
+}
+
+task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportScoverage'])
 
 for ( sv in ['2_10', '2_11'] ) {
   String svInDot = sv.replaceAll( "_", ".")
@@ -301,6 +365,7 @@ project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
   apply plugin: 'scala'
+  apply plugin: "org.scoverage"
   archivesBaseName = "kafka_${versions.baseScala}"
 
   dependencies {
@@ -319,10 +384,33 @@ project(':core') {
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix
     testCompile libs.easymock
-    testCompile libs.hadoopMiniKdc
+    testCompile(libs.apacheda) {
+      exclude group: 'xml-apis', module: 'xml-apis'
+    }
+    testCompile libs.apachedsCoreApi
+    testCompile libs.apachedsInterceptorKerberos
+    testCompile libs.apachedsProtocolShared
+    testCompile libs.apachedsProtocolKerberos
+    testCompile libs.apachedsProtocolLdap
+    testCompile libs.apachedsLdifPartition
+    testCompile libs.apachedsMavibotPartition
+    testCompile libs.apachedsJdbmPartition
     testCompile libs.junit
     testCompile libs.scalaTest
+
+    scoverage libs.scoveragePlugin
+    scoverage libs.scoverageRuntime
   }
+
+  jacocoTestReport.enabled = false
+  scoverage {
+    reportDir = file("${rootProject.buildDir}/scoverage")
+    highlighting = false
+  }
+  checkScoverage {
+    minimumRate = 0.0
+  }
+  checkScoverage.shouldRunAfter('test')
 
   configurations {
     // manually excludes some unnecessary dependencies
@@ -346,31 +434,63 @@ project(':core') {
       exclude('kafka-clients*')
     }
     into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
   }
 
-  tasks.create(name: "genProducerConfigDocs", dependsOn:jar, type: JavaExec) {
+  systemTestLibs {
+    dependsOn testJar
+  }
+
+  task genProtocolErrorDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.common.protocol.Errors'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "protocol_errors.html").newOutputStream()
+  }
+
+  task genProtocolApiKeyDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.common.protocol.ApiKeys'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "protocol_api_keys.html").newOutputStream()
+  }
+
+  task genProtocolMessageDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.common.protocol.Protocol'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "protocol_messages.html").newOutputStream()
+  }
+
+  task genProducerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.clients.producer.ProducerConfig'
-    standardOutput = new File("$rootDir/docs/producer_config.html").newOutputStream()
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "producer_config.html").newOutputStream()
   }
 
-  tasks.create(name: "genConsumerConfigDocs", dependsOn:jar, type: JavaExec) {
+  task genConsumerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.clients.consumer.ConsumerConfig'
-    standardOutput = new File("$rootDir/docs/consumer_config.html").newOutputStream()
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "consumer_config.html").newOutputStream()
   }
 
-  tasks.create(name: "genKafkaConfigDocs", dependsOn:jar, type: JavaExec) {
+  task genKafkaConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'kafka.server.KafkaConfig'
-    standardOutput = new File("$rootDir/docs/kafka_config.html").newOutputStream()
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "kafka_config.html").newOutputStream()
   }
 
-  task siteDocsTar(dependsOn: ['genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs', ':connect:runtime:genConnectConfigDocs'], type: Tar) {
+  task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
+                               'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
+                               ':connect:runtime:genConnectConfigDocs', ':streams:genStreamsConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("../docs")
     into 'site-docs'
+    duplicatesStrategy 'exclude'
   }
 
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
@@ -397,6 +517,7 @@ project(':core') {
     from(project(':streams').configurations.runtime) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtime) { into("libs/") }
+    duplicatesStrategy 'exclude'
   }
 
   jar {
@@ -414,6 +535,7 @@ project(':core') {
       include('*.jar')
     }
     into "$buildDir/dependant-testlibs"
+    duplicatesStrategy 'exclude'
   }
 
   checkstyle {
@@ -497,79 +619,89 @@ project(':clients') {
     include "**/org/apache/kafka/common/*"
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/serialization/*"
+    include "**/org/apache/kafka/common/config/*"
   }
 }
 
 project(':tools') {
-    archivesBaseName = "kafka-tools"
+  archivesBaseName = "kafka-tools"
 
-    dependencies {
-        compile project(':clients')
-        compile project(':log4j-appender')
-        compile libs.argparse4j
-        compile libs.jacksonDatabind
-        compile libs.slf4jlog4j
+  dependencies {
+    compile project(':clients')
+    compile project(':log4j-appender')
+    compile libs.argparse4j
+    compile libs.jacksonDatabind
+    compile libs.slf4jlog4j
 
-        testCompile project(':clients')
-        testCompile libs.junit
+    testCompile project(':clients')
+    testCompile libs.junit
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/tools/*"
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
     }
-
-    javadoc {
-        include "**/org/apache/kafka/tools/*"
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
     }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
 
-    tasks.create(name: "copyDependantLibs", type: Copy) {
-        from (configurations.testRuntime) {
-            include('slf4j-log4j12*')
-        }
-        from (configurations.runtime) {
-            exclude('kafka-clients*')
-        }
-        into "$buildDir/dependant-libs-${versions.scala}"
-    }
-
-    jar {
-        dependsOn 'copyDependantLibs'
-    }
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
 }
 
 project(':streams') {
-    archivesBaseName = "kafka-streams"
+  archivesBaseName = "kafka-streams"
 
-    dependencies {
-        compile project(':clients')
-        compile project(':connect:json')  // this dependency should be removed after we unify data API
-        compile libs.slf4jlog4j
-        compile libs.rocksDBJni
-        compile libs.zkclient // this dependency should be removed after KIP-4
-        compile libs.jacksonDatabind // this dependency should be removed after KIP-4
+  dependencies {
+    compile project(':clients')
+    compile project(':connect:json')  // this dependency should be removed after we unify data API
+    compile libs.slf4jlog4j
+    compile libs.rocksDBJni
+    compile libs.zkclient // this dependency should be removed after KIP-4
+    compile libs.jacksonDatabind // this dependency should be removed after KIP-4
 
-        testCompile project(':clients').sourceSets.test.output
-        testCompile libs.junit
+    testCompile project(':clients').sourceSets.test.output
+    testCompile libs.junit
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/streams/**"
+    exclude "**/internals/**"
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
     }
-
-    javadoc {
-        include "**/org/apache/kafka/streams/**"
-        exclude "**/internals/**"
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
     }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
 
-    tasks.create(name: "copyDependantLibs", type: Copy) {
-        from (configurations.testRuntime) {
-            include('slf4j-log4j12*')
-        }
-        from (configurations.runtime) {
-            exclude('kafka-clients*')
-        }
-        into "$buildDir/dependant-libs-${versions.scala}"
-    }
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
 
-    jar {
-        dependsOn 'copyDependantLibs'
-    }
+  systemTestLibs {
+    dependsOn testJar
+  }
 
-    systemTestLibs {
-        dependsOn testJar
-    }
+  task genStreamsConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.streams.StreamsConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
+  }
 }
 
 project(':streams:examples') {
@@ -589,6 +721,7 @@ project(':streams:examples') {
       exclude('kafka-streams*')
     }
     into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
   }
 
   jar {
@@ -637,6 +770,7 @@ project(':connect:api') {
       exclude('connect-*')
     }
     into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
   }
 
   jar {
@@ -673,6 +807,7 @@ project(':connect:json') {
       exclude('connect-*')
     }
     into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
   }
 
   jar {
@@ -693,6 +828,7 @@ project(':connect:runtime') {
     compile libs.jerseyContainerServlet
     compile libs.jettyServer
     compile libs.jettyServlet
+    compile libs.jettyServlets
     compile libs.reflections
 
     testCompile project(':clients').sourceSets.test.output
@@ -718,16 +854,18 @@ project(':connect:runtime') {
       exclude('connect-*')
     }
     into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
   }
 
   jar {
     dependsOn copyDependantLibs
   }
 
-  tasks.create(name: "genConnectConfigDocs", dependsOn:jar, type: JavaExec) {
+  task genConnectConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
-    standardOutput = new File("$rootDir/docs/connect_config.html").newOutputStream()
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "connect_config.html").newOutputStream()
   }
 }
 
@@ -759,6 +897,7 @@ project(':connect:file') {
       exclude('connect-*')
     }
     into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
   }
 
   jar {

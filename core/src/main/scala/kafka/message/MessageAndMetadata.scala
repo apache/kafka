@@ -25,10 +25,10 @@ case class MessageAndMetadata[K, V](topic: String,
                                     partition: Int,
                                     private val rawMessage: Message,
                                     offset: Long,
+                                    keyDecoder: Decoder[K], valueDecoder: Decoder[V],
                                     timestamp: Long = Message.NoTimestamp,
-                                    timestampType: TimestampType = TimestampType.CREATE_TIME,
-                                    keyDecoder: Decoder[K], valueDecoder: Decoder[V]) {
-  
+                                    timestampType: TimestampType = TimestampType.CREATE_TIME) {
+
   /**
    * Return the decoded message key and payload
    */

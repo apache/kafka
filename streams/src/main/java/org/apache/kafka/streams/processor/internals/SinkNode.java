@@ -40,6 +40,9 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         this.partitioner = partitioner;
     }
 
+    /**
+     * @throws UnsupportedOperationException if this method adds a child to a sink node
+     */
     @Override
     public void addChild(ProcessorNode<?, ?> child) {
         throw new UnsupportedOperationException("sink node does not allow addChild");
@@ -49,15 +52,15 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void init(ProcessorContext context) {
         this.context = context;
-        if (this.keySerializer == null) this.keySerializer = (Serializer<K>) context.keySerializer();
-        if (this.valSerializer == null) this.valSerializer = (Serializer<V>) context.valueSerializer();
+        if (this.keySerializer == null) this.keySerializer = (Serializer<K>) context.keySerde().serializer();
+        if (this.valSerializer == null) this.valSerializer = (Serializer<V>) context.valueSerde().serializer();
     }
 
     @Override
     public void process(K key, V value) {
         // send to all the registered topics
         RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
-        collector.send(new ProducerRecord<>(topic, key, value), keySerializer, valSerializer, partitioner);
+        collector.send(new ProducerRecord<>(topic, null, context.timestamp(), key, value), keySerializer, valSerializer, partitioner);
     }
 
     @Override

@@ -22,8 +22,8 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 /**
  * A stateful Value Transformer interface for transform a value into a new value.
  *
- * @param <V> Value type.
- * @param <R> Return type.
+ * @param <V>   value type
+ * @param <R>   return type
  */
 public interface ValueTransformer<V, R> {
 
@@ -47,12 +47,13 @@ public interface ValueTransformer<V, R> {
     R transform(V value);
 
     /**
-     * Perform any periodic operations, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
+     * Perform any periodic operations and possibly return a new value, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
      * during {@link #init(ProcessorContext) initialization}.
      *
      * @param timestamp the stream time when this method is being called
+     * @return new value; if null it will not be forwarded to down stream
      */
-    void punctuate(long timestamp);
+    R punctuate(long timestamp);
 
     /**
      * Close this processor and clean up any resources.

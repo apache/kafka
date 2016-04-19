@@ -18,10 +18,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -47,10 +45,8 @@ public class KStreamKTableLeftJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    private IntegerSerializer keySerializer = new IntegerSerializer();
-    private StringSerializer valSerializer = new StringSerializer();
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
+    final private Serde<Integer> intSerde = new Serdes.IntegerSerde();
+    final private Serde<String> stringSerde = new Serdes.StringSerde();
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
@@ -81,8 +77,8 @@ public class KStreamKTableLeftJoinTest {
             MockProcessorSupplier<Integer, String> processor;
 
             processor = new MockProcessorSupplier<>();
-            stream = builder.stream(keyDeserializer, valDeserializer, topic1);
-            table = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
+            stream = builder.stream(intSerde, stringSerde, topic1);
+            table = builder.table(intSerde, stringSerde, topic2);
             stream.leftJoin(table, joiner).process(processor);
 
             Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
@@ -99,7 +95,7 @@ public class KStreamKTableLeftJoinTest {
                 driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+null", "1:X1+null");
+            processor.checkAndClearProcessResult("0:X0+null", "1:X1+null");
 
             // push two items to the other stream. this should not produce any item.
 
@@ -107,7 +103,7 @@ public class KStreamKTableLeftJoinTest {
                 driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult();
+            processor.checkAndClearProcessResult();
 
             // push all four items to the primary stream. this should produce four items.
 
@@ -115,14 +111,14 @@ public class KStreamKTableLeftJoinTest {
                 driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+Y0", "1:X1+Y1", "2:X2+null", "3:X3+null");
+            processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1", "2:X2+null", "3:X3+null");
 
             // push all items to the other stream. this should not produce any item
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult();
+            processor.checkAndClearProcessResult();
 
             // push all four items to the primary stream. this should produce four items.
 
@@ -130,7 +126,7 @@ public class KStreamKTableLeftJoinTest {
                 driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
 
             // push two items with null to the other stream as deletes. this should not produce any item.
 
@@ -138,7 +134,7 @@ public class KStreamKTableLeftJoinTest {
                 driver.process(topic2, expectedKeys[i], null);
             }
 
-            processor.checkAndClearResult();
+            processor.checkAndClearProcessResult();
 
             // push all four items to the primary stream. this should produce four items.
 
@@ -146,7 +142,7 @@ public class KStreamKTableLeftJoinTest {
                 driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
             }
 
-            processor.checkAndClearResult("0:XX0+null", "1:XX1+null", "2:XX2+YY2", "3:XX3+YY3");
+            processor.checkAndClearProcessResult("0:XX0+null", "1:XX1+null", "2:XX2+YY2", "3:XX3+YY3");
 
         } finally {
             Utils.delete(baseDir);
@@ -162,8 +158,8 @@ public class KStreamKTableLeftJoinTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keyDeserializer, valDeserializer, topic1).map(keyValueMapper);
-        table = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
+        stream = builder.stream(intSerde, stringSerde, topic1).map(keyValueMapper);
+        table = builder.table(intSerde, stringSerde, topic2);
 
         stream.leftJoin(table, joiner).process(processor);
     }

@@ -22,10 +22,8 @@ import kafka.coordinator.GroupCoordinator
 
 object Topic {
   val legalChars = "[a-zA-Z0-9\\._\\-]"
-  private val maxNameLength = 255
+  private val maxNameLength = 249
   private val rgx = new Regex(legalChars + "+")
-
-  val InternalTopics = Set(GroupCoordinator.GroupMetadataTopicName)
 
   def validate(topic: String) {
     if (topic.length <= 0)

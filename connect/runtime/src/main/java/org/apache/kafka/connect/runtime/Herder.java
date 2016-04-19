@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -60,9 +61,9 @@ public interface Herder {
      * from the current configuration. However, note
      *
      * @returns A list of connector names
-     * @throws org.apache.kafka.connect.runtime.distributed.NotLeaderException if this node can not resolve the request
+     * @throws org.apache.kafka.connect.runtime.distributed.RequestTargetException if this node can not resolve the request
      *         (e.g., because it has not joined the cluster or does not have configs in sync with the group) and it is
-     *         also not the leader
+     *         not the leader or the task owner (e.g., task restart must be handled by the worker which owns the task)
      * @throws org.apache.kafka.connect.errors.ConnectException if this node is the leader, but still cannot resolve the
      *         request (e.g., it is not in sync with other worker's config state)
      */
@@ -127,6 +128,26 @@ public interface Herder {
      */
     ConnectorStateInfo.TaskState taskStatus(ConnectorTaskId id);
 
+    /**
+     * Validate the provided connector config values against the configuration definition.
+     * @param connType the connector class
+     * @param connectorConfig the provided connector config values
+     */
+    ConfigInfos validateConfigs(String connType, Map<String, String> connectorConfig);
+
+    /**
+     * Restart the task with the given id.
+     * @param id id of the task
+     * @param cb callback to invoke upon completion
+     */
+    void restartTask(ConnectorTaskId id, Callback<Void> cb);
+
+    /**
+     * Restart the connector.
+     * @param connName name of the connector
+     * @param cb callback to invoke upon completion
+     */
+    void restartConnector(String connName, Callback<Void> cb);
 
     class Created<T> {
         private final boolean created;

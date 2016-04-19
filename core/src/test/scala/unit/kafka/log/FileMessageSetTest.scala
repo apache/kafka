@@ -133,11 +133,13 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   def testIteratorWithLimits() {
     val message = messageSet.toList(1)
     val start = messageSet.searchFor(1, 0).position
-    val size = message.message.size
+    val size = message.message.size + 12
     val slice = messageSet.read(start, size)
     assertEquals(List(message), slice.toList)
+    val slice2 = messageSet.read(start, size - 1)
+    assertEquals(List(), slice2.toList)
   }
-  
+
   /**
    * Test the truncateTo method lops off messages and appropriately updates the size
    */
@@ -200,6 +202,17 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
     assertEquals(oldposition, position)
     assertEquals(oldposition, size)
     assertEquals(oldposition, tempReopen.length)
+  }
+
+  @Test
+  def testFormatConversionWithPartialMessage() {
+    val message = messageSet.toList(1)
+    val start = messageSet.searchFor(1, 0).position
+    val size = message.message.size + 12
+    val slice = messageSet.read(start, size - 1)
+    val messageV0 = slice.toMessageFormat(Message.MagicValue_V0)
+    assertEquals("No message should be there", 0, messageV0.size)
+    assertEquals(s"There should be ${size - 1} bytes", size - 1, messageV0.sizeInBytes)
   }
 
   @Test

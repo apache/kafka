@@ -242,7 +242,7 @@ class KafkaService(JmxMixin, Service):
         cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s --partitions %(partitions)d --replication-factor %(replication)d" % {
                 'zk_connect': self.zk.connect_setting(),
                 'topic': topic_cfg.get("topic"),
-                'partitions': topic_cfg.get('partitions', 1),
+                'partitions': topic_cfg.get('partitions', 1), 
                 'replication': topic_cfg.get('replication-factor', 1)
             }
 
@@ -267,6 +267,15 @@ class KafkaService(JmxMixin, Service):
         for line in node.account.ssh_capture(cmd):
             output += line
         return output
+    
+    def alter_message_format(self, topic, msg_format_version, node=None):
+        if node is None:
+            node = self.nodes[0]
+        self.logger.info("Altering message format version for topic %s with format %s", topic, msg_format_version)
+        cmd = "/opt/%s/bin/kafka-configs.sh --zookeeper %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
+              (kafka_dir(node), self.zk.connect_setting(), topic, msg_format_version)
+        self.logger.info("Running alter message format command...\n%s" % cmd)
+        node.account.ssh(cmd)
 
     def parse_describe_topic(self, topic_description):
         """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
@@ -458,7 +467,7 @@ class KafkaService(JmxMixin, Service):
         output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):
-            if not (line.startswith("SLF4J") or line.startswith("GROUP, TOPIC") or line.startswith("Could not fetch offset")):
+            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.startswith("Could not fetch offset")):
                 output += line
         self.logger.debug(output)
         return output
@@ -491,3 +500,21 @@ class KafkaService(JmxMixin, Service):
         controller_idx = int(controller_info["brokerid"])
         self.logger.info("Controller's ID: %d" % (controller_idx))
         return self.get_node(controller_idx)
+
+    def get_offset_shell(self, topic, partitions, max_wait_ms, offsets, time):
+        node = self.nodes[0]
+
+        cmd = "/opt/%s/bin/" % kafka_dir(node)
+        cmd += "kafka-run-class.sh kafka.tools.GetOffsetShell"
+        cmd += " --topic %s --broker-list %s --max-wait-ms %s --offsets %s --time %s" % (topic, self.bootstrap_servers(self.security_protocol), max_wait_ms, offsets, time)
+
+        if partitions:
+            cmd += '  --partitions %s' % partitions
+
+        cmd += " 2>> /mnt/get_offset_shell.log | tee -a /mnt/get_offset_shell.log &"
+        output = ""
+        self.logger.debug(cmd)
+        for line in node.account.ssh_capture(cmd):
+            output += line
+        self.logger.debug(output)
+        return output

@@ -55,6 +55,7 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
    * care.
    */
   def blockingReady(node: Node, timeout: Long)(implicit time: JTime): Boolean = {
+    require(timeout >=0, "timeout should be >= 0")
     client.ready(node, time.milliseconds()) || pollUntil(timeout) { (_, now) =>
       if (client.isReady(node, now))
         true
@@ -65,19 +66,18 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
   }
 
   /**
-   * Invokes `client.send` followed by 1 or more `client.poll` invocations until a response is received,
-   * the timeout expires or a disconnection happens.
+   * Invokes `client.send` followed by 1 or more `client.poll` invocations until a response is received or a
+   * disconnection happens (which can happen for a number of reasons including a request timeout).
    *
-   * It returns `true` if the call completes normally or `false` if the timeout expires. In the case of a disconnection,
-   * an `IOException` is thrown instead.
+   * In case of a disconnection, an `IOException` is thrown.
    *
    * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
    * care.
    */
-  def blockingSendAndReceive(request: ClientRequest, timeout: Long)(implicit time: JTime): Option[ClientResponse] = {
+  def blockingSendAndReceive(request: ClientRequest)(implicit time: JTime): ClientResponse = {
     client.send(request, time.milliseconds())
 
-    pollUntilFound(timeout) { case (responses, _) =>
+    pollContinuously { responses =>
       val response = responses.find { response =>
         response.request.request.header.correlationId == request.request.header.correlationId
       }
@@ -102,41 +102,45 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
    * care.
    */
   private def pollUntil(timeout: Long)(predicate: (Seq[ClientResponse], Long) => Boolean)(implicit time: JTime): Boolean = {
-    pollUntilFound(timeout) { (responses, now) =>
-      if (predicate(responses, now)) Some(true)
-      else None
-    }.fold(false)(_ => true)
-  }
-
-  /**
-   * Invokes `client.poll` until `collect` returns `Some` or the timeout expires.
-   *
-   * It returns the result of `collect` if the call completes normally or `None` if the timeout expires. Exceptions
-   * thrown via `collect` are not handled and will bubble up.
-   *
-   * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
-   * care.
-   */
-  private def pollUntilFound[T](timeout: Long)(collect: (Seq[ClientResponse], Long) => Option[T])(implicit time: JTime): Option[T] = {
-
     val methodStartTime = time.milliseconds()
     val timeoutExpiryTime = methodStartTime + timeout
 
     @tailrec
-    def recurse(iterationStartTime: Long): Option[T] = {
-      val pollTimeout = if (timeout < 0) timeout else timeoutExpiryTime - iterationStartTime
+    def recursivePoll(iterationStartTime: Long): Boolean = {
+      val pollTimeout = timeoutExpiryTime - iterationStartTime
       val responses = client.poll(pollTimeout, iterationStartTime).asScala
-      val result = collect(responses, iterationStartTime)
-      if (result.isDefined) result
+      if (predicate(responses, iterationStartTime)) true
       else {
         val afterPollTime = time.milliseconds()
-        if (timeout < 0 || afterPollTime < timeoutExpiryTime)
-          recurse(afterPollTime)
-        else None
+        if (afterPollTime < timeoutExpiryTime) recursivePoll(afterPollTime)
+        else false
       }
     }
 
-    recurse(methodStartTime)
+    recursivePoll(methodStartTime)
+  }
+
+  /**
+    * Invokes `client.poll` until `collect` returns `Some`. The value inside `Some` is returned.
+    *
+    * Exceptions thrown via `collect` are not handled and will bubble up.
+    *
+    * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
+    * care.
+    */
+  private def pollContinuously[T](collect: Seq[ClientResponse] => Option[T])(implicit time: JTime): T = {
+
+    @tailrec
+    def recursivePoll: T = {
+      // rely on request timeout to ensure we don't block forever
+      val responses = client.poll(Long.MaxValue, time.milliseconds()).asScala
+      collect(responses) match {
+        case Some(result) => result
+        case None => recursivePoll
+      }
+    }
+
+    recursivePoll
   }
 
 }

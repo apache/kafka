@@ -63,6 +63,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
+@SuppressWarnings("unchecked")
 public class StandaloneHerderTest {
     private static final String CONNECTOR_NAME = "test";
     private static final List<String> TOPICS_LIST = Arrays.asList("topic1", "topic2");
@@ -149,6 +150,160 @@ public class StandaloneHerderTest {
             fail("Should have thrown NotFoundException");
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof NotFoundException);
+        }
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartConnector() throws Exception {
+        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+
+        worker.stopConnector(CONNECTOR_NAME);
+        EasyMock.expectLastCall();
+
+        worker.startConnector(EasyMock.eq(new ConnectorConfig(connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class))),
+                EasyMock.anyObject(HerderConnectorContext.class), EasyMock.eq(herder));
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class), false, createCallback);
+
+        FutureCallback<Void> cb = new FutureCallback<>();
+        herder.restartConnector(CONNECTOR_NAME, cb);
+        cb.get(1000L, TimeUnit.MILLISECONDS);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartConnectorFailureOnStop() throws Exception {
+        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+
+        RuntimeException e = new RuntimeException();
+        worker.stopConnector(CONNECTOR_NAME);
+        EasyMock.expectLastCall().andThrow(e);
+
+        // the connector will not be started after the failure in start
+
+        PowerMock.replayAll();
+
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class), false, createCallback);
+
+        FutureCallback<Void> cb = new FutureCallback<>();
+        herder.restartConnector(CONNECTOR_NAME, cb);
+        try {
+            cb.get(1000L, TimeUnit.MILLISECONDS);
+            fail();
+        } catch (ExecutionException exception) {
+            assertEquals(e, exception.getCause());
+        }
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartConnectorFailureOnStart() throws Exception {
+        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+
+        worker.stopConnector(CONNECTOR_NAME);
+        EasyMock.expectLastCall();
+
+        RuntimeException e = new RuntimeException();
+        worker.startConnector(EasyMock.eq(new ConnectorConfig(connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class))),
+                EasyMock.anyObject(HerderConnectorContext.class), EasyMock.eq(herder));
+        EasyMock.expectLastCall().andThrow(e);
+
+        PowerMock.replayAll();
+
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class), false, createCallback);
+
+        FutureCallback<Void> cb = new FutureCallback<>();
+        herder.restartConnector(CONNECTOR_NAME, cb);
+        try {
+            cb.get(1000L, TimeUnit.MILLISECONDS);
+            fail();
+        } catch (ExecutionException exception) {
+            assertEquals(e, exception.getCause());
+        }
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartTask() throws Exception {
+        ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
+        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+
+        worker.stopAndAwaitTask(taskId);
+        EasyMock.expectLastCall();
+
+        Map<String, String> generatedTaskProps = taskConfig(BogusSourceTask.class, false);
+        worker.startTask(taskId, new TaskConfig(generatedTaskProps), herder);
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class), false, createCallback);
+
+        FutureCallback<Void> cb = new FutureCallback<>();
+        herder.restartTask(taskId, cb);
+        cb.get(1000L, TimeUnit.MILLISECONDS);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartTaskFailureOnStop() throws Exception {
+        ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
+        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+
+        RuntimeException e = new RuntimeException();
+        worker.stopAndAwaitTask(taskId);
+        EasyMock.expectLastCall().andThrow(e);
+
+        // task will not be started after the failure in stop
+
+        PowerMock.replayAll();
+
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class), false, createCallback);
+
+        FutureCallback<Void> cb = new FutureCallback<>();
+        herder.restartTask(taskId, cb);
+        try {
+            cb.get(1000L, TimeUnit.MILLISECONDS);
+            fail("Expected restart callback to raise an exception");
+        } catch (ExecutionException exception) {
+            assertEquals(e, exception.getCause());
+        }
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartTaskFailureOnStart() throws Exception {
+        ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
+        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+
+        worker.stopAndAwaitTask(taskId);
+        EasyMock.expectLastCall();
+
+        RuntimeException e = new RuntimeException();
+        Map<String, String> generatedTaskProps = taskConfig(BogusSourceTask.class, false);
+        worker.startTask(taskId, new TaskConfig(generatedTaskProps), herder);
+        EasyMock.expectLastCall().andThrow(e);
+
+        PowerMock.replayAll();
+
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class), false, createCallback);
+
+        FutureCallback<Void> cb = new FutureCallback<>();
+        herder.restartTask(taskId, cb);
+        try {
+            cb.get(1000L, TimeUnit.MILLISECONDS);
+            fail("Expected restart callback to raise an exception");
+        } catch (ExecutionException exception) {
+            assertEquals(e, exception.getCause());
         }
 
         PowerMock.verifyAll();

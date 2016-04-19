@@ -17,7 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueTransformer;
@@ -33,8 +34,7 @@ public class KStreamTransformValuesTest {
 
     private String topicName = "topic";
 
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private IntegerDeserializer valDeserializer = new IntegerDeserializer();
+    final private Serde<Integer> intSerde = Serdes.Integer();
 
     @Test
     public void testTransform() {
@@ -58,7 +58,8 @@ public class KStreamTransformValuesTest {
                         }
 
                         @Override
-                        public void punctuate(long timestamp) {
+                        public Integer punctuate(long timestamp) {
+                            return (int) timestamp;
                         }
 
                         @Override
@@ -72,7 +73,7 @@ public class KStreamTransformValuesTest {
 
         KStream<Integer, Integer> stream;
         MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
-        stream = builder.stream(keyDeserializer, valDeserializer, topicName);
+        stream = builder.stream(intSerde, intSerde, topicName);
         stream.transformValues(valueTransformerSupplier).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);
@@ -82,7 +83,10 @@ public class KStreamTransformValuesTest {
 
         assertEquals(4, processor.processed.size());
 
-        String[] expected = {"1:10", "10:110", "100:1110", "1000:11110"};
+        driver.punctuate(2);
+        driver.punctuate(3);
+
+        String[] expected = {"1:10", "10:110", "100:1110", "1000:11110", "null:2", "null:3"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));

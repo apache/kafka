@@ -43,11 +43,22 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String GROUP_ID_CONFIG = "group.id";
     private static final String GROUP_ID_DOC = "A unique string that identifies the consumer group this consumer belongs to. This property is required if the consumer uses either the group management functionality by using <code>subscribe(topic)</code> or the Kafka-based offset management strategy.";
 
+    /** <code>max.poll.records</code> */
+    public static final String MAX_POLL_RECORDS_CONFIG = "max.poll.records";
+    private static final String MAX_POLL_RECORDS_DOC = "The maximum number of records returned in a single call to poll().";
+
     /**
      * <code>session.timeout.ms</code>
      */
     public static final String SESSION_TIMEOUT_MS_CONFIG = "session.timeout.ms";
-    private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect failures when using Kafka's group management facilities.";
+    private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect failures when using Kafka's " +
+            "group management facilities. When a consumer's heartbeat is not received within the session timeout, " +
+            "the broker will mark the consumer as failed and rebalance the group. Since heartbeats are sent only " +
+            "when poll() is invoked, a higher session timeout allows more time for message processing in the consumer's " +
+            "poll loop at the cost of a longer time to detect hard failures. See also <code>" + MAX_POLL_RECORDS_CONFIG + "</code> for " +
+            "another option to control the processing time in the poll loop. Note that the value must be in the " +
+            "allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> " +
+            "and <code>group.max.session.timeout.ms</code>.";
 
     /**
      * <code>heartbeat.interval.ms</code>
@@ -168,10 +179,13 @@ public class ConsumerConfig extends AbstractConfig {
                                                         + "Implementing the <code>ConsumerInterceptor</code> interface allows you to intercept (and possibly mutate) records "
                                                         + "received by the consumer. By default, there are no interceptors.";
 
-    /** <code>max.poll.records</code> */
-    public static final String MAX_POLL_RECORDS_CONFIG = "max.poll.records";
-    private static final String MAX_POLL_RECORDS_DOC = "The maximum number of records returned in a single call to poll().";
 
+    /** <code>exclude.internal.topics</code> */
+    public static final String EXCLUDE_INTERNAL_TOPICS_CONFIG = "exclude.internal.topics";
+    private static final String EXCLUDE_INTERNAL_TOPICS_DOC = "Whether records from internal topics (such as offsets) should be exposed to the consumer. "
+                                                            + "If set to <code>true</code> the only way to receive records from an internal topic is subscribing to it.";
+    public static final boolean EXCLUDE_INTERNAL_TOPICS_DEFAULT = true;
+    
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -229,7 +243,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.SEND_BUFFER_DOC)
                                 .define(RECEIVE_BUFFER_CONFIG,
                                         Type.INT,
-                                        32 * 1024,
+                                        64 * 1024,
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.RECEIVE_BUFFER_DOC)
@@ -316,6 +330,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(1),
                                         Importance.MEDIUM,
                                         MAX_POLL_RECORDS_DOC)
+                                .define(EXCLUDE_INTERNAL_TOPICS_CONFIG,
+                                        Type.BOOLEAN,
+                                        EXCLUDE_INTERNAL_TOPICS_DEFAULT,
+                                        Importance.MEDIUM,
+                                        EXCLUDE_INTERNAL_TOPICS_DOC)
 
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,

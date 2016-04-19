@@ -19,13 +19,14 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.WindowStoreUtils;
@@ -51,7 +52,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         public final long id;
 
         Segment(String segmentName, String windowName, long id) {
-            super(segmentName, windowName, WindowStoreUtils.INNER_SERDES);
+            super(segmentName, windowName, WindowStoreUtils.INNER_SERDE, WindowStoreUtils.INNER_SERDE);
             this.id = id;
         }
 
@@ -61,15 +62,15 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     private static class RocksDBWindowStoreIterator<V> implements WindowStoreIterator<V> {
-        private final Serdes<?, V> serdes;
+        private final StateSerdes<?, V> serdes;
         private final KeyValueIterator<byte[], byte[]>[] iterators;
         private int index = 0;
 
-        RocksDBWindowStoreIterator(Serdes<?, V> serdes) {
+        RocksDBWindowStoreIterator(StateSerdes<?, V> serdes) {
             this(serdes, WindowStoreUtils.NO_ITERATORS);
         }
 
-        RocksDBWindowStoreIterator(Serdes<?, V> serdes, KeyValueIterator<byte[], byte[]>[] iterators) {
+        RocksDBWindowStoreIterator(StateSerdes<?, V> serdes, KeyValueIterator<byte[], byte[]>[] iterators) {
             this.serdes = serdes;
             this.iterators = iterators;
         }
@@ -85,6 +86,9 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
             return false;
         }
 
+        /**
+         * @throws NoSuchElementException if no next element exists
+         */
         @Override
         public KeyValue<Long, V> next() {
             if (index >= iterators.length)
@@ -114,7 +118,8 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private final long segmentInterval;
     private final boolean retainDuplicates;
     private final Segment[] segments;
-    private final Serdes<K, V> serdes;
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
     private final SimpleDateFormat formatter;
     private final StoreChangeLogger.ValueGetter<byte[], byte[]> getter;
 
@@ -122,17 +127,20 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private int seqnum = 0;
     private long currentSegmentId = -1L;
 
+    private StateSerdes<K, V> serdes;
+
     private boolean loggingEnabled = false;
     private StoreChangeLogger<byte[], byte[]> changeLogger = null;
 
-    public RocksDBWindowStore(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serdes<K, V> serdes) {
+    public RocksDBWindowStore(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde) {
         this.name = name;
 
         // The segment interval must be greater than MIN_SEGMENT_INTERVAL
         this.segmentInterval = Math.max(retentionPeriod / (numSegments - 1), MIN_SEGMENT_INTERVAL);
 
         this.segments = new Segment[numSegments];
-        this.serdes = serdes;
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
 
         this.retainDuplicates = retainDuplicates;
 
@@ -159,13 +167,18 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
         this.context = context;
 
+        // construct the serde
+        this.serdes = new StateSerdes<>(name,
+                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+
         openExistingSegments();
 
-        this.changeLogger = this.loggingEnabled ?
-                new RawStoreChangeLogger(name, context) : null;
+        this.changeLogger = this.loggingEnabled ? new RawStoreChangeLogger(name, context) : null;
 
         // register and possibly restore the state from the logs
         context.register(root, loggingEnabled, new StateRestoreCallback() {
@@ -202,7 +215,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
                 dir.mkdir();
             }
         } catch (Exception ex) {
-
+            // ignore
         }
     }
 
@@ -235,7 +248,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public void put(K key, V value) {
         byte[] rawKey = putAndReturnInternalKey(key, value, USE_CURRENT_TIMESTAMP);
 
-        if (loggingEnabled) {
+        if (rawKey != null && loggingEnabled) {
             changeLogger.add(rawKey);
             changeLogger.maybeLogChange(this.getter);
         }
@@ -245,7 +258,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public void put(K key, V value, long timestamp) {
         byte[] rawKey = putAndReturnInternalKey(key, value, timestamp);
 
-        if (loggingEnabled) {
+        if (rawKey != null && loggingEnabled) {
             changeLogger.add(rawKey);
             changeLogger.maybeLogChange(this.getter);
         }
