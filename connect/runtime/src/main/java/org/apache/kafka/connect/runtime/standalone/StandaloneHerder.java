@@ -202,6 +202,44 @@ public class StandaloneHerder extends AbstractHerder {
         throw new UnsupportedOperationException("Kafka Connect in standalone mode does not support externally setting task configurations.");
     }
 
+    @Override
+    public synchronized void restartTask(ConnectorTaskId taskId, Callback<Void> cb) {
+        if (!connectors.containsKey(taskId.connector()))
+            cb.onCompletion(new NotFoundException("Connector " + taskId.connector() + " not found", null), null);
+
+        ConnectorState state = connectors.get(taskId.connector());
+        if (state.taskConfigs.contains(taskId))
+            cb.onCompletion(new NotFoundException("Task " + taskId + " not found", null), null);
+
+        try {
+            worker.stopAndAwaitTask(taskId);
+
+            Map<String, String> taskConfig = state.taskConfigs.get(taskId.task());
+            worker.startTask(taskId, new TaskConfig(taskConfig), this);
+
+            cb.onCompletion(null, null);
+        } catch (Exception e) {
+            log.error("Failed to restart task {}", taskId, e);
+            cb.onCompletion(e, null);
+        }
+    }
+
+    @Override
+    public synchronized void restartConnector(String connName, Callback<Void> cb) {
+        if (!connectors.containsKey(connName))
+            cb.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
+
+        ConnectorState state = connectors.get(connName);
+        try {
+            worker.stopConnector(connName);
+            worker.startConnector(state.config, new HerderConnectorContext(this, connName), this);
+            cb.onCompletion(null, null);
+        } catch (Exception e) {
+            log.error("Failed to restart connector {}", connName, e);
+            cb.onCompletion(e, null);
+        }
+    }
+
     /**
      * Start a connector in the worker and record its state.
      * @param connectorProps new connector configuration
@@ -234,16 +272,20 @@ public class StandaloneHerder extends AbstractHerder {
         int index = 0;
         for (Map<String, String> taskConfigMap : state.taskConfigs) {
             ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
-            TaskConfig config = new TaskConfig(taskConfigMap);
-            try {
-                worker.startTask(taskId, config, this);
-            } catch (Throwable e) {
-                log.error("Failed to add task {}: ", taskId, e);
-                // Swallow this so we can continue updating the rest of the tasks
-                // FIXME what's the proper response? Kill all the tasks? Consider this the same as a task
-                // that died after starting successfully.
-            }
+            startTask(taskId, taskConfigMap);
             index++;
+        }
+    }
+
+    private void startTask(ConnectorTaskId taskId, Map<String, String> taskConfigMap) {
+        TaskConfig config = new TaskConfig(taskConfigMap);
+        try {
+            worker.startTask(taskId, config, this);
+        } catch (Throwable e) {
+            log.error("Failed to add task {}: ", taskId, e);
+            // Swallow this so we can continue updating the rest of the tasks
+            // FIXME what's the proper response? Kill all the tasks? Consider this the same as a task
+            // that died after starting successfully.
         }
     }
 

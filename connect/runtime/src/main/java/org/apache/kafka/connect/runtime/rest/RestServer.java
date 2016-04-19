@@ -20,7 +20,6 @@ package org.apache.kafka.connect.runtime.rest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
-
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -48,6 +47,9 @@ import org.glassfish.jersey.servlet.ServletContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.servlet.DispatcherType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -57,10 +59,6 @@ import java.net.URL;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-
-import javax.servlet.DispatcherType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
 
 /**
  * Embedded server for the REST API that provides the control plane for Kafka Connect workers.
@@ -272,4 +270,5 @@ public class RestServer {
         else
             return base + path;
     }
+
 }

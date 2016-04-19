@@ -278,7 +278,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 }
             }
         }
-
+        consumer.close();
 
         System.out.println("-------------------");
         System.out.println("Result Verification");

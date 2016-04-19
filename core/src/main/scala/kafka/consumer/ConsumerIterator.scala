@@ -104,10 +104,10 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
                            currentTopicInfo.partitionId,
                            item.message,
                            item.offset,
-                           item.message.timestamp,
-                           item.message.timestampType,
                            keyDecoder,
-                           valueDecoder)
+                           valueDecoder,
+                           item.message.timestamp,
+                           item.message.timestampType)
   }
 
   def clearCurrentChunk() {

@@ -77,6 +77,8 @@ public class KafkaConsumerTest {
         consumer.unsubscribe();
         Assert.assertTrue(consumer.subscription().isEmpty());
         Assert.assertTrue(consumer.assignment().isEmpty());
+
+        consumer.close();
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -85,10 +87,13 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testSeekNegative");
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
-
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
-        consumer.assign(Arrays.asList(new TopicPartition("nonExistTopic", 0)));
-        consumer.seek(new TopicPartition("nonExistTopic", 0), -1);
+        try {
+            consumer.assign(Arrays.asList(new TopicPartition("nonExistTopic", 0)));
+            consumer.seek(new TopicPartition("nonExistTopic", 0), -1);
+        } finally {
+            consumer.close();
+        }
     }
 
     @Test
@@ -129,6 +134,8 @@ public class KafkaConsumerTest {
 
         consumer.unsubscribe();
         Assert.assertTrue(consumer.paused().isEmpty());
+
+        consumer.close();
     }
 
     private KafkaConsumer<byte[], byte[]> newConsumer() {

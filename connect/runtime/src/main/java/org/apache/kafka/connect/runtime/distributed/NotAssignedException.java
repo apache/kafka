@@ -5,26 +5,25 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
-
 package org.apache.kafka.connect.runtime.distributed;
 
 /**
- * Indicates an operation was not permitted because it can only be performed on the leader and this worker is not currently
- * the leader.
+ * Thrown when a request intended for the owner of a task or connector is received by a worker which doesn't
+ * own it (typically the leader).
  */
-public class NotLeaderException extends RequestTargetException {
+public class NotAssignedException extends RequestTargetException {
 
-    public NotLeaderException(String msg, String leaderUrl) {
-        super(msg, leaderUrl);
+    public NotAssignedException(String message, String ownerUrl) {
+        super(message, ownerUrl);
     }
 
 }
