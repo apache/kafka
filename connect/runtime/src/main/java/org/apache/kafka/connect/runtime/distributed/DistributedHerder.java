@@ -107,6 +107,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // Config updates can be collected and applied together when possible. Also, we need to take care to rebalance when
     // needed (e.g. task reconfiguration, which requires everyone to coordinate offset commits).
     private Set<String> connectorConfigUpdates = new HashSet<>();
+    // Similarly collect target state changes (when observed by the config storage listener) for handling in the
+    // herder's main thread.
     private Set<String> connectorTargetStateChanges = new HashSet<>();
     private boolean needsReconfigRebalance;
     private volatile int generation;
