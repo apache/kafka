@@ -155,6 +155,7 @@ class VerifiableConsumer(BackgroundThreadService):
         self.event_handlers = {}
         self.global_position = {}
         self.global_committed = {}
+        self.path = create_path_resolver(self.context)
 
         for node in self.nodes:
             node.version = version
