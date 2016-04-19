@@ -228,7 +228,7 @@ class LogTest extends JUnitSuite {
   /**
    * Test reading at the boundary of the log, specifically
    * - reading from the logEndOffset should give an empty message set
-   * - reading from the the maxOffset should give an empty message set
+   * - reading from the maxOffset should give an empty message set
    * - reading beyond the log end offset should throw an OffsetOutOfRangeException
    */
   @Test
