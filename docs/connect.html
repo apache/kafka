@@ -25,7 +25,7 @@ Kafka Connect features include:
     <li><b>Distributed and standalone modes</b> - scale up to a large, centrally managed service supporting an entire organization or scale down to development, testing, and small production deployments</li>
     <li><b>REST interface</b> - submit and manage connectors to your Kafka Connect cluster via an easy to use REST API</li>
     <li><b>Automatic offset management</b> - with just a little information from connectors, Kafka Connect can manage the offset commit process automatically so connector developers do not need to worry about this error prone part of connector development</li>
-    <li><b>Distributed and scalable by default</b> - Kafka Connect builds on the existing group management protocol. More workers can be added to scale up Kafka Connect cluster.</li>
+    <li><b>Distributed and scalable by default</b> - Kafka Connect builds on the existing group management protocol. More workers can be added to scale up a Kafka Connect cluster.</li>
     <li><b>Streaming/batch integration</b> - leveraging Kafka's existing capabilities, Kafka Connect is an ideal solution for bridging streaming and batch data systems</li>
 </ul>
 
@@ -47,7 +47,7 @@ The first parameter is the configuration for the worker. This includes settings 
 
 The remaining parameters are connector configuration files. You may include as many as you want, but all will execute within the same process (on different threads).
 
-Distributed mode handles automatic work balancing work, allows you to scale up (or down) dynamically, and offers fault tolerance both in the active tasks and for configuration and offset commit data. Execution is very similar to standalone mode:
+Distributed mode handles automatic balancing of work, allows you to scale up (or down) dynamically, and offers fault tolerance both in the active tasks and for configuration and offset commit data. Execution is very similar to standalone mode:
 
 <pre>
 &gt; bin/connect-distributed.sh config/connect-distributed.properties
@@ -99,11 +99,11 @@ Since Kafka Connect is intended to be run as a service, it also provides a REST 
     <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
 </ul>
 
-We also provides a REST API for getting information of connector plugins:
+Kafka Connect also provides a REST API for getting information about connector plugins:
 
 <ul>
-    <li><code>GET /connector-plugins</code><- return a list of connector plugins installed in the Kafka Connect cluster</li>
-    <li><code>PUT /connector-plugins/{connector-type}/config/validate</code> - validate the provided configuration values against the configuration definition</li>
+    <li><code>GET /connector-plugins</code>- return a list of connector plugins installed in the Kafka Connect cluster. Note that the API only checks for connectors on the worker that handles the request, which means you may see inconsistent results, especially during a rolling upgrade if you add new connector jars</li>
+    <li><code>PUT /connector-plugins/{connector-type}/config/validate</code> - validate the provided configuration values against the configuration definition. This API performs per config validation, returns suggested values and error messages during validation.</li>
 </ul>
 
 <h3><a id="connect_development" href="#connect_development">8.3 Connector Development Guide</a></h3>
@@ -191,8 +191,8 @@ public List&lt;Map&lt;String, String&gt;&gt; getTaskConfigs(int maxTasks) {
 }
 </pre>
 
-Although not used in the example, <code>SourceTask</code> also provides two APIs to commit offsets in the source system: <code>commit</code> and <code>commitSourceRecord</code>. The APIs are provided for source systems that also need to store offsets internally which serve as an acknowledge mechanism to the source system that the message are delivered to Kafka.
-The <code>commit<code> API stores the offsets in the source system, up to the offsets that have been returned by <code>poll</code>. The implementation of this API should block until the commit is complete. The <code>commitSourceRecord</code> API saves the offset in the source system for each <code>SourceRecord</code> after it is delivered to Kafka.As Kafka Connect will record offsets automatically, <code>SourceTask<code>s are not required to implement them. Typically you only need to implement one of the two APIs.
+Although not used in the example, <code>SourceTask</code> also provides two APIs to commit offsets in the source system: <code>commit</code> and <code>commitSourceRecord</code>. The APIs are provided for source systems which have an acknowledgement mechanism for messages. Overriding these methods allows the source connector to acknowledge messages in the source system, either in bulk or individually, once they have been written to Kafka.
+The <code>commit<code> API stores the offsets in the source system, up to the offsets that have been returned by <code>poll</code>. The implementation of this API should block until the commit is complete. The <code>commitSourceRecord</code> API saves the offset in the source system for each <code>SourceRecord</code> after it is written to Kafka. As Kafka Connect will record offsets automatically, <code>SourceTask<code>s are not required to implement them. In cases where a connector does need to acknowledge messages in the source system, only one of the APIs is typically required.
 
 Even with multiple tasks, this method implementation is usually pretty simple. It just has to determine the number of input tasks, which may require contacting the remote service it is pulling data from, and then divvy them up. Because some patterns for splitting work among tasks are so common, some utilities are provided in <code>ConnectorUtils</code> to simplify these cases.
 
