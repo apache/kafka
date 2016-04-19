@@ -39,16 +39,16 @@ import java.io.PrintStream;
 import java.util.Set;
 
 /**
- * The implementation class of KTable
+ * The implementation class of {@link KTable}.
  * @param <K> the key type
  * @param <S> the source's (parent's) value type
  * @param <V> the value type
  */
 public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, V> {
 
-    private static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
-
     private static final String FILTER_NAME = "KTABLE-FILTER-";
+
+    private static final String FOREACH_NAME = "KTABLE-FOREACH-";
 
     public static final String JOINTHIS_NAME = "KTABLE-JOINTHIS-";
 
@@ -73,8 +73,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public static final String SOURCE_NAME = "KTABLE-SOURCE-";
 
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
-
-    private static final String FOREACH_NAME = "KTABLE-FOREACH-";
 
     public final ProcessorSupplier<?, ?> processorSupplier;
 
@@ -311,17 +309,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
                                                   Serde<K1> keySerde,
-                                                  Serde<V1> valueSerde,
-                                                  String name) {
+                                                  Serde<V1> valueSerde) {
 
         String selectName = topology.newName(SELECT_NAME);
-        String sinkName = topology.newName(KStreamImpl.SINK_NAME);
-        String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
-
-        String topic = name + REPARTITION_TOPIC_SUFFIX;
-
-        ChangedSerializer<V1> changedValueSerializer = new ChangedSerializer<>(valueSerde.serializer());
-        ChangedDeserializer<V1> changedValueDeserializer = new ChangedDeserializer<>(valueSerde.deserializer());
 
         KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
 
@@ -329,19 +319,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.addProcessor(selectName, selectSupplier, this.name);
         this.enableSendingOldValues();
 
-        // send the aggregate key-value pairs to the intermediate topic for partitioning
-        topology.addInternalTopic(topic);
-        topology.addSink(sinkName, topic, keySerde.serializer(), changedValueSerializer, selectName);
-
-        // read the intermediate topic
-        topology.addSource(sourceName, keySerde.deserializer(), changedValueDeserializer, topic);
-
-        return new KGroupedTableImpl<>(topology, sourceName, sourceName, keySerde, valueSerde);
+        return new KGroupedTableImpl<>(topology, selectName, this.name, keySerde, valueSerde);
     }
 
     @Override
-    public <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name) {
-        return this.groupBy(selector, null, null, name);
+    public <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector) {
+        return this.groupBy(selector, null, null);
     }
 
     @SuppressWarnings("unchecked")

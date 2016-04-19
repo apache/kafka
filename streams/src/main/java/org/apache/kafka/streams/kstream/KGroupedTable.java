@@ -21,7 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 
 /**
- * KGroupedTable is an abstraction of a <i>grouped changelog stream</i> from a primary-keyed table.
+ * {@link KGroupedTable} is an abstraction of a <i>grouped changelog stream</i> from a primary-keyed table.
  *
  * @param <K> Type of primary keys
  * @param <V> Type of value changes

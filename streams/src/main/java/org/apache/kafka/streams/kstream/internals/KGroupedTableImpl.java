@@ -32,20 +32,22 @@ import org.apache.kafka.streams.state.Stores;
 import java.util.Collections;
 
 /**
- * The implementation class of KGroupedTable
+ * The implementation class of {@link KGroupedTable}.
  * 
  * @param <K> the key type
- * @param <S> the source's (parent's) value type
  * @param <V> the value type
  */
-public class KGroupedTableImpl<K, S, V> extends AbstractStream<K> implements KGroupedTable<K, V> {
+public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroupedTable<K, V> {
 
     private static final String AGGREGATE_NAME = "KTABLE-AGGREGATE-";
 
     private static final String REDUCE_NAME = "KTABLE-REDUCE-";
 
+    private static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
+
     protected final Serde<K> keySerde;
     protected final Serde<V> valSerde;
+
     private final String sourceName;
 
     public KGroupedTableImpl(KStreamBuilder topology,
@@ -66,7 +68,14 @@ public class KGroupedTableImpl<K, S, V> extends AbstractStream<K> implements KGr
                                       Serde<T> aggValueSerde,
                                       String name) {
 
+        String sinkName = topology.newName(KStreamImpl.SINK_NAME);
+        String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
         String aggregateName = topology.newName(AGGREGATE_NAME);
+
+        String topic = name + REPARTITION_TOPIC_SUFFIX;
+
+        ChangedSerializer<V> changedValueSerializer = new ChangedSerializer<>(valSerde.serializer());
+        ChangedDeserializer<V> changedValueDeserializer = new ChangedDeserializer<>(valSerde.deserializer());
 
         ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(name, initializer, adder, subtractor);
 
@@ -75,6 +84,13 @@ public class KGroupedTableImpl<K, S, V> extends AbstractStream<K> implements KGr
                 .withValues(aggValueSerde)
                 .persistent()
                 .build();
+
+        // send the aggregate key-value pairs to the intermediate topic for partitioning
+        topology.addInternalTopic(topic);
+        topology.addSink(sinkName, topic, keySerde.serializer(), changedValueSerializer, this.name);
+
+        // read the intermediate topic
+        topology.addSource(sourceName, keySerde.deserializer(), changedValueDeserializer, topic);
 
         // aggregate the values with the aggregator and local store
         topology.addProcessor(aggregateName, aggregateSupplier, sourceName);
@@ -121,8 +137,14 @@ public class KGroupedTableImpl<K, S, V> extends AbstractStream<K> implements KGr
                                Reducer<V> subtractor,
                                String name) {
 
+        String sinkName = topology.newName(KStreamImpl.SINK_NAME);
         String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
         String reduceName = topology.newName(REDUCE_NAME);
+
+        String topic = name + REPARTITION_TOPIC_SUFFIX;
+
+        ChangedSerializer<V> changedValueSerializer = new ChangedSerializer<>(valSerde.serializer());
+        ChangedDeserializer<V> changedValueDeserializer = new ChangedDeserializer<>(valSerde.deserializer());
 
         ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(name, adder, subtractor);
 
@@ -131,6 +153,13 @@ public class KGroupedTableImpl<K, S, V> extends AbstractStream<K> implements KGr
                 .withValues(valSerde)
                 .persistent()
                 .build();
+
+        // send the aggregate key-value pairs to the intermediate topic for partitioning
+        topology.addInternalTopic(topic);
+        topology.addSink(sinkName, topic, keySerde.serializer(), changedValueSerializer, this.name);
+
+        // read the intermediate topic
+        topology.addSource(sourceName, keySerde.deserializer(), changedValueDeserializer, topic);
 
         // aggregate the values with the aggregator and local store
         topology.addProcessor(reduceName, aggregateSupplier, sourceName);

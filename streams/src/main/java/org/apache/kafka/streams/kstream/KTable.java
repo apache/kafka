@@ -242,28 +242,26 @@ public interface KTable<K, V> {
     <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
-     * Groups this {@link KTable} via the provided {@link KeyValueMapper}.
+     * Group the records of this {@link KTable} using the provided {@link KeyValueMapper}.
      * 
-     * @param selector      the instance of {@link KeyValueMapper} that select the grouping key
+     * @param selector      select the grouping key and value to be aggregated
      * @param keySerde      key serdes for materializing this stream,
      *                      if not specified the default serdes defined in the configs will be used
      * @param valueSerde    value serdes for materializing this stream,
      *                      if not specified the default serdes defined in the configs will be used
-     * @param name          the name of the resulted {@link KGroupedTable}
      * @param <K1>          the key type of the {@link KGroupedTable}
      * @param <V1>          the value type of the {@link KGroupedTable}
      */
-    <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, Serde<K1> keySerde, Serde<V1> valueSerde, String name);
+    <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, Serde<K1> keySerde, Serde<V1> valueSerde);
 
     /**
-     * Groups this {@link KTable} via the provided {@link KeyValueMapper} usind default serializers and deserializers.
+     * Group the records of this {@link KTable} using the provided {@link KeyValueMapper} and default serializers and deserializers.
      *
-     * @param selector      the instance of {@link KeyValueMapper} that select the grouping key
-     * @param name          the name of the resulted {@link KGroupedTable}
+     * @param selector      select the grouping key and value to be aggregated
      * @param <K1>          the key type of the {@link KGroupedTable}
      * @param <V1>          the value type of the {@link KGroupedTable}
      */
-    <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name);
+    <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector);
 
     /**
      * Perform an action on each element of {@link KTable}.
