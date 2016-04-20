@@ -379,7 +379,7 @@ object TopicCommand extends Logging {
   def shortMessageSizeWarning(maxMessageBytes: Int): String = {
     "\n\n" +
       "*****************************************************************************************************\n" +
-      "*** WARNING: you are creating a topic where the the max.message.bytes is greater than the consumer ***\n" +
+      "*** WARNING: you are creating a topic where the max.message.bytes is greater than the consumer ***\n" +
       "*** default. This operation is potentially dangerous. Consumers will get failures if their        ***\n" +
       "*** fetch.message.max.bytes < the value you are using.                                            ***\n" +
       "*****************************************************************************************************\n" +

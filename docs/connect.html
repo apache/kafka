@@ -25,7 +25,7 @@ Kafka Connect features include:
     <li><b>Distributed and standalone modes</b> - scale up to a large, centrally managed service supporting an entire organization or scale down to development, testing, and small production deployments</li>
     <li><b>REST interface</b> - submit and manage connectors to your Kafka Connect cluster via an easy to use REST API</li>
     <li><b>Automatic offset management</b> - with just a little information from connectors, Kafka Connect can manage the offset commit process automatically so connector developers do not need to worry about this error prone part of connector development</li>
-    <li><b>Distributed and scalable by default</b> - Kafka Connect builds on the existing </li>
+    <li><b>Distributed and scalable by default</b> - Kafka Connect builds on the existing group management protocol. More workers can be added to scale up a Kafka Connect cluster.</li>
     <li><b>Streaming/batch integration</b> - leveraging Kafka's existing capabilities, Kafka Connect is an ideal solution for bridging streaming and batch data systems</li>
 </ul>
 
@@ -76,6 +76,8 @@ Most configurations are connector dependent, so they can't be outlined here. How
     <li><code>tasks.max</code> - The maximum number of tasks that should be created for this connector. The connector may create fewer tasks if it cannot achieve this level of parallelism.</li>
 </ul>
 
+The <code>connector.class</code> config supports several formats: the full name or alias of the class for this connector. If the connector is org.apache.kafka.connect.file.FileStreamSinkConnector, you can either specify this full name or use FileStreamSink or FileStreamSinkConnector to make the configuration a bit shorter.
+
 Sink connectors also have one additional option to control their input:
 <ul>
     <li><code>topics</code> - A list of topics to use as input for this connector</li>
@@ -83,10 +85,9 @@ Sink connectors also have one additional option to control their input:
 
 For any other options, you should consult the documentation for the connector.
 
-
 <h4><a id="connect_rest" href="#connect_rest">REST API</a></h4>
 
-Since Kafka Connect is intended to be run as a service, it also supports a REST API for managing connectors. By default this service runs on port 8083. The following are the currently supported endpoints:
+Since Kafka Connect is intended to be run as a service, it also provides a REST API for managing connectors. By default this service runs on port 8083. The following are the currently supported endpoints:
 
 <ul>
     <li><code>GET /connectors</code> - return a list of active connectors</li>
@@ -96,6 +97,13 @@ Since Kafka Connect is intended to be run as a service, it also supports a REST 
     <li><code>PUT /connectors/{name}/config</code> - update the configuration parameters for a specific connector</li>
     <li><code>GET /connectors/{name}/tasks</code> - get a list of tasks currently running for a connector</li>
     <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
+</ul>
+
+Kafka Connect also provides a REST API for getting information about connector plugins:
+
+<ul>
+    <li><code>GET /connector-plugins</code>- return a list of connector plugins installed in the Kafka Connect cluster. Note that the API only checks for connectors on the worker that handles the request, which means you may see inconsistent results, especially during a rolling upgrade if you add new connector jars</li>
+    <li><code>PUT /connector-plugins/{connector-type}/config/validate</code> - validate the provided configuration values against the configuration definition. This API performs per config validation, returns suggested values and error messages during validation.</li>
 </ul>
 
 <h3><a id="connect_development" href="#connect_development">8.3 Connector Development Guide</a></h3>
@@ -183,6 +191,9 @@ public List&lt;Map&lt;String, String&gt;&gt; getTaskConfigs(int maxTasks) {
 }
 </pre>
 
+Although not used in the example, <code>SourceTask</code> also provides two APIs to commit offsets in the source system: <code>commit</code> and <code>commitSourceRecord</code>. The APIs are provided for source systems which have an acknowledgement mechanism for messages. Overriding these methods allows the source connector to acknowledge messages in the source system, either in bulk or individually, once they have been written to Kafka.
+The <code>commit<code> API stores the offsets in the source system, up to the offsets that have been returned by <code>poll</code>. The implementation of this API should block until the commit is complete. The <code>commitSourceRecord</code> API saves the offset in the source system for each <code>SourceRecord</code> after it is written to Kafka. As Kafka Connect will record offsets automatically, <code>SourceTask<code>s are not required to implement them. In cases where a connector does need to acknowledge messages in the source system, only one of the APIs is typically required.
+
 Even with multiple tasks, this method implementation is usually pretty simple. It just has to determine the number of input tasks, which may require contacting the remote service it is pulling data from, and then divvy them up. Because some patterns for splitting work among tasks are so common, some utilities are provided in <code>ConnectorUtils</code> to simplify these cases.
 
 Note that this simple example does not include dynamic input. See the discussion in the next section for how to trigger updates to task configs.
@@ -257,7 +268,7 @@ public abstract void put(Collection&lt;SinkRecord&gt; records);
 public abstract void flush(Map&lt;TopicPartition, Long&gt; offsets);
 </pre>
 
-The <code>SinkTask</code> documentation contains full details, but this interface is nearly as simple as the the <code>SourceTask</code>. The <code>put()</code> method should contain most of the implementation, accepting sets of <code>SinkRecords</code>, performing any required translation, and storing them in the destination system. This method does not need to ensure the data has been fully written to the destination system before returning. In fact, in many cases internal buffering will be useful so an entire batch of records can be sent at once, reducing the overhead of inserting events into the downstream data store. The <code>SinkRecords</code> contain essentially the same information as <code>SourceRecords</code>: Kafka topic, partition, offset and the event key and value.
+The <code>SinkTask</code> documentation contains full details, but this interface is nearly as simple as the <code>SourceTask</code>. The <code>put()</code> method should contain most of the implementation, accepting sets of <code>SinkRecords</code>, performing any required translation, and storing them in the destination system. This method does not need to ensure the data has been fully written to the destination system before returning. In fact, in many cases internal buffering will be useful so an entire batch of records can be sent at once, reducing the overhead of inserting events into the downstream data store. The <code>SinkRecords</code> contain essentially the same information as <code>SourceRecords</code>: Kafka topic, partition, offset and the event key and value.
 
 The <code>flush()</code> method is used during the offset commit process, which allows tasks to recover from failures and resume from a safe point such that no events will be missed. The method should push any outstanding data to the destination system and then block until the write has been acknowledged. The <code>offsets</code> parameter can often be ignored, but is useful in some cases where implementations want to store offset information in the destination store to provide exactly-once
 delivery. For example, an HDFS connector could do this and use atomic move operations to make sure the <code>flush()</code> operation atomically commits the data and offsets to a final location in HDFS.
@@ -287,7 +298,6 @@ Kafka Connect is intended to define bulk data copying jobs, such as copying an e
 
 Source connectors need to monitor the source system for changes, e.g. table additions/deletions in a database. When they pick up changes, they should notify the framework via the <code>ConnectorContext</code> object that reconfiguration is necessary. For example, in a <code>SourceConnector</code>:
 
-
 <pre>
 if (inputsChanged())
     this.context.requestTaskReconfiguration();
@@ -309,15 +319,15 @@ The API documentation provides a complete reference, but here is a simple exampl
 
 <pre>
 Schema schema = SchemaBuilder.struct().name(NAME)
-                    .field("name", Schema.STRING_SCHEMA)
-                    .field("age", Schema.INT_SCHEMA)
-                    .field("admin", new SchemaBuilder.boolean().defaultValue(false).build())
-                    .build();
+    .field("name", Schema.STRING_SCHEMA)
+    .field("age", Schema.INT_SCHEMA)
+    .field("admin", new SchemaBuilder.boolean().defaultValue(false).build())
+    .build();
 
 Struct struct = new Struct(schema)
-                           .put("name", "Barbara Liskov")
-                           .put("age", 75)
-                           .build();
+    .put("name", "Barbara Liskov")
+    .put("age", 75)
+    .build();
 </pre>
 
 If you are implementing a source connector, you'll need to decide when and how to create schemas. Where possible, you should avoid recomputing them as much as possible. For example, if your connector is guaranteed to have a fixed schema, create it statically and reuse a single instance.
