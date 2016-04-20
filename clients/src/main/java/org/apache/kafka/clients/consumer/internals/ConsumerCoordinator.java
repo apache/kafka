@@ -187,7 +187,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                   String assignmentStrategy,
                                   ByteBuffer assignmentBuffer) {
         // if we were the assignor, then we need to make sure that there have been no metadata updates
-        // since the rebalance begin. otherwise, we won't rebalance again until the next metadata change
+        // since the rebalance begin. Otherwise, we won't rebalance again until the next metadata change
         if (assignmentSnapshot != null && !assignmentSnapshot.equals(metadataSnapshot)) {
             subscriptions.needReassignment();
             return;
