@@ -20,7 +20,6 @@ package org.apache.kafka.common.security.auth;
 import java.util.Map;
 
 import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.KafkaException;
 
 import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
@@ -38,10 +37,10 @@ public interface AuthCallbackHandler extends CallbackHandler {
      * @param subject Subject from login context
      * @param saslMechanism Negotiated SASL mechanism
      */
-    void configure(Map<String, ?> configs, Mode mode, Subject subject, String saslMechanism) throws KafkaException;
+    void configure(Map<String, ?> configs, Mode mode, Subject subject, String saslMechanism);
 
     /**
      * Closes this instance.
      */
-    void close() throws KafkaException;
+    void close();
 }

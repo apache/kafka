@@ -73,11 +73,11 @@ public class SaslServerAuthenticator implements Authenticator {
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerAuthenticator.class);
 
     public enum SaslState {
-        INIT, AUTHENTICATE, COMPLETE, FAILED
+        HANDSHAKE_REQUEST, AUTHENTICATE, COMPLETE, FAILED
     }
 
     private SaslState pendingSaslState = null;
-    private SaslState saslState = SaslState.INIT;
+    private SaslState saslState = SaslState.HANDSHAKE_REQUEST;
     private Set<String> enabledMechanisms = new HashSet<>();
     private String saslMechanism;
     private Map<String, ?> configs;
@@ -215,7 +215,7 @@ public class SaslServerAuthenticator implements Authenticator {
             netInBuffer = null; // reset the networkReceive as we read all the data.
             try {
                 switch (saslState) {
-                    case INIT:
+                    case HANDSHAKE_REQUEST:
                         if (handleKafkaRequest(clientToken))
                             break;
                         // For default GSSAPI, fall through to authenticate using the client token as the first GSSAPI packet.

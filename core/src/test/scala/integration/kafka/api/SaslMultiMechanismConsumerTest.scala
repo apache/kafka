@@ -32,55 +32,55 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslTestHarne
   @Test
   def testMultipleBrokerMechanisms() {
 
-    val plainProducer = producers(0)
-    val plainConsumer = consumers(0)
+    val plainSaslProducer = producers(0)
+    val plainSaslConsumer = consumers(0)
 
     val gssapiSaslProperties = kafkaSaslProperties("GSSAPI", kafkaServerSaslMechanisms)
-    val gssapiProducer = TestUtils.createNewProducer(brokerList,
+    val gssapiSaslProducer = TestUtils.createNewProducer(brokerList,
                                                securityProtocol = this.securityProtocol,
                                                trustStoreFile = this.trustStoreFile,
                                                saslProperties = Some(gssapiSaslProperties))
-    producers += gssapiProducer
-    val gssapiConsumer = TestUtils.createNewConsumer(brokerList,
+    producers += gssapiSaslProducer
+    val gssapiSaslConsumer = TestUtils.createNewConsumer(brokerList,
                                                securityProtocol = this.securityProtocol,
                                                trustStoreFile = this.trustStoreFile,
                                                saslProperties = Some(gssapiSaslProperties))
-    consumers += gssapiConsumer
+    consumers += gssapiSaslConsumer
     val numRecords = 1000
     var startingOffset = 0
 
     // Test SASL/PLAIN producer and consumer
-    sendRecords(plainProducer, numRecords, tp)
-    plainConsumer.assign(List(tp).asJava)
-    plainConsumer.seek(tp, 0)
-    consumeAndVerifyRecords(consumer = plainConsumer, numRecords = numRecords, startingOffset = startingOffset)
+    sendRecords(plainSaslProducer, numRecords, tp)
+    plainSaslConsumer.assign(List(tp).asJava)
+    plainSaslConsumer.seek(tp, 0)
+    consumeAndVerifyRecords(consumer = plainSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
     val plainCommitCallback = new CountConsumerCommitCallback()
-    plainConsumer.commitAsync(plainCommitCallback)
-    awaitCommitCallback(plainConsumer, plainCommitCallback)
+    plainSaslConsumer.commitAsync(plainCommitCallback)
+    awaitCommitCallback(plainSaslConsumer, plainCommitCallback)
     startingOffset += numRecords
 
     // Test SASL/GSSAPI producer and consumer
-    sendRecords(gssapiProducer, numRecords, tp)
-    gssapiConsumer.assign(List(tp).asJava)
-    gssapiConsumer.seek(tp, startingOffset)
-    consumeAndVerifyRecords(consumer = gssapiConsumer, numRecords = numRecords, startingOffset = startingOffset)
+    sendRecords(gssapiSaslProducer, numRecords, tp)
+    gssapiSaslConsumer.assign(List(tp).asJava)
+    gssapiSaslConsumer.seek(tp, startingOffset)
+    consumeAndVerifyRecords(consumer = gssapiSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
     val gssapiCommitCallback = new CountConsumerCommitCallback()
-    gssapiConsumer.commitAsync(gssapiCommitCallback)
-    awaitCommitCallback(gssapiConsumer, gssapiCommitCallback)
+    gssapiSaslConsumer.commitAsync(gssapiCommitCallback)
+    awaitCommitCallback(gssapiSaslConsumer, gssapiCommitCallback)
     startingOffset += numRecords
 
     // Test SASL/PLAIN producer and SASL/GSSAPI consumer
-    sendRecords(plainProducer, numRecords, tp)
-    gssapiConsumer.assign(List(tp).asJava)
-    gssapiConsumer.seek(tp, startingOffset)
-    consumeAndVerifyRecords(consumer = gssapiConsumer, numRecords = numRecords, startingOffset = startingOffset)
+    sendRecords(plainSaslProducer, numRecords, tp)
+    gssapiSaslConsumer.assign(List(tp).asJava)
+    gssapiSaslConsumer.seek(tp, startingOffset)
+    consumeAndVerifyRecords(consumer = gssapiSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
     startingOffset += numRecords
 
     // Test SASL/GSSAPI producer and SASL/PLAIN consumer
-    sendRecords(gssapiProducer, numRecords, tp)
-    plainConsumer.assign(List(tp).asJava)
-    plainConsumer.seek(tp, startingOffset)
-    consumeAndVerifyRecords(consumer = plainConsumer, numRecords = numRecords, startingOffset = startingOffset)
+    sendRecords(gssapiSaslProducer, numRecords, tp)
+    plainSaslConsumer.assign(List(tp).asJava)
+    plainSaslConsumer.seek(tp, startingOffset)
+    consumeAndVerifyRecords(consumer = plainSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
 
   }
 }

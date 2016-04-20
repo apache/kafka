@@ -28,12 +28,6 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 
 import javax.security.auth.Subject;
-import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.NameCallback;
-import javax.security.auth.callback.PasswordCallback;
-import javax.security.auth.callback.UnsupportedCallbackException;
-import javax.security.sasl.AuthorizeCallback;
-import javax.security.sasl.RealmCallback;
 import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslClient;
 import javax.security.sasl.SaslException;
@@ -120,7 +114,7 @@ public class SaslClientAuthenticator implements Authenticator {
             } else {
                 clientPrincipalName = null;
             }
-            callbackHandler = new ClientCallbackHandler();
+            callbackHandler = new SaslClientCallbackHandler();
 
             saslClient = createSaslClient();
         } catch (Exception e) {
@@ -164,7 +158,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 setSaslState(SaslState.RECEIVE_HANDSHAKE_RESPONSE);
                 break;
             case RECEIVE_HANDSHAKE_RESPONSE:
-                byte[] responseBytes = receiveBytes();
+                byte[] responseBytes = receiveResponseOrToken();
                 if (responseBytes == null)
                     break;
                 else {
@@ -183,7 +177,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 setSaslState(SaslState.INTERMEDIATE);
                 break;
             case INTERMEDIATE:
-                byte[] serverToken = receiveBytes();
+                byte[] serverToken = receiveResponseOrToken();
                 if (serverToken != null) {
                     sendSaslToken(serverToken, false);
                 }
@@ -244,17 +238,17 @@ public class SaslClientAuthenticator implements Authenticator {
         return flushedCompletely;
     }
 
-    private byte[] receiveBytes() throws IOException {
+    private byte[] receiveResponseOrToken() throws IOException {
         if (netInBuffer == null) netInBuffer = new NetworkReceive(node);
         netInBuffer.readFrom(transportLayer);
-        byte[] serverToken = null;
+        byte[] serverPacket = null;
         if (netInBuffer.complete()) {
             netInBuffer.payload().rewind();
-            serverToken = new byte[netInBuffer.payload().remaining()];
-            netInBuffer.payload().get(serverToken, 0, serverToken.length);
+            serverPacket = new byte[netInBuffer.payload().remaining()];
+            netInBuffer.payload().get(serverPacket, 0, serverPacket.length);
             netInBuffer = null; // reset the networkReceive as we read all the data.
         }
-        return serverToken;
+        return serverPacket;
     }
 
     public Principal principal() {
@@ -342,63 +336,6 @@ public class SaslClientAuthenticator implements Authenticator {
         } else if (response.errorCode() != 0) {
             throw new AuthenticationException(String.format("Unknown error code %d, client mechanism is %s, enabled mechanisms are %s",
                     response.errorCode(), mechanism, response.enabledMechanisms()));
-        }
-    }
-
-    public static class ClientCallbackHandler implements AuthCallbackHandler {
-
-        private boolean isKerberos;
-        private Subject subject;
-
-        @Override
-        public void configure(Map<String, ?> configs, Mode mode, Subject subject, String mechanism) {
-            this.isKerberos = mechanism.equals(SaslConfigs.GSSAPI_MECHANISM);
-            this.subject = subject;
-        }
-
-        @Override
-        public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
-            for (Callback callback : callbacks) {
-                if (callback instanceof NameCallback) {
-                    NameCallback nc = (NameCallback) callback;
-                    if (!isKerberos && subject != null && !subject.getPublicCredentials(String.class).isEmpty()) {
-                        nc.setName(subject.getPublicCredentials(String.class).iterator().next());
-                    } else
-                        nc.setName(nc.getDefaultName());
-                } else if (callback instanceof PasswordCallback) {
-                    if (!isKerberos && subject != null && !subject.getPrivateCredentials(String.class).isEmpty()) {
-                        char [] password = subject.getPrivateCredentials(String.class).iterator().next().toCharArray();
-                        ((PasswordCallback) callback).setPassword(password);
-                    } else {
-                        // Call `setPassword` once we support obtaining a password from the user and update message below
-                        String errorMessage = "Could not login: the client is being asked for a password, but the Kafka" +
-                                 " client code does not currently support obtaining a password from the user.";
-                        if (isKerberos) {
-                            errorMessage += " Make sure -Djava.security.auth.login.config property passed to JVM and" +
-                                 " the client is configured to use a ticket cache (using" +
-                                 " the JAAS configuration setting 'useTicketCache=true)'. Make sure you are using" +
-                                 " FQDN of the Kafka broker you are trying to connect to.";
-                        }
-                        throw new UnsupportedCallbackException(callback, errorMessage);
-                    }
-                } else if (callback instanceof RealmCallback) {
-                    RealmCallback rc = (RealmCallback) callback;
-                    rc.setText(rc.getDefaultText());
-                } else if (callback instanceof AuthorizeCallback) {
-                    AuthorizeCallback ac = (AuthorizeCallback) callback;
-                    String authId = ac.getAuthenticationID();
-                    String authzId = ac.getAuthorizationID();
-                    ac.setAuthorized(authId.equals(authzId));
-                    if (ac.isAuthorized())
-                        ac.setAuthorizedID(authzId);
-                } else {
-                    throw new UnsupportedCallbackException(callback, "Unrecognized SASL ClientCallback");
-                }
-            }
-        }
-
-        @Override
-        public void close() {
         }
     }
 }

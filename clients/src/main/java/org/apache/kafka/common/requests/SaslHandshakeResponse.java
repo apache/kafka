@@ -43,6 +43,7 @@ public class SaslHandshakeResponse extends AbstractRequestResponse {
     /**
      * Possible error codes:
      *   UNSUPPORTED_SASL_MECHANISM(33): Client mechanism not enabled in server
+     *   ILLEGAL_SASL_STATE(34) : Invalid request during SASL handshake
      */
     private final short errorCode;
     private List<String> enabledMechanisms = new ArrayList<String>();

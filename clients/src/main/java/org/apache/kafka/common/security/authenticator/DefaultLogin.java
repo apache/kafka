@@ -22,12 +22,16 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
+import javax.security.sasl.RealmCallback;
+import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.callback.NameCallback;
+import javax.security.auth.callback.PasswordCallback;
+import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.Subject;
 
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.auth.Login;
-import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator.ClientCallbackHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +48,7 @@ public class DefaultLogin implements Login {
     private final CallbackHandler callbackHandler;
 
     public DefaultLogin() {
-        this.callbackHandler = new ClientCallbackHandler();
+        this.callbackHandler = new LoginCallbackHandler();
     }
 
     @Override
@@ -83,6 +87,28 @@ public class DefaultLogin implements Login {
 
     @Override
     public void close() {
+    }
+
+    public static class LoginCallbackHandler implements CallbackHandler {
+
+        @Override
+        public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
+            for (Callback callback : callbacks) {
+                if (callback instanceof NameCallback) {
+                    NameCallback nc = (NameCallback) callback;
+                    nc.setName(nc.getDefaultName());
+                } else if (callback instanceof PasswordCallback) {
+                    String errorMessage = "Could not login: the client is being asked for a password, but the Kafka" +
+                                 " client code does not currently support obtaining a password from the user.";
+                    throw new UnsupportedCallbackException(callback, errorMessage);
+                } else if (callback instanceof RealmCallback) {
+                    RealmCallback rc = (RealmCallback) callback;
+                    rc.setText(rc.getDefaultText());
+                } else {
+                    throw new UnsupportedCallbackException(callback, "Unrecognized SASL Login callback");
+                }
+            }
+        }
     }
 }
 
