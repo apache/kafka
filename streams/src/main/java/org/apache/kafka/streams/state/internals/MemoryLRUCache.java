@@ -32,7 +32,7 @@ import java.util.Set;
 /**
  * An in-memory LRU cache store based on HashSet and HashMap.
  *
- * Note that array typed keys may result in incorrect behavior for ordering.
+ * Note that array typed keys may result in incorrect behavior.
  *
  * @param <K> The key type
  * @param <V> The value type

@@ -13,6 +13,8 @@
 
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.utils.Bytes;
+
 import java.nio.ByteBuffer;
 
 /**
@@ -80,6 +82,18 @@ public class Serdes {
         }
     }
 
+    static public final class BytesSerde implements Serde<Bytes> {
+        @Override
+        public Serializer<Bytes> serializer() {
+            return new BytesSerializer();
+        }
+
+        @Override
+        public Deserializer<Bytes> deserializer() {
+            return new BytesDeserializer();
+        }
+    }
+
     static public final class ByteArraySerde implements Serde<byte[]> {
         @Override
         public Serializer<byte[]> serializer() {
@@ -114,8 +128,12 @@ public class Serdes {
             return (Serde<T>) ByteArray();
         }
 
-        if (ByteBufferSerde.class.isAssignableFrom(type)) {
+        if (ByteBuffer.class.isAssignableFrom(type)) {
             return (Serde<T>) ByteBuffer();
+        }
+
+        if (Bytes.class.isAssignableFrom(type)) {
+            return (Serde<T>) Bytes();
         }
 
         // TODO: we can also serializes objects of type T using generic Java serialization by default
@@ -182,6 +200,13 @@ public class Serdes {
      */
     static public Serde<ByteBuffer> ByteBuffer() {
         return new ByteBufferSerde();
+    }
+
+    /*
+     * A serde for nullable byte array type.
+     */
+    static public Serde<Bytes> Bytes() {
+        return new BytesSerde();
     }
 
     /*

@@ -22,7 +22,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -224,20 +223,6 @@ public abstract class AbstractKeyValueStoreTest {
             assertEquals(false, driver.flushedEntryRemoved(1));
             assertEquals(false, driver.flushedEntryRemoved(2));
             assertEquals(false, driver.flushedEntryRemoved(4));
-        } finally {
-            store.close();
-        }
-    }
-
-    @Test
-    public void testArrayKey() {
-        // Create the test driver ...
-        KeyValueStoreTestDriver<byte[], String> driver = KeyValueStoreTestDriver.create(byte[].class, String.class);
-        KeyValueStore<byte[], String> store = createKeyValueStore(driver.context(), byte[].class, String.class, true);
-        try {
-            store.put("1".getBytes(), "one");
-        } catch (StreamsException e) {
-            // this is good.
         } finally {
             store.close();
         }

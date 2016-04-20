@@ -27,6 +27,14 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * Store change log collector that batches updates before sending to Kafka.
+ *
+ * Note that array typed key may result in incorrect behavior as it has undefined hashing function.
+ *
+ * @param <K>
+ * @param <V>
+ */
 public class StoreChangeLogger<K, V> {
 
     public interface ValueGetter<K, V> {

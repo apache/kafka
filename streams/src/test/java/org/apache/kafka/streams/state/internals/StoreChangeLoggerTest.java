@@ -24,10 +24,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -63,22 +60,10 @@ public class StoreChangeLoggerTest {
 
     private final StoreChangeLogger<Integer, String> changeLogger = new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class), 3, 3);
 
-    private final StoreChangeLogger<byte[], byte[]> rawChangeLogger = new RawStoreChangeLogger(topic, context, 3, 3);
-
     private final StoreChangeLogger.ValueGetter<Integer, String> getter = new StoreChangeLogger.ValueGetter<Integer, String>() {
         @Override
         public String get(Integer key) {
             return written.get(key);
-        }
-    };
-
-    private final StoreChangeLogger.ValueGetter<byte[], byte[]> rawGetter = new StoreChangeLogger.ValueGetter<byte[], byte[]>() {
-        private IntegerDeserializer deserializer = new IntegerDeserializer();
-        private StringSerializer serializer = new StringSerializer();
-
-        @Override
-        public byte[] get(byte[] key) {
-            return serializer.serialize(topic, written.get(deserializer.deserialize(topic, key)));
         }
     };
 
@@ -116,31 +101,5 @@ public class StoreChangeLoggerTest {
         assertEquals("two", logged.get(2));
         assertEquals("three", logged.get(3));
         assertEquals("four", logged.get(4));
-    }
-
-    @Test
-    public void testRaw() {
-        IntegerSerializer serializer = new IntegerSerializer();
-
-        written.put(0, "zero");
-        rawChangeLogger.add(serializer.serialize(topic, 0));
-        written.put(1, "one");
-        rawChangeLogger.add(serializer.serialize(topic, 1));
-        written.put(2, "two");
-        rawChangeLogger.add(serializer.serialize(topic, 2));
-        assertEquals(3, rawChangeLogger.numDirty());
-        assertEquals(0, rawChangeLogger.numRemoved());
-
-        rawChangeLogger.delete(serializer.serialize(topic, 0));
-        rawChangeLogger.delete(serializer.serialize(topic, 1));
-        written.put(3, "three");
-        rawChangeLogger.add(serializer.serialize(topic, 3));
-        assertEquals(2, rawChangeLogger.numDirty());
-        assertEquals(2, rawChangeLogger.numRemoved());
-
-        written.put(0, "zero-again");
-        rawChangeLogger.add(serializer.serialize(topic, 0));
-        assertEquals(3, rawChangeLogger.numDirty());
-        assertEquals(1, rawChangeLogger.numRemoved());
     }
 }

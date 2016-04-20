@@ -28,6 +28,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
+import org.apache.kafka.streams.state.WindowStoreUtils;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
@@ -91,8 +92,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private Set<K> cacheDirtyKeys;
     private MemoryLRUCache<K, RocksDBCacheEntry> cache;
-    private StoreChangeLogger<byte[], byte[]> changeLogger;
-    private StoreChangeLogger.ValueGetter<byte[], byte[]> getter;
+    private StoreChangeLogger<Bytes, byte[]> changeLogger;
+    private StoreChangeLogger.ValueGetter<Bytes, byte[]> getter;
 
     public KeyValueStore<K, V> enableLogging() {
         loggingEnabled = true;
@@ -167,7 +168,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // open the DB dir
         openDB(context);
 
-        this.changeLogger = this.loggingEnabled ? new RawStoreChangeLogger(name, context) : null;
+        this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(name, context, WindowStoreUtils.INNER_SERDES) : null;
 
         if (this.cacheSize > 0) {
             this.cache = new MemoryLRUCache<K, RocksDBCacheEntry>(name, cacheSize)
@@ -189,10 +190,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        this.getter = new StoreChangeLogger.ValueGetter<byte[], byte[]>() {
+        this.getter = new StoreChangeLogger.ValueGetter<Bytes, byte[]>() {
             @Override
-            public byte[] get(byte[] key) {
-                return getInternal(key);
+            public byte[] get(Bytes key) {
+                return getInternal(key.get());
             }
         };
 
@@ -268,7 +269,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             putInternal(rawKey, rawValue);
 
             if (loggingEnabled) {
-                changeLogger.add(rawKey);
+                changeLogger.add(Bytes.wrap(rawKey));
                 changeLogger.maybeLogChange(this.getter);
             }
         }
@@ -375,7 +376,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
             if (loggingEnabled) {
                 for (KeyValue<byte[], byte[]> kv : putBatch)
-                    changeLogger.add(kv.key);
+                    changeLogger.add(Bytes.wrap(kv.key));
             }
 
             // check all removed entries and remove them in rocksDB
@@ -388,7 +389,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 }
 
                 if (loggingEnabled) {
-                    changeLogger.delete(removedKey);
+                    changeLogger.delete(Bytes.wrap(removedKey));
                 }
             }
 
@@ -481,7 +482,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // comparator to be pluggable, and the default is lexicographic, so it's
         // safe to just force lexicographic comparator here for now.
         private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
-        byte[] rawToKey;
+        private byte[] rawToKey;
 
         public RocksDBRangeIterator(RocksIterator iter, StateSerdes<K, V> serdes, K from, K to) {
             super(iter, serdes);
