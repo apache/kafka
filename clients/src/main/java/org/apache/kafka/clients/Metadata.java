@@ -108,6 +108,14 @@ public final class Metadata {
     }
 
     /**
+     * Check whether an update has been explicitly requested.
+     * @return true if an update was requested, false otherwise
+     */
+    public synchronized boolean updateRequested() {
+        return this.needUpdate;
+    }
+
+    /**
      * Wait for metadata update until the current version is larger than the last version we know of
      */
     public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
