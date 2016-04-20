@@ -291,8 +291,8 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     private void updateConnectorTasks(String connName) {
-        if (configState.targetState(connName) == TargetState.PAUSED) {
-            log.trace("Skipping reconfiguration of tasks for paused connector {}", connName);
+        if (!worker.isRunning(connName)) {
+            log.info("Skipping reconfiguration of connector {} since it is not running", connName);
             return;
         }
 

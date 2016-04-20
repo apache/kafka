@@ -174,7 +174,7 @@ public class Worker {
         WorkerConnector workerConnector = new WorkerConnector(connName, connector, ctx, statusListener);
 
         log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connClass.getName());
-        workerConnector.initialize(connConfig.originalsStrings());
+        workerConnector.initialize(connConfig);
         workerConnector.transitionTo(initialState);
 
         connectors.put(connName, workerConnector);

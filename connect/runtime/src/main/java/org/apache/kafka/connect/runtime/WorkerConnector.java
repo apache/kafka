@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 
 /**
- * Container for Connector tasks which is responsible for managing their lifecycle (e.g. handling startup,
+ * Container for connectors which is responsible for managing their lifecycle (e.g. handling startup,
  * shutdown, pausing, etc.). Internally, we manage the runtime state of the connector and transition according
  * to target state changes. Note that unlike connector tasks, the connector does not really have a "pause"
  * state which is distinct from being stopped. We therefore treat pause operations as requests to momentarily
@@ -43,7 +43,7 @@ public class WorkerConnector {
         INIT,    // initial state before startup
         STOPPED, // the connector has been stopped/paused.
         STARTED, // the connector has been started/resumed.
-        FAILED,  // final state.
+        FAILED,  // the connector has failed (no further transitions are possible after this state)
     }
 
     private final String connName;
@@ -65,12 +65,12 @@ public class WorkerConnector {
         this.state = State.INIT;
     }
 
-    public void initialize(Map<String, String> config) {
+    public void initialize(ConnectorConfig connectorConfig) {
         log.debug("Initializing connector {} with config {}", connName, config);
 
-        this.config = config;
-
         try {
+            this.config = connectorConfig.originalsStrings();
+
             connector.initialize(new ConnectorContext() {
                 @Override
                 public void requestTaskReconfiguration() {

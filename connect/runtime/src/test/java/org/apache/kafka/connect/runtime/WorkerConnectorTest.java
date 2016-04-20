@@ -25,7 +25,7 @@ import org.easymock.Mock;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.easymock.EasyMock.expectLastCall;
@@ -34,7 +34,12 @@ import static org.easymock.EasyMock.expectLastCall;
 public class WorkerConnectorTest extends EasyMockSupport {
 
     public static final String CONNECTOR = "connector";
-    public static final Map<String, String> CONFIG = Collections.emptyMap();
+    public static final Map<String, String> CONFIG = new HashMap<>();
+    static {
+        CONFIG.put("connector.class", "foo");
+        CONFIG.put("name", "bar");
+    }
+    public static final ConnectorConfig CONNECTOR_CONFIG = new ConnectorConfig(CONFIG);
 
     @Mock Connector connector;
     @Mock ConnectorContext ctx;
@@ -57,7 +62,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
 
-        workerConnector.initialize(CONFIG);
+        workerConnector.initialize(CONNECTOR_CONFIG);
         workerConnector.shutdown();
 
         verifyAll();
@@ -82,7 +87,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
 
-        workerConnector.initialize(CONFIG);
+        workerConnector.initialize(CONNECTOR_CONFIG);
         workerConnector.transitionTo(TargetState.STARTED);
         workerConnector.shutdown();
 
@@ -110,7 +115,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
 
-        workerConnector.initialize(CONFIG);
+        workerConnector.initialize(CONNECTOR_CONFIG);
         workerConnector.transitionTo(TargetState.STARTED);
         workerConnector.shutdown();
 
@@ -141,7 +146,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
 
-        workerConnector.initialize(CONFIG);
+        workerConnector.initialize(CONNECTOR_CONFIG);
         workerConnector.transitionTo(TargetState.STARTED);
         workerConnector.transitionTo(TargetState.PAUSED);
         workerConnector.shutdown();
@@ -173,7 +178,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
 
-        workerConnector.initialize(CONFIG);
+        workerConnector.initialize(CONNECTOR_CONFIG);
         workerConnector.transitionTo(TargetState.PAUSED);
         workerConnector.transitionTo(TargetState.STARTED);
         workerConnector.shutdown();
@@ -198,7 +203,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
 
-        workerConnector.initialize(CONFIG);
+        workerConnector.initialize(CONNECTOR_CONFIG);
         workerConnector.transitionTo(TargetState.PAUSED);
         workerConnector.shutdown();
 
@@ -225,7 +230,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
 
-        workerConnector.initialize(CONFIG);
+        workerConnector.initialize(CONNECTOR_CONFIG);
         workerConnector.transitionTo(TargetState.STARTED);
         workerConnector.shutdown();
 
@@ -255,7 +260,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
 
-        workerConnector.initialize(CONFIG);
+        workerConnector.initialize(CONNECTOR_CONFIG);
         workerConnector.transitionTo(TargetState.STARTED);
         workerConnector.shutdown();
 
@@ -284,7 +289,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
 
-        workerConnector.initialize(CONFIG);
+        workerConnector.initialize(CONNECTOR_CONFIG);
         workerConnector.transitionTo(TargetState.STARTED);
         workerConnector.transitionTo(TargetState.STARTED);
         workerConnector.shutdown();
@@ -316,7 +321,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
 
-        workerConnector.initialize(CONFIG);
+        workerConnector.initialize(CONNECTOR_CONFIG);
         workerConnector.transitionTo(TargetState.STARTED);
         workerConnector.transitionTo(TargetState.PAUSED);
         workerConnector.transitionTo(TargetState.PAUSED);

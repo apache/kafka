@@ -833,7 +833,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void reconfigureConnector(final String connName, final Callback<Void> cb) {
         try {
             if (!worker.isRunning(connName)) {
-                log.trace("Skipping reconfiguration of connector {} since it is not running", connName);
+                log.info("Skipping reconfiguration of connector {} since it is not running", connName);
                 return;
             }
 
