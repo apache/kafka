@@ -14,7 +14,6 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.utils.Bytes;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 
 public class BytesDeserializer implements Deserializer<Bytes> {

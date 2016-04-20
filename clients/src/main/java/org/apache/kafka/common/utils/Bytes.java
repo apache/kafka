@@ -84,12 +84,12 @@ public class Bytes implements Comparable<Bytes> {
 
     @Override
     public boolean equals(Object other) {
-        if (other instanceof byte[]) {
-            return compareTo((byte[]) other) == 0;
-        }
-        if (other instanceof Bytes) {
+        if (this == other)
+            return true;
+
+        if (other instanceof Bytes)
             return compareTo((Bytes) other) == 0;
-        }
+
         return false;
     }
 
@@ -98,19 +98,6 @@ public class Bytes implements Comparable<Bytes> {
         return ((ByteArrayComparator) BYTES_LEXICO_COMPARATOR).compare(
                 this.bytes, this.offset, this.length,
                 that.bytes, that.offset, that.length);
-    }
-
-    /**
-     * Compares the bytes in this object to the specified byte array following lexicograpic ordering.
-     *
-     * @param that the comparing byte array
-     * @return Positive if left is bigger than right, 0 if they are equal, and
-     *         negative if left is smaller than right
-     */
-    public int compareTo(final byte[] that) {
-        return ((ByteArrayComparator) BYTES_LEXICO_COMPARATOR).compare(
-                this.bytes, this.offset, this.length,
-                that, 0, that.length);
     }
 
     @Override
@@ -191,8 +178,8 @@ public class Bytes implements Comparable<Bytes> {
             int end1 = offset1 + length1;
             int end2 = offset2 + length2;
             for (int i = offset1, j = offset2; i < end1 && j < end2; i++, j++) {
-                int a = (buffer1[i] & 0xff);
-                int b = (buffer2[j] & 0xff);
+                int a = buffer1[i] & 0xff;
+                int b = buffer2[j] & 0xff;
                 if (a != b) {
                     return a - b;
                 }
