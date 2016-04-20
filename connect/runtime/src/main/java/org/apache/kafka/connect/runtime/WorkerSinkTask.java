@@ -43,11 +43,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static java.util.Collections.singleton;
 
@@ -436,20 +433,12 @@ class WorkerSinkTask extends WorkerTask {
             // Also make sure our tracking of paused partitions is updated to remove any partitions we no longer own.
             pausedForRedelivery = false;
 
-            Set<TopicPartition> assigned = new HashSet<>(partitions);
-            Set<TopicPartition> taskPaused = context.pausedPartitions();
-
-            Iterator<TopicPartition> tpIter = taskPaused.iterator();
-            while (tpIter.hasNext()) {
-                TopicPartition tp = tpIter.next();
-                if (!assigned.contains(tp))
-                    tpIter.remove();
-                else
-                    consumer.pause(singleton(tp));
-            }
-
+            // Ensure that the paused partitions contains only assigned partitions and repause as necessary
+            context.pausedPartitions().retainAll(partitions);
             if (shouldPause())
                 pauseAll();
+            else if (!context.pausedPartitions().isEmpty())
+                consumer.pause(context.pausedPartitions());
 
             // Instead of invoking the assignment callback on initialization, we guarantee the consumer is ready upon
             // task start. Since this callback gets invoked during that initial setup before we've started the task, we
