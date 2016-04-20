@@ -122,6 +122,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
+    public void onResume(String connector) {
+        statusBackingStore.put(new ConnectorStatus(connector, TaskStatus.State.RUNNING,
+                workerId, generation()));
+    }
+
+    @Override
     public void onShutdown(String connector) {
         statusBackingStore.putSafe(new ConnectorStatus(connector, ConnectorStatus.State.UNASSIGNED,
                 workerId, generation()));

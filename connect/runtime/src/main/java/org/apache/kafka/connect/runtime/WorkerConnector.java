@@ -75,19 +75,18 @@ public class WorkerConnector {
         });
     }
 
-    private void start() {
+    private boolean doStart() {
         try {
             switch (state) {
                 case STARTED:
-                    return;
+                    return false;
 
                 case INIT:
                 case FAILED:
                 case STOPPED:
                     connector.start(config);
-                    statusListener.onStartup(connName);
                     this.state = State.STARTED;
-                    return;
+                    return true;
 
                 default:
                     throw new IllegalArgumentException("Cannot start connector in state " + state);
@@ -96,7 +95,18 @@ public class WorkerConnector {
             log.error("Error while starting connector {}", connName, t);
             statusListener.onFailure(connName, t);
             this.state = State.FAILED;
+            return false;
         }
+    }
+
+    private void resume() {
+        if (doStart())
+            statusListener.onResume(connName);
+    }
+
+    private void start() {
+        if (doStart())
+            statusListener.onStartup(connName);
     }
 
     private void pause() {
@@ -143,7 +153,10 @@ public class WorkerConnector {
         if (targetState == TargetState.PAUSED) {
             pause();
         } else if (targetState == TargetState.STARTED) {
-            start();
+            if (state == State.INIT)
+                start();
+            else
+                resume();
         } else {
             throw new IllegalArgumentException("Unhandled target state " + targetState);
         }

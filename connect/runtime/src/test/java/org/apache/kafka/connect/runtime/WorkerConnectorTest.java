@@ -101,6 +101,38 @@ public class WorkerConnectorTest extends EasyMockSupport {
     }
 
     @Test
+    public void testOnResume() {
+        connector.initialize(EasyMock.notNull(ConnectorContext.class));
+        expectLastCall();
+
+        listener.onPause(CONNECTOR);
+        expectLastCall();
+
+        connector.start(CONFIG);
+        expectLastCall();
+
+        listener.onResume(CONNECTOR);
+        expectLastCall();
+
+        connector.stop();
+        expectLastCall();
+
+        listener.onShutdown(CONNECTOR);
+        expectLastCall();
+
+        replayAll();
+
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+
+        workerConnector.initialize(CONFIG);
+        workerConnector.transitionTo(TargetState.PAUSED);
+        workerConnector.transitionTo(TargetState.STARTED);
+        workerConnector.shutdown();
+
+        verifyAll();
+    }
+
+    @Test
     public void testStartupPaused() {
         connector.initialize(EasyMock.notNull(ConnectorContext.class));
         expectLastCall();

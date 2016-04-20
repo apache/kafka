@@ -52,6 +52,12 @@ public class ConnectorStatus extends AbstractStatus<String> {
         void onPause(String connector);
 
         /**
+         * Invoked after the connector has been resumed.
+         * @param connector The connector name
+         */
+        void onResume(String connector);
+
+        /**
          * Invoked after successful startup of the connector.
          * @param connector The connector name
          */
