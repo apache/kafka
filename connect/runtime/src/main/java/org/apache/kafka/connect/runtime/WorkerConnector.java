@@ -26,7 +26,13 @@ import java.util.Map;
 
 /**
  * Container for Connector tasks which is responsible for managing their lifecycle (e.g. handling startup,
- * shutdown, pausing, etc.).
+ * shutdown, pausing, etc.). Internally, we manage the runtime state of the connector and transition according
+ * to target state changes. Note that unlike connector tasks, the connector does not really have a "pause"
+ * state which is distinct from being stopped. We therefore treat pause operations as requests to momentarily
+ * stop the connector, and resume operations as requests to restart it (without reinitialization). Connector
+ * failures, whether in initialization or after startup, are treated as fatal, which means that we will not attempt
+ * to restart this connector instance after failure. What this means from a user perspective is that you must
+ * use the /restart REST API to restart a failed task. This behavior is consistent with task failures.
  *
  * Note that this class is NOT thread-safe.
  */
@@ -34,7 +40,10 @@ public class WorkerConnector {
     private static final Logger log = LoggerFactory.getLogger(WorkerConnector.class);
 
     private enum State {
-        INIT, STOPPED, STARTED, FAILED
+        INIT,    // initial state before startup
+        STOPPED, // the connector has been stopped/paused.
+        STARTED, // the connector has been started/resumed.
+        FAILED,  // final state.
     }
 
     private final String connName;
@@ -61,18 +70,24 @@ public class WorkerConnector {
 
         this.config = config;
 
-        connector.initialize(new ConnectorContext() {
-            @Override
-            public void requestTaskReconfiguration() {
-                ctx.requestTaskReconfiguration();
-            }
+        try {
+            connector.initialize(new ConnectorContext() {
+                @Override
+                public void requestTaskReconfiguration() {
+                    ctx.requestTaskReconfiguration();
+                }
 
-            @Override
-            public void raiseError(Exception e) {
-                WorkerConnector.this.state = State.FAILED;
-                ctx.raiseError(e);
-            }
-        });
+                @Override
+                public void raiseError(Exception e) {
+                    log.error("Connector raised an error {}", connName, e);
+                    onFailure(e);
+                    ctx.raiseError(e);
+                }
+            });
+        } catch (Throwable t) {
+            log.error("Error initializing connector {}", connName, t);
+            onFailure(t);
+        }
     }
 
     private boolean doStart() {
@@ -82,7 +97,6 @@ public class WorkerConnector {
                     return false;
 
                 case INIT:
-                case FAILED:
                 case STOPPED:
                     connector.start(config);
                     this.state = State.STARTED;
@@ -93,10 +107,14 @@ public class WorkerConnector {
             }
         } catch (Throwable t) {
             log.error("Error while starting connector {}", connName, t);
-            statusListener.onFailure(connName, t);
-            this.state = State.FAILED;
+            onFailure(t);
             return false;
         }
+    }
+
+    private void onFailure(Throwable t) {
+        statusListener.onFailure(connName, t);
+        this.state = State.FAILED;
     }
 
     private void resume() {
@@ -107,6 +125,10 @@ public class WorkerConnector {
     private void start() {
         if (doStart())
             statusListener.onStartup(connName);
+    }
+
+    public boolean isRunning() {
+        return state == State.STARTED;
     }
 
     private void pause() {
@@ -120,7 +142,6 @@ public class WorkerConnector {
                     // fall through
 
                 case INIT:
-                case FAILED:
                     statusListener.onPause(connName);
                     this.state = State.STOPPED;
                     break;
@@ -149,6 +170,11 @@ public class WorkerConnector {
     }
 
     public void transitionTo(TargetState targetState) {
+        if (state == State.FAILED) {
+            log.warn("Cannot transition connector {} to {} since it has failed", connName, targetState);
+            return;
+        }
+
         log.debug("Transition connector {} to {}", connName, targetState);
         if (targetState == TargetState.PAUSED) {
             pause();

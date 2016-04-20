@@ -41,6 +41,55 @@ public class WorkerConnectorTest extends EasyMockSupport {
     @Mock ConnectorStatus.Listener listener;
 
     @Test
+    public void testInitializeFailure() {
+        RuntimeException exception = new RuntimeException();
+
+        connector.initialize(EasyMock.notNull(ConnectorContext.class));
+        expectLastCall().andThrow(exception);
+
+        listener.onFailure(CONNECTOR, exception);
+        expectLastCall();
+
+        listener.onShutdown(CONNECTOR);
+        expectLastCall();
+
+        replayAll();
+
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+
+        workerConnector.initialize(CONFIG);
+        workerConnector.shutdown();
+
+        verifyAll();
+    }
+
+    @Test
+    public void testFailureIsFinalState() {
+        RuntimeException exception = new RuntimeException();
+
+        connector.initialize(EasyMock.notNull(ConnectorContext.class));
+        expectLastCall().andThrow(exception);
+
+        listener.onFailure(CONNECTOR, exception);
+        expectLastCall();
+
+        // expect no call to onStartup() after failure
+
+        listener.onShutdown(CONNECTOR);
+        expectLastCall();
+
+        replayAll();
+
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+
+        workerConnector.initialize(CONFIG);
+        workerConnector.transitionTo(TargetState.STARTED);
+        workerConnector.shutdown();
+
+        verifyAll();
+    }
+
+    @Test
     public void testStartupAndShutdown() {
         connector.initialize(EasyMock.notNull(ConnectorContext.class));
         expectLastCall();

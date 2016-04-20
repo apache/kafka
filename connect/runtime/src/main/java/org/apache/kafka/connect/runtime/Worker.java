@@ -175,14 +175,9 @@ public class Worker {
 
         log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connClass.getName());
         workerConnector.initialize(connConfig.originalsStrings());
-        try {
-            workerConnector.transitionTo(initialState);
-        } catch (ConnectException e) {
-            throw new ConnectException("Connector threw an exception while starting", e);
-        }
+        workerConnector.transitionTo(initialState);
 
         connectors.put(connName, workerConnector);
-
         log.info("Finished creating connector {}", connName);
     }
 
@@ -297,6 +292,13 @@ public class Worker {
      */
     public Set<String> connectorNames() {
         return connectors.keySet();
+    }
+
+    public boolean isRunning(String connName) {
+        WorkerConnector connector = connectors.get(connName);
+        if (connector == null)
+            throw new ConnectException("Connector " + connName + " not found in this worker.");
+        return connector.isRunning();
     }
 
     /**

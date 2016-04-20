@@ -832,8 +832,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // by the system, then checks whether any configs have actually changed before submitting the new configs to storage
     private void reconfigureConnector(final String connName, final Callback<Void> cb) {
         try {
-            if (configState.targetState(connName) == TargetState.PAUSED) {
-                log.trace("Skipping reconfiguration of paused connector {}", connName);
+            if (!worker.isRunning(connName)) {
+                log.trace("Skipping reconfiguration of connector {} since it is not running", connName);
                 return;
             }
 
