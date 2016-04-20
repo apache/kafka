@@ -220,6 +220,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
             <pre>
     -Djava.security.krb5.conf=/etc/kafka/krb5.conf
     -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</pre>
+        When using the <tt>bin/kafka-server-start.sh</tt> script, these parameters can be passed to the server JVM via the <tt>$KAFKA_OPTS</tt> environment variable.
         </li>
         <li>Make sure the keytabs configured in the JAAS file are readable by the operating system user who is starting kafka broker.</li>
         <li>Configure a SASL port in server.properties, by adding at least one of SASL_PLAINTEXT or SASL_SSL to the <i>listeners</i> parameter, which contains one or more comma-separated values:
@@ -267,7 +268,9 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
             <li>Pass the JAAS and optionally krb5 file locations as JVM parameters to each client JVM (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
             <pre>
     -Djava.security.krb5.conf=/etc/kafka/krb5.conf
-    -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
+    -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre>
+            For command-line utilities like kafka-console-consumer or kafka-console-producer, the above parameters can be exported via the environment variable <tt>$KAFKA_OPTS</tt> prior to execution.
+            </li>
             <li>Make sure the keytabs configured in the kafka_client_jaas.conf are readable by the operating system user who is starting kafka client.</li>
             <li>Configure the following properties in producer.properties or consumer.properties:
                 <pre>
@@ -470,7 +473,10 @@ Suppose you want to add an acl "Principals User:Bob and User:Alice are allowed t
         By default all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principal and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from IP 198.51.100.3 we can do so using following commands:
         <pre>bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-host * --deny-principal User:BadBob --deny-host 198.51.100.3 --operation Read --topic Test-topic</pre>
         Note that ``--allow-host`` and ``deny-host`` only support IP addresses (hostnames are not supported).
-        Above examples add acls to a topic by specifying --topic [topic-name] as the resource option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name].</li>
+        Above examples add acls to a topic by specifying --topic [topic-name] as the resource option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name].
+        <p></p>
+        When using SSL-based client authentication, the principal value will need to match the client certificate's subject name. For example:
+        <pre>... --allow-principal 'User:C=US,ST=CA,L=Santa Clara,O=org,OU=org,CN=Sriharsha Chintalapani' ...</pre></li>
 
     <li><b>Removing Acls</b><br>
             Removing acls is pretty much the same. The only difference is instead of --add option users will have to specify --remove option. To remove the acls added by the first example above we can execute the CLI with following options:
