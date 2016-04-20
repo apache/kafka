@@ -54,7 +54,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //When we move the replica on 100 to broker 101
     ReassignPartitionsCommand.executeAssignment(zkUtils, s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101]}]}""")
-    waitFor(ReassignPartitionsPath)
+    waitForReasignmentToComplete()
 
     //Then the replica should be on 101
     assertEquals(zkUtils.getPartitionAssignmentForTopics(Seq(topicName)).get(topicName).get(partition), Seq(101))
@@ -102,8 +102,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(actual.values.flatten.toSeq.distinct.sorted, Seq(100, 101))
   }
 
-  def waitFor(path: String) {
-    waitUntilTrue(() => !zkUtils.pathExists(path), s"Znode $zkUtils.ReassignPartitionsPath wasn't deleted")
+  def waitForReasignmentToComplete() {
+    waitUntilTrue(() => !zkUtils.pathExists(ReassignPartitionsPath), s"Znode $zkUtils.ReassignPartitionsPath wasn't deleted")
   }
 
   def json(topic: String): String = {
