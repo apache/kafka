@@ -26,9 +26,17 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>> {
 
     private static final int NEWFLAG_SIZE = 1;
 
-    private final Deserializer<T> inner;
+    private Deserializer<T> inner;
 
     public ChangedDeserializer(Deserializer<T> inner) {
+        this.inner = inner;
+    }
+
+    public Deserializer<T> getInner() {
+        return inner;
+    }
+
+    public void setInner(Deserializer<T> inner) {
         this.inner = inner;
     }
 

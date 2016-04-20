@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
@@ -52,8 +53,16 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void init(ProcessorContext context) {
         this.context = context;
+
+        // if serializers are null, get the default ones from the context
         if (this.keySerializer == null) this.keySerializer = (Serializer<K>) context.keySerde().serializer();
         if (this.valSerializer == null) this.valSerializer = (Serializer<V>) context.valueSerde().serializer();
+
+        // if value serializers are for {@code Change} values, set the inner serializer when necessary
+        if (this.valSerializer instanceof ChangedSerializer &&
+                ((ChangedSerializer) this.valSerializer).getInner() == null)
+            ((ChangedSerializer) this.valSerializer).setInner(context.valueSerde().serializer());
+
     }
 
     @Override
@@ -66,5 +75,10 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void close() {
         // do nothing
+    }
+
+    // for test only
+    public Serializer<V> valueSerializer() {
+        return valSerializer;
     }
 }

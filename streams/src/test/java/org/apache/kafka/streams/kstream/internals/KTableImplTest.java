@@ -25,8 +25,14 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.processor.internals.SinkNode;
+import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockAggregator;
+import org.apache.kafka.test.MockInitializer;
+import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockReducer;
 import org.junit.Test;
 
 import java.io.File;
@@ -34,7 +40,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class KTableImplTest {
 
@@ -295,6 +303,53 @@ public class KTableImplTest {
         } finally {
             Utils.delete(stateDir);
         }
+    }
 
+    @Test
+    public void testRepartition() throws IOException {
+        String topic1 = "topic1";
+
+        File stateDir = Files.createTempDirectory("test").toFile();
+        try {
+            KStreamBuilder builder = new KStreamBuilder();
+
+            KTableImpl<String, String, String> table1 =
+                    (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+
+            KTableImpl<String, String, String> table1Aggregated = (KTableImpl<String, String, String>) table1.aggregate(
+                    MockInitializer.STRING_INIT,
+                    MockAggregator.STRING_ADDER,
+                    MockAggregator.STRING_REMOVER,
+                    MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
+                    "mock-result1"
+            );
+
+            KTableImpl<String, String, String> table1Reduced = (KTableImpl<String, String, String>) table1.reduce(
+                    MockReducer.STRING_ADDER,
+                    MockReducer.STRING_REMOVER,
+                    MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
+                    "mock-result2"
+            );
+
+            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, stringSerde, stringSerde);
+            driver.setTime(0L);
+
+            // three state store should be created, one for source, one for aggregate and one for reduce
+            assertEquals(3, driver.allStateStores().size());
+
+            // contains the corresponding repartition source / sink nodes
+            assertTrue(driver.allProcessorNames().contains("KSTREAM-SINK-0000000003"));
+            assertTrue(driver.allProcessorNames().contains("KSTREAM-SOURCE-0000000004"));
+            assertTrue(driver.allProcessorNames().contains("KSTREAM-SINK-0000000007"));
+            assertTrue(driver.allProcessorNames().contains("KSTREAM-SOURCE-0000000008"));
+
+            assertNotNull(((ChangedSerializer) ((SinkNode) driver.processor("KSTREAM-SINK-0000000003")).valueSerializer()).getInner());
+            assertNotNull(((ChangedDeserializer) ((SourceNode) driver.processor("KSTREAM-SOURCE-0000000004")).valueDeserializer()).getInner());
+            assertNotNull(((ChangedSerializer) ((SinkNode) driver.processor("KSTREAM-SINK-0000000007")).valueSerializer()).getInner());
+            assertNotNull(((ChangedDeserializer) ((SourceNode) driver.processor("KSTREAM-SOURCE-0000000008")).valueDeserializer()).getInner());
+
+        } finally {
+            Utils.delete(stateDir);
+        }
     }
 }

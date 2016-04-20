@@ -27,9 +27,17 @@ public class ChangedSerializer<T> implements Serializer<Change<T>> {
 
     private static final int NEWFLAG_SIZE = 1;
 
-    private final Serializer<T> inner;
+    private Serializer<T> inner;
 
     public ChangedSerializer(Serializer<T> inner) {
+        this.inner = inner;
+    }
+
+    public Serializer<T> getInner() {
+        return inner;
+    }
+
+    public void setInner(Serializer<T> inner) {
         this.inner = inner;
     }
 

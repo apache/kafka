@@ -17,8 +17,10 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -335,8 +337,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         String topic = name + REPARTITION_TOPIC_SUFFIX;
 
-        ChangedSerializer<V1> changedValueSerializer = new ChangedSerializer<>(valueSerde.serializer());
-        ChangedDeserializer<V1> changedValueDeserializer = new ChangedDeserializer<>(valueSerde.deserializer());
+        Serializer<K1> keySerializer = keySerde == null ? null : keySerde.serializer();
+        Deserializer<K1> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
+        Serializer<V1> valueSerializer = valueSerde == null ? null : valueSerde.serializer();
+        Deserializer<V1> valueDeserializer = valueSerde == null ? null : valueSerde.deserializer();
+
+        ChangedSerializer<V1> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
+        ChangedDeserializer<V1> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
 
         KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
 
@@ -354,10 +361,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         // send the aggregate key-value pairs to the intermediate topic for partitioning
         topology.addInternalTopic(topic);
-        topology.addSink(sinkName, topic, keySerde.serializer(), changedValueSerializer, selectName);
+        topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, selectName);
 
         // read the intermediate topic
-        topology.addSource(sourceName, keySerde.deserializer(), changedValueDeserializer, topic);
+        topology.addSource(sourceName, keyDeserializer, changedValueDeserializer, topic);
 
         // aggregate the values with the aggregator and local store
         topology.addProcessor(aggregateName, aggregateSupplier, sourceName);
@@ -426,10 +433,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
         String reduceName = topology.newName(REDUCE_NAME);
 
+        Serializer<K1> keySerializer = keySerde == null ? null : keySerde.serializer();
+        Deserializer<K1> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
+        Serializer<V1> valueSerializer = valueSerde == null ? null : valueSerde.serializer();
+        Deserializer<V1> valueDeserializer = valueSerde == null ? null : valueSerde.deserializer();
+
         String topic = name + REPARTITION_TOPIC_SUFFIX;
 
-        ChangedSerializer<V1> changedValueSerializer = new ChangedSerializer<>(valueSerde.serializer());
-        ChangedDeserializer<V1> changedValueDeserializer = new ChangedDeserializer<>(valueSerde.deserializer());
+        ChangedSerializer<V1> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
+        ChangedDeserializer<V1> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
 
         KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
 
@@ -447,10 +459,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         // send the aggregate key-value pairs to the intermediate topic for partitioning
         topology.addInternalTopic(topic);
-        topology.addSink(sinkName, topic, keySerde.serializer(), changedValueSerializer, selectName);
+        topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, selectName);
 
         // read the intermediate topic
-        topology.addSource(sourceName, keySerde.deserializer(), changedValueDeserializer, topic);
+        topology.addSource(sourceName, keyDeserializer, changedValueDeserializer, topic);
 
         // aggregate the values with the aggregator and local store
         topology.addProcessor(reduceName, aggregateSupplier, sourceName);
