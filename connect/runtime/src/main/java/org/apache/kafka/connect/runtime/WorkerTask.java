@@ -69,12 +69,22 @@ abstract class WorkerTask implements Runnable {
      */
     public abstract void initialize(Map<String, String> props);
 
+
+    private void triggerStop() {
+        synchronized (this) {
+            this.stopping.set(true);
+
+            // wakeup any threads that are waiting for unpause
+            this.notifyAll();
+        }
+    }
+
     /**
      * Stop this task from processing messages. This method does not block, it only triggers
      * shutdown. Use #{@link #awaitStop} to block until completion.
      */
     public void stop() {
-        this.stopping.set(true);
+        triggerStop();
     }
 
     /**
@@ -140,7 +150,8 @@ abstract class WorkerTask implements Runnable {
 
     private void onShutdown() {
         synchronized (this) {
-            stopping.set(true);
+            triggerStop();
+
             // if we were cancelled, skip the status update since the task may have already been
             // started somewhere else
             if (!cancelled.get())
@@ -150,7 +161,8 @@ abstract class WorkerTask implements Runnable {
 
     private void onFailure(Throwable t) {
         synchronized (this) {
-            stopping.set(true);
+            triggerStop();
+
             // if we were cancelled, skip the status update since the task may have already been
             // started somewhere else
             if (!cancelled.get())
@@ -173,14 +185,23 @@ abstract class WorkerTask implements Runnable {
         }
     }
 
-    public boolean isPaused() {
+    public boolean shouldPause() {
         return this.targetState.get() == TargetState.PAUSED;
     }
 
-    protected void awaitUnpause(long timeoutMs) throws InterruptedException {
+    /**
+     * Await task resumption.
+     * @return true if the task's target state is not paused, false if the task is shutdown before resumption
+     * @throws InterruptedException
+     */
+    protected boolean awaitUnpause() throws InterruptedException {
         synchronized (this) {
-            if (targetState.get() != TargetState.PAUSED) return;
-            this.wait(timeoutMs);
+            while (targetState.get() == TargetState.PAUSED) {
+                if (stopping.get())
+                    return false;
+                this.wait();
+            }
+            return true;
         }
     }
 

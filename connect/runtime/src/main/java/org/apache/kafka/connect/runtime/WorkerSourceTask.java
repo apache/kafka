@@ -50,7 +50,6 @@ class WorkerSourceTask extends WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSourceTask.class);
 
     private static final long SEND_FAILED_BACKOFF_MS = 100;
-    private static final long UNPAUSE_AWAIT_TIMEOUT_MS = 100;
 
     private final WorkerConfig workerConfig;
     private final SourceTask task;
@@ -141,8 +140,8 @@ class WorkerSourceTask extends WorkerTask {
             }
 
             while (!isStopping()) {
-                if (isPaused()) {
-                    awaitUnpause(UNPAUSE_AWAIT_TIMEOUT_MS);
+                if (shouldPause()) {
+                    awaitUnpause();
                     continue;
                 }
 

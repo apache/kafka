@@ -226,7 +226,7 @@ class WorkerSinkTask extends WorkerTask {
         } catch (WakeupException we) {
             log.trace("{} consumer woken up", id);
 
-            if (isPaused()) {
+            if (shouldPause()) {
                 pauseAll();
             } else if (!pausedForRedelivery) {
                 resumeAll();
@@ -373,7 +373,7 @@ class WorkerSinkTask extends WorkerTask {
             // If we had paused all consumer topic partitions to try to redeliver data, then we should resume any that
             // the task had not explicitly paused
             if (pausedForRedelivery) {
-                if (!isPaused())
+                if (!shouldPause())
                     resumeAll();
                 pausedForRedelivery = false;
             }
@@ -448,7 +448,7 @@ class WorkerSinkTask extends WorkerTask {
                     consumer.pause(singleton(tp));
             }
 
-            if (isPaused())
+            if (shouldPause())
                 pauseAll();
 
             // Instead of invoking the assignment callback on initialization, we guarantee the consumer is ready upon
