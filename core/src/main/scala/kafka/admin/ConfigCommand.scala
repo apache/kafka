@@ -22,7 +22,7 @@ import java.util.Properties
 import joptsimple._
 import kafka.admin.TopicCommand._
 import kafka.log.{Defaults, LogConfig}
-import kafka.server.{ClientConfigOverride, ConfigType}
+import kafka.server.{ClientConfigOverride, ClientQuotaManagerConfig, ConfigType, QuotaId}
 import kafka.utils.{CommandLineUtils, ZkUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
@@ -41,7 +41,7 @@ object ConfigCommand {
     val opts = new ConfigCommandOptions(args)
 
     if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity (topics/clients) configs")
+      CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity (topics/clients/users) configs")
 
     opts.checkArgs()
 
@@ -76,12 +76,20 @@ object ConfigCommand {
     configs.putAll(configsToBeAdded)
     configsToBeDeleted.foreach(config => configs.remove(config))
 
-    if (entityType.equals(ConfigType.Topic)) {
-      AdminUtils.changeTopicConfig(zkUtils, entityName, configs)
-      println("Updated config for topic: \"%s\".".format(entityName))
-    } else {
-      AdminUtils.changeClientIdConfig(zkUtils, entityName, configs)
-      println("Updated config for clientId: \"%s\".".format(entityName))
+    entityType match {
+      case ConfigType.Topic =>
+        AdminUtils.changeTopicConfig(zkUtils, entityName, configs)
+        println("Updated config for topic: \"%s\".".format(entityName))
+      case ConfigType.Client =>
+        AdminUtils.changeClientIdConfig(zkUtils, entityName, configs)
+        println("Updated config for clientId: \"%s\".".format(entityName))
+      case ConfigType.User =>
+         // Set non-encoded name as property to identify record easily since the path contains base64-encoded name
+        configs.setProperty("user_principal", entityName)
+        AdminUtils.changeUserConfig(zkUtils, QuotaId.sanitize(ClientQuotaManagerConfig.User, entityName), configs)
+        println("Updated config for user principal: \"%s\".".format(entityName))
+      case _ =>
+        throw new IllegalArgumentException("Unknown entity type " + entityType)
     }
   }
 
@@ -145,10 +153,10 @@ object ConfigCommand {
             .ofType(classOf[String])
     val alterOpt = parser.accepts("alter", "Alter the configuration for the entity.")
     val describeOpt = parser.accepts("describe", "List configs for the given entity.")
-    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients)")
+    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users)")
             .withRequiredArg
             .ofType(classOf[String])
-    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id)")
+    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name)")
             .withRequiredArg
             .ofType(classOf[String])
 
@@ -156,7 +164,9 @@ object ConfigCommand {
     val addConfig = parser.accepts("add-config", "Key Value pairs configs to add 'k1=v1,k2=v2'. The following is a list of valid configurations: " +
             "For entity_type '" + ConfigType.Topic + "': " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
             "For entity_type '" + ConfigType.Client + "': " + nl + "\t" + ClientConfigOverride.ProducerOverride
-                                                            + nl + "\t" + ClientConfigOverride.ConsumerOverride)
+                                                            + nl + "\t" + ClientConfigOverride.ConsumerOverride +
+            "For entity_type '" + ConfigType.User + "': " + nl + "\t" + ClientConfigOverride.ProducerOverride
+                                                          + nl + "\t" + ClientConfigOverride.ConsumerOverride)
             .withRequiredArg
             .ofType(classOf[String])
             .withValuesSeparatedBy(',')
@@ -190,8 +200,8 @@ object ConfigCommand {
           throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
       }
       val entityTypeVal = options.valueOf(entityType)
-      if(! entityTypeVal.equals(ConfigType.Topic) && ! entityTypeVal.equals(ConfigType.Client)) {
-        throw new IllegalArgumentException("--entity-type must be '%s' or '%s'".format(ConfigType.Topic, ConfigType.Client))
+      if(! entityTypeVal.equals(ConfigType.Topic) && ! entityTypeVal.equals(ConfigType.Client) && !entityTypeVal.equals(ConfigType.User)) {
+        throw new IllegalArgumentException("--entity-type must be '%s', '%s' or '%s'".format(ConfigType.Topic, ConfigType.Client, ConfigType.User))
       }
     }
   }

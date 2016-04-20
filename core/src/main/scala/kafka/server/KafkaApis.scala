@@ -386,6 +386,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
 
       quotaManagers(ApiKeys.PRODUCE.id).recordAndMaybeThrottle(
+        request.session.principal.getName,
         request.header.clientId,
         numBytesAppended,
         produceResponseCallback)
@@ -482,7 +483,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (fetchRequest.isFromFollower) {
         fetchResponseCallback(0)
       } else {
-        quotaManagers(ApiKeys.FETCH.id).recordAndMaybeThrottle(fetchRequest.clientId,
+        quotaManagers(ApiKeys.FETCH.id).recordAndMaybeThrottle(request.session.principal.getName, fetchRequest.clientId,
                                                                FetchResponse.responseSize(mergedPartitionData.groupBy(_._1.topic),
                                                                                           fetchRequest.versionId),
                                                                fetchResponseCallback)
@@ -971,12 +972,14 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   private def instantiateQuotaManagers(cfg: KafkaConfig): Map[Short, ClientQuotaManager] = {
     val producerQuotaManagerCfg = ClientQuotaManagerConfig(
+      quotaType = cfg.quotaType,
       quotaBytesPerSecondDefault = cfg.producerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
 
     val consumerQuotaManagerCfg = ClientQuotaManagerConfig(
+       quotaType = cfg.quotaType,
       quotaBytesPerSecondDefault = cfg.consumerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds

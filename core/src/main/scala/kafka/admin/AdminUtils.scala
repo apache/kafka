@@ -473,6 +473,19 @@ object AdminUtils extends Logging {
   }
 
   /**
+   * Update the config for a user and create a change notification so the change will propagate to other brokers
+   *
+   * @param zkUtils Zookeeper utilities used to write the config to ZK
+   * @param sanitizedUserPrincipal: The base64 encoded user principal for which configs are being changed
+   * @param configs: The final set of configs that will be applied to the user. If any new configs need to be added or
+   *                 existing configs need to be deleted, it should be done prior to invoking this API
+   *
+   */
+  def changeUserConfig(zkUtils: ZkUtils, sanitizedUserPrincipal: String, configs: Properties) {
+    changeEntityConfig(zkUtils, ConfigType.User, sanitizedUserPrincipal, configs)
+  }
+
+  /**
    * Update the config for an existing topic and create a change notification so the change will propagate to other brokers
    *
    * @param zkUtils Zookeeper utilities used to write the config to ZK

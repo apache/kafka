@@ -16,10 +16,9 @@ package kafka.api
 
 import java.util.Properties
 
-import kafka.admin.AdminUtils
 import kafka.consumer.SimpleConsumer
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.{ClientQuotaManager, ClientConfigOverride, KafkaConfig, KafkaServer}
+import kafka.server.{ClientQuotaManager, ClientConfigOverride, KafkaConfig, KafkaServer, QuotaId}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
@@ -27,38 +26,42 @@ import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics.{Quota, KafkaMetric}
 import org.apache.kafka.common.protocol.ApiKeys
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 import scala.collection.Map
 import scala.collection.mutable
+import kafka.server.ClientQuotaManagerConfig
 
-class QuotasTest extends KafkaServerTestHarness {
+abstract class BaseQuotasTest extends IntegrationTestHarness {
+
+  def quotaType: String
+  def clientPrincipal : String
+  def producerQuotaId : String
+  def consumerQuotaId : String
+  def changeQuota(quotaId: String, props: Properties)
+
+  override val serverCount = 2
+  val producerCount = 0
+  val consumerCount = 0
+
   private val producerBufferSize = 300000
-  private val producerId1 = "QuotasTestProducer-1"
-  private val producerId2 = "QuotasTestProducer-2"
-  private val consumerId1 = "QuotasTestConsumer-1"
-  private val consumerId2 = "QuotasTestConsumer-2"
+  protected val producerClientId = "QuotasTestProducer-1"
+  protected val consumerClientId = "QuotasTestConsumer-1"
 
-  val numServers = 2
-  val overridingProps = new Properties()
+  this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
+  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "2")
+  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
+  this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100")
+  this.serverConfig.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, "30000")
 
   // Low enough quota that a producer sending a small payload in a tight loop should get throttled
-  overridingProps.put(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, "8000")
-  overridingProps.put(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, "2500")
+  this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, "8000")
+  this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, "2500")
+  this.serverConfig.setProperty(KafkaConfig.QuotaTypeProp, quotaType)
 
-  override def generateConfigs() = {
-    FixedPortTestUtils.createBrokerConfigs(numServers,
-                                           zkConnect,
-                                           enableControlledShutdown = false)
-            .map(KafkaConfig.fromProps(_, overridingProps))
-  }
-
-  var producers = mutable.Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
-  var consumers = mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
   var replicaConsumers = mutable.Buffer[SimpleConsumer]()
 
   var leaderNode: KafkaServer = null
@@ -68,28 +71,29 @@ class QuotasTest extends KafkaServerTestHarness {
   @Before
   override def setUp() {
     super.setUp()
+    val producerSecurityProps = TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
+    val consumerSecurityProps = TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
     val producerProps = new Properties()
+    producerProps.putAll(producerSecurityProps)
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.ACKS_CONFIG, "0")
     producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, producerBufferSize.toString)
-    producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, producerId1)
+    producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                       classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                       classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producers += new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
-    producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, producerId2)
-    producers += new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
-
     val numPartitions = 1
-    val leaders = TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers)
+    val leaders = TestUtils.createTopic(zkUtils, topic1, numPartitions, serverCount, servers)
     leaderNode = if (leaders(0).get == servers.head.config.brokerId) servers.head else servers(1)
     followerNode = if (leaders(0).get != servers.head.config.brokerId) servers.head else servers(1)
     assertTrue("Leader of all partitions of the topic should exist", leaders.values.forall(leader => leader.isDefined))
 
     // Create consumers
     val consumerProps = new Properties
+    consumerProps.putAll(consumerSecurityProps)
     consumerProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "QuotasTest")
     consumerProps.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
     consumerProps.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
@@ -99,20 +103,14 @@ class QuotasTest extends KafkaServerTestHarness {
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
                       classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
 
-    consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, consumerId1)
+    consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, consumerClientId)
     consumers += new KafkaConsumer(consumerProps)
     // Create replica consumers with the same clientId as the high level consumer. These requests should never be throttled
-    replicaConsumers += new SimpleConsumer("localhost", leaderNode.boundPort(), 1000000, 64*1024, consumerId1)
-
-    consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, consumerId2)
-    consumers += new KafkaConsumer(consumerProps)
-    replicaConsumers += new SimpleConsumer("localhost", leaderNode.boundPort(), 1000000, 64*1024, consumerId2)
+    replicaConsumers += new SimpleConsumer("localhost", leaderNode.boundPort(), 1000000, 64*1024, consumerClientId)
   }
 
   @After
   override def tearDown() {
-    producers.foreach( _.close )
-    consumers.foreach( _.close )
     replicaConsumers.foreach( _.close )
     super.tearDown()
   }
@@ -126,8 +124,8 @@ class QuotasTest extends KafkaServerTestHarness {
 
     val producerMetricName = leaderNode.metrics.metricName("throttle-time",
                                                            ApiKeys.PRODUCE.name,
-                                                           "Tracking throttle-time per client",
-                                                           "client-id", producerId1)
+                                                           "Tracking throttle-time per " + quotaType,
+                                                           quotaMetricTag, producerMetricTagValue)
     assertTrue("Should have been throttled", allMetrics(producerMetricName).value() > 0)
 
     // Consumer should read in a bursty manner and get throttled immediately
@@ -137,50 +135,86 @@ class QuotasTest extends KafkaServerTestHarness {
     replicaConsumers.head.fetch(request)
     val consumerMetricName = leaderNode.metrics.metricName("throttle-time",
                                                            ApiKeys.FETCH.name,
-                                                           "Tracking throttle-time per client",
-                                                           "client-id", consumerId1)
+                                                           "Tracking throttle-time per " + quotaType,
+                                                           quotaMetricTag, consumerMetricTagValue)
     assertTrue("Should have been throttled", allMetrics(consumerMetricName).value() > 0)
   }
 
   @Test
   def testProducerConsumerOverrideUnthrottled() {
-    // Give effectively unlimited quota for producerId2 and consumerId2
+    // Give effectively unlimited quota for producer and consumer
     val props = new Properties()
     props.put(ClientConfigOverride.ProducerOverride, Long.MaxValue.toString)
     props.put(ClientConfigOverride.ConsumerOverride, Long.MaxValue.toString)
 
-    AdminUtils.changeClientIdConfig(zkUtils, producerId2, props)
-    AdminUtils.changeClientIdConfig(zkUtils, consumerId2, props)
+    changeQuota(producerQuotaId, props)
+    changeQuota(consumerQuotaId, props)
 
     TestUtils.retry(10000) {
       val quotaManagers: Map[Short, ClientQuotaManager] = leaderNode.apis.quotaManagers
-      val overrideProducerQuota = quotaManagers.get(ApiKeys.PRODUCE.id).get.quota(producerId2)
-      val overrideConsumerQuota = quotaManagers.get(ApiKeys.FETCH.id).get.quota(consumerId2)
+      val overrideProducerQuota = quotaManagers.get(ApiKeys.PRODUCE.id).get.quota(producerQuotaId)
+      val overrideConsumerQuota = quotaManagers.get(ApiKeys.FETCH.id).get.quota(consumerQuotaId)
 
-      assertEquals(s"ClientId $producerId2 must have unlimited producer quota", Quota.upperBound(Long.MaxValue), overrideProducerQuota)
-      assertEquals(s"ClientId $consumerId2 must have unlimited consumer quota", Quota.upperBound(Long.MaxValue), overrideConsumerQuota)
+      assertEquals(s"$quotaType $producerQuotaId must have unlimited producer quota", Quota.upperBound(Long.MaxValue), overrideProducerQuota)
+      assertEquals(s"$quotaType $consumerQuotaId must have unlimited consumer quota", Quota.upperBound(Long.MaxValue), overrideConsumerQuota)
     }
-
 
     val allMetrics: mutable.Map[MetricName, KafkaMetric] = leaderNode.metrics.metrics().asScala
     val numRecords = 1000
-    produce(producers(1), numRecords)
+    produce(producers.head, numRecords)
     val producerMetricName = leaderNode.metrics.metricName("throttle-time",
                                                            ApiKeys.PRODUCE.name,
-                                                           "Tracking throttle-time per client",
-                                                           "client-id", producerId2)
+                                                           "Tracking throttle-time per " + quotaType,
+                                                           quotaMetricTag, producerMetricTagValue)
     assertEquals("Should not have been throttled", 0.0, allMetrics(producerMetricName).value(), 0.0)
 
     // The "client" consumer does not get throttled.
-    consume(consumers(1), numRecords)
+    consume(consumers.head, numRecords)
     // The replica consumer should not be throttled also. Create a fetch request which will exceed the quota immediately
     val request = new FetchRequestBuilder().addFetch(topic1, 0, 0, 1024*1024).replicaId(followerNode.config.brokerId).build()
-    replicaConsumers(1).fetch(request)
+    replicaConsumers.head.fetch(request)
     val consumerMetricName = leaderNode.metrics.metricName("throttle-time",
                                                            ApiKeys.FETCH.name,
-                                                           "Tracking throttle-time per client",
-                                                           "client-id", consumerId2)
+                                                           "Tracking throttle-time per " + quotaType,
+                                                           quotaMetricTag, consumerMetricTagValue)
     assertEquals("Should not have been throttled", 0.0, allMetrics(consumerMetricName).value(), 0.0)
+  }
+
+  @Test
+  def testQuotaOverrideDelete() {
+    // Override producer and consumer quotas to unlimited
+    val props = new Properties()
+    props.put(ClientConfigOverride.ProducerOverride, Long.MaxValue.toString)
+    props.put(ClientConfigOverride.ConsumerOverride, Long.MaxValue.toString)
+
+    changeQuota(producerQuotaId, props)
+    changeQuota(consumerQuotaId, props)
+
+    val allMetrics: mutable.Map[MetricName, KafkaMetric] = leaderNode.metrics.metrics().asScala
+    val producerMetricName = leaderNode.metrics.metricName("throttle-time",
+                                                           ApiKeys.PRODUCE.name,
+                                                           "Tracking throttle-time per " + quotaType,
+                                                           quotaMetricTag, producerMetricTagValue)
+    val consumerMetricName = leaderNode.metrics.metricName("throttle-time",
+                                                           ApiKeys.FETCH.name,
+                                                           "Tracking throttle-time per " + quotaType,
+                                                           quotaMetricTag, consumerMetricTagValue)
+    val numRecords = 1000
+    produce(producers.head, numRecords)
+    assertTrue("Should not have been throttled", allMetrics(producerMetricName).value() == 0)
+    consume(consumers.head, numRecords)
+    assertTrue("Should not have been throttled", allMetrics(consumerMetricName).value() == 0)
+
+    // Delete producer and consumer quota overrides. Consumer and producer should now be
+    // throttled since broker defaults are very small
+    val emptyProps = new Properties()
+    changeQuota(producerQuotaId, emptyProps)
+    changeQuota(consumerQuotaId, emptyProps)
+    produce(producers.head, numRecords)
+
+    assertTrue("Should have been throttled", allMetrics(producerMetricName).value() > 0)
+    consume(consumers.head, numRecords)
+    assertTrue("Should have been throttled", allMetrics(consumerMetricName).value() > 0)
   }
 
   def produce(p: KafkaProducer[Array[Byte], Array[Byte]], count: Int): Int = {
@@ -204,4 +238,8 @@ class QuotasTest extends KafkaServerTestHarness {
       }
     }
   }
+
+  private def quotaMetricTag = quotaType
+  private def producerMetricTagValue = QuotaId.sanitize(quotaType, producerQuotaId)
+  private def consumerMetricTagValue = QuotaId.sanitize(quotaType, consumerQuotaId)
 }

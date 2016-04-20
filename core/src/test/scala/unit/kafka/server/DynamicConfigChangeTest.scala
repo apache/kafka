@@ -67,7 +67,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     AdminUtils.changeClientIdConfig(zkUtils, clientId, props)
 
     TestUtils.retry(10000) {
-      val configHandler = this.servers(0).dynamicConfigHandlers(ConfigType.Client).asInstanceOf[ClientIdConfigHandler]
+      val configHandler = this.servers(0).dynamicConfigHandlers(ConfigType.Client).asInstanceOf[QuotaConfigHandler]
       val quotaManagers: Map[Short, ClientQuotaManager] = servers(0).apis.quotaManagers
       val overrideProducerQuota = quotaManagers.get(ApiKeys.PRODUCE.id).get.quota(clientId)
       val overrideConsumerQuota = quotaManagers.get(ApiKeys.FETCH.id).get.quota(clientId)

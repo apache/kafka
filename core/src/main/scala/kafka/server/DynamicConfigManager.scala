@@ -37,6 +37,7 @@ import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 object ConfigType {
   val Topic = "topics"
   val Client = "clients"
+  val User = "users"
 }
 
 /**
@@ -79,6 +80,19 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
                            private val time: Time = SystemTime) extends Logging {
   private var lastExecutedChange = -1L
 
+  // Apply all existing client/user configs to the ClientIdConfigHandler/UserConfigHandler to bootstrap the overrides
+  configHandlers.foreach {
+    case (ConfigType.Client, handler) =>
+        AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Client).foreach {
+          case (clientId, properties) => handler.processConfigChanges(clientId, properties)
+        }
+    case (ConfigType.User, handler) =>
+        AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.User).foreach {
+          case (userPrincipal, properties) => handler.processConfigChanges(userPrincipal, properties)
+        }
+    case _ =>
+  }
+
   object ConfigChangedNotificationHandler extends NotificationHandler {
     override def processNotification(json: String) = {
       Json.parseFull(json) match {
@@ -92,6 +106,7 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
           val entityType = map.get("entity_type") match {
             case Some(ConfigType.Topic) => ConfigType.Topic
             case Some(ConfigType.Client) => ConfigType.Client
+            case Some(ConfigType.User) => ConfigType.User
             case _ => throw new IllegalArgumentException("Config change notification must have 'entity_type' set to either 'client' or 'topic'." +
               " Received: " + json)
           }
