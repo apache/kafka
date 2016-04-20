@@ -41,7 +41,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   @After
   override def tearDown() {
     servers.foreach(_.shutdown())
-    servers.foreach(server => CoreUtils.rm(server.config.logDirs))
+    servers.foreach(server => CoreUtils.delete(server.config.logDirs))
     super.tearDown()
   }
 
@@ -74,7 +74,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //When rebalancing
     val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, brokers, json(topicName), true)._1
     ReassignPartitionsCommand.executeAssignment(zkUtils, zkUtils.formatAsReassignmentJson(newAssignment))
-    waitFor(ReassignPartitionsPath)
+    waitForReasignmentToComplete()
 
     //Then the replicas should span all three brokers
     val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
@@ -95,7 +95,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //When rebalancing
     val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, Array(100, 101), json(topicName), true)._1
     ReassignPartitionsCommand.executeAssignment(zkUtils, zkUtils.formatAsReassignmentJson(newAssignment))
-    waitFor(ReassignPartitionsPath)
+    waitForReasignmentToComplete()
 
     //Then replicas should only span the first two brokers
     val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
