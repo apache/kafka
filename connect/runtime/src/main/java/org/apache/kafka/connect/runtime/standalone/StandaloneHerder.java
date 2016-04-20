@@ -60,7 +60,7 @@ public class StandaloneHerder extends AbstractHerder {
     StandaloneHerder(Worker worker,
                      String workerId,
                      StatusBackingStore statusBackingStore,
-                     ConfigBackingStore configBackingStore) {
+                     MemoryConfigBackingStore configBackingStore) {
         super(worker, workerId, statusBackingStore, configBackingStore);
         this.configState = ClusterConfigState.EMPTY;
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
@@ -306,6 +306,12 @@ public class StandaloneHerder extends AbstractHerder {
         }
     }
 
+    // This update listener assumes synchronous updates the ConfigBackingStore, which only works
+    // with the MemoryConfigBackingStore. This allows us to write a change (e.g. through
+    // ConfigBackingStore.putConnectorConfig()) and then immediately read it back from an updated
+    // snapshot.
+    // TODO: To get any real benefit from the backing store abstraction, we should move some of
+    // the handling into the callbacks in this listener.
     private class ConfigUpdateListener implements ConfigBackingStore.UpdateListener {
 
         @Override
