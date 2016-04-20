@@ -299,7 +299,7 @@ public class ConnectSchema implements Schema {
 
 
     /**
-     * Get the {@link Schema.Type} associated with the the given class.
+     * Get the {@link Schema.Type} associated with the given class.
      *
      * @param klass the Class to
      * @return the corresponding type, nor null if there is no matching type

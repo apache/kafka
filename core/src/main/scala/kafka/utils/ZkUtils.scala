@@ -668,7 +668,7 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
-  // Parses without deduplicating keys so the the data can be checked before allowing reassignment to proceed
+  // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed
   def parsePartitionReassignmentDataWithoutDedup(jsonData: String): Seq[(TopicAndPartition, Seq[Int])] = {
     Json.parseFull(jsonData) match {
       case Some(m) =>

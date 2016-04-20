@@ -104,7 +104,7 @@ class ClientQuotaManagerTest {
       assertEquals(10, numCallbacks)
       time.sleep(sleepTime)
 
-      // Callback can only be triggered after the the delay time passes
+      // Callback can only be triggered after the delay time passes
       clientMetrics.throttledRequestReaper.doWork()
       assertEquals(0, queueSizeMetric.value().toInt)
       assertEquals(11, numCallbacks)
