@@ -18,9 +18,9 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.connect.errors.ConnectException;
 
-public class StaleConfigException extends ConnectException {
+public class RebalanceNeededException extends ConnectException {
 
-    public StaleConfigException(String s) {
+    public RebalanceNeededException(String s) {
         super(s);
     }
 

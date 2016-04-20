@@ -20,7 +20,7 @@ package org.apache.kafka.connect.runtime.rest.resources;
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.distributed.StaleConfigException;
+import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -149,6 +149,20 @@ public class ConnectorsResource {
         completeOrForwardRequest(cb, "/connectors/" + connector + "/restart", "POST", null, forward);
     }
 
+    @PUT
+    @Path("/{connector}/pause")
+    public Response pauseConnector(@PathParam("connector") String connector) {
+        herder.pauseConnector(connector);
+        return Response.accepted().build();
+    }
+
+    @PUT
+    @Path("/{connector}/resume")
+    public Response resumeConnector(@PathParam("connector") String connector) {
+        herder.resumeConnector(connector);
+        return Response.accepted().build();
+    }
+
     @GET
     @Path("/{connector}/tasks")
     public List<TaskInfo> getTaskConfigs(final @PathParam("connector") String connector,
@@ -230,7 +244,7 @@ public class ConnectorsResource {
                     throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
                             "Cannot complete request because of a conflicting operation (e.g. worker rebalance)");
                 }
-            } else if (cause instanceof StaleConfigException) {
+            } else if (cause instanceof RebalanceNeededException) {
                 throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
                         "Cannot complete request momentarily due to stale configuration (typically caused by a concurrent config change)");
             }

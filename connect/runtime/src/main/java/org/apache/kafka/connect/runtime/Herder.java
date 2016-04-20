@@ -149,6 +149,21 @@ public interface Herder {
      */
     void restartConnector(String connName, Callback<Void> cb);
 
+    /**
+     * Pause the connector. This call will asynchronously suspend processing by the connector and all
+     * of its tasks.
+     * @param connector name of the connector
+     */
+    void pauseConnector(String connector);
+
+    /**
+     * Resume the connector. This call will asynchronously start the connector and its tasks (if
+     * not started already).
+     * @param connector name of the connector
+     */
+    void resumeConnector(String connector);
+
+
     class Created<T> {
         private final boolean created;
         private final T result;
