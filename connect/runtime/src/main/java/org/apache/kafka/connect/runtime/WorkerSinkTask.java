@@ -101,10 +101,15 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     @Override
-    public void initialize(Map<String, String> taskConfig) {
-        this.taskConfig = taskConfig;
-        this.consumer = createConsumer();
-        this.context = new WorkerSinkTaskContext(consumer);
+    public void initialize(TaskConfig taskConfig) {
+        try {
+            this.taskConfig = taskConfig.originalsStrings();
+            this.consumer = createConsumer();
+            this.context = new WorkerSinkTaskContext(consumer);
+        } catch (Throwable t) {
+            log.error("Task {} failed initialization and will not be started.", t);
+            onFailure(t);
+        }
     }
 
     @Override

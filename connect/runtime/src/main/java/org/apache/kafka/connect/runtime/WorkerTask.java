@@ -21,7 +21,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -67,7 +66,7 @@ abstract class WorkerTask implements Runnable {
      * Initialize the task for execution.
      * @param props initial configuration
      */
-    public abstract void initialize(Map<String, String> props);
+    public abstract void initialize(TaskConfig taskConfig);
 
 
     private void triggerStop() {
@@ -159,7 +158,7 @@ abstract class WorkerTask implements Runnable {
         }
     }
 
-    private void onFailure(Throwable t) {
+    protected void onFailure(Throwable t) {
         synchronized (this) {
             triggerStop();
 

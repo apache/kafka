@@ -362,7 +362,7 @@ public class WorkerTest extends ThreadedTest {
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
-        workerTask.initialize(origProps);
+        workerTask.initialize(new TaskConfig(origProps));
         EasyMock.expectLastCall();
         workerTask.run();
         EasyMock.expectLastCall();
@@ -430,7 +430,7 @@ public class WorkerTest extends ThreadedTest {
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
-        workerTask.initialize(origProps);
+        workerTask.initialize(new TaskConfig(origProps));
         EasyMock.expectLastCall();
         workerTask.run();
         EasyMock.expectLastCall();

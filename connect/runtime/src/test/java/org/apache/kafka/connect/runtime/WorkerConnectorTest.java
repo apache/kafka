@@ -36,8 +36,8 @@ public class WorkerConnectorTest extends EasyMockSupport {
     public static final String CONNECTOR = "connector";
     public static final Map<String, String> CONFIG = new HashMap<>();
     static {
-        CONFIG.put("connector.class", "foo");
-        CONFIG.put("name", "bar");
+        CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestConnector.class.getName());
+        CONFIG.put(ConnectorConfig.NAME_CONFIG, CONNECTOR);
     }
     public static final ConnectorConfig CONNECTOR_CONFIG = new ConnectorConfig(CONFIG);
 
@@ -328,6 +328,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         workerConnector.shutdown();
 
         verifyAll();
+    }
+
+    private static abstract class TestConnector extends Connector {
     }
 
 }

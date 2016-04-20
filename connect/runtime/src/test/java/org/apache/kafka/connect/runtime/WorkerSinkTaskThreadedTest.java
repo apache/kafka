@@ -89,8 +89,9 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
     static {
         TASK_PROPS.put(SinkConnector.TOPICS_CONFIG, TOPIC);
+        TASK_PROPS.put(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
     }
-
+    private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private TargetState initialState = TargetState.STARTED;
@@ -139,7 +140,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
         // First iteration initializes partition assignment
@@ -182,7 +183,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
         // Initialize partition assignment
@@ -221,7 +222,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
         // Initialize partition assignment
@@ -259,7 +260,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
         // Initialize partition assignment
@@ -291,7 +292,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
         // Initialize partition assignment
@@ -323,7 +324,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
         // Initialize partition assignment
@@ -402,7 +403,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
         workerTask.iteration();
         workerTask.iteration();
@@ -445,7 +446,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         expectStopTask(3);
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
         workerTask.iteration();
         workerTask.iteration();
@@ -590,6 +591,9 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
             }
         });
         return capturedCallback;
+    }
+
+    private static abstract class TestSinkTask extends SinkTask {
     }
 
 }

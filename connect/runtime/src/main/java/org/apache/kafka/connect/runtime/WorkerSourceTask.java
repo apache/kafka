@@ -105,8 +105,13 @@ class WorkerSourceTask extends WorkerTask {
     }
 
     @Override
-    public void initialize(Map<String, String> config) {
-        this.taskConfig = config;
+    public void initialize(TaskConfig taskConfig) {
+        try {
+            this.taskConfig = taskConfig.originalsStrings();
+        } catch (Throwable t) {
+            log.error("Task {} failed initialization and will not be started.", t);
+            onFailure(t);
+        }
     }
 
     protected void close() {

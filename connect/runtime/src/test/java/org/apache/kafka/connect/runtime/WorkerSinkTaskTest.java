@@ -86,8 +86,9 @@ public class WorkerSinkTaskTest {
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
     static {
         TASK_PROPS.put(SinkConnector.TOPICS_CONFIG, TOPIC);
+        TASK_PROPS.put(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
     }
-
+    private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private TargetState initialState = TargetState.STARTED;
@@ -144,7 +145,7 @@ public class WorkerSinkTaskTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
         workerTask.poll(Long.MAX_VALUE);
 
@@ -193,7 +194,7 @@ public class WorkerSinkTaskTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
         workerTask.poll(Long.MAX_VALUE); // initial assignment
         workerTask.poll(Long.MAX_VALUE); // fetch some data
@@ -237,7 +238,7 @@ public class WorkerSinkTaskTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
         workerTask.poll(Long.MAX_VALUE);
         workerTask.poll(Long.MAX_VALUE);
@@ -256,7 +257,7 @@ public class WorkerSinkTaskTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
         workerTask.poll(Long.MAX_VALUE);
         try {
@@ -279,7 +280,7 @@ public class WorkerSinkTaskTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
         workerTask.poll(Long.MAX_VALUE);
         try {
@@ -397,4 +398,8 @@ public class WorkerSinkTaskTest {
         EasyMock.expect(keyConverter.toConnectData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).times(numMessages);
         EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).times(numMessages);
     }
+
+    private abstract static class TestSinkTask extends SinkTask  {
+    }
+
 }

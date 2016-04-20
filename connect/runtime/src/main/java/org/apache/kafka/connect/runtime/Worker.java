@@ -329,7 +329,7 @@ public class Worker {
 
         // Start the task before adding modifying any state, any exceptions are caught higher up the
         // call chain and there's no cleanup to do here
-        workerTask.initialize(taskConfig.originalsStrings());
+        workerTask.initialize(taskConfig);
         executor.submit(workerTask);
 
         if (task instanceof SourceTask) {
