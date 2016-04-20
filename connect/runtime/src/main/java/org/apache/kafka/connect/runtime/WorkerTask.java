@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * Note on locking: since the task runs in its own thread, special care must be taken to ensure
  * that state transitions are reported correctly, in particular since some state transitions are
- * asynchronous (e.g. pause/resume). For example, change the state to paused could cause a race
+ * asynchronous (e.g. pause/resume). For example, changing the state to paused could cause a race
  * if the task fails at the same time. To protect from these cases, we synchronize status updates
  * using the WorkerTask's monitor.
  */
