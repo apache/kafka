@@ -759,10 +759,24 @@ public class Protocol {
     public static final Schema[] SASL_HANDSHAKE_REQUEST = new Schema[] {SASL_HANDSHAKE_REQUEST_V0};
     public static final Schema[] SASL_HANDSHAKE_RESPONSE = new Schema[] {SASL_HANDSHAKE_RESPONSE_V0};
 
+    /* ApiVersion api */
+    public static final Schema API_VERSION_REQUEST_V0 = new Schema();
+
+    public static final Schema API_VERSION_V0 = new Schema(new Field("api_key", INT16, "Api key."),
+                                                           new Field("min_version", INT16, "Minimum supported version."),
+                                                           new Field("max_version", INT16, "Maximum supported version."));
+
+    public static final Schema API_VERSION_RESPONSE_V0 = new Schema(new Field("error_code", INT16, "Error code."),
+                                                                    new Field("api_versions", new ArrayOf(API_VERSION_V0), ""));
+
+    public static final Schema[] API_VERSION_REQUEST = new Schema[]{API_VERSION_REQUEST_V0};
+    public static final Schema[] API_VERSION_RESPONSE = new Schema[]{API_VERSION_RESPONSE_V0};
+
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
     public static final Schema[][] RESPONSES = new Schema[ApiKeys.MAX_API_KEY + 1][];
+    public static final short[] MIN_VERSIONS = new short[ApiKeys.MAX_API_KEY + 1];
 
     /* the latest version of each api */
     public static final short[] CURR_VERSION = new short[ApiKeys.MAX_API_KEY + 1];
@@ -786,6 +800,7 @@ public class Protocol {
         REQUESTS[ApiKeys.DESCRIBE_GROUPS.id] = DESCRIBE_GROUPS_REQUEST;
         REQUESTS[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_REQUEST;
         REQUESTS[ApiKeys.SASL_HANDSHAKE.id] = SASL_HANDSHAKE_REQUEST;
+        REQUESTS[ApiKeys.API_VERSION.id] = API_VERSION_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -805,16 +820,33 @@ public class Protocol {
         RESPONSES[ApiKeys.DESCRIBE_GROUPS.id] = DESCRIBE_GROUPS_RESPONSE;
         RESPONSES[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_RESPONSE;
         RESPONSES[ApiKeys.SASL_HANDSHAKE.id] = SASL_HANDSHAKE_RESPONSE;
+        RESPONSES[ApiKeys.API_VERSION.id] = API_VERSION_RESPONSE;
 
-        /* set the maximum version of each api */
-        for (ApiKeys api : ApiKeys.values())
+        /* set the minimum and maximum version of each api */
+        for (ApiKeys api : ApiKeys.values()) {
             CURR_VERSION[api.id] = (short) (REQUESTS[api.id].length - 1);
+            for (int i = 0; i < REQUESTS[api.id].length; ++i)
+                if (REQUESTS[api.id][i] != null) {
+                    MIN_VERSIONS[api.id] = (short) i;
+                    break;
+                }
+        }
 
-        /* sanity check that we have the same number of request and response versions for each api */
-        for (ApiKeys api : ApiKeys.values())
+        /* sanity check:
+             - we have the same number of request and response versions for each api
+             - minimum supported version is same for request and response of each api */
+        for (ApiKeys api : ApiKeys.values()) {
             if (REQUESTS[api.id].length != RESPONSES[api.id].length)
                 throw new IllegalStateException(REQUESTS[api.id].length + " request versions for api " + api.name
                         + " but " + RESPONSES[api.id].length + " response versions.");
+
+            for (int i = 0; i < REQUESTS[api.id].length; ++i)
+                if ((REQUESTS[api.id][i] == null && RESPONSES[api.id][i] != null) ||
+                        (REQUESTS[api.id][i] != null && RESPONSES[api.id][i] == null))
+                    throw new IllegalStateException("Version " + i + " of api " + api.id + " has inconsistency in" +
+                            "request and response. One of request and response of a version can not be marked" +
+                            "as null.");
+        }
     }
 
     private static String indentString(int size) {
