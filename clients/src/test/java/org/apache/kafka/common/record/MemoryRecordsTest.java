@@ -71,6 +71,17 @@ public class MemoryRecordsTest {
         }
     }
 
+    @Test
+    public void testHasRoomForMethod() {
+        MemoryRecords recs1 = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), compression);
+        recs1.append(0, new Record(0L, "a".getBytes(), "1".getBytes()));
+
+        assertTrue(recs1.hasRoomFor("b".getBytes(), "2".getBytes()));
+        recs1.close();
+        assertFalse(recs1.hasRoomFor("b".getBytes(), "2".getBytes()));
+
+    }
+
     @Parameterized.Parameters
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<Object[]>();
