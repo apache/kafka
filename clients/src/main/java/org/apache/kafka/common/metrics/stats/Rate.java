@@ -13,6 +13,7 @@
 package org.apache.kafka.common.metrics.stats;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.metrics.MeasurableStat;
@@ -48,7 +49,7 @@ public class Rate implements MeasurableStat {
     }
 
     public String unitName() {
-        return unit.name().substring(0, unit.name().length() - 2).toLowerCase();
+        return unit.name().substring(0, unit.name().length() - 2).toLowerCase(Locale.ROOT);
     }
 
     @Override

@@ -76,7 +76,7 @@ public class ConnectStandalone {
         Worker worker = new Worker(workerId, time, config, new FileOffsetBackingStore());
 
         Herder herder = new StandaloneHerder(worker);
-        final Connect connect = new Connect(worker, herder, rest);
+        final Connect connect = new Connect(herder, rest);
         connect.start();
 
         try {

@@ -24,7 +24,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.connect.storage.KafkaConfigStorage;
+import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,7 +49,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     public static final String DEFAULT_SUBPROTOCOL = "default";
 
     private final String restUrl;
-    private final KafkaConfigStorage configStorage;
+    private final ConfigBackingStore configStorage;
     private ConnectProtocol.Assignment assignmentSnapshot;
     private final WorkerCoordinatorMetrics sensors;
     private ClusterConfigState configSnapshot;
@@ -70,7 +70,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              Time time,
                              long retryBackoffMs,
                              String restUrl,
-                             KafkaConfigStorage configStorage,
+                             ConfigBackingStore configStorage,
                              WorkerRebalanceListener listener) {
         super(client,
                 groupId,

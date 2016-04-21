@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -15,11 +15,22 @@
  * limitations under the License.
  */
 
-package kafka.utils
+package org.apache.kafka.test;
 
-import java.util.Locale
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 
-object Os {
-  val name = System.getProperty("os.name").toLowerCase(Locale.ROOT)
-  val isWindows = name.startsWith("windows")
+public class MockKeyValueMapper {
+
+    private static class NoOpKeyValueMapper<K, V> implements KeyValueMapper<K, V, KeyValue<K, V>> {
+
+        @Override
+        public KeyValue<K, V> apply(K key, V value) {
+            return new KeyValue<>(key, value);
+        }
+    }
+
+    public static <K, V> KeyValueMapper<K, V, KeyValue<K, V>> NoOpKeyValueMapper() {
+        return new NoOpKeyValueMapper<>();
+    }
 }

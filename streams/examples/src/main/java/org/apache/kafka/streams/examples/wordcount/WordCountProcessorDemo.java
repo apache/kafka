@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 
+import java.util.Locale;
 import java.util.Properties;
 
 /**
@@ -63,7 +64,7 @@ public class WordCountProcessorDemo {
 
                 @Override
                 public void process(String dummy, String line) {
-                    String[] words = line.toLowerCase().split(" ");
+                    String[] words = line.toLowerCase(Locale.getDefault()).split(" ");
 
                     for (String word : words) {
                         Integer oldValue = this.kvStore.get(word);

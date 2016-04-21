@@ -26,6 +26,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.junit.Test;
 import java.util.List;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -60,7 +61,7 @@ public class KStreamForeachTest {
             new ForeachAction<Integer, String>() {
                 @Override
                 public void apply(Integer key, String value) {
-                    actualRecords.add(new KeyValue<>(key * 2, value.toUpperCase()));
+                    actualRecords.add(new KeyValue<>(key * 2, value.toUpperCase(Locale.ROOT)));
                 }
             };
 

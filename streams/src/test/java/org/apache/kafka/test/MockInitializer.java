@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -15,11 +15,19 @@
  * limitations under the License.
  */
 
-package kafka.utils
+package org.apache.kafka.test;
 
-import java.util.Locale
+import org.apache.kafka.streams.kstream.Initializer;
 
-object Os {
-  val name = System.getProperty("os.name").toLowerCase(Locale.ROOT)
-  val isWindows = name.startsWith("windows")
+public class MockInitializer {
+
+    private static class StringInit implements Initializer<String> {
+
+        @Override
+        public String apply() {
+            return "0";
+        }
+    }
+
+    public final static Initializer<String> STRING_INIT = new StringInit();
 }

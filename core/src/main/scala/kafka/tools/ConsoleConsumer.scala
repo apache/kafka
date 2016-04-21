@@ -349,9 +349,9 @@ class DefaultMessageFormatter extends MessageFormatter {
 
   override def init(props: Properties) {
     if (props.containsKey("print.timestamp"))
-      printTimestamp = props.getProperty("print.timestamp").trim.toLowerCase.equals("true")
+      printTimestamp = props.getProperty("print.timestamp").trim.equalsIgnoreCase("true")
     if (props.containsKey("print.key"))
-      printKey = props.getProperty("print.key").trim.toLowerCase.equals("true")
+      printKey = props.getProperty("print.key").trim.equalsIgnoreCase("true")
     if (props.containsKey("key.separator"))
       keySeparator = props.getProperty("key.separator").getBytes
     if (props.containsKey("line.separator"))

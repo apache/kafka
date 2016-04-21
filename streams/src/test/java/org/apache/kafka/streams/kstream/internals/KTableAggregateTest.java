@@ -20,13 +20,13 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockAggregator;
+import org.apache.kafka.test.MockInitializer;
+import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.NoOpKeyValueMapper;
 import org.junit.Test;
 
 import java.io.File;
@@ -38,31 +38,6 @@ public class KTableAggregateTest {
 
     final private Serde<String> stringSerde = new Serdes.StringSerde();
 
-    private class StringAdd implements Aggregator<String, String, String> {
-
-        @Override
-        public String apply(String aggKey, String value, String aggregate) {
-            return aggregate + "+" + value;
-        }
-    }
-
-    private class StringRemove implements Aggregator<String, String, String> {
-
-        @Override
-        public String apply(String aggKey, String value, String aggregate) {
-            return aggregate + "-" + value;
-        }
-    }
-
-    private class StringInit implements Initializer<String> {
-
-        @Override
-        public String apply() {
-            return "0";
-        }
-    }
-
-
     @Test
     public void testAggBasic() throws Exception {
         final File baseDir = Files.createTempDirectory("test").toFile();
@@ -72,12 +47,14 @@ public class KTableAggregateTest {
             String topic1 = "topic1";
 
             KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
-            KTable<String, String> table2 = table1.aggregate(new StringInit(), new StringAdd(), new StringRemove(),
-                    new NoOpKeyValueMapper<String, String>(),
-                    stringSerde,
-                    stringSerde,
-                    stringSerde,
-                    "topic1-Canonized");
+            KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
+                                                           stringSerde,
+                                                           stringSerde
+            ).aggregate(MockInitializer.STRING_INIT,
+                        MockAggregator.STRING_ADDER,
+                        MockAggregator.STRING_REMOVER,
+                        stringSerde,
+                        "topic1-Canonized");
 
             MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
             table2.toStream().process(proc2);

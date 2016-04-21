@@ -29,6 +29,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.tools.VerifiableSinkConnector;
 import org.apache.kafka.connect.tools.VerifiableSourceConnector;
@@ -75,33 +76,54 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public abstract class AbstractHerder implements Herder, TaskStatus.Listener, ConnectorStatus.Listener {
 
+    private final String workerId;
     protected final Worker worker;
     protected final StatusBackingStore statusBackingStore;
-    private final String workerId;
+    protected final ConfigBackingStore configBackingStore;
 
     private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
     private static final List<Class<? extends Connector>> SKIPPED_CONNECTORS = Arrays.<Class<? extends Connector>>asList(VerifiableSourceConnector.class, VerifiableSinkConnector.class);
     private static List<ConnectorPluginInfo> validConnectorPlugins;
 
-    public AbstractHerder(Worker worker, StatusBackingStore statusBackingStore, String workerId) {
+    public AbstractHerder(Worker worker,
+                          String workerId,
+                          StatusBackingStore statusBackingStore,
+                          ConfigBackingStore configBackingStore) {
         this.worker = worker;
-        this.statusBackingStore = statusBackingStore;
         this.workerId = workerId;
+        this.statusBackingStore = statusBackingStore;
+        this.configBackingStore = configBackingStore;
     }
 
     protected abstract int generation();
 
     protected void startServices() {
+        this.worker.start();
         this.statusBackingStore.start();
+        this.configBackingStore.start();
     }
 
     protected void stopServices() {
         this.statusBackingStore.stop();
+        this.configBackingStore.stop();
+        this.worker.stop();
     }
 
     @Override
     public void onStartup(String connector) {
         statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.RUNNING,
+                workerId, generation()));
+    }
+
+    @Override
+    public void onPause(String connector) {
+        statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.PAUSED,
+                workerId, generation()));
+    }
+
+    @Override
+    public void onResume(String connector) {
+        statusBackingStore.put(new ConnectorStatus(connector, TaskStatus.State.RUNNING,
                 workerId, generation()));
     }
 
@@ -133,10 +155,34 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
+    public void onResume(ConnectorTaskId id) {
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.RUNNING, workerId, generation()));
+    }
+
+    @Override
+    public void onPause(ConnectorTaskId id) {
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.PAUSED, workerId, generation()));
+    }
+
+    @Override
     public void onDeletion(String connector) {
         for (TaskStatus status : statusBackingStore.getAll(connector))
             statusBackingStore.put(new TaskStatus(status.id(), TaskStatus.State.DESTROYED, workerId, generation()));
         statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.DESTROYED, workerId, generation()));
+    }
+
+    @Override
+    public void pauseConnector(String connector) {
+        if (!configBackingStore.contains(connector))
+            throw new NotFoundException("Unknown connector " + connector);
+        configBackingStore.putTargetState(connector, TargetState.PAUSED);
+    }
+
+    @Override
+    public void resumeConnector(String connector) {
+        if (!configBackingStore.contains(connector))
+            throw new NotFoundException("Unknown connector " + connector);
+        configBackingStore.putTargetState(connector, TargetState.STARTED);
     }
 
     @Override

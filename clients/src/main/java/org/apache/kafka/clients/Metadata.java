@@ -108,6 +108,14 @@ public final class Metadata {
     }
 
     /**
+     * Check whether an update has been explicitly requested.
+     * @return true if an update was requested, false otherwise
+     */
+    public synchronized boolean updateRequested() {
+        return this.needUpdate;
+    }
+
+    /**
      * Wait for metadata update until the current version is larger than the last version we know of
      */
     public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
@@ -203,10 +211,10 @@ public final class Metadata {
 
     /**
      * Set state to indicate if metadata for all topics in Kafka cluster is required or not.
-     * @param needMetadaForAllTopics boolean indicating need for metadata of all topics in cluster.
+     * @param needMetadataForAllTopics boolean indicating need for metadata of all topics in cluster.
      */
-    public synchronized void needMetadataForAllTopics(boolean needMetadaForAllTopics) {
-        this.needMetadataForAllTopics = needMetadaForAllTopics;
+    public synchronized void needMetadataForAllTopics(boolean needMetadataForAllTopics) {
+        this.needMetadataForAllTopics = needMetadataForAllTopics;
     }
 
     /**
