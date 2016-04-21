@@ -29,6 +29,7 @@ import org.apache.kafka.common.config.ConfigException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -59,7 +60,7 @@ public class MockConsumerInterceptor implements ConsumerInterceptor<String, Stri
                                              record.timestamp(), record.timestampType(),
                                              record.checksum(), record.serializedKeySize(),
                                              record.serializedValueSize(),
-                                             record.key(), record.value().toUpperCase()));
+                                             record.key(), record.value().toUpperCase(Locale.ROOT)));
             }
             recordMap.put(tp, lst);
         }

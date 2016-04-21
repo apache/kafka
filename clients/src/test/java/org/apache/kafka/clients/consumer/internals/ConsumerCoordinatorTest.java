@@ -63,6 +63,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -574,6 +575,61 @@ public class ConsumerCoordinatorTest {
         // we should detect the change and ask for reassignment
         assertTrue(subscriptions.partitionAssignmentNeeded());
     }
+
+
+    @Test
+    public void testUpdateMetadataDuringRebalance() {
+        final String topic1 = "topic1";
+        final String topic2 = "topic2";
+        TopicPartition tp1 = new TopicPartition(topic1, 0);
+        TopicPartition tp2 = new TopicPartition(topic2, 0);
+        final String consumerId = "leader";
+
+        List<String> topics = Arrays.asList(topic1, topic2);
+
+        subscriptions.subscribe(topics, rebalanceListener);
+        metadata.setTopics(topics);
+        subscriptions.needReassignment();
+
+        // we only have metadata for one topic initially
+        metadata.update(TestUtils.singletonCluster(topic1, 1), time.milliseconds());
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        // prepare initial rebalance
+        Map<String, List<String>> memberSubscriptions = Collections.singletonMap(consumerId, topics);
+        partitionAssignor.prepare(Collections.singletonMap(consumerId, Arrays.asList(tp1)));
+
+        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE.code()));
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                SyncGroupRequest sync = new SyncGroupRequest(request.request().body());
+                if (sync.memberId().equals(consumerId) &&
+                        sync.generationId() == 1 &&
+                        sync.groupAssignment().containsKey(consumerId)) {
+                    // trigger the metadata update including both topics after the sync group request has been sent
+                    Map<String, Integer> topicPartitionCounts = new HashMap<>();
+                    topicPartitionCounts.put(topic1, 1);
+                    topicPartitionCounts.put(topic2, 1);
+                    metadata.update(TestUtils.singletonCluster(topicPartitionCounts), time.milliseconds());
+                    return true;
+                }
+                return false;
+            }
+        }, syncGroupResponse(Arrays.asList(tp1), Errors.NONE.code()));
+
+        // the metadata update should trigger a second rebalance
+        client.prepareResponse(joinGroupLeaderResponse(2, consumerId, memberSubscriptions, Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp1, tp2), Errors.NONE.code()));
+
+        coordinator.ensurePartitionAssignment();
+
+        assertFalse(subscriptions.partitionAssignmentNeeded());
+        assertEquals(new HashSet<>(Arrays.asList(tp1, tp2)), subscriptions.assignedPartitions());
+    }
+
 
     @Test
     public void testExcludeInternalTopicsConfigOption() { 

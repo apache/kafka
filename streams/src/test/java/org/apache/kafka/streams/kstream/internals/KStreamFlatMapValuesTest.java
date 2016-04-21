@@ -26,6 +26,7 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Locale;
 
 import static org.junit.Assert.assertEquals;
 
@@ -42,7 +43,7 @@ public class KStreamFlatMapValuesTest {
                 @Override
                 public Iterable<String> apply(String value) {
                     ArrayList<String> result = new ArrayList<String>();
-                    result.add(value.toLowerCase());
+                    result.add(value.toLowerCase(Locale.ROOT));
                     result.add(value);
                     return result;
                 }

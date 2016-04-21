@@ -21,6 +21,7 @@ public abstract class AbstractStatus<T> {
     public enum State {
         UNASSIGNED,
         RUNNING,
+        PAUSED,
         FAILED,
         DESTROYED,
     }

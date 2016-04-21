@@ -47,14 +47,14 @@ public class KTableAggregateTest {
             String topic1 = "topic1";
 
             KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
-            KTable<String, String> table2 = table1.aggregate(MockInitializer.STRING_INIT,
-                    MockAggregator.STRING_ADDER,
-                    MockAggregator.STRING_REMOVER,
-                    MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
-                    stringSerde,
-                    stringSerde,
-                    stringSerde,
-                    "topic1-Canonized");
+            KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
+                                                           stringSerde,
+                                                           stringSerde
+            ).aggregate(MockInitializer.STRING_INIT,
+                        MockAggregator.STRING_ADDER,
+                        MockAggregator.STRING_REMOVER,
+                        stringSerde,
+                        "topic1-Canonized");
 
             MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
             table2.toStream().process(proc2);
