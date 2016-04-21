@@ -52,6 +52,13 @@ class ReplicaVerificationTool(BackgroundThreadService):
                 self.logger.debug("Setting max lag for {} as {}".format(topic_partition, lag))
                 self.partition_lag[topic_partition] = lag
 
+    """
+    Get latest lag for given topic-partition
+
+    Args:
+        topic:          a topic
+        partition:      a partition of the topic
+    """
     def get_lag_for_partition(self, topic, partition):
         topic_partition = topic + ',' + str(partition)
         lag = self.partition_lag[topic_partition]
@@ -66,6 +73,9 @@ class ReplicaVerificationTool(BackgroundThreadService):
         cmd += " 2>> /mnt/replica_verification_tool.log | tee -a /mnt/replica_verification_tool.log &"
         return cmd
 
+    def stop_node(self, node):
+        node.account.kill_process("java", clean_shutdown=True, allow_fail=True)
+
     def clean_node(self, node):
-        node.account.kill_process("java", allow_fail=True)
+        node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf /mnt/replica_verification_tool.log", allow_fail=False)
