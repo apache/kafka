@@ -138,7 +138,7 @@ public class ConsumerNetworkClient implements Closeable {
      * until it has completed).
      */
     public void ensureFreshMetadata() {
-        if (this.metadata.timeToNextUpdate(time.milliseconds()) == 0)
+        if (this.metadata.updateRequested() || this.metadata.timeToNextUpdate(time.milliseconds()) == 0)
             awaitMetadataUpdate();
     }
 
