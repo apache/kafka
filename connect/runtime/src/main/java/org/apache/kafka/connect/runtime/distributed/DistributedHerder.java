@@ -866,8 +866,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     configBackingStore.putTaskConfigs(connName, taskConfigListAsMap(connName, taskProps));
                     cb.onCompletion(null, null);
                 } else {
-                    // We cannot forward the request on the same thread because this reconfiguration can happen in as a
-                    // result of . If we blocked
+                    // We cannot forward the request on the same thread because this reconfiguration can happen as a result of connector
+                    // addition or removal. If we blocked waiting for the response from leader, we may be kicked out of the worker group.
                     forwardRequestExecutor.submit(new Runnable() {
                         @Override
                         public void run() {
