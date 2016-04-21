@@ -17,13 +17,27 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Reducer;
 
-public class NoOpKeyValueMapper<K, V> implements KeyValueMapper<K, V, KeyValue<K, V>> {
+public class MockReducer {
 
-    @Override
-    public KeyValue<K, V> apply(K key, V value) {
-        return new KeyValue<>(key, value);
+    private static class StringAdd implements Reducer<String> {
+
+        @Override
+        public String apply(String value1, String value2) {
+            return value1 + "+" + value2;
+        }
     }
+
+    private static class StringRemove implements Reducer<String> {
+
+        @Override
+        public String apply(String value1, String value2) {
+            return value1 + "-" + value2;
+        }
+    }
+
+    public final static Reducer<String> STRING_ADDER = new StringAdd();
+
+    public final static Reducer<String> STRING_REMOVER = new StringRemove();
 }
