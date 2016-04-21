@@ -26,7 +26,6 @@ public class BytesDeserializer implements Deserializer<Bytes> {
         if (data == null)
             return null;
 
-        // assuming offset as 0, and length as data.length
         return new Bytes(data);
     }
 

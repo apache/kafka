@@ -32,7 +32,10 @@ import java.util.Set;
 /**
  * An in-memory LRU cache store based on HashSet and HashMap.
  *
- * Note that array typed keys may result in incorrect behavior.
+ *  * Note that the use of array-typed keys is discouraged because they result in incorrect ordering behavior.
+ * If you intent to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
+ * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
+
  *
  * @param <K> The key type
  * @param <V> The value type

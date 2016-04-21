@@ -30,7 +30,9 @@ import java.util.Set;
 /**
  * Store change log collector that batches updates before sending to Kafka.
  *
- * Note that array typed key may result in incorrect behavior as it has undefined hashing function.
+ * Note that the use of array-typed keys is discouraged because they result in incorrect caching behavior.
+ * If you intent to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
+ * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
  *
  * @param <K>
  * @param <V>

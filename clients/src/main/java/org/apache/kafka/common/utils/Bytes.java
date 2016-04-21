@@ -19,6 +19,7 @@ package org.apache.kafka.common.utils;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Comparator;
 
 /**
@@ -26,15 +27,13 @@ import java.util.Comparator;
  */
 public class Bytes implements Comparable<Bytes> {
 
+    /** When we encode strings, we always specify UTF8 encoding */
+    private static final Charset UTF8_CHARSET = StandardCharsets.UTF_8;
+
     private final byte[] bytes;
 
-    private final int offset;
-
-    private final int length;
-
+    // cache the hash code for the string, default to 0
     private int hashCode;
-
-    private boolean hashCodeComputed;
 
     public static Bytes wrap(byte[] bytes) {
         return new Bytes(bytes);
@@ -46,22 +45,10 @@ public class Bytes implements Comparable<Bytes> {
      * @param bytes This array becomes the backing storage for the object.
      */
     public Bytes(byte[] bytes) {
-        this(bytes, 0, bytes.length);
-    }
-
-    /**
-     * Create a Bytes using the byte array.
-     *
-     * @param bytes the byte array to set to
-     * @param offset the offset in {@code bytes} to start at
-     * @param length the number of bytes in {@code bytes}
-     */
-    public Bytes(final byte[] bytes, final int offset, final int length) {
         this.bytes = bytes;
-        this.offset = offset;
-        this.length = length;
 
-        hashCodeComputed = false;
+        // initialize hash code to 0
+        hashCode = 0;
     }
 
     /**
@@ -72,11 +59,16 @@ public class Bytes implements Comparable<Bytes> {
         return this.bytes;
     }
 
+    /**
+     * The hashcode is cached except for the case where it is computed as 0, in which
+     * case we compute the hashcode on every call.
+     *
+     * @return the hashcode
+     */
     @Override
     public int hashCode() {
-        if (!hashCodeComputed) {
-            hashCode = Bytes.hashCode(bytes, offset, length);
-            hashCodeComputed = true;
+        if (hashCode == 0) {
+            hashCode = Arrays.hashCode(bytes);
         }
 
         return hashCode;
@@ -95,14 +87,12 @@ public class Bytes implements Comparable<Bytes> {
 
     @Override
     public int compareTo(Bytes that) {
-        return ((ByteArrayComparator) BYTES_LEXICO_COMPARATOR).compare(
-                this.bytes, this.offset, this.length,
-                that.bytes, that.offset, that.length);
+        return BYTES_LEXICO_COMPARATOR.compare(this.bytes, that.bytes);
     }
 
     @Override
     public String toString() {
-        return Bytes.toString(bytes, offset, length);
+        return Bytes.toString(bytes, 0, bytes.length);
     }
 
     /**
@@ -122,28 +112,6 @@ public class Bytes implements Comparable<Bytes> {
             return "";
         }
         return new String(b, off, len, UTF8_CHARSET);
-    }
-
-    /** When we encode strings, we always specify UTF8 encoding */
-    private static final Charset UTF8_CHARSET = StandardCharsets.UTF_8;
-
-    /**
-     * Compute the hashcode of a given byte array following Arrays.hashCode(bytes)
-     * while considers {@code offset} and {@code length}.
-     *
-     * @param bytes array to hash
-     * @param offset offset to start from
-     * @param length length to hash
-     * */
-    private static int hashCode(byte[] bytes, int offset, int length) {
-        if (bytes == null)
-            return 0;
-
-        int hash = 1;
-        for (int i = offset; i < offset + length; i++)
-            hash = (31 * hash) + bytes[i];
-
-        return hash;
     }
 
     /**
@@ -187,6 +155,4 @@ public class Bytes implements Comparable<Bytes> {
             return length1 - length2;
         }
     }
-
-
 }
