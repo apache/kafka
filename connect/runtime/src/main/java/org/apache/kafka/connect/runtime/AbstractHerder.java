@@ -84,6 +84,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
     private static final List<Class<? extends Connector>> SKIPPED_CONNECTORS = Arrays.<Class<? extends Connector>>asList(VerifiableSourceConnector.class, VerifiableSinkConnector.class);
     private static List<ConnectorPluginInfo> validConnectorPlugins;
+    private static final Object lock = new Object();
+    private Thread classPathTraverser;
+
 
     public AbstractHerder(Worker worker,
                           String workerId,
@@ -101,12 +104,18 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.worker.start();
         this.statusBackingStore.start();
         this.configBackingStore.start();
+        traverseClassPath();
     }
 
     protected void stopServices() {
         this.statusBackingStore.stop();
         this.configBackingStore.stop();
         this.worker.stop();
+        try {
+            this.classPathTraverser.join();
+        } catch (InterruptedException e) {
+            // ignore as it can only happen during shutdown
+        }
     }
 
     @Override
@@ -248,22 +257,24 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     public static List<ConnectorPluginInfo> connectorPlugins() {
-        if (validConnectorPlugins != null) {
-            return validConnectorPlugins;
-        }
-
-        Reflections reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath()));
-        Set<Class<? extends Connector>> connectorClasses = reflections.getSubTypesOf(Connector.class);
-        connectorClasses.removeAll(SKIPPED_CONNECTORS);
-        List<ConnectorPluginInfo> connectorPlugins = new LinkedList<>();
-        for (Class<? extends Connector> connectorClass: connectorClasses) {
-            int mod = connectorClass.getModifiers();
-            if (!Modifier.isAbstract(mod) && !Modifier.isInterface(mod)) {
-                connectorPlugins.add(new ConnectorPluginInfo(connectorClass.getCanonicalName()));
+        synchronized (lock) {
+            if (validConnectorPlugins != null) {
+                return validConnectorPlugins;
             }
+
+            Reflections reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath()));
+            Set<Class<? extends Connector>> connectorClasses = reflections.getSubTypesOf(Connector.class);
+            connectorClasses.removeAll(SKIPPED_CONNECTORS);
+            List<ConnectorPluginInfo> connectorPlugins = new LinkedList<>();
+            for (Class<? extends Connector> connectorClass : connectorClasses) {
+                int mod = connectorClass.getModifiers();
+                if (!Modifier.isAbstract(mod) && !Modifier.isInterface(mod)) {
+                    connectorPlugins.add(new ConnectorPluginInfo(connectorClass.getCanonicalName()));
+                }
+            }
+            validConnectorPlugins = connectorPlugins;
+            return connectorPlugins;
         }
-        validConnectorPlugins = connectorPlugins;
-        return connectorPlugins;
     }
 
     // public for testing
@@ -353,5 +364,15 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         } catch (UnsupportedEncodingException e) {
             return null;
         }
+    }
+
+    private void traverseClassPath() {
+        classPathTraverser = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                connectorPlugins();
+            }
+        }, "CLASSPATH traversal thread.");
+        classPathTraverser.start();
     }
 }
