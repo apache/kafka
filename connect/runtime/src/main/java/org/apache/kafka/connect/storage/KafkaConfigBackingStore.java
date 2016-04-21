@@ -362,15 +362,12 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         synchronized (lock) {
             // Validate tasks in this assignment. Any task configuration updates should include updates for *all* tasks
             // in the connector -- we should have all task IDs 0 - N-1 within a connector if any task is included here
-            Map<String, Set<Integer>> updatedConfigIdsByConnector = taskIdsByConnector(configs);
-            if (updatedConfigIdsByConnector.containsKey(connector)) {
-                Set<Integer> taskConfigSet = updatedConfigIdsByConnector.get(connector);
-                if (!completeTaskIdSet(taskConfigSet, taskConfigSet.size())) {
-                    log.error("Submitted task configuration contain invalid range of task IDs, ignoring this submission");
-                    throw new ConnectException("Error writing task configurations: found some connectors with invalid connectors");
-                }
-                newTaskCount += taskConfigSet.size();
+            Set<Integer>  taskConfigSet = taskIds(connector, configs);
+            if (!completeTaskIdSet(taskConfigSet, taskConfigSet.size())) {
+                log.error("Submitted task configuration contain invalid range of task IDs, ignoring this submission");
+                throw new ConnectException("Error writing task configurations: found some connectors with invalid connectors");
             }
+            newTaskCount += taskConfigSet.size();
         }
 
         // Start sending all the individual updates
@@ -386,8 +383,9 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         // the end of the log
         try {
             // Read to end to ensure all the task configs have been written
-            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-
+            if (newTaskCount > 0) {
+                configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            }
             // Write the commit message
             Struct connectConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
             connectConfig.put("tasks", newTaskCount);
@@ -426,6 +424,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, new SystemTime());
     }
 
+    @SuppressWarnings("unchecked")
     private class ConsumeCallback implements Callback<ConsumerRecord<String, byte[]>> {
         @Override
         public void onCompletion(Throwable error, ConsumerRecord<String, byte[]> record) {
@@ -569,8 +568,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
                     // Validate the configs we're supposed to update to ensure we're getting a complete configuration
                     // update of all tasks that are expected based on the number of tasks in the commit message.
-                    Map<String, Set<Integer>> updatedConfigIdsByConnector = taskIdsByConnector(deferred);
-                    Set<Integer> taskIdSet = updatedConfigIdsByConnector.get(connectorName);
+                    Set<Integer> taskIdSet = taskIds(connectorName, deferred);
                     if (taskIdSet == null) {
                         //TODO: Figure out why this happens (KAFKA-3321)
                         log.error("Received a commit message for connector " + connectorName + " but there is no matching configuration for tasks in this connector. This should never happen.");
@@ -622,19 +620,20 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     }
 
     /**
-     * Given task configurations, get a set of integer task IDs organized by connector name.
+     * Given task configurations, get a set of integer task IDs for the connector.
      */
-    private Map<String, Set<Integer>> taskIdsByConnector(Map<ConnectorTaskId, Map<String, String>> configs) {
-        Map<String, Set<Integer>> connectorTaskIds = new HashMap<>();
-        if (configs == null)
-            return connectorTaskIds;
+    private Set<Integer> taskIds(String connector, Map<ConnectorTaskId, Map<String, String>> configs) {
+        Set<Integer> tasks = new TreeSet<>();
+        if (configs == null) {
+            return tasks;
+        }
         for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : configs.entrySet()) {
             ConnectorTaskId taskId = taskConfigEntry.getKey();
-            if (!connectorTaskIds.containsKey(taskId.connector()))
-                connectorTaskIds.put(taskId.connector(), new TreeSet<Integer>());
-            connectorTaskIds.get(taskId.connector()).add(taskId.task());
+            if (taskId.connector().equals(connector)) {
+                tasks.add(taskId.task());
+            }
         }
-        return connectorTaskIds;
+        return tasks;
     }
 
     private boolean completeTaskIdSet(Set<Integer> idSet, int expectedSize) {
