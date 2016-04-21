@@ -61,6 +61,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -289,7 +290,7 @@ public class Fetcher<K, V> {
         else
             throw new NoOffsetForPartitionException(partition);
 
-        log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase());
+        log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase(Locale.ROOT));
         long offset = listOffset(partition, timestamp);
 
         // we might lose the assignment while fetching the offset, so check it is still active

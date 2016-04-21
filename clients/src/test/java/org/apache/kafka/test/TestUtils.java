@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import org.apache.kafka.common.Cluster;
@@ -45,18 +46,30 @@ public class TestUtils {
     public static final Random SEEDED_RANDOM = new Random(192348092834L);
     public static final Random RANDOM = new Random();
 
+    public static Cluster singletonCluster(Map<String, Integer> topicPartitionCounts) {
+        return clusterWith(1, topicPartitionCounts);
+    }
+
     public static Cluster singletonCluster(String topic, int partitions) {
         return clusterWith(1, topic, partitions);
     }
 
-    public static Cluster clusterWith(int nodes, String topic, int partitions) {
+    public static Cluster clusterWith(int nodes, Map<String, Integer> topicPartitionCounts) {
         Node[] ns = new Node[nodes];
         for (int i = 0; i < nodes; i++)
             ns[i] = new Node(i, "localhost", 1969);
-        List<PartitionInfo> parts = new ArrayList<PartitionInfo>();
-        for (int i = 0; i < partitions; i++)
-            parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
+        List<PartitionInfo> parts = new ArrayList<>();
+        for (Map.Entry<String, Integer> topicPartition : topicPartitionCounts.entrySet()) {
+            String topic = topicPartition.getKey();
+            int partitions = topicPartition.getValue();
+            for (int i = 0; i < partitions; i++)
+                parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
+        }
         return new Cluster(asList(ns), parts, Collections.<String>emptySet());
+    }
+
+    public static Cluster clusterWith(int nodes, String topic, int partitions) {
+        return clusterWith(nodes, Collections.singletonMap(topic, partitions));
     }
 
     /**

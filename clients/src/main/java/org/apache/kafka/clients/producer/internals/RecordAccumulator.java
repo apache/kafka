@@ -467,7 +467,7 @@ public final class RecordAccumulator {
             abortBatches();
         } while (appendsInProgress());
         // After this point, no thread will append any messages because they will see the close
-        // flag set. We need to do the last abort after no thread was appending in case the there was a new
+        // flag set. We need to do the last abort after no thread was appending in case there was a new
         // batch appended by the last appending thread.
         abortBatches();
         this.batches.clear();

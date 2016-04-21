@@ -77,10 +77,6 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     // check async commit callbacks
     val commitCallback = new CountConsumerCommitCallback()
     this.consumers(0).commitAsync(commitCallback)
-
-    // shouldn't make progress until poll is invoked
-    Thread.sleep(10)
-    assertEquals(0, commitCallback.successCount)
     awaitCommitCallback(this.consumers(0), commitCallback)
   }
 
@@ -331,11 +327,10 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
   protected def awaitCommitCallback[K, V](consumer: Consumer[K, V],
                                           commitCallback: CountConsumerCommitCallback,
                                           count: Int = 1): Unit = {
-    val startCount = commitCallback.successCount
     val started = System.currentTimeMillis()
-    while (commitCallback.successCount < startCount + count && System.currentTimeMillis() - started < 10000)
+    while (commitCallback.successCount < count && System.currentTimeMillis() - started < 10000)
       consumer.poll(50)
-    assertEquals(startCount + count, commitCallback.successCount)
+    assertEquals(count, commitCallback.successCount)
   }
 
   protected class CountConsumerCommitCallback extends OffsetCommitCallback {

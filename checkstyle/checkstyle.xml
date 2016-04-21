@@ -84,5 +84,12 @@
     <module name="MethodParamPad"/>
     <module name="ParenPad"/>
     <module name="TypecastParenPad"/>
+
+    <!-- locale-sensitive methods should specify locale -->
+    <module name="Regexp">
+      <property name="format" value="\.to(Lower|Upper)Case\(\)"/>
+      <property name="illegalPattern" value="true"/>
+      <property name="ignoreComments" value="true"/>
+    </module>
   </module>
 </module>

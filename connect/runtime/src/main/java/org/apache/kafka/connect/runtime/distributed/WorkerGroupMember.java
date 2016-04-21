@@ -32,7 +32,8 @@ import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.connect.storage.KafkaConfigStorage;
+import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,7 +69,7 @@ public class WorkerGroupMember {
 
     public WorkerGroupMember(DistributedConfig config,
                              String restUrl,
-                             KafkaConfigStorage configStorage,
+                             ConfigBackingStore configStorage,
                              WorkerRebalanceListener listener,
                              Time time) {
         try {
@@ -173,6 +174,14 @@ public class WorkerGroupMember {
 
     public void maybeLeaveGroup() {
         coordinator.maybeLeaveGroup();
+    }
+
+    public String ownerUrl(String connector) {
+        return coordinator.ownerUrl(connector);
+    }
+
+    public String ownerUrl(ConnectorTaskId task) {
+        return coordinator.ownerUrl(task);
     }
 
     private void stop(boolean swallowException) {

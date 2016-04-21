@@ -46,6 +46,15 @@ public interface KStream<K, V> {
      */
     KStream<K, V> filterNot(Predicate<K, V> predicate);
 
+
+    /**
+     * Create a new key from the current key and value.
+     *
+     * @param mapper  the instance of {@link KeyValueMapper}
+     * @param <K1>   the new key type on the stream
+     */
+    <K1> KStream<K1, V> selectKey(KeyValueMapper<K, V, K1> mapper);
+
     /**
      * Create a new instance of {@link KStream} by transforming each element in this stream into a different element in the new stream.
      *

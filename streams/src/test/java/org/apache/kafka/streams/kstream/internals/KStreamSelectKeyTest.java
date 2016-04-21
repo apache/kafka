@@ -15,60 +15,69 @@
  * limitations under the License.
  */
 
+
 package org.apache.kafka.streams.kstream.internals;
 
+
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.Locale;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
-public class KStreamFlatMapValuesTest {
+public class KStreamSelectKeyTest {
 
-    private String topicName = "topic";
+    private String topicName = "topic_key_select";
+
+    final private Serde<Integer> integerSerde = Serdes.Integer();
+    final private Serde<String> stringSerde = Serdes.String();
 
     @Test
-    public void testFlatMapValues() {
+    public void testSelectKey() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        ValueMapper<String, Iterable<String>> mapper =
-            new ValueMapper<String, Iterable<String>>() {
-                @Override
-                public Iterable<String> apply(String value) {
-                    ArrayList<String> result = new ArrayList<String>();
-                    result.add(value.toLowerCase(Locale.ROOT));
-                    result.add(value);
-                    return result;
-                }
-            };
+        final Map<Integer, String> keyMap = new HashMap<>();
+        keyMap.put(1, "ONE");
+        keyMap.put(2, "TWO");
+        keyMap.put(3, "THREE");
 
-        final int[] expectedKeys = {0, 1, 2, 3};
 
-        KStream<Integer, String> stream;
-        MockProcessorSupplier<Integer, String> processor;
+        KeyValueMapper<String, Integer, String> selector = new KeyValueMapper<String, Integer, String>() {
+            @Override
+            public String apply(String key, Integer value) {
+                return keyMap.get(value);
+            }
+        };
 
-        processor = new MockProcessorSupplier<>();
-        stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
-        stream.flatMapValues(mapper).process(processor);
+        final String[] expected = new String[]{"ONE:1", "TWO:2", "THREE:3"};
+        final int[] expectedValues = new int[]{1, 2, 3};
+
+        KStream<String, Integer>  stream = builder.stream(stringSerde, integerSerde, topicName);
+
+        MockProcessorSupplier<String, Integer> processor = new MockProcessorSupplier<>();
+
+        stream.selectKey(selector).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
+
+        for (int expectedValue : expectedValues) {
+            driver.process(topicName, null, expectedValue);
         }
 
-        assertEquals(8, processor.processed.size());
-
-        String[] expected = {"0:v0", "0:V0", "1:v1", "1:V1", "2:v2", "2:V2", "3:v3", "3:V3"};
+        assertEquals(3, processor.processed.size());
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));
         }
+
     }
+
 }

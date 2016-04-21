@@ -137,7 +137,8 @@ public class AbstractConfig {
         Map<String, String> copy = new RecordingMap<>();
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (!(entry.getValue() instanceof String))
-                throw new ClassCastException("Non-string value found in original settings");
+                throw new ClassCastException("Non-string value found in original settings for key " + entry.getKey() +
+                        ": " + (entry.getValue() == null ? null : entry.getValue().getClass().getName()));
             copy.put(entry.getKey(), (String) entry.getValue());
         }
         return copy;

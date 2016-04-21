@@ -33,6 +33,8 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
@@ -50,7 +52,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -146,8 +147,14 @@ import java.util.concurrent.TimeoutException;
  * rebalance must be deferred.
  * </p>
  */
-public class KafkaConfigStorage {
-    private static final Logger log = LoggerFactory.getLogger(KafkaConfigStorage.class);
+public class KafkaConfigBackingStore implements ConfigBackingStore {
+    private static final Logger log = LoggerFactory.getLogger(KafkaConfigBackingStore.class);
+
+    public static final String TARGET_STATE_PREFIX = "target-state-";
+
+    public static String TARGET_STATE_KEY(String connectorName) {
+        return TARGET_STATE_PREFIX + connectorName;
+    }
 
     public static final String CONNECTOR_PREFIX = "connector-";
 
@@ -178,14 +185,17 @@ public class KafkaConfigStorage {
     public static final Schema CONNECTOR_TASKS_COMMIT_V0 = SchemaBuilder.struct()
             .field("tasks", Schema.INT32_SCHEMA)
             .build();
+    public static final Schema TARGET_STATE_V0 = SchemaBuilder.struct()
+            .field("state", Schema.STRING_SCHEMA)
+            .build();
 
     private static final long READ_TO_END_TIMEOUT_MS = 30000;
 
     private final Object lock;
     private boolean starting;
     private final Converter converter;
-    private final Callback<String> connectorConfigCallback;
-    private final Callback<List<ConnectorTaskId>> tasksConfigCallback;
+    private UpdateListener updateListener;
+
     private String topic;
     // Data is passed to the log already serialized. We use a converter to handle translating to/from generic Connect
     // format to serialized form
@@ -200,23 +210,27 @@ public class KafkaConfigStorage {
     private Set<String> inconsistent = new HashSet<>();
     // The most recently read offset. This does not take into account deferred task updates/commits, so we may have
     // outstanding data to be applied.
-    private long offset;
+    private volatile long offset;
 
     // Connector -> Map[ConnectorTaskId -> Configs]
-    private Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();
+    private final Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();
 
+    private final Map<String, TargetState> connectorTargetStates = new HashMap<>();
 
-    public KafkaConfigStorage(Converter converter, Callback<String> connectorConfigCallback, Callback<List<ConnectorTaskId>> tasksConfigCallback) {
+    public KafkaConfigBackingStore(Converter converter) {
         this.lock = new Object();
         this.starting = false;
         this.converter = converter;
-        this.connectorConfigCallback = connectorConfigCallback;
-        this.tasksConfigCallback = tasksConfigCallback;
-
-        offset = -1;
+        this.offset = -1;
     }
 
-    public void configure(DistributedConfig config) {
+    @Override
+    public void setUpdateListener(UpdateListener listener) {
+        this.updateListener = listener;
+    }
+
+    @Override
+    public void configure(WorkerConfig config) {
         topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
         if (topic.equals(""))
             throw new ConfigException("Must specify topic for connector configuration.");
@@ -232,28 +246,31 @@ public class KafkaConfigStorage {
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
-        configLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback);
+        configLog = createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback());
     }
 
+    @Override
     public void start() {
-        log.info("Starting KafkaConfigStorage");
+        log.info("Starting KafkaConfigBackingStore");
         // During startup, callbacks are *not* invoked. You can grab a snapshot after starting -- just take care that
         // updates can continue to occur in the background
         starting = true;
         configLog.start();
         starting = false;
-        log.info("Started KafkaConfigStorage");
+        log.info("Started KafkaConfigBackingStore");
     }
 
+    @Override
     public void stop() {
-        log.info("Closing KafkaConfigStorage");
+        log.info("Closing KafkaConfigBackingStore");
         configLog.stop();
-        log.info("Closed KafkaConfigStorage");
+        log.info("Closed KafkaConfigBackingStore");
     }
 
     /**
      * Get a snapshot of the current state of the cluster.
      */
+    @Override
     public ClusterConfigState snapshot() {
         synchronized (lock) {
             // Doing a shallow copy of the data is safe here because the complex nested data that is copied should all be
@@ -262,9 +279,17 @@ public class KafkaConfigStorage {
                     offset,
                     new HashMap<>(connectorTaskCounts),
                     new HashMap<>(connectorConfigs),
+                    new HashMap<>(connectorTargetStates),
                     new HashMap<>(taskConfigs),
                     new HashSet<>(inconsistent)
             );
+        }
+    }
+
+    @Override
+    public boolean contains(String connector) {
+        synchronized (lock) {
+            return connectorConfigs.containsKey(connector);
         }
     }
 
@@ -275,18 +300,33 @@ public class KafkaConfigStorage {
      * @param connector  name of the connector to write data for
      * @param properties the configuration to write
      */
+    @Override
     public void putConnectorConfig(String connector, Map<String, String> properties) {
-        byte[] serializedConfig;
-        if (properties == null) {
-            serializedConfig = null;
-        } else {
-            Struct connectConfig = new Struct(CONNECTOR_CONFIGURATION_V0);
-            connectConfig.put("properties", properties);
-            serializedConfig = converter.fromConnectData(topic, CONNECTOR_CONFIGURATION_V0, connectConfig);
-        }
+        log.debug("Writing connector configuration {} for connector {} configuration", properties, connector);
+        Struct connectConfig = new Struct(CONNECTOR_CONFIGURATION_V0);
+        connectConfig.put("properties", properties);
+        byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_CONFIGURATION_V0, connectConfig);
+        updateConnectorConfig(connector, serializedConfig);
+    }
 
+    /**
+     * Remove configuration for a given connector.
+     * @param connector name of the connector to remove
+     */
+    @Override
+    public void removeConnectorConfig(String connector) {
+        log.debug("Removing connector configuration for connector {}", connector);
+        updateConnectorConfig(connector, null);
+        configLog.send(TARGET_STATE_KEY(connector), null);
+    }
+
+    @Override
+    public void removeTaskConfigs(String connector) {
+        throw new UnsupportedOperationException("Removal of tasks is not currently supported");
+    }
+
+    private void updateConnectorConfig(String connector, byte[] serializedConfig) {
         try {
-            log.debug("Writing connector configuration for connector " + connector + " configuration: " + properties);
             configLog.send(CONNECTOR_KEY(connector), serializedConfig);
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
@@ -303,7 +343,8 @@ public class KafkaConfigStorage {
      * @throws ConnectException if the task configurations do not resolve inconsistencies found in the existing root
      *                          and task configurations.
      */
-    public void putTaskConfigs(Map<ConnectorTaskId, Map<String, String>> configs) {
+    @Override
+    public void putTaskConfigs(String connector, Map<ConnectorTaskId, Map<String, String>> configs) {
         // Make sure we're at the end of the log. We should be the only writer, but we want to make sure we don't have
         // any outstanding lagging data to consume.
         try {
@@ -362,12 +403,22 @@ public class KafkaConfigStorage {
         }
     }
 
-    public Future<Void> readToEnd() {
-        return configLog.readToEnd();
+    @Override
+    public void refresh(long timeout, TimeUnit unit) throws TimeoutException {
+        try {
+            configLog.readToEnd().get(timeout, unit);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new ConnectException("Error trying to read to end of config log", e);
+        }
     }
 
-    public void readToEnd(Callback<Void> cb) {
-        configLog.readToEnd(cb);
+    @Override
+    public void putTargetState(String connector, TargetState state) {
+        Struct connectTargetState = new Struct(TARGET_STATE_V0);
+        connectTargetState.put("state", state.name());
+        byte[] serializedTargetState = converter.fromConnectData(topic, TARGET_STATE_V0, connectTargetState);
+        log.debug("Writing target state {} for connector {}", state, connector);
+        configLog.send(TARGET_STATE_KEY(connector), serializedTargetState);
     }
 
     private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
@@ -375,12 +426,11 @@ public class KafkaConfigStorage {
         return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, new SystemTime());
     }
 
-    @SuppressWarnings("unchecked")
-    private final Callback<ConsumerRecord<String, byte[]>> consumedCallback = new Callback<ConsumerRecord<String, byte[]>>() {
+    private class ConsumeCallback implements Callback<ConsumerRecord<String, byte[]>> {
         @Override
         public void onCompletion(Throwable error, ConsumerRecord<String, byte[]> record) {
             if (error != null) {
-                log.error("Unexpected in consumer callback for KafkaConfigStorage: ", error);
+                log.error("Unexpected in consumer callback for KafkaConfigBackingStore: ", error);
                 return;
             }
 
@@ -395,13 +445,43 @@ public class KafkaConfigStorage {
             // *next record*, not the last one consumed.
             offset = record.offset() + 1;
 
-            if (record.key().startsWith(CONNECTOR_PREFIX)) {
+            if (record.key().startsWith(TARGET_STATE_PREFIX)) {
+                String connectorName = record.key().substring(TARGET_STATE_PREFIX.length());
+                synchronized (lock) {
+                    if (value.value() != null) {
+                        if (!(value.value() instanceof Map)) {
+                            log.error("Found target state ({}) in wrong format: {}",  record.key(), value.value().getClass());
+                            return;
+                        }
+                        Object targetState = ((Map<String, Object>) value.value()).get("state");
+                        if (!(targetState instanceof String)) {
+                            log.error("Invalid data for target state for connector ({}): 'state' field should be a Map but is {}",
+                                    connectorName, targetState == null ? null : targetState.getClass());
+                            return;
+                        }
+
+                        try {
+                            TargetState state = TargetState.valueOf((String) targetState);
+                            log.trace("Setting target state for connector {} to {}", connectorName, targetState);
+                            connectorTargetStates.put(connectorName, state);
+                        } catch (IllegalArgumentException e) {
+                            log.error("Invalid target state for connector ({}): {}", connectorName, targetState);
+                            return;
+                        }
+                    }
+                }
+
+                if (!starting)
+                    updateListener.onConnectorTargetStateChange(connectorName);
+            } else if (record.key().startsWith(CONNECTOR_PREFIX)) {
                 String connectorName = record.key().substring(CONNECTOR_PREFIX.length());
+                boolean removed = false;
                 synchronized (lock) {
                     if (value.value() == null) {
                         // Connector deletion will be written as a null value
                         log.info("Removed connector " + connectorName + " due to null configuration. This is usually intentional and does not indicate an issue.");
                         connectorConfigs.remove(connectorName);
+                        removed = true;
                     } else {
                         // Connector configs can be applied and callbacks invoked immediately
                         if (!(value.value() instanceof Map)) {
@@ -410,15 +490,23 @@ public class KafkaConfigStorage {
                         }
                         Object newConnectorConfig = ((Map<String, Object>) value.value()).get("properties");
                         if (!(newConnectorConfig instanceof Map)) {
-                            log.error("Invalid data for connector config (" + connectorName + "): properties filed should be a Map but is " + newConnectorConfig.getClass());
+                            log.error("Invalid data for connector config ({}): properties field should be a Map but is {}", connectorName,
+                                    newConnectorConfig == null ? null : newConnectorConfig.getClass());
                             return;
                         }
-                        log.debug("Updating configuration for connector " + connectorName + " configuation: " + newConnectorConfig);
+                        log.debug("Updating configuration for connector " + connectorName + " configuration: " + newConnectorConfig);
                         connectorConfigs.put(connectorName, (Map<String, String>) newConnectorConfig);
+
+                        if (!connectorTargetStates.containsKey(connectorName))
+                            connectorTargetStates.put(connectorName, TargetState.STARTED);
                     }
                 }
-                if (!starting)
-                    connectorConfigCallback.onCompletion(null, connectorName);
+                if (!starting) {
+                    if (removed)
+                        updateListener.onConnectorConfigRemove(connectorName);
+                    else
+                        updateListener.onConnectorConfigUpdate(connectorName);
+                }
             } else if (record.key().startsWith(TASK_PREFIX)) {
                 synchronized (lock) {
                     ConnectorTaskId taskId = parseTaskId(record.key());
@@ -512,12 +600,13 @@ public class KafkaConfigStorage {
                 }
 
                 if (!starting)
-                    tasksConfigCallback.onCompletion(null, updatedTasks);
+                    updateListener.onTaskConfigUpdate(updatedTasks);
             } else {
                 log.error("Discarding config update record with invalid key: " + record.key());
             }
         }
-    };
+
+    }
 
     private ConnectorTaskId parseTaskId(String key) {
         String[] parts = key.split("-");
