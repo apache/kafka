@@ -152,6 +152,9 @@ public class SaslClientAuthenticator implements Authenticator {
 
         switch (saslState) {
             case SEND_HANDSHAKE_REQUEST:
+                // When multiple versions of SASL_HANDSHAKE_REQUEST are to be supported,
+                // API_VERSIONS_REQUEST must be sent prior to sending SASL_HANDSHAKE_REQUEST to
+                // fetch supported versions.
                 String clientId = (String) configs.get(CommonClientConfigs.CLIENT_ID_CONFIG);
                 currentRequestHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id, clientId, correlationId++);
                 SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest(mechanism);

@@ -38,6 +38,9 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.MetadataRequest;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Protocol;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
@@ -46,6 +49,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -505,6 +510,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final long NO_CURRENT_THREAD = -1L;
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.consumer";
+    /**
+     * APIs used by KafkaConsumer
+     */
+    private static final List<Short> USED_API_KEYS = Arrays.asList(
+            ApiKeys.METADATA.id,
+            ApiKeys.FETCH.id,
+            ApiKeys.GROUP_COORDINATOR.id,
+            ApiKeys.HEARTBEAT.id,
+            ApiKeys.JOIN_GROUP.id,
+            ApiKeys.LEAVE_GROUP.id,
+            ApiKeys.LIST_OFFSETS.id,
+            ApiKeys.OFFSET_COMMIT.id,
+            ApiKeys.OFFSET_FETCH.id,
+            ApiKeys.SYNC_GROUP.id);
 
     private final String clientId;
     private final ConsumerCoordinator coordinator;
@@ -648,15 +667,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.metadata.update(Cluster.bootstrap(addresses), 0);
             String metricGrpPrefix = "consumer";
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
-            NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder),
+            NetworkClient netClient = new NetworkClient(new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder),
                     this.metadata,
                     clientId,
                     100, // a fixed large enough value will suffice
                     config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                     config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
-                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), time);
+                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                    time,
+                    expectedApiVersions());
             this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG));
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
@@ -737,6 +757,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
+    }
+
+    private Collection<ApiVersionsResponse.ApiVersion> expectedApiVersions() {
+        List<ApiVersionsResponse.ApiVersion> expectedApiVersions = new ArrayList<>();
+        for (Short apiKey: this.USED_API_KEYS)
+            expectedApiVersions.add(
+                    new ApiVersionsResponse.ApiVersion(
+                            apiKey, Protocol.MIN_VERSIONS[apiKey], Protocol.CURR_VERSION[apiKey]));
+        return expectedApiVersions;
     }
 
     /**

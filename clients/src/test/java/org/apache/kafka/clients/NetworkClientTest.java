@@ -24,40 +24,72 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.kafka.common.requests.ApiVersionsResponse.API_KEY_NAME;
+import static org.apache.kafka.common.requests.ApiVersionsResponse.API_VERSIONS_KEY_NAME;
+import static org.apache.kafka.common.requests.ApiVersionsResponse.ERROR_CODE_KEY_NAME;
+import static org.apache.kafka.common.requests.ApiVersionsResponse.MAX_VERSION_KEY_NAME;
+import static org.apache.kafka.common.requests.ApiVersionsResponse.MIN_VERSION_KEY_NAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class NetworkClientTest {
 
-    private final int requestTimeoutMs = 1000;
-    private MockTime time = new MockTime();
-    private MockSelector selector = new MockSelector(time);
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
-    private int nodeId = 1;
-    private Cluster cluster = TestUtils.singletonCluster("test", nodeId);
-    private Node node = cluster.nodes().get(0);
-    private long reconnectBackoffMsTest = 10 * 1000;
-    private NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest, 
-            64 * 1024, 64 * 1024, requestTimeoutMs, time);
-    
-    private NetworkClient clientWithStaticNodes = new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
-            "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs, time);
+    protected final int requestTimeoutMs = 1000;
+    protected MockTime time = new MockTime();
+    protected MockSelector selector = new MockSelector(time);
+    protected Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+    protected int nodeId = 1;
+    protected Cluster cluster = TestUtils.singletonCluster("test", nodeId);
+    protected Node node = cluster.nodes().get(0);
+    protected long reconnectBackoffMsTest = 10 * 1000;
+    protected NetworkClient client = getNetworkClient();
+
+    private NetworkClient clientWithStaticNodes = getNetworkClientWithStaticNodes();
+
+    private NetworkClient getNetworkClient() {
+        final Collection<ApiVersionsResponse.ApiVersion> expectedApiVersions = getExpectedApiVersions();
+        if (expectedApiVersions == null)
+            return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest,
+                    64 * 1024, 64 * 1024, requestTimeoutMs, time);
+        else
+            return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest,
+                    64 * 1024, 64 * 1024, requestTimeoutMs, time, expectedApiVersions);
+
+    }
+
+    private NetworkClient getNetworkClientWithStaticNodes() {
+        final Collection<ApiVersionsResponse.ApiVersion> expectedApiVersions = getExpectedApiVersions();
+        if (expectedApiVersions == null)
+            return new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
+                    "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs, time);
+        else
+            return new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
+                    "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs, time, expectedApiVersions);
+    }
+
+    protected Collection<ApiVersionsResponse.ApiVersion> getExpectedApiVersions() {
+        return null;
+    }
 
     @Before
     public void setup() {
@@ -126,9 +158,35 @@ public class NetworkClientTest {
         assertEquals("Should be correlated to the original request", request.header(), handler.response.requestHeader());
     }
 
-    private void awaitReady(NetworkClient client, Node node) {
+    private void maybeSetExpectedApiVersionsResponse() {
+        final Collection<ApiVersionsResponse.ApiVersion> expectedApiVersions = getExpectedApiVersions();
+        if (expectedApiVersions == null)
+            return;
+        ResponseHeader respHeader = new ResponseHeader(0);
+        Struct resp = new Struct(ProtoUtils.currentResponseSchema(ApiKeys.API_VERSIONS.id));
+        resp.set(ERROR_CODE_KEY_NAME, (short) 0);
+        List<Struct> apiVersionList = new ArrayList<>();
+        for (ApiVersionsResponse.ApiVersion apiVersion : expectedApiVersions) {
+            Struct apiVersionStruct = resp.instance(API_VERSIONS_KEY_NAME);
+            apiVersionStruct.set(API_KEY_NAME, apiVersion.apiKey);
+            apiVersionStruct.set(MIN_VERSION_KEY_NAME, apiVersion.minVersion);
+            apiVersionStruct.set(MAX_VERSION_KEY_NAME, apiVersion.maxVersion);
+            apiVersionList.add(apiVersionStruct);
+        }
+        resp.set(API_VERSIONS_KEY_NAME, apiVersionList.toArray());
+        int size = respHeader.sizeOf() + resp.sizeOf();
+        ByteBuffer buffer = ByteBuffer.allocate(size);
+        respHeader.writeTo(buffer);
+        resp.writeTo(buffer);
+        buffer.flip();
+        selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
+    }
+
+    protected void awaitReady(NetworkClient client, Node node) {
+        maybeSetExpectedApiVersionsResponse();
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
+        selector.clear();
     }
 
     @Test
