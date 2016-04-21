@@ -33,7 +33,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>> {
         this.inner = inner;
     }
 
-    public Serializer<T> getInner() {
+    public Serializer<T> inner() {
         return inner;
     }
 

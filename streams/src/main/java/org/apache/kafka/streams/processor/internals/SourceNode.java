@@ -55,7 +55,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
         // if value deserializers are for {@code Change} values, set the inner deserializer when necessary
         if (this.valDeserializer instanceof ChangedDeserializer &&
-                ((ChangedDeserializer) this.valDeserializer).getInner() == null)
+                ((ChangedDeserializer) this.valDeserializer).inner() == null)
             ((ChangedDeserializer) this.valDeserializer).setInner(context.valueSerde().deserializer());
     }
 

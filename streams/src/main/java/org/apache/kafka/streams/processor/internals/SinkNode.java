@@ -60,7 +60,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
         // if value serializers are for {@code Change} values, set the inner serializer when necessary
         if (this.valSerializer instanceof ChangedSerializer &&
-                ((ChangedSerializer) this.valSerializer).getInner() == null)
+                ((ChangedSerializer) this.valSerializer).inner() == null)
             ((ChangedSerializer) this.valSerializer).setInner(context.valueSerde().serializer());
 
     }

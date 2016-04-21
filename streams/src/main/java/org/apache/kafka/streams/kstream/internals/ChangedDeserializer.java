@@ -32,7 +32,7 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>> {
         this.inner = inner;
     }
 
-    public Deserializer<T> getInner() {
+    public Deserializer<T> inner() {
         return inner;
     }
 
