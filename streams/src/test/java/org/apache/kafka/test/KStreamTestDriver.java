@@ -31,8 +31,10 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 
 import java.io.File;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class KStreamTestDriver {
 
@@ -151,10 +153,32 @@ public class KStreamTestDriver {
         }
     }
 
+    public Set<String> allProcessorNames() {
+        Set<String> names = new HashSet<>();
+
+        List<ProcessorNode> nodes = topology.processors();
+
+        for (ProcessorNode node: nodes) {
+            names.add(node.name());
+        }
+
+        return names;
+    }
+
+    public ProcessorNode processor(String name) {
+        List<ProcessorNode> nodes = topology.processors();
+
+        for (ProcessorNode node: nodes) {
+            if (node.name().equals(name))
+                return node;
+        }
+
+        return null;
+    }
+
     public Map<String, StateStore> allStateStores() {
         return context.allStateStores();
     }
-
 
     private class MockRecordCollector extends RecordCollector {
         public MockRecordCollector() {
