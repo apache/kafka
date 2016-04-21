@@ -167,7 +167,7 @@ public final class RecordAccumulator {
         appendsInProgress.incrementAndGet();
         try {
             // check if we have an in-progress batch
-            Deque<RecordBatch> dq = dequeFor(tp);
+            Deque<RecordBatch> dq = getOrCreateDeque(tp);
             synchronized (dq) {
                 if (closed)
                     throw new IllegalStateException("Cannot send after the producer is closed.");
@@ -259,7 +259,7 @@ public final class RecordAccumulator {
         batch.lastAttemptMs = now;
         batch.lastAppendTime = now;
         batch.setRetry();
-        Deque<RecordBatch> deque = dequeFor(batch.topicPartition);
+        Deque<RecordBatch> deque = getOrCreateDeque(batch.topicPartition);
         synchronized (deque) {
             deque.addFirst(batch);
         }
@@ -369,7 +369,7 @@ public final class RecordAccumulator {
                 TopicPartition tp = new TopicPartition(part.topic(), part.partition());
                 // Only proceed if the partition has no in-flight batches.
                 if (!muted.contains(tp)) {
-                    Deque<RecordBatch> deque = dequeFor(new TopicPartition(part.topic(), part.partition()));
+                    Deque<RecordBatch> deque = getDeque(new TopicPartition(part.topic(), part.partition()));
                     if (deque != null) {
                         synchronized (deque) {
                             RecordBatch first = deque.peekFirst();
@@ -401,10 +401,14 @@ public final class RecordAccumulator {
         return batches;
     }
 
+    private Deque<RecordBatch> getDeque(TopicPartition tp) {
+        return batches.get(tp);
+    }
+
     /**
      * Get the deque for the given topic-partition, creating it if necessary.
      */
-    private Deque<RecordBatch> dequeFor(TopicPartition tp) {
+    private Deque<RecordBatch> getOrCreateDeque(TopicPartition tp) {
         Deque<RecordBatch> d = this.batches.get(tp);
         if (d != null)
             return d;
@@ -478,7 +482,7 @@ public final class RecordAccumulator {
      */
     private void abortBatches() {
         for (RecordBatch batch : incomplete.all()) {
-            Deque<RecordBatch> dq = dequeFor(batch.topicPartition);
+            Deque<RecordBatch> dq = getDeque(batch.topicPartition);
             // Close the batch before aborting
             synchronized (dq) {
                 batch.records.close();
