@@ -316,20 +316,14 @@ public class KTableImplTest {
             KTableImpl<String, String, String> table1 =
                     (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
 
-            KTableImpl<String, String, String> table1Aggregated = (KTableImpl<String, String, String>) table1.aggregate(
-                    MockInitializer.STRING_INIT,
-                    MockAggregator.STRING_ADDER,
-                    MockAggregator.STRING_REMOVER,
-                    MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
-                    "mock-result1"
-            );
+            KTableImpl<String, String, String> table1Aggregated = (KTableImpl<String, String, String>) table1
+                    .groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
+                    .aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, MockAggregator.STRING_REMOVER, "mock-result1");
 
-            KTableImpl<String, String, String> table1Reduced = (KTableImpl<String, String, String>) table1.reduce(
-                    MockReducer.STRING_ADDER,
-                    MockReducer.STRING_REMOVER,
-                    MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
-                    "mock-result2"
-            );
+
+            KTableImpl<String, String, String> table1Reduced = (KTableImpl<String, String, String>) table1
+                    .groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
+                    .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result2");
 
             KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, stringSerde, stringSerde);
             driver.setTime(0L);

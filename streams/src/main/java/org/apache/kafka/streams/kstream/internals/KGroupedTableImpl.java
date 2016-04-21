@@ -17,8 +17,10 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedTable;
@@ -74,8 +76,13 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
         String topic = name + REPARTITION_TOPIC_SUFFIX;
 
-        ChangedSerializer<V> changedValueSerializer = new ChangedSerializer<>(valSerde.serializer());
-        ChangedDeserializer<V> changedValueDeserializer = new ChangedDeserializer<>(valSerde.deserializer());
+        Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
+        Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
+        Serializer<V> valueSerializer = valSerde == null ? null : valSerde.serializer();
+        Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
+
+        ChangedSerializer<V> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
+        ChangedDeserializer<V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
 
         ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(name, initializer, adder, subtractor);
 
@@ -87,10 +94,10 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
         // send the aggregate key-value pairs to the intermediate topic for partitioning
         topology.addInternalTopic(topic);
-        topology.addSink(sinkName, topic, keySerde.serializer(), changedValueSerializer, this.name);
+        topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, this.name);
 
         // read the intermediate topic
-        topology.addSource(sourceName, keySerde.deserializer(), changedValueDeserializer, topic);
+        topology.addSource(sourceName, keyDeserializer, changedValueDeserializer, topic);
 
         // aggregate the values with the aggregator and local store
         topology.addProcessor(aggregateName, aggregateSupplier, sourceName);
@@ -107,29 +114,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                             String name) {
 
         return aggregate(initializer, adder, substractor, null, name);
-    }
-
-    @Override
-    public KTable<K, Long> count(String name) {
-        return this.aggregate(
-                new Initializer<Long>() {
-                    @Override
-                    public Long apply() {
-                        return 0L;
-                    }
-                },
-                new Aggregator<K, V, Long>() {
-                    @Override
-                    public Long apply(K aggKey, V value, Long aggregate) {
-                        return aggregate + 1L;
-                    }
-                }, new Aggregator<K, V, Long>() {
-                    @Override
-                    public Long apply(K aggKey, V value, Long aggregate) {
-                        return aggregate - 1L;
-                    }
-                },
-                Serdes.Long(), name);
     }
 
     @Override
@@ -169,4 +153,26 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         return new KTableImpl<>(topology, reduceName, aggregateSupplier, Collections.singleton(sourceName));
     }
 
+    @Override
+    public KTable<K, Long> count(String name) {
+        return this.aggregate(
+                new Initializer<Long>() {
+                    @Override
+                    public Long apply() {
+                        return 0L;
+                    }
+                },
+                new Aggregator<K, V, Long>() {
+                    @Override
+                    public Long apply(K aggKey, V value, Long aggregate) {
+                        return aggregate + 1L;
+                    }
+                }, new Aggregator<K, V, Long>() {
+                    @Override
+                    public Long apply(K aggKey, V value, Long aggregate) {
+                        return aggregate - 1L;
+                    }
+                },
+                Serdes.Long(), name);
+    }
 }
