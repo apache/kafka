@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -891,7 +892,7 @@ public class ConfigDef {
             b.append(def.documentation);
             b.append("</td>");
             b.append("<td>");
-            b.append(def.type.toString().toLowerCase());
+            b.append(def.type.toString().toLowerCase(Locale.ROOT));
             b.append("</td>");
             b.append("<td>");
             if (def.hasDefault()) {
@@ -908,7 +909,7 @@ public class ConfigDef {
             b.append(def.validator != null ? def.validator.toString() : "");
             b.append("</td>");
             b.append("<td>");
-            b.append(def.importance.toString().toLowerCase());
+            b.append(def.importance.toString().toLowerCase(Locale.ROOT));
             b.append("</td>");
             b.append("</tr>\n");
         }
@@ -937,7 +938,7 @@ public class ConfigDef {
                 b.append("\n\n");
             }
             b.append("  * Type: ");
-            b.append(def.type.toString().toLowerCase());
+            b.append(def.type.toString().toLowerCase(Locale.ROOT));
             b.append("\n");
             if (def.defaultValue != null) {
                 b.append("  * Default: ");
@@ -951,7 +952,7 @@ public class ConfigDef {
                 b.append("\n");
             }
             b.append("  * Importance: ");
-            b.append(def.importance.toString().toLowerCase());
+            b.append(def.importance.toString().toLowerCase(Locale.ROOT));
             b.append("\n\n");
         }
         return b.toString();

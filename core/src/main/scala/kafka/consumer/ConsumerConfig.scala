@@ -21,6 +21,7 @@ import java.util.Properties
 import kafka.api.OffsetRequest
 import kafka.utils._
 import kafka.common.{InvalidConfigException, Config}
+import java.util.Locale
 
 object ConsumerConfig extends Config {
   val RefreshMetadataBackoffMs = 200
@@ -163,7 +164,7 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   val offsetsCommitMaxRetries = props.getInt("offsets.commit.max.retries", OffsetsCommitMaxRetries)
 
   /** Specify whether offsets should be committed to "zookeeper" (default) or "kafka" */
-  val offsetsStorage = props.getString("offsets.storage", OffsetsStorage).toLowerCase
+  val offsetsStorage = props.getString("offsets.storage", OffsetsStorage).toLowerCase(Locale.ROOT)
 
   /** If you are using "kafka" as offsets.storage, you can dual commit offsets to ZooKeeper (in addition to Kafka). This
     * is required during migration from zookeeper-based offset storage to kafka-based offset storage. With respect to any
