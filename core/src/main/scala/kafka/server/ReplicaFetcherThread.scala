@@ -81,7 +81,7 @@ class ReplicaFetcherThread(name: String,
       "replica-fetcher",
       Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
-      ChannelBuilders.create(brokerConfig.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, brokerConfig.values)
+      ChannelBuilders.create(brokerConfig.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, brokerConfig.values, brokerConfig.saslInterBrokerHandshakeRequestEnable)
     )
     new NetworkClient(
       selector,

@@ -399,7 +399,7 @@ private[kafka] class Processor(val id: Int,
     "socket-server",
     metricTags,
     false,
-    ChannelBuilders.create(protocol, Mode.SERVER, LoginType.SERVER, channelConfigs))
+    ChannelBuilders.create(protocol, Mode.SERVER, LoginType.SERVER, channelConfigs, true))
 
   override def run() {
     startupComplete()

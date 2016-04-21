@@ -331,7 +331,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           "kafka-server-controlled-shutdown",
           Map.empty.asJava,
           false,
-          ChannelBuilders.create(config.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, config.values)
+          ChannelBuilders.create(config.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, config.values, config.saslInterBrokerHandshakeRequestEnable)
         )
         new NetworkClient(
           selector,

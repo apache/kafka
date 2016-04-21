@@ -31,10 +31,12 @@ public class ChannelBuilders {
      *             it is ignored otherwise
      * @param loginType the loginType, it must be non-null if `securityProtocol` is SASL_*; it is ignored otherwise
      * @param configs client/server configs
+     * @param saslHandshakeRequestEnable flag to enable Sasl handshake requests; disabled only for SASL
+     *             inter-broker connections with inter-broker protocol version < 0.10
      * @return the configured `ChannelBuilder`
      * @throws IllegalArgumentException if `mode` invariants described above is not maintained
      */
-    public static ChannelBuilder create(SecurityProtocol securityProtocol, Mode mode, LoginType loginType, Map<String, ?> configs) {
+    public static ChannelBuilder create(SecurityProtocol securityProtocol, Mode mode, LoginType loginType, Map<String, ?> configs, boolean saslHandshakeRequestEnable) {
         ChannelBuilder channelBuilder;
 
         switch (securityProtocol) {
@@ -47,7 +49,7 @@ public class ChannelBuilders {
                 requireNonNullMode(mode, securityProtocol);
                 if (loginType == null)
                     throw new IllegalArgumentException("`loginType` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
-                channelBuilder = new SaslChannelBuilder(mode, loginType, securityProtocol);
+                channelBuilder = new SaslChannelBuilder(mode, loginType, securityProtocol, saslHandshakeRequestEnable);
                 break;
             case PLAINTEXT:
             case TRACE:

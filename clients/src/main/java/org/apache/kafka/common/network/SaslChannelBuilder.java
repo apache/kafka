@@ -38,6 +38,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private final SecurityProtocol securityProtocol;
     private final Mode mode;
     private final LoginType loginType;
+    private final boolean handshakeRequestEnable;
 
     private LoginManager loginManager;
     private SslFactory sslFactory;
@@ -46,10 +47,11 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private Subject subject;
     private String serviceName;
 
-    public SaslChannelBuilder(Mode mode, LoginType loginType, SecurityProtocol securityProtocol) {
+    public SaslChannelBuilder(Mode mode, LoginType loginType, SecurityProtocol securityProtocol, boolean handshakeRequestEnable) {
         this.mode = mode;
         this.loginType = loginType;
         this.securityProtocol = securityProtocol;
+        this.handshakeRequestEnable = handshakeRequestEnable;
     }
 
     public void configure(Map<String, ?> configs) throws KafkaException {
@@ -103,7 +105,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
                         socketChannel.socket().getLocalAddress().getHostName(), maxReceiveSize);
             else
                 authenticator = new SaslClientAuthenticator(id, subject, serviceName,
-                        socketChannel.socket().getInetAddress().getHostName());
+                        socketChannel.socket().getInetAddress().getHostName(), handshakeRequestEnable);
             // Both authenticators don't use `PrincipalBuilder`, so we pass `null` for now. Reconsider if this changes.
             authenticator.configure(transportLayer, null, this.configs);
             return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize);

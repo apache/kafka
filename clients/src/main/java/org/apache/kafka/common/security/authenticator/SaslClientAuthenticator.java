@@ -71,6 +71,7 @@ public class SaslClientAuthenticator implements Authenticator {
     private final String servicePrincipal;
     private final String host;
     private final String node;
+    private final boolean handshakeRequestEnable;
 
     // assigned in `configure`
     private SaslClient saslClient;
@@ -88,11 +89,12 @@ public class SaslClientAuthenticator implements Authenticator {
     private int correlationId;
     private RequestHeader currentRequestHeader;
 
-    public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host) throws IOException {
+    public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host, boolean handshakeRequestEnable) throws IOException {
         this.node = node;
         this.subject = subject;
         this.host = host;
         this.servicePrincipal = servicePrincipal;
+        this.handshakeRequestEnable = handshakeRequestEnable;
         this.correlationId = -1;
     }
 
@@ -103,9 +105,8 @@ public class SaslClientAuthenticator implements Authenticator {
             mechanism = (String) this.configs.get(SaslConfigs.SASL_MECHANISM);
             if (mechanism == null)
                 throw new IllegalArgumentException("SASL mechanism not specified");
-            // Since 0.9.0.x servers expect to see GSSAPI packets without mechanism being sent first, send
-            // mechanism to server only for non-GSSAPI.
-            setSaslState(mechanism.equals(SaslConfigs.GSSAPI_MECHANISM) ? SaslState.INITIAL : SaslState.SEND_HANDSHAKE_REQUEST);
+
+            setSaslState(handshakeRequestEnable ? SaslState.SEND_HANDSHAKE_REQUEST : SaslState.INITIAL);
 
             // determine client principal from subject.
             if (!subject.getPrincipals().isEmpty()) {
