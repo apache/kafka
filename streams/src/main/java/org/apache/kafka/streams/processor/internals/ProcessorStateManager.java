@@ -353,6 +353,7 @@ public class ProcessorStateManager {
     public StateStore getStore(String name) {
         StateStore store = stores.get(name);
         if (store != null && !this.storeInitialized.contains(store.name())) {
+            log.debug("Lazily initializing store " + name);
             store.init(processorContext, store);
         }
         return store;
