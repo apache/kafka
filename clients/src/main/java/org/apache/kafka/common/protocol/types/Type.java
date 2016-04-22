@@ -77,7 +77,7 @@ public abstract class Type {
 
         @Override
         public Object read(ByteBuffer buffer) {
-            Byte value = buffer.get();
+            byte value = buffer.get();
             return value != 0;
         }
 
@@ -237,7 +237,7 @@ public abstract class Type {
                 throw new SchemaException("String length " + length + " cannot be negative");
             if (length > buffer.remaining())
                 throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
-            
+
             byte[] bytes = new byte[length];
             buffer.get(bytes);
             return Utils.utf8(bytes);

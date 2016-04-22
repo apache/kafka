@@ -63,7 +63,6 @@ public class ProtocolSerializationTest {
     public void testSimple() {
         check(Type.BOOLEAN, false);
         check(Type.BOOLEAN, true);
-        check(Type.BOOLEAN, false);
         check(Type.INT8, (byte) -111);
         check(Type.INT16, (short) -11111);
         check(Type.INT32, -11111111);

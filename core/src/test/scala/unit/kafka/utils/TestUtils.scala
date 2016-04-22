@@ -953,7 +953,7 @@ object TestUtils extends Logging {
     )
 
     val values = (0 until numMessages).map(x => s"test-$x")
-
+    
     val futures = values.map { value =>
       producer.send(new ProducerRecord(topic, null, null, value.getBytes))
     }

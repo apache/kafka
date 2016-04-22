@@ -62,8 +62,7 @@ object Topic {
     topicA.replace('.', '_') == topicB.replace('.', '_')
   }
 
-  def isInternal(topic: String): Boolean = {
+  def isInternal(topic: String): Boolean =
     INTERNAL_TOPICS.contains(topic)
-  }
 
 }

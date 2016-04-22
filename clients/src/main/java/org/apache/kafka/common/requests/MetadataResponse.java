@@ -41,7 +41,7 @@ public class MetadataResponse extends AbstractRequestResponse {
     private static final String PORT_KEY_NAME = "port";
     private static final String RACK_KEY_NAME = "rack";
 
-    private static final String CONTROLLER_ID_KEY_NAME = "controllerId";
+    private static final String CONTROLLER_ID_KEY_NAME = "controller_id";
     public static final int NO_CONTROLLER_ID = -1;
 
     // topic level field names
@@ -102,12 +102,14 @@ public class MetadataResponse extends AbstractRequestResponse {
             broker.set(NODE_ID_KEY_NAME, node.id());
             broker.set(HOST_KEY_NAME, node.host());
             broker.set(PORT_KEY_NAME, node.port());
+            // This field only exists in v1+
             if (broker.hasField(RACK_KEY_NAME))
                 broker.set(RACK_KEY_NAME, node.rack());
             brokerArray.add(broker);
         }
         struct.set(BROKERS_KEY_NAME, brokerArray.toArray());
 
+        // This field only exists in v1+
         if (struct.hasField(CONTROLLER_ID_KEY_NAME))
             struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
 
@@ -116,6 +118,7 @@ public class MetadataResponse extends AbstractRequestResponse {
             Struct topicData = struct.instance(TOPIC_METADATA_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, metadata.topic);
             topicData.set(TOPIC_ERROR_CODE_KEY_NAME, metadata.error.code());
+            // This field only exists in v1+
             if (topicData.hasField(IS_INTERNAL_KEY_NAME))
                 topicData.set(IS_INTERNAL_KEY_NAME, metadata.isInternal());
 
@@ -152,10 +155,14 @@ public class MetadataResponse extends AbstractRequestResponse {
             int nodeId = broker.getInt(NODE_ID_KEY_NAME);
             String host = broker.getString(HOST_KEY_NAME);
             int port = broker.getInt(PORT_KEY_NAME);
+            // This field only exists in v1+
+            // When we can't know if a rack exists in a v0 response we default to null
             String rack =  broker.hasField(RACK_KEY_NAME) ? broker.getString(RACK_KEY_NAME) : null;
             brokers.put(nodeId, new Node(nodeId, host, port, rack));
         }
 
+        // This field only exists in v1+
+        // When we can't know the controller id in a v0 response we default to NO_CONTROLLER_ID
         int controllerId = NO_CONTROLLER_ID;
         if (struct.hasField(CONTROLLER_ID_KEY_NAME))
             controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
@@ -166,6 +173,8 @@ public class MetadataResponse extends AbstractRequestResponse {
             Struct topicInfo = (Struct) topicInfos[i];
             Errors topicError = Errors.forCode(topicInfo.getShort(TOPIC_ERROR_CODE_KEY_NAME));
             String topic = topicInfo.getString(TOPIC_KEY_NAME);
+            // This field only exists in v1+
+            // When we can't know if a topic is internal or not in a v0 response we default to false
             boolean isInternal = topicInfo.hasField(IS_INTERNAL_KEY_NAME) ? topicInfo.getBoolean(IS_INTERNAL_KEY_NAME) : false;
 
             List<PartitionMetadata> partitionMetadata = new ArrayList<>();
@@ -206,14 +215,11 @@ public class MetadataResponse extends AbstractRequestResponse {
     }
 
     private Node getControllerNode(int controllerId, Collection<Node> brokers) {
-        Node controller = null;
         for (Node broker : brokers) {
-            if (broker.id() == controllerId) {
-                controller = broker;
-                break;
-            }
+            if (broker.id() == controllerId)
+                return broker;
         }
-        return controller;
+        return null;
     }
 
     /**
@@ -267,10 +273,6 @@ public class MetadataResponse extends AbstractRequestResponse {
      */
     public Collection<TopicMetadata> topicMetadata() {
         return topicMetadata;
-    }
-
-    public boolean hasController() {
-        return controller != null;
     }
 
     /**

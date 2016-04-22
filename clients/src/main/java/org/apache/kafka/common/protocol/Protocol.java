@@ -113,7 +113,7 @@ public class Protocol {
 
     public static final Schema METADATA_RESPONSE_V1 = new Schema(new Field("brokers", new ArrayOf(METADATA_BROKER_V1),
                                                                     "Host and port information for all brokers."),
-                                                                 new Field("controllerId", INT32,
+                                                                 new Field("controller_id", INT32,
                                                                      "The broker id of the controller broker."),
                                                                  new Field("topic_metadata", new ArrayOf(TOPIC_METADATA_V1)));
 

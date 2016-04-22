@@ -47,6 +47,8 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
 
   this.logIdent = s"[Kafka Metadata Cache on broker $brokerId] "
 
+  // This method is the main hotspot when it comes to the performance of metadata requests,
+  // we should be careful about adding additional logic here.
   // filterUnavailableEndpoints exists to support v0 MetadataResponses
   private def getEndpoints(brokers: Iterable[Int], protocol: SecurityProtocol, filterUnavailableEndpoints: Boolean): Seq[Node] = {
     val result = new mutable.ArrayBuffer[Node](math.min(aliveBrokers.size, brokers.size))
@@ -158,14 +160,11 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  def getControllerId: Int = {
-    controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
-  }
+  def getControllerId: Option[Int] = controllerId
 
   def updateCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest) {
     inWriteLock(partitionMetadataLock) {
-      controllerId =
-        updateMetadataRequest.controllerId match {
+      controllerId = updateMetadataRequest.controllerId match {
           case id if id < 0 => None
           case id => Some(id)
         }

@@ -22,7 +22,6 @@ import kafka.cluster.Replica
 import kafka.common.TopicAndPartition
 import kafka.log.Log
 import kafka.message.{MessageSet, ByteBufferMessageSet, Message}
-import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.junit.{Test, After, Before}
@@ -32,6 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import collection.JavaConversions._
 
 import org.easymock.EasyMock
+import org.I0Itec.zkclient.ZkClient
 import org.junit.Assert._
 
 class SimpleFetchTest {
@@ -69,10 +69,8 @@ class SimpleFetchTest {
   @Before
   def setUp() {
     // create nice mock since we don't particularly care about zkclient calls
-    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
-    EasyMock.replay(zkClient)
-
-    val zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
+    val zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
+    EasyMock.replay(zkUtils)
 
     // create nice mock since we don't particularly care about scheduler calls
     val scheduler = EasyMock.createNiceMock(classOf[KafkaScheduler])

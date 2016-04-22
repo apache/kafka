@@ -20,17 +20,26 @@ package kafka.server
 import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
 import java.nio.ByteBuffer
+import java.util.Properties
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
-import org.apache.kafka.common.requests.{ResponseHeader, RequestHeader, AbstractRequest}
+import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader, ResponseHeader}
 import org.junit.Before
 
 abstract class BaseRequestTest extends KafkaServerTestHarness {
   val numBrokers = 3
   private var correlationId = 0
+
+  def propertyOverrides(properties: Properties): Properties = properties
+
+  def generateConfigs() = {
+    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect, enableControlledShutdown = false)
+    props.map(propertyOverrides)
+      .map(KafkaConfig.fromProps)
+  }
 
   @Before
   override def setUp() {
@@ -78,7 +87,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     * Serializes and send the request to the given api. A ByteBuffer containing the response is returned.
     */
   def send(request: AbstractRequest, apiKey: ApiKeys, version: Short): ByteBuffer = {
-    correlationId = correlationId + 1
+    correlationId += 1
     val serializedBytes = {
       val header = new RequestHeader(apiKey.id, version, "", correlationId)
       val byteBuffer = ByteBuffer.allocate(header.sizeOf() + request.sizeOf)
@@ -90,7 +99,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     val response = requestAndReceive(serializedBytes)
 
     val responseBuffer = ByteBuffer.wrap(response)
-    val responseHeader = ResponseHeader.parse(responseBuffer)
+    ResponseHeader.parse(responseBuffer) // Parse the header to ensure its valid and move the buffer forward
     responseBuffer
   }
 }

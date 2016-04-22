@@ -85,10 +85,6 @@ public class MetadataRequest extends AbstractRequest {
         }
     }
 
-    public boolean hasTopics() {
-        return topics != null;
-    }
-
     public List<String> topics() {
         return topics;
     }

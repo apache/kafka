@@ -718,6 +718,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, common.Topic.isInternal(topic),
         java.util.Collections.emptyList()))
 
+    // In version 0, we returned an error when brokers with replicas were unavailable,
+    // while in higher versions we simply don't include the broker in the returned broker list
     val errorUnavailableEndpoints = requestVersion == 0
     val topicMetadata =
       if (authorizedTopics.isEmpty)
@@ -736,7 +738,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val responseBody = new MetadataResponse(
       brokers.map(_.getNode(request.securityProtocol)).asJava,
-      metadataCache.getControllerId,
+      metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
       completeTopicMetadata.asJava,
       requestVersion
     )
