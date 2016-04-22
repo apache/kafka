@@ -435,16 +435,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     @Override
     public void putConnectorConfig(final String connName, final Map<String, String> config, final boolean allowReplace,
                                    final Callback<Created<ConnectorInfo>> callback) {
-        final Map<String, String> connConfig;
-        if (config == null) {
-            connConfig = null;
-        } else if (!config.containsKey(ConnectorConfig.NAME_CONFIG)) {
-            connConfig = new HashMap<>(config);
-            connConfig.put(ConnectorConfig.NAME_CONFIG, connName);
-        } else {
-            connConfig = config;
-        }
-
         log.trace("Submitting connector config write request {}", connName);
 
         addRequest(
@@ -463,7 +453,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             return null;
                         }
 
-                        if (connConfig == null) {
+                        if (config == null) {
                             if (!exists) {
                                 callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                             } else {
@@ -475,11 +465,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         }
 
                         log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
-                        configBackingStore.putConnectorConfig(connName, connConfig);
+                        configBackingStore.putConnectorConfig(connName, config);
 
                         // Note that we use the updated connector config despite the fact that we don't have an updated
                         // snapshot yet. The existing task info should still be accurate.
-                        ConnectorInfo info = new ConnectorInfo(connName, connConfig, configState.tasks(connName));
+                        ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName));
                         callback.onCompletion(null, new Created<>(!exists, info));
                         return null;
                     }
