@@ -20,7 +20,7 @@ from ducktape.mark import matrix
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.version import TRUNK, KafkaVersion
+from kafkatest.version.version import TRUNK, KafkaVersion
 from kafkatest.services.performance import ProducerPerformanceService, EndToEndLatencyService, ConsumerPerformanceService, throughput, latency, compute_aggregate_throughput
 
 

@@ -18,7 +18,7 @@ from ducktape.mark import parametrize
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, LATEST_0_9, KafkaVersion
+from kafkatest.version.version import TRUNK, LATEST_0_8_2, LATEST_0_9, KafkaVersion
 from kafkatest.services.performance import ProducerPerformanceService, ConsumerPerformanceService, EndToEndLatencyService
 from kafkatest.services.performance import latency, compute_aggregate_throughput
 
