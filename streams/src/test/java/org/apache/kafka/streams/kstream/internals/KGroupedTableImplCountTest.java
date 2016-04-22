@@ -35,13 +35,14 @@ import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
 
 
-public class KGroupedTableCountTest {
+public class KGroupedTableImplCountTest {
 
     @Rule
     public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
+    @SuppressWarnings("unchecked")
     @Test
-    public void shouldCountOccurencesOfEachGrouping() throws IOException {
+    public void testGroupedCountOccurences() throws IOException {
         final KStreamBuilder builder = new KStreamBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier processorSupplier = new MockProcessorSupplier<>();
