@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -31,6 +32,16 @@ import static org.junit.Assert.assertEquals;
 public class KStreamFilterTest {
 
     private String topicName = "topic";
+
+    private KStreamTestDriver driver = null;
+
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
+    }
 
     private Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
         @Override
@@ -51,7 +62,7 @@ public class KStreamFilterTest {
         stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
         stream.filter(isMultipleOfThree).process(processor);
 
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
         }
@@ -71,7 +82,7 @@ public class KStreamFilterTest {
         stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
         stream.filterNot(isMultipleOfThree).process(processor);
 
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
         }

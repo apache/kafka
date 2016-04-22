@@ -24,11 +24,13 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -36,7 +38,20 @@ import static org.junit.Assert.assertTrue;
 
 public class KTableSourceTest {
 
-    final private Serde<String> stringSerde = new Serdes.StringSerde();
+    final private Serde<String> stringSerde = Serdes.String();
+
+    private KStreamTestDriver driver = null;
+
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
+    }
+
+    @Rule
+    public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     @Test
     public void testKTable() {
@@ -49,7 +64,7 @@ public class KTableSourceTest {
         MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
 
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder);
 
         driver.process(topic1, "A", 1);
         driver.process(topic1, "B", 2);
@@ -63,138 +78,123 @@ public class KTableSourceTest {
 
     @Test
     public void testValueGetter() throws IOException {
-        File stateDir = Files.createTempDirectory("test").toFile();
-        try {
-            final KStreamBuilder builder = new KStreamBuilder();
+        final File stateDir = temporaryFolder.newFolder();
+        final KStreamBuilder builder = new KStreamBuilder();
 
-            String topic1 = "topic1";
+        String topic1 = "topic1";
 
-            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
 
-            KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
+        KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver = new KStreamTestDriver(builder, stateDir, null, null);
 
-            KTableValueGetter<String, String> getter1 = getterSupplier1.get();
-            getter1.init(driver.context());
+        KTableValueGetter<String, String> getter1 = getterSupplier1.get();
+        getter1.init(driver.context());
 
-            driver.process(topic1, "A", "01");
-            driver.process(topic1, "B", "01");
-            driver.process(topic1, "C", "01");
+        driver.process(topic1, "A", "01");
+        driver.process(topic1, "B", "01");
+        driver.process(topic1, "C", "01");
 
-            assertEquals("01", getter1.get("A"));
-            assertEquals("01", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+        assertEquals("01", getter1.get("A"));
+        assertEquals("01", getter1.get("B"));
+        assertEquals("01", getter1.get("C"));
 
-            driver.process(topic1, "A", "02");
-            driver.process(topic1, "B", "02");
+        driver.process(topic1, "A", "02");
+        driver.process(topic1, "B", "02");
 
-            assertEquals("02", getter1.get("A"));
-            assertEquals("02", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+        assertEquals("02", getter1.get("A"));
+        assertEquals("02", getter1.get("B"));
+        assertEquals("01", getter1.get("C"));
 
-            driver.process(topic1, "A", "03");
+        driver.process(topic1, "A", "03");
 
-            assertEquals("03", getter1.get("A"));
-            assertEquals("02", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+        assertEquals("03", getter1.get("A"));
+        assertEquals("02", getter1.get("B"));
+        assertEquals("01", getter1.get("C"));
 
-            driver.process(topic1, "A", null);
-            driver.process(topic1, "B", null);
+        driver.process(topic1, "A", null);
+        driver.process(topic1, "B", null);
 
-            assertNull(getter1.get("A"));
-            assertNull(getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+        assertNull(getter1.get("A"));
+        assertNull(getter1.get("B"));
+        assertEquals("01", getter1.get("C"));
 
-        } finally {
-            Utils.delete(stateDir);
-        }
     }
 
     @Test
     public void testNotSedingOldValue() throws IOException {
-        File stateDir = Files.createTempDirectory("test").toFile();
-        try {
-            final KStreamBuilder builder = new KStreamBuilder();
+        final File stateDir = temporaryFolder.newFolder();
+        final KStreamBuilder builder = new KStreamBuilder();
 
-            String topic1 = "topic1";
+        String topic1 = "topic1";
 
-            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
 
-            MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
 
-            builder.addProcessor("proc1", proc1, table1.name);
+        builder.addProcessor("proc1", proc1, table1.name);
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver = new KStreamTestDriver(builder, stateDir, null, null);
 
-            driver.process(topic1, "A", "01");
-            driver.process(topic1, "B", "01");
-            driver.process(topic1, "C", "01");
+        driver.process(topic1, "A", "01");
+        driver.process(topic1, "B", "01");
+        driver.process(topic1, "C", "01");
 
-            proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
+        proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
 
-            driver.process(topic1, "A", "02");
-            driver.process(topic1, "B", "02");
+        driver.process(topic1, "A", "02");
+        driver.process(topic1, "B", "02");
 
-            proc1.checkAndClearProcessResult("A:(02<-null)", "B:(02<-null)");
+        proc1.checkAndClearProcessResult("A:(02<-null)", "B:(02<-null)");
 
-            driver.process(topic1, "A", "03");
+        driver.process(topic1, "A", "03");
 
-            proc1.checkAndClearProcessResult("A:(03<-null)");
+        proc1.checkAndClearProcessResult("A:(03<-null)");
 
-            driver.process(topic1, "A", null);
-            driver.process(topic1, "B", null);
+        driver.process(topic1, "A", null);
+        driver.process(topic1, "B", null);
 
-            proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
-
-        } finally {
-            Utils.delete(stateDir);
-        }
+        proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
     }
 
     @Test
     public void testSedingOldValue() throws IOException {
-        File stateDir = Files.createTempDirectory("test").toFile();
-        try {
-            final KStreamBuilder builder = new KStreamBuilder();
+        final File stateDir = temporaryFolder.newFolder();
+        final KStreamBuilder builder = new KStreamBuilder();
 
-            String topic1 = "topic1";
+        String topic1 = "topic1";
 
-            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
 
-            table1.enableSendingOldValues();
+        table1.enableSendingOldValues();
 
-            assertTrue(table1.sendingOldValueEnabled());
+        assertTrue(table1.sendingOldValueEnabled());
 
-            MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
 
-            builder.addProcessor("proc1", proc1, table1.name);
+        builder.addProcessor("proc1", proc1, table1.name);
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver = new KStreamTestDriver(builder, stateDir, null, null);
 
-            driver.process(topic1, "A", "01");
-            driver.process(topic1, "B", "01");
-            driver.process(topic1, "C", "01");
+        driver.process(topic1, "A", "01");
+        driver.process(topic1, "B", "01");
+        driver.process(topic1, "C", "01");
 
-            proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
+        proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
 
-            driver.process(topic1, "A", "02");
-            driver.process(topic1, "B", "02");
+        driver.process(topic1, "A", "02");
+        driver.process(topic1, "B", "02");
 
-            proc1.checkAndClearProcessResult("A:(02<-01)", "B:(02<-01)");
+        proc1.checkAndClearProcessResult("A:(02<-01)", "B:(02<-01)");
 
-            driver.process(topic1, "A", "03");
+        driver.process(topic1, "A", "03");
 
-            proc1.checkAndClearProcessResult("A:(03<-02)");
+        proc1.checkAndClearProcessResult("A:(03<-02)");
 
-            driver.process(topic1, "A", null);
-            driver.process(topic1, "B", null);
+        driver.process(topic1, "A", null);
+        driver.process(topic1, "B", null);
 
-            proc1.checkAndClearProcessResult("A:(null<-03)", "B:(null<-02)");
-
-        } finally {
-            Utils.delete(stateDir);
-        }
+        proc1.checkAndClearProcessResult("A:(null<-03)", "B:(null<-02)");
     }
-
 }

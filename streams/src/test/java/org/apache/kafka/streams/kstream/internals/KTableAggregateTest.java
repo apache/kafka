@@ -27,61 +27,70 @@ import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
-import java.nio.file.Files;
 
 import static org.junit.Assert.assertEquals;
 
 public class KTableAggregateTest {
 
-    final private Serde<String> stringSerde = new Serdes.StringSerde();
+    final private Serde<String> stringSerde = Serdes.String();
+
+    private KStreamTestDriver driver = null;
+
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
+    }
+
+    @Rule
+    public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     @Test
     public void testAggBasic() throws Exception {
-        final File baseDir = Files.createTempDirectory("test").toFile();
+        final File baseDir = temporaryFolder.newFolder();
+        final KStreamBuilder builder = new KStreamBuilder();
+        String topic1 = "topic1";
 
-        try {
-            final KStreamBuilder builder = new KStreamBuilder();
-            String topic1 = "topic1";
+        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
+        KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
+                stringSerde,
+                stringSerde
+        ).aggregate(MockInitializer.STRING_INIT,
+                MockAggregator.STRING_ADDER,
+                MockAggregator.STRING_REMOVER,
+                stringSerde,
+                "topic1-Canonized");
 
-            KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
-            KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
-                                                           stringSerde,
-                                                           stringSerde
-            ).aggregate(MockInitializer.STRING_INIT,
-                        MockAggregator.STRING_ADDER,
-                        MockAggregator.STRING_REMOVER,
-                        stringSerde,
-                        "topic1-Canonized");
+        MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
+        table2.toStream().process(proc2);
 
-            MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
-            table2.toStream().process(proc2);
+        driver = new KStreamTestDriver(builder, baseDir);
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, baseDir);
+        driver.process(topic1, "A", "1");
+        driver.process(topic1, "B", "2");
+        driver.process(topic1, "A", "3");
+        driver.process(topic1, "B", "4");
+        driver.process(topic1, "C", "5");
+        driver.process(topic1, "D", "6");
+        driver.process(topic1, "B", "7");
+        driver.process(topic1, "C", "8");
 
-            driver.process(topic1, "A", "1");
-            driver.process(topic1, "B", "2");
-            driver.process(topic1, "A", "3");
-            driver.process(topic1, "B", "4");
-            driver.process(topic1, "C", "5");
-            driver.process(topic1, "D", "6");
-            driver.process(topic1, "B", "7");
-            driver.process(topic1, "C", "8");
-
-            assertEquals(Utils.mkList(
-                    "A:0+1",
-                    "B:0+2",
-                    "A:0+1+3", "A:0+1+3-1",
-                    "B:0+2+4", "B:0+2+4-2",
-                    "C:0+5",
-                    "D:0+6",
-                    "B:0+2+4-2+7", "B:0+2+4-2+7-4",
-                    "C:0+5+8", "C:0+5+8-5"), proc2.processed);
-
-        } finally {
-            Utils.delete(baseDir);
-        }
+        assertEquals(Utils.mkList(
+                "A:0+1",
+                "B:0+2",
+                "A:0+1+3", "A:0+1+3-1",
+                "B:0+2+4", "B:0+2+4-2",
+                "C:0+5",
+                "D:0+6",
+                "B:0+2+4-2+7", "B:0+2+4-2+7-4",
+                "C:0+5+8", "C:0+5+8-5"), proc2.processed);
     }
 }
