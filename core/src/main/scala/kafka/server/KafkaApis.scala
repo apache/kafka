@@ -48,10 +48,9 @@ import scala.collection.JavaConverters._
 import org.apache.kafka.common.requests.SaslHandshakeResponse
 
 object KafkaApis {
+  val apiVersionResponse = new ApiVersionResponse(Errors.NONE.code, buildApiKeysToApiVersions.values.toList.asJava)
 
-  val apiKeysToApiVersions: Map[Short, ApiVersionResponse.ApiVersion] = buildApiKeysToApiVersions
-
-  private def buildApiKeysToApiVersions(): Map[Short, ApiVersionResponse.ApiVersion] = {
+  private def buildApiKeysToApiVersions: Map[Short, ApiVersionResponse.ApiVersion] = {
     ApiKeys.values().map(apiKey =>
       apiKey.id -> new ApiVersionResponse.ApiVersion(apiKey.id, Protocol.MIN_VERSIONS(apiKey.id), Protocol.CURR_VERSION(apiKey.id))).toMap
   }
@@ -1033,10 +1032,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleApiVersionRequest(request: RequestChannel.Request) {
     val responseHeader = new ResponseHeader(request.header.correlationId)
-    val responseBody = if (!authorize(request.session, Describe, Resource.ClusterResource))
-      ApiVersionResponse.fromError(Errors.CLUSTER_AUTHORIZATION_FAILED)
-    else
-      new ApiVersionResponse(Errors.NONE.code, KafkaApis.apiKeysToApiVersions.values.toList.asJava)
+    val responseBody = KafkaApis.apiVersionResponse
     requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
   }
 
