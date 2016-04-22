@@ -19,8 +19,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.HoppingWindows;
-import org.apache.kafka.streams.kstream.TumblingWindows;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.junit.Test;
 
@@ -32,39 +31,27 @@ public class WindowsTest {
 
     @Test
     public void hoppingWindows() {
-
-        HoppingWindows windows = HoppingWindows.of("test").with(12L).every(5L);
-
-        Map<Long, HoppingWindow> matched = windows.windowsFor(21L);
-
+        TimeWindows windows = TimeWindows.of("test", 12L).shiftedBy(5L);
+        Map<Long, TimeWindow> matched = windows.windowsFor(21L);
         assertEquals(3, matched.size());
-
-        assertEquals(new HoppingWindow(10L, 22L), matched.get(10L));
-        assertEquals(new HoppingWindow(15L, 27L), matched.get(15L));
-        assertEquals(new HoppingWindow(20L, 32L), matched.get(20L));
+        assertEquals(new TimeWindow(10L, 22L), matched.get(10L));
+        assertEquals(new TimeWindow(15L, 27L), matched.get(15L));
+        assertEquals(new TimeWindow(20L, 32L), matched.get(20L));
     }
 
     @Test
-    public void tumblineWindows() {
-
-        TumblingWindows windows = TumblingWindows.of("test").with(12L);
-
-        Map<Long, TumblingWindow> matched = windows.windowsFor(21L);
-
+    public void tumblingWindows() {
+        TimeWindows windows = TimeWindows.of("test", 12L);
+        Map<Long, TimeWindow> matched = windows.windowsFor(21L);
         assertEquals(1, matched.size());
-
-        assertEquals(new TumblingWindow(12L, 24L), matched.get(12L));
+        assertEquals(new TimeWindow(12L, 24L), matched.get(12L));
     }
 
     @Test
     public void unlimitedWindows() {
-
         UnlimitedWindows windows = UnlimitedWindows.of("test").startOn(10L);
-
         Map<Long, UnlimitedWindow> matched = windows.windowsFor(21L);
-
         assertEquals(1, matched.size());
-
         assertEquals(new UnlimitedWindow(10L), matched.get(10L));
     }
 }

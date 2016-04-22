@@ -61,12 +61,22 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
     }
 
     @Override
-    public boolean equalTo(Windows other) {
-        if (!other.getClass().equals(UnlimitedWindows.class))
+    public final boolean equals(Object o) {
+        if (o == this) {
+            return true;
+        }
+
+        if (!(o instanceof UnlimitedWindows)) {
             return false;
+        }
 
-        UnlimitedWindows otherWindows = (UnlimitedWindows) other;
-
-        return this.start == otherWindows.start;
+        UnlimitedWindows other = (UnlimitedWindows) o;
+        return this.start == other.start;
     }
+
+    @Override
+    public int hashCode() {
+        return (int) (start ^ (start >>> 32));
+    }
+
 }

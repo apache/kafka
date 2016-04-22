@@ -17,15 +17,14 @@
 
 package org.apache.kafka.streams.kstream;
 
-
-import org.apache.kafka.streams.kstream.internals.TumblingWindow;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 
 import java.util.Map;
 
 /**
  * The window specifications used for joins.
  */
-public class JoinWindows extends Windows<TumblingWindow> {
+public class JoinWindows extends Windows<TimeWindow> {
 
     public final long before;
     public final long after;
@@ -74,19 +73,29 @@ public class JoinWindows extends Windows<TumblingWindow> {
     }
 
     @Override
-    public Map<Long, TumblingWindow> windowsFor(long timestamp) {
+    public Map<Long, TimeWindow> windowsFor(long timestamp) {
         // this function should never be called
         throw new UnsupportedOperationException("windowsFor() is not supported in JoinWindows");
     }
 
     @Override
-    public boolean equalTo(Windows other) {
-        if (!other.getClass().equals(JoinWindows.class))
+    public final boolean equals(Object o) {
+        if (o == this) {
+            return true;
+        }
+        if (!(o instanceof JoinWindows)) {
             return false;
+        }
 
-        JoinWindows otherWindows = (JoinWindows) other;
+        JoinWindows other = (JoinWindows) o;
+        return this.before == other.before && this.after == other.after;
+    }
 
-        return this.before == otherWindows.before && this.after == otherWindows.after;
+    @Override
+    public int hashCode() {
+        int result = (int) (before ^ (before >>> 32));
+        result = 31 * result + (int) (after ^ (after >>> 32));
+        return result;
     }
 
 }

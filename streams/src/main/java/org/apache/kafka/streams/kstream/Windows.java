@@ -45,6 +45,9 @@ public abstract class Windows<W extends Window> {
     public int segments;
 
     protected Windows(String name) {
+        if (name == null || name.isEmpty()) {
+            throw new IllegalArgumentException("name must not be null or empty");
+        }
         this.name = name;
         this.segments = DEFAULT_NUM_SEGMENTS;
         this.emitDurationMs = DEFAULT_EMIT_DURATION;
@@ -95,7 +98,6 @@ public abstract class Windows<W extends Window> {
         return prefix + String.format("%010d", NAME_INDEX.getAndIncrement());
     }
 
-    public abstract boolean equalTo(Windows other);
-
     public abstract Map<Long, W> windowsFor(long timestamp);
+
 }
