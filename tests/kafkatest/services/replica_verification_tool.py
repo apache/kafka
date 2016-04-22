@@ -52,14 +52,14 @@ class ReplicaVerificationTool(BackgroundThreadService):
                 self.logger.debug("Setting max lag for {} as {}".format(topic_partition, lag))
                 self.partition_lag[topic_partition] = lag
 
-    """
-    Get latest lag for given topic-partition
-
-    Args:
-        topic:          a topic
-        partition:      a partition of the topic
-    """
     def get_lag_for_partition(self, topic, partition):
+        """
+        Get latest lag for given topic-partition
+
+        Args:
+            topic:          a topic
+            partition:      a partition of the topic
+        """
         topic_partition = topic + ',' + str(partition)
         lag = self.partition_lag[topic_partition]
         self.logger.debug("Retuning lag for {} as {}".format(topic_partition, lag))
