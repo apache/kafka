@@ -17,7 +17,7 @@ from kafkatest.directory_layout.kafka_path import create_path_resolver
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
 
-from kafkatest.version.version import TRUNK, V_0_9_0_0, V_0_10_0_0
+from kafkatest.version.version import TRUNK, V_0_9_0_0
 
 import os
 
