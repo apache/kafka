@@ -111,10 +111,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.statusBackingStore.stop();
         this.configBackingStore.stop();
         this.worker.stop();
-        try {
-            this.classPathTraverser.join();
-        } catch (InterruptedException e) {
-            // ignore as it can only happen during shutdown
+        if (this.classPathTraverser != null) {
+            try {
+                this.classPathTraverser.join();
+            } catch (InterruptedException e) {
+                // ignore as it can only happen during shutdown
+            }
         }
     }
 
