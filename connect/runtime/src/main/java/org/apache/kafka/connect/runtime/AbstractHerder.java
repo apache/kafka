@@ -84,7 +84,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
     private static final List<Class<? extends Connector>> SKIPPED_CONNECTORS = Arrays.<Class<? extends Connector>>asList(VerifiableSourceConnector.class, VerifiableSinkConnector.class);
     private static List<ConnectorPluginInfo> validConnectorPlugins;
-    private static final Object lock = new Object();
+    private static final Object LOCK = new Object();
     private Thread classPathTraverser;
 
 
@@ -257,7 +257,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     public static List<ConnectorPluginInfo> connectorPlugins() {
-        synchronized (lock) {
+        synchronized (LOCK) {
             if (validConnectorPlugins != null) {
                 return validConnectorPlugins;
             }
