@@ -213,7 +213,7 @@ public final class RecordAccumulator {
      * Abort the batches that have been sitting in RecordAccumulator for more than the configured requestTimeout
      * due to metadata being unavailable
      */
-    public List<RecordBatch> abortExpiredBatches(int requestTimeout, Cluster cluster, long now) {
+    public List<RecordBatch> abortExpiredBatches(int requestTimeout, long now) {
         List<RecordBatch> expiredBatches = new ArrayList<RecordBatch>();
         int count = 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
