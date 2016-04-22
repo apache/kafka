@@ -27,8 +27,9 @@ import java.util.Comparator;
  */
 public class Bytes implements Comparable<Bytes> {
 
-    /** When we encode strings, we always specify UTF8 encoding */
-    private static final Charset UTF8_CHARSET = StandardCharsets.UTF_8;
+    private static final char[] HEX_CHARS_UPPER = {
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
+    };
 
     private final byte[] bytes;
 
@@ -79,8 +80,12 @@ public class Bytes implements Comparable<Bytes> {
         if (this == other)
             return true;
 
+        // we intentionally use the function to compute hashcode here
+        if (this.hashCode() != other.hashCode())
+            return false;
+
         if (other instanceof Bytes)
-            return compareTo((Bytes) other) == 0;
+            return Arrays.equals(this.bytes, ((Bytes) other).get());
 
         return false;
     }
@@ -96,22 +101,41 @@ public class Bytes implements Comparable<Bytes> {
     }
 
     /**
-     * Convert utf8 encoded bytes into a string. If
-     * the given byte array is null, this method will return null.
+     * Write a printable representation of a byte array. Non-printable
+     * characters are hex escaped in the format \\x%02X, eg:
+     * \x00 \x05 etc.
      *
-     * @param b Presumed UTF-8 encoded byte array.
-     * @param off offset into array
-     * @param len length of utf-8 sequence
-     * @return String made from {@code b} or null
+     * This function is brought from org.apache.hadoop.hbase.util.Bytes
+     *
+     * @param b array to write out
+     * @param off offset to start at
+     * @param len length to write
+     * @return string output
      */
     private static String toString(final byte[] b, int off, int len) {
-        if (b == null) {
-            return null;
+        StringBuilder result = new StringBuilder();
+
+        if (b == null)
+            return result.toString();
+
+        // just in case we are passed a 'len' that is > buffer length...
+        if (off >= b.length)
+            return result.toString();
+
+        if (off + len > b.length)
+            len = b.length - off;
+
+        for (int i = off; i < off + len ; ++i) {
+            int ch = b[i] & 0xFF;
+            if (ch >= ' ' && ch <= '~' && ch != '\\') {
+                result.append((char)ch);
+            } else {
+                result.append("\\x");
+                result.append(HEX_CHARS_UPPER[ch / 0x10]);
+                result.append(HEX_CHARS_UPPER[ch % 0x10]);
+            }
         }
-        if (len == 0) {
-            return "";
-        }
-        return new String(b, off, len, UTF8_CHARSET);
+        return result.toString();
     }
 
     /**
