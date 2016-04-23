@@ -26,17 +26,22 @@ class ApiVersionTest {
 
   @Test
   def testApiVersions {
-    val apiVersions = KafkaApis.apiKeysToApiVersions.values
-    assert(KafkaApis.apiKeysToApiVersions.values.size == ApiKeys.values().length)
+    val apiVersions = KafkaApis.apiVersionResponse.apiVersions()
+    assert(apiVersions.size == ApiKeys.values().length)
 
     for (key <- ApiKeys.values()) {
-      val version: ApiVersion = KafkaApis.apiKeysToApiVersions.getOrElse(key.id, null)
+      val version = KafkaApis.apiVersionResponse.apiVersions(key.id)
       assert(version != null, "Could not find ApiVersion for API " + key.name)
+      assert(version.minVersion == Protocol.MIN_VERSIONS(key.id), "Incorrect min version for Api " + key.name)
+      assert(version.maxVersion == Protocol.CURR_VERSION(key.id), "Incorrect min version for Api " + key.name)
 
+      // Check if versions less than min version are indeed set as null, i.e., deprecated.
       for (i <- 0 until version.minVersion) {
         assert(Protocol.REQUESTS(version.apiKey)(i) == null)
         assert(Protocol.RESPONSES(version.apiKey)(i) == null)
       }
+
+      // Check if versions between min and max versions are non null, i.e., valid.
       for (i <- version.minVersion.asInstanceOf[Int] to version.maxVersion) {
         assert(Protocol.REQUESTS(version.apiKey)(i) != null)
         assert(Protocol.RESPONSES(version.apiKey)(i) != null)

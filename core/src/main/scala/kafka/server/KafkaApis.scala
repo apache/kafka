@@ -1032,7 +1032,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleApiVersionRequest(request: RequestChannel.Request) {
     val responseHeader = new ResponseHeader(request.header.correlationId)
-    val responseBody = KafkaApis.apiVersionResponse
+    def isApiVersionRequestVersionSupported: Boolean = {
+      request.header.apiVersion() <= Protocol.CURR_VERSION(ApiKeys.API_VERSION.id) && request.header.apiVersion() >= Protocol.MIN_VERSIONS(ApiKeys.API_VERSION.id)
+    }
+    val responseBody = if (isApiVersionRequestVersionSupported)
+      KafkaApis.apiVersionResponse
+    else
+      ApiVersionResponse.fromError(Errors.UNKNOWN_API_VERSION_REQUEST_VERSION)
     requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
   }
 

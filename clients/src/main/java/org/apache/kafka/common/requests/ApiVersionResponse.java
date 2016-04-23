@@ -36,7 +36,7 @@ public class ApiVersionResponse extends AbstractRequestResponse {
     /**
      * Possible error codes:
      *
-     * CLUSTER_AUTHORIZATION_FAILED (31)
+     * UNKNOWN_API_VERSION_REQUEST_VERSION (33)
      */
     private final short errorCode;
     private final List<ApiVersion> apiVersions;

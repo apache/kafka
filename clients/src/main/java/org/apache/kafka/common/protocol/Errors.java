@@ -53,6 +53,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownApiVersionRequestVersionException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -136,7 +137,9 @@ public enum Errors {
     UNSUPPORTED_SASL_MECHANISM(33,
             new UnsupportedSaslMechanismException("The broker does not support the requested SASL mechanism.")),
     ILLEGAL_SASL_STATE(34,
-            new IllegalSaslStateException("Request is not valid given the current SASL state."));
+            new IllegalSaslStateException("Request is not valid given the current SASL state.")),
+    UNKNOWN_API_VERSION_REQUEST_VERSION(35,
+            new UnknownApiVersionRequestVersionException("The version of ApiVersion Request is not supported."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
