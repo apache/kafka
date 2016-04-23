@@ -131,6 +131,14 @@
       <allow pkg="com.fasterxml.jackson.databind" />
       <allow pkg="org.apache.kafka.connect.json" />
     </subpackage>
+    
+    <subpackage name="integration">
+      <allow pkg="kafka.admin" />
+      <allow pkg="kafka.server" />
+      <allow pkg="kafka.utils" />
+      <allow pkg="org.apache.curator.test" />
+      <allow pkg="org.I0Itec.zkclient" />
+    </subpackage>
 
     <subpackage name="state">
       <allow pkg="org.rocksdb" />
