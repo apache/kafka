@@ -31,8 +31,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertEquals;
 
 
 public class KGroupedTableImplCountTest {
@@ -69,7 +68,7 @@ public class KGroupedTableImplCountTest {
         driver.process(input, "D", "green");
 
         final List<String> expected = Arrays.asList("green:1", "green:2", "blue:1", "green:1", "yellow:1", "green:2");
-        final List<String> processed = processorSupplier.processed;
-        assertThat(processed, is(expected));
+        final List<String> actual = processorSupplier.processed;
+        assertEquals(expected, actual);
     }
 }
