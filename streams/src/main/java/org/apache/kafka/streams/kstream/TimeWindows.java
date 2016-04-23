@@ -89,10 +89,17 @@ public class TimeWindows extends Windows<TimeWindow> {
     // TODO: Document windowsFor()
     @Override
     public Map<Long, TimeWindow> windowsFor(long timestamp) {
-        long windowStart = timestamp - timestamp % this.size;
-        // We cannot use Collections.singleMap since it does not support remove() call.
+        long enclosed = (size - 1) / hop;
+        long windowStart = Math.max(0, timestamp - timestamp % hop - enclosed * hop);
+
         Map<Long, TimeWindow> windows = new HashMap<>();
-        windows.put(windowStart, new TimeWindow(windowStart, windowStart + this.size));
+        while (windowStart <= timestamp) {
+            // add the window
+            TimeWindow window = new TimeWindow(windowStart, windowStart + this.size);
+            windows.put(windowStart, window);
+            // hop forward
+            windowStart += this.hop;
+        }
         return windows;
     }
 
