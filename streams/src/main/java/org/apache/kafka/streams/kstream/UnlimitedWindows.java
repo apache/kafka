@@ -50,13 +50,10 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
     @Override
     public Map<Long, UnlimitedWindow> windowsFor(long timestamp) {
-        // always return the single unlimited window
-
-        // we cannot use Collections.singleMap since it does not support remove() call
+        // Always return the single unlimited window.
+        // We cannot use Collections.singleMap since it does not support remove().
         Map<Long, UnlimitedWindow> windows = new HashMap<>();
         windows.put(start, new UnlimitedWindow(start));
-
-
         return windows;
     }
 

@@ -86,7 +86,12 @@ public class TimeWindows extends Windows<TimeWindow> {
         return new TimeWindows(this.name, this.size, hop);
     }
 
-    // TODO: Document windowsFor()
+    /**
+     * Returns the windows that contain the provided timestamp.
+     *
+     * @param timestamp the timestamp
+     * @return a map of (windowStartTimestamp, window) entries
+     */
     @Override
     public Map<Long, TimeWindow> windowsFor(long timestamp) {
         long enclosed = (size - 1) / hop;
@@ -94,10 +99,8 @@ public class TimeWindows extends Windows<TimeWindow> {
 
         Map<Long, TimeWindow> windows = new HashMap<>();
         while (windowStart <= timestamp) {
-            // add the window
             TimeWindow window = new TimeWindow(windowStart, windowStart + this.size);
             windows.put(windowStart, window);
-            // hop forward
             windowStart += this.hop;
         }
         return windows;

@@ -19,19 +19,23 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.junit.Test;
+
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class TimeWindowsTest {
 
+    private static String ANY_NAME = "window";
+    private static long ANY_SIZE = 123L;
+
     @Test
     public void shouldHaveSaneEqualsAndHashCode() {
-        long arbitrarySize = 10L;
-        TimeWindows w1 = TimeWindows.of("w1", arbitrarySize);
+        TimeWindows w1 = TimeWindows.of("w1", ANY_SIZE);
         TimeWindows w2 = TimeWindows.of("w2", w1.size);
 
         // Reflexive
@@ -60,6 +64,60 @@ public class TimeWindowsTest {
 
         TimeWindows differentHopSize = w1.shiftedBy(w1.hop - 1);
         assertFalse("must be false when hop sizes are different", w1.equals(differentHopSize));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void nameMustNotBeEmpty() {
+        TimeWindows.of("", ANY_SIZE);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void nameMustNotBeNull() {
+        TimeWindows.of(null, ANY_SIZE);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void windowSizeMustNotBeNegative() {
+        TimeWindows.of(ANY_NAME, -1);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void windowSizeMustNotBeZero() {
+        TimeWindows.of(ANY_NAME, 0);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void hopSizeMustNotBeNegative() {
+        TimeWindows.of(ANY_NAME, ANY_SIZE).shiftedBy(-1);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void hopSizeMustNotBeZero() {
+        TimeWindows.of(ANY_NAME, ANY_SIZE).shiftedBy(0);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void hopSizeMustNotBeLargerThanWindowSize() {
+        long size = ANY_SIZE;
+        TimeWindows.of(ANY_NAME, size).shiftedBy(size + 1);
+    }
+
+    @Test
+    public void windowsForHoppingWindows() {
+        TimeWindows windows = TimeWindows.of(ANY_NAME, 12L).shiftedBy(5L);
+        Map<Long, TimeWindow> matched = windows.windowsFor(21L);
+        assertEquals(12L / 5L + 1, matched.size());
+        assertEquals(new TimeWindow(10L, 22L), matched.get(10L));
+        assertEquals(new TimeWindow(15L, 27L), matched.get(15L));
+        assertEquals(new TimeWindow(20L, 32L), matched.get(20L));
+    }
+
+    @Test
+    public void windowsForTumblingWindows() {
+        TimeWindows windows = TimeWindows.of(ANY_NAME, 12L);
+        Map<Long, TimeWindow> matched = windows.windowsFor(21L);
+        assertEquals(1, matched.size());
+        assertEquals(new TimeWindow(12L, 24L), matched.get(12L));
     }
 
 }
