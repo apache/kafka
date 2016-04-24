@@ -104,7 +104,11 @@ public class KafkaStreams {
      * @param props    properties for the {@link StreamsConfig}
      */
     public KafkaStreams(TopologyBuilder builder, Properties props) {
-        this(builder, new StreamsConfig(props));
+        this(builder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
+    }
+
+    public KafkaStreams(TopologyBuilder builder, StreamsConfig config) {
+        this(builder, config, new DefaultKafkaClientSupplier());
     }
 
     /**
@@ -112,8 +116,9 @@ public class KafkaStreams {
      *
      * @param builder  the processor topology builder specifying the computational logic
      * @param config   the stream configs
+     * @param clientSupplier The kafka clients supplier which provides clients for this KafkaStream
      */
-    public KafkaStreams(TopologyBuilder builder, StreamsConfig config) {
+    public KafkaStreams(TopologyBuilder builder, StreamsConfig config, KafkaClientSupplier clientSupplier) {
         // create the metrics
         Time time = new SystemTime();
 
@@ -138,7 +143,7 @@ public class KafkaStreams {
 
         this.threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(builder, config, applicationId, clientId, processId, metrics, time);
+            this.threads[i] = new StreamThread(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
         }
     }
 
