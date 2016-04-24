@@ -30,10 +30,10 @@ package org.apache.kafka.streams.kstream;
 public interface ForeachAction<K, V> {
 
     /**
-     * Perform an action for each message of a stream.
+     * Perform an action for each record of a stream.
      *
-     * @param key    the key of the message
-     * @param value  the value of the message
+     * @param key    the key of the record
+     * @param value  the value of the record
      */
     void apply(K key, V value);
 }

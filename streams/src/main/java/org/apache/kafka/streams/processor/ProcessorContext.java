@@ -24,7 +24,7 @@ import org.apache.kafka.streams.StreamsMetrics;
 import java.io.File;
 
 /**
- * Processor context interface. TODO explain what a processor context is
+ * Processor context interface.
  */
 @InterfaceStability.Unstable
 public interface ProcessorContext {

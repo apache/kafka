@@ -27,10 +27,10 @@ package org.apache.kafka.streams.kstream;
 public interface KeyValueMapper<K, V, R> {
 
     /**
-     * Map a message with the given key and value to a new value.
+     * Map a record with the given key and value to a new value.
      *
-     * @param key    the key of the message
-     * @param value  the value of the message
+     * @param key    the key of the record
+     * @param value  the value of the record
      * @return       the new value
      */
     R apply(K key, V value);

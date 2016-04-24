@@ -23,7 +23,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 /**
- * {@link KTable} is an abstraction of a <i>changelog stream</i> from a primary-keyed table. TODO extend
+ * {@link KTable} is an abstraction of a <i>changelog stream</i> from a primary-keyed table.
  *
  * @param <K> Type of primary keys
  * @param <V> Type of value changes

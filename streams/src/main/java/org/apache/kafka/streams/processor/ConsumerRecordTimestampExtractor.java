@@ -27,7 +27,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
  * via this timestamp extractor.
  *
  * If <i>CreateTime</i> is used to define the built-in timestamps, using this extractor effectively provide
- * <i>event-time</i> semantics.
+ * <i>event-time</i> semantics. If <i>LogAppendTime</i> is used to define the built-in timestamps, using
+ * this extractor effectively provides <i>ingestion-time</i> semantics.
  *
  * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
  */

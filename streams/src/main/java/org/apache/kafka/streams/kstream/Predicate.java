@@ -26,10 +26,10 @@ package org.apache.kafka.streams.kstream;
 public interface Predicate<K, V> {
 
     /**
-     * Test if the message with the given key and value satisfies the predicate.
+     * Test if the record with the given key and value satisfies the predicate.
      *
-     * @param key    the key of the message
-     * @param value  the value of the message
+     * @param key    the key of the record
+     * @param value  the value of the record
      * @return       return {@code true} if the key-value pair satisfies the predicate&mdash;{@code false} otherwise
      */
     boolean test(K key, V value);

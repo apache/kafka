@@ -24,8 +24,8 @@ import org.apache.kafka.common.serialization.Serializer;
 /**
  * Factory for creating serializers / deserializers for state stores in Kafka Streams.
  *
- * @param <K> key type of serdes
- * @param <V> value type of serdes
+ * @param <K> key type of serde
+ * @param <V> value type of serde
  */
 public final class StateSerdes<K, V> {
 
@@ -74,18 +74,18 @@ public final class StateSerdes<K, V> {
     }
 
     /**
-     * Return the key serdes.
+     * Return the key serde.
      *
-     * @return the key serdes
+     * @return the key serde
      */
     public Serde<K> keySerde() {
         return keySerde;
     }
 
     /**
-     * Return the value serdes.
+     * Return the value serde.
      *
-     * @return the value serdes
+     * @return the value serde
      */
     public Serde<V> valueSerde() {
         return valueSerde;

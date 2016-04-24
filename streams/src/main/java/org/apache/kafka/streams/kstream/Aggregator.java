@@ -27,11 +27,10 @@ package org.apache.kafka.streams.kstream;
 public interface Aggregator<K, V, T> {
 
     /**
-     * Compute a new aggregate for the message with the given key and value and the current aggregate (ie,
-     * {@link #apply(Object, Object, Object)} "increments" an aggregate with another message).
+     * Compute a new aggregate from the key and value of a record and the current aggregate of the same key.
      *
-     * @param aggKey     the key of the message
-     * @param value      the value of the message
+     * @param aggKey     the key of the record
+     * @param value      the value of the record
      * @param aggregate  the current aggregate value
      * @return           the new aggregate value
      */

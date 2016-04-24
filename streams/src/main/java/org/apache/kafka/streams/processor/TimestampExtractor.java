@@ -26,10 +26,12 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 public interface TimestampExtractor {
 
     /**
-     * Extracts a timestamp from a message.
+     * Extracts a timestamp from a record.
+     * <p>
+     * Typically, the timestamp represents the milliseconds since midnight, January 1, 1970 UTC.
      *
-     * @param record  a message
-     * @return        the timestamp of the message
+     * @param record  a data record
+     * @return        the timestamp of the record
      */
     long extract(ConsumerRecord<Object, Object> record);
 }

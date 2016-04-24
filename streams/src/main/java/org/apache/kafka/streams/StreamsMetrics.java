@@ -24,9 +24,7 @@ import org.apache.kafka.common.metrics.Sensor;
  */
 public interface StreamsMetrics {
 
-    // TODO ??
     Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags);
 
-    // TODO ??
     void recordLatency(Sensor sensor, long startNs, long endNs);
 }

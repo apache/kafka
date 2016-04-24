@@ -22,15 +22,15 @@ package org.apache.kafka.streams.kstream;
  * i.e. {@link KStream#aggregateByKey(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde,
  * org.apache.kafka.common.serialization.Serde)}
  *
- * @param <T> Type of the key
+ * @param <K> Type of the key
  */
-public class Windowed<T> {
+public class Windowed<K> {
 
-    private T key;
+    private K key;
 
     private Window window;
 
-    public Windowed(T key, Window window) {
+    public Windowed(K key, Window window) {
         this.key = key;
         this.window = window;
     }
@@ -40,7 +40,7 @@ public class Windowed<T> {
      *
      * @return the key of the window
      */
-    public T key() {
+    public K key() {
         return key;
     }
 

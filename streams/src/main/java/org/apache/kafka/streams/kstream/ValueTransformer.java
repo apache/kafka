@@ -20,7 +20,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 /**
- * A stateful {@link ValueTransformer} interface for transform a value into a new value.
+ * A stateful {@link ValueTransformer} interface to transform a value into a new value.
  *
  * @param <V>   value type
  * @param <R>   return type
@@ -39,9 +39,9 @@ public interface ValueTransformer<V, R> {
     void init(ProcessorContext context);
 
     /**
-     * Transform the message with the given key and value.
+     * Transform the record with the given key and value.
      *
-     * @param value the value for the message
+     * @param value the value for the record
      * @return new value
      */
     R transform(V value);

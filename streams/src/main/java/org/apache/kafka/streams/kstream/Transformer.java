@@ -40,10 +40,10 @@ public interface Transformer<K, V, R> {
     void init(ProcessorContext context);
 
     /**
-     * Transform the message with the given key and value.
+     * Transform the record with the given key and value.
      *
-     * @param key the key for the message
-     * @param value the value for the message
+     * @param key the key for the record
+     * @param value the value for the record
      * @return new value; if null no key-value pair will be forwarded to down stream
      */
     R transform(K key, V value);

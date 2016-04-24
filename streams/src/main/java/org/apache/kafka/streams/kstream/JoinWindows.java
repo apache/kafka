@@ -22,7 +22,7 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import java.util.Map;
 
 /**
- * The window specifications used for joins. TODO extend
+ * The window specifications used for joins.
  */
 public class JoinWindows extends Windows<TimeWindow> {
 
@@ -45,7 +45,7 @@ public class JoinWindows extends Windows<TimeWindow> {
     /**
      * Specifies that records of the same key are joinable if their timestamps are within {@code timeDifference}.
      *
-     * @param timeDifference    join window interval in milliseconds
+     * @param timeDifference    join window interval
      */
     public JoinWindows within(long timeDifference) {
         return new JoinWindows(this.name, timeDifference, timeDifference);
@@ -56,7 +56,7 @@ public class JoinWindows extends Windows<TimeWindow> {
      * the join window interval, and if the timestamp of a record from the secondary stream is
      * earlier than or equal to the timestamp of a record from the first stream.
      *
-     * @param timeDifference    join window interval in milliseconds
+     * @param timeDifference    join window interval
      */
     public JoinWindows before(long timeDifference) {
         return new JoinWindows(this.name, timeDifference, this.after);
@@ -67,7 +67,7 @@ public class JoinWindows extends Windows<TimeWindow> {
      * the join window interval, and if the timestamp of a record from the secondary stream
      * is later than or equal to the timestamp of a record from the first stream.
      *
-     * @param timeDifference    join window interval in milliseconds
+     * @param timeDifference    join window interval
      */
     public JoinWindows after(long timeDifference) {
         return new JoinWindows(this.name, this.before, timeDifference);

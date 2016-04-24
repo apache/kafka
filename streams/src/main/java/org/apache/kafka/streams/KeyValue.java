@@ -52,7 +52,7 @@ public class KeyValue<K, V> {
      * @param value  the value
      * @param <K>    the type of the key
      * @param <V>    the type of the value
-     * @return       a new typed key value pair
+     * @return       a new key value pair
      */
     public static <K, V> KeyValue<K, V> pair(K key, V value) {
         return new KeyValue<>(key, value);
