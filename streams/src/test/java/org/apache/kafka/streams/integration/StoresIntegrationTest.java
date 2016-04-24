@@ -102,11 +102,11 @@ public class StoresIntegrationTest {
      */
     @Test
     public void testCreateLargeNumberOfStores() throws Exception {
-        int numStores = 100;
+        int numStores = 10;
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "stores-integration-test-processor");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, cluster.zookeeperConnect());
+        props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, cluster.zKConnectString());
         props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 

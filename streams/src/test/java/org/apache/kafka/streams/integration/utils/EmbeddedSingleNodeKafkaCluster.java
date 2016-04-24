@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.integration.utils;
 
-
+import kafka.zk.EmbeddedZookeeper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +32,7 @@ public class EmbeddedSingleNodeKafkaCluster {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedSingleNodeKafkaCluster.class);
     private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
-    private final ZooKeeperEmbedded zookeeper;
+    private EmbeddedZookeeper zookeeper = null;
     private final KafkaEmbedded broker;
 
     /**
@@ -50,10 +50,10 @@ public class EmbeddedSingleNodeKafkaCluster {
     public EmbeddedSingleNodeKafkaCluster(Properties brokerConfig) throws Exception {
         log.debug("Initiating embedded Kafka cluster startup");
         log.debug("Starting a ZooKeeper instance");
-        zookeeper = new ZooKeeperEmbedded();
-        log.debug("ZooKeeper instance is running at {}", zookeeper.connectString());
+        zookeeper = new EmbeddedZookeeper();
+        log.debug("ZooKeeper instance is running at {}", zKConnectString());
 
-        Properties effectiveBrokerConfig = effectiveBrokerConfigFrom(brokerConfig, zookeeper);
+        Properties effectiveBrokerConfig = effectiveBrokerConfigFrom(brokerConfig);
         log.debug("Starting a Kafka instance on port {} ...", effectiveBrokerConfig.getProperty("port"));
         broker = new KafkaEmbedded(effectiveBrokerConfig);
         broker.start();
@@ -61,9 +61,9 @@ public class EmbeddedSingleNodeKafkaCluster {
             broker.brokerList(), broker.zookeeperConnect());
     }
 
-    private Properties effectiveBrokerConfigFrom(Properties brokerConfig, ZooKeeperEmbedded zookeeper) {
+    private Properties effectiveBrokerConfigFrom(Properties brokerConfig) {
         Properties effectiveConfig = new Properties();
-        effectiveConfig.put("zookeeper.connect", zookeeper.connectString());
+        effectiveConfig.put("zookeeper.connect", zKConnectString());
         int brokerPort = DEFAULT_BROKER_PORT;
         effectiveConfig.put("port", String.valueOf(brokerPort));
         effectiveConfig.putAll(brokerConfig);
@@ -75,7 +75,17 @@ public class EmbeddedSingleNodeKafkaCluster {
      */
     public void stop() throws IOException {
         broker.stop();
-        zookeeper.stop();
+        zookeeper.shutdown();
+    }
+
+    /**
+     * The ZooKeeper connection string aka `zookeeper.connect` in `hostnameOrIp:port` format.
+     * Example: `127.0.0.1:2181`.
+     *
+     * You can use this to e.g. tell Kafka brokers how to connect to this instance.
+     */
+    public String zKConnectString() {
+        return "localhost:" + zookeeper.port();
     }
 
     /**
@@ -87,15 +97,6 @@ public class EmbeddedSingleNodeKafkaCluster {
         return broker.brokerList();
     }
 
-    /**
-     * This cluster's ZK connection string aka `zookeeper.connect` in `hostnameOrIp:port` format.
-     * Example: `127.0.0.1:2181`.
-     *
-     * You can use this to e.g. tell Kafka consumers how to connect to this cluster.
-     */
-    public String zookeeperConnect() {
-        return zookeeper.connectString();
-    }
 
     /**
      * Create a Kafka topic with 1 partition and a replication factor of 1.
