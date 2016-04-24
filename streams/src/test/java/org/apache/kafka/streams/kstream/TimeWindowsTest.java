@@ -22,6 +22,9 @@ package org.apache.kafka.streams.kstream;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class TimeWindowsTest {
 
@@ -32,31 +35,31 @@ public class TimeWindowsTest {
         TimeWindows w2 = TimeWindows.of("w2", w1.size);
 
         // Reflexive
-        assertEquals(true, w1.equals(w1));
-        assertEquals(true, w1.hashCode() == w1.hashCode());
+        assertTrue(w1.equals(w1));
+        assertTrue(w1.hashCode() == w1.hashCode());
 
         // Symmetric
-        assertEquals(true, w1.equals(w2));
-        assertEquals(true, w1.hashCode() == w2.hashCode());
-        assertEquals(true, w2.hashCode() == w1.hashCode());
+        assertTrue(w1.equals(w2));
+        assertTrue(w1.hashCode() == w2.hashCode());
+        assertTrue(w2.hashCode() == w1.hashCode());
 
         // Transitive
         TimeWindows w3 = TimeWindows.of("w3", w2.size);
-        assertEquals(true, w2.equals(w3));
-        assertEquals(true, w2.hashCode() == w3.hashCode());
-        assertEquals(true, w1.equals(w3));
-        assertEquals(true, w1.hashCode() == w3.hashCode());
+        assertTrue(w2.equals(w3));
+        assertTrue(w2.hashCode() == w3.hashCode());
+        assertTrue(w1.equals(w3));
+        assertTrue(w1.hashCode() == w3.hashCode());
 
         // Inequality scenarios
-        assertEquals("must be false for null", false, w1.equals(null));
-        assertEquals("must be false for different window types", false, w1.equals(UnlimitedWindows.of("irrelevant")));
-        assertEquals("must be false for different types", false, w1.equals(new Object()));
+        assertFalse("must be false for null", w1.equals(null));
+        assertFalse("must be false for different window types", w1.equals(UnlimitedWindows.of("irrelevant")));
+        assertFalse("must be false for different types", w1.equals(new Object()));
 
         TimeWindows differentWindowSize = TimeWindows.of("differentWindowSize", w1.size + 1);
-        assertEquals("must be false when window sizes are different", false, w1.equals(differentWindowSize));
+        assertFalse("must be false when window sizes are different", w1.equals(differentWindowSize));
 
         TimeWindows differentHopSize = w1.shiftedBy(w1.hop - 1);
-        assertEquals("must be false when hop sizes are different", false, w1.equals(differentHopSize));
+        assertFalse("must be false when hop sizes are different", w1.equals(differentHopSize));
     }
 
 }
