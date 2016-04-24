@@ -20,6 +20,15 @@ then
   exit 1
 fi
 
+check_file() {
+  file=$1
+  if [ -z "$(echo "$file" | grep "test")" ] ; then
+    return 0
+  else
+    return 1
+  fi
+}
+
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
@@ -41,24 +50,32 @@ do
   fi
 done
 
-for file in $base_dir/examples/build/libs//kafka-examples*.jar;
+for file in $base_dir/examples/build/libs/kafka-examples*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if check_file "$file"; then
+    CLASSPATH=$CLASSPATH:$file
+  fi
 done
 
 for file in $base_dir/clients/build/libs/kafka-clients*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if check_file "$file"; then
+    CLASSPATH=$CLASSPATH:$file
+  fi
 done
 
 for file in $base_dir/streams/build/libs/kafka-streams*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if check_file "$file"; then
+    CLASSPATH=$CLASSPATH:$file
+  fi
 done
 
 for file in $base_dir/streams/examples/build/libs/kafka-streams-examples*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if check_file "$file"; then
+    CLASSPATH=$CLASSPATH:$file
+  fi
 done
 
 for file in $base_dir/streams/build/dependant-libs-${SCALA_VERSION}/rocksdb*.jar;
@@ -68,7 +85,9 @@ done
 
 for file in $base_dir/tools/build/libs/kafka-tools*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if check_file "$file"; then
+    CLASSPATH=$CLASSPATH:$file
+  fi
 done
 
 for dir in $base_dir/tools/build/dependant-libs-${SCALA_VERSION}*;
@@ -80,7 +99,9 @@ for cc_pkg in "api" "runtime" "file" "json" "tools"
 do
   for file in $base_dir/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
   do
-    CLASSPATH=$CLASSPATH:$file
+    if check_file "$file"; then
+      CLASSPATH=$CLASSPATH:$file
+    fi
   done
   if [ -d "$base_dir/connect/${cc_pkg}/build/dependant-libs" ] ; then
     CLASSPATH=$CLASSPATH:$base_dir/connect/${cc_pkg}/build/dependant-libs/*
@@ -92,7 +113,9 @@ CLASSPATH=$CLASSPATH:$base_dir/libs/*
 
 for file in $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if check_file "$file"; then
+    CLASSPATH=$CLASSPATH:$file
+  fi
 done
 shopt -u nullglob
 
