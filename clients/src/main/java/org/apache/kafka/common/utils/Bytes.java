@@ -17,8 +17,6 @@
 
 package org.apache.kafka.common.utils;
 
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Comparator;
 
@@ -27,9 +25,7 @@ import java.util.Comparator;
  */
 public class Bytes implements Comparable<Bytes> {
 
-    private static final char[] HEX_CHARS_UPPER = {
-            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
-    };
+    private static final char[] HEX_CHARS_UPPER = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
     private final byte[] bytes;
 
@@ -125,10 +121,10 @@ public class Bytes implements Comparable<Bytes> {
         if (off + len > b.length)
             len = b.length - off;
 
-        for (int i = off; i < off + len ; ++i) {
+        for (int i = off; i < off + len; ++i) {
             int ch = b[i] & 0xFF;
             if (ch >= ' ' && ch <= '~' && ch != '\\') {
-                result.append((char)ch);
+                result.append((char) ch);
             } else {
                 result.append("\\x");
                 result.append(HEX_CHARS_UPPER[ch / 0x10]);
