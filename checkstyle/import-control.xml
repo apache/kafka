@@ -136,7 +136,7 @@
       <allow pkg="kafka.admin" />
       <allow pkg="kafka.server" />
       <allow pkg="kafka.utils" />
-      <allow pkg="org.apache.curator.test" />
+      <allow pkg="kafka.zk" />
       <allow pkg="org.I0Itec.zkclient" />
     </subpackage>
 

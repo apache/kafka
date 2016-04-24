@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.integration.utils;
 
-import org.apache.curator.test.InstanceSpec;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +31,7 @@ import java.util.Properties;
 public class EmbeddedSingleNodeKafkaCluster {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedSingleNodeKafkaCluster.class);
-
+    private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
     private final ZooKeeperEmbedded zookeeper;
     private final KafkaEmbedded broker;
 
@@ -49,9 +49,8 @@ public class EmbeddedSingleNodeKafkaCluster {
      */
     public EmbeddedSingleNodeKafkaCluster(Properties brokerConfig) throws Exception {
         log.debug("Initiating embedded Kafka cluster startup");
-        int zkPort = InstanceSpec.getRandomPort();
-        log.debug("Starting a ZooKeeper instance on port {} ...", zkPort);
-        zookeeper = new ZooKeeperEmbedded(zkPort);
+        log.debug("Starting a ZooKeeper instance");
+        zookeeper = new ZooKeeperEmbedded();
         log.debug("ZooKeeper instance is running at {}", zookeeper.connectString());
 
         Properties effectiveBrokerConfig = effectiveBrokerConfigFrom(brokerConfig, zookeeper);
@@ -65,7 +64,7 @@ public class EmbeddedSingleNodeKafkaCluster {
     private Properties effectiveBrokerConfigFrom(Properties brokerConfig, ZooKeeperEmbedded zookeeper) {
         Properties effectiveConfig = new Properties();
         effectiveConfig.put("zookeeper.connect", zookeeper.connectString());
-        int brokerPort = InstanceSpec.getRandomPort();
+        int brokerPort = DEFAULT_BROKER_PORT;
         effectiveConfig.put("port", String.valueOf(brokerPort));
         effectiveConfig.putAll(brokerConfig);
         return effectiveConfig;

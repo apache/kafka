@@ -670,7 +670,7 @@ project(':streams') {
 
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':core')
-    testCompile libs.curator
+    testCompile project(':core').sourceSets.test.output
     testCompile libs.junit
   }
 

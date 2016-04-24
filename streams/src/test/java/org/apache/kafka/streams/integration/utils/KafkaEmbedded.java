@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.integration.utils;
 
 
+import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,8 +36,10 @@ import java.util.Random;
 import kafka.admin.AdminUtils;
 import kafka.admin.RackAwareMode;
 import kafka.server.KafkaConfig;
-import kafka.server.KafkaServerStartable;
+import kafka.server.KafkaServer;
 import kafka.utils.CoreUtils;
+import kafka.utils.SystemTime$;
+import kafka.utils.TestUtils;
 import kafka.utils.ZKStringSerializer$;
 import kafka.utils.ZkUtils;
 
@@ -44,9 +47,7 @@ import kafka.utils.ZkUtils;
  * Runs an in-memory, "embedded" instance of a Kafka broker, which listens at `127.0.0.1:9092` by
  * default.
  *
- * Requires a running ZooKeeper instance to connect to.  By default, it expects a ZooKeeper instance
- * running at `127.0.0.1:2181`.  You can specify a different ZooKeeper instance by setting the
- * `zookeeper.connect` parameter in the broker's configuration.
+ * Requires a running ZooKeeper instance to connect to.
  */
 public class KafkaEmbedded {
 
@@ -57,7 +58,7 @@ public class KafkaEmbedded {
     private static final int DEFAULT_ZK_CONNECTION_TIMEOUT_MS = 8 * 1000;
     private final Properties effectiveConfig;
     private final File logDir;
-    private final KafkaServerStartable kafka;
+    private final KafkaServer kafka;
 
     /**
      * @param config Broker configuration settings.  Used to modify, for example, on which port the
@@ -69,7 +70,7 @@ public class KafkaEmbedded {
         effectiveConfig = effectiveConfigFrom(config);
         boolean loggingEnabled = true;
         KafkaConfig kafkaConfig = new KafkaConfig(effectiveConfig, loggingEnabled);
-        kafka = new KafkaServerStartable(kafkaConfig);
+        kafka = TestUtils.createServer(kafkaConfig, SystemTime$.MODULE$);
     }
 
     private File randomTempDirectory() {
@@ -94,7 +95,7 @@ public class KafkaEmbedded {
      * You can use this to tell Kafka producers and consumers how to connect to this instance.
      */
     public String brokerList() {
-        return kafka.serverConfig().hostName() + ":" + kafka.serverConfig().port().toString();
+        return kafka.config().hostName() + ":" + kafka.boundPort(SecurityProtocol.PLAINTEXT);
     }
 
 
@@ -111,7 +112,7 @@ public class KafkaEmbedded {
     public void start() {
         log.debug("Starting embedded Kafka broker at {} (with log.dirs={} and ZK ensemble at {}) ...",
             brokerList(), logDir, zookeeperConnect());
-        kafka.startup();
+        // already started in constructore
         log.debug("Startup of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
             brokerList(), zookeeperConnect());
     }
