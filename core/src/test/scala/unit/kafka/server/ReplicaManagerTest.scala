@@ -58,7 +58,7 @@ class ReplicaManagerTest {
   
   @After
   def tearDown() {
-    metrics.close();
+    metrics.close()
   }
 
   @Test
