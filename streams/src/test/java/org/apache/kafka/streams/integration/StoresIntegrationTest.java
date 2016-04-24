@@ -24,35 +24,26 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.ClassRule;
 import static org.junit.Assert.assertEquals;
-
-import java.io.IOException;
 import java.util.Properties;
 
 import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
 
 
 public class StoresIntegrationTest {
-    private static EmbeddedSingleNodeKafkaCluster cluster = null;
+    @ClassRule
+    public static EmbeddedSingleNodeKafkaCluster cluster = new EmbeddedSingleNodeKafkaCluster();
     private static final String INPUT_TOPIC = "inputTopic";
     private static final String OUTPUT_TOPIC = "outputTopic";
     private static int foundStores = 0;
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
-        cluster = new EmbeddedSingleNodeKafkaCluster();
         cluster.createTopic(INPUT_TOPIC);
         cluster.createTopic(OUTPUT_TOPIC);
-    }
-
-    @AfterClass
-    public static void stopKafkaCluster() throws IOException {
-        if (cluster != null) {
-            cluster.stop();
-        }
     }
 
     private static class MyProcessorSupplier implements ProcessorSupplier<String, String> {
@@ -102,7 +93,7 @@ public class StoresIntegrationTest {
      */
     @Test
     public void testCreateLargeNumberOfStores() throws Exception {
-        int numStores = 10;
+        int numStores = 100;
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "stores-integration-test-processor");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());

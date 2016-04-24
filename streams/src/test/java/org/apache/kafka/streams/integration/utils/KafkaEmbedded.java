@@ -31,7 +31,6 @@ import org.I0Itec.zkclient.ZkConnection;
 import java.io.File;
 import java.util.Collections;
 import java.util.List;
-import java.util.Random;
 
 import kafka.admin.AdminUtils;
 import kafka.admin.RackAwareMode;
@@ -42,7 +41,7 @@ import kafka.utils.SystemTime$;
 import kafka.utils.TestUtils;
 import kafka.utils.ZKStringSerializer$;
 import kafka.utils.ZkUtils;
-
+import org.junit.rules.TemporaryFolder;
 /**
  * Runs an in-memory, "embedded" instance of a Kafka broker, which listens at `127.0.0.1:9092` by
  * default.
@@ -58,6 +57,7 @@ public class KafkaEmbedded {
     private static final int DEFAULT_ZK_CONNECTION_TIMEOUT_MS = 8 * 1000;
     private final Properties effectiveConfig;
     private final File logDir;
+    public final TemporaryFolder tmpFolder;
     private final KafkaServer kafka;
 
     /**
@@ -66,20 +66,15 @@ public class KafkaEmbedded {
      *               currently.
      */
     public KafkaEmbedded(Properties config) throws IOException {
-        logDir = randomTempDirectory();
+        tmpFolder = new TemporaryFolder();
+        tmpFolder.create();
+        logDir = tmpFolder.newFolder();
         effectiveConfig = effectiveConfigFrom(config);
         boolean loggingEnabled = true;
         KafkaConfig kafkaConfig = new KafkaConfig(effectiveConfig, loggingEnabled);
         kafka = TestUtils.createServer(kafkaConfig, SystemTime$.MODULE$);
     }
 
-    private File randomTempDirectory() {
-        int randomNumber = Math.abs(new Random().nextInt());
-        String path = System.getProperty("java.io.tmpdir") +
-            File.separator +
-            "kafka-embedded-logs-dir-" + randomNumber;
-        return new File(path);
-    }
 
     private Properties effectiveConfigFrom(Properties initialConfig) throws IOException {
         Properties effectiveConfig = new Properties();
@@ -128,6 +123,7 @@ public class KafkaEmbedded {
         log.debug("Removing logs.dir at {} ...", logDir);
         List<String> logDirs = Collections.singletonList(logDir.getAbsolutePath());
         CoreUtils.delete(scala.collection.JavaConversions.asScalaBuffer(logDirs).seq());
+        tmpFolder.delete();
         log.debug("Shutdown of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
             brokerList(), zookeeperConnect());
     }

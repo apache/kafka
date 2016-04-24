@@ -23,31 +23,32 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Properties;
-
+import org.junit.rules.ExternalResource;
 
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and 1 Kafka broker.
  */
-public class EmbeddedSingleNodeKafkaCluster {
+public class EmbeddedSingleNodeKafkaCluster extends ExternalResource {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedSingleNodeKafkaCluster.class);
     private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
     private EmbeddedZookeeper zookeeper = null;
-    private final KafkaEmbedded broker;
+    private KafkaEmbedded broker = null;
 
     /**
      * Creates and starts a Kafka cluster.
      */
-    public EmbeddedSingleNodeKafkaCluster() throws Exception {
-        this(new Properties());
+    public void start() throws IOException, InterruptedException {
+        start(new Properties());
     }
+
 
     /**
      * Creates and starts a Kafka cluster.
      *
      * @param brokerConfig Additional broker configuration settings.
      */
-    public EmbeddedSingleNodeKafkaCluster(Properties brokerConfig) throws Exception {
+    public void start(Properties brokerConfig) throws IOException, InterruptedException {
         log.debug("Initiating embedded Kafka cluster startup");
         log.debug("Starting a ZooKeeper instance");
         zookeeper = new EmbeddedZookeeper();
@@ -73,7 +74,7 @@ public class EmbeddedSingleNodeKafkaCluster {
     /**
      * Stop the Kafka cluster.
      */
-    public void stop() throws IOException {
+    public void stop() {
         broker.stop();
         zookeeper.shutdown();
     }
@@ -97,6 +98,13 @@ public class EmbeddedSingleNodeKafkaCluster {
         return broker.brokerList();
     }
 
+    protected void before() throws Throwable {
+        start();
+    }
+
+    protected void after() {
+        stop();
+    }
 
     /**
      * Create a Kafka topic with 1 partition and a replication factor of 1.
