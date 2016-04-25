@@ -21,6 +21,7 @@ import static java.util.Arrays.asList;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -106,13 +107,6 @@ public class TestUtils {
         final File file = File.createTempFile("kafka", ".tmp");
         file.deleteOnExit();
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                Utils.delete(file);
-            }
-        });
-
         return file;
     }
 
@@ -122,7 +116,19 @@ public class TestUtils {
      * @param prefix The prefix of the temporary directory, if null using "kafka" as default prefix
      */
     public static File tempDirectory(String prefix) throws IOException {
-        final File file = Files.createTempDirectory(prefix == null ? "kafka" : prefix).toFile();
+        return tempDirectory(null, prefix);
+    }
+
+    /**
+     * Create a temporary relative directory in the specified parent directory with the given prefix.
+     *
+     * @param parent The parent folder path name, if null using the default temporary-file directory
+     * @param prefix The prefix of the temporary directory, if null using "kafka" as default prefix
+     */
+    public static File tempDirectory(Path parent, String prefix) throws IOException {
+        final File file = parent == null ?
+                Files.createTempDirectory(prefix == null ? "kafka" : prefix).toFile() :
+                Files.createTempDirectory(parent, prefix == null ? "kafka" : prefix).toFile();
         file.deleteOnExit();
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -134,4 +140,5 @@ public class TestUtils {
 
         return file;
     }
+
 }
