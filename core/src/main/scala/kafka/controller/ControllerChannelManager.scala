@@ -89,6 +89,14 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
     val brokerNode = new Node(broker.id, brokerEndPoint.host, brokerEndPoint.port)
     val networkClient = {
+      val channelBuilder = ChannelBuilders.create(
+        config.interBrokerSecurityProtocol,
+        Mode.CLIENT,
+        LoginType.SERVER,
+        config.values,
+        config.saslMechanismInterBrokerProtocol,
+        config.saslInterBrokerHandshakeRequestEnable
+      )
       val selector = new Selector(
         NetworkReceive.UNLIMITED,
         config.connectionsMaxIdleMs,
@@ -97,7 +105,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         "controller-channel",
         Map("broker-id" -> broker.id.toString).asJava,
         false,
-        ChannelBuilders.create(config.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, config.values, config.saslInterBrokerHandshakeRequestEnable)
+        channelBuilder
       )
       new NetworkClient(
         selector,

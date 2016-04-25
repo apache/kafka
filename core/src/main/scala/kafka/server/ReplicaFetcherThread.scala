@@ -73,6 +73,14 @@ class ReplicaFetcherThread(name: String,
   // as the metrics tag to avoid metric name conflicts with
   // more than one fetcher thread to the same broker
   private val networkClient = {
+    val channelBuilder = ChannelBuilders.create(
+      brokerConfig.interBrokerSecurityProtocol,
+      Mode.CLIENT,
+      LoginType.SERVER,
+      brokerConfig.values,
+      brokerConfig.saslMechanismInterBrokerProtocol,
+      brokerConfig.saslInterBrokerHandshakeRequestEnable
+    )
     val selector = new Selector(
       NetworkReceive.UNLIMITED,
       brokerConfig.connectionsMaxIdleMs,
@@ -81,7 +89,7 @@ class ReplicaFetcherThread(name: String,
       "replica-fetcher",
       Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
-      ChannelBuilders.create(brokerConfig.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, brokerConfig.values, brokerConfig.saslInterBrokerHandshakeRequestEnable)
+      channelBuilder
     )
     new NetworkClient(
       selector,

@@ -13,6 +13,7 @@
 package kafka.api
 
 import kafka.zk.ZooKeeperTestHarness
+import kafka.server.KafkaConfig
 import org.junit.{After, Before}
 import java.util.Properties
 import scala.collection.JavaConverters._
@@ -45,6 +46,7 @@ trait SaslTestHarness extends ZooKeeperTestHarness with SaslSetup {
   def kafkaSaslProperties(kafkaClientSaslMechanism: String, kafkaServerSaslMechanisms: List[String]) = {
     val props = new Properties
     props.put(SaslConfigs.SASL_MECHANISM, kafkaClientSaslMechanism)
+    props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, kafkaClientSaslMechanism)
     props.put(SaslConfigs.SASL_ENABLED_MECHANISMS, kafkaServerSaslMechanisms.asJava)
     props
   }

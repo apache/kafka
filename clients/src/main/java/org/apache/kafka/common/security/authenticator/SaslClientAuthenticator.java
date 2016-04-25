@@ -32,7 +32,6 @@ import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslClient;
 import javax.security.sasl.SaslException;
 
-import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
@@ -70,10 +69,10 @@ public class SaslClientAuthenticator implements Authenticator {
     private final String servicePrincipal;
     private final String host;
     private final String node;
+    private final String mechanism;
     private final boolean handshakeRequestEnable;
 
     // assigned in `configure`
-    private String mechanism;
     private SaslClient saslClient;
     private Map<String, ?> configs;
     private String clientPrincipalName;
@@ -93,11 +92,12 @@ public class SaslClientAuthenticator implements Authenticator {
     // Request header for which response from the server is pending
     private RequestHeader currentRequestHeader;
 
-    public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host, boolean handshakeRequestEnable) throws IOException {
+    public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host, String mechanism, boolean handshakeRequestEnable) throws IOException {
         this.node = node;
         this.subject = subject;
         this.host = host;
         this.servicePrincipal = servicePrincipal;
+        this.mechanism = mechanism;
         this.handshakeRequestEnable = handshakeRequestEnable;
         this.correlationId = -1;
     }
@@ -106,9 +106,6 @@ public class SaslClientAuthenticator implements Authenticator {
         try {
             this.transportLayer = transportLayer;
             this.configs = configs;
-            mechanism = (String) this.configs.get(SaslConfigs.SASL_MECHANISM);
-            if (mechanism == null)
-                throw new IllegalArgumentException("SASL mechanism not specified");
 
             setSaslState(handshakeRequestEnable ? SaslState.SEND_HANDSHAKE_REQUEST : SaslState.INITIAL);
 
