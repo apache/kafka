@@ -18,26 +18,38 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.Rule;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
 
-public class KGroupedTableImplCountTest {
+public class KGroupedTableImplTest {
 
-    @Rule
-    public final TemporaryFolder temporaryFolder = new TemporaryFolder();
+    private File stateDir;
+
+    @Before
+    public void setUp() throws IOException {
+        stateDir = Files.createTempDirectory("test").toFile();
+    }
+
+    @After
+    public void tearDown() throws IOException {
+        Utils.delete(stateDir);
+    }
 
     @SuppressWarnings("unchecked")
     @Test
@@ -58,7 +70,7 @@ public class KGroupedTableImplCountTest {
                 .process(processorSupplier);
 
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, temporaryFolder.newFolder());
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
 
 
         driver.process(input, "A", "green");
