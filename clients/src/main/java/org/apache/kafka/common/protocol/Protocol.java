@@ -58,7 +58,7 @@ public class Protocol {
                                                                           "An array of topics to fetch metadata for. If no topics are specified fetch metadata for all topics."));
 
     public static final Schema METADATA_REQUEST_V1 = new Schema(new Field("topics",
-                                                                          new ArrayOf(STRING, true),
+                                                                          ArrayOf.nullable(STRING),
                                                                           "An array of topics to fetch metadata for. If the topics array is null fetch metadata for all topics."));
 
     public static final Schema METADATA_BROKER_V0 = new Schema(new Field("node_id", INT32, "The broker id."),

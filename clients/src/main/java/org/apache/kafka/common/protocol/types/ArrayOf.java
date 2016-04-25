@@ -30,7 +30,11 @@ public class ArrayOf extends Type {
         this(type, false);
     }
 
-    public ArrayOf(Type type, boolean nullable) {
+    public static ArrayOf nullable(Type type) {
+        return new ArrayOf(type, true);
+    }
+
+    private ArrayOf(Type type, boolean nullable) {
         this.type = type;
         this.nullable = nullable;
     }
