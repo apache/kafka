@@ -57,7 +57,7 @@ public class EmbeddedSingleNodeKafkaCluster extends ExternalResource {
         Properties effectiveBrokerConfig = effectiveBrokerConfigFrom(brokerConfig);
         log.debug("Starting a Kafka instance on port {} ...", effectiveBrokerConfig.getProperty("port"));
         broker = new KafkaEmbedded(effectiveBrokerConfig);
-        broker.start();
+
         log.debug("Kafka instance is running at {}, connected to ZooKeeper at {}",
             broker.brokerList(), broker.zookeeperConnect());
     }

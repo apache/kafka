@@ -61,6 +61,7 @@ public class KafkaEmbedded {
     private final KafkaServer kafka;
 
     /**
+     * Creates and starts an embedded Kafka broker.
      * @param config Broker configuration settings.  Used to modify, for example, on which port the
      *               broker should listen to.  Note that you cannot change the `log.dirs` setting
      *               currently.
@@ -72,10 +73,21 @@ public class KafkaEmbedded {
         effectiveConfig = effectiveConfigFrom(config);
         boolean loggingEnabled = true;
         KafkaConfig kafkaConfig = new KafkaConfig(effectiveConfig, loggingEnabled);
+        log.debug("Starting embedded Kafka broker (with log.dirs={} and ZK ensemble at {}) ...",
+            logDir, zookeeperConnect());
         kafka = TestUtils.createServer(kafkaConfig, SystemTime$.MODULE$);
+        log.debug("Startup of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
+            brokerList(), zookeeperConnect());
     }
 
 
+    /**
+     * Creates the configuration for starting the Kafka broker by merging default values with
+     * overwrites.
+     * @param initialConfig Broker configuration settings that override the default config.
+     * @return
+     * @throws IOException
+     */
     private Properties effectiveConfigFrom(Properties initialConfig) throws IOException {
         Properties effectiveConfig = new Properties();
         effectiveConfig.load(this.getClass().getResourceAsStream("/broker-defaults.properties"));
@@ -99,17 +111,6 @@ public class KafkaEmbedded {
      */
     public String zookeeperConnect() {
         return effectiveConfig.getProperty("zookeeper.connect", DEFAULT_ZK_CONNECT);
-    }
-
-    /**
-     * Start the broker.
-     */
-    public void start() {
-        log.debug("Starting embedded Kafka broker at {} (with log.dirs={} and ZK ensemble at {}) ...",
-            brokerList(), logDir, zookeeperConnect());
-        // already started in constructore
-        log.debug("Startup of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
-            brokerList(), zookeeperConnect());
     }
 
     /**
