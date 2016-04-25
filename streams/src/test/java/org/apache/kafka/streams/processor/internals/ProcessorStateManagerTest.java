@@ -213,7 +213,10 @@ public class ProcessorStateManagerTest {
             try {
                 assertNotNull(lock);
             } finally {
-                if (lock != null) lock.release();
+                if (lock != null) {
+                    lock.release();
+                    lock.channel().close();
+                }
             }
         } finally {
             Utils.delete(baseDir);
