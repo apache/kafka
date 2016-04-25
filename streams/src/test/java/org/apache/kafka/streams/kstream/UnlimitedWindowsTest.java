@@ -28,12 +28,12 @@ import static org.junit.Assert.assertEquals;
 
 public class UnlimitedWindowsTest {
 
-    private static String ANY_NAME = "window";
+    private static String anyName = "window";
 
     @Test
     public void unlimitedWindows() {
         long startTime = 10L;
-        UnlimitedWindows w = UnlimitedWindows.of(ANY_NAME).startOn(startTime);
+        UnlimitedWindows w = UnlimitedWindows.of(anyName).startOn(startTime);
 
         Map<Long, UnlimitedWindow> matchedWindows1 = w.windowsFor(startTime + 11L);
         assertEquals(1, matchedWindows1.size());
