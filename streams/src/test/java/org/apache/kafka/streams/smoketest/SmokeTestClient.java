@@ -220,15 +220,14 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // test repartition
         Agg agg = new Agg();
-        cntTable.aggregate(
-                agg.init(),
-                agg.adder(),
-                agg.remover(),
-                agg.selector(),
-                stringSerde,
-                longSerde,
-                longSerde,
-                "cntByCnt"
+        cntTable.groupBy(agg.selector(),
+                         stringSerde,
+                         longSerde
+        ).aggregate(agg.init(),
+                    agg.adder(),
+                    agg.remover(),
+                    longSerde,
+                    "cntByCnt"
         ).to(stringSerde, longSerde, "tagg");
 
         return new KafkaStreams(builder, props);
