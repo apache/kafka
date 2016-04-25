@@ -76,15 +76,6 @@ public abstract class AbstractLogin implements Login {
         return loginContext.getSubject();
     }
 
-    @Override
-    public String serviceName() {
-        return "kafka";
-    }
-
-    @Override
-    public void close() {
-    }
-
     /**
      * Callback handler for creating login context. Login callback handlers
      * should support the callbacks required for the login modules used by

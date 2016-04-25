@@ -60,9 +60,10 @@ public class SaslHandshakeResponse extends AbstractRequestResponse {
         super(struct);
         errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
         Object[] mechanisms = struct.getArray(ENABLED_MECHANISMS_KEY_NAME);
-        this.enabledMechanisms = new ArrayList<>();
+        ArrayList<String> enabledMechanisms = new ArrayList<>();
         for (Object mechanism : mechanisms)
-            this.enabledMechanisms.add((String) mechanism);
+            enabledMechanisms.add((String) mechanism);
+        this.enabledMechanisms = enabledMechanisms;
     }
 
     public short errorCode() {

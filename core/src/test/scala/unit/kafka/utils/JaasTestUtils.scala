@@ -51,7 +51,7 @@ object JaasTestUtils {
         entries = Map(
           "username" -> username,
           "password" -> password
-        ) ++ validUsers.map{ case (user, pass) => (s"user_$user"-> pass)}
+        ) ++ validUsers.map { case (user, pass) => (s"user_$user"-> pass)}
       )
     }
   }
@@ -120,7 +120,7 @@ object JaasTestUtils {
   )
 
   private def kafkaServerSection(mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
-    val modules = mechanisms.map{
+    val modules = mechanisms.map {
       case "GSSAPI" =>
         Krb5LoginModule(
           useKeyTab = true,
@@ -141,24 +141,22 @@ object JaasTestUtils {
   }
 
   private def kafkaClientSection(mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
-    val modules = mechanisms.map{mechanism =>
-      mechanism match {
-        case "GSSAPI" =>
-          Krb5LoginModule(
-            useKeyTab = true,
-            storeKey = true,
-            keyTab = keytabLocation.get.getAbsolutePath,
-            principal = KafkaClientPrincipal,
-            debug = true,
-            serviceName = Some("kafka")
-          ).toJaasModule
-        case "PLAIN" =>
-          PlainLoginModule(
-            KafkaPlainUser,
-            KafkaPlainPassword
-          ).toJaasModule
-        case _ => throw new IllegalArgumentException("Unsupported client mechanism " + mechanism)
-      }
+    val modules = mechanisms.map {
+      case "GSSAPI" =>
+        Krb5LoginModule(
+          useKeyTab = true,
+          storeKey = true,
+          keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
+          principal = KafkaClientPrincipal,
+          debug = true,
+          serviceName = Some("kafka")
+        ).toJaasModule
+      case "PLAIN" =>
+        PlainLoginModule(
+          KafkaPlainUser,
+          KafkaPlainPassword
+        ).toJaasModule
+      case mechanism => throw new IllegalArgumentException("Unsupported client mechanism " + mechanism)
     }
     new JaasSection(KafkaClientContextName, modules)
   }
