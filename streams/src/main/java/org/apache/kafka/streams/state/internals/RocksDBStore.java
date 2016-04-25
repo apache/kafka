@@ -150,8 +150,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
-
-        this.db.merge();
     }
 
     public void init(ProcessorContext context, StateStore root) {

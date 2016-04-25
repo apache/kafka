@@ -27,12 +27,13 @@ import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.Rule;
+import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
+import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
 
@@ -41,21 +42,23 @@ public class KTableAggregateTest {
     final private Serde<String> stringSerde = Serdes.String();
 
     private KStreamTestDriver driver = null;
+    private File stateDir = null;
 
     @After
-    public void cleanup() {
+    public void tearDown() {
         if (driver != null) {
             driver.close();
         }
         driver = null;
     }
 
-    @Rule
-    public final TemporaryFolder temporaryFolder = new TemporaryFolder();
+    @Before
+    public void setUp() throws IOException {
+        stateDir = TestUtils.tempDirectory("kafka-test");
+    }
 
     @Test
     public void testAggBasic() throws Exception {
-        final File baseDir = temporaryFolder.newFolder();
         final KStreamBuilder builder = new KStreamBuilder();
         String topic1 = "topic1";
 
@@ -72,7 +75,7 @@ public class KTableAggregateTest {
         MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
         table2.toStream().process(proc2);
 
-        driver = new KStreamTestDriver(builder, baseDir);
+        driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(topic1, "A", "1");
         driver.process(topic1, "B", "2");

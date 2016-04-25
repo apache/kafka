@@ -30,12 +30,13 @@ import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.Rule;
+import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
+import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
 
@@ -44,21 +45,23 @@ public class KStreamWindowAggregateTest {
     final private Serde<String> strSerde = Serdes.String();
 
     private KStreamTestDriver driver = null;
-
-    @Rule
-    public final TemporaryFolder temporaryFolder = new TemporaryFolder();
+    private File stateDir = null;
 
     @After
-    public void cleanup() {
+    public void tearDown() {
         if (driver != null) {
             driver.close();
         }
         driver = null;
     }
 
+    @Before
+    public void setUp() throws IOException {
+        stateDir = TestUtils.tempDirectory("kafka-test");
+    }
+
     @Test
     public void testAggBasic() throws Exception {
-        final File baseDir = temporaryFolder.newFolder();
         final KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
@@ -72,7 +75,7 @@ public class KStreamWindowAggregateTest {
         MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
         table2.toStream().process(proc2);
 
-        driver = new KStreamTestDriver(builder, baseDir);
+        driver = new KStreamTestDriver(builder, stateDir);
 
         driver.setTime(0L);
         driver.process(topic1, "A", "1");
@@ -129,7 +132,6 @@ public class KStreamWindowAggregateTest {
 
     @Test
     public void testJoin() throws Exception {
-        final File baseDir = temporaryFolder.newFolder();
         final KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
@@ -162,7 +164,7 @@ public class KStreamWindowAggregateTest {
             }
         }).toStream().process(proc3);
 
-        driver = new KStreamTestDriver(builder, baseDir);
+        driver = new KStreamTestDriver(builder, stateDir);
 
         driver.setTime(0L);
         driver.process(topic1, "A", "1");

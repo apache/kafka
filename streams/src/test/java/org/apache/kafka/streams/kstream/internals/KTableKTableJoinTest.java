@@ -25,12 +25,13 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.Rule;
+import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -50,21 +51,23 @@ public class KTableKTableJoinTest {
     final private Serde<String> stringSerde = Serdes.String();
 
     private KStreamTestDriver driver = null;
+    private File stateDir = null;
 
     @After
-    public void cleanup() {
+    public void tearDown() {
         if (driver != null) {
             driver.close();
         }
         driver = null;
     }
 
-    @Rule
-    public final TemporaryFolder temporaryFolder = new TemporaryFolder();
+    @Before
+    public void setUp() throws IOException {
+        stateDir = TestUtils.tempDirectory("kafka-test");
+    }
 
     @Test
     public void testJoin() throws Exception {
-        final File baseDir = temporaryFolder.newFolder();
         final KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -87,7 +90,7 @@ public class KTableKTableJoinTest {
 
         KTableValueGetterSupplier<Integer, String> getterSupplier = ((KTableImpl<Integer, String, String>) joined).valueGetterSupplier();
 
-        driver = new KStreamTestDriver(builder, baseDir);
+        driver = new KStreamTestDriver(builder, stateDir);
         driver.setTime(0L);
 
         KTableValueGetter<Integer, String> getter = getterSupplier.get();
@@ -158,7 +161,6 @@ public class KTableKTableJoinTest {
 
     @Test
     public void testNotSendingOldValues() throws Exception {
-        final File baseDir = temporaryFolder.newFolder();
         final KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -175,7 +177,7 @@ public class KTableKTableJoinTest {
         proc = new MockProcessorSupplier<>();
         builder.addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
 
-        driver = new KStreamTestDriver(builder, baseDir);
+        driver = new KStreamTestDriver(builder, stateDir);
         driver.setTime(0L);
 
         assertFalse(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
@@ -240,7 +242,6 @@ public class KTableKTableJoinTest {
 
     @Test
     public void testSendingOldValues() throws Exception {
-        final File baseDir = temporaryFolder.newFolder();
         final KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -259,7 +260,7 @@ public class KTableKTableJoinTest {
         proc = new MockProcessorSupplier<>();
         builder.addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
 
-        driver = new KStreamTestDriver(builder, baseDir);
+        driver = new KStreamTestDriver(builder, stateDir);
         driver.setTime(0L);
 
         assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());

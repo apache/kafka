@@ -18,19 +18,17 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.After;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
 
@@ -43,12 +41,7 @@ public class KGroupedTableImplTest {
 
     @Before
     public void setUp() throws IOException {
-        stateDir = Files.createTempDirectory("test").toFile();
-    }
-
-    @After
-    public void tearDown() throws IOException {
-        Utils.delete(stateDir);
+        stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
     @SuppressWarnings("unchecked")

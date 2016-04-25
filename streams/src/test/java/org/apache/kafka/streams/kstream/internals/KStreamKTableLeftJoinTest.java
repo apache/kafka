@@ -27,12 +27,13 @@ import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.Rule;
+import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -49,21 +50,23 @@ public class KStreamKTableLeftJoinTest {
     final private Serde<String> stringSerde = Serdes.String();
 
     private KStreamTestDriver driver = null;
+    private File stateDir = null;
 
     @After
-    public void cleanup() {
+    public void tearDown() {
         if (driver != null) {
             driver.close();
         }
         driver = null;
     }
 
-    @Rule
-    public final TemporaryFolder temporaryFolder = new TemporaryFolder();
+    @Before
+    public void setUp() throws IOException {
+        stateDir = TestUtils.tempDirectory("kafka-test");
+    }
 
     @Test
     public void testJoin() throws Exception {
-        File baseDir = temporaryFolder.newFolder();
         KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -82,7 +85,7 @@ public class KStreamKTableLeftJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        driver = new KStreamTestDriver(builder, baseDir);
+        driver = new KStreamTestDriver(builder, stateDir);
         driver.setTime(0L);
 
         // push two items to the primary stream. the other table is empty

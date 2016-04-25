@@ -33,10 +33,10 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.Rule;
+import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.IOException;
@@ -51,17 +51,20 @@ public class KTableImplTest {
     final private Serde<String> stringSerde = Serdes.String();
 
     private KStreamTestDriver driver = null;
+    private File stateDir = null;
 
     @After
-    public void cleanup() {
+    public void tearDown() {
         if (driver != null) {
             driver.close();
         }
         driver = null;
     }
 
-    @Rule
-    public final TemporaryFolder temporaryFolder = new TemporaryFolder();
+    @Before
+    public void setUp() throws IOException {
+        stateDir = TestUtils.tempDirectory("kafka-test");
+    }
 
     @Test
     public void testKTable() {
@@ -115,7 +118,6 @@ public class KTableImplTest {
 
     @Test
     public void testValueGetter() throws IOException {
-        final File stateDir = temporaryFolder.newFolder();
         final KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
@@ -240,7 +242,6 @@ public class KTableImplTest {
         String topic1 = "topic1";
         String topic2 = "topic2";
 
-        final File stateDir = temporaryFolder.newFolder();
         final KStreamBuilder builder = new KStreamBuilder();
 
         KTableImpl<String, String, String> table1 =
@@ -275,7 +276,6 @@ public class KTableImplTest {
         String topic1 = "topic1";
         String topic2 = "topic2";
 
-        final File stateDir = temporaryFolder.newFolder();
         final KStreamBuilder builder = new KStreamBuilder();
 
         KTableImpl<String, String, String> table1 =
@@ -316,7 +316,6 @@ public class KTableImplTest {
     public void testRepartition() throws IOException {
         String topic1 = "topic1";
 
-        final File stateDir = temporaryFolder.newFolder();
         final KStreamBuilder builder = new KStreamBuilder();
 
         KTableImpl<String, String, String> table1 =
