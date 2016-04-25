@@ -693,7 +693,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         else
           metadataRequest.topics.asScala.toSet
       } else {
-        if (metadataRequest.allTopics())
+        if (metadataRequest.isAllTopics)
           metadataCache.getAllTopics()
         else
           metadataRequest.topics.asScala.toSet

@@ -30,7 +30,7 @@ import scala.collection.JavaConverters._
 
 class MetadataRequestTest extends BaseRequestTest {
 
-  private def allMetadataRequest = new MetadataRequest(null, true)
+  private def allMetadataRequest = MetadataRequest.allTopics()
   private def noMetadataRequest = new MetadataRequest(List[String]().asJava)
 
   override def propertyOverrides(properties: Properties): Properties = {

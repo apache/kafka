@@ -70,10 +70,9 @@ public class RequestResponseTest {
                 createListOffsetRequest(),
                 createListOffsetRequest().getErrorResponse(0, new UnknownServerException()),
                 createListOffsetResponse(),
-                createMetadataRequest(null, true),
-                createMetadataRequest(Arrays.asList("topic1"), true),
-                createMetadataRequest(Arrays.asList("topic1"), false),
-                createMetadataRequest(null, true).getErrorResponse(1, new UnknownServerException()),
+                MetadataRequest.allTopics(),
+                createMetadataRequest(Arrays.asList("topic1")),
+                createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(1, new UnknownServerException()),
                 createMetadataResponse(1),
                 createOffsetCommitRequest(2),
                 createOffsetCommitRequest(2).getErrorResponse(2, new UnknownServerException()),
@@ -100,7 +99,7 @@ public class RequestResponseTest {
             checkSerialization(req, null);
 
         createMetadataResponse(0);
-        createMetadataRequest(null, true).getErrorResponse(0, new UnknownServerException());
+        createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(0, new UnknownServerException());
         checkSerialization(createFetchRequest().getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createOffsetCommitRequest(0), 0);
         checkSerialization(createOffsetCommitRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
@@ -282,8 +281,8 @@ public class RequestResponseTest {
         return new ListOffsetResponse(responseData);
     }
 
-    private AbstractRequest createMetadataRequest(List<String> topics, boolean allTopics) {
-        return new MetadataRequest(topics, allTopics);
+    private AbstractRequest createMetadataRequest(List<String> topics) {
+        return new MetadataRequest(topics);
     }
 
     private AbstractRequestResponse createMetadataResponse(int version) {

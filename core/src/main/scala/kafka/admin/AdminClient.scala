@@ -83,7 +83,7 @@ class AdminClient(val time: Time,
   }
 
   private def findAllBrokers(): List[Node] = {
-    val request = new MetadataRequest(List[String](), true)
+    val request = new MetadataRequest(List[String]())
     val responseBody = sendAnyNode(ApiKeys.METADATA, request)
     val response = new MetadataResponse(responseBody)
     val errors = response.errors()

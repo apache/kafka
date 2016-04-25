@@ -29,23 +29,24 @@ public class MetadataRequest extends AbstractRequest {
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.METADATA.id);
     private static final String TOPICS_KEY_NAME = "topics";
 
-    private final boolean allTopics;
+    private static final MetadataRequest ALL_TOPICS_REQUEST = new MetadataRequest((List<String>) null); // Unusual cast to work around constructor ambiguity
+
     private final List<String> topics;
 
-    public MetadataRequest(List<String> topics) {
-        this(topics, false);
+    public static MetadataRequest allTopics() {
+        return ALL_TOPICS_REQUEST;
     }
 
     /**
-     * If allTopics is true, then the passed topics will be ignored.
+     * In v0 null is not allowed and and empty list indicates requesting all topics.
+     * In v1 null indicates requesting all topics, and an empty list indicates requesting no topics.
      */
-    public MetadataRequest(List<String> topics, boolean allTopics) {
+    public MetadataRequest(List<String> topics) {
         super(new Struct(CURRENT_SCHEMA));
-        if (allTopics)
+        if (topics == null)
             struct.set(TOPICS_KEY_NAME, null);
         else
             struct.set(TOPICS_KEY_NAME, topics.toArray());
-        this.allTopics = allTopics;
         this.topics = topics;
     }
 
@@ -57,10 +58,8 @@ public class MetadataRequest extends AbstractRequest {
             for (Object topicObj: topicArray) {
                 topics.add((String) topicObj);
             }
-            allTopics = false;
         } else {
             topics = null;
-            allTopics = true;
         }
     }
 
@@ -85,12 +84,12 @@ public class MetadataRequest extends AbstractRequest {
         }
     }
 
-    public List<String> topics() {
-        return topics;
+    public boolean isAllTopics() {
+        return topics == null;
     }
 
-    public boolean allTopics() {
-        return allTopics;
+    public List<String> topics() {
+        return topics;
     }
 
     public static MetadataRequest parse(ByteBuffer buffer, int versionId) {

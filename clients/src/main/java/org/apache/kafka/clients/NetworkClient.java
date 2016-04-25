@@ -37,7 +37,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 
 /**
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
@@ -607,8 +606,7 @@ public class NetworkClient implements KafkaClient {
         /**
          * Create a metadata request for the given topics
          */
-        private ClientRequest request(long now, String node, Set<String> topics, boolean allTopics) {
-            MetadataRequest metadata = new MetadataRequest(new ArrayList<>(topics), allTopics);
+        private ClientRequest request(long now, String node, MetadataRequest metadata) {
             RequestSend send = new RequestSend(node, nextRequestHeader(ApiKeys.METADATA), metadata.toStruct());
             return new ClientRequest(now, true, send, null, true);
         }
@@ -627,9 +625,14 @@ public class NetworkClient implements KafkaClient {
 
             if (canSendRequest(nodeConnectionId)) {
                 this.metadataFetchInProgress = true;
-                ClientRequest metadataRequest = request(now, nodeConnectionId, metadata.topics(), metadata.needMetadataForAllTopics());
+                MetadataRequest metadataRequest;
+                if (metadata.needMetadataForAllTopics())
+                    metadataRequest = MetadataRequest.allTopics();
+                else
+                    metadataRequest = new MetadataRequest(new ArrayList<>(metadata.topics()));
+                ClientRequest clientRequest = request(now, nodeConnectionId, metadataRequest);
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
-                doSend(metadataRequest, now);
+                doSend(clientRequest, now);
             } else if (connectionStates.canConnect(nodeConnectionId, now)) {
                 // we don't have a connection to this node right now, make one
                 log.debug("Initialize connection to node {} for sending metadata request", node.id());
