@@ -30,9 +30,6 @@ import scala.collection.JavaConverters._
 
 class MetadataRequestTest extends BaseRequestTest {
 
-  private def allMetadataRequest = MetadataRequest.allTopics()
-  private def noMetadataRequest = new MetadataRequest(List[String]().asJava)
-
   override def propertyOverrides(properties: Properties): Properties = {
     properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
     properties
@@ -42,7 +39,7 @@ class MetadataRequestTest extends BaseRequestTest {
   def testControllerId() {
     val controllerServer = servers.find(_.kafkaController.isActive()).get
     val controllerId = controllerServer.apis.brokerId
-    val metadataResponse = sendMetadataRequest(allMetadataRequest, 1)
+    val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 1)
 
     assertEquals("Controller id should match the active controller",
       controllerServer.apis.brokerId, metadataResponse.controller.id)
@@ -55,14 +52,14 @@ class MetadataRequestTest extends BaseRequestTest {
     val controllerId2 = controllerServer2.apis.brokerId
     assertNotEquals("Controller id should switch to a new broker", controllerId, controllerId2)
     TestUtils.waitUntilTrue(() => {
-      val metadataResponse2 = sendMetadataRequest(allMetadataRequest, 1)
+      val metadataResponse2 = sendMetadataRequest(MetadataRequest.allTopics(), 1)
       controllerServer2.apis.brokerId == metadataResponse2.controller.id
     }, "Controller id should match the active controller after failover", 5000)
   }
 
   @Test
   def testRack() {
-    val metadataResponse = sendMetadataRequest(allMetadataRequest, 1)
+    val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 1)
     // Validate rack matches what's set in generateConfigs() above
     metadataResponse.brokers.asScala.foreach { broker =>
       assertEquals("Rack information should match config", s"rack/${broker.id}", broker.rack)
@@ -77,7 +74,7 @@ class MetadataRequestTest extends BaseRequestTest {
     TestUtils.createTopic(zkUtils, internalTopic, 3, 2, servers)
     TestUtils.createTopic(zkUtils, notInternalTopic, 3, 2, servers)
 
-    val metadataResponse = sendMetadataRequest(allMetadataRequest, 1)
+    val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 1)
     assertTrue("Response should have no errors", metadataResponse.errors.isEmpty)
 
     val topicMetadata = metadataResponse.topicMetadata.asScala
@@ -94,9 +91,28 @@ class MetadataRequestTest extends BaseRequestTest {
     TestUtils.createTopic(zkUtils, "t1", 3, 2, servers)
     TestUtils.createTopic(zkUtils, "t2", 3, 2, servers)
 
-    val metadataResponse = sendMetadataRequest(noMetadataRequest, 1)
+    // v0, Doesn't support a "no topics" request
+    // v1, Empty list represents "no topics"
+    val metadataResponse = sendMetadataRequest(new MetadataRequest(List[String]().asJava), 1)
     assertTrue("Response should have no errors", metadataResponse.errors.isEmpty)
     assertTrue("Response should have no topics", metadataResponse.topicMetadata.isEmpty)
+  }
+
+  @Test
+  def testAllTopicsRequest() {
+    // create some topics
+    TestUtils.createTopic(zkUtils, "t1", 3, 2, servers)
+    TestUtils.createTopic(zkUtils, "t2", 3, 2, servers)
+
+    // v0, Empty list represents all topics
+    val metadataResponseV0 = sendMetadataRequest(new MetadataRequest(List[String]().asJava), 0)
+    assertTrue("V0 Response should have no errors", metadataResponseV0.errors.isEmpty)
+    assertEquals("V0 Response should have 2 (all) topics", 2, metadataResponseV0.topicMetadata.size())
+
+    // v1, Null represents all topics
+    val metadataResponseV1 = sendMetadataRequest(MetadataRequest.allTopics(), 1)
+    assertTrue("V1 Response should have no errors", metadataResponseV1.errors.isEmpty)
+    assertEquals("V1 Response should have 2 (all) topics", 2, metadataResponseV1.topicMetadata.size())
   }
 
   @Test
