@@ -54,8 +54,6 @@ import scala.collection.Map;
 
 /**
  * Tests related to internal topics in streams
- *
- * Note: This example uses lambda expressions and thus works with Java 8+ only.
  */
 public class InternalTopicIntegrationTest {
     @ClassRule
@@ -119,7 +117,7 @@ public class InternalTopicIntegrationTest {
     }
 
     @Test
-    public void shouldValidateCompactTopics() throws Exception {
+    public void shouldCompactTopicsForStateChangelogs() throws Exception {
         List<String> inputValues = Arrays.asList("hello", "world", "world", "hello world");
 
         //
@@ -161,11 +159,6 @@ public class InternalTopicIntegrationTest {
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
 
-        // Wait briefly for the topology to be fully up and running (otherwise it might miss some or all
-        // of the input data we produce below).
-        // Note: The sleep times are relatively high to support running the build on Travis CI.
-        Thread.sleep(5000);
-
         //
         // Step 2: Produce some input data to the input topic.
         //
@@ -177,14 +170,10 @@ public class InternalTopicIntegrationTest {
         producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         IntegrationTestUtils.produceValuesSynchronously(DEFAULT_INPUT_TOPIC, inputValues, producerConfig);
 
-        // Give the stream processing application some time to do its work.
-        // Note: The sleep times are relatively high to support running the build on Travis CI.
-        Thread.sleep(10000);
-        streams.close();
-
         //
         // Step 3: Verify the state changelog topics are compact
         //
+        streams.close();
         assertEquals(isUsingCompactionForStateChangelogTopics(), true);
     }
 }
