@@ -205,8 +205,9 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
         <pre>    security.inter.broker.protocol=SASL_PLAINTEXT (or SASL_SSL)</pre></li>
       <li>Enable one or more SASL mechanisms in server.properties:
           <pre>    sasl.enabled.mechanisms=GSSAPI (,PLAIN)</pre></li>
-      <li>Configure a SASL mechanism in server.properties if using SASL for inter-broker communication:
-          <pre>    sasl.mechanism=GSSAPI (or PLAIN)</pre></li>
+      <li>Configure the SASL mechanism for inter-broker communication in server.properties
+        if using SASL for inter-broker communication:
+        <pre>    sasl.mechanism.inter.broker.protocol=GSSAPI (or PLAIN)</pre></li>
       <li>Follow the steps in <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>
         or <a href="#security_sasl_plain_brokerconfig">PLAIN</a> to configure SASL
         for the enabled mechanisms. To enable multiple mechanisms in the broker, follow
@@ -299,7 +300,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
           <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>.</pre> For example:
           <pre>    listeners=SASL_PLAINTEXT://host.name:port
     security.inter.broker.protocol=SASL_PLAINTEXT
-    sasl.mechanism=GSSAPI
+    sasl.mechanism.inter.broker.protocol=GSSAPI
     sasl.enabled.mechanisms=GSSAPI
           </pre>
           </li>We must also configure the service name in server.properties, which should match the principal name of the kafka brokers. In the above example, principal is "kafka/kafka1.hostname.com@EXAMPLE.com", so: 
@@ -363,7 +364,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
           <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>.</pre> For example:
             <pre>    listeners=SASL_SSL://host.name:port
     security.inter.broker.protocol=SASL_SSL
-    sasl.mechanism=PLAIN
+    sasl.mechanism.inter.broker.protocol=PLAIN
     sasl.enabled.mechanisms=PLAIN</pre></li>
         </ol>
       </li>
@@ -421,7 +422,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
       <li>Enable the SASL mechanisms in server.properties: <pre>    sasl.enabled.mechanisms=GSSAPI,PLAIN</pre></li>
       <li>Specify the SASL security protocol and mechanism for inter-broker communication in server.properties if required:
         <pre>    security.inter.broker.protocol=SASL_PLAINTEXT (or SASL_SSL)
-    sasl.mechanism=GSSAPI (or PLAIN)</pre></li>
+    sasl.mechanism.inter.broker.protocol=GSSAPI (or PLAIN)</pre></li>
       <li>Follow the mechanism-specific steps in <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>
           and <a href="#security_sasl_plain_brokerconfig">PLAIN</a> to configure SASL for the enabled mechanisms.</li>
     </ol>
@@ -500,7 +501,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
       <li>Enable new SASL mechanism by adding the mechanism to <tt>sasl.enabled.mechanisms</tt> in server.properties for each broker. Update JAAS config file to include both
         mechanisms as described <a href="#security_sasl_multimechanism">here</a>. Incrementally bounce the cluster nodes.</li>
       <li>Restart clients using the new mechanism.</li>
-      <li>To change the mechanism of inter-broker communication (if this is required), set <tt>sasl.mechanism</tt> in server.properties to the new mechanism and
+      <li>To change the mechanism of inter-broker communication (if this is required), set <tt>sasl.mechanism.inter.broker.protocol</tt> in server.properties to the new mechanism and
         incrementally bounce the cluster again.</li>
       <li>To remove old mechanism (if this is required), remove the old mechanism from <tt>sasl.enabled.mechanisms</tt> in server.properties and remove the entries for the
         old mechanism from JAAS config file. Incrementally bounce the cluster again.</li>
