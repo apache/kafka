@@ -20,9 +20,11 @@ then
   exit 1
 fi
 
-check_file() {
+# Exclude jars not necessary for running commands.
+regex="((test|src|scaladoc|javadoc)\.jar|jar.asc)$"
+filter_file() {
   file=$1
-  if [ -z "$(echo "$file" | grep "test")" ] ; then
+  if [ -z "$(echo "$file" | egrep "$regex")" ] ; then
     return 0
   else
     return 1
@@ -52,28 +54,28 @@ done
 
 for file in $base_dir/examples/build/libs/kafka-examples*.jar;
 do
-  if check_file "$file"; then
+  if filter_file "$file"; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
 
 for file in $base_dir/clients/build/libs/kafka-clients*.jar;
 do
-  if check_file "$file"; then
+  if filter_file "$file"; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
 
 for file in $base_dir/streams/build/libs/kafka-streams*.jar;
 do
-  if check_file "$file"; then
+  if filter_file "$file"; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
 
 for file in $base_dir/streams/examples/build/libs/kafka-streams-examples*.jar;
 do
-  if check_file "$file"; then
+  if filter_file "$file"; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
@@ -85,7 +87,7 @@ done
 
 for file in $base_dir/tools/build/libs/kafka-tools*.jar;
 do
-  if check_file "$file"; then
+  if filter_file "$file"; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
@@ -99,7 +101,7 @@ for cc_pkg in "api" "runtime" "file" "json" "tools"
 do
   for file in $base_dir/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
   do
-    if check_file "$file"; then
+    if filter_file "$file"; then
       CLASSPATH=$CLASSPATH:$file
     fi
   done
@@ -109,11 +111,16 @@ do
 done
 
 # classpath addition for release
-CLASSPATH=$CLASSPATH:$base_dir/libs/*
+for file in $base_dir/libs;
+do
+  if filter_file "$file"; then
+    CLASSPATH=$CLASSPATH:$file
+  fi
+done
 
 for file in $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
 do
-  if check_file "$file"; then
+  if filter_file "$file"; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
@@ -167,8 +174,6 @@ if [ "x$KAFKA_DEBUG" != "x" ]; then
     if [ -z "$JAVA_DEBUG_OPTS" ]; then
         JAVA_DEBUG_OPTS="$DEFAULT_JAVA_DEBUG_OPTS"
     fi
-
-
 
     echo "Enabling Java debug options: $JAVA_DEBUG_OPTS"
     KAFKA_OPTS="$JAVA_DEBUG_OPTS $KAFKA_OPTS"
