@@ -60,16 +60,10 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         this.valSerde = valSerde;
     }
 
-    @Override
-    public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                                      Aggregator<K, V, T> adder,
-                                      Aggregator<K, V, T> subtractor,
-                                      Serde<T> aggValueSerde,
-                                      String name) {
-
+    private <T> KTable<K, T> getKTableImplObj(String name, String kTableAction, ProcessorSupplier<K, Change<V>> aggregateSupplier, StateStoreSupplier aggregateStore) {
         String sinkName = topology.newName(KStreamImpl.SINK_NAME);
         String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
-        String aggregateName = topology.newName(AGGREGATE_NAME);
+        String actionName = topology.newName(kTableAction);
 
         String topic = name + REPARTITION_TOPIC_SUFFIX;
 
@@ -81,14 +75,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         ChangedSerializer<V> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
         ChangedDeserializer<V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
 
-        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(name, initializer, adder, subtractor);
-
-        StateStoreSupplier aggregateStore = Stores.create(name)
-                .withKeys(keySerde)
-                .withValues(aggValueSerde)
-                .persistent()
-                .build();
-
         // send the aggregate key-value pairs to the intermediate topic for partitioning
         topology.addInternalTopic(topic);
         topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, this.name);
@@ -97,11 +83,27 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         topology.addSource(sourceName, keyDeserializer, changedValueDeserializer, topic);
 
         // aggregate the values with the aggregator and local store
-        topology.addProcessor(aggregateName, aggregateSupplier, sourceName);
-        topology.addStateStore(aggregateStore, aggregateName);
+        topology.addProcessor(actionName, aggregateSupplier, sourceName);
+        topology.addStateStore(aggregateStore, actionName);
 
         // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(topology, aggregateName, aggregateSupplier, Collections.singleton(sourceName));
+        return new KTableImpl<>(topology, actionName, aggregateSupplier, Collections.singleton(sourceName));
+    }
+
+    @Override
+    public <T> KTable<K, T> aggregate(Initializer<T> initializer,
+                                      Aggregator<K, V, T> adder,
+                                      Aggregator<K, V, T> subtractor,
+                                      Serde<T> aggValueSerde,
+                                      String name) {
+        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(name, initializer, adder, subtractor);
+        StateStoreSupplier aggregateStore = Stores.create(name)
+                .withKeys(keySerde)
+                .withValues(aggValueSerde)
+                .persistent()
+                .build();
+
+        return getKTableImplObj(name, AGGREGATE_NAME, aggregateSupplier, aggregateStore);
     }
 
     @Override
@@ -117,42 +119,14 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     public KTable<K, V> reduce(Reducer<V> adder,
                                Reducer<V> subtractor,
                                String name) {
-
-        String sinkName = topology.newName(KStreamImpl.SINK_NAME);
-        String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
-        String reduceName = topology.newName(REDUCE_NAME);
-
-        String topic = name + REPARTITION_TOPIC_SUFFIX;
-
-        Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
-        Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
-        Serializer<V> valueSerializer = valSerde == null ? null : valSerde.serializer();
-        Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
-
-        ChangedSerializer<V> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
-        ChangedDeserializer<V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
-
-        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(name, adder, subtractor);
-
+        ProcessorSupplier<K, Change<V>> aggregateSupplier = aggregateSupplier = new KTableReduce<>(name, adder, subtractor);
         StateStoreSupplier aggregateStore = Stores.create(name)
                 .withKeys(keySerde)
                 .withValues(valSerde)
                 .persistent()
                 .build();
 
-        // send the aggregate key-value pairs to the intermediate topic for partitioning
-        topology.addInternalTopic(topic);
-        topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, this.name);
-
-        // read the intermediate topic
-        topology.addSource(sourceName, keyDeserializer, changedValueDeserializer, topic);
-
-        // aggregate the values with the aggregator and local store
-        topology.addProcessor(reduceName, aggregateSupplier, sourceName);
-        topology.addStateStore(aggregateStore, reduceName);
-
-        // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(topology, reduceName, aggregateSupplier, Collections.singleton(sourceName));
+        return getKTableImplObj(name, REDUCE_NAME, aggregateSupplier, aggregateStore);
     }
 
     @Override
