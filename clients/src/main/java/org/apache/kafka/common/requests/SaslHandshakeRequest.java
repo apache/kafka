@@ -32,7 +32,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 /**
  * Request from SASL client containing client SASL mechanism.
  * <p/>
- * For interoperability with Kafka 0.9.0.x, mechanism flow may be omitted when using GSSAPI. Hence
+ * For interoperability with Kafka 0.9.0.x, the mechanism flow may be omitted when using GSSAPI. Hence
  * this request should not conflict with the first GSSAPI client packet. For GSSAPI, the first context
  * establishment packet starts with byte 0x60 (APPLICATION-0 tag) followed by a variable-length encoded size.
  * This handshake request starts with a request header two-byte API key set to 17, followed by a mechanism name,
@@ -43,7 +43,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.SASL_HANDSHAKE.id);
     public static final String MECHANISM_KEY_NAME = "mechanism";
 
-    private String mechanism;
+    private final String mechanism;
 
     public SaslHandshakeRequest(String mechanism) {
         super(new Struct(CURRENT_SCHEMA));

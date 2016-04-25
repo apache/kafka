@@ -28,7 +28,7 @@ import javax.security.auth.Subject;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.JaasUtils;
-import org.apache.kafka.common.security.authenticator.DefaultLogin;
+import org.apache.kafka.common.security.authenticator.AbstractLogin;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.utils.Shell;
 import org.apache.kafka.common.utils.Time;
@@ -47,18 +47,18 @@ import java.util.Map;
  * This class is responsible for refreshing Kerberos credentials for
  * logins for both Kafka client and server.
  */
-public class KerberosLogin extends DefaultLogin {
+public class KerberosLogin extends AbstractLogin {
     private static final Logger log = LoggerFactory.getLogger(KerberosLogin.class);
 
     private static final Random RNG = new Random();
 
+    private final Time time = new SystemTime();
     private Thread t;
     private boolean isKrbTicket;
     private boolean isUsingTicketCache;
 
     private String loginContextName;
     private String principal;
-    private Time time = new SystemTime();
 
     // LoginThread will sleep until 80% of time from last refresh to
     // ticket's expiry has been reached, at which time it will wake

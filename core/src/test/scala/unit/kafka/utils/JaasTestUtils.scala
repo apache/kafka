@@ -43,7 +43,7 @@ object JaasTestUtils {
   case class PlainLoginModule(username: String,
                               password: String,
                               debug: Boolean = false,
-                              validUsers: Option[Map[String, String]] = None) {
+                              validUsers: Map[String, String] = Map.empty) {
     def toJaasModule: JaasModule = {
       JaasModule(
         "org.apache.kafka.common.security.plain.PlainLoginModule",
@@ -51,7 +51,7 @@ object JaasTestUtils {
         entries = Map(
           "username" -> username,
           "password" -> password
-        ) ++ validUsers.getOrElse(Map.empty).map(up => ("user_" + up._1 -> up._2))
+        ) ++ validUsers.map{ case (user, pass) => (s"user_$user"-> pass)}
       )
     }
   }
@@ -120,24 +120,22 @@ object JaasTestUtils {
   )
 
   private def kafkaServerSection(mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
-    val modules = mechanisms.map{mechanism =>
-      mechanism match {
-        case "GSSAPI" =>
-          Krb5LoginModule(
-            useKeyTab = true,
-            storeKey = true,
-            keyTab = keytabLocation.get.getAbsolutePath,
-            principal = KafkaServerPrincipal,
-            debug = true,
-            serviceName = Some("kafka")).toJaasModule
-        case "PLAIN" =>
-          PlainLoginModule(
-              KafkaPlainAdmin,
-              KafkaPlainAdminPassword,
-              debug = false,
-              Some(Map(KafkaPlainAdmin -> KafkaPlainAdminPassword, KafkaPlainUser -> KafkaPlainPassword))).toJaasModule
-        case _ => throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
-      }
+    val modules = mechanisms.map{
+      case "GSSAPI" =>
+        Krb5LoginModule(
+          useKeyTab = true,
+          storeKey = true,
+          keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
+          principal = KafkaServerPrincipal,
+          debug = true,
+          serviceName = Some("kafka")).toJaasModule
+      case "PLAIN" =>
+        PlainLoginModule(
+          KafkaPlainAdmin,
+          KafkaPlainAdminPassword,
+          debug = false,
+          Map(KafkaPlainAdmin -> KafkaPlainAdminPassword, KafkaPlainUser -> KafkaPlainPassword)).toJaasModule
+      case mechanism => throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
     }
     new JaasSection(KafkaServerContextName, modules)
   }

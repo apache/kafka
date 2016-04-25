@@ -31,6 +31,12 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 
+/**
+ * Callback handler for Sasl clients. The callbacks required for the SASL mechanism
+ * configured for the client should be supported by this callback handler. See
+ * <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/sasl/sasl-refguide.html">Java SASL API</a>
+ * for the list of SASL callback handlers required for each SASL mechanism.
+ */
 public class SaslClientCallbackHandler implements AuthCallbackHandler {
 
     private boolean isKerberos;

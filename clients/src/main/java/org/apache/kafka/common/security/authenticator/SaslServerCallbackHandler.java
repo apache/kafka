@@ -38,6 +38,12 @@ import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.JaasUtils;
 
+/**
+ * Callback handler for Sasl servers. The callbacks required for all the SASL
+ * mechanisms enabled in the server should be supported by this callback handler. See
+ * <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/sasl/sasl-refguide.html">Java SASL API</a>
+ * for the list of SASL callback handlers required for each SASL mechanism.
+ */
 public class SaslServerCallbackHandler implements AuthCallbackHandler {
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerCallbackHandler.class);
     private final KerberosShortNamer kerberosShortNamer;

@@ -46,7 +46,6 @@ public interface Login {
 
     /**
      * Returns the service name to be used for SASL.
-     * @return
      */
     String serviceName();
 

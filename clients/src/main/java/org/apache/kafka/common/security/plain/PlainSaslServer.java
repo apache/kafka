@@ -41,9 +41,8 @@ import org.apache.kafka.common.security.JaasUtils;
  * is specified with user_<username> as key and <password> as value. This is consistent
  * with Zookeeper Digest-MD5 implementation.
  * <p>
- * This implementation is provided as a sample and for testing. In production systems,
- * this can be easily replaced with a different implementation that does not require
- * clear passwords to be stored on disk.
+ * To avoid storing clear passwords on disk or to integrate with external authentication
+ * servers in production systems, this module can be replaced with a different implementation.
  *
  */
 public class PlainSaslServer implements SaslServer {
@@ -79,18 +78,18 @@ public class PlainSaslServer implements SaslServer {
             throw new SaslException("UTF-8 encoding not supported", e);
         }
         if (tokens.length != 3)
-            throw new SaslException("Invalid SASL/PLAIN response");
+            throw new SaslException("Invalid SASL/PLAIN response: expected 3 tokens, got " + tokens.length);
         authorizationID = tokens[0];
         String username = tokens[1];
         String password = tokens[2];
 
-        if (username.length() == 0) {
+        if (username.isEmpty()) {
             throw new SaslException("Authentication failed: username not specified");
         }
-        if (password.length() == 0) {
+        if (password.isEmpty()) {
             throw new SaslException("Authentication failed: password not specified");
         }
-        if (authorizationID.length() == 0)
+        if (authorizationID.isEmpty())
             authorizationID = username;
 
         try {
@@ -99,7 +98,7 @@ public class PlainSaslServer implements SaslServer {
                 throw new SaslException("Authentication failed: Invalid username or password");
             }
         } catch (IOException e) {
-            throw new SaslException("Authentication failed: " + e, e);
+            throw new SaslException("Authentication failed: Invalid JAAS configuration", e);
         }
         complete = true;
         return new byte[0];
@@ -154,7 +153,7 @@ public class PlainSaslServer implements SaslServer {
             throws SaslException {
 
             if (!PLAIN_MECHANISM.equals(mechanism)) {
-                throw new SaslException("Mechanism not supported: " + mechanism);
+                throw new SaslException(String.format("Mechanism \'%s\' is not supported. Only PLAIN is supported.", mechanism));
             }
             return new PlainSaslServer(cbh);
         }
@@ -163,9 +162,9 @@ public class PlainSaslServer implements SaslServer {
         public String[] getMechanismNames(Map<String, ?> props) {
             String noPlainText = (String) props.get(Sasl.POLICY_NOPLAINTEXT);
             if ("true".equals(noPlainText))
-                return new String[]{PLAIN_MECHANISM};
-            else
                 return new String[]{};
+            else
+                return new String[]{PLAIN_MECHANISM};
         }
     }
 }

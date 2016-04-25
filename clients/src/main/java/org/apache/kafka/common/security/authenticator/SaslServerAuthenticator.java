@@ -76,21 +76,24 @@ public class SaslServerAuthenticator implements Authenticator {
         HANDSHAKE_REQUEST, AUTHENTICATE, COMPLETE, FAILED
     }
 
-    private SaslState pendingSaslState = null;
-    private SaslState saslState = SaslState.HANDSHAKE_REQUEST;
-    private Set<String> enabledMechanisms = new HashSet<>();
-    private String saslMechanism;
-    private Map<String, ?> configs;
-    private final String host;
-    private SaslServer saslServer;
-    private AuthCallbackHandler callbackHandler;
-    private final Subject subject;
     private final String node;
+    private final Subject subject;
     private final KerberosShortNamer kerberosNamer;
     private final int maxReceiveSize;
+    private final String host;
+
+    // Current SASL state
+    private SaslState saslState = SaslState.HANDSHAKE_REQUEST;
+    // Next SASL state to be set when outgoing writes associated with the current SASL state complete
+    private SaslState pendingSaslState = null;
+    private SaslServer saslServer;
+    private String saslMechanism;
+    private AuthCallbackHandler callbackHandler;
 
     // assigned in `configure`
     private TransportLayer transportLayer;
+    private Set<String> enabledMechanisms;
+    private Map<String, ?> configs;
 
     // buffers used in `authenticate`
     private NetworkReceive netInBuffer;
@@ -109,20 +112,15 @@ public class SaslServerAuthenticator implements Authenticator {
     public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) {
         this.transportLayer = transportLayer;
         this.configs = configs;
-        try {
-            callbackHandler = new SaslServerCallbackHandler(Configuration.getConfiguration(), kerberosNamer);
-            List<String> enabledMechanisms = (List<String>) this.configs.get(SaslConfigs.SASL_ENABLED_MECHANISMS);
-            if (enabledMechanisms == null || enabledMechanisms.isEmpty())
-                this.enabledMechanisms.add((String) this.configs.get(SaslConfigs.SASL_MECHANISM));
-            else
-                this.enabledMechanisms.addAll(enabledMechanisms);
-        } catch (IOException e) {
-            throw new KafkaException(e);
-        }
+        List<String> enabledMechanisms = (List<String>) this.configs.get(SaslConfigs.SASL_ENABLED_MECHANISMS);
+        if (enabledMechanisms == null || enabledMechanisms.isEmpty())
+            throw new IllegalArgumentException("No SASL mechanisms are enabled");
+        this.enabledMechanisms = new HashSet<>(enabledMechanisms);
     }
 
     private void createSaslServer(String mechanism) throws IOException {
         this.saslMechanism = mechanism;
+        callbackHandler = new SaslServerCallbackHandler(Configuration.getConfiguration(), kerberosNamer);
         callbackHandler.configure(configs, Mode.SERVER, subject, saslMechanism);
         if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
             if (subject.getPrincipals().isEmpty())
@@ -130,7 +128,7 @@ public class SaslServerAuthenticator implements Authenticator {
             saslServer = createSaslKerberosServer(callbackHandler, configs);
         } else {
             try {
-                saslServer =  Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
+                saslServer = Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
                     public SaslServer run() throws SaslException {
                         return Sasl.createSaslServer(saslMechanism, "kafka", host, configs, callbackHandler);
                     }
@@ -199,7 +197,6 @@ public class SaslServerAuthenticator implements Authenticator {
             return;
 
         if (saslServer != null && saslServer.isComplete()) {
-            transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
             setSaslState(SaslState.COMPLETE);
             return;
         }
@@ -226,6 +223,8 @@ public class SaslServerAuthenticator implements Authenticator {
                             netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(response));
                             flushNetOutBufferAndUpdateInterestOps();
                         }
+                        // When the authentication exchange is complete and no more tokens are expected from the client,
+                        // update SASL state. Current SASL state will be updated when outgoing writes to the client complete.
                         if (saslServer.isComplete())
                             setSaslState(SaslState.COMPLETE);
                         break;
@@ -260,7 +259,7 @@ public class SaslServerAuthenticator implements Authenticator {
         else {
             this.pendingSaslState = null;
             this.saslState = saslState;
-            LOG.debug("Set SASL server state to " + saslState);
+            LOG.debug("Set SASL server state to {}", saslState);
         }
     }
 

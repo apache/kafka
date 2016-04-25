@@ -18,8 +18,6 @@ import java.nio.channels.SocketChannel;
 import java.util.List;
 import java.util.Map;
 
-import javax.security.auth.Subject;
-
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
@@ -44,8 +42,6 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private SslFactory sslFactory;
     private Map<String, ?> configs;
     private KerberosShortNamer kerberosShortNamer;
-    private Subject subject;
-    private String serviceName;
 
     public SaslChannelBuilder(Mode mode, LoginType loginType, SecurityProtocol securityProtocol, boolean handshakeRequestEnable) {
         this.mode = mode;
@@ -82,8 +78,6 @@ public class SaslChannelBuilder implements ChannelBuilder {
                     kerberosShortNamer = KerberosShortNamer.fromUnparsedRules(defaultRealm, principalToLocalRules);
             }
             this.loginManager = LoginManager.acquireLoginManager(loginType, hasKerberos, configs);
-            this.subject = loginManager.subject();
-            this.serviceName = loginManager.serviceName();
 
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 // Disable SSL client authentication as we are using SASL authentication
@@ -101,10 +95,10 @@ public class SaslChannelBuilder implements ChannelBuilder {
             TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel);
             Authenticator authenticator;
             if (mode == Mode.SERVER)
-                authenticator = new SaslServerAuthenticator(id, subject, kerberosShortNamer,
+                authenticator = new SaslServerAuthenticator(id, loginManager.subject(), kerberosShortNamer,
                         socketChannel.socket().getLocalAddress().getHostName(), maxReceiveSize);
             else
-                authenticator = new SaslClientAuthenticator(id, subject, serviceName,
+                authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
                         socketChannel.socket().getInetAddress().getHostName(), handshakeRequestEnable);
             // Both authenticators don't use `PrincipalBuilder`, so we pass `null` for now. Reconsider if this changes.
             authenticator.configure(transportLayer, null, this.configs);

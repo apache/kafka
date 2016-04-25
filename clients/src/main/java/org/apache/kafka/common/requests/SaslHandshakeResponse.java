@@ -46,21 +46,22 @@ public class SaslHandshakeResponse extends AbstractRequestResponse {
      *   ILLEGAL_SASL_STATE(34) : Invalid request during SASL handshake
      */
     private final short errorCode;
-    private List<String> enabledMechanisms = new ArrayList<String>();
+    private final List<String> enabledMechanisms;
 
     public SaslHandshakeResponse(short errorCode, Collection<String> enabledMechanisms) {
         super(new Struct(CURRENT_SCHEMA));
         struct.set(ERROR_CODE_KEY_NAME, errorCode);
         struct.set(ENABLED_MECHANISMS_KEY_NAME, enabledMechanisms.toArray());
         this.errorCode = errorCode;
-        this.enabledMechanisms.addAll(enabledMechanisms);
+        this.enabledMechanisms = new ArrayList<>(enabledMechanisms);
     }
 
     public SaslHandshakeResponse(Struct struct) {
         super(struct);
         errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
-        Object[] mechanisms = (Object []) struct.getArray(ENABLED_MECHANISMS_KEY_NAME);
-        for (Object mechanism: mechanisms)
+        Object[] mechanisms = struct.getArray(ENABLED_MECHANISMS_KEY_NAME);
+        this.enabledMechanisms = new ArrayList<>();
+        for (Object mechanism : mechanisms)
             this.enabledMechanisms.add((String) mechanism);
     }
 

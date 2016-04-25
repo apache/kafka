@@ -134,9 +134,9 @@ public enum Errors {
     INVALID_TIMESTAMP(32,
             new InvalidTimestampException("The timestamp of the message is out of acceptable range.")),
     UNSUPPORTED_SASL_MECHANISM(33,
-            new UnsupportedSaslMechanismException("The broker does not support requested SASL mechanism.")),
+            new UnsupportedSaslMechanismException("The broker does not support the requested SASL mechanism.")),
     ILLEGAL_SASL_STATE(34,
-            new IllegalSaslStateException("Request is not valid in the current SASL state."));
+            new IllegalSaslStateException("Request is not valid given the current SASL state."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

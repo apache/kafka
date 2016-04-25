@@ -34,6 +34,7 @@ import javax.security.sasl.SaslException;
 
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.Mode;
@@ -42,18 +43,17 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestSend;
-import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,7 +66,6 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private static final Logger LOG = LoggerFactory.getLogger(SaslClientAuthenticator.class);
 
-    private String mechanism;
     private final Subject subject;
     private final String servicePrincipal;
     private final String host;
@@ -74,6 +73,7 @@ public class SaslClientAuthenticator implements Authenticator {
     private final boolean handshakeRequestEnable;
 
     // assigned in `configure`
+    private String mechanism;
     private SaslClient saslClient;
     private Map<String, ?> configs;
     private String clientPrincipalName;
@@ -84,9 +84,13 @@ public class SaslClientAuthenticator implements Authenticator {
     private NetworkReceive netInBuffer;
     private NetworkSend netOutBuffer;
 
-    private SaslState pendingSaslState;
+    // Current SASL state
     private SaslState saslState;
+    // Next SASL state to be set when outgoing writes associated with the current SASL state complete
+    private SaslState pendingSaslState;
+    // Correlation ID for the next request
     private int correlationId;
+    // Request header for which response from the server is pending
     private RequestHeader currentRequestHeader;
 
     public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host, boolean handshakeRequestEnable) throws IOException {
@@ -116,6 +120,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 clientPrincipalName = null;
             }
             callbackHandler = new SaslClientCallbackHandler();
+            callbackHandler.configure(configs, Mode.CLIENT, subject, mechanism);
 
             saslClient = createSaslClient();
         } catch (Exception e) {
@@ -125,7 +130,6 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private SaslClient createSaslClient() {
         try {
-            callbackHandler.configure(configs, Mode.CLIENT, subject, mechanism);
             return Subject.doAs(subject, new PrivilegedExceptionAction<SaslClient>() {
                 public SaslClient run() throws SaslException {
                     String[] mechs = {mechanism};
@@ -200,21 +204,15 @@ public class SaslClientAuthenticator implements Authenticator {
         else {
             this.pendingSaslState = null;
             this.saslState = saslState;
-            LOG.debug("Set SASL client state to " + saslState);
+            LOG.debug("Set SASL client state to {}", saslState);
         }
     }
 
     private void sendSaslToken(byte[] serverToken, boolean isInitial) throws IOException {
         if (!saslClient.isComplete()) {
-            try {
-                byte[] saslToken = createSaslToken(serverToken, isInitial);
-                if (saslToken != null) {
-                    send(ByteBuffer.wrap(saslToken));
-                }
-            } catch (IOException e) {
-                setSaslState(SaslState.FAILED);
-                throw e;
-            }
+            byte[] saslToken = createSaslToken(serverToken, isInitial);
+            if (saslToken != null)
+                send(ByteBuffer.wrap(saslToken));
         }
     }
 
@@ -307,20 +305,15 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     private void handleKafkaResponse(RequestHeader requestHeader, byte[] responseBytes) {
-        ByteBuffer responseBuffer = ByteBuffer.wrap(responseBytes);
-        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
-        if (responseHeader.correlationId() != requestHeader.correlationId()) {
-            throw new IllegalStateException("Correlation id for response (" + responseHeader.correlationId()
-                    + ") does not match request (" + requestHeader.correlationId() + ")");
-        }
         Struct struct;
+        ApiKeys apiKey;
         try {
-            struct = ProtoUtils.responseSchema(requestHeader.apiKey(), requestHeader.apiVersion()).read(responseBuffer);
-        } catch (SchemaException e) {
+            struct = NetworkClient.parseResponse(ByteBuffer.wrap(responseBytes), requestHeader);
+            apiKey = ApiKeys.forId(requestHeader.apiKey());
+        } catch (SchemaException | IllegalArgumentException e) {
             LOG.debug("Invalid SASL mechanism response, server may be expecting only GSSAPI tokens");
             throw new AuthenticationException("Invalid SASL mechanism response", e);
         }
-        ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
         switch (apiKey) {
             case SASL_HANDSHAKE:
                 handleSaslHandshakeResponse(new SaslHandshakeResponse(struct));
@@ -331,11 +324,18 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     private void handleSaslHandshakeResponse(SaslHandshakeResponse response) {
-        if (response.errorCode() == Errors.UNSUPPORTED_SASL_MECHANISM.code()) {
-            throw new UnsupportedSaslMechanismException(String.format("Client saslMechanism '%s' not enabled in the server, enabled mechanisms are %s",
+        Errors error = Errors.forCode(response.errorCode());
+        switch (error) {
+            case NONE:
+                break;
+            case UNSUPPORTED_SASL_MECHANISM:
+                throw new UnsupportedSaslMechanismException(String.format("Client SASL mechanism '%s' not enabled in the server, enabled mechanisms are %s",
                     mechanism, response.enabledMechanisms()));
-        } else if (response.errorCode() != 0) {
-            throw new AuthenticationException(String.format("Unknown error code %d, client mechanism is %s, enabled mechanisms are %s",
+            case ILLEGAL_SASL_STATE:
+                throw new IllegalSaslStateException(String.format("Unexpected handshake request with client mechanism %s, enabled mechanisms are %s",
+                    mechanism, response.enabledMechanisms()));
+            default:
+                throw new AuthenticationException(String.format("Unknown error code %d, client mechanism is %s, enabled mechanisms are %s",
                     response.errorCode(), mechanism, response.enabledMechanisms()));
         }
     }

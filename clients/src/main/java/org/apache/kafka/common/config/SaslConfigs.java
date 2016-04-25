@@ -20,13 +20,17 @@ public class SaslConfigs {
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
      */
+    /** SASL mechanism configuration - standard mechanism names are listed <a href="http://www.iana.org/assignments/sasl-mechanisms/sasl-mechanisms.xhtml">here</a>. */
     public static final String SASL_MECHANISM = "sasl.mechanism";
     public static final String SASL_MECHANISM_DOC = "SASL mechanism used for client connections. This may be any mechanism for which a security provider is available. GSSAPI is the default mechanism.";
     public static final String GSSAPI_MECHANISM = "GSSAPI";
     public static final String DEFAULT_SASL_MECHANISM = GSSAPI_MECHANISM;
 
     public static final String SASL_ENABLED_MECHANISMS = "sasl.enabled.mechanisms";
-    public static final String SASL_ENABLED_MECHANISMS_DOC = "The list of SASL mechanisms enabled in the Kafka server. The list may contain any mechanism for which a security provider is available.";
+    public static final String SASL_ENABLED_MECHANISMS_DOC = "The list of SASL mechanisms enabled in the Kafka server. "
+        + "The list may contain any mechanism for which a security provider is available. "
+        + "Only GSSAPI is enabled by default.";
+    public static final List<String> DEFAULT_SASL_ENABLED_MECHANISMS = Collections.singletonList(GSSAPI_MECHANISM);
 
     public static final String SASL_KERBEROS_SERVICE_NAME = "sasl.kerberos.service.name";
     public static final String SASL_KERBEROS_SERVICE_NAME_DOC = "The Kerberos principal name that Kafka runs as. "

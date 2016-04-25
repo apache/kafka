@@ -176,6 +176,7 @@ object Defaults {
 
   /** ********* Sasl configuration ***********/
   val SaslMechanism = SaslConfigs.DEFAULT_SASL_MECHANISM
+  val SaslEnabledMechanisms = SaslConfigs.DEFAULT_SASL_ENABLED_MECHANISMS
   val SaslKerberosKinitCmd = SaslConfigs.DEFAULT_KERBEROS_KINIT_CMD
   val SaslKerberosTicketRenewWindowFactor = SaslConfigs.DEFAULT_KERBEROS_TICKET_RENEW_WINDOW_FACTOR
   val SaslKerberosTicketRenewJitter = SaslConfigs.DEFAULT_KERBEROS_TICKET_RENEW_JITTER
@@ -710,7 +711,7 @@ object KafkaConfig {
 
       /** ********* Sasl Configuration ****************/
       .define(SaslMechanismProp, STRING, Defaults.SaslMechanism, MEDIUM, SaslMechanismDoc)
-      .define(SaslEnabledMechanismsProp, LIST, null, MEDIUM, SaslEnabledMechanismsDoc)
+      .define(SaslEnabledMechanismsProp, LIST, Defaults.SaslEnabledMechanisms, MEDIUM, SaslEnabledMechanismsDoc)
       .define(SaslKerberosServiceNameProp, STRING, null, MEDIUM, SaslKerberosServiceNameDoc)
       .define(SaslKerberosKinitCmdProp, STRING, Defaults.SaslKerberosKinitCmd, MEDIUM, SaslKerberosKinitCmdDoc)
       .define(SaslKerberosTicketRenewWindowFactorProp, DOUBLE, Defaults.SaslKerberosTicketRenewWindowFactor, MEDIUM, SaslKerberosTicketRenewWindowFactorDoc)
@@ -1019,8 +1020,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
     )
     require(interBrokerProtocolVersion >= logMessageFormatVersion,
       s"log.message.format.version $logMessageFormatVersionString cannot be used when inter.broker.protocol.version is set to $interBrokerProtocolVersionString")
-    require(saslInterBrokerHandshakeRequestEnable || saslMechanism == SaslConfigs.GSSAPI_MECHANISM ||
-        (interBrokerSecurityProtocol != SecurityProtocol.SASL_PLAINTEXT && interBrokerSecurityProtocol != SecurityProtocol.SASL_SSL),
+    val interBrokerUsesSasl = interBrokerSecurityProtocol == SecurityProtocol.SASL_PLAINTEXT || interBrokerSecurityProtocol == SecurityProtocol.SASL_SSL
+    require(!interBrokerUsesSasl || saslInterBrokerHandshakeRequestEnable || saslMechanism == SaslConfigs.GSSAPI_MECHANISM,
       s"Only GSSAPI mechanism is supported for inter-broker communication with SASL when inter.broker.protocol.version is set to $interBrokerProtocolVersionString")
+    require(!interBrokerUsesSasl || saslEnabledMechanisms.contains(saslMechanism),
+      s"${KafkaConfig.SaslMechanismProp} must be included in ${KafkaConfig.SaslEnabledMechanismsProp} when SASL is used for inter-broker communication")
   }
 }
