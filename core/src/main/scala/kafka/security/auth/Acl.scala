@@ -18,7 +18,7 @@
 package kafka.security.auth
 
 import kafka.utils.Json
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, Acl => JAcl, Operation => JOperation, PermissionType => JPermissionType}
 
 object Acl {
   val WildCardPrincipal: KafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "*")
@@ -75,6 +75,14 @@ object Acl {
     acls.toSet
   }
 
+  def fromJava(jAcl: JAcl): Acl = {
+    new Acl(
+      jAcl.getPrincipal,
+      PermissionType.fromString(jAcl.getPermissionType.name),
+      jAcl.getHost,
+      Operation.fromString(jAcl.getOperation.name))
+  }
+
   def toJsonCompatibleMap(acls: Set[Acl]): Map[String, Any] = {
     Map(Acl.VersionKey -> Acl.CurrentVersion, Acl.AclsKey -> acls.map(acl => acl.toMap).toList)
   }
@@ -85,7 +93,8 @@ object Acl {
  * <pre>
  * Principal P has permissionType PT on Operation O1 from hosts H1.
  * </pre>
- * @param principal A value of *:* indicates all users.
+  *
+  * @param principal A value of *:* indicates all users.
  * @param permissionType
  * @param host A value of * indicates all hosts.
  * @param operation A value of ALL indicates all operations.
@@ -94,7 +103,8 @@ case class Acl(principal: KafkaPrincipal, permissionType: PermissionType, host: 
 
   /**
    * TODO: Ideally we would have a symmetric toJson method but our current json library can not jsonify/dejsonify complex objects.
-   * @return Map representation of the Acl.
+    *
+    * @return Map representation of the Acl.
    */
   def toMap(): Map[String, Any] = {
     Map(Acl.PrincipalKey -> principal.toString,
@@ -105,6 +115,15 @@ case class Acl(principal: KafkaPrincipal, permissionType: PermissionType, host: 
 
   override def toString: String = {
     "%s has %s permission for operations: %s from hosts: %s".format(principal, permissionType.name, operation, host)
+  }
+
+  def asJava: JAcl = {
+    new JAcl(
+      principal,
+      JPermissionType.forName(permissionType.name),
+      host,
+      JOperation.forName(operation.name)
+    )
   }
 
 }

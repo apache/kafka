@@ -20,7 +20,6 @@ import java.util.{ArrayList, Collections, Properties}
 
 import kafka.cluster.EndPoint
 import kafka.common.TopicAndPartition
-import kafka.coordinator.GroupCoordinator
 import kafka.integration.KafkaServerTestHarness
 import kafka.security.auth._
 import kafka.server.KafkaConfig
@@ -29,8 +28,9 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, KafkaConsume
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.requests.AlterAclsRequest.ActionRequest
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, PermissionType, Operation, Acl => JAcl, Resource => JResource}
 import org.apache.kafka.common.{Node, TopicPartition, requests}
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
@@ -57,6 +57,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   val TopicReadAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)))
   val TopicWriteAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)))
   val TopicDescribeAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)))
+  val AllAcl = Map(Resource.ClusterResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, All)))
 
   val consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
   val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
@@ -89,7 +90,9 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
       ApiKeys.LEAVE_GROUP.id -> classOf[LeaveGroupResponse],
       ApiKeys.LEADER_AND_ISR.id -> classOf[requests.LeaderAndIsrResponse],
       ApiKeys.STOP_REPLICA.id -> classOf[requests.StopReplicaResponse],
-      ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> classOf[requests.ControlledShutdownResponse]
+      ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> classOf[requests.ControlledShutdownResponse],
+      ApiKeys.LIST_ACLS.id -> classOf[requests.ListAclsResponse],
+      ApiKeys.ALTER_ACLS.id -> classOf[requests.AlterAclsResponse]
     )
 
   val RequestKeyToErrorCode = Map[Short, (Nothing) => Short](
@@ -107,7 +110,9 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     ApiKeys.LEAVE_GROUP.id -> ((resp: LeaveGroupResponse) => resp.errorCode()),
     ApiKeys.LEADER_AND_ISR.id -> ((resp: requests.LeaderAndIsrResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
     ApiKeys.STOP_REPLICA.id -> ((resp: requests.StopReplicaResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
-    ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ((resp: requests.ControlledShutdownResponse) => resp.errorCode())
+    ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ((resp: requests.ControlledShutdownResponse) => resp.errorCode()),
+    ApiKeys.LIST_ACLS.id -> ((resp: requests.ListAclsResponse) => resp.error.code),
+    ApiKeys.ALTER_ACLS.id -> ((resp: requests.AlterAclsResponse) => resp.results().asScala.head._2.asScala.head.error.code)
   )
 
   val RequestKeysToAcls = Map[Short, Map[Resource, Set[Acl]]](
@@ -125,7 +130,9 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     ApiKeys.LEAVE_GROUP.id -> GroupReadAcl,
     ApiKeys.LEADER_AND_ISR.id -> ClusterAcl,
     ApiKeys.STOP_REPLICA.id -> ClusterAcl,
-    ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ClusterAcl
+    ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ClusterAcl,
+    ApiKeys.LIST_ACLS.id -> AllAcl,
+    ApiKeys.ALTER_ACLS.id -> AllAcl
   )
 
   // configure the servers and clients
@@ -227,6 +234,18 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     new requests.ControlledShutdownRequest(brokerId)
   }
 
+  private def createListAclsRequest = {
+    new ListAclsRequest()
+  }
+
+  private def createAlterAclsRequest = {
+    val requests = Map(
+      JResource.CLUSTER_RESOURCE -> List(
+        new ActionRequest(AlterAclsRequest.Action.ADD, new JAcl(KafkaPrincipal.ANONYMOUS, PermissionType.ALLOW, "*", Operation.DESCRIBE))
+      ).asJava)
+    new AlterAclsRequest(requests.asJava)
+  }
+
   @Test
   def testAuthorization() {
     val requestKeyToRequest = mutable.LinkedHashMap[Short, AbstractRequest](
@@ -244,18 +263,34 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
       ApiKeys.LEAVE_GROUP.id -> createLeaveGroupRequest,
       ApiKeys.LEADER_AND_ISR.id -> createLeaderAndIsrRequest,
       ApiKeys.STOP_REPLICA.id -> createStopReplicaRequest,
-      ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> createControlledShutdownRequest
+      ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> createControlledShutdownRequest,
+      ApiKeys.LIST_ACLS.id -> createListAclsRequest,
+      ApiKeys.ALTER_ACLS.id -> createAlterAclsRequest
     )
 
     val socket = new Socket("localhost", servers.head.boundPort())
+    try {
+      for ((key, request) <- requestKeyToRequest) {
+        removeAllAcls
+        val resources = RequestKeysToAcls(key).map(_._1.resourceType).toSet
+        sendRequestAndVerifyResponseErrorCode(socket, key, request, resources, isAuthorized = false)
+        for ((resource, acls) <- RequestKeysToAcls(key))
+          addAndVerifyAcls(acls, resource)
+        sendRequestAndVerifyResponseErrorCode(socket, key, request, resources, isAuthorized = true)
+      }
+    } finally {
+      socket.close()
+    }
+  }
 
-    for ((key, request) <- requestKeyToRequest) {
-      removeAllAcls
-      val resources = RequestKeysToAcls(key).map(_._1.resourceType).toSet
-      sendRequestAndVerifyResponseErrorCode(socket, key, request, resources, isAuthorized = false)
-      for ((resource, acls) <- RequestKeysToAcls(key))
-        addAndVerifyAcls(acls, resource)
-      sendRequestAndVerifyResponseErrorCode(socket, key, request, resources, isAuthorized = true)
+  @Test
+  def testListAclsWithOwnPrincipal() {
+    val socket = new Socket("localhost", servers.head.boundPort())
+    try {
+      val request = new ListAclsRequest(KafkaPrincipal.ANONYMOUS)
+      sendRequestAndVerifyResponseErrorCode(socket, ApiKeys.LIST_ACLS.id, request, Set(Cluster), isAuthorized = true)
+    } finally {
+      socket.close()
     }
   }
 
