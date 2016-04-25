@@ -200,10 +200,6 @@ public class KStreamTestDriver {
         return context.allStateStores();
     }
 
-    public StateStore stateStore(String name) {
-        return context.getStateStore(name);
-    }
-
     private class MockRecordCollector extends RecordCollector {
         public MockRecordCollector() {
             super(null);
