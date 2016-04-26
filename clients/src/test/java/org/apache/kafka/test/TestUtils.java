@@ -104,7 +104,7 @@ public class TestUtils {
      * suffix to generate its name.
      */
     public static File tempFile() throws IOException {
-        final File file = File.createTempFile("kafka", ".tmp");
+        File file = File.createTempFile("kafka", ".tmp");
         file.deleteOnExit();
 
         return file;
@@ -113,7 +113,7 @@ public class TestUtils {
     /**
      * Create a temporary relative directory in the default temporary-file directory with the given prefix.
      *
-     * @param prefix The prefix of the temporary directory, if null using "kafka" as default prefix
+     * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
      */
     public static File tempDirectory(String prefix) throws IOException {
         return tempDirectory(null, prefix);
@@ -123,12 +123,12 @@ public class TestUtils {
      * Create a temporary relative directory in the specified parent directory with the given prefix.
      *
      * @param parent The parent folder path name, if null using the default temporary-file directory
-     * @param prefix The prefix of the temporary directory, if null using "kafka" as default prefix
+     * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
      */
     public static File tempDirectory(Path parent, String prefix) throws IOException {
         final File file = parent == null ?
-                Files.createTempDirectory(prefix == null ? "kafka" : prefix).toFile() :
-                Files.createTempDirectory(parent, prefix == null ? "kafka" : prefix).toFile();
+                Files.createTempDirectory(prefix == null ? "kafka-" : prefix).toFile() :
+                Files.createTempDirectory(parent, prefix == null ? "kafka-" : prefix).toFile();
         file.deleteOnExit();
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
