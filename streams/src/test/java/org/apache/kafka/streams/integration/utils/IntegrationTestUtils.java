@@ -24,6 +24,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 
@@ -37,8 +38,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-
-import kafka.utils.CoreUtils;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -119,8 +118,7 @@ public class IntegrationTestUtils {
             // Only purge state when it's under /tmp.  This is a safety net to prevent accidentally
             // deleting important local directory trees.
             if (node.getAbsolutePath().startsWith("/tmp")) {
-                List<String> nodes = Collections.singletonList(node.getAbsolutePath());
-                CoreUtils.delete(scala.collection.JavaConversions.asScalaBuffer(nodes).seq());
+                Utils.delete(new File(node.getAbsolutePath()));
             }
         }
     }
