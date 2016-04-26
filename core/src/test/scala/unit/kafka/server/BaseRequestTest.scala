@@ -33,12 +33,13 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   val numBrokers = 3
   private var correlationId = 0
 
-  def propertyOverrides(properties: Properties): Properties = properties
+  // Override properties by mutating the passed Properties object
+  def propertyOverrides(properties: Properties): Unit
 
   def generateConfigs() = {
     val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect, enableControlledShutdown = false)
-    props.map(propertyOverrides)
-      .map(KafkaConfig.fromProps)
+    props.foreach(propertyOverrides)
+    props.map(KafkaConfig.fromProps)
   }
 
   @Before
@@ -51,7 +52,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     servers.find { server =>
       val state = server.brokerState.currentState
       state != NotRunning.state && state != BrokerShuttingDown.state
-    }.get.socketServer
+    }.map(_.socketServer).getOrElse(throw new IllegalStateException("No live broker is available"))
   }
 
   private def connect(s: SocketServer = socketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Socket = {

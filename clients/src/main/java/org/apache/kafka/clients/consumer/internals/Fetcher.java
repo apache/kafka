@@ -194,8 +194,8 @@ public class Fetcher<K, V> {
      * @return The map of topics with their partition information
      */
     public Map<String, List<PartitionInfo>> getTopicMetadata(MetadataRequest request, long timeout) {
-        // Save the round trip if no topics are requested. In the case of null, all topics are being requested.
-        if (request.topics() != null && request.topics().isEmpty())
+        // Save the round trip if no topics are requested.
+        if (!request.isAllTopics() && request.topics().isEmpty())
             return Collections.emptyMap();
 
         long start = time.milliseconds();

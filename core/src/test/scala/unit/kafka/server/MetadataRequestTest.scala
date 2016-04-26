@@ -30,26 +30,25 @@ import scala.collection.JavaConverters._
 
 class MetadataRequestTest extends BaseRequestTest {
 
-  override def propertyOverrides(properties: Properties): Properties = {
+  override def propertyOverrides(properties: Properties) {
     properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
-    properties
   }
 
   @Test
   def testControllerId() {
     val controllerServer = servers.find(_.kafkaController.isActive()).get
-    val controllerId = controllerServer.apis.brokerId
+    val controllerId = controllerServer.config.brokerId
     val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 1)
 
     assertEquals("Controller id should match the active controller",
-      controllerServer.apis.brokerId, metadataResponse.controller.id)
+      controllerId, metadataResponse.controller.id)
 
     // Fail over the controller
     controllerServer.shutdown()
     controllerServer.startup()
 
     val controllerServer2 = servers.find(_.kafkaController.isActive()).get
-    val controllerId2 = controllerServer2.apis.brokerId
+    val controllerId2 = controllerServer2.config.brokerId
     assertNotEquals("Controller id should switch to a new broker", controllerId, controllerId2)
     TestUtils.waitUntilTrue(() => {
       val metadataResponse2 = sendMetadataRequest(MetadataRequest.allTopics(), 1)
@@ -143,7 +142,9 @@ class MetadataRequestTest extends BaseRequestTest {
 
     // Validate version 0 still filters unavailable replicas and contains error
     val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava), 0)
+    val v0BrokerIds = v0MetadataResponse.brokers().asScala.map(_.id).toSeq
     assertTrue("Response should have no errors", v0MetadataResponse.errors.isEmpty)
+    assertFalse(s"The downed broker should not be in the brokers list", v0BrokerIds.contains(downNode))
     assertTrue("Response should have one topic", v0MetadataResponse.topicMetadata.size == 1)
     val v0PartitionMetadata = v0MetadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
     assertTrue("PartitionMetadata should have an error", v0PartitionMetadata.error == Errors.REPLICA_NOT_AVAILABLE)
@@ -151,11 +152,13 @@ class MetadataRequestTest extends BaseRequestTest {
 
     // Validate version 1 returns unavailable replicas with no error
     val v1MetadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava), 1)
+    val v1BrokerIds = v1MetadataResponse.brokers().asScala.map(_.id).toSeq
     assertTrue("Response should have no errors", v1MetadataResponse.errors.isEmpty)
-    assertTrue("Response should have one topic", v1MetadataResponse.topicMetadata.size == 1)
+    assertFalse(s"The downed broker should not be in the brokers list", v1BrokerIds.contains(downNode))
+    assertEquals("Response should have one topic", 1, v1MetadataResponse.topicMetadata.size)
     val v1PartitionMetadata = v1MetadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
-    assertTrue("PartitionMetadata should have no errors", v1PartitionMetadata.error == Errors.NONE)
-    assertTrue(s"Response should have $replicaCount replicas", v1PartitionMetadata.replicas.size == replicaCount)
+    assertEquals("PartitionMetadata should have no errors", Errors.NONE, v1PartitionMetadata.error)
+    assertEquals(s"Response should have $replicaCount replicas", replicaCount, v1PartitionMetadata.replicas.size)
   }
 
   private def sendMetadataRequest(request: MetadataRequest, version: Short): MetadataResponse = {
