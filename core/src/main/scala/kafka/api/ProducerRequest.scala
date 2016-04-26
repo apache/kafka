@@ -128,7 +128,8 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
   }
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    if(request.requestObj.asInstanceOf[ProducerRequest].requiredAcks == 0) {
+    val produceRequest = request.requestObj.asInstanceOf[ProducerRequest]
+    if(produceRequest.requiredAcks == 0) {
         requestChannel.closeConnection(request.processor, request)
     }
     else {
@@ -136,7 +137,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
         case (topicAndPartition, data) =>
           (topicAndPartition, ProducerResponseStatus(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1l))
       }
-      val errorResponse = ProducerResponse(correlationId, producerResponseStatus)
+      val errorResponse = ProducerResponse(correlationId, producerResponseStatus, produceRequest.versionId)
       requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
     }
   }
