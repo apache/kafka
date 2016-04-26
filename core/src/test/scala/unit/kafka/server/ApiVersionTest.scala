@@ -18,33 +18,33 @@
 package unit.kafka.server
 
 import kafka.server.KafkaApis
-import org.apache.kafka.common.requests.ApiVersionResponse.ApiVersion
 import org.apache.kafka.common.protocol.{Protocol, ApiKeys}
+import org.junit.Assert._
 import org.junit.Test
 
 class ApiVersionTest {
 
   @Test
   def testApiVersions {
-    val apiVersions = KafkaApis.apiVersionResponse.apiVersions()
-    assert(apiVersions.size == ApiKeys.values().length)
+    val apiVersions = KafkaApis.apiVersionResponse.apiVersions
+    assertEquals("API versions for all API keys must be maintained.", apiVersions.size, ApiKeys.values().length)
 
-    for (key <- ApiKeys.values()) {
-      val version = KafkaApis.apiVersionResponse.apiVersions(key.id)
-      assert(version != null, "Could not find ApiVersion for API " + key.name)
-      assert(version.minVersion == Protocol.MIN_VERSIONS(key.id), "Incorrect min version for Api " + key.name)
-      assert(version.maxVersion == Protocol.CURR_VERSION(key.id), "Incorrect min version for Api " + key.name)
+    for (key <- ApiKeys.values) {
+      val version = KafkaApis.apiVersionResponse.apiVersion(key.id)
+      assertNotNull("Could not find ApiVersion for API " + key.name, version)
+      assertEquals("Incorrect min version for Api " + key.name, version.minVersion, Protocol.MIN_VERSIONS(key.id))
+      assertEquals("Incorrect min version for Api " + key.name, version.maxVersion, Protocol.CURR_VERSION(key.id))
 
       // Check if versions less than min version are indeed set as null, i.e., deprecated.
       for (i <- 0 until version.minVersion) {
-        assert(Protocol.REQUESTS(version.apiKey)(i) == null)
-        assert(Protocol.RESPONSES(version.apiKey)(i) == null)
+        assertNull("Request version " + i + " for API " + version.apiKey + " must be null.", Protocol.REQUESTS(version.apiKey)(i))
+        assertNull("Response version " + i + " for API " + version.apiKey + " must be null.", Protocol.RESPONSES(version.apiKey)(i))
       }
 
       // Check if versions between min and max versions are non null, i.e., valid.
-      for (i <- version.minVersion.asInstanceOf[Int] to version.maxVersion) {
-        assert(Protocol.REQUESTS(version.apiKey)(i) != null)
-        assert(Protocol.RESPONSES(version.apiKey)(i) != null)
+      for (i <- version.minVersion.toInt to version.maxVersion) {
+        assertNotNull("Request version " + i + " for API " + version.apiKey + " must not be null.", Protocol.REQUESTS(version.apiKey)(i))
+        assertNotNull("Response version " + i + " for API " + version.apiKey + " must not be null.", Protocol.RESPONSES(version.apiKey)(i))
       }
     }
   }

@@ -20,8 +20,11 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ApiVersionResponse extends AbstractRequestResponse {
 
@@ -36,10 +39,10 @@ public class ApiVersionResponse extends AbstractRequestResponse {
     /**
      * Possible error codes:
      *
-     * UNKNOWN_API_VERSION_REQUEST_VERSION (33)
+     * UNSUPPORTED_VERSION (33)
      */
     private final short errorCode;
-    private final List<ApiVersion> apiVersions;
+    private final Map<Short, ApiVersion> apiKeyToApiVersion;
 
     public static final class ApiVersion {
         public final short apiKey;
@@ -66,32 +69,29 @@ public class ApiVersionResponse extends AbstractRequestResponse {
         }
         struct.set(API_VERSIONS_KEY_NAME, apiVersionList.toArray());
         this.errorCode = errorCode;
-        this.apiVersions = apiVersions;
+        this.apiKeyToApiVersion = buildApiKeyToApiVersion(apiVersions);
     }
 
     public ApiVersionResponse(Struct struct) {
         super(struct);
         this.errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
-        this.apiVersions = new ArrayList<>();
+        List<ApiVersion> tempApiVersions = new ArrayList<>();
         for (Object apiVersionsObj : struct.getArray(API_VERSIONS_KEY_NAME)) {
             Struct apiVersionStruct = (Struct) apiVersionsObj;
             short apiKey = apiVersionStruct.getShort(API_KEY_NAME);
             short minVersion = apiVersionStruct.getShort(MIN_VERSION_KEY_NAME);
             short maxVersion = apiVersionStruct.getShort(MAX_VERSION_KEY_NAME);
-            this.apiVersions.add(new ApiVersion(apiKey, minVersion, maxVersion));
+            tempApiVersions.add(new ApiVersion(apiKey, minVersion, maxVersion));
         }
+        this.apiKeyToApiVersion = buildApiKeyToApiVersion(tempApiVersions);
     }
 
-    public List<ApiVersion> apiVersions() {
-        return apiVersions;
+    public Collection<ApiVersion> apiVersions() {
+        return apiKeyToApiVersion.values();
     }
 
-    public ApiVersion apiVersions(short apiKey) {
-        for (ApiVersion apiVersion: apiVersions)
-            if (apiKey == apiVersion.apiKey)
-                return apiVersion;
-
-        return null;
+    public ApiVersion apiVersion(short apiKey) {
+        return apiKeyToApiVersion.get(apiKey);
     }
 
     public short errorCode() {
@@ -106,4 +106,11 @@ public class ApiVersionResponse extends AbstractRequestResponse {
         return new ApiVersionResponse(error.code(), Collections.<ApiVersion>emptyList());
     }
 
+    private Map<Short, ApiVersion> buildApiKeyToApiVersion(List<ApiVersion> apiVersions) {
+        Map<Short, ApiVersion> tempApiIdToApiVersion = new HashMap<>();
+        for (ApiVersion apiVersion: apiVersions) {
+            tempApiIdToApiVersion.put(apiVersion.apiKey, apiVersion);
+        }
+        return tempApiIdToApiVersion;
+    }
 }

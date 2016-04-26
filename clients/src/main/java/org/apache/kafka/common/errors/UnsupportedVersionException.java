@@ -12,22 +12,22 @@
  */
 package org.apache.kafka.common.errors;
 
-public class UnknownApiVersionRequestVersionException extends ApiException {
+public class UnsupportedVersionException extends ApiException {
     private static final long serialVersionUID = 1L;
 
-    public UnknownApiVersionRequestVersionException() {
+    public UnsupportedVersionException() {
         super();
     }
 
-    public UnknownApiVersionRequestVersionException(String message, Throwable cause) {
+    public UnsupportedVersionException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public UnknownApiVersionRequestVersionException(String message) {
+    public UnsupportedVersionException(String message) {
         super(message);
     }
 
-    public UnknownApiVersionRequestVersionException(Throwable cause) {
+    public UnsupportedVersionException(Throwable cause) {
         super(cause);
     }
 }

@@ -762,12 +762,12 @@ public class Protocol {
     /* ApiVersion api */
     public static final Schema API_VERSION_REQUEST_V0 = new Schema();
 
-    public static final Schema API_VERSION_V0 = new Schema(new Field("api_key", INT16, "Api key."),
+    public static final Schema API_VERSION_V0 = new Schema(new Field("api_key", INT16, "API key."),
                                                            new Field("min_version", INT16, "Minimum supported version."),
                                                            new Field("max_version", INT16, "Maximum supported version."));
 
     public static final Schema API_VERSION_RESPONSE_V0 = new Schema(new Field("error_code", INT16, "Error code."),
-                                                                    new Field("api_versions", new ArrayOf(API_VERSION_V0), ""));
+                                                                    new Field("api_versions", new ArrayOf(API_VERSION_V0), "API versions supported by the broker."));
 
     public static final Schema[] API_VERSION_REQUEST = new Schema[]{API_VERSION_REQUEST_V0};
     public static final Schema[] API_VERSION_RESPONSE = new Schema[]{API_VERSION_RESPONSE_V0};
@@ -832,9 +832,9 @@ public class Protocol {
                 }
         }
 
-        /* sanity check:
+        /* sanity check that:
              - we have the same number of request and response versions for each api
-             - minimum supported version is same for request and response of each api */
+             - for each supported api, minimum supported version is same for its request and response*/
         for (ApiKeys api : ApiKeys.values()) {
             if (REQUESTS[api.id].length != RESPONSES[api.id].length)
                 throw new IllegalStateException(REQUESTS[api.id].length + " request versions for api " + api.name
@@ -843,9 +843,8 @@ public class Protocol {
             for (int i = 0; i < REQUESTS[api.id].length; ++i)
                 if ((REQUESTS[api.id][i] == null && RESPONSES[api.id][i] != null) ||
                         (REQUESTS[api.id][i] != null && RESPONSES[api.id][i] == null))
-                    throw new IllegalStateException("Version " + i + " of api " + api.id + " has inconsistency in" +
-                            "request and response. One of request and response of a version can not be marked" +
-                            "as null.");
+                    throw new IllegalStateException("Request and response for version " + i + " of API "
+                            + api.id + " are defined inconsistently. One is null while the other is not null.");
         }
     }
 

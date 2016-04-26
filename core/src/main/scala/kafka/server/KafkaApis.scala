@@ -51,7 +51,7 @@ object KafkaApis {
   val apiVersionResponse = new ApiVersionResponse(Errors.NONE.code, buildApiKeysToApiVersions.values.toList.asJava)
 
   private def buildApiKeysToApiVersions: Map[Short, ApiVersionResponse.ApiVersion] = {
-    ApiKeys.values().map(apiKey =>
+    ApiKeys.values.map(apiKey =>
       apiKey.id -> new ApiVersionResponse.ApiVersion(apiKey.id, Protocol.MIN_VERSIONS(apiKey.id), Protocol.CURR_VERSION(apiKey.id))).toMap
   }
 }
@@ -1031,14 +1031,19 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleApiVersionRequest(request: RequestChannel.Request) {
+    // Note that broker returns its full list of supported ApiKeys and versions regardless of current
+    // authentication state (e.g., before SASL authentication on an SASL listener, do note that no
+    // Kafka protocol requests may take place on a SSL listener before the SSL handshake is finished).
+    // If this is considered to leak information about the broker version a workaround is to use SSL
+    // with client authentication which is performed at an earlier stage of the connection where the
+    // ApiVersionRequest is not available.
     val responseHeader = new ResponseHeader(request.header.correlationId)
-    def isApiVersionRequestVersionSupported: Boolean = {
-      request.header.apiVersion() <= Protocol.CURR_VERSION(ApiKeys.API_VERSION.id) && request.header.apiVersion() >= Protocol.MIN_VERSIONS(ApiKeys.API_VERSION.id)
-    }
+    val isApiVersionRequestVersionSupported = request.header.apiVersion <= Protocol.CURR_VERSION(ApiKeys.API_VERSION.id) &&
+                                              request.header.apiVersion >= Protocol.MIN_VERSIONS(ApiKeys.API_VERSION.id)
     val responseBody = if (isApiVersionRequestVersionSupported)
       KafkaApis.apiVersionResponse
     else
-      ApiVersionResponse.fromError(Errors.UNKNOWN_API_VERSION_REQUEST_VERSION)
+      ApiVersionResponse.fromError(Errors.UNSUPPORTED_VERSION)
     requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
   }
 
