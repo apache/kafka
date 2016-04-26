@@ -323,6 +323,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     def networkClientControlledShutdown(retries: Int): Boolean = {
       val metadataUpdater = new ManualMetadataUpdater()
       val networkClient = {
+        val channelBuilder = ChannelBuilders.create(
+          config.interBrokerSecurityProtocol,
+          Mode.CLIENT,
+          LoginType.SERVER,
+          config.values,
+          config.saslMechanismInterBrokerProtocol,
+          config.saslInterBrokerHandshakeRequestEnable)
         val selector = new Selector(
           NetworkReceive.UNLIMITED,
           config.connectionsMaxIdleMs,
@@ -331,7 +338,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           "kafka-server-controlled-shutdown",
           Map.empty.asJava,
           false,
-          ChannelBuilders.create(config.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, config.values)
+          channelBuilder
         )
         new NetworkClient(
           selector,

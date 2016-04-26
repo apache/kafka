@@ -91,7 +91,10 @@ public class RequestResponseTest {
                 createUpdateMetadataResponse(),
                 createLeaderAndIsrRequest(),
                 createLeaderAndIsrRequest().getErrorResponse(0, new UnknownServerException()),
-                createLeaderAndIsrResponse()
+                createLeaderAndIsrResponse(),
+                createSaslHandshakeRequest(),
+                createSaslHandshakeRequest().getErrorResponse(0, new UnknownServerException()),
+                createSaslHandshakeResponse()
         );
 
         for (AbstractRequestResponse req : requestResponseList)
@@ -425,5 +428,11 @@ public class RequestResponseTest {
         return new UpdateMetadataResponse(Errors.NONE.code());
     }
 
+    private AbstractRequest createSaslHandshakeRequest() {
+        return new SaslHandshakeRequest("PLAIN");
+    }
 
+    private AbstractRequestResponse createSaslHandshakeResponse() {
+        return new SaslHandshakeResponse(Errors.NONE.code(), Collections.singletonList("GSSAPI"));
+    }
 }

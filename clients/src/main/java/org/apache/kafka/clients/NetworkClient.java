@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -373,6 +374,16 @@ public class NetworkClient implements KafkaClient {
         return found;
     }
 
+    public static Struct parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
+        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
+        // Always expect the response version id to be the same as the request version id
+        short apiKey = requestHeader.apiKey();
+        short apiVer = requestHeader.apiVersion();
+        Struct responseBody = ProtoUtils.responseSchema(apiKey, apiVer).read(responseBuffer);
+        correlate(requestHeader, responseHeader);
+        return responseBody;
+    }
+
     /**
      * Post process disconnection of a node
      *
@@ -437,12 +448,7 @@ public class NetworkClient implements KafkaClient {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
             ClientRequest req = inFlightRequests.completeNext(source);
-            ResponseHeader header = ResponseHeader.parse(receive.payload());
-            // Always expect the response version id to be the same as the request version id
-            short apiKey = req.request().header().apiKey();
-            short apiVer = req.request().header().apiVersion();
-            Struct body = ProtoUtils.responseSchema(apiKey, apiVer).read(receive.payload());
-            correlate(req.request().header(), header);
+            Struct body = parseResponse(receive.payload(), req.request().header());
             if (!metadataUpdater.maybeHandleCompletedReceive(req, now, body))
                 responses.add(new ClientResponse(req, now, false, body));
         }
@@ -477,7 +483,7 @@ public class NetworkClient implements KafkaClient {
     /**
      * Validate that the response corresponds to the request we expect or else explode
      */
-    private void correlate(RequestHeader requestHeader, ResponseHeader responseHeader) {
+    private static void correlate(RequestHeader requestHeader, ResponseHeader responseHeader) {
         if (requestHeader.correlationId() != responseHeader.correlationId())
             throw new IllegalStateException("Correlation id for response (" + responseHeader.correlationId()
                     + ") does not match request (" + requestHeader.correlationId() + ")");
