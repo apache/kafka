@@ -50,7 +50,7 @@ public class Utils {
 
     // This matches URIs of formats: host:port and protocol:\\host:port
     // IPv6 is supported with [ip] pattern
-    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-.:]*)\\]?:([0-9]+)");
+    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?(?:(?:\\[([0-9a-zA-Z:]*)\\])|([0-9a-zA-Z\\-.]*))(?::([0-9]+))?");
 
     public static final String NL = System.getProperty("line.separator");
 
@@ -383,7 +383,12 @@ public class Utils {
      */
     public static String getHost(String address) {
         Matcher matcher = HOST_PORT_PATTERN.matcher(address);
-        return matcher.matches() ? matcher.group(1) : null;
+
+        if (!matcher.matches()) {
+            return null;
+        }
+
+        return matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
     }
 
     /**
@@ -393,7 +398,11 @@ public class Utils {
      */
     public static Integer getPort(String address) {
         Matcher matcher = HOST_PORT_PATTERN.matcher(address);
-        return matcher.matches() ? Integer.parseInt(matcher.group(2)) : null;
+        if (matcher.matches() && matcher.group(3) != null) {
+            return Integer.parseInt(matcher.group(3));
+        } else {
+            return null;
+        }
     }
 
     /**

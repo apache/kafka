@@ -26,6 +26,7 @@ import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class UtilsTest {
 
@@ -37,6 +38,10 @@ public class UtilsTest {
         assertEquals("::1", getHost("[::1]:1234"));
         assertEquals("2001:db8:85a3:8d3:1319:8a2e:370:7348", getHost("PLAINTEXT://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678"));
         assertEquals("2001:DB8:85A3:8D3:1319:8A2E:370:7348", getHost("PLAINTEXT://[2001:DB8:85A3:8D3:1319:8A2E:370:7348]:5678"));
+        assertEquals("127.0.0.1", getHost("127.0.0.1"));
+        assertEquals("mydomain.com", getHost("PLAINTEXT://mydomain.com"));
+        assertEquals("::1", getHost("[::1]"));
+        assertEquals("2001:db8:85a3:8d3:1319:8a2e:370:7348", getHost("PLAINTEXT://[2001:db8:85a3:8d3:1319:8a2e:370:7348]"));
     }
 
     @Test
@@ -47,6 +52,11 @@ public class UtilsTest {
         assertEquals(1234, getPort("[::1]:1234").intValue());
         assertEquals(5678, getPort("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678").intValue());
         assertEquals(5678, getPort("[2001:DB8:85A3:8D3:1319:8A2E:370:7348]:5678").intValue());
+        assertNull(getPort("127.0.0.1"));
+        assertNull(getPort("mydomain.com"));
+        assertNull(getPort("PLAINTEXT://mydomain.com"));
+        assertNull(getPort("[2001:DB8:85A3:8D3:1319:8A2E:370:7348]"));
+        assertEquals(8000, getPort(":8000").intValue());
     }
 
     @Test
