@@ -17,11 +17,15 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
 
 public class ClientUtilsTest {
+    @Rule
+    public ExpectedException expectedException = ExpectedException.none();
 
     @Test
     public void testParseAndValidateAddresses() {
@@ -31,8 +35,10 @@ public class ClientUtilsTest {
         check("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "mydomain.com:10000");
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testNoPort() {
+        expectedException.expect(ConfigException.class);
+        expectedException.expectMessage("Missing port in bootstrap.servers: 127.0.0.1");
         check("127.0.0.1");
     }
 
