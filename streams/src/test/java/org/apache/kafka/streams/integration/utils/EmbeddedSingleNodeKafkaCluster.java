@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.integration.utils;
 
+import kafka.server.KafkaConfig$;
 import kafka.zk.EmbeddedZookeeper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,36 +40,20 @@ public class EmbeddedSingleNodeKafkaCluster extends ExternalResource {
      * Creates and starts a Kafka cluster.
      */
     public void start() throws IOException, InterruptedException {
-        start(new Properties());
-    }
+        Properties brokerConfig = new Properties();
 
-
-    /**
-     * Creates and starts a Kafka cluster.
-     *
-     * @param brokerConfig Additional broker configuration settings.
-     */
-    public void start(Properties brokerConfig) throws IOException, InterruptedException {
         log.debug("Initiating embedded Kafka cluster startup");
         log.debug("Starting a ZooKeeper instance");
         zookeeper = new EmbeddedZookeeper();
         log.debug("ZooKeeper instance is running at {}", zKConnectString());
+        brokerConfig.put(KafkaConfig$.MODULE$.ZkConnectProp(), zKConnectString());
+        brokerConfig.put(KafkaConfig$.MODULE$.PortProp(), DEFAULT_BROKER_PORT);
 
-        Properties effectiveBrokerConfig = effectiveBrokerConfigFrom(brokerConfig);
-        log.debug("Starting a Kafka instance on port {} ...", effectiveBrokerConfig.getProperty("port"));
-        broker = new KafkaEmbedded(effectiveBrokerConfig);
+        log.debug("Starting a Kafka instance on port {} ...", brokerConfig.getProperty(KafkaConfig$.MODULE$.PortProp()));
+        broker = new KafkaEmbedded(brokerConfig);
 
         log.debug("Kafka instance is running at {}, connected to ZooKeeper at {}",
             broker.brokerList(), broker.zookeeperConnect());
-    }
-
-    private Properties effectiveBrokerConfigFrom(Properties brokerConfig) {
-        Properties effectiveConfig = new Properties();
-        effectiveConfig.put("zookeeper.connect", zKConnectString());
-        int brokerPort = DEFAULT_BROKER_PORT;
-        effectiveConfig.put("port", String.valueOf(brokerPort));
-        effectiveConfig.putAll(brokerConfig);
-        return effectiveConfig;
     }
 
     /**

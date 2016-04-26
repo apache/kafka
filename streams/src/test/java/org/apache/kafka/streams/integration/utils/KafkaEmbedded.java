@@ -35,6 +35,7 @@ import java.util.List;
 import kafka.admin.AdminUtils;
 import kafka.admin.RackAwareMode;
 import kafka.server.KafkaConfig;
+import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
 import kafka.utils.CoreUtils;
 import kafka.utils.SystemTime$;
@@ -90,9 +91,16 @@ public class KafkaEmbedded {
      */
     private Properties effectiveConfigFrom(Properties initialConfig) throws IOException {
         Properties effectiveConfig = new Properties();
-        effectiveConfig.load(this.getClass().getResourceAsStream("/broker-defaults.properties"));
+        effectiveConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), 0);
+        effectiveConfig.put(KafkaConfig$.MODULE$.HostNameProp(), "127.0.0.1");
+        effectiveConfig.put(KafkaConfig$.MODULE$.PortProp(), "9092");
+        effectiveConfig.put(KafkaConfig$.MODULE$.NumPartitionsProp(), 1);
+        effectiveConfig.put(KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), true);
+        effectiveConfig.put(KafkaConfig$.MODULE$.MessageMaxBytesProp(), 1000000);
+        effectiveConfig.put(KafkaConfig$.MODULE$.ControlledShutdownEnableProp(), true);
+
         effectiveConfig.putAll(initialConfig);
-        effectiveConfig.setProperty("log.dirs", logDir.getAbsolutePath());
+        effectiveConfig.setProperty(KafkaConfig$.MODULE$.LogDirProp(), logDir.getAbsolutePath());
         return effectiveConfig;
     }
 
