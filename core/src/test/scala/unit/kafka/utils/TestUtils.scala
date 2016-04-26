@@ -95,15 +95,8 @@ object TestUtils extends Logging {
   def tempRelativeDir(parent: String): File = {
     val parentFile = new File(parent)
     parentFile.mkdirs()
-    val f = Files.createTempDirectory(parentFile.toPath, "kafka-").toFile
-    f.deleteOnExit()
 
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      override def run() = {
-        Utils.delete(f)
-      }
-    })
-    f
+    org.apache.kafka.test.TestUtils.tempDirectory(parentFile.toPath, "kafka-");
   }
 
   /**

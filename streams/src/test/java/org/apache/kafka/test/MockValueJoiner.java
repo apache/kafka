@@ -17,20 +17,17 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.ValueJoiner;
 
-public class MockKeyValueMapper {
+public class MockValueJoiner {
 
-    private static class NoOpKeyValueMapper<K, V> implements KeyValueMapper<K, V, KeyValue<K, V>> {
+    private static class StringJoin implements ValueJoiner<String, String, String> {
 
         @Override
-        public KeyValue<K, V> apply(K key, V value) {
-            return KeyValue.pair(key, value);
+        public String apply(String value1, String value2) {
+            return value1 + "+" + value2;
         }
-    }
+    };
 
-    public static <K, V> KeyValueMapper<K, V, KeyValue<K, V>> NoOpKeyValueMapper() {
-        return new NoOpKeyValueMapper<>();
-    }
+    public final static ValueJoiner<String, String, String> STRING_JOINER = new StringJoin();
 }
