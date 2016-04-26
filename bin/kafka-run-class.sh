@@ -21,7 +21,7 @@ then
 fi
 
 # Exclude jars not necessary for running commands.
-regex="((test|src|scaladoc|javadoc)\.jar|jar.asc)$"
+regex="(-(test|src|scaladoc|javadoc)\.jar|jar.asc)$"
 filter_file() {
   file=$1
   if [ -z "$(echo "$file" | egrep "$regex")" ] ; then
