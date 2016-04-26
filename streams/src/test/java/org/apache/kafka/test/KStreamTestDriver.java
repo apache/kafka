@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 
@@ -82,6 +83,12 @@ public class KStreamTestDriver {
 
     public void process(String topicName, Object key, Object value) {
         currNode = topology.source(topicName);
+
+        // if currNode is null, check if this topic is a changelog topic;
+        // if yes, skip
+        if (topicName.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX))
+            return;
+
         try {
             forward(key, value);
         } finally {
@@ -106,10 +113,6 @@ public class KStreamTestDriver {
 
     public void setTime(long timestamp) {
         context.setTime(timestamp);
-    }
-
-    public StateStore getStateStore(String name) {
-        return context.getStateStore(name);
     }
 
     @SuppressWarnings("unchecked")
@@ -150,6 +153,23 @@ public class KStreamTestDriver {
                 }
                 break;
             }
+        }
+    }
+
+    public void close() {
+        // close all processors
+        for (ProcessorNode node : topology.processors()) {
+            currNode = node;
+            try {
+                node.close();
+            } finally {
+                currNode = null;
+            }
+        }
+
+        // close all state stores
+        for (StateStore store : context.allStateStores().values()) {
+            store.close();
         }
     }
 

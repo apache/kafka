@@ -13,6 +13,8 @@
 
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.utils.Bytes;
+
 import java.nio.ByteBuffer;
 
 /**
@@ -80,6 +82,18 @@ public class Serdes {
         }
     }
 
+    static public final class BytesSerde implements Serde<Bytes> {
+        @Override
+        public Serializer<Bytes> serializer() {
+            return new BytesSerializer();
+        }
+
+        @Override
+        public Deserializer<Bytes> deserializer() {
+            return new BytesDeserializer();
+        }
+    }
+
     static public final class ByteArraySerde implements Serde<byte[]> {
         @Override
         public Serializer<byte[]> serializer() {
@@ -114,8 +128,12 @@ public class Serdes {
             return (Serde<T>) ByteArray();
         }
 
-        if (ByteBufferSerde.class.isAssignableFrom(type)) {
+        if (ByteBuffer.class.isAssignableFrom(type)) {
             return (Serde<T>) ByteBuffer();
+        }
+
+        if (Bytes.class.isAssignableFrom(type)) {
+            return (Serde<T>) Bytes();
         }
 
         // TODO: we can also serializes objects of type T using generic Java serialization by default
@@ -150,42 +168,49 @@ public class Serdes {
     }
 
     /*
-     * A serde for nullable long type.
+     * A serde for nullable {@code Long} type.
      */
     static public Serde<Long> Long() {
         return new LongSerde();
     }
 
     /*
-     * A serde for nullable int type.
+     * A serde for nullable {@code Integer} type.
      */
     static public Serde<Integer> Integer() {
         return new IntegerSerde();
     }
 
     /*
-     * A serde for nullable long type.
+     * A serde for nullable {@code Double} type.
      */
     static public Serde<Double> Double() {
         return new DoubleSerde();
     }
 
     /*
-     * A serde for nullable string type.
+     * A serde for nullable {@code String} type.
      */
     static public Serde<String> String() {
         return new StringSerde();
     }
 
     /*
-     * A serde for nullable byte array type.
+     * A serde for nullable {@code ByteBuffer} type.
      */
     static public Serde<ByteBuffer> ByteBuffer() {
         return new ByteBufferSerde();
     }
 
     /*
-     * A serde for nullable byte array type.
+     * A serde for nullable {@code Bytes} type.
+     */
+    static public Serde<Bytes> Bytes() {
+        return new BytesSerde();
+    }
+
+    /*
+     * A serde for nullable {@code byte[]} type.
      */
     static public Serde<byte[]> ByteArray() {
         return new ByteArraySerde();

@@ -20,6 +20,8 @@ import static java.util.Arrays.asList;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -29,6 +31,7 @@ import java.util.Random;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.Utils;
 
 
 /**
@@ -97,12 +100,44 @@ public class TestUtils {
     }
 
     /**
-     * Creates an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
+     * Create an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
      * suffix to generate its name.
      */
     public static File tempFile() throws IOException {
         File file = File.createTempFile("kafka", ".tmp");
         file.deleteOnExit();
+
+        return file;
+    }
+
+    /**
+     * Create a temporary relative directory in the default temporary-file directory with the given prefix.
+     *
+     * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
+     */
+    public static File tempDirectory(String prefix) throws IOException {
+        return tempDirectory(null, prefix);
+    }
+
+    /**
+     * Create a temporary relative directory in the specified parent directory with the given prefix.
+     *
+     * @param parent The parent folder path name, if null using the default temporary-file directory
+     * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
+     */
+    public static File tempDirectory(Path parent, String prefix) throws IOException {
+        final File file = parent == null ?
+                Files.createTempDirectory(prefix == null ? "kafka-" : prefix).toFile() :
+                Files.createTempDirectory(parent, prefix == null ? "kafka-" : prefix).toFile();
+        file.deleteOnExit();
+
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                Utils.delete(file);
+            }
+        });
+
         return file;
     }
 

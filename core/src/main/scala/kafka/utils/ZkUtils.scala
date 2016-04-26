@@ -710,7 +710,7 @@ class ZkUtils(val zkClient: ZkClient,
     topics
   }
 
-  def getPartitionReassignmentZkData(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
+  def formatAsReassignmentJson(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
     Json.encode(Map("version" -> 1, "partitions" -> partitionsToBeReassigned.map(e => Map("topic" -> e._1.topic, "partition" -> e._1.partition,
                                                                                           "replicas" -> e._2))))
   }
@@ -722,7 +722,7 @@ class ZkUtils(val zkClient: ZkClient,
         deletePath(zkPath)
         info("No more partitions need to be reassigned. Deleting zk path %s".format(zkPath))
       case _ =>
-        val jsonData = getPartitionReassignmentZkData(partitionsToBeReassigned)
+        val jsonData = formatAsReassignmentJson(partitionsToBeReassigned)
         try {
           updatePersistentPath(zkPath, jsonData)
           debug("Updated partition reassignment path with %s".format(jsonData))

@@ -134,6 +134,9 @@ public class ProcessorStateManager {
             retry--;
             lock = lockStateDirectory(channel);
         }
+        if (lock == null) {
+            channel.close();
+        }
         return lock;
     }
 
@@ -368,6 +371,7 @@ public class ProcessorStateManager {
         } finally {
             // release the state directory directoryLock
             directoryLock.release();
+            directoryLock.channel().close();
         }
     }
 

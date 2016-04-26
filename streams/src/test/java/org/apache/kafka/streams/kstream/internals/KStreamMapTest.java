@@ -25,6 +25,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -35,6 +36,16 @@ public class KStreamMapTest {
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
+
+    private KStreamTestDriver driver = null;
+
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
+    }
 
     @Test
     public void testMap() {
@@ -56,7 +67,7 @@ public class KStreamMapTest {
         processor = new MockProcessorSupplier<>();
         stream.map(mapper).process(processor);
 
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
         }
