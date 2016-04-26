@@ -31,12 +31,10 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -68,14 +66,6 @@ public class InternalTopicIntegrationTest {
         cluster.createTopic(DEFAULT_INPUT_TOPIC);
         cluster.createTopic(DEFAULT_OUTPUT_TOPIC);
     }
-
-    @AfterClass
-    public static void stopKafkaCluster() throws IOException {
-        if (cluster != null) {
-            cluster.stop();
-        }
-    }
-
 
     /**
      * Validates that any state changelog topics are compacted
