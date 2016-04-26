@@ -141,9 +141,9 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override def setUp {
     securityProtocol match {
       case SecurityProtocol.SSL =>
-        startSasl(ZkSasl)
+        startSasl(ZkSasl, null, null)
       case _ =>
-        startSasl(Both)
+        startSasl(Both, List("GSSAPI"), List("GSSAPI"))
     }
     super.setUp
     AclCommand.main(topicBrokerReadAclArgs)
