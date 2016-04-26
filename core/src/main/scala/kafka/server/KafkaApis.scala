@@ -37,7 +37,7 @@ import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidTopicException, NotLeaderForPartitionException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol, SecurityProtocol}
-import org.apache.kafka.common.requests.{ApiVersionResponse, DescribeGroupsRequest, DescribeGroupsResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsResponse, ListOffsetRequest, ListOffsetResponse, MetadataRequest, MetadataResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, ProduceRequest, ProduceResponse, ResponseHeader, ResponseSend, StopReplicaRequest, StopReplicaResponse, SyncGroupRequest, SyncGroupResponse, UpdateMetadataRequest, UpdateMetadataResponse}
+import org.apache.kafka.common.requests.{ApiVersionsResponse, DescribeGroupsRequest, DescribeGroupsResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsResponse, ListOffsetRequest, ListOffsetResponse, MetadataRequest, MetadataResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, ProduceRequest, ProduceResponse, ResponseHeader, ResponseSend, StopReplicaRequest, StopReplicaResponse, SyncGroupRequest, SyncGroupResponse, UpdateMetadataRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -48,11 +48,11 @@ import scala.collection.JavaConverters._
 import org.apache.kafka.common.requests.SaslHandshakeResponse
 
 object KafkaApis {
-  val apiVersionResponse = new ApiVersionResponse(Errors.NONE.code, buildApiKeysToApiVersions.values.toList.asJava)
+  val apiVersionsResponse = new ApiVersionsResponse(Errors.NONE.code, buildApiKeysToApiVersions.values.toList.asJava)
 
-  private def buildApiKeysToApiVersions: Map[Short, ApiVersionResponse.ApiVersion] = {
+  private def buildApiKeysToApiVersions: Map[Short, ApiVersionsResponse.ApiVersion] = {
     ApiKeys.values.map(apiKey =>
-      apiKey.id -> new ApiVersionResponse.ApiVersion(apiKey.id, Protocol.MIN_VERSIONS(apiKey.id), Protocol.CURR_VERSION(apiKey.id))).toMap
+      apiKey.id -> new ApiVersionsResponse.ApiVersion(apiKey.id, Protocol.MIN_VERSIONS(apiKey.id), Protocol.CURR_VERSION(apiKey.id))).toMap
   }
 }
 
@@ -101,7 +101,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
         case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
-        case ApiKeys.API_VERSION => handleApiVersionRequest(request)
+        case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -1030,7 +1030,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, response)))
   }
 
-  def handleApiVersionRequest(request: RequestChannel.Request) {
+  def handleApiVersionsRequest(request: RequestChannel.Request) {
     // Note that broker returns its full list of supported ApiKeys and versions regardless of current
     // authentication state (e.g., before SASL authentication on an SASL listener, do note that no
     // Kafka protocol requests may take place on a SSL listener before the SSL handshake is finished).
@@ -1038,12 +1038,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     // with client authentication which is performed at an earlier stage of the connection where the
     // ApiVersionRequest is not available.
     val responseHeader = new ResponseHeader(request.header.correlationId)
-    val isApiVersionRequestVersionSupported = request.header.apiVersion <= Protocol.CURR_VERSION(ApiKeys.API_VERSION.id) &&
-                                              request.header.apiVersion >= Protocol.MIN_VERSIONS(ApiKeys.API_VERSION.id)
-    val responseBody = if (isApiVersionRequestVersionSupported)
-      KafkaApis.apiVersionResponse
+    val isApiVersionsRequestVersionSupported = request.header.apiVersion <= Protocol.CURR_VERSION(ApiKeys.API_VERSIONS.id) &&
+                                              request.header.apiVersion >= Protocol.MIN_VERSIONS(ApiKeys.API_VERSIONS.id)
+    val responseBody = if (isApiVersionsRequestVersionSupported)
+      KafkaApis.apiVersionsResponse
     else
-      ApiVersionResponse.fromError(Errors.UNSUPPORTED_VERSION)
+      ApiVersionsResponse.fromError(Errors.UNSUPPORTED_VERSION)
     requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
   }
 

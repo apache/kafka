@@ -26,9 +26,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ApiVersionResponse extends AbstractRequestResponse {
+public class ApiVersionsResponse extends AbstractRequestResponse {
 
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.API_VERSION.id);
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.API_VERSIONS.id);
 
     public static final String ERROR_CODE_KEY_NAME = "error_code";
     public static final String API_VERSIONS_KEY_NAME = "api_versions";
@@ -56,7 +56,7 @@ public class ApiVersionResponse extends AbstractRequestResponse {
         }
     }
 
-    public ApiVersionResponse(short errorCode, List<ApiVersion> apiVersions) {
+    public ApiVersionsResponse(short errorCode, List<ApiVersion> apiVersions) {
         super(new Struct(CURRENT_SCHEMA));
         struct.set(ERROR_CODE_KEY_NAME, errorCode);
         List<Struct> apiVersionList = new ArrayList<>();
@@ -72,7 +72,7 @@ public class ApiVersionResponse extends AbstractRequestResponse {
         this.apiKeyToApiVersion = buildApiKeyToApiVersion(apiVersions);
     }
 
-    public ApiVersionResponse(Struct struct) {
+    public ApiVersionsResponse(Struct struct) {
         super(struct);
         this.errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
         List<ApiVersion> tempApiVersions = new ArrayList<>();
@@ -98,12 +98,12 @@ public class ApiVersionResponse extends AbstractRequestResponse {
         return errorCode;
     }
 
-    public static ApiVersionResponse parse(ByteBuffer buffer) {
-        return new ApiVersionResponse(CURRENT_SCHEMA.read(buffer));
+    public static ApiVersionsResponse parse(ByteBuffer buffer) {
+        return new ApiVersionsResponse(CURRENT_SCHEMA.read(buffer));
     }
 
-    public static ApiVersionResponse fromError(Errors error) {
-        return new ApiVersionResponse(error.code(), Collections.<ApiVersion>emptyList());
+    public static ApiVersionsResponse fromError(Errors error) {
+        return new ApiVersionsResponse(error.code(), Collections.<ApiVersion>emptyList());
     }
 
     private Map<Short, ApiVersion> buildApiKeyToApiVersion(List<ApiVersion> apiVersions) {

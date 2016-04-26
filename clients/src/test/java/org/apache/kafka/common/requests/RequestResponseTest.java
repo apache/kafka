@@ -443,11 +443,11 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createApiVersionRequest() {
-        return new ApiVersionRequest();
+        return new ApiVersionsRequest();
     }
 
     private AbstractRequestResponse createApiVersionResponse() {
-        List<ApiVersionResponse.ApiVersion> apiVersions = Arrays.asList(new ApiVersionResponse.ApiVersion((short) 0, (short) 0, (short) 2));
-        return new ApiVersionResponse(Errors.NONE.code(), apiVersions);
+        List<ApiVersionsResponse.ApiVersion> apiVersions = Arrays.asList(new ApiVersionsResponse.ApiVersion((short) 0, (short) 0, (short) 2));
+        return new ApiVersionsResponse(Errors.NONE.code(), apiVersions);
     }
 }

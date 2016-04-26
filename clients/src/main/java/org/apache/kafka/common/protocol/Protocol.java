@@ -760,17 +760,17 @@ public class Protocol {
     public static final Schema[] SASL_HANDSHAKE_RESPONSE = new Schema[] {SASL_HANDSHAKE_RESPONSE_V0};
 
     /* ApiVersion api */
-    public static final Schema API_VERSION_REQUEST_V0 = new Schema();
+    public static final Schema API_VERSIONS_REQUEST_V0 = new Schema();
 
-    public static final Schema API_VERSION_V0 = new Schema(new Field("api_key", INT16, "API key."),
+    public static final Schema API_VERSIONS_V0 = new Schema(new Field("api_key", INT16, "API key."),
                                                            new Field("min_version", INT16, "Minimum supported version."),
                                                            new Field("max_version", INT16, "Maximum supported version."));
 
-    public static final Schema API_VERSION_RESPONSE_V0 = new Schema(new Field("error_code", INT16, "Error code."),
-                                                                    new Field("api_versions", new ArrayOf(API_VERSION_V0), "API versions supported by the broker."));
+    public static final Schema API_VERSIONS_RESPONSE_V0 = new Schema(new Field("error_code", INT16, "Error code."),
+                                                                    new Field("api_versions", new ArrayOf(API_VERSIONS_V0), "API versions supported by the broker."));
 
-    public static final Schema[] API_VERSION_REQUEST = new Schema[]{API_VERSION_REQUEST_V0};
-    public static final Schema[] API_VERSION_RESPONSE = new Schema[]{API_VERSION_RESPONSE_V0};
+    public static final Schema[] API_VERSIONS_REQUEST = new Schema[]{API_VERSIONS_REQUEST_V0};
+    public static final Schema[] API_VERSIONS_RESPONSE = new Schema[]{API_VERSIONS_RESPONSE_V0};
 
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
@@ -800,7 +800,7 @@ public class Protocol {
         REQUESTS[ApiKeys.DESCRIBE_GROUPS.id] = DESCRIBE_GROUPS_REQUEST;
         REQUESTS[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_REQUEST;
         REQUESTS[ApiKeys.SASL_HANDSHAKE.id] = SASL_HANDSHAKE_REQUEST;
-        REQUESTS[ApiKeys.API_VERSION.id] = API_VERSION_REQUEST;
+        REQUESTS[ApiKeys.API_VERSIONS.id] = API_VERSIONS_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -820,7 +820,7 @@ public class Protocol {
         RESPONSES[ApiKeys.DESCRIBE_GROUPS.id] = DESCRIBE_GROUPS_RESPONSE;
         RESPONSES[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_RESPONSE;
         RESPONSES[ApiKeys.SASL_HANDSHAKE.id] = SASL_HANDSHAKE_RESPONSE;
-        RESPONSES[ApiKeys.API_VERSION.id] = API_VERSION_RESPONSE;
+        RESPONSES[ApiKeys.API_VERSIONS.id] = API_VERSIONS_RESPONSE;
 
         /* set the minimum and maximum version of each api */
         for (ApiKeys api : ApiKeys.values()) {

@@ -22,15 +22,15 @@ import org.apache.kafka.common.protocol.{Protocol, ApiKeys}
 import org.junit.Assert._
 import org.junit.Test
 
-class ApiVersionTest {
+class ApiVersionsTest {
 
   @Test
   def testApiVersions {
-    val apiVersions = KafkaApis.apiVersionResponse.apiVersions
+    val apiVersions = KafkaApis.apiVersionsResponse.apiVersions
     assertEquals("API versions for all API keys must be maintained.", apiVersions.size, ApiKeys.values().length)
 
     for (key <- ApiKeys.values) {
-      val version = KafkaApis.apiVersionResponse.apiVersion(key.id)
+      val version = KafkaApis.apiVersionsResponse.apiVersion(key.id)
       assertNotNull("Could not find ApiVersion for API " + key.name, version)
       assertEquals("Incorrect min version for Api " + key.name, version.minVersion, Protocol.MIN_VERSIONS(key.id))
       assertEquals("Incorrect min version for Api " + key.name, version.maxVersion, Protocol.CURR_VERSION(key.id))

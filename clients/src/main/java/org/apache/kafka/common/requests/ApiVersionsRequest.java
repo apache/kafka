@@ -21,15 +21,15 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
-public class ApiVersionRequest extends AbstractRequest {
+public class ApiVersionsRequest extends AbstractRequest {
 
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.API_VERSION.id);
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.API_VERSIONS.id);
 
-    public ApiVersionRequest() {
+    public ApiVersionsRequest() {
         super(new Struct(CURRENT_SCHEMA));
     }
 
-    public ApiVersionRequest(Struct struct) {
+    public ApiVersionsRequest(Struct struct) {
         super(struct);
     }
 
@@ -38,18 +38,18 @@ public class ApiVersionRequest extends AbstractRequest {
         switch (versionId) {
             case 0:
                 short errorCode = Errors.forException(e).code();
-                return new ApiVersionResponse(errorCode, Collections.<ApiVersionResponse.ApiVersion>emptyList());
+                return new ApiVersionsResponse(errorCode, Collections.<ApiVersionsResponse.ApiVersion>emptyList());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.API_VERSION.id)));
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.API_VERSIONS.id)));
         }
     }
 
-    public static ApiVersionRequest parse(ByteBuffer buffer, int versionId) {
-        return new ApiVersionRequest(ProtoUtils.parseRequest(ApiKeys.API_VERSION.id, versionId, buffer));
+    public static ApiVersionsRequest parse(ByteBuffer buffer, int versionId) {
+        return new ApiVersionsRequest(ProtoUtils.parseRequest(ApiKeys.API_VERSIONS.id, versionId, buffer));
     }
 
-    public static ApiVersionRequest parse(ByteBuffer buffer) {
-        return new ApiVersionRequest(CURRENT_SCHEMA.read(buffer));
+    public static ApiVersionsRequest parse(ByteBuffer buffer) {
+        return new ApiVersionsRequest(CURRENT_SCHEMA.read(buffer));
     }
 }
