@@ -21,6 +21,7 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 
 import java.nio.ByteBuffer;
 
@@ -30,13 +31,12 @@ public class WindowStoreUtils {
     private static final int TIMESTAMP_SIZE = 8;
 
     /** Inner byte array serde used for segments */
-    public static final Serde<byte[]> INNER_SERDE = Serdes.ByteArray();
-
-    /** Inner byte array state serde used for segments */
-    public static final StateSerdes<byte[], byte[]> INNER_SERDES = new StateSerdes<>("", INNER_SERDE, INNER_SERDE);
+    public static final Serde<Bytes> INNER_KEY_SERDE = Serdes.Bytes();
+    public static final Serde<byte[]> INNER_VALUE_SERDE = Serdes.ByteArray();
+    public static final StateSerdes<Bytes, byte[]> INNER_SERDES = new StateSerdes<>("rocksDB-inner", INNER_KEY_SERDE, INNER_VALUE_SERDE);
 
     @SuppressWarnings("unchecked")
-    public static final KeyValueIterator<byte[], byte[]>[] NO_ITERATORS = (KeyValueIterator<byte[], byte[]>[]) new KeyValueIterator[0];
+    public static final KeyValueIterator<Bytes, byte[]>[] NO_ITERATORS = (KeyValueIterator<Bytes, byte[]>[]) new KeyValueIterator[0];
 
     public static <K> byte[] toBinaryKey(K key, final long timestamp, final int seqnum, StateSerdes<K, ?> serdes) {
         byte[] serializedKey = serdes.rawKey(key);
