@@ -192,8 +192,6 @@ public abstract class AbstractKeyValueStoreTest {
         }
     }
 
-
-
     @Test
     public void testPutIfAbsent() {
         // Create the test driver ...
