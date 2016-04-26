@@ -573,7 +573,7 @@ class ReplicaManager(val config: KafkaConfig,
         stateChangeLogger.warn(stateControllerEpochErrorMessage)
         throw new ControllerMovedException(stateControllerEpochErrorMessage)
       } else {
-        metadataCache.updateCache(updateMetadataRequest, localBrokerId, stateChangeLogger)
+        metadataCache.updateCache(updateMetadataRequest)
         controllerEpoch = updateMetadataRequest.controllerEpoch
       }
     }
