@@ -63,7 +63,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String NUM_STREAM_THREADS_CONFIG = "num.stream.threads";
     private static final String NUM_STREAM_THREADS_DOC = "The number of threads to execute stream processing.";
 
-    /** <code>num.stream.threads</code> */
+    /** <code>num.standby.replicas</code> */
     public static final String NUM_STANDBY_REPLICAS_CONFIG = "num.standby.replicas";
     private static final String NUM_STANDBY_REPLICAS_DOC = "The number of standby replicas for each task.";
 
@@ -91,11 +91,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
     public static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the stream processing application.";
 
-    /** <code>replication.factor</code> */
+    /** <code>key.serde</code> */
     public static final String KEY_SERDE_CLASS_CONFIG = "key.serde";
     public static final String KEY_SERDE_CLASS_DOC = "Serializer / deserializer class for key that implements the <code>Serde</code> interface.";
 
-    /** <code>replication.factor</code> */
+    /** <code>value.serde</code> */
     public static final String VALUE_SERDE_CLASS_CONFIG = "value.serde";
     public static final String VALUE_SERDE_CLASS_DOC = "Serializer / deserializer class for value that implements the <code>Serde</code> interface.";
 
