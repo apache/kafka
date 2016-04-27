@@ -33,7 +33,8 @@ public class ProtocolSerializationTest {
 
     @Before
     public void setup() {
-        this.schema = new Schema(new Field("int8", Type.INT8),
+        this.schema = new Schema(new Field("boolean", Type.BOOLEAN),
+                                 new Field("int8", Type.INT8),
                                  new Field("int16", Type.INT16),
                                  new Field("int32", Type.INT32),
                                  new Field("int64", Type.INT64),
@@ -42,8 +43,10 @@ public class ProtocolSerializationTest {
                                  new Field("bytes", Type.BYTES),
                                  new Field("nullable_bytes", Type.NULLABLE_BYTES),
                                  new Field("array", new ArrayOf(Type.INT32)),
+                                 new Field("null_array", ArrayOf.nullable(Type.INT32)),
                                  new Field("struct", new Schema(new Field("field", new ArrayOf(Type.INT32)))));
-        this.struct = new Struct(this.schema).set("int8", (byte) 1)
+        this.struct = new Struct(this.schema).set("boolean", true)
+                                             .set("int8", (byte) 1)
                                              .set("int16", (short) 1)
                                              .set("int32", 1)
                                              .set("int64", 1L)
@@ -51,12 +54,15 @@ public class ProtocolSerializationTest {
                                              .set("nullable_string", null)
                                              .set("bytes", ByteBuffer.wrap("1".getBytes()))
                                              .set("nullable_bytes", null)
-                                             .set("array", new Object[] {1});
+                                             .set("array", new Object[] {1})
+                                             .set("null_array", null);
         this.struct.set("struct", this.struct.instance("struct").set("field", new Object[] {1, 2, 3}));
     }
 
     @Test
     public void testSimple() {
+        check(Type.BOOLEAN, false);
+        check(Type.BOOLEAN, true);
         check(Type.INT8, (byte) -111);
         check(Type.INT16, (short) -11111);
         check(Type.INT32, -11111111);
@@ -75,6 +81,7 @@ public class ProtocolSerializationTest {
         check(new ArrayOf(Type.INT32), new Object[] {1, 2, 3, 4});
         check(new ArrayOf(Type.STRING), new Object[] {});
         check(new ArrayOf(Type.STRING), new Object[] {"hello", "there", "beautiful"});
+        check(ArrayOf.nullable(Type.STRING), null);
     }
 
     @Test

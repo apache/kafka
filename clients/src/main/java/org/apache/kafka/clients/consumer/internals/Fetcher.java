@@ -183,25 +183,26 @@ public class Fetcher<K, V> {
      * @return The map of topics with their partition information
      */
     public Map<String, List<PartitionInfo>> getAllTopicMetadata(long timeout) {
-        return getTopicMetadata(null, timeout);
+        return getTopicMetadata(MetadataRequest.allTopics(), timeout);
     }
 
     /**
      * Get metadata for all topics present in Kafka cluster
      *
-     * @param topics The list of topics to fetch or null to fetch all
+     * @param request The MetadataRequest to send
      * @param timeout time for which getting topic metadata is attempted
      * @return The map of topics with their partition information
      */
-    public Map<String, List<PartitionInfo>> getTopicMetadata(List<String> topics, long timeout) {
-        if (topics != null && topics.isEmpty())
+    public Map<String, List<PartitionInfo>> getTopicMetadata(MetadataRequest request, long timeout) {
+        // Save the round trip if no topics are requested.
+        if (!request.isAllTopics() && request.topics().isEmpty())
             return Collections.emptyMap();
 
         long start = time.milliseconds();
         long remaining = timeout;
 
         do {
-            RequestFuture<ClientResponse> future = sendMetadataRequest(topics);
+            RequestFuture<ClientResponse> future = sendMetadataRequest(request);
             client.poll(future, remaining);
 
             if (future.failed() && !future.isRetriable())
@@ -266,14 +267,12 @@ public class Fetcher<K, V> {
      * Send Metadata Request to least loaded node in Kafka cluster asynchronously
      * @return A future that indicates result of sent metadata request
      */
-    private RequestFuture<ClientResponse> sendMetadataRequest(List<String> topics) {
-        if (topics == null)
-            topics = Collections.emptyList();
+    private RequestFuture<ClientResponse> sendMetadataRequest(MetadataRequest request) {
         final Node node = client.leastLoadedNode();
         if (node == null)
             return RequestFuture.noBrokersAvailable();
         else
-            return client.send(node, ApiKeys.METADATA, new MetadataRequest(topics));
+            return client.send(node, ApiKeys.METADATA, request);
     }
 
     /**
