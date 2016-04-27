@@ -298,7 +298,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String name = topology.newName(SINK_NAME);
 
         Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
-        Serializer<V> valSerializer = keySerde == null ? null : valSerde.serializer();
+        Serializer<V> valSerializer = valSerde == null ? null : valSerde.serializer();
         
         if (partitioner == null && keySerializer != null && keySerializer instanceof WindowedSerializer) {
             WindowedSerializer<Object> windowedSerializer = (WindowedSerializer<Object>) keySerializer;
