@@ -103,6 +103,8 @@ object ConsoleConsumer extends Logging {
         consumer.stop()
 
         shutdownLatch.await()
+
+        System.out.println("shutdown_complete")
       }
     })
   }

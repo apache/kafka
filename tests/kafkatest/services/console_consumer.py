@@ -123,6 +123,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         self.from_beginning = from_beginning
         self.message_validator = message_validator
         self.messages_consumed = {idx: [] for idx in range(1, num_nodes + 1)}
+        self.nodes_clean_shutdown = []
         self.client_id = client_id
         self.print_key = print_key
         self.log_level = "TRACE"
@@ -199,6 +200,9 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
     def alive(self, node):
         return len(self.pids(node)) > 0
 
+    def clean_shutdown(self, node):
+        return self.idx(node) in self.nodes_clean_shutdown
+
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
 
@@ -226,10 +230,13 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
 
             for line in itertools.chain([first_line], consumer_output):
                 msg = line.strip()
-                if self.message_validator is not None:
-                    msg = self.message_validator(msg)
-                if msg is not None:
-                    self.messages_consumed[idx].append(msg)
+                if msg == "shutdown_complete":
+                    self.nodes_clean_shutdown.append(idx)
+                else:
+                    if self.message_validator is not None:
+                        msg = self.message_validator(msg)
+                    if msg is not None:
+                        self.messages_consumed[idx].append(msg)
 
             self.read_jmx_output(idx, node)
 
