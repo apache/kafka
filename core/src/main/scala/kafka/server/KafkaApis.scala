@@ -48,14 +48,8 @@ import scala.collection.JavaConverters._
 import org.apache.kafka.common.requests.SaslHandshakeResponse
 
 object KafkaApis {
-  val apiVersionsResponse = new ApiVersionsResponse(Errors.NONE.code, buildApiKeysToApiVersions.values.toList.asJava)
-
-  private def buildApiKeysToApiVersions: Map[Short, ApiVersionsResponse.ApiVersion] = {
-    ApiKeys.values.map(apiKey =>
-      apiKey.id -> new ApiVersionsResponse.ApiVersion(apiKey.id, Protocol.MIN_VERSIONS(apiKey.id), Protocol.CURR_VERSION(apiKey.id))).toMap
-  }
+  val apiVersionsResponse = ApiVersionsResponse.createApiVersionsResponse
 }
-
 
 /**
  * Logic to handle the various Kafka requests

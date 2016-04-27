@@ -17,20 +17,29 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
+import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.After;
@@ -195,6 +204,51 @@ public class SaslAuthenticatorTest {
     }
 
     /**
+     * Tests that Kafka ApiVersionRequests are handled by the SASL server authenticator
+     * prior to SASL handshake flow and that subsequent authentication succeeds.
+     */
+    @Test
+    public void testUnauthenticatedApiVersionRequest() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
+        server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
+
+        // Create PLAINTEXT connection to manually authenticate after ApiVersionsRequest
+        String node = "1";
+        createClientConnection(SecurityProtocol.PLAINTEXT, node);
+
+        // Send ApiVersionsRequest and check response
+        RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS.id, "someclient", 1);
+        ApiVersionsRequest versionsRequest = new ApiVersionsRequest();
+        selector.send(new NetworkSend(node, RequestSend.serialize(versionsHeader, versionsRequest.toStruct())));
+        Struct versionsResponseStruct = waitForResponse(versionsHeader);
+        ApiVersionsResponse versionsResponse = new ApiVersionsResponse(versionsResponseStruct);
+        assertEquals(Protocol.MIN_VERSIONS[ApiKeys.SASL_HANDSHAKE.id], versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).minVersion);
+        assertEquals(Protocol.CURR_VERSION[ApiKeys.SASL_HANDSHAKE.id], versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).maxVersion);
+
+        // Send SaslHandshakeRequest and check response
+        RequestHeader handshakeHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id, "someclient", 2);
+        SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest("PLAIN");
+        selector.send(new NetworkSend(node, RequestSend.serialize(handshakeHeader, handshakeRequest.toStruct())));
+        Struct handshakeResponseStruct = waitForResponse(handshakeHeader);
+        SaslHandshakeResponse handshakeResponse = new SaslHandshakeResponse(handshakeResponseStruct);
+        assertEquals(Errors.NONE, Errors.forCode(handshakeResponse.errorCode()));
+        assertEquals(Collections.singletonList("PLAIN"), handshakeResponse.enabledMechanisms());
+
+        // Authenticate using PLAIN username/password
+        String authString = "\u0000" + TestJaasConfig.USERNAME + "\u0000" + TestJaasConfig.PASSWORD;
+        selector.send(new NetworkSend(node, ByteBuffer.wrap(authString.getBytes("UTF-8"))));
+        do {
+            selector.poll(1000);
+        } while (selector.completedReceives().size() == 0);
+
+        // Check send/receive on the manually authenticated connection
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+
+        selector.close();
+    }
+
+    /**
      * Tests that any invalid data during Kafka SASL handshake request flow
      * or the actual SASL authentication flow result in authentication failure
      * and do not cause any failures in the server.
@@ -233,6 +287,35 @@ public class SaslAuthenticatorTest {
 
         // Test good connection still works
         testNewClientConnection(securityProtocol, "good2");
+    }
+
+    /**
+     * Tests that ApiVersionsRequest after Kafka SASL handshake request flow,
+     * but prior to actual SASL authentication, results in authentication failure.
+     */
+    @Test
+    public void testInvalidApiVersionsRequestSequence() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
+        server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
+
+        // Send invalid SASL packet after valid handshake request
+        String node1 = "invalid1";
+        createClientConnection(SecurityProtocol.PLAINTEXT, node1);
+        RequestHeader header = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id, "someclient", 1);
+        SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest("PLAIN");
+        selector.send(new NetworkSend(node1, RequestSend.serialize(header, handshakeRequest.toStruct())));
+        while (selector.completedSends().size() == 0)
+            selector.poll(1000);
+
+        RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS.id, "someclient", 2);
+        ApiVersionsRequest versionsRequest = new ApiVersionsRequest();
+        selector.send(new NetworkSend(node1, RequestSend.serialize(versionsHeader, versionsRequest.toStruct())));
+        NetworkTestUtils.waitForChannelClose(selector, node1);
+        selector.close();
+
+        // Test good connection still works
+        testNewClientConnection(securityProtocol, "good1");
     }
 
     /**
@@ -393,5 +476,14 @@ public class SaslAuthenticatorTest {
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
         selector.close();
         selector = null;
+    }
+
+    private Struct waitForResponse(RequestHeader requestHeader) throws IOException {
+        do {
+            selector.poll(1000);
+        } while (selector.completedReceives().size() == 0);
+        assertEquals(1, selector.completedReceives().size());
+        ByteBuffer responseBuffer = selector.completedReceives().get(0).payload();
+        return NetworkClient.parseResponse(responseBuffer, requestHeader);
     }
 }
