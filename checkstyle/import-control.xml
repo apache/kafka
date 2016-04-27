@@ -63,6 +63,8 @@
       <allow pkg="org.apache.kafka.common.config" />
       <allow pkg="org.apache.kafka.common.metrics" />
       <allow pkg="org.apache.kafka.common.security" />
+      <!-- for testing -->
+      <allow pkg="org.apache.kafka.common.requests" />
     </subpackage>
 
     <subpackage name="security">
