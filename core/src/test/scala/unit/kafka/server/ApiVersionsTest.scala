@@ -31,20 +31,20 @@ class ApiVersionsTest {
 
     for (key <- ApiKeys.values) {
       val version = KafkaApis.apiVersionsResponse.apiVersion(key.id)
-      assertNotNull("Could not find ApiVersion for API " + key.name, version)
-      assertEquals("Incorrect min version for Api " + key.name, version.minVersion, Protocol.MIN_VERSIONS(key.id))
-      assertEquals("Incorrect min version for Api " + key.name, version.maxVersion, Protocol.CURR_VERSION(key.id))
+      assertNotNull(s"Could not find ApiVersion for API ${key.name}", version)
+      assertEquals(s"Incorrect min version for Api ${key.name}.", version.minVersion, Protocol.MIN_VERSIONS(key.id))
+      assertEquals(s"Incorrect max version for Api ${key.name}.", version.maxVersion, Protocol.CURR_VERSION(key.id))
 
       // Check if versions less than min version are indeed set as null, i.e., deprecated.
       for (i <- 0 until version.minVersion) {
-        assertNull("Request version " + i + " for API " + version.apiKey + " must be null.", Protocol.REQUESTS(version.apiKey)(i))
-        assertNull("Response version " + i + " for API " + version.apiKey + " must be null.", Protocol.RESPONSES(version.apiKey)(i))
+        assertNull(s"Request version $i for API ${version.apiKey} must be null.", Protocol.REQUESTS(version.apiKey)(i))
+        assertNull(s"Response version $i for API ${version.apiKey} must be null.", Protocol.RESPONSES(version.apiKey)(i))
       }
 
       // Check if versions between min and max versions are non null, i.e., valid.
       for (i <- version.minVersion.toInt to version.maxVersion) {
-        assertNotNull("Request version " + i + " for API " + version.apiKey + " must not be null.", Protocol.REQUESTS(version.apiKey)(i))
-        assertNotNull("Response version " + i + " for API " + version.apiKey + " must not be null.", Protocol.RESPONSES(version.apiKey)(i))
+        assertNotNull(s"Request version $i for API ${version.apiKey} must not be null.", Protocol.REQUESTS(version.apiKey)(i))
+        assertNotNull(s"Response version $i for API ${version.apiKey} must not be null.", Protocol.RESPONSES(version.apiKey)(i))
       }
     }
   }
