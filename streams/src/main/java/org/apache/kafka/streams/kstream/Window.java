@@ -48,21 +48,18 @@ public abstract class Window {
         return this.start() < other.end() || other.start() < this.end();
     }
 
-    public boolean equalsTo(Window other) {
-        return this.start() == other.start() && this.end() == other.end();
-    }
-
     @Override
     public boolean equals(Object obj) {
-        if (obj == this)
+        if (obj == this) {
             return true;
+        }
 
-        if (!(obj instanceof Window))
+        if (getClass() != obj.getClass()) {
             return false;
+        }
 
         Window other = (Window) obj;
-
-        return this.equalsTo(other) && this.start == other.start && this.end == other.end;
+        return this.start == other.start && this.end == other.end;
     }
 
     @Override
@@ -70,4 +67,5 @@ public abstract class Window {
         long n = (this.start << 32) | this.end;
         return (int) (n % 0xFFFFFFFFL);
     }
+
 }
