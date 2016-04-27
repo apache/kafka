@@ -138,6 +138,6 @@ public class KStreamImplTest {
     public void testToWithNullValueSerdeDoesntNPE() {
         final KStreamBuilder builder = new KStreamBuilder();
         final KStream<String, String> inputStream = builder.stream(stringSerde, stringSerde, "input");
-        inputStream.to(stringSerde,null,"output");
+        inputStream.to(stringSerde, null, "output");
     }
 }
