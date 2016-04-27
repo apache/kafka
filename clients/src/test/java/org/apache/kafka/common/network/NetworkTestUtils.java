@@ -42,13 +42,10 @@ public class NetworkTestUtils {
 
     public static void checkClientConnection(Selector selector, String node, int minMessageSize, int messageCount) throws Exception {
 
+        waitForChannelReady(selector, node);
         String prefix = TestUtils.randomString(minMessageSize);
         int requests = 0;
         int responses = 0;
-        // wait for handshake to finish
-        while (!selector.isChannelReady(node)) {
-            selector.poll(1000L);
-        }
         selector.send(new NetworkSend(node, ByteBuffer.wrap((prefix + "-0").getBytes())));
         requests++;
         while (responses < messageCount) {
@@ -63,6 +60,14 @@ public class NetworkTestUtils {
             for (int i = 0; i < selector.completedSends().size() && requests < messageCount && selector.isChannelReady(node); i++, requests++) {
                 selector.send(new NetworkSend(node, ByteBuffer.wrap((prefix + "-" + requests).getBytes())));
             }
+        }
+    }
+
+    public static void waitForChannelReady(Selector selector, String node) throws IOException {
+        // wait for handshake to finish
+        int secondsLeft = 30;
+        while (!selector.isChannelReady(node) && secondsLeft-- > 0) {
+            selector.poll(1000L);
         }
     }
 
