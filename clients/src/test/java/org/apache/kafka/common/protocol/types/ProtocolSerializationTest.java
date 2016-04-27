@@ -233,13 +233,9 @@ public class ProtocolSerializationTest {
 
     @Test
     public void testToString() {
-        try {
-            String stuctStr = this.struct.toString();
-            assertFalse("Stuct string should not be null.", stuctStr == null);
-            assertFalse("Stuct string should not be empty.", stuctStr.isEmpty());
-        } catch (Throwable e) {
-            fail("Struct.toString throws an exception");
-        }
+        String stuctStr = this.struct.toString();
+        assertFalse("Stuct string should not be null.", stuctStr == null);
+        assertFalse("Stuct string should not be empty.", stuctStr.isEmpty());
     }
 
     private Object roundtrip(Type type, Object obj) {
