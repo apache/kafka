@@ -24,6 +24,7 @@ import java.util.Properties
 import kafka.admin.{RackAwareMode, AdminUtils}
 import kafka.api._
 import kafka.cluster.Partition
+import kafka.common
 import kafka.common._
 import kafka.controller.KafkaController
 import kafka.coordinator.{GroupCoordinator, JoinGroupResult}
@@ -631,12 +632,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       AdminUtils.createTopic(zkUtils, topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe)
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
         .format(topic, numPartitions, replicationFactor))
-      new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, java.util.Collections.emptyList())
+      new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, common.Topic.isInternal(topic),
+        java.util.Collections.emptyList())
     } catch {
       case e: TopicExistsException => // let it go, possibly another broker created this topic
-        new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, java.util.Collections.emptyList())
+        new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, common.Topic.isInternal(topic),
+          java.util.Collections.emptyList())
       case itex: InvalidTopicException =>
-        new MetadataResponse.TopicMetadata(Errors.INVALID_TOPIC_EXCEPTION, topic, java.util.Collections.emptyList())
+        new MetadataResponse.TopicMetadata(Errors.INVALID_TOPIC_EXCEPTION, topic, common.Topic.isInternal(topic),
+          java.util.Collections.emptyList())
     }
   }
 
@@ -656,8 +660,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     topicMetadata.headOption.getOrElse(createGroupMetadataTopic())
   }
 
-  private def getTopicMetadata(topics: Set[String], securityProtocol: SecurityProtocol): Seq[MetadataResponse.TopicMetadata] = {
-    val topicResponses = metadataCache.getTopicMetadata(topics, securityProtocol)
+  private def getTopicMetadata(topics: Set[String], securityProtocol: SecurityProtocol, errorUnavailableEndpoints: Boolean): Seq[MetadataResponse.TopicMetadata] = {
+    val topicResponses = metadataCache.getTopicMetadata(topics, securityProtocol, errorUnavailableEndpoints)
     if (topics.isEmpty || topicResponses.size == topics.size) {
       topicResponses
     } else {
@@ -668,7 +672,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else if (config.autoCreateTopicsEnable) {
           createTopic(topic, config.numPartitions, config.defaultReplicationFactor)
         } else {
-          new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, java.util.Collections.emptyList())
+          new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, common.Topic.isInternal(topic),
+            java.util.Collections.emptyList())
         }
       }
       topicResponses ++ responsesForNonExistentTopics
@@ -680,16 +685,24 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleTopicMetadataRequest(request: RequestChannel.Request) {
     val metadataRequest = request.body.asInstanceOf[MetadataRequest]
+    val requestVersion = request.header.apiVersion()
 
-    val topics = metadataRequest.topics.asScala.toSet
-    var (authorizedTopics, unauthorizedTopics) = if (metadataRequest.topics.isEmpty) {
-      //if topics is empty -> fetch all topics metadata but filter out the topic response that are not authorized
-      val authorized = metadataCache.getAllTopics()
-        .filter(topic => authorize(request.session, Describe, new Resource(Topic, topic)))
-      (authorized, mutable.Set[String]())
-    } else {
+    val topics =
+      // Handle old metadata request logic. Version 0 has no way to specify "no topics".
+      if (requestVersion == 0) {
+        if (metadataRequest.topics() == null || metadataRequest.topics().isEmpty)
+          metadataCache.getAllTopics()
+        else
+          metadataRequest.topics.asScala.toSet
+      } else {
+        if (metadataRequest.isAllTopics)
+          metadataCache.getAllTopics()
+        else
+          metadataRequest.topics.asScala.toSet
+      }
+
+    var (authorizedTopics, unauthorizedTopics) =
       topics.partition(topic => authorize(request.session, Describe, new Resource(Topic, topic)))
-    }
 
     if (authorizedTopics.nonEmpty) {
       val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
@@ -704,22 +717,32 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val unauthorizedTopicMetadata = unauthorizedTopics.map(topic =>
-      new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, java.util.Collections.emptyList()))
+      new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, common.Topic.isInternal(topic),
+        java.util.Collections.emptyList()))
 
-    val topicMetadata = if (authorizedTopics.isEmpty)
-      Seq.empty[MetadataResponse.TopicMetadata]
-    else
-      getTopicMetadata(authorizedTopics, request.securityProtocol)
+    // In version 0, we returned an error when brokers with replicas were unavailable,
+    // while in higher versions we simply don't include the broker in the returned broker list
+    val errorUnavailableEndpoints = requestVersion == 0
+    val topicMetadata =
+      if (authorizedTopics.isEmpty)
+        Seq.empty[MetadataResponse.TopicMetadata]
+      else
+        getTopicMetadata(authorizedTopics, request.securityProtocol, errorUnavailableEndpoints)
+
+    val completeTopicMetadata = topicMetadata ++ unauthorizedTopicMetadata
 
     val brokers = metadataCache.getAliveBrokers
 
-    trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(topicMetadata.mkString(","),
+    trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
 
     val responseHeader = new ResponseHeader(request.header.correlationId)
+
     val responseBody = new MetadataResponse(
       brokers.map(_.getNode(request.securityProtocol)).asJava,
-      (topicMetadata ++ unauthorizedTopicMetadata).asJava
+      metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+      completeTopicMetadata.asJava,
+      requestVersion
     )
     requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
   }
