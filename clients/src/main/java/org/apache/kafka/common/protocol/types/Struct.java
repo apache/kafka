@@ -292,13 +292,15 @@ public class Struct {
             b.append('=');
             if (f.type() instanceof ArrayOf) {
                 Object[] arrayValue = (Object[]) this.values[i];
-                b.append('[');
-                for (int j = 0; j < arrayValue.length; j++) {
-                    b.append(arrayValue[j]);
-                    if (j < arrayValue.length - 1)
-                        b.append(',');
+                if (arrayValue != null) {
+                    b.append('[');
+                    for (int j = 0; j < arrayValue.length; j++) {
+                        b.append(arrayValue[j]);
+                        if (j < arrayValue.length - 1)
+                            b.append(',');
+                    }
+                    b.append(']');
                 }
-                b.append(']');
             } else
                 b.append(this.values[i]);
             if (i < this.values.length - 1)

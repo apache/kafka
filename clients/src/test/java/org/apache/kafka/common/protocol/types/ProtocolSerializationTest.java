@@ -231,6 +231,17 @@ public class ProtocolSerializationTest {
         }
     }
 
+    @Test
+    public void testToString() {
+        try {
+            String stuctStr = this.struct.toString();
+            assertFalse("Stuct string should not be null.", stuctStr == null);
+            assertFalse("Stuct string should not be empty.", stuctStr.isEmpty());
+        } catch (Throwable e) {
+            fail("Struct.toString throws an exception");
+        }
+    }
+
     private Object roundtrip(Type type, Object obj) {
         ByteBuffer buffer = ByteBuffer.allocate(type.sizeOf(obj));
         type.write(buffer, obj);
