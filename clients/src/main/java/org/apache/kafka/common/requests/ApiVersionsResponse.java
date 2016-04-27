@@ -54,20 +54,6 @@ public class ApiVersionsResponse extends AbstractRequestResponse {
             this.minVersion = minVersion;
             this.maxVersion = maxVersion;
         }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj == this)
-                return  true;
-
-            if (!(obj instanceof ApiVersion))
-                return false;
-
-            ApiVersion other = (ApiVersion) obj;
-            return other.apiKey == this.apiKey &&
-                    other.minVersion == this.minVersion &&
-                    other.maxVersion == this.maxVersion;
-        }
     }
 
     public ApiVersionsResponse(short errorCode, List<ApiVersion> apiVersions) {
