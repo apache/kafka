@@ -27,7 +27,7 @@ import scala.collection.JavaConversions._
 
 class ApiVersionsRequestTest extends BaseRequestTest {
 
-  override def numBrokers(): Int = 1
+  override def numBrokers: Int = 1
 
   @Test
   def testApiVersionsRequest() {
@@ -37,9 +37,9 @@ class ApiVersionsRequestTest extends BaseRequestTest {
     for (expectedApiVersion: ApiVersion <- KafkaApis.apiVersionsResponse.apiVersions()) {
       val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
       assertNotNull(s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.", actualApiVersion)
-      assertEquals(s"API key ${actualApiVersion.apiKey} must be supported by broker.", expectedApiVersion.apiKey, actualApiVersion.apiKey)
-      assertEquals(s"API key ${actualApiVersion.apiKey} must have ${expectedApiVersion.minVersion} as minimum supported version.", expectedApiVersion.minVersion, actualApiVersion.minVersion)
-      assertEquals(s"API key ${actualApiVersion.apiKey} must have ${expectedApiVersion.maxVersion} as maximum supported version.", expectedApiVersion.maxVersion, actualApiVersion.maxVersion)
+      assertEquals("API key must be supported by the broker.", expectedApiVersion.apiKey, actualApiVersion.apiKey)
+      assertEquals(s"Received unexpected min version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.minVersion, actualApiVersion.minVersion)
+      assertEquals(s"Received unexpected max version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.maxVersion, actualApiVersion.maxVersion)
     }
   }
 
