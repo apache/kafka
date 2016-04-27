@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.directory_layout.kafka_path import create_path_resolver
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
 
@@ -67,7 +66,6 @@ class EndToEndLatencyService(PerformanceService):
             'kafka_opts': self.security_config.kafka_opts,
             'message_bytes': EndToEndLatencyService.MESSAGE_BYTES
         }
-        self.path = create_path_resolver(self.context)
 
         for node in self.nodes:
             node.version = version

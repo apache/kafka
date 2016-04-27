@@ -79,7 +79,6 @@ class ConsumerPerformanceService(PerformanceService):
         self.messages = messages
         self.new_consumer = new_consumer
         self.settings = settings
-        self.path = create_path_resolver(self.context)
 
         assert version >= V_0_9_0_0 or (not new_consumer), \
             "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(version)
