@@ -30,11 +30,13 @@ import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader, Respons
 import org.junit.Before
 
 abstract class BaseRequestTest extends KafkaServerTestHarness {
-  val numBrokers = 3
   private var correlationId = 0
 
-  // Override properties by mutating the passed Properties object
-  def propertyOverrides(properties: Properties): Unit
+  // If required, set number of brokers
+  protected def numBrokers(): Int = 3
+
+  // If required, override properties by mutating the passed Properties object
+  protected def propertyOverrides(properties: Properties): Unit = {}
 
   def generateConfigs() = {
     val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect, enableControlledShutdown = false)
