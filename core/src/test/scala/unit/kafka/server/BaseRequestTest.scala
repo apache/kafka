@@ -33,10 +33,10 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   private var correlationId = 0
 
   // If required, set number of brokers
-  protected def numBrokers(): Int = 3
+  protected def numBrokers: Int = 3
 
   // If required, override properties by mutating the passed Properties object
-  protected def propertyOverrides(properties: Properties): Unit = {}
+  protected def propertyOverrides(properties: Properties) {}
 
   def generateConfigs() = {
     val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect, enableControlledShutdown = false)
