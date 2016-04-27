@@ -58,7 +58,7 @@ public class JaasUtils {
         return null;
     }
 
-    public static String defaultRealm()
+    public static String defaultKerberosRealm()
         throws ClassNotFoundException, NoSuchMethodException,
                IllegalArgumentException, IllegalAccessException,
                InvocationTargetException {
