@@ -833,8 +833,8 @@ public class Protocol {
         }
 
         /* sanity check that:
-             - we have the same number of request and response versions for each api
-             - for each supported api, minimum supported version is same for its request and response*/
+         *   - we have the same number of request and response versions for each api
+         *   - we have a consistent set of request and response versions for each api */
         for (ApiKeys api : ApiKeys.values()) {
             if (REQUESTS[api.id].length != RESPONSES[api.id].length)
                 throw new IllegalStateException(REQUESTS[api.id].length + " request versions for api " + api.name

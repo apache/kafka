@@ -38,8 +38,7 @@ public enum ApiKeys {
     DESCRIBE_GROUPS(15, "DescribeGroups"),
     LIST_GROUPS(16, "ListGroups"),
     SASL_HANDSHAKE(17, "SaslHandshake"),
-    API_VERSION(18, "ApiVersion"),
-    API_VERSIONS(17, "ApiVersions");
+    API_VERSIONS(18, "ApiVersions");
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

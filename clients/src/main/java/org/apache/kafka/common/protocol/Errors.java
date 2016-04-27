@@ -138,7 +138,7 @@ public enum Errors {
             new UnsupportedSaslMechanismException("The broker does not support the requested SASL mechanism.")),
     ILLEGAL_SASL_STATE(34,
             new IllegalSaslStateException("Request is not valid given the current SASL state.")),
-    UNSUPPORTED_VERSION(33,
+    UNSUPPORTED_VERSION(35,
             new UnsupportedVersionException("The version of API is not supported."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
