@@ -25,19 +25,56 @@ import org.junit.Test;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class UnlimitedWindowsTest {
 
     private static String anyName = "window";
+    private static long anyStartTime = 10L;
+
+    @Test(expected = IllegalArgumentException.class)
+    public void nameMustNotBeEmpty() {
+        UnlimitedWindows.of("");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void nameMustNotBeNull() {
+        UnlimitedWindows.of(null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void startTimeMustNotBeNegative() {
+        UnlimitedWindows.of(anyName).startOn(-1);
+    }
 
     @Test
-    public void unlimitedWindows() {
-        long startTime = 10L;
-        UnlimitedWindows w = UnlimitedWindows.of(anyName).startOn(startTime);
+    public void startTimeCanBeZero() {
+        UnlimitedWindows.of(anyName).startOn(0);
+    }
 
-        Map<Long, UnlimitedWindow> matchedWindows1 = w.windowsFor(startTime + 11L);
-        assertEquals(1, matchedWindows1.size());
-        assertEquals(new UnlimitedWindow(startTime), matchedWindows1.get(startTime));
+    @Test
+    public void shouldIncludeRecordsThatHappenedOnWindowStart() {
+        UnlimitedWindows w = UnlimitedWindows.of(anyName).startOn(anyStartTime);
+        Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(w.start);
+        assertEquals(1, matchedWindows.size());
+        assertEquals(new UnlimitedWindow(anyStartTime), matchedWindows.get(anyStartTime));
+    }
+
+    @Test
+    public void shouldIncludeRecordsThatHappenedAfterWindowStart() {
+        UnlimitedWindows w = UnlimitedWindows.of(anyName).startOn(anyStartTime);
+        long timestamp = w.start + 1;
+        Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
+        assertEquals(1, matchedWindows.size());
+        assertEquals(new UnlimitedWindow(anyStartTime), matchedWindows.get(anyStartTime));
+    }
+
+    @Test
+    public void shouldExcludeRecordsThatHappenedBeforeWindowStart() {
+        UnlimitedWindows w = UnlimitedWindows.of(anyName).startOn(anyStartTime);
+        long timestamp = w.start - 1;
+        Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
+        assertTrue(matchedWindows.isEmpty());
     }
 
 }

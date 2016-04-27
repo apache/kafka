@@ -34,6 +34,9 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
     private UnlimitedWindows(String name, long start) {
         super(name);
 
+        if (start < 0) {
+            throw new IllegalArgumentException("start must be > 0 (you provided " + start + ")");
+        }
         this.start = start;
     }
 
@@ -53,7 +56,9 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
         // Always return the single unlimited window.
         // We cannot use Collections.singleMap since it does not support remove().
         Map<Long, UnlimitedWindow> windows = new HashMap<>();
-        windows.put(start, new UnlimitedWindow(start));
+        if (timestamp >= start) {
+            windows.put(start, new UnlimitedWindow(start));
+        }
         return windows;
     }
 
