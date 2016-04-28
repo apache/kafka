@@ -341,7 +341,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
      * that we would be leaving one of the referenced connectors with an inconsistent state.
      *
      * @param connector the connector to write task configuration
-     * @param configs map containing task configurations for the connector
+     * @param configs list of task configurations for the connector
      * @throws ConnectException if the task configurations do not resolve inconsistencies found in the existing root
      *                          and task configurations.
      */
