@@ -34,6 +34,7 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.tools.VerifiableSinkConnector;
 import org.apache.kafka.connect.tools.VerifiableSourceConnector;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.ReflectionsUtil;
 import org.reflections.Reflections;
 import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
@@ -82,11 +83,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected final ConfigBackingStore configBackingStore;
 
     private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
-    private static final List<Class<? extends Connector>> SKIPPED_CONNECTORS = Arrays.<Class<? extends Connector>>asList(VerifiableSourceConnector.class, VerifiableSinkConnector.class);
     private static List<ConnectorPluginInfo> validConnectorPlugins;
     private static final Object LOCK = new Object();
     private Thread classPathTraverser;
-
+    private static final List<Class<? extends Connector>> EXCLUDES = Arrays.<Class<? extends Connector>>asList(VerifiableSourceConnector.class, VerifiableSinkConnector.class);
 
     public AbstractHerder(Worker worker,
                           String workerId,
@@ -263,10 +263,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             if (validConnectorPlugins != null) {
                 return validConnectorPlugins;
             }
+            ReflectionsUtil.registerUrlTypes();
+            ConfigurationBuilder builder = new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath());
+            Reflections reflections = new Reflections(builder);
 
-            Reflections reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath()));
             Set<Class<? extends Connector>> connectorClasses = reflections.getSubTypesOf(Connector.class);
-            connectorClasses.removeAll(SKIPPED_CONNECTORS);
+            connectorClasses.removeAll(EXCLUDES);
             List<ConnectorPluginInfo> connectorPlugins = new LinkedList<>();
             for (Class<? extends Connector> connectorClass : connectorClasses) {
                 int mod = connectorClass.getModifiers();

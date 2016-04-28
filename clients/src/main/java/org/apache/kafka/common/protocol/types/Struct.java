@@ -290,7 +290,7 @@ public class Struct {
             Field f = this.schema.get(i);
             b.append(f.name);
             b.append('=');
-            if (f.type() instanceof ArrayOf) {
+            if (f.type() instanceof ArrayOf && this.values[i] != null) {
                 Object[] arrayValue = (Object[]) this.values[i];
                 b.append('[');
                 for (int j = 0; j < arrayValue.length; j++) {
