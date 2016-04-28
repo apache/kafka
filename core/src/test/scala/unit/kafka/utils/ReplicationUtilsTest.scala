@@ -17,7 +17,7 @@
 
 package kafka.utils
 
-import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.controller.{ZkLeaderAndIsrUpdateBatch, LeaderIsrAndControllerEpoch}
 import kafka.server.{ReplicaFetcherManager, KafkaConfig}
 import kafka.api.LeaderAndIsr
 import kafka.zk.ZooKeeperTestHarness
@@ -94,6 +94,57 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
       "my-topic-test", partitionId, newLeaderAndIsr3, controllerEpoch, zkVersion + 1)
     assertFalse(updateSucceeded3)
     assertEquals(newZkVersion3,-1)
+
+    //test async update leader and isr
+    val topicAndPartition = TopicAndPartition("my-topic-test", partitionId)
+    val leaderAndIsrUpdateBatch = new ZkLeaderAndIsrUpdateBatch(zkUtils)
+
+    // Test regular update
+    var updateSucceeded4 = false
+    var newZkVersion4 = -1
+    val newLeaderAndIsr4 = new LeaderAndIsr(brokerId, leaderEpoch + 1, replicas, zkVersion = 2)
+    leaderAndIsrUpdateBatch.addLeaderAndIsrUpdate(topicAndPartition, newLeaderAndIsr4, expectZkVersion = 1,
+      (_, updateResult) => {
+        updateSucceeded4 = true
+        newZkVersion4 = updateResult.newZkVersion
+      }
+    )
+    leaderAndIsrUpdateBatch.writeLeaderAndIsrUpdateToZk(controllerEpoch)
+    assertTrue(updateSucceeded4)
+    assertEquals(2, newZkVersion4)
+    assertEquals(0, leaderAndIsrUpdateBatch.incompleteUpdates)
+
+    // Test mismatched zkversion with same data
+    var updateSucceeded5 = false
+    var newZkVersion5 = -1
+    val newLeaderAndIsr5 = new LeaderAndIsr(brokerId, leaderEpoch + 1, replicas, zkVersion = 3)
+    leaderAndIsrUpdateBatch.addLeaderAndIsrUpdate(topicAndPartition, newLeaderAndIsr5, expectZkVersion = 3,
+      (_, updateResult) => {
+        updateSucceeded5 = true
+        newZkVersion5 = updateResult.newZkVersion
+      }
+    )
+    leaderAndIsrUpdateBatch.writeLeaderAndIsrUpdateToZk(controllerEpoch)
+    assertFalse(updateSucceeded5)
+    assertEquals(-1, newZkVersion5)
+    assertEquals(1, leaderAndIsrUpdateBatch.incompleteUpdates)
+    assertTrue(leaderAndIsrUpdateBatch.containsPartition(topicAndPartition))
+
+    // Test mismatched zkversion with different data
+    var updateSucceeded6 = false
+    var newZkVersion6 = -1
+    val newLeaderAndIsr6 = new LeaderAndIsr(brokerId, leaderEpoch + 2, replicas, zkVersion = 3)
+    leaderAndIsrUpdateBatch.addLeaderAndIsrUpdate(topicAndPartition, newLeaderAndIsr1, expectZkVersion = 3,
+      (_, updateResult) => {
+        updateSucceeded6 = true
+        newZkVersion6 = updateResult.newZkVersion
+      }
+    )
+    leaderAndIsrUpdateBatch.writeLeaderAndIsrUpdateToZk(controllerEpoch)
+    assertFalse(updateSucceeded6)
+    assertEquals(-1, newZkVersion6)
+    assertEquals(1, leaderAndIsrUpdateBatch.incompleteUpdates)
+    assertTrue(leaderAndIsrUpdateBatch.containsPartition(topicAndPartition))
   }
 
   @Test

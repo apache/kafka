@@ -17,32 +17,29 @@
 package kafka.controller
 
 import java.util
-
-import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException}
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse}
-
-import scala.collection._
-import com.yammer.metrics.core.Gauge
 import java.util.concurrent.TimeUnit
-import kafka.admin.AdminUtils
+import java.util.concurrent.locks.ReentrantLock
+
+import com.yammer.metrics.core.Gauge
 import kafka.admin.PreferredReplicaLeaderElectionCommand
 import kafka.api._
 import kafka.cluster.Broker
 import kafka.common._
-import kafka.log.LogConfig
-import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
+import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
+import kafka.server._
+import kafka.utils.CoreUtils._
 import kafka.utils.ZkUtils._
 import kafka.utils._
-import kafka.utils.CoreUtils._
-import org.apache.zookeeper.Watcher.Event.KeeperState
+import org.I0Itec.zkclient.exception.{ZkNoNodeException, ZkNodeExistsException}
+import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient}
+import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException}
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse}
 import org.apache.kafka.common.utils.Time
-import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
-import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
-import java.util.concurrent.locks.ReentrantLock
-import kafka.server._
-import kafka.common.TopicAndPartition
+import org.apache.zookeeper.Watcher.Event.KeeperState
+
+import scala.collection._
 
 class ControllerContext(val zkUtils: ZkUtils,
                         val zkSessionTimeout: Int) {
@@ -222,6 +219,8 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     "id_%d-host_%s-port_%d".format(config.brokerId, controllerListener.get.host, controllerListener.get.port)
   }
 
+  def isValidController = zkUtils.getController == config.brokerId
+
   /**
    * On clean shutdown, the controller first determines the partitions that the
    * shutting down broker leads, and moves leadership of those partitions to another broker
@@ -254,43 +253,40 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
             .map(topicAndPartition => (topicAndPartition, controllerContext.partitionReplicaAssignment(topicAndPartition).size))
         }
 
-      allPartitionsAndReplicationFactorOnBroker.foreach {
-        case(topicAndPartition, replicationFactor) =>
-          // Move leadership serially to relinquish lock.
-          inLock(controllerContext.controllerLock) {
+      val leadersOnBroker = new mutable.HashSet[TopicAndPartition]
+      val followersOnBroker = new mutable.HashSet[PartitionAndReplica]
+      inLock(controllerContext.controllerLock) {
+        allPartitionsAndReplicationFactorOnBroker.foreach {
+          case (topicAndPartition, replicationFactor) =>
             controllerContext.partitionLeadershipInfo.get(topicAndPartition).foreach { currLeaderIsrAndControllerEpoch =>
               if (replicationFactor > 1) {
                 if (currLeaderIsrAndControllerEpoch.leaderAndIsr.leader == id) {
-                  // If the broker leads the topic partition, transition the leader and update isr. Updates zk and
-                  // notifies all affected brokers
-                  partitionStateMachine.handleStateChanges(Set(topicAndPartition), OnlinePartition,
-                    controlledShutdownPartitionLeaderSelector)
+                  leadersOnBroker += topicAndPartition
                 } else {
-                  // Stop the replica first. The state change below initiates ZK changes which should take some time
-                  // before which the stop replica request should be completed (in most cases)
-                  try {
-                    brokerRequestBatch.newBatch()
-                    brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(id), topicAndPartition.topic,
-                      topicAndPartition.partition, deletePartition = false)
-                    brokerRequestBatch.sendRequestsToBrokers(epoch)
-                  } catch {
-                    case e : IllegalStateException => {
-                      // Resign if the controller is in an illegal state
-                      error("Forcing the controller to resign")
-                      brokerRequestBatch.clear()
-                      controllerElector.resign()
-
-                      throw e
-                    }
-                  }
-                  // If the broker is a follower, updates the isr in ZK and notifies the current leader
-                  replicaStateMachine.handleStateChanges(Set(PartitionAndReplica(topicAndPartition.topic,
-                    topicAndPartition.partition, id)), OfflineReplica)
+                  followersOnBroker += PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition, id)
                 }
               }
             }
-          }
+        }
       }
+
+      // We group the change to 1000 partitions to avoid holding the controller lock for too long.
+      leadersOnBroker.grouped(1000).foreach { leaderGroup =>
+        inLock(controllerContext.controllerLock) {
+          // If the broker leads the topic partitions, transition all the leaders and update isr. Updates zk and
+          // notifies all affected brokers
+          partitionStateMachine.handleStateChanges(leaderGroup, OnlinePartition,
+            controlledShutdownPartitionLeaderSelector)
+        }
+      }
+
+      followersOnBroker.grouped(1000).foreach { followerGroup =>
+        inLock(controllerContext.controllerLock) {
+          // If the broker is a follower of the partitions, updates the isr in ZK and notifies the current leaders
+          replicaStateMachine.handleStateChanges(followerGroup, OfflineReplica)
+        }
+      }
+
       def replicatedPartitionsBrokerLeads() = inLock(controllerContext.controllerLock) {
         trace("All leaders = " + controllerContext.partitionLeadershipInfo.mkString(","))
         controllerContext.partitionLeadershipInfo.filter {
@@ -821,6 +817,30 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     controllerContext.controllerChannelManager.startup()
   }
 
+  /**
+   * The method reads leader and ISR info from zookeeper. It is used before invoking state changes to make sure the
+   * controller is using the up-to-date information.
+   */
+  def refreshLeaderAndIsrFromZk(topicAndPartitions: Set[TopicAndPartition]): Map[TopicAndPartition, ZkLeaderAndIsrReadResult] = {
+    val leaderAndIsrReadResults = ReplicationUtils.asyncGetLeaderIsrAndEpochForPartitions(zkUtils, topicAndPartitions)
+    leaderAndIsrReadResults.foreach { case (tap, leaderAndIsrReadResult) =>
+      leaderAndIsrReadResult.leaderIsrAndControllerEpochOpt match {
+        case Some(leaderIsrAndControllerEpoch) =>
+          if (leaderIsrAndControllerEpoch.controllerEpoch > epoch)
+            throw new IllegalStateException(s"Leader and isr path written by another controller. This probably" +
+              s"means the current controller with epoch $epoch went through a soft failure and another " +
+              s"controller was elected with epoch ${leaderIsrAndControllerEpoch.controllerEpoch}.")
+        case None =>
+      }
+      leaderAndIsrReadResult.exceptionOpt match {
+        case Some(exception) =>
+          throw new KafkaException(s"Asychronously reading LeaderAndIsr information for $tap", exception)
+        case None =>
+      }
+    }
+    leaderAndIsrReadResults
+  }
+
   def updateLeaderAndIsrCache(topicAndPartitions: Set[TopicAndPartition] = controllerContext.partitionReplicaAssignment.keySet) {
     val leaderAndIsrInfo = zkUtils.getPartitionLeaderAndIsrForTopics(zkUtils.zkClient, topicAndPartitions)
     for((topicPartition, leaderIsrAndControllerEpoch) <- leaderAndIsrInfo)
@@ -1038,73 +1058,6 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
         throw e
       }
     }
-  }
-
-  /**
-   * Removes a given partition replica from the ISR; if it is not the current
-   * leader and there are sufficient remaining replicas in ISR.
-   * @param topic topic
-   * @param partition partition
-   * @param replicaId replica Id
-   * @return the new leaderAndIsr (with the replica removed if it was present),
-   *         or None if leaderAndIsr is empty.
-   */
-  def removeReplicaFromIsr(topic: String, partition: Int, replicaId: Int): Option[LeaderIsrAndControllerEpoch] = {
-    val topicAndPartition = TopicAndPartition(topic, partition)
-    debug("Removing replica %d from ISR %s for partition %s.".format(replicaId,
-      controllerContext.partitionLeadershipInfo(topicAndPartition).leaderAndIsr.isr.mkString(","), topicAndPartition))
-    var finalLeaderIsrAndControllerEpoch: Option[LeaderIsrAndControllerEpoch] = None
-    var zkWriteCompleteOrUnnecessary = false
-    while (!zkWriteCompleteOrUnnecessary) {
-      // refresh leader and isr from zookeeper again
-      val leaderIsrAndEpochOpt = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkUtils, topic, partition)
-      zkWriteCompleteOrUnnecessary = leaderIsrAndEpochOpt match {
-        case Some(leaderIsrAndEpoch) => // increment the leader epoch even if the ISR changes
-          val leaderAndIsr = leaderIsrAndEpoch.leaderAndIsr
-          val controllerEpoch = leaderIsrAndEpoch.controllerEpoch
-          if(controllerEpoch > epoch)
-            throw new StateChangeFailedException("Leader and isr path written by another controller. This probably" +
-              "means the current controller with epoch %d went through a soft failure and another ".format(epoch) +
-              "controller was elected with epoch %d. Aborting state change by this controller".format(controllerEpoch))
-          if (leaderAndIsr.isr.contains(replicaId)) {
-            // if the replica to be removed from the ISR is also the leader, set the new leader value to -1
-            val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NoLeader else leaderAndIsr.leader
-            var newIsr = leaderAndIsr.isr.filter(b => b != replicaId)
-
-            // if the replica to be removed from the ISR is the last surviving member of the ISR and unclean leader election
-            // is disallowed for the corresponding topic, then we must preserve the ISR membership so that the replica can
-            // eventually be restored as the leader.
-            if (newIsr.isEmpty && !LogConfig.fromProps(config.originals, AdminUtils.fetchEntityConfig(zkUtils,
-              ConfigType.Topic, topicAndPartition.topic)).uncleanLeaderElectionEnable) {
-              info("Retaining last ISR %d of partition %s since unclean leader election is disabled".format(replicaId, topicAndPartition))
-              newIsr = leaderAndIsr.isr
-            }
-
-            val newLeaderAndIsr = new LeaderAndIsr(newLeader, leaderAndIsr.leaderEpoch + 1,
-              newIsr, leaderAndIsr.zkVersion + 1)
-            // update the new leadership decision in zookeeper or retry
-            val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partition,
-              newLeaderAndIsr, epoch, leaderAndIsr.zkVersion)
-
-            newLeaderAndIsr.zkVersion = newVersion
-            finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(newLeaderAndIsr, epoch))
-            controllerContext.partitionLeadershipInfo.put(topicAndPartition, finalLeaderIsrAndControllerEpoch.get)
-            if (updateSucceeded)
-              info("New leader and ISR for partition %s is %s".format(topicAndPartition, newLeaderAndIsr.toString()))
-            updateSucceeded
-          } else {
-            warn("Cannot remove replica %d from ISR of partition %s since it is not in the ISR. Leader = %d ; ISR = %s"
-                 .format(replicaId, topicAndPartition, leaderAndIsr.leader, leaderAndIsr.isr))
-            finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(leaderAndIsr, epoch))
-            controllerContext.partitionLeadershipInfo.put(topicAndPartition, finalLeaderIsrAndControllerEpoch.get)
-            true
-          }
-        case None =>
-          warn("Cannot remove replica %d from ISR of %s - leaderAndIsr is empty.".format(replicaId, topicAndPartition))
-          true
-      }
-    }
-    finalLeaderIsrAndControllerEpoch
   }
 
   /**

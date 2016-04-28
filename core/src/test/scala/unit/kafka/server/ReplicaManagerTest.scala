@@ -25,8 +25,7 @@ import kafka.api.{FetchResponsePartitionData, PartitionFetchInfo}
 import kafka.cluster.Broker
 import kafka.common.TopicAndPartition
 import kafka.message.{ByteBufferMessageSet, Message}
-import kafka.utils.{MockScheduler, MockTime, TestUtils, ZkUtils}
-import org.I0Itec.zkclient.ZkClient
+import kafka.utils.{ZkClient, MockScheduler, MockTime, TestUtils, ZkUtils}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.LeaderAndIsrRequest

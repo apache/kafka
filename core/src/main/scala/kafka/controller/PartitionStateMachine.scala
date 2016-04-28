@@ -21,7 +21,7 @@ import collection.JavaConversions
 import collection.mutable.Buffer
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.api.LeaderAndIsr
-import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
+import kafka.common.{KafkaException, LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
 import kafka.utils.{Logging, ReplicationUtils}
 import kafka.utils.ZkUtils._
 import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener}
@@ -47,6 +47,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   private val zkUtils = controllerContext.zkUtils
   private val partitionState: mutable.Map[TopicAndPartition, PartitionState] = mutable.Map.empty
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
+  private val leaderAndIsrUpdateBatch = new ZkLeaderAndIsrUpdateBatch(zkUtils)
   private val hasStarted = new AtomicBoolean(false)
   private val noOpPartitionLeaderSelector = new NoOpLeaderSelector(controllerContext)
   private val topicChangeListener = new TopicChangeListener()
@@ -110,21 +111,12 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * state. This is called on a successful controller election and on broker changes
    */
   def triggerOnlinePartitionStateChange() {
-    try {
-      brokerRequestBatch.newBatch()
-      // try to move all partitions in NewPartition or OfflinePartition state to OnlinePartition state except partitions
-      // that belong to topics to be deleted
-      for((topicAndPartition, partitionState) <- partitionState
-          if(!controller.deleteTopicManager.isTopicQueuedUpForDeletion(topicAndPartition.topic))) {
-        if(partitionState.equals(OfflinePartition) || partitionState.equals(NewPartition))
-          handleStateChange(topicAndPartition.topic, topicAndPartition.partition, OnlinePartition, controller.offlinePartitionSelector,
-                            (new CallbackBuilder).build)
-      }
-      brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
-    } catch {
-      case e: Throwable => error("Error while moving some partitions to the online state", e)
-      // TODO: It is not enough to bail out and log an error, it is important to trigger leader election for those partitions
-    }
+    val partitions = partitionState.filter { case (topicAndPartition, partitionState) =>
+      val isBeingDeleted = controller.deleteTopicManager.isTopicQueuedUpForDeletion(topicAndPartition.topic)
+      !isBeingDeleted && (partitionState.equals(OfflinePartition) || partitionState.equals(NewPartition))
+    }.keySet
+
+    handleStateChanges(partitions, OnlinePartition, controller.offlinePartitionSelector, (new CallbackBuilder).build)
   }
 
   def partitionsInState(state: PartitionState): Set[TopicAndPartition] = {
@@ -141,11 +133,37 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
                          callbacks: Callbacks = (new CallbackBuilder).build) {
     info("Invoking state change to %s for partitions %s".format(targetState, partitions.mkString(",")))
     try {
-      brokerRequestBatch.newBatch()
-      partitions.foreach { topicAndPartition =>
-        handleStateChange(topicAndPartition.topic, topicAndPartition.partition, targetState, leaderSelector, callbacks)
-      }
-      brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
+      val remainingParititions = collection.mutable.Set(partitions.toArray:_*)
+      do {
+        // First refresh all the LeaderAndIsr info from zookeeper
+        // Make sure all the LeaderAndIsr information are successfully read and this is the valid controller.
+        val leaderAndIsrReadResults = controller.refreshLeaderAndIsrFromZk(remainingParititions)
+        trace(s"Refreshed LeaderAndIsr information for partitions: ${leaderAndIsrReadResults}")
+        leaderAndIsrUpdateBatch.newBatch()
+        brokerRequestBatch.newBatch()
+        partitions.foreach { topicAndPartition =>
+          val leaderIsrAndControllerEpoch = leaderAndIsrReadResults(topicAndPartition).leaderIsrAndControllerEpochOpt
+          handleStateChange(topicAndPartition.topic, topicAndPartition.partition, leaderIsrAndControllerEpoch,
+            targetState, leaderSelector, callbacks)
+        }
+        // Make sure we update zk first because the callbacks will fill in the BrokerRequestBatch
+        try {
+          leaderAndIsrUpdateBatch.writeLeaderAndIsrUpdateToZk(controller.epoch, Some(() => controller.isValidController))
+        } catch {
+          // the exception thrown here is likely because of the zk disconnection or session expiration. In this case
+          // we swallow the error and retry. For the LeaderAndIsr updates that has been sent but not acked yet, they
+          // might be updated again, but that does not hurt.
+          case e: Throwable => error("Error while updating LeaderAndIsr in zookeeper.", e)
+        }
+        brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
+        remainingParititions.retain(leaderAndIsrUpdateBatch.containsPartition(_))
+        if (!remainingParititions.isEmpty) {
+          debug(s"The following partitions are still waiting for state change: $remainingParititions.")
+          if (!controller.isValidController)
+            throw new StateChangeFailedException(s"Controller ${controller.config.brokerId} epoch ${controller.epoch}" +
+              s" is no longer the valid controller.")
+        }
+      } while (!remainingParititions.isEmpty)
     }catch {
       case e: Throwable => error("Error while moving some partitions to %s state".format(targetState), e)
       // TODO: It is not enough to bail out and log an error, it is important to trigger state changes for those partitions
@@ -175,7 +193,10 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * @param partition   The partition for which the state transition is invoked
    * @param targetState The end state that the partition should be moved to
    */
-  private def handleStateChange(topic: String, partition: Int, targetState: PartitionState,
+  private def handleStateChange(topic: String,
+                                partition: Int,
+                                leaderIsrAndControllerEpoch: Option[LeaderIsrAndControllerEpoch],
+                                targetState: PartitionState,
                                 leaderSelector: PartitionLeaderSelector,
                                 callbacks: Callbacks) {
     val topicAndPartition = TopicAndPartition(topic, partition)
@@ -201,16 +222,17 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             case NewPartition =>
               // initialize leader and isr path for new partition
               initializeLeaderAndIsrForPartition(topicAndPartition)
+              partitionState.put(topicAndPartition, OnlinePartition)
+              val leader = controllerContext.partitionLeadershipInfo(topicAndPartition).leaderAndIsr.leader
+              stateChangeLogger.trace("Controller %d epoch %d changed partition %s from %s to %s with leader %d"
+                .format(controllerId, controller.epoch, topicAndPartition, currState, targetState, leader))
             case OfflinePartition =>
-              electLeaderForPartition(topic, partition, leaderSelector)
+              electLeaderForPartition(topic, partition, OfflinePartition, leaderIsrAndControllerEpoch, leaderSelector)
             case OnlinePartition => // invoked when the leader needs to be re-elected
-              electLeaderForPartition(topic, partition, leaderSelector)
+              electLeaderForPartition(topic, partition, OnlinePartition, leaderIsrAndControllerEpoch, leaderSelector)
             case _ => // should never come here since illegal previous states are checked above
           }
-          partitionState.put(topicAndPartition, OnlinePartition)
-          val leader = controllerContext.partitionLeadershipInfo(topicAndPartition).leaderAndIsr.leader
-          stateChangeLogger.trace("Controller %d epoch %d changed partition %s from %s to %s with leader %d"
-                                    .format(controllerId, controller.epoch, topicAndPartition, currState, targetState, leader))
+
            // post: partition has a leader
         case OfflinePartition =>
           // pre: partition should be in New or Online state
@@ -316,49 +338,57 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   /**
    * Invoked on the OfflinePartition,OnlinePartition->OnlinePartition state change.
    * It invokes the leader election API to elect a leader for the input offline partition
-   * @param topic               The topic of the offline partition
-   * @param partition           The offline partition
-   * @param leaderSelector      Specific leader selector (e.g., offline/reassigned/etc.)
+   * @param topic                                 The topic of the offline partition
+   * @param partition                             The offline partition
+   * @param currState                             The current state of the partition.
+   * @param leaderIsrAndControllerEpochOpt        The current leader and isr information in zookeeper
+   * @param leaderSelector                        Specific leader selector (e.g., offline/reassigned/etc.)
    */
-  def electLeaderForPartition(topic: String, partition: Int, leaderSelector: PartitionLeaderSelector) {
+  def electLeaderForPartition(topic: String,
+                              partition: Int,
+                              currState: PartitionState,
+                              leaderIsrAndControllerEpochOpt: Option[LeaderIsrAndControllerEpoch],
+                              leaderSelector: PartitionLeaderSelector) {
     val topicAndPartition = TopicAndPartition(topic, partition)
     // handle leader election for the partitions whose leader is no longer alive
     stateChangeLogger.trace("Controller %d epoch %d started leader election for partition %s"
                               .format(controllerId, controller.epoch, topicAndPartition))
     try {
-      var zookeeperPathUpdateSucceeded: Boolean = false
-      var newLeaderAndIsr: LeaderAndIsr = null
-      var replicasForThisPartition: Seq[Int] = Seq.empty[Int]
-      while(!zookeeperPathUpdateSucceeded) {
-        val currentLeaderIsrAndEpoch = getLeaderIsrAndEpochOrThrowException(topic, partition)
-        val currentLeaderAndIsr = currentLeaderIsrAndEpoch.leaderAndIsr
-        val controllerEpoch = currentLeaderIsrAndEpoch.controllerEpoch
-        if (controllerEpoch > controller.epoch) {
-          val failMsg = ("aborted leader election for partition [%s,%d] since the LeaderAndIsr path was " +
-                         "already written by another controller. This probably means that the current controller %d went through " +
-                         "a soft failure and another controller was elected with epoch %d.")
-                           .format(topic, partition, controllerId, controllerEpoch)
-          stateChangeLogger.error("Controller %d epoch %d ".format(controllerId, controller.epoch) + failMsg)
-          throw new StateChangeFailedException(failMsg)
-        }
-        // elect new leader or throw exception
-        val (leaderAndIsr, replicas) = leaderSelector.selectLeader(topicAndPartition, currentLeaderAndIsr)
-        val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partition,
-          leaderAndIsr, controller.epoch, currentLeaderAndIsr.zkVersion)
-        newLeaderAndIsr = leaderAndIsr
-        newLeaderAndIsr.zkVersion = newVersion
-        zookeeperPathUpdateSucceeded = updateSucceeded
-        replicasForThisPartition = replicas
+
+      val currLeaderIsrAndEpoch = leaderIsrAndControllerEpochOpt.getOrElse({
+        val failMsg = "LeaderAndIsr information doesn't exist for partition %s in %s state"
+          .format(topicAndPartition, partitionState(topicAndPartition))
+        throw new StateChangeFailedException(failMsg)
+      })
+      val currLeaderAndIsr = currLeaderIsrAndEpoch.leaderAndIsr
+      // elect new leader or throw exception
+      val (newLeaderAndIsr, replicas) = leaderSelector.selectLeader(topicAndPartition, currLeaderAndIsr)
+      leaderAndIsrUpdateBatch.addLeaderAndIsrUpdate(topicAndPartition,
+                                                    newLeaderAndIsr,
+                                                    currLeaderAndIsr.zkVersion,
+                                                    onLeaderAndIsrUpdateSuccess)
+
+      def onLeaderAndIsrUpdateSuccess(topicAndPartition: TopicAndPartition,
+                                      leaderAndIsrUpdateResult: ZkLeaderAndIsrUpdateResult) = {
+        val newLeaderAndIsr = leaderAndIsrUpdateResult.leaderAndIsr
+        val newZkVersion = leaderAndIsrUpdateResult.newZkVersion
+        updateLocalState(newLeaderAndIsr, newZkVersion)
       }
-      val newLeaderIsrAndControllerEpoch = new LeaderIsrAndControllerEpoch(newLeaderAndIsr, controller.epoch)
-      // update the leader cache
-      controllerContext.partitionLeadershipInfo.put(TopicAndPartition(topic, partition), newLeaderIsrAndControllerEpoch)
-      stateChangeLogger.trace("Controller %d epoch %d elected leader %d for Offline partition %s"
-                                .format(controllerId, controller.epoch, newLeaderAndIsr.leader, topicAndPartition))
-      val replicas = controllerContext.partitionReplicaAssignment(TopicAndPartition(topic, partition))
-      // store new leader and isr info in cache
-      brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasForThisPartition, topic, partition,
-        newLeaderIsrAndControllerEpoch, replicas)
+
+      def updateLocalState(newLeaderAndIsr: LeaderAndIsr, newZkVersion: Int) = {
+        val newLeaderIsrAndControllerEpoch = new LeaderIsrAndControllerEpoch(newLeaderAndIsr, controller.epoch)
+        // update the leader cache
+        controllerContext.partitionLeadershipInfo.put(topicAndPartition, newLeaderIsrAndControllerEpoch)
+        debug(s"After leader election, leader cache is updated to " +
+          s"${controllerContext.partitionLeadershipInfo.map(l => (l._1, l._2))}")
+        val assignedReplicas = controllerContext.partitionReplicaAssignment(TopicAndPartition(topic, partition))
+        // store new leader and isr info in cache
+        brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicas, topic, partition,
+          newLeaderIsrAndControllerEpoch, assignedReplicas)
+        partitionState.put(topicAndPartition, OnlinePartition)
+        stateChangeLogger.trace(s"Controller $controllerId epoch ${controller.epoch} changed partition $topicAndPartition " +
+          s"from $currState to $OnlinePartition with leader ${newLeaderAndIsr.leader}")
+      }
     } catch {
       case lenne: LeaderElectionNotNeededException => // swallow
       case nroe: NoReplicaOnlineException => throw nroe
@@ -367,7 +397,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         stateChangeLogger.error("Controller %d epoch %d ".format(controllerId, controller.epoch) + failMsg)
         throw new StateChangeFailedException(failMsg, sce)
     }
-    debug("After leader election, leader cache is updated to %s".format(controllerContext.partitionLeadershipInfo.map(l => (l._1, l._2))))
   }
 
   private def registerTopicChangeListener() = {
