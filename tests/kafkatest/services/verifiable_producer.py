@@ -71,7 +71,7 @@ class VerifiableProducer(BackgroundThreadService):
         self.acked_values = []
         self.not_acked_values = []
         self.produced_count = {}
-        self.nodes_clean_shutdown = []
+        self.node_indexes_clean_shutdown = set()
 
 
     @property
@@ -137,7 +137,8 @@ class VerifiableProducer(BackgroundThreadService):
                         prev_msg = data
 
                     elif data["name"] == "tool_data":
-                        self.nodes_clean_shutdown.append(idx)
+                        # the stats summary is printed after producer's close(), which means shutdown was clean
+                        self.node_indexes_clean_shutdown.add(idx)
 
     def start_cmd(self, node, idx):
 
@@ -183,9 +184,6 @@ class VerifiableProducer(BackgroundThreadService):
 
     def alive(self, node):
         return len(self.pids(node)) > 0
-
-    def clean_shutdown(self, node):
-        return self.idx(node) in self.nodes_clean_shutdown
 
     @property
     def acked(self):
