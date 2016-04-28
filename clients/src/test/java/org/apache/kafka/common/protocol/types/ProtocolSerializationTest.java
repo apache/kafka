@@ -18,6 +18,7 @@ package org.apache.kafka.common.protocol.types;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 import java.nio.ByteBuffer;
@@ -233,9 +234,9 @@ public class ProtocolSerializationTest {
 
     @Test
     public void testToString() {
-        String stuctStr = this.struct.toString();
-        assertFalse("Stuct string should not be null.", stuctStr == null);
-        assertFalse("Stuct string should not be empty.", stuctStr.isEmpty());
+        String structStr = this.struct.toString();
+        assertNotNull("Struct string should not be null.", structStr);
+        assertFalse("Struct string should not be empty.", structStr.isEmpty());
     }
 
     private Object roundtrip(Type type, Object obj) {
