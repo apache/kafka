@@ -109,6 +109,11 @@ public class WorkerConfig extends AbstractConfig {
                     " from the domain of the REST API.";
     protected static final String ACCESS_CONTROL_ALLOW_ORIGIN_DEFAULT = "";
 
+    public static final String ACCESS_CONTROL_ALLOW_METHODS_CONFIG = "access.control.allow.methods";
+    protected static final String ACCESS_CONTROL_ALLOW_METHODS_DOC =
+        "Set value to Jetty Access-Control-Allow-Origin header for the specified methods. "
+        + "The default value of the Access-Control-Allow-Origin header allows cross origin requests for GET, POST and HEAD methods.";
+    protected static final String ACCESS_CONTROL_ALLOW_METHODS_DEFAULT = "";
 
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
@@ -141,7 +146,10 @@ public class WorkerConfig extends AbstractConfig {
                 .define(REST_ADVERTISED_PORT_CONFIG, Type.INT,  null, Importance.LOW, REST_ADVERTISED_PORT_DOC)
                 .define(ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, Type.STRING,
                         ACCESS_CONTROL_ALLOW_ORIGIN_DEFAULT, Importance.LOW,
-                        ACCESS_CONTROL_ALLOW_ORIGIN_DOC);
+                        ACCESS_CONTROL_ALLOW_ORIGIN_DOC)
+                .define(ACCESS_CONTROL_ALLOW_METHODS_CONFIG, Type.STRING,
+                        ACCESS_CONTROL_ALLOW_METHODS_DEFAULT, Importance.LOW,
+                        ACCESS_CONTROL_ALLOW_METHODS_DOC);
     }
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
