@@ -257,7 +257,8 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("deserializer for values")
       .ofType(classOf[String])
-    val enableLifecycleLoggingOpt = parser.accepts("enable-lifecycle-logging", "Log lifecycle events of the consumer.")
+    val enableLifecycleLoggingOpt = parser.accepts("enable-lifecycle-logging", "Log lifecycle events of the consumer in addition to logging consumed " +
+                                                                               "messages. (This is specific for system tests.)")
 
     if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
