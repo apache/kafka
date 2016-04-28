@@ -106,6 +106,9 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
          Clients that Produce/Fetch LZ4-compressed messages using v0/v1 (Message format 0.9.0) should continue
          to use the 0.9.0 framing implementation. Clients that use Produce/Fetch protocols v2 or later
          should use interoperable LZ4f framing. A list of interoperable LZ4 libraries is available at http://www.lz4.org/
+    <li> Authorization related interfaces and classes, i.e., <code>kafka.security.auth.Authorizer</code>, <code>kafka.security.auth.Acl</code>, <code>kafka.security.auth.Operation</code>,
+        <code>kafka.security.auth.PermissionType</code>, <code>kafka.security.auth.Resource</code>, <code>kafka.security.auth.ResourceType</code> and <code>kafka.network.RequestChannel.Session</code>,
+        have been moved to <code>org.apache.kafka.common.auth</code> package. Third party authorizer implementations will have to be updated and re-built against the new interface and classes. </li>
 </ul>
 
 <h5><a id="upgrade_10_notable" href="#upgrade_10_notable">Notable changes in 0.10.0.0</a></h5>
