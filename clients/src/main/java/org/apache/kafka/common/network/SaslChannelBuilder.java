@@ -63,14 +63,13 @@ public class SaslChannelBuilder implements ChannelBuilder {
                 hasKerberos = clientSaslMechanism.equals(SaslConfigs.GSSAPI_MECHANISM);
             }
 
-            String defaultRealm;
-            try {
-                defaultRealm = JaasUtils.defaultRealm();
-            } catch (Exception ke) {
-                defaultRealm = "";
-            }
-
             if (hasKerberos) {
+                String defaultRealm;
+                try {
+                    defaultRealm = JaasUtils.defaultKerberosRealm();
+                } catch (Exception ke) {
+                    defaultRealm = "";
+                }
                 @SuppressWarnings("unchecked")
                 List<String> principalToLocalRules = (List<String>) configs.get(SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES);
                 if (principalToLocalRules != null)
