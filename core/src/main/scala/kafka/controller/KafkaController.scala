@@ -1474,11 +1474,7 @@ object ControllerStats extends KafkaMetricsGroup {
   private val _uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
   private val _leaderElectionTimer = new KafkaTimer(newTimer("LeaderElectionRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
 
-  def uncleanLeaderElectionRate() = {
-    _uncleanLeaderElectionRate
-  }
+  def uncleanLeaderElectionRate: Meter = _uncleanLeaderElectionRate
 
-  def leaderElectionTimer() = {
-    _leaderElectionTimer
-  }
+  def leaderElectionTimer: KafkaTimer = _leaderElectionTimer
 }
