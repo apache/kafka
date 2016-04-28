@@ -89,6 +89,7 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     <li> The new consumer now exposes the configuration parameter <code>exclude.internal.topics</code> to restrict internal topics (such as the consumer offsets topic) from accidentally being included in regular expression subscriptions. By default, it is enabled.</li>
     <li> The old Scala producer has been deprecated. Users should migrate their code to the Java producer included in the kafka-clients JAR as soon as possible. </li>
     <li> The new consumer API has been marked stable. </li>
+    <li> Altering topic configuration functionality from the kafka-topics.sh script (kafka.admin.TopicCommand) has been removed. Please use the kafka-configs.sh script (kafka.admin.ConfigCommand) for this functionality.</li>
 </ul>
 
 <h4><a id="upgrade_9" href="#upgrade_9">Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.9.0.0</a></h4>

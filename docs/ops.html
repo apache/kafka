@@ -25,7 +25,7 @@ This section will review the most common operations you will perform on your Kaf
 
 You have the option of either adding topics manually or having them be created automatically when data is first published to a non-existent topic. If topics are auto-created then you may want to tune the default <a href="#topic-config">topic configurations</a> used for auto-created topics.
 <p>
-Topics are added and modified using the topic tool:
+Topics are added and modified using the kafka-topics.sh script (kafka.admin.TopicCommand):
 <pre>
  &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --create --topic my_topic_name
        --partitions 20 --replication-factor 3 --config x=y
@@ -40,7 +40,7 @@ The configurations added on the command line override the default settings the s
 
 <h4><a id="basic_ops_modify_topic" href="#basic_ops_modify_topic">Modifying topics</a></h4>
 
-You can change the configuration or partitioning of a topic using the same topic tool.
+You can change the partitioning of a topic using the same topic tool.
 <p>
 To add partitions you can do
 <pre>
@@ -49,15 +49,18 @@ To add partitions you can do
 </pre>
 Be aware that one use case for partitions is to semantically partition data, and adding partitions doesn't change the partitioning of existing data so this may disturb consumers if they rely on that partition. That is if data is partitioned by <code>hash(key) % number_of_partitions</code> then this partitioning will potentially be shuffled by adding partitions but Kafka will not attempt to automatically redistribute data in any way.
 <p>
+
+You can change the configuration of a topic using the kafka-configs.sh script (kafka.admin.ConfigCommand):
 To add configs:
 <pre>
- &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --alter --topic my_topic_name --config x=y
+ &gt; bin/kafka-configs.sh  --zookeeper zk_host:port/chroot --entity-type topics --alter --entity-name my_topic_name --add-config x=y
 </pre>
 To remove a config:
 <pre>
- &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --alter --topic my_topic_name --delete-config x
+ &gt; bin/kafka-configs.sh  --zookeeper zk_host:port/chroot --entity-type topics --alter --entity-name my_topic_name --delete-config x
 </pre>
-And finally deleting a topic:
+
+And finally deleting a topic using kafka-topics.sh script:
 <pre>
  &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --delete --topic my_topic_name
 </pre>
