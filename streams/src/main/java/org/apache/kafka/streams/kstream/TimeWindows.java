@@ -35,27 +35,29 @@ public class TimeWindows extends Windows<TimeWindow> {
     public final long size;
 
     /**
-     * The size of the window's hop, i.e. by how much a window moves forward relative to the previous one.
-     * The hop size's effective time unit is determined by the semantics of the topology's
-     * configured {@link org.apache.kafka.streams.processor.TimestampExtractor}.
+     * The size of the window's advance interval, i.e. by how much a window moves forward relative
+     * to the previous one.  The interval's effective time unit is determined by the semantics of
+     * the topology's configured {@link org.apache.kafka.streams.processor.TimestampExtractor}.
      */
-    public final long hop;
+    public final long advance;
 
-    private TimeWindows(String name, long size, long hop) {
+    private TimeWindows(String name, long size, long advance) {
         super(name);
         if (size <= 0) {
-            throw new IllegalArgumentException("size must be > 0 (you provided " + size + ")");
+            throw new IllegalArgumentException("window size must be > 0 (you provided " + size + ")");
         }
         this.size = size;
-        if (!(0 < hop && hop <= size)) {
-            throw new IllegalArgumentException(String.format("hop (%d) must lie within interval (0, %d]", hop, size));
+        if (!(0 < advance && advance <= size)) {
+            throw new IllegalArgumentException(
+                String.format("advance interval (%d) must lie within interval (0, %d]", advance, size));
         }
-        this.hop = hop;
+        this.advance = advance;
     }
 
     /**
-     * Returns a window definition with the given window size, and with the hop size being equal to
-     * the window size.  Think: [N * size, N * size + size), with N denoting the N-th window.
+     * Returns a window definition with the given window size, and with the advance interval being
+     * equal to the window size.  Think: [N * size, N * size + size), with N denoting the N-th
+     * window.
      *
      * This provides the semantics of tumbling windows, which are fixed-sized, gap-less,
      * non-overlapping windows.  Tumbling windows are a specialization of hopping windows.
@@ -71,31 +73,32 @@ public class TimeWindows extends Windows<TimeWindow> {
     }
 
     /**
-     * Returns a window definition with the original size, but shift ("hop") the window by the given
-     * hop size, which specifies by how much a window moves forward relative to the previous one.
-     * Think: [N * hop, N * hop + size), with N denoting the N-th window.
+     * Returns a window definition with the original size, but advance ("hop") the window by the given
+     * interval, which specifies by how much a window moves forward relative to the previous one.
+     * Think: [N * advanceInterval, N * advanceInterval + size), with N denoting the N-th window.
      *
      * This provides the semantics of hopping windows, which are fixed-sized, overlapping windows.
      *
-     * @param hop The hop size of the window, with the requirement that 0 &lt; hop &le; size.
-     *            The hop size's effective time unit is determined by the semantics of the
-     *            topology's configured {@link org.apache.kafka.streams.processor.TimestampExtractor}.
+     * @param interval The advance interval ("hop") of the window, with the requirement that
+     *                 0 &lt; interval &le; size.  The interval's effective time unit is
+     *                 determined by the semantics of the topology's configured
+     *                 {@link org.apache.kafka.streams.processor.TimestampExtractor}.
      * @return a new window definition
      */
-    public TimeWindows shiftedBy(long hop) {
-        return new TimeWindows(this.name, this.size, hop);
+    public TimeWindows advanceBy(long interval) {
+        return new TimeWindows(this.name, this.size, interval);
     }
 
     @Override
     public Map<Long, TimeWindow> windowsFor(long timestamp) {
-        long enclosed = (size - 1) / hop;
-        long windowStart = Math.max(0, timestamp - timestamp % hop - enclosed * hop);
+        long enclosed = (size - 1) / advance;
+        long windowStart = Math.max(0, timestamp - timestamp % advance - enclosed * advance);
 
         Map<Long, TimeWindow> windows = new HashMap<>();
         while (windowStart <= timestamp) {
             TimeWindow window = new TimeWindow(windowStart, windowStart + this.size);
             windows.put(windowStart, window);
-            windowStart += this.hop;
+            windowStart += this.advance;
         }
         return windows;
     }
@@ -109,13 +112,13 @@ public class TimeWindows extends Windows<TimeWindow> {
             return false;
         }
         TimeWindows other = (TimeWindows) o;
-        return this.size == other.size && this.hop == other.hop;
+        return this.size == other.size && this.advance == other.advance;
     }
 
     @Override
     public int hashCode() {
         int result = (int) (size ^ (size >>> 32));
-        result = 31 * result + (int) (hop ^ (hop >>> 32));
+        result = 31 * result + (int) (advance ^ (advance >>> 32));
         return result;
     }
 

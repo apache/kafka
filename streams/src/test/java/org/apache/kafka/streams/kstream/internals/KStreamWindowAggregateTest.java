@@ -72,7 +72,7 @@ public class KStreamWindowAggregateTest {
             KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
             KTable<Windowed<String>, String> table2 =
                 stream1.aggregateByKey(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER,
-                    TimeWindows.of("topic1-Canonized", 10).shiftedBy(5),
+                    TimeWindows.of("topic1-Canonized", 10).advanceBy(5),
                     strSerde,
                     strSerde);
 
@@ -150,7 +150,7 @@ public class KStreamWindowAggregateTest {
             KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
             KTable<Windowed<String>, String> table1 =
                 stream1.aggregateByKey(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER,
-                    TimeWindows.of("topic1-Canonized", 10).shiftedBy(5),
+                    TimeWindows.of("topic1-Canonized", 10).advanceBy(5),
                     strSerde,
                     strSerde);
 
@@ -160,7 +160,7 @@ public class KStreamWindowAggregateTest {
             KStream<String, String> stream2 = builder.stream(strSerde, strSerde, topic2);
             KTable<Windowed<String>, String> table2 =
                 stream2.aggregateByKey(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER,
-                    TimeWindows.of("topic2-Canonized", 10).shiftedBy(5),
+                    TimeWindows.of("topic2-Canonized", 10).advanceBy(5),
                     strSerde,
                     strSerde);
 

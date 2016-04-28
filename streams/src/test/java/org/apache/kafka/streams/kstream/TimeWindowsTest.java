@@ -62,8 +62,8 @@ public class TimeWindowsTest {
         TimeWindows differentWindowSize = TimeWindows.of("differentWindowSize", w1.size + 1);
         assertFalse("must be false when window sizes are different", w1.equals(differentWindowSize));
 
-        TimeWindows differentHopSize = w1.shiftedBy(w1.hop - 1);
-        assertFalse("must be false when hop sizes are different", w1.equals(differentHopSize));
+        TimeWindows differentAdvanceInterval = w1.advanceBy(w1.advance - 1);
+        assertFalse("must be false when advance intervals are different", w1.equals(differentAdvanceInterval));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -87,24 +87,24 @@ public class TimeWindowsTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void hopSizeMustNotBeNegative() {
-        TimeWindows.of(anyName, anySize).shiftedBy(-1);
+    public void advanceIntervalMustNotBeNegative() {
+        TimeWindows.of(anyName, anySize).advanceBy(-1);
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void hopSizeMustNotBeZero() {
-        TimeWindows.of(anyName, anySize).shiftedBy(0);
+    public void advanceIntervalMustNotBeZero() {
+        TimeWindows.of(anyName, anySize).advanceBy(0);
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void hopSizeMustNotBeLargerThanWindowSize() {
+    public void advanceIntervalMustNotBeLargerThanWindowSize() {
         long size = anySize;
-        TimeWindows.of(anyName, size).shiftedBy(size + 1);
+        TimeWindows.of(anyName, size).advanceBy(size + 1);
     }
 
     @Test
     public void windowsForHoppingWindows() {
-        TimeWindows windows = TimeWindows.of(anyName, 12L).shiftedBy(5L);
+        TimeWindows windows = TimeWindows.of(anyName, 12L).advanceBy(5L);
         Map<Long, TimeWindow> matched = windows.windowsFor(21L);
         assertEquals(12L / 5L + 1, matched.size());
         assertEquals(new TimeWindow(10L, 22L), matched.get(10L));
