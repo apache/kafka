@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
 public class MemoryConfigBackingStore implements ConfigBackingStore {
@@ -114,10 +115,11 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         if (state == null)
             throw new IllegalArgumentException("Cannot put tasks for non-existing connector");
 
-        state.taskConfigs = configs;
+        Map<ConnectorTaskId, Map<String, String>> taskConfigsMap = taskConfigListAsMap(connector, configs);
+        state.taskConfigs = taskConfigsMap;
 
         if (updateListener != null)
-            updateListener.onTaskConfigUpdate(configs.keySet());
+            updateListener.onTaskConfigUpdate(taskConfigsMap.keySet());
     }
 
     @Override
@@ -153,5 +155,12 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         }
     }
 
-    private static
+    private static Map<ConnectorTaskId, Map<String, String>> taskConfigListAsMap(String connector, List<Map<String, String>> configs) {
+        int index = 0;
+        Map<ConnectorTaskId, Map<String, String>> result = new TreeMap<>();
+        for (Map<String, String> taskConfigMap: configs) {
+            result.put(new ConnectorTaskId(connector, index++), taskConfigMap);
+        }
+        return result;
+    }
 }

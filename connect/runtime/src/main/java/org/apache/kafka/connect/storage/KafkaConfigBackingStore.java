@@ -355,10 +355,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             log.error("Failed to write root configuration to Kafka: ", e);
             throw new ConnectException("Error writing root configuration to Kafka", e);
         }
-        // In theory, there is only a single writer and we shouldn't need this lock since the background thread should
-        // not invoke any callbacks that would conflict, but in practice this guards against inconsistencies due to
-        // the root config being updated.
-        int newTaskCount = configs.size();
+
+        int taskCount = configs.size();
 
         // Start sending all the individual updates
         int index = 0;
@@ -376,14 +374,14 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         // the end of the log
         try {
             // Read to end to ensure all the task configs have been written
-            if (newTaskCount > 0) {
+            if (taskCount > 0) {
                 configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             }
             // Write the commit message
             Struct connectConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
-            connectConfig.put("tasks", newTaskCount);
+            connectConfig.put("tasks", taskCount);
             byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
-            log.debug("Writing commit for connector " + connector + " with " + newTaskCount + " tasks.");
+            log.debug("Writing commit for connector " + connector + " with " + taskCount + " tasks.");
             configLog.send(COMMIT_TASKS_KEY(connector), serializedConfig);
 
             // Read to end to ensure all the commit messages have been written

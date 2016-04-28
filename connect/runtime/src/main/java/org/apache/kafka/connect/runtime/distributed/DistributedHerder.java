@@ -543,7 +543,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         else if (!configState.contains(connName))
                             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                         else {
-                            configBackingStore.putTaskConfigs(connName, taskConfigListAsMap(configs));
+                            configBackingStore.putTaskConfigs(connName, configs);
                             callback.onCompletion(null, null);
                         }
                         return null;
@@ -853,7 +853,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
             if (changed) {
                 if (isLeader()) {
-                    configBackingStore.putTaskConfigs(connName, taskConfigListAsMap(taskProps));
+                    configBackingStore.putTaskConfigs(connName, taskProps);
                     cb.onCompletion(null, null);
                 } else {
                     // We cannot forward the request on the same thread because this reconfiguration can happen as a result of connector
