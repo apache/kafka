@@ -304,8 +304,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
    */
   private def registerStats() {
     BrokerTopicStats.getBrokerAllTopicsStats()
-    ControllerStats.uncleanLeaderElectionRate
-    ControllerStats.leaderElectionTimer
+    ControllerStats.uncleanLeaderElectionRate()
+    ControllerStats.leaderElectionTimer()
   }
 
   /**

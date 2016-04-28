@@ -1468,6 +1468,6 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
 }
 
 object ControllerStats extends KafkaMetricsGroup {
-  val uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
-  val leaderElectionTimer = new KafkaTimer(newTimer("LeaderElectionRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+  def uncleanLeaderElectionRate() = newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
+  def leaderElectionTimer() = new KafkaTimer(newTimer("LeaderElectionRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
 }
