@@ -88,8 +88,7 @@ trait SaslSetup {
   def kafkaSaslProperties(clientSaslMechanism: String, serverSaslMechanisms: Option[Seq[String]] = None) = {
     val props = new Properties
     props.put(SaslConfigs.SASL_MECHANISM, clientSaslMechanism)
-    serverSaslMechanisms.foreach {
-      case serverMechanisms =>
+    serverSaslMechanisms.foreach { serverMechanisms =>
         props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, clientSaslMechanism)
         props.put(SaslConfigs.SASL_ENABLED_MECHANISMS, serverMechanisms.mkString(","))
     }

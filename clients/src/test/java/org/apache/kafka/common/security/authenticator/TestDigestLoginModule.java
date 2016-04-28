@@ -41,16 +41,20 @@ import org.apache.kafka.common.security.plain.PlainLoginModule;
  *
  */
 public class TestDigestLoginModule extends PlainLoginModule {
+
+    private static final SaslServerFactory STANDARD_DIGEST_SASL_SERVER_FACTORY;
     static {
+        SaslServerFactory digestSaslServerFactory = null;
         Enumeration<SaslServerFactory> factories = Sasl.getSaslServerFactories();
         Map<String, Object> emptyProps = new HashMap<>();
         while (factories.hasMoreElements()) {
             SaslServerFactory factory = factories.nextElement();
             if (Arrays.asList(factory.getMechanismNames(emptyProps)).contains("DIGEST-MD5")) {
-                DigestSaslServerFactory.standardDigestSaslServerFactory = factory;
+                digestSaslServerFactory = factory;
                 break;
             }
         }
+        STANDARD_DIGEST_SASL_SERVER_FACTORY = digestSaslServerFactory;
         Security.insertProviderAt(new DigestSaslServerProvider(), 1);
     }
 
@@ -81,12 +85,10 @@ public class TestDigestLoginModule extends PlainLoginModule {
 
     public static class DigestSaslServerFactory implements SaslServerFactory {
 
-        private static SaslServerFactory standardDigestSaslServerFactory;
-
         @Override
         public SaslServer createSaslServer(String mechanism, String protocol, String serverName, Map<String, ?> props, CallbackHandler cbh)
                 throws SaslException {
-            return standardDigestSaslServerFactory.createSaslServer(mechanism, protocol, serverName, props, new DigestServerCallbackHandler());
+            return STANDARD_DIGEST_SASL_SERVER_FACTORY.createSaslServer(mechanism, protocol, serverName, props, new DigestServerCallbackHandler());
         }
 
         @Override
