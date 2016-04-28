@@ -148,6 +148,7 @@
       <allow pkg="scala" />
       <allow pkg="scala.collection" />
       <allow pkg="org.I0Itec.zkclient" />
+      <allow pkg="org.assertj.core.api.Assertions" />
     </subpackage>
 
     <subpackage name="state">
