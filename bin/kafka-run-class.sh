@@ -34,7 +34,11 @@ fi
 shopt -s nullglob
 for dir in $base_dir/core/build/dependant-libs-${SCALA_VERSION}*;
 do
-  CLASSPATH=$CLASSPATH:$dir/*
+  if [ -z $CLASSPATH ] ; then
+    CLASSPATH=$dir/*
+  else
+    CLASSPATH=$CLASSPATH:$dir/*
+  fi
 done
 
 for file in $base_dir/examples/build/libs//kafka-examples*.jar;
