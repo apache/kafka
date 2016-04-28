@@ -223,11 +223,7 @@ public class SaslAuthenticatorTest {
         // Send invalid SASL packet after valid handshake request
         String node1 = "invalid1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
-        RequestHeader header = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id, "someclient", 1);
-        SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest("PLAIN");
-        selector.send(new NetworkSend(node1, RequestSend.serialize(header, handshakeRequest.toStruct())));
-        while (selector.completedSends().size() == 0)
-            selector.poll(1000);
+        sendHandshakeRequest(node1);
         Random random = new Random();
         byte[] bytes = new byte[1024];
         random.nextBytes(bytes);
@@ -264,11 +260,7 @@ public class SaslAuthenticatorTest {
         // Send SASL packet with large size after valid handshake request
         String node1 = "invalid1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
-        RequestHeader header = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id, "someclient", 1);
-        SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest("PLAIN");
-        selector.send(new NetworkSend(node1, RequestSend.serialize(header, handshakeRequest.toStruct())));
-        while (selector.completedSends().size() == 0)
-            selector.poll(1000);
+        sendHandshakeRequest(node1);
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.putInt(Integer.MAX_VALUE);
         buffer.put(new byte[buffer.capacity() - 4]);
@@ -320,11 +312,7 @@ public class SaslAuthenticatorTest {
         // Send metadata request after Kafka SASL handshake request
         String node2 = "invalid2";
         createClientConnection(SecurityProtocol.PLAINTEXT, node2);
-        RequestHeader handshakeRequestHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id, "someclient", 1);
-        SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest("PLAIN");
-        selector.send(new NetworkSend(node2, RequestSend.serialize(handshakeRequestHeader, handshakeRequest.toStruct())));
-        while (selector.completedSends().size() == 0)
-            selector.poll(1000);
+        sendHandshakeRequest(node2);
         RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKeys.METADATA.id, "someclient", 2);
         MetadataRequest metadataRequest2 = new MetadataRequest(Collections.singletonList("sometopic"));
         selector.send(new NetworkSend(node2, RequestSend.serialize(metadataRequestHeader2, metadataRequest2.toStruct())));
@@ -406,5 +394,15 @@ public class SaslAuthenticatorTest {
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
         selector.close();
         selector = null;
+    }
+
+    private void sendHandshakeRequest(String node) throws Exception {
+        RequestHeader header = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id, "someclient", 1);
+        SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest("PLAIN");
+        selector.send(new NetworkSend(node, RequestSend.serialize(header, handshakeRequest.toStruct())));
+        int waitSeconds = 10;
+        do {
+            selector.poll(1000);
+        } while (selector.completedSends().isEmpty() && waitSeconds-- > 0);
     }
 }
