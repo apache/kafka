@@ -21,7 +21,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -57,7 +56,6 @@ import java.util.concurrent.Future;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(KafkaConfigBackingStore.class)
@@ -275,9 +273,7 @@ public class KafkaConfigBackingStoreTest {
 
         // Writing task task configs should block until all the writes have been performed and the root record update
         // has completed
-        Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
-        taskConfigs.put(TASK_IDS.get(0), SAMPLE_CONFIGS.get(0));
-        taskConfigs.put(TASK_IDS.get(1), SAMPLE_CONFIGS.get(1));
+        List<Map<String, String>> taskConfigs = Arrays.asList(SAMPLE_CONFIGS.get(0), SAMPLE_CONFIGS.get(1));
         configStorage.putTaskConfigs("connector1", taskConfigs);
 
         // Validate root config by listing all connectors and tasks
@@ -330,7 +326,7 @@ public class KafkaConfigBackingStoreTest {
 
         // Writing task task configs should block until all the writes have been performed and the root record update
         // has completed
-        Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
+        List<Map<String, String>> taskConfigs = Collections.emptyList();
         configStorage.putTaskConfigs("connector1", taskConfigs);
 
         // Validate root config by listing all connectors and tasks
@@ -403,8 +399,8 @@ public class KafkaConfigBackingStoreTest {
     @Test
     public void testPutTaskConfigsDoesNotResolveAllInconsistencies() throws Exception {
         // Test a case where a failure and compaction has left us in an inconsistent state when reading the log.
-        // We start out by loading an initial configuration where we started to write a task update and failed before
-        // writing an the commit, and then compaction cleaned up the earlier record.
+        // We start out by loading an initial configuration where we started to write a task update, and then
+        // compaction cleaned up the earlier record.
 
         expectConfigure();
         List<ConsumerRecord<String, byte[]>> existingRecords = Arrays.asList(
@@ -421,9 +417,6 @@ public class KafkaConfigBackingStoreTest {
         deserialized.put(CONFIGS_SERIALIZED.get(5), TASK_CONFIG_STRUCTS.get(1));
         logOffset = 6;
         expectStart(existingRecords, deserialized);
-
-        // One failed attempt to write new task configs
-        expectReadToEnd(new LinkedHashMap<String, byte[]>());
 
         // Successful attempt to write new task config
         expectReadToEnd(new LinkedHashMap<String, byte[]>());
@@ -443,7 +436,6 @@ public class KafkaConfigBackingStoreTest {
         serializedConfigs.put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
         expectReadToEnd(serializedConfigs);
 
-
         expectStop();
 
         PowerMock.replayAll();
@@ -461,17 +453,9 @@ public class KafkaConfigBackingStoreTest {
         assertNull(configState.taskConfig(TASK_IDS.get(1)));
         assertEquals(Collections.singleton(CONNECTOR_IDS.get(0)), configState.inconsistentConnectors());
 
-        // First try sending an invalid set of configs (can't possibly represent a valid config set for the tasks)
-        try {
-            configStorage.putTaskConfigs("connector1", Collections.singletonMap(TASK_IDS.get(1), SAMPLE_CONFIGS.get(2)));
-            fail("Should have failed due to incomplete task set.");
-        } catch (KafkaException e) {
-            // expected
-        }
-
         // Next, issue a write that has everything that is needed and it should be accepted. Note that in this case
         // we are going to shrink the number of tasks to 1
-        configStorage.putTaskConfigs("connector1", Collections.singletonMap(TASK_IDS.get(0), SAMPLE_CONFIGS.get(0)));
+        configStorage.putTaskConfigs("connector1", Collections.singletonList(SAMPLE_CONFIGS.get(0)));
         // Validate updated config
         configState = configStorage.snapshot();
         // This is only two more ahead of the last one because multiple calls fail, and so their configs are not written
