@@ -20,9 +20,16 @@ then
   exit 1
 fi
 
+if [ -z "$INCLUDE_TEST_JARS" ]; then
+  INCLUDE_TEST_JARS=false
+fi
+
 # Exclude jars not necessary for running commands.
 regex="(-(test|src|scaladoc|javadoc)\.jar|jar.asc)$"
-filter_file() {
+should_include_file() {
+  if [ "$INCLUDE_TEST_JARS" = true ]; then
+    return 0
+  fi
   file=$1
   if [ -z "$(echo "$file" | egrep "$regex")" ] ; then
     return 0
@@ -54,28 +61,28 @@ done
 
 for file in $base_dir/examples/build/libs/kafka-examples*.jar;
 do
-  if filter_file "$file"; then
+  if should_include_file "$file"; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
 
 for file in $base_dir/clients/build/libs/kafka-clients*.jar;
 do
-  if filter_file "$file"; then
+  if should_include_file "$file"; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
 
 for file in $base_dir/streams/build/libs/kafka-streams*.jar;
 do
-  if filter_file "$file"; then
+  if should_include_file "$file"; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
 
 for file in $base_dir/streams/examples/build/libs/kafka-streams-examples*.jar;
 do
-  if filter_file "$file"; then
+  if should_include_file "$file"; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
@@ -87,7 +94,7 @@ done
 
 for file in $base_dir/tools/build/libs/kafka-tools*.jar;
 do
-  if filter_file "$file"; then
+  if should_include_file "$file"; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
@@ -101,7 +108,7 @@ for cc_pkg in "api" "runtime" "file" "json" "tools"
 do
   for file in $base_dir/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
   do
-    if filter_file "$file"; then
+    if should_include_file "$file"; then
       CLASSPATH=$CLASSPATH:$file
     fi
   done
@@ -113,18 +120,20 @@ done
 # classpath addition for release
 for file in $base_dir/libs;
 do
-  if filter_file "$file"; then
+  if should_include_file "$file"; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
 
 for file in $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
 do
-  if filter_file "$file"; then
+  if should_include_file "$file"; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
 shopt -u nullglob
+
+echo $CLASSPATH
 
 # JMX settings
 if [ -z "$KAFKA_JMX_OPTS" ]; then
