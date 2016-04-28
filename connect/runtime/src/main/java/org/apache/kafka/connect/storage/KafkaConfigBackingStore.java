@@ -205,6 +205,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     // Connector and task configs: name or id -> config map
     private Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
     private Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
+
     // Set of connectors where we saw a task commit with an incomplete set of task config updates, indicating the data
     // is in an inconsistent state and we cannot safely use them until they have been refreshed.
     private Set<String> inconsistent = new HashSet<>();
@@ -340,12 +341,12 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
      * that we would be leaving one of the referenced connectors with an inconsistent state.
      *
      * @param connector the connector to write task configuration
-     * @param configs map containing task configurations
+     * @param configs map containing task configurations for the connector
      * @throws ConnectException if the task configurations do not resolve inconsistencies found in the existing root
      *                          and task configurations.
      */
     @Override
-    public void putTaskConfigs(String connector, Map<ConnectorTaskId, Map<String, String>> configs) {
+    public void putTaskConfigs(String connector, List<Map<String, String>> configs) {
         // Make sure we're at the end of the log. We should be the only writer, but we want to make sure we don't have
         // any outstanding lagging data to consume.
         try {
@@ -354,29 +355,21 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             log.error("Failed to write root configuration to Kafka: ", e);
             throw new ConnectException("Error writing root configuration to Kafka", e);
         }
-
         // In theory, there is only a single writer and we shouldn't need this lock since the background thread should
         // not invoke any callbacks that would conflict, but in practice this guards against inconsistencies due to
         // the root config being updated.
-        int newTaskCount = 0;
-        synchronized (lock) {
-            // Validate tasks in this assignment. Any task configuration updates should include updates for *all* tasks
-            // in the connector -- we should have all task IDs 0 - N-1 within a connector if any task is included here
-            Set<Integer>  taskConfigSet = taskIds(connector, configs);
-            if (!completeTaskIdSet(taskConfigSet, taskConfigSet.size())) {
-                log.error("Submitted task configuration contain invalid range of task IDs, ignoring this submission");
-                throw new ConnectException("Error writing task configurations: found some connectors with invalid connectors");
-            }
-            newTaskCount += taskConfigSet.size();
-        }
+        int newTaskCount = configs.size();
 
         // Start sending all the individual updates
-        for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : configs.entrySet()) {
+        int index = 0;
+        for (Map<String, String> taskConfig: configs) {
             Struct connectConfig = new Struct(TASK_CONFIGURATION_V0);
-            connectConfig.put("properties", taskConfigEntry.getValue());
+            connectConfig.put("properties", taskConfig);
             byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
-            log.debug("Writing configuration for task " + taskConfigEntry.getKey() + " configuration: " + taskConfigEntry.getValue());
-            configLog.send(TASK_KEY(taskConfigEntry.getKey()), serializedConfig);
+            log.debug("Writing configuration for task " + index + " configuration: " + taskConfig);
+            ConnectorTaskId connectorTaskId = new ConnectorTaskId(connector, index);
+            configLog.send(TASK_KEY(connectorTaskId), serializedConfig);
+            index++;
         }
 
         // Finally, send the commit to update the number of tasks and apply the new configs, then wait until we read to

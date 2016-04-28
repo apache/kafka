@@ -250,7 +250,7 @@ public class StandaloneHerder extends AbstractHerder {
         return connName;
     }
 
-    private Map<ConnectorTaskId, Map<String, String>> recomputeTaskConfigs(String connName) {
+    private Map<Integer, Map<String, String>> recomputeTaskConfigs(String connName) {
         Map<String, String> config = configState.connectorConfig(connName);
         ConnectorConfig connConfig = new ConnectorConfig(config);
 
@@ -258,10 +258,12 @@ public class StandaloneHerder extends AbstractHerder {
                 connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG),
                 connConfig.getList(ConnectorConfig.TOPICS_CONFIG));
 
-        int i = 0;
-        Map<ConnectorTaskId, Map<String, String>> taskConfigMap = new HashMap<>();
-        for (Map<String, String> taskConfig : taskConfigs)
-            taskConfigMap.put(new ConnectorTaskId(connName, i++), taskConfig);
+        int index = 0;
+        Map<Integer, Map<String, String>> taskConfigMap = new HashMap<>();
+        for (Map<String, String> taskConfig : taskConfigs) {
+            taskConfigMap.put(index, taskConfig);
+            index++;
+        }
 
         return taskConfigMap;
     }
@@ -296,8 +298,8 @@ public class StandaloneHerder extends AbstractHerder {
             return;
         }
 
-        Map<ConnectorTaskId, Map<String, String>> newTaskConfigs = recomputeTaskConfigs(connName);
-        Map<ConnectorTaskId, Map<String, String>> oldTaskConfigs = configState.allTaskConfigs(connName);
+        Map<Integer, Map<String, String>> newTaskConfigs = recomputeTaskConfigs(connName);
+        Map<Integer, Map<String, String>> oldTaskConfigs = configState.allTaskConfigs(connName);
 
         if (!newTaskConfigs.equals(oldTaskConfigs)) {
             removeConnectorTasks(connName);

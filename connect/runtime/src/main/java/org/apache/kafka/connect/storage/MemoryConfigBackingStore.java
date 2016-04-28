@@ -24,6 +24,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -108,7 +109,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
     }
 
     @Override
-    public synchronized void putTaskConfigs(String connector, Map<ConnectorTaskId, Map<String, String>> configs) {
+    public synchronized void putTaskConfigs(String connector, List<Map<String, String>> configs) {
         ConnectorState state = connectors.get(connector);
         if (state == null)
             throw new IllegalArgumentException("Cannot put tasks for non-existing connector");
@@ -151,4 +152,6 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
             this.taskConfigs = new HashMap<>();
         }
     }
+
+    private static
 }

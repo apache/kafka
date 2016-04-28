@@ -44,13 +44,13 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -543,7 +543,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         else if (!configState.contains(connName))
                             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                         else {
-                            configBackingStore.putTaskConfigs(connName, taskConfigListAsMap(connName, configs));
+                            configBackingStore.putTaskConfigs(connName, taskConfigListAsMap(configs));
                             callback.onCompletion(null, null);
                         }
                         return null;
@@ -853,7 +853,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
             if (changed) {
                 if (isLeader()) {
-                    configBackingStore.putTaskConfigs(connName, taskConfigListAsMap(connName, taskProps));
+                    configBackingStore.putTaskConfigs(connName, taskConfigListAsMap(taskProps));
                     cb.onCompletion(null, null);
                 } else {
                     // We cannot forward the request on the same thread because this reconfiguration can happen as a result of connector
@@ -1064,12 +1064,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    private static Map<ConnectorTaskId, Map<String, String>> taskConfigListAsMap(String connName, List<Map<String, String>> configs) {
+    private static Map<Integer, Map<String, String>> taskConfigListAsMap(List<Map<String, String>> configs) {
         int index = 0;
-        Map<ConnectorTaskId, Map<String, String>> result = new HashMap<>();
-        for (Map<String, String> taskConfigMap : configs) {
-            ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
-            result.put(taskId, taskConfigMap);
+        Map<Integer, Map<String, String>> result = new TreeMap<>();
+        for (Map<String, String> taskConfigMap: configs) {
+            result.put(index, taskConfigMap);
             index++;
         }
         return result;

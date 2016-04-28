@@ -118,11 +118,11 @@ public class ClusterConfigState {
      * @param connector name of the connector
      * @return a map from the task id to its configuration
      */
-    public Map<ConnectorTaskId, Map<String, String>> allTaskConfigs(String connector) {
-        Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
+    public Map<Integer, Map<String, String>> allTaskConfigs(String connector) {
+        Map<Integer, Map<String, String>> taskConfigs = new HashMap<>();
         for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : this.taskConfigs.entrySet()) {
             if (taskConfigEntry.getKey().connector().equals(connector))
-                taskConfigs.put(taskConfigEntry.getKey(), taskConfigEntry.getValue());
+                taskConfigs.put(taskConfigEntry.getKey().task(), taskConfigEntry.getValue());
         }
         return taskConfigs;
     }
