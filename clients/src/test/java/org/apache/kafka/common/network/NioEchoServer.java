@@ -49,7 +49,7 @@ public class NioEchoServer extends Thread {
         this.port = serverSocketChannel.socket().getLocalPort();
         this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
-        ChannelBuilder channelBuilder = ChannelBuilders.create(securityProtocol, Mode.SERVER, LoginType.SERVER, configs, "GSSAPI", true);
+        ChannelBuilder channelBuilder = ChannelBuilders.create(securityProtocol, Mode.SERVER, LoginType.SERVER, configs, null, true);
         this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
         setName("echoserver");
         setDaemon(true);

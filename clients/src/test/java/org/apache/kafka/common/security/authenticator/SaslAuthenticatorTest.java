@@ -10,7 +10,7 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package org.apache.kafka.common.network;
+package org.apache.kafka.common.security.authenticator;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -24,15 +24,22 @@ import static org.junit.Assert.fail;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.network.CertStores;
+import org.apache.kafka.common.network.ChannelBuilder;
+import org.apache.kafka.common.network.ChannelBuilders;
+import org.apache.kafka.common.network.LoginType;
+import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.network.NetworkSend;
+import org.apache.kafka.common.network.NetworkTestUtils;
+import org.apache.kafka.common.network.NioEchoServer;
+import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
-import org.apache.kafka.common.security.plain.PlainLoginModule;
-import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.security.JaasUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -72,41 +79,52 @@ public class SaslAuthenticatorTest {
      * Tests good path SASL/PLAIN client and server channels using SSL transport layer.
      */
     @Test
-    public void testValidSaslPlain_Ssl() throws Exception {
+    public void testValidSaslPlainOverSsl() throws Exception {
         String node = "0";
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
 
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
-        createClientConnection(securityProtocol, node);
-        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+        createAndCheckClientConnection(securityProtocol, node);
     }
 
     /**
      * Tests good path SASL/PLAIN client and server channels using PLAINTEXT transport layer.
      */
     @Test
-    public void testValidSaslPlain_Plaintext() throws Exception {
+    public void testValidSaslPlainOverPlaintext() throws Exception {
         String node = "0";
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
         configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
 
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
-        createClientConnection(securityProtocol, node);
-        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+        createAndCheckClientConnection(securityProtocol, node);
     }
 
     /**
      * Tests that SASL/PLAIN clients with invalid password fail authentication.
      */
     @Test
-    public void testInvalidSaslPlain() throws Exception {
+    public void testInvalidPasswordSaslPlain() throws Exception {
         String node = "0";
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
-        jaasConfig.setPlainClientOptions("myuser", "invalidpassword");
-        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
-        saslServerConfigs.put(SaslConfigs.SASL_ENABLED_MECHANISMS, Arrays.asList("PLAIN"));
+        jaasConfig.setPlainClientOptions(TestJaasConfig.USERNAME, "invalidpassword");
+
+        server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
+        createClientConnection(securityProtocol, node);
+        NetworkTestUtils.waitForChannelClose(selector, node);
+    }
+
+    /**
+     * Tests that SASL/PLAIN clients with invalid username fail authentication.
+     */
+    @Test
+    public void testInvalidUsernameSaslPlain() throws Exception {
+        String node = "0";
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
+        jaasConfig.setPlainClientOptions("invaliduser", TestJaasConfig.PASSWORD);
 
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
         createClientConnection(securityProtocol, node);
@@ -166,8 +184,7 @@ public class SaslAuthenticatorTest {
         configureMechanisms("DIGEST-MD5", Arrays.asList("DIGEST-MD5"));
 
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
-        createClientConnection(securityProtocol, node);
-        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+        createAndCheckClientConnection(securityProtocol, node);
     }
 
     /**
@@ -176,15 +193,13 @@ public class SaslAuthenticatorTest {
      */
     @Test
     public void testMultipleServerMechanisms() throws Exception {
-        String node1 = "1";
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         configureMechanisms("DIGEST-MD5", Arrays.asList("DIGEST-MD5", "PLAIN"));
-        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
-
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
-        createClientConnection(securityProtocol, node1);
-        NetworkTestUtils.checkClientConnection(selector, node1, 100, 10);
-        selector.close();
+
+        String node1 = "1";
+        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
+        createAndCheckClientConnection(securityProtocol, node1);
 
         String node2 = "2";
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "DIGEST-MD5");
@@ -221,7 +236,7 @@ public class SaslAuthenticatorTest {
         selector.close();
 
         // Test good connection still works
-        testNewClientConnection(securityProtocol, "good1");
+        createAndCheckClientConnection(securityProtocol, "good1");
 
         // Send invalid SASL packet before handshake request
         String node2 = "invalid2";
@@ -232,7 +247,7 @@ public class SaslAuthenticatorTest {
         selector.close();
 
         // Test good connection still works
-        testNewClientConnection(securityProtocol, "good2");
+        createAndCheckClientConnection(securityProtocol, "good2");
     }
 
     /**
@@ -263,7 +278,7 @@ public class SaslAuthenticatorTest {
         selector.close();
 
         // Test good connection still works
-        testNewClientConnection(securityProtocol, "good1");
+        createAndCheckClientConnection(securityProtocol, "good1");
 
         // Send packet with large size before handshake request
         String node2 = "invalid2";
@@ -277,7 +292,7 @@ public class SaslAuthenticatorTest {
         selector.close();
 
         // Test good connection still works
-        testNewClientConnection(securityProtocol, "good2");
+        createAndCheckClientConnection(securityProtocol, "good2");
     }
 
     /**
@@ -300,7 +315,7 @@ public class SaslAuthenticatorTest {
         selector.close();
 
         // Test good connection still works
-        testNewClientConnection(securityProtocol, "good1");
+        createAndCheckClientConnection(securityProtocol, "good1");
 
         // Send metadata request after Kafka SASL handshake request
         String node2 = "invalid2";
@@ -317,7 +332,7 @@ public class SaslAuthenticatorTest {
         selector.close();
 
         // Test good connection still works
-        testNewClientConnection(securityProtocol, "good2");
+        createAndCheckClientConnection(securityProtocol, "good2");
     }
 
     /**
@@ -325,9 +340,8 @@ public class SaslAuthenticatorTest {
      */
     @Test
     public void testInvalidLoginModule() throws Exception {
-        TestJaasConfig.createConfiguration("InvalidLoginModule", TestJaasConfig.defaultClientOptions(), PlainLoginModule.class.getName(), TestJaasConfig.defaultServerOptions());
-        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
-        saslServerConfigs.put(SaslConfigs.SASL_ENABLED_MECHANISMS, Arrays.asList("PLAIN"));
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
+        jaasConfig.createOrUpdateEntry(JaasUtils.LOGIN_CONTEXT_CLIENT, "InvalidLoginModule", TestJaasConfig.defaultClientOptions());
 
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
@@ -361,9 +375,8 @@ public class SaslAuthenticatorTest {
     public void testInvalidMechanism() throws Exception {
         String node = "0";
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        TestJaasConfig.createConfiguration("PLAIN", Arrays.asList("PLAIN"));
+        configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "INVALID");
-        saslServerConfigs.put(SaslConfigs.SASL_ENABLED_MECHANISMS, Arrays.asList("PLAIN"));
 
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
         createClientConnection(securityProtocol, node);
@@ -379,7 +392,7 @@ public class SaslAuthenticatorTest {
     private void createSelector(SecurityProtocol securityProtocol, Map<String, Object> clientConfigs) {
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         this.channelBuilder = ChannelBuilders.create(securityProtocol, Mode.CLIENT, LoginType.CLIENT, clientConfigs, saslMechanism, true);
-        this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
+        this.selector = NetworkTestUtils.createSelector(channelBuilder);
     }
 
     private void createClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
@@ -388,7 +401,7 @@ public class SaslAuthenticatorTest {
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
     }
 
-    private void testNewClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
+    private void createAndCheckClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
         createClientConnection(securityProtocol, node);
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
         selector.close();

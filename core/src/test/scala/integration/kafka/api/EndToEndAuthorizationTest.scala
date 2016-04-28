@@ -80,7 +80,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
   protected def kafkaClientSaslMechanism = "GSSAPI"
   protected def kafkaServerSaslMechanisms = List("GSSAPI")
-  override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, kafkaServerSaslMechanisms))
+  override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, Some(kafkaServerSaslMechanisms)))
 
   val topicResource = new Resource(Topic, topic)
   val groupResource = new Resource(Group, group)

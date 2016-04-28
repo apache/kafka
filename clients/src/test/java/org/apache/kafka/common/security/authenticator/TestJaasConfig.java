@@ -10,7 +10,7 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package org.apache.kafka.common.network;
+package org.apache.kafka.common.security.authenticator;
 
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +20,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
 import javax.security.auth.login.AppConfigurationEntry.LoginModuleControlFlag;
 
+import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 
 public class TestJaasConfig extends Configuration {
@@ -27,33 +28,25 @@ public class TestJaasConfig extends Configuration {
     static final String USERNAME = "myuser";
     static final String PASSWORD = "mypassword";
 
-    private HashMap<String, AppConfigurationEntry[]> entryMap = new HashMap<String, AppConfigurationEntry[]>();
+    private Map<String, AppConfigurationEntry[]> entryMap = new HashMap<>();
 
     public static TestJaasConfig createConfiguration(String clientMechanism, List<String> serverMechanisms) {
         TestJaasConfig config = new TestJaasConfig();
-        config.createOrUpdateEntry("KafkaClient", loginModule(clientMechanism), defaultClientOptions());
+        config.createOrUpdateEntry(JaasUtils.LOGIN_CONTEXT_CLIENT, loginModule(clientMechanism), defaultClientOptions());
         for (String mechanism : serverMechanisms) {
-            config.createOrUpdateEntry("KafkaServer", loginModule(mechanism), defaultServerOptions());
+            config.createOrUpdateEntry(JaasUtils.LOGIN_CONTEXT_SERVER, loginModule(mechanism), defaultServerOptions());
         }
         Configuration.setConfiguration(config);
         return config;
     }
 
-    public static TestJaasConfig createConfiguration(String clientLoginModule, Map<String, Object> clientOptions, String serverLoginModule, Map<String, Object> serverOptions) {
-        TestJaasConfig config = new TestJaasConfig();
-        config.createOrUpdateEntry("KafkaClient", clientLoginModule, clientOptions);
-        config.createOrUpdateEntry("KafkaServer", serverLoginModule, serverOptions);
-        Configuration.setConfiguration(config);
-        return config;
-    }
-
     public void setPlainClientOptions(String clientUsername, String clientPassword) {
-        HashMap<String, Object> options = new HashMap<String, Object>();
+        Map<String, Object> options = new HashMap<>();
         if (clientUsername != null)
             options.put("username", clientUsername);
         if (clientPassword != null)
             options.put("password", clientPassword);
-        createOrUpdateEntry("KafkaClient", PlainLoginModule.class.getName(), options);
+        createOrUpdateEntry(JaasUtils.LOGIN_CONTEXT_CLIENT, PlainLoginModule.class.getName(), options);
     }
 
     public void createOrUpdateEntry(String name, String loginModule, Map<String, Object> options) {
@@ -82,14 +75,14 @@ public class TestJaasConfig extends Configuration {
     }
 
     public static Map<String, Object> defaultClientOptions() {
-        HashMap<String, Object> options = new HashMap<>();
+        Map<String, Object> options = new HashMap<>();
         options.put("username", USERNAME);
         options.put("password", PASSWORD);
         return options;
     }
 
     public static Map<String, Object> defaultServerOptions() {
-        HashMap<String, Object> options = new HashMap<>();
+        Map<String, Object> options = new HashMap<>();
         options.put("user_" + USERNAME, PASSWORD);
         return options;
     }
