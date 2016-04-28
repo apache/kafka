@@ -15,6 +15,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
+import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -104,6 +105,14 @@ public class ApiVersionsResponse extends AbstractRequestResponse {
 
     public static ApiVersionsResponse fromError(Errors error) {
         return new ApiVersionsResponse(error.code(), Collections.<ApiVersion>emptyList());
+    }
+
+    public static ApiVersionsResponse createApiVersionsResponse() {
+        List<ApiVersion> versionList = new ArrayList<>();
+        for (ApiKeys apiKey : ApiKeys.values()) {
+            versionList.add(new ApiVersion(apiKey.id, Protocol.MIN_VERSIONS[apiKey.id], Protocol.CURR_VERSION[apiKey.id]));
+        }
+        return new ApiVersionsResponse(Errors.NONE.code(), versionList);
     }
 
     private Map<Short, ApiVersion> buildApiKeyToApiVersion(List<ApiVersion> apiVersions) {
