@@ -559,7 +559,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
                     // Validate the configs we're supposed to update to ensure we're getting a complete configuration
                     // update of all tasks that are expected based on the number of tasks in the commit message.
-                    Set<Integer> taskIdSet = taskIds(connectorName, deferred);
+                    Set<Integer> taskIdSet = taskIds(deferred);
                     if (taskIdSet == null) {
                         //TODO: Figure out why this happens (KAFKA-3321)
                         log.error("Received a commit message for connector " + connectorName + " but there is no matching configuration for tasks in this connector. This should never happen.");
@@ -613,16 +613,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     /**
      * Given task configurations, get a set of integer task IDs for the connector.
      */
-    private Set<Integer> taskIds(String connector, Map<ConnectorTaskId, Map<String, String>> configs) {
+    private Set<Integer> taskIds(Map<ConnectorTaskId, Map<String, String>> configs) {
         Set<Integer> tasks = new TreeSet<>();
         if (configs == null) {
             return tasks;
         }
-        for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : configs.entrySet()) {
-            ConnectorTaskId taskId = taskConfigEntry.getKey();
-            if (taskId.connector().equals(connector)) {
-                tasks.add(taskId.task());
-            }
+        for (ConnectorTaskId taskId : configs.keySet()) {
+            tasks.add(taskId.task());
         }
         return tasks;
     }
