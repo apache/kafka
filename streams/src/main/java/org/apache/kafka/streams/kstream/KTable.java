@@ -24,6 +24,12 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 
 /**
  * {@link KTable} is an abstraction of a <i>changelog stream</i> from a primary-keyed table.
+ * <p>
+ * A {@link KTable} is either defined from one or multiple Kafka topics that are consumed message by message or
+ * the result of a {@link KTable} transformation. An aggregation of a {@link KStream} also yields a {@link KTable}.
+ * <p>
+ * A {@link KTable} can be transformed record by record, joined with another {@link KTable} or {@link KStream}, or
+ * can be re-partitioned and aggregated into a new {@link KTable}.
  *
  * @param <K> Type of primary keys
  * @param <V> Type of value changes
@@ -35,6 +41,8 @@ public interface KTable<K, V> {
      * Create a new instance of {@link KTable} that consists of all elements of this stream which satisfy a predicate.
      *
      * @param predicate     the instance of {@link Predicate}
+     *
+     * @return a {@link KTable} containing only those records that satisfy the given predicate
      */
     KTable<K, V> filter(Predicate<K, V> predicate);
 
@@ -42,6 +50,8 @@ public interface KTable<K, V> {
      * Create a new instance of {@link KTable} that consists all elements of this stream which do not satisfy a predicate.
      *
      * @param predicate     the instance of {@link Predicate}
+     *
+     * @return a {@link KTable} containing only those records that do not satisfy the given predicate
      */
     KTable<K, V> filterNot(Predicate<K, V> predicate);
 
@@ -50,6 +60,8 @@ public interface KTable<K, V> {
      *
      * @param mapper        the instance of {@link ValueMapper}
      * @param <V1>          the value type of the new stream
+     *
+     * @return a {@link KTable} with the same keys and new values of different type
      */
     <V1> KTable<K, V1> mapValues(ValueMapper<V, V1> mapper);
 
@@ -103,6 +115,8 @@ public interface KTable<K, V> {
      * This is equivalent to calling {@link #to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(String)}.
      *
      * @param topic         the topic name
+     *
+     * @return a {@link KTable} containing the exact same records as this {@link KTable}
      */
     KTable<K, V> through(String topic);
 
@@ -114,6 +128,8 @@ public interface KTable<K, V> {
      * @param partitioner  the function used to determine how records are distributed among partitions of the topic,
      *                     if not specified producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner} will be used
      * @param topic        the topic name
+     *
+     * @return a {@link KTable} containing the exact same records as this {@link KTable}
      */
     KTable<K, V> through(StreamPartitioner<K, V> partitioner, String topic);
 
@@ -130,6 +146,8 @@ public interface KTable<K, V> {
      * @param valSerde     value serde used to send key-value pairs,
      *                     if not specified the default value serde defined in the configuration will be used
      * @param topic        the topic name
+     *
+     * @return a {@link KTable} containing the exact same records as this {@link KTable}
      */
     KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic);
 
@@ -148,6 +166,8 @@ public interface KTable<K, V> {
      *                     {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner} will be used
      *                     &mdash; otherwise {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner} will be used
      * @param topic        the topic name
+     *
+     * @return a {@link KTable} containing the exact same records as this {@link KTable}
      */
     KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic);
 
@@ -200,6 +220,8 @@ public interface KTable<K, V> {
 
     /**
      * Convert this stream to a new instance of {@link KStream}.
+     *
+     * @return a {@link KStream} containing a record for each update of this {@link KTable}
      */
     KStream<K, V> toStream();
 
@@ -209,6 +231,8 @@ public interface KTable<K, V> {
      *
      * @param mapper  @param mapper  the instance of {@link KeyValueMapper}
      * @param <K1> the new key type
+     *
+     * @return a {@link KStream} containing a record with new key of different type for each update of this {@link KTable}
      */
     <K1> KStream<K1, V> toStream(KeyValueMapper<K, V, K1> mapper);
 
@@ -219,6 +243,8 @@ public interface KTable<K, V> {
      * @param joiner        the instance of {@link ValueJoiner}
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
+     *
+     * @return a {@link KTable} containing the join-tuples computed by the given {@link ValueJoiner}
      */
     <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
@@ -229,6 +255,8 @@ public interface KTable<K, V> {
      * @param joiner        the instance of {@link ValueJoiner}
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
+     *
+     * @return a {@link KTable} containing the join-tuples computed by the given {@link ValueJoiner}
      */
     <V1, R> KTable<K, R> outerJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
@@ -239,6 +267,8 @@ public interface KTable<K, V> {
      * @param joiner        the instance of {@link ValueJoiner}
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
+     *
+     * @return a {@link KTable} containing the join-tuples computed by the given {@link ValueJoiner}
      */
     <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
@@ -252,6 +282,8 @@ public interface KTable<K, V> {
      *                      if not specified the default serdes defined in the configs will be used
      * @param <K1>          the key type of the {@link KGroupedTable}
      * @param <V1>          the value type of the {@link KGroupedTable}
+     *
+     * @return a {@link KGroupedTable} that containing the re-partitioned records (with ne of this {@link KTable}
      */
     <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, Serde<K1> keySerde, Serde<V1> valueSerde);
 
@@ -261,6 +293,8 @@ public interface KTable<K, V> {
      * @param selector      select the grouping key and value to be aggregated
      * @param <K1>          the key type of the {@link KGroupedTable}
      * @param <V1>          the value type of the {@link KGroupedTable}
+     *
+     * @return a {@link KGroupedTable} that containing the re-partitioned records (with ne of this {@link KTable}
      */
     <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector);
 

@@ -23,6 +23,24 @@ import java.util.Map;
 
 /**
  * The window specifications used for joins.
+ * <p>
+ * A {@link JoinWindows} instance defines a join over two stream on the same key and a maximum time difference.
+ * The time difference can either be positive, negative, or both. In SQL-style you would express this join as
+ * <pre>
+ *     SELECT * FROM stream1, stream2
+ *     WHERE
+ *       stream1.key = stream2.key
+ *       AND
+ *       stream2.ts - before <= stream1.ts <= stream2.ts + after
+ * </pre>
+ * There are three different window configuration supported:
+ * <ul>
+ *     <li>before = after = time-difference</li>
+ *     <li>before = 0 and after = time-difference</li>
+ *     <li>before = time-difference and after = 0</li>
+ * </ul>
+ * A join is symmetric in the sense, that a join specification on the first stream returns the same result record as
+ * a join specification on the second stream with flipped before and after values.
  */
 public class JoinWindows extends Windows<TimeWindow> {
 

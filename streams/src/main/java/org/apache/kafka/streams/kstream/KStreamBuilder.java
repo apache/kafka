@@ -47,6 +47,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * The default deserializers specified in the config are used.
      *
      * @param topics    the topic names; must contain at least one topic name
+     * @return a {@link KStream} for the specified topics
      */
     public <K, V> KStream<K, V> stream(String... topics) {
         return stream(null, null, topics);
@@ -60,6 +61,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param valSerde  value serde used to read this source {@link KStream},
      *                  if not specified the default serde defined in the configs will be used
      * @param topics    the topic names; must contain at least one topic name
+     * @return a {@link KStream} for the specified topics
      */
     public <K, V> KStream<K, V> stream(Serde<K> keySerde, Serde<V> valSerde, String... topics) {
         String name = newName(KStreamImpl.SOURCE_NAME);
@@ -74,6 +76,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * The default deserializers specified in the config are used.
      *
      * @param topic     the topic name; cannot be null
+     * @return a {@link KTable} for the specified topics
      */
     public <K, V> KTable<K, V> table(String topic) {
         return table(null, null, topic);
@@ -87,6 +90,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param valSerde   value serde used to send key-value pairs,
      *                   if not specified the default value serde defined in the configuration will be used
      * @param topic      the topic name; cannot be null
+     * @return a {@link KTable} for the specified topics
      */
     public <K, V> KTable<K, V> table(Serde<K> keySerde, Serde<V> valSerde, String topic) {
         String source = newName(KStreamImpl.SOURCE_NAME);
@@ -104,6 +108,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * Create a new instance of {@link KStream} by merging the given streams.
      *
      * @param streams   the instances of {@link KStream} to be merged
+     * @return a {@link KStream} containing all records of the given streams
      */
     public <K, V> KStream<K, V> merge(KStream<K, V>... streams) {
         return KStreamImpl.merge(this, streams);
@@ -114,6 +119,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * This function is only for internal usage.
      *
      * @param prefix    processor name prefix
+     * @return a new unique name
      */
     public String newName(String prefix) {
         return prefix + String.format("%010d", index.getAndIncrement());
