@@ -1,14 +1,14 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information regarding copyright ownership. The ASF licenses this file to You under
+ * the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may
+ * obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS"
+ * BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language
+ * governing permissions and limitations under the License.
  */
 package org.apache.kafka.clients.consumer;
 
@@ -45,6 +45,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -512,8 +513,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
         this(new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
-            keyDeserializer,
-            valueDeserializer);
+                keyDeserializer,
+                valueDeserializer);
     }
 
     /**
@@ -542,8 +543,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
         this(new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(properties, keyDeserializer, valueDeserializer)),
-             keyDeserializer,
-             valueDeserializer);
+                keyDeserializer,
+                valueDeserializer);
     }
 
     @SuppressWarnings("unchecked")
@@ -874,7 +875,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     fetcher.sendFetches(metadata.fetch());
                     client.quickPoll(false);
                     return this.interceptors == null
-                        ? new ConsumerRecords<>(records) : this.interceptors.onConsume(new ConsumerRecords<>(records));
+                            ? new ConsumerRecords<>(records) : this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
 
                 long elapsed = time.milliseconds() - start;
@@ -1060,6 +1061,19 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * @see KafkaConsumer#seekToBeginning(java.util.Collection)
+     */
+    @Deprecated
+    public void seekToBeginning(TopicPartition... partitions) {
+        acquire();
+        try {
+            seekToBeginning(Arrays.asList(partitions));
+        } finally {
+            release();
+        }
+    }
+
+    /**
      * Seek to the first offset for each of the given partitions. This function evaluates lazily, seeking to the
      * first offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
      * If no partition is provided, seek to the first offset for all of the currently assigned partitions.
@@ -1072,6 +1086,19 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 log.debug("Seeking to beginning of partition {}", tp);
                 subscriptions.needOffsetReset(tp, OffsetResetStrategy.EARLIEST);
             }
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * @see KafkaConsumer#seekToEnd(java.util.Collection)
+     */
+    @Deprecated
+    public void seekToEnd(TopicPartition... partitions) {
+        acquire();
+        try {
+            seekToEnd(Arrays.asList(partitions));
         } finally {
             release();
         }
@@ -1220,6 +1247,19 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * @see KafkaConsumer#pause(java.util.Collection)
+     */
+    @Deprecated
+    public void pause(TopicPartition... partitions) {
+        acquire();
+        try {
+            pause(Arrays.asList(partitions));
+        } finally {
+            release();
+        }
+    }
+
+    /**
      * Suspend fetching from the requested partitions. Future calls to {@link #poll(long)} will not return
      * any records from these partitions until they have been resumed using {@link #resume(Collection)}.
      * Note that this method does not affect partition subscription. In particular, it does not cause a group
@@ -1230,10 +1270,23 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void pause(Collection<TopicPartition> partitions) {
         acquire();
         try {
-            for (TopicPartition partition: partitions) {
+            for (TopicPartition partition : partitions) {
                 log.debug("Pausing partition {}", partition);
                 subscriptions.pause(partition);
             }
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * @see KafkaConsumer#resume(java.util.Collection)
+     */
+    @Deprecated
+    public void resume(TopicPartition... partitions) {
+        acquire();
+        try {
+            pause(Arrays.asList(partitions));
         } finally {
             release();
         }
@@ -1249,7 +1302,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void resume(Collection<TopicPartition> partitions) {
         acquire();
         try {
-            for (TopicPartition partition: partitions) {
+            for (TopicPartition partition : partitions) {
                 log.debug("Resuming partition {}", partition);
                 subscriptions.resume(partition);
             }
