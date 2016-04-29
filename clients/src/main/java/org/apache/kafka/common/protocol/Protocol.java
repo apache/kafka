@@ -31,7 +31,6 @@ import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.INT16;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
-import static org.apache.kafka.common.protocol.types.Type.INT8;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 
@@ -671,8 +670,7 @@ public class Protocol {
 
     public static final Schema STOP_REPLICA_REQUEST_V0 = new Schema(new Field("controller_id", INT32, "The controller id."),
                                                                     new Field("controller_epoch", INT32, "The controller epoch."),
-                                                                    new Field("delete_partitions",
-                                                                              INT8,
+                                                                    new Field("delete_partitions", BOOLEAN,
                                                                               "Boolean which indicates if replica's partitions must be deleted."),
                                                                     new Field("partitions",
                                                                               new ArrayOf(STOP_REPLICA_REQUEST_PARTITION_V0)));
