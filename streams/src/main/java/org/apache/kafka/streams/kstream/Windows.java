@@ -85,10 +85,6 @@ public abstract class Windows<W extends Window> {
         return this.maintainDurationMs;
     }
 
-    protected String newName(String prefix) {
-        return prefix + String.format("%010d", NAME_INDEX.getAndIncrement());
-    }
-
     /**
      * Creates all windows that contain the provided timestamp.
      *
