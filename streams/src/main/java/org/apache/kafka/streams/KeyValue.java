@@ -70,8 +70,8 @@ public class KeyValue<K, V> {
         if (other instanceof KeyValue) {
             KeyValue otherKV = (KeyValue) other;
 
-            return key == null ? otherKV.key == null : key.equals(otherKV.key)
-                    && value == null ? otherKV.value == null : value.equals(otherKV.value);
+            return (key == null ? otherKV.key == null : key.equals(otherKV.key))
+                    && (value == null ? otherKV.value == null : value.equals(otherKV.value));
         } else {
             return false;
         }
