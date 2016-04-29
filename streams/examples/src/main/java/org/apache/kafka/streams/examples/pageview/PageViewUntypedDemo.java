@@ -107,7 +107,7 @@ public class PageViewUntypedDemo {
                     public KeyValue<JsonNode, JsonNode> apply(Windowed<String> key, Long value) {
                         ObjectNode keyNode = JsonNodeFactory.instance.objectNode();
                         keyNode.put("window-start", key.window().start())
-                                .put("region", key.value());
+                                .put("region", key.key());
 
                         ObjectNode valueNode = JsonNodeFactory.instance.objectNode();
                         valueNode.put("count", value);
