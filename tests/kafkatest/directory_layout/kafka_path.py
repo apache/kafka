@@ -19,16 +19,21 @@ import importlib
 import os
 
 
-# TODO - describe how overriding can work
-"""This module contains tools for resolving the location of directories and scripts.
+"""This module serves a few purposes:
 
+First, it gathers information about path layout in a single place, and second, it
+makes the layout of the Kafka installation pluggable, so that users are not forced
+to use the layout assumed in the KafkaPathResolver class.
 
+To run system tests using your own path resolver, use for example:
+
+ducktape <TEST_PATH> --globals '{"kafka-path-resolver": "my.path.resolver.CustomResolverClass"}'
 """
 
-DEFAULT_SCRATCH_ROOT = "/mnt"
-DEFAULT_KAFKA_INSTALL_ROOT = "/opt"
+SCRATCH_ROOT = "/mnt"
+KAFKA_INSTALL_ROOT = "/opt"
 KAFKA_PATH_RESOLVER_KEY = "kafka-path-resolver"
-DEFAULT_KAFKA_PATH_RESOLVER = "kafkatest.directory_layout.kafka_path.KafkaSystemTestPathResolver"
+KAFKA_PATH_RESOLVER = "kafkatest.directory_layout.kafka_path.KafkaSystemTestPathResolver"
 
 # Variables for jar path resolution
 CORE_JAR_NAME = "core"
@@ -60,7 +65,7 @@ def create_path_resolver(context, project="kafka"):
     if KAFKA_PATH_RESOLVER_KEY in context.globals:
         resolver_fully_qualified_classname = context.globals[KAFKA_PATH_RESOLVER_KEY]
     else:
-        resolver_fully_qualified_classname = DEFAULT_KAFKA_PATH_RESOLVER
+        resolver_fully_qualified_classname = KAFKA_PATH_RESOLVER
 
     # Using the fully qualified classname, import the resolver class
     (module_name, resolver_class_name) = resolver_fully_qualified_classname.rsplit('.', 1)
@@ -107,7 +112,7 @@ class KafkaSystemTestPathResolver(object):
         if version is not None:
             home_dir += "-%s" % str(version)
 
-        return os.path.join(DEFAULT_KAFKA_INSTALL_ROOT, home_dir)
+        return os.path.join(KAFKA_INSTALL_ROOT, home_dir)
 
     def bin(self, node_or_version=TRUNK):
         version = self._version(node_or_version)
@@ -122,7 +127,7 @@ class KafkaSystemTestPathResolver(object):
         return os.path.join(self.home(version), JARS[str(version)][jar_name])
 
     def scratch_space(self, service_instance):
-        return os.path.join(DEFAULT_SCRATCH_ROOT, service_instance.name)
+        return os.path.join(SCRATCH_ROOT, service_instance.service_id)
 
     def _version(self, node_or_version):
         if isinstance(node_or_version, KafkaVersion):
