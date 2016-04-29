@@ -552,7 +552,6 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         log.error("Ignoring connector tasks configuration commit for connector " + connectorName + " because it is in the wrong format: " + value.value());
                         return;
                     }
-
                     Map<ConnectorTaskId, Map<String, String>> deferred = deferredTaskUpdates.get(connectorName);
 
                     int newTaskCount = intValue(((Map<String, Object>) value.value()).get("tasks"));
