@@ -63,22 +63,22 @@ public class KeyValue<K, V> {
     }
 
     @Override
-    public boolean equals(Object other) {
-        if (this == other)
+    public boolean equals(Object obj) {
+        if (this == obj)
             return true;
 
-        if (other instanceof KeyValue) {
-            KeyValue otherKV = (KeyValue) other;
-
-            return key == null ? otherKV.key == null : key.equals(otherKV.key)
-                    && value == null ? otherKV.value == null : value.equals(otherKV.value);
-        } else {
+        if (!(obj instanceof KeyValue)) {
             return false;
         }
+
+        KeyValue other = (KeyValue) obj;
+        return (this.key == null ? other.key == null : this.key.equals(other.key))
+                && (this.value == null ? other.value == null : this.value.equals(other.value));
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(key, value);
     }
+
 }
