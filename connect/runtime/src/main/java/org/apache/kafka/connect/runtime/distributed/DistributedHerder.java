@@ -50,7 +50,6 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -1064,13 +1063,4 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    private static Map<Integer, Map<String, String>> taskConfigListAsMap(List<Map<String, String>> configs) {
-        int index = 0;
-        Map<Integer, Map<String, String>> result = new TreeMap<>();
-        for (Map<String, String> taskConfigMap: configs) {
-            result.put(index, taskConfigMap);
-            index++;
-        }
-        return result;
-    }
 }
