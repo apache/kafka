@@ -123,7 +123,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         self.from_beginning = from_beginning
         self.message_validator = message_validator
         self.messages_consumed = {idx: [] for idx in range(1, num_nodes + 1)}
-        self.node_indexes_clean_shutdown = set()
+        self.clean_shutdown_nodes = set()
         self.client_id = client_id
         self.print_key = print_key
         self.log_level = "TRACE"
@@ -186,7 +186,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         if node.version > LATEST_0_9:
             cmd+=" --formatter kafka.tools.LoggingMessageFormatter"
 
-        cmd += " --enable-lifecycle-logging"
+        cmd += " --enable-systest-events"
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args
         return cmd
 
@@ -229,9 +229,9 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
             for line in itertools.chain([first_line], consumer_output):
                 msg = line.strip()
                 if msg == "shutdown_complete":
-                    if idx in self.node_indexes_clean_shutdown:
+                    if node in self.clean_shutdown_nodes:
                         raise Exception("Unexpected shutdown event from consumer, already shutdown. Consumer index: %d" % idx)
-                    self.node_indexes_clean_shutdown.add(idx)
+                    self.clean_shutdown_nodes.add(node)
                 else:
                     if self.message_validator is not None:
                         msg = self.message_validator(msg)
