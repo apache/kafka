@@ -152,7 +152,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      * @param topicToTaskIds Map that contains the topic names to be created
      * @param compactTopic If true, the topic should be a compacted topic. This is used for
      *                     change log topics usually.
-     * @param outPartitionInfo If true, compute and return all partitions created
      * @param postPartitionPhase If true, the computation for calculating the number of partitions
      *                           is slightly different. Set to true after the initial topic-to-partition
      *                           assignment.
@@ -160,7 +159,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      */
     private Map<TopicPartition, PartitionInfo> prepareTopic(Map<String, Set<TaskId>> topicToTaskIds,
                                                             boolean compactTopic,
-                                                            boolean outPartitionInfo,
                                                             boolean postPartitionPhase) {
         Map<TopicPartition, PartitionInfo> partitionInfos = new HashMap<>();
         log.debug("Starting to validate internal topics in partition assignor.");
@@ -191,10 +189,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     partitions = streamThread.restoreConsumer.partitionsFor(topic);
                 } while (partitions == null || partitions.size() != numPartitions);
 
-                if (outPartitionInfo) {
-                    for (PartitionInfo partition : partitions)
-                        partitionInfos.put(new TopicPartition(partition.topic(), partition.partition()), partition);
-                }
+                for (PartitionInfo partition : partitions)
+                    partitionInfos.put(new TopicPartition(partition.topic(), partition.partition()), partition);
             } else {
                 List<PartitionInfo> partitions = streamThread.restoreConsumer.partitionsFor(topic);
                 if (partitions == null) {
@@ -289,7 +285,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
 
-        Map<TopicPartition, PartitionInfo> internalPartitionInfos = prepareTopic(internalSourceTopicToTaskIds, false, true, false);
+        Map<TopicPartition, PartitionInfo> internalPartitionInfos = prepareTopic(internalSourceTopicToTaskIds, false, false);
         internalSourceTopicToTaskIds.clear();
 
         Cluster metadataWithInternalTopics = metadata;
@@ -385,9 +381,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         // if ZK is specified, validate the internal topics again
-        prepareTopic(internalSourceTopicToTaskIds, false /* compactTopic */, false, true);
+        prepareTopic(internalSourceTopicToTaskIds, false /* compactTopic */, true);
         // change log topics should be compacted
-        prepareTopic(stateChangelogTopicToTaskIds, true /* compactTopic */, false, true);
+        prepareTopic(stateChangelogTopicToTaskIds, true /* compactTopic */, true);
 
         return assignment;
     }
