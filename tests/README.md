@@ -133,3 +133,19 @@ the test driver machine.
         $ ducktape kafkatest/tests
 
 * To halt your workers without destroying persistent state, run `vagrant halt`. Run `vagrant destroy -f` to destroy all traces of your workers.
+
+Unit Tests
+----------
+The system tests have unit tests! The various services in the python `kafkatest` module are reasonably complex, and intended to be reusable. Hence we have unit tests
+for the system service classes.
+
+Where are the unit tests?
+* Under kafkatest_unit_tests
+
+How do I run the unit tests?
+* python setup.py test
+
+How can I add a unit test?
+* Follow the naming conventions - module name starts with "check", class name begins with "Check", test method name begins with "check"
+* These naming conventions are defined in "setup.cfg". We use "check" to distinguish unit tests from system tests, which use "test" in the various names.
+
