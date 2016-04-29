@@ -1,0 +1,128 @@
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath 'org.ajoberstar:gradle-git:1.4.2'
+    classpath 'com.github.siom79.japicmp:japicmp:0.7.2'
+  }
+}
+
+import org.ajoberstar.grgit.Grgit
+import org.apache.tools.ant.DirectoryScanner
+import io.airlift.airline.SingleCommand;
+
+// Parameters
+def defaultOldRef = "trunk"
+def oldRef = project.hasProperty('oldRef') ? project.oldRef : defaultOldRef
+
+def defaultNewRef = "HEAD"
+def newRef = project.hasProperty('newRef') ? project.newRef : defaultNewRef
+
+// Constants
+def includes = [
+  "org.apache.kafka.common.*",
+  "org.apache.kafka.clients.*",
+  "org.apache.kafka.connect.*",
+]
+def excludes = [
+  "org.apache.kafka.common.internals.*",
+  "org.apache.kafka.clients.consumer.internals.*",
+  "org.apache.kafka.clients.producer.internals.*",
+  "org.apache.kafka.clients.common.internals.*",
+]
+def oldWorkspace = "$buildDir/tmp/compatibility/old"
+def newWorkspace = "$buildDir/tmp/compatibility/new"
+def reportDir = "$buildDir/reports/compatibility"
+def reportFile = "$reportDir/compatibilityReport.html"
+
+def prepareWorkspace(name, gitRef, workspace) {
+  def rootRepo = Grgit.open(dir: rootProject.rootDir)
+  def repoExcludes = new ArrayList<String>(rootRepo.clean(ignore: false, directories: true, dryRun: true))
+
+  // Setup a clean workspace
+  delete workspace
+
+  // Hack to remove Ant default excludes for copy. (Reset after)
+  // See https://issues.gradle.org/browse/GRADLE-1883
+  DirectoryScanner.defaultExcludes.each { DirectoryScanner.removeDefaultExclude it } // Reset at the bottom
+  DirectoryScanner.addDefaultExclude 'something has to be in here or everything gets excluded'
+
+  copy {
+    from rootDir
+    into workspace
+    excludes = repoExcludes
+  }
+
+  // See Hack comment above
+  DirectoryScanner.resetDefaultExcludes()
+
+  // Clean up and checkout the needed branch
+  def repo = Grgit.open(dir: workspace)
+  // Add and commit changes to support comparing un-committed work
+  repo.add(patterns: ['*'], update: true)
+  repo.commit(message: 'compatibility-check commit', all: true)
+  // Switch to the correct ref and make sure the branch is clean
+  repo.checkout(branch: 'compatibility-check', startPoint: gitRef, createBranch: true, orphan: true)
+  repo.clean(ignore: false, directories: true)
+
+  // Build the project Artifacts
+  tasks.create(name: "${name}Build", type: GradleBuild) {
+    dir = workspace
+    tasks = ['clean','jar']
+  }
+  tasks."${name}Build".execute()
+}
+
+def collectArtifactJars(workspace) {
+  return new FileNameFinder().getFileNames(workspace,
+    // Includes
+    '**/build/libs/kafka-*.jar',
+    // Excludes
+    '**/build/libs/*-javadoc.jar **/build/libs/*-sources.jar **/build/libs/*-test.jar ')
+}
+
+def collectClasspathJars(workspace) {
+  return new FileNameFinder().getFileNames(workspace,
+    // Includes
+    '**/build/dependent-libs/*.jar')
+}
+
+task checkApiCompatibility() {
+  doLast {
+    // Prepare Workspaces
+    prepareWorkspace("old", oldRef, oldWorkspace)
+    prepareWorkspace("new", newRef, newWorkspace)
+
+    // Setup the report file
+    new File(reportDir).mkdirs()
+    new File(reportFile).createNewFile()
+
+    // Artifacts and Classpaths
+    def oldArtifacts = collectArtifactJars(oldWorkspace)
+    def newArtifacts = collectArtifactJars(newWorkspace)
+    // TODO: Add classpath after we centralize it
+//    def oldClasspath = collectClasspathJars(oldWorkspace)
+//    def newClasspath = collectClasspathJars(newWorkspace)
+
+    // Build check tool arguments
+    String[] args = [
+      "--old", oldArtifacts.join(";"),
+//      "--old-classpath", oldClasspath.join(":"),
+      "--new", newArtifacts.join(";"),
+//      "--new-classpath", newClasspath.join(":"),
+      "--include", includes.join(";"),
+      "--exclude", excludes.join(";"),
+      "--only-modified",
+//      "--only-incompatible",
+      "-a", "protected",
+      "--html-file", reportFile
+    ]
+
+    // Run the check tool
+    SingleCommand<japicmp.cli.JApiCli.Compare> singleCommand = SingleCommand.singleCommand(japicmp.cli.JApiCli.Compare.class);
+    japicmp.cli.JApiCli.Compare cmd = singleCommand.parse(args);
+    cmd.run();
+    logger.info("API Compatibility port available in ${new File(reportFile).toURI()}")
+  }
+}

@@ -121,6 +121,8 @@ ext {
 }
 
 apply from: file('wrapper.gradle')
+apply from: "$rootDir/gradle/compatibility.gradle"
+
 
 if (file('.git').exists()) {
   apply from: file('gradle/rat.gradle')

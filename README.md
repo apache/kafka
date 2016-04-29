@@ -61,6 +61,14 @@ See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugi
 Generate coverage reports for the whole project:
 
     ./gradlew reportCoverage
+    
+### Generating an API compatibility report between trunk and your local branch ###
+*Note that the branches need to be local*
+    ./gradlew checkApiCompatibility    
+    
+### Generating an API compatibility report between branches or commits  ###
+*Note that the branches need to be local*
+     ./gradlew checkApiCompatibility -PoldRef=0.9.0 -PnewRef=trunk
 
 Generate coverage for a single module, i.e.: 
 
