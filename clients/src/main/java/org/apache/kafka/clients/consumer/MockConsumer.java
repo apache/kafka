@@ -268,11 +268,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
         ensureNotClosed();
-        List<PartitionInfo> parts = this.partitions.get(topic);
-        if (parts == null)
-            return Collections.emptyList();
-        else
-            return parts;
+        return this.partitions.get(topic);
     }
 
     @Override
