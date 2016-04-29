@@ -117,6 +117,7 @@ public class RestServerTest {
             .header("Access-Control-Request-Method", method)
             .options();
         assertEquals(404, response.getStatus());
+        assertEquals(expectedHeader, response.getHeaderString("Access-Control-Allow-Origin"));
         assertEquals(method, response.getHeaderString("Access-Control-Allow-Methods"));
         PowerMock.verifyAll();
     }

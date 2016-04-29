@@ -111,8 +111,8 @@ public class WorkerConfig extends AbstractConfig {
 
     public static final String ACCESS_CONTROL_ALLOW_METHODS_CONFIG = "access.control.allow.methods";
     protected static final String ACCESS_CONTROL_ALLOW_METHODS_DOC =
-        "Set value to Jetty Access-Control-Allow-Origin header for the specified methods. "
-        + "The default value of the Access-Control-Allow-Origin header allows cross origin requests for GET, POST and HEAD methods.";
+        "Sets the methods supported for cross origin requests by setting the Access-Control-Allow-Methods header. "
+        + "The default value of the Access-Control-Allow-Methods header allows cross origin requests for GET, POST and HEAD.";
     protected static final String ACCESS_CONTROL_ALLOW_METHODS_DEFAULT = "";
 
     /**
