@@ -26,6 +26,7 @@ public class KeyValueTest {
 
     private KeyValue<String, Long> kv1a = new KeyValue<>("key1", 1L);
     private KeyValue<String, Long> kv1b = new KeyValue<>("key1", 1L);
+    private KeyValue<String, Long> kv1c = new KeyValue<>("key1", 2L);
     private KeyValue<String, Long> kv2 = new KeyValue<>("key2", 2L);
     private KeyValue<String, Long> kv3 = new KeyValue<>("key3", 3L);
 
@@ -34,11 +35,15 @@ public class KeyValueTest {
         assertTrue(kv1a.equals(kv1a));
         assertTrue(kv1a.equals(kv1b));
         assertTrue(kv1b.equals(kv1a));
+        assertFalse(kv1a.equals(kv1c));
+        assertFalse(kv1c.equals(kv2));
         assertFalse(kv1a.equals(kv2));
         assertFalse(kv1a.equals(kv3));
         assertFalse(kv2.equals(kv3));
         assertFalse(kv1a.equals(null));
     }
+
+
 
     @Test
     public void testHashcode() {
