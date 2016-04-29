@@ -26,13 +26,8 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
-import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader, ResponseHeader}
-import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.junit.Before
-import org.junit.Assert._
-
-import scala.collection.JavaConversions._
 
 abstract class BaseRequestTest extends KafkaServerTestHarness {
   private var correlationId = 0
@@ -115,16 +110,5 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     val responseBuffer = ByteBuffer.wrap(response)
     ResponseHeader.parse(responseBuffer) // Parse the header to ensure its valid and move the buffer forward
     responseBuffer
-  }
-
-  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse) {
-    assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.", ApiKeys.values.length, apiVersionsResponse.apiVersions.size)
-    for (expectedApiVersion: ApiVersion <- ApiVersionsResponse.apiVersionsResponse.apiVersions) {
-      val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
-      assertNotNull(s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.", actualApiVersion)
-      assertEquals("API key must be supported by the broker.", expectedApiVersion.apiKey, actualApiVersion.apiKey)
-      assertEquals(s"Received unexpected min version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.minVersion, actualApiVersion.minVersion)
-      assertEquals(s"Received unexpected max version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.maxVersion, actualApiVersion.maxVersion)
-    }
   }
 }

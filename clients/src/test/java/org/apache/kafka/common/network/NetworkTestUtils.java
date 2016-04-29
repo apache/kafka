@@ -69,6 +69,7 @@ public class NetworkTestUtils {
         while (!selector.isChannelReady(node) && secondsLeft-- > 0) {
             selector.poll(1000L);
         }
+        assertTrue(selector.isChannelReady(node));
     }
 
     public static void waitForChannelClose(Selector selector, String node) throws IOException {

@@ -462,7 +462,17 @@ public class SaslAuthenticatorTest {
 
         // Create non-SASL connection to manually authenticate after ApiVersionsRequest
         String node = "1";
-        SecurityProtocol clientProtocol = securityProtocol == SecurityProtocol.SASL_PLAINTEXT ? SecurityProtocol.PLAINTEXT : SecurityProtocol.SSL;
+        SecurityProtocol clientProtocol;
+        switch (securityProtocol) {
+            case SASL_PLAINTEXT:
+                clientProtocol = SecurityProtocol.PLAINTEXT;
+                break;
+            case SASL_SSL:
+                clientProtocol = SecurityProtocol.SSL;
+                break;
+            default:
+                throw new IllegalArgumentException("Server protocol " + securityProtocol + " is not SASL");
+        }
         createClientConnection(clientProtocol, node);
         NetworkTestUtils.waitForChannelReady(selector, node);
 

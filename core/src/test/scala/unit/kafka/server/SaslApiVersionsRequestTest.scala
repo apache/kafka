@@ -24,7 +24,7 @@ import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse
 import org.apache.kafka.common.requests.SaslHandshakeRequest
 import org.apache.kafka.common.requests.SaslHandshakeResponse
 import org.apache.kafka.common.protocol.Errors
-import org.junit.{Before, Test}
+import org.junit.Test
 import org.junit.Assert._
 import kafka.api.SaslTestHarness
 
@@ -36,17 +36,12 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
   override protected val zkSaslEnabled = false
   override def numBrokers = 1
 
-  @Before
-  override def setUp() {
-    super.setUp()
-  }
-
   @Test
   def testApiVersionsRequestBeforeSaslHandshakeRequest() {
     val plaintextSocket = connect(protocol = securityProtocol)
     try {
       val apiVersionsResponse = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest, 0)
-      validateApiVersionsResponse(apiVersionsResponse)
+      ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
       sendSaslHandshakeRequestValidateResponse(plaintextSocket)
     } finally {
       plaintextSocket.close()
@@ -56,12 +51,16 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
   @Test
   def testApiVersionsRequestAfterSaslHandshakeRequest() {
     val plaintextSocket = connect(protocol = securityProtocol)
-    sendSaslHandshakeRequestValidateResponse(plaintextSocket)
     try {
-      sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest, 0)
-      fail("Versions Request during Sasl handshake did not fail")
-    } catch {
-      case ioe: IOException => // expected exception
+      sendSaslHandshakeRequestValidateResponse(plaintextSocket)
+      try {
+        sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest, 0)
+        fail("Versions Request during Sasl handshake did not fail")
+      } catch {
+        case ioe: IOException => // expected exception
+      }
+    } finally {
+      plaintextSocket.close()
     }
   }
 
