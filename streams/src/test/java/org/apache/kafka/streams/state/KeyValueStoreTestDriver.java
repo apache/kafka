@@ -198,19 +198,8 @@ public class KeyValueStoreTestDriver<K, V> {
             public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
                 // for byte arrays we need to wrap it for comparison
 
-                K key;
-                if (record.key() instanceof byte[]) {
-                    key = serdes.keyFrom((byte[]) record.key());
-                } else {
-                    key = (K) record.key();
-                }
-
-                V value;
-                if (record.key() instanceof byte[]) {
-                    value = serdes.valueFrom((byte[]) record.value());
-                } else {
-                    value = (V) record.value();
-                }
+                K key = serdes.keyFrom(keySerializer.serialize(record.topic(), record.key()));
+                V value = serdes.valueFrom(valueSerializer.serialize(record.topic(), record.value()));
 
                 recordFlushed(key, value);
             }

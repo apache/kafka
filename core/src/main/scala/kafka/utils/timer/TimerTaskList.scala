@@ -29,7 +29,7 @@ private[timer] class TimerTaskList(taskCounter: AtomicInteger) extends Delayed {
   // TimerTaskList forms a doubly linked cyclic list using a dummy root entry
   // root.next points to the head
   // root.prev points to the tail
-  private[this] val root = new TimerTaskEntry(null)
+  private[this] val root = new TimerTaskEntry(null, -1)
   root.next = root
   root.prev = root
 
@@ -131,7 +131,7 @@ private[timer] class TimerTaskList(taskCounter: AtomicInteger) extends Delayed {
 
 }
 
-private[timer] class TimerTaskEntry(val timerTask: TimerTask) {
+private[timer] class TimerTaskEntry(val timerTask: TimerTask, val expirationMs: Long) extends Ordered[TimerTaskEntry] {
 
   @volatile
   var list: TimerTaskList = null
@@ -157,5 +157,8 @@ private[timer] class TimerTaskEntry(val timerTask: TimerTask) {
     }
   }
 
+  override def compare(that: TimerTaskEntry): Int = {
+    this.expirationMs compare that.expirationMs
+  }
 }
 

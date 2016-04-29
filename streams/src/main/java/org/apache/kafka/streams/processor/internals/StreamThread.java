@@ -239,6 +239,8 @@ public class StreamThread extends Thread {
 
     /**
      * Execute the stream processors
+     * @throws KafkaException for any Kafka-related exceptions
+     * @throws Exception for any other non-Kafka exceptions
      */
     @Override
     public void run() {
@@ -284,7 +286,7 @@ public class StreamThread extends Thread {
         removeStandbyTasks();
 
         // We need to first close the underlying clients before closing the state
-        // manager, for example we need to make sure producer's message sends
+        // manager, for example we need to make sure producer's record sends
         // have all been acked before the state manager records
         // changelog sent offsets
         try {
@@ -517,6 +519,7 @@ public class StreamThread extends Thread {
                                 if (directoryLock != null) {
                                     try {
                                         directoryLock.release();
+                                        directoryLock.channel().close();
                                     } catch (IOException e) {
                                         log.error("Failed to release the state directory lock");
                                     }
@@ -760,6 +763,9 @@ public class StreamThread extends Thread {
             sensor.record((endNs - startNs) / 1000000, endNs);
         }
 
+        /**
+         * @throws IllegalArgumentException if tags is not constructed in key-value pairs
+         */
         @Override
         public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
             // extract the additional tags if there are any

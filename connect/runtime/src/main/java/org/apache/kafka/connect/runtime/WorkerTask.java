@@ -21,33 +21,41 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Handles processing for an individual task. This interface only provides the basic methods
  * used by {@link Worker} to manage the tasks. Implementations combine a user-specified Task with
  * Kafka to create a data flow.
+ *
+ * Note on locking: since the task runs in its own thread, special care must be taken to ensure
+ * that state transitions are reported correctly, in particular since some state transitions are
+ * asynchronous (e.g. pause/resume). For example, changing the state to paused could cause a race
+ * if the task fails at the same time. To protect from these cases, we synchronize status updates
+ * using the WorkerTask's monitor.
  */
 abstract class WorkerTask implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(WorkerTask.class);
 
     protected final ConnectorTaskId id;
-    private final AtomicBoolean stopping;
-    private final AtomicBoolean running;
-    private final AtomicBoolean cancelled;
+    private final AtomicBoolean stopping;   // indicates whether the Worker has asked the task to stop
+    private final AtomicBoolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
     private final CountDownLatch shutdownLatch;
-    private final TaskStatus.Listener lifecycleListener;
+    private final TaskStatus.Listener statusListener;
+    private final AtomicReference<TargetState> targetState;
 
-    public WorkerTask(ConnectorTaskId id, TaskStatus.Listener lifecycleListener) {
+    public WorkerTask(ConnectorTaskId id,
+                      TaskStatus.Listener statusListener,
+                      TargetState initialState) {
         this.id = id;
         this.stopping = new AtomicBoolean(false);
-        this.running = new AtomicBoolean(false);
         this.cancelled = new AtomicBoolean(false);
         this.shutdownLatch = new CountDownLatch(1);
-        this.lifecycleListener = lifecycleListener;
+        this.statusListener = statusListener;
+        this.targetState = new AtomicReference<>(initialState);
     }
 
     public ConnectorTaskId id() {
@@ -58,14 +66,24 @@ abstract class WorkerTask implements Runnable {
      * Initialize the task for execution.
      * @param props initial configuration
      */
-    public abstract void initialize(Map<String, String> props);
+    public abstract void initialize(TaskConfig taskConfig);
+
+
+    private void triggerStop() {
+        synchronized (this) {
+            this.stopping.set(true);
+
+            // wakeup any threads that are waiting for unpause
+            this.notifyAll();
+        }
+    }
 
     /**
      * Stop this task from processing messages. This method does not block, it only triggers
      * shutdown. Use #{@link #awaitStop} to block until completion.
      */
     public void stop() {
-        this.stopping.set(true);
+        triggerStop();
     }
 
     /**
@@ -83,9 +101,6 @@ abstract class WorkerTask implements Runnable {
      * @return true if successful, false if the timeout was reached
      */
     public boolean awaitStop(long timeoutMs) {
-        if (!running.get())
-            return true;
-
         try {
             return shutdownLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
@@ -101,10 +116,6 @@ abstract class WorkerTask implements Runnable {
         return stopping.get();
     }
 
-    protected boolean isStopped() {
-        return !running.get();
-    }
-
     private void doClose() {
         try {
             close();
@@ -115,14 +126,17 @@ abstract class WorkerTask implements Runnable {
     }
 
     private void doRun() {
-        if (!this.running.compareAndSet(false, true))
-            throw new IllegalStateException("The task cannot be started while still running");
-
         try {
-            if (stopping.get())
-                return;
+            synchronized (this) {
+                if (stopping.get())
+                    return;
 
-            lifecycleListener.onStartup(id);
+                if (targetState.get() == TargetState.PAUSED)
+                    statusListener.onPause(id);
+                else
+                    statusListener.onStartup(id);
+            }
+
             execute();
         } catch (Throwable t) {
             log.error("Task {} threw an uncaught and unrecoverable exception", id, t);
@@ -133,21 +147,79 @@ abstract class WorkerTask implements Runnable {
         }
     }
 
+    private void onShutdown() {
+        synchronized (this) {
+            triggerStop();
+
+            // if we were cancelled, skip the status update since the task may have already been
+            // started somewhere else
+            if (!cancelled.get())
+                statusListener.onShutdown(id);
+        }
+    }
+
+    protected void onFailure(Throwable t) {
+        synchronized (this) {
+            triggerStop();
+
+            // if we were cancelled, skip the status update since the task may have already been
+            // started somewhere else
+            if (!cancelled.get())
+                statusListener.onFailure(id, t);
+        }
+    }
+
     @Override
     public void run() {
         try {
             doRun();
-            if (!cancelled.get())
-                lifecycleListener.onShutdown(id);
+            onShutdown();
         } catch (Throwable t) {
-            if (!cancelled.get())
-                lifecycleListener.onFailure(id, t);
+            onFailure(t);
 
             if (t instanceof Error)
                 throw t;
         } finally {
-            running.set(false);
             shutdownLatch.countDown();
+        }
+    }
+
+    public boolean shouldPause() {
+        return this.targetState.get() == TargetState.PAUSED;
+    }
+
+    /**
+     * Await task resumption.
+     * @return true if the task's target state is not paused, false if the task is shutdown before resumption
+     * @throws InterruptedException
+     */
+    protected boolean awaitUnpause() throws InterruptedException {
+        synchronized (this) {
+            while (targetState.get() == TargetState.PAUSED) {
+                if (stopping.get())
+                    return false;
+                this.wait();
+            }
+            return true;
+        }
+    }
+
+    public void transitionTo(TargetState state) {
+        synchronized (this) {
+            // ignore the state change if we are stopping
+            if (stopping.get())
+                return;
+
+            TargetState oldState = this.targetState.getAndSet(state);
+            if (state != oldState) {
+                if (state == TargetState.PAUSED) {
+                    statusListener.onPause(id);
+                } else if (state == TargetState.STARTED) {
+                    statusListener.onResume(id);
+                    this.notifyAll();
+                } else
+                    throw new IllegalArgumentException("Unhandled target state " + state);
+            }
         }
     }
 

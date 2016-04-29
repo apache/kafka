@@ -17,31 +17,14 @@
 
 package org.apache.kafka.connect.runtime.distributed;
 
-import org.apache.kafka.connect.errors.ConnectException;
-
 /**
  * Indicates an operation was not permitted because it can only be performed on the leader and this worker is not currently
  * the leader.
  */
-public class NotLeaderException extends ConnectException {
-    private final String leaderUrl;
+public class NotLeaderException extends RequestTargetException {
 
     public NotLeaderException(String msg, String leaderUrl) {
-        super(msg);
-        this.leaderUrl = leaderUrl;
+        super(msg, leaderUrl);
     }
 
-    public NotLeaderException(String msg, String leaderUrl, Throwable throwable) {
-        super(msg, throwable);
-        this.leaderUrl = leaderUrl;
-    }
-
-    public NotLeaderException(String leaderUrl, Throwable throwable) {
-        super(throwable);
-        this.leaderUrl = leaderUrl;
-    }
-
-    public String leaderUrl() {
-        return leaderUrl;
-    }
 }

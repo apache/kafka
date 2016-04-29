@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.junit.After;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -39,11 +40,19 @@ public class KeyValuePrinterProcessorTest {
 
     private String topicName = "topic";
     private Serde<String> stringSerde = Serdes.String();
-    private Serde<byte[]> bytesSerde = Serdes.ByteArray();
     private ByteArrayOutputStream baos = new ByteArrayOutputStream();
     private KStreamBuilder builder = new KStreamBuilder();
     private PrintStream printStream = new PrintStream(baos);
 
+    private KStreamTestDriver driver = null;
+
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
+    }
 
     @Test
     public void testPrintKeyValueDefaultSerde() throws Exception {
@@ -57,7 +66,7 @@ public class KeyValuePrinterProcessorTest {
         KStream<String, String> stream = builder.stream(stringSerde, stringSerde, topicName);
         stream.process(keyValuePrinter);
 
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder);
         for (int i = 0; i < suppliedKeys.length; i++) {
             driver.process(topicName, suppliedKeys[i], suppliedValues[i]);
         }
@@ -79,7 +88,7 @@ public class KeyValuePrinterProcessorTest {
 
         stream.process(keyValuePrinter);
 
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder);
 
         String suppliedKey = null;
         byte[] suppliedValue = "{\"name\":\"print\", \"label\":\"test\"}".getBytes(Charset.forName("UTF-8"));

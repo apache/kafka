@@ -31,7 +31,7 @@ public class ResponseSend extends NetworkSend {
         this(destination, header, response.toStruct());
     }
 
-    private static ByteBuffer serialize(ResponseHeader header, Struct body) {
+    public static ByteBuffer serialize(ResponseHeader header, Struct body) {
         ByteBuffer buffer = ByteBuffer.allocate(header.sizeOf() + body.sizeOf());
         header.writeTo(buffer);
         body.writeTo(buffer);

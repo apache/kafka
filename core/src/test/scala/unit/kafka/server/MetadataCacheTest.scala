@@ -158,7 +158,8 @@ class MetadataCacheTest {
     val updateMetadataRequest = new UpdateMetadataRequest(controllerId, controllerEpoch, partitionStates.asJava, brokers.asJava)
     cache.updateCache(15, updateMetadataRequest)
 
-    val topicMetadatas = cache.getTopicMetadata(Set(topic), SecurityProtocol.PLAINTEXT)
+    // Validate errorUnavailableEndpoints = false
+    val topicMetadatas = cache.getTopicMetadata(Set(topic), SecurityProtocol.PLAINTEXT, errorUnavailableEndpoints = false)
     assertEquals(1, topicMetadatas.size)
 
     val topicMetadata = topicMetadatas.head
@@ -169,9 +170,25 @@ class MetadataCacheTest {
 
     val partitionMetadata = partitionMetadatas.get(0)
     assertEquals(0, partitionMetadata.partition)
-    assertEquals(Errors.REPLICA_NOT_AVAILABLE, partitionMetadata.error)
-    assertEquals(Set(0), partitionMetadata.replicas.asScala.map(_.id).toSet)
+    assertEquals(Errors.NONE, partitionMetadata.error)
+    assertEquals(Set(0, 1), partitionMetadata.replicas.asScala.map(_.id).toSet)
     assertEquals(Set(0), partitionMetadata.isr.asScala.map(_.id).toSet)
+
+    // Validate errorUnavailableEndpoints = true
+    val topicMetadatasWithError = cache.getTopicMetadata(Set(topic), SecurityProtocol.PLAINTEXT, errorUnavailableEndpoints = true)
+    assertEquals(1, topicMetadatasWithError.size)
+
+    val topicMetadataWithError = topicMetadatasWithError.head
+    assertEquals(Errors.NONE, topicMetadataWithError.error)
+
+    val partitionMetadatasWithError = topicMetadataWithError.partitionMetadata
+    assertEquals(1, partitionMetadatasWithError.size)
+
+    val partitionMetadataWithError = partitionMetadatasWithError.get(0)
+    assertEquals(0, partitionMetadataWithError.partition)
+    assertEquals(Errors.REPLICA_NOT_AVAILABLE, partitionMetadataWithError.error)
+    assertEquals(Set(0), partitionMetadataWithError.replicas.asScala.map(_.id).toSet)
+    assertEquals(Set(0), partitionMetadataWithError.isr.asScala.map(_.id).toSet)
   }
 
   @Test
@@ -197,7 +214,8 @@ class MetadataCacheTest {
     val updateMetadataRequest = new UpdateMetadataRequest(controllerId, controllerEpoch, partitionStates.asJava, brokers.asJava)
     cache.updateCache(15, updateMetadataRequest)
 
-    val topicMetadatas = cache.getTopicMetadata(Set(topic), SecurityProtocol.PLAINTEXT)
+    // Validate errorUnavailableEndpoints = false
+    val topicMetadatas = cache.getTopicMetadata(Set(topic), SecurityProtocol.PLAINTEXT, errorUnavailableEndpoints = false)
     assertEquals(1, topicMetadatas.size)
 
     val topicMetadata = topicMetadatas.head
@@ -208,9 +226,25 @@ class MetadataCacheTest {
 
     val partitionMetadata = partitionMetadatas.get(0)
     assertEquals(0, partitionMetadata.partition)
-    assertEquals(Errors.REPLICA_NOT_AVAILABLE, partitionMetadata.error)
+    assertEquals(Errors.NONE, partitionMetadata.error)
     assertEquals(Set(0), partitionMetadata.replicas.asScala.map(_.id).toSet)
-    assertEquals(Set(0), partitionMetadata.isr.asScala.map(_.id).toSet)
+    assertEquals(Set(0, 1), partitionMetadata.isr.asScala.map(_.id).toSet)
+
+    // Validate errorUnavailableEndpoints = true
+    val topicMetadatasWithError = cache.getTopicMetadata(Set(topic), SecurityProtocol.PLAINTEXT, errorUnavailableEndpoints = true)
+    assertEquals(1, topicMetadatasWithError.size)
+
+    val topicMetadataWithError = topicMetadatasWithError.head
+    assertEquals(Errors.NONE, topicMetadataWithError.error)
+
+    val partitionMetadatasWithError = topicMetadataWithError.partitionMetadata
+    assertEquals(1, partitionMetadatasWithError.size)
+
+    val partitionMetadataWithError = partitionMetadatasWithError.get(0)
+    assertEquals(0, partitionMetadataWithError.partition)
+    assertEquals(Errors.REPLICA_NOT_AVAILABLE, partitionMetadataWithError.error)
+    assertEquals(Set(0), partitionMetadataWithError.replicas.asScala.map(_.id).toSet)
+    assertEquals(Set(0), partitionMetadataWithError.isr.asScala.map(_.id).toSet)
   }
 
   @Test

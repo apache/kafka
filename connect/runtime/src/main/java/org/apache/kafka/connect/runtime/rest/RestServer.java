@@ -117,7 +117,11 @@ public class RestServer {
         if (allowedOrigins != null && !allowedOrigins.trim().isEmpty()) {
             FilterHolder filterHolder = new FilterHolder(new CrossOriginFilter());
             filterHolder.setName("cross-origin");
-            filterHolder.setInitParameter("allowedOrigins", allowedOrigins);
+            filterHolder.setInitParameter(CrossOriginFilter.ALLOWED_ORIGINS_PARAM, allowedOrigins);
+            String allowedMethods = config.getString(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG);
+            if (allowedMethods != null && !allowedOrigins.trim().isEmpty()) {
+                filterHolder.setInitParameter(CrossOriginFilter.ALLOWED_METHODS_PARAM, allowedMethods);
+            }
             context.addFilter(filterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));
         }
 
@@ -272,4 +276,5 @@ public class RestServer {
         else
             return base + path;
     }
+
 }

@@ -31,7 +31,8 @@ import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.connect.storage.KafkaConfigStorage;
+import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -76,7 +77,7 @@ public class WorkerCoordinatorTest {
     private Metrics metrics;
     private ConsumerNetworkClient consumerClient;
     private MockRebalanceListener rebalanceListener;
-    @Mock private KafkaConfigStorage configStorage;
+    @Mock private KafkaConfigBackingStore configStorage;
     private WorkerCoordinator coordinator;
 
     private ClusterConfigState configState1;
@@ -91,7 +92,7 @@ public class WorkerCoordinatorTest {
         this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
-        this.configStorage = PowerMock.createMock(KafkaConfigStorage.class);
+        this.configStorage = PowerMock.createMock(KafkaConfigBackingStore.class);
 
         client.setNode(node);
 
@@ -110,6 +111,7 @@ public class WorkerCoordinatorTest {
         configState1 = new ClusterConfigState(
                 1L, Collections.singletonMap(connectorId, 1),
                 Collections.singletonMap(connectorId, (Map<String, String>) new HashMap<String, String>()),
+                Collections.singletonMap(connectorId, TargetState.STARTED),
                 Collections.singletonMap(taskId0, (Map<String, String>) new HashMap<String, String>()),
                 Collections.<String>emptySet()
         );
@@ -119,6 +121,9 @@ public class WorkerCoordinatorTest {
         Map<String, Map<String, String>> configState2ConnectorConfigs = new HashMap<>();
         configState2ConnectorConfigs.put(connectorId, new HashMap<String, String>());
         configState2ConnectorConfigs.put(connectorId2, new HashMap<String, String>());
+        Map<String, TargetState> targetStates = new HashMap<>();
+        targetStates.put(connectorId, TargetState.STARTED);
+        targetStates.put(connectorId2, TargetState.STARTED);
         Map<ConnectorTaskId, Map<String, String>> configState2TaskConfigs = new HashMap<>();
         configState2TaskConfigs.put(taskId0, new HashMap<String, String>());
         configState2TaskConfigs.put(taskId1, new HashMap<String, String>());
@@ -126,6 +131,7 @@ public class WorkerCoordinatorTest {
         configState2 = new ClusterConfigState(
                 2L, configState2ConnectorTaskCounts,
                 configState2ConnectorConfigs,
+                targetStates,
                 configState2TaskConfigs,
                 Collections.<String>emptySet()
         );

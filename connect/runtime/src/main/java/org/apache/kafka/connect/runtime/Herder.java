@@ -61,9 +61,9 @@ public interface Herder {
      * from the current configuration. However, note
      *
      * @returns A list of connector names
-     * @throws org.apache.kafka.connect.runtime.distributed.NotLeaderException if this node can not resolve the request
+     * @throws org.apache.kafka.connect.runtime.distributed.RequestTargetException if this node can not resolve the request
      *         (e.g., because it has not joined the cluster or does not have configs in sync with the group) and it is
-     *         also not the leader
+     *         not the leader or the task owner (e.g., task restart must be handled by the worker which owns the task)
      * @throws org.apache.kafka.connect.errors.ConnectException if this node is the leader, but still cannot resolve the
      *         request (e.g., it is not in sync with other worker's config state)
      */
@@ -134,6 +134,35 @@ public interface Herder {
      * @param connectorConfig the provided connector config values
      */
     ConfigInfos validateConfigs(String connType, Map<String, String> connectorConfig);
+
+    /**
+     * Restart the task with the given id.
+     * @param id id of the task
+     * @param cb callback to invoke upon completion
+     */
+    void restartTask(ConnectorTaskId id, Callback<Void> cb);
+
+    /**
+     * Restart the connector.
+     * @param connName name of the connector
+     * @param cb callback to invoke upon completion
+     */
+    void restartConnector(String connName, Callback<Void> cb);
+
+    /**
+     * Pause the connector. This call will asynchronously suspend processing by the connector and all
+     * of its tasks.
+     * @param connector name of the connector
+     */
+    void pauseConnector(String connector);
+
+    /**
+     * Resume the connector. This call will asynchronously start the connector and its tasks (if
+     * not started already).
+     * @param connector name of the connector
+     */
+    void resumeConnector(String connector);
+
 
     class Created<T> {
         private final boolean created;

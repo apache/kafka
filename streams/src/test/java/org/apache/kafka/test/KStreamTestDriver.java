@@ -27,12 +27,15 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 
 import java.io.File;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class KStreamTestDriver {
 
@@ -80,6 +83,12 @@ public class KStreamTestDriver {
 
     public void process(String topicName, Object key, Object value) {
         currNode = topology.source(topicName);
+
+        // if currNode is null, check if this topic is a changelog topic;
+        // if yes, skip
+        if (topicName.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX))
+            return;
+
         try {
             forward(key, value);
         } finally {
@@ -104,10 +113,6 @@ public class KStreamTestDriver {
 
     public void setTime(long timestamp) {
         context.setTime(timestamp);
-    }
-
-    public StateStore getStateStore(String name) {
-        return context.getStateStore(name);
     }
 
     @SuppressWarnings("unchecked")
@@ -151,10 +156,49 @@ public class KStreamTestDriver {
         }
     }
 
+    public void close() {
+        // close all processors
+        for (ProcessorNode node : topology.processors()) {
+            currNode = node;
+            try {
+                node.close();
+            } finally {
+                currNode = null;
+            }
+        }
+
+        // close all state stores
+        for (StateStore store : context.allStateStores().values()) {
+            store.close();
+        }
+    }
+
+    public Set<String> allProcessorNames() {
+        Set<String> names = new HashSet<>();
+
+        List<ProcessorNode> nodes = topology.processors();
+
+        for (ProcessorNode node: nodes) {
+            names.add(node.name());
+        }
+
+        return names;
+    }
+
+    public ProcessorNode processor(String name) {
+        List<ProcessorNode> nodes = topology.processors();
+
+        for (ProcessorNode node: nodes) {
+            if (node.name().equals(name))
+                return node;
+        }
+
+        return null;
+    }
+
     public Map<String, StateStore> allStateStores() {
         return context.allStateStores();
     }
-
 
     private class MockRecordCollector extends RecordCollector {
         public MockRecordCollector() {

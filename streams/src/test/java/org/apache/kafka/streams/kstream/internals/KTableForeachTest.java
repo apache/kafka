@@ -24,8 +24,10 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.junit.After;
 import org.junit.Test;
 import java.util.List;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -37,6 +39,16 @@ public class KTableForeachTest {
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
+
+    private KStreamTestDriver driver;
+
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
+    }
 
     @Test
     public void testForeach() {
@@ -60,7 +72,7 @@ public class KTableForeachTest {
             new ForeachAction<Integer, String>() {
                 @Override
                 public void apply(Integer key, String value) {
-                    actualRecords.add(new KeyValue<>(key * 2, value.toUpperCase()));
+                    actualRecords.add(new KeyValue<>(key * 2, value.toUpperCase(Locale.ROOT)));
                 }
             };
 
@@ -70,7 +82,7 @@ public class KTableForeachTest {
         table.foreach(action);
 
         // Then
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder);
         for (KeyValue<Integer, String> record: inputRecords) {
             driver.process(topicName, record.key, record.value);
         }

@@ -27,9 +27,17 @@ public class ChangedSerializer<T> implements Serializer<Change<T>> {
 
     private static final int NEWFLAG_SIZE = 1;
 
-    private final Serializer<T> inner;
+    private Serializer<T> inner;
 
     public ChangedSerializer(Serializer<T> inner) {
+        this.inner = inner;
+    }
+
+    public Serializer<T> inner() {
+        return inner;
+    }
+
+    public void setInner(Serializer<T> inner) {
         this.inner = inner;
     }
 
@@ -38,6 +46,10 @@ public class ChangedSerializer<T> implements Serializer<Change<T>> {
         // do nothing
     }
 
+    /**
+     * @throws StreamsException if both old and new values of data are null, or if
+     * both values are not null
+     */
     @Override
     public byte[] serialize(String topic, Change<T> data) {
         byte[] serializedKey;

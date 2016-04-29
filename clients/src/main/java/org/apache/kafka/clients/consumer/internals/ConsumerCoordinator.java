@@ -63,7 +63,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private final List<PartitionAssignor> assignors;
     private final org.apache.kafka.clients.Metadata metadata;
-    private final MetadataSnapshot metadataSnapshot;
     private final ConsumerCoordinatorMetrics sensors;
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
@@ -71,6 +70,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final AutoCommitTask autoCommitTask;
     private final ConsumerInterceptors<?, ?> interceptors;
     private final boolean excludeInternalTopics;
+
+    private MetadataSnapshot metadataSnapshot;
+    private MetadataSnapshot assignmentSnapshot;
 
     /**
      * Initialize the coordination manager.
@@ -102,7 +104,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.metadata = metadata;
 
         this.metadata.requestUpdate();
-        this.metadataSnapshot = new MetadataSnapshot();
+        this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch());
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = defaultOffsetCommitCallback;
         this.autoCommitEnabled = autoCommitEnabled;
@@ -159,8 +161,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 }
 
                 // check if there are any changes to the metadata which should trigger a rebalance
-                if (metadataSnapshot.update(subscriptions, cluster) && subscriptions.partitionsAutoAssigned())
-                    subscriptions.needReassignment();
+                if (subscriptions.partitionsAutoAssigned()) {
+                    MetadataSnapshot snapshot = new MetadataSnapshot(subscriptions, cluster);
+                    if (!snapshot.equals(metadataSnapshot)) {
+                        metadataSnapshot = snapshot;
+                        subscriptions.needReassignment();
+                    }
+                }
+
             }
         });
     }
@@ -178,6 +186,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                   String memberId,
                                   String assignmentStrategy,
                                   ByteBuffer assignmentBuffer) {
+        // if we were the assignor, then we need to make sure that there have been no metadata updates
+        // since the rebalance begin. Otherwise, we won't rebalance again until the next metadata change
+        if (assignmentSnapshot != null && !assignmentSnapshot.equals(metadataSnapshot)) {
+            subscriptions.needReassignment();
+            return;
+        }
+
         PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
@@ -231,7 +246,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // which ensures that all metadata changes will eventually be seen
         this.subscriptions.groupSubscribe(allSubscribedTopics);
         metadata.setTopics(this.subscriptions.groupSubscription());
+
+        // update metadata (if needed) and keep track of the metadata used for assignment so that
+        // we can check after rebalance completion whether anything has changed
         client.ensureFreshMetadata();
+        assignmentSnapshot = metadataSnapshot;
 
         log.debug("Performing assignment for group {} using strategy {} with subscriptions {}",
                 groupId, assignor.name(), subscriptions);
@@ -267,6 +286,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     listener.getClass().getName(), groupId, e);
         }
 
+        assignmentSnapshot = null;
         subscriptions.needReassignment();
     }
 
@@ -669,19 +689,26 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private static class MetadataSnapshot {
-        private Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        private final Map<String, Integer> partitionsPerTopic;
 
-        public boolean update(SubscriptionState subscription, Cluster cluster) {
+        public MetadataSnapshot(SubscriptionState subscription, Cluster cluster) {
             Map<String, Integer> partitionsPerTopic = new HashMap<>();
             for (String topic : subscription.groupSubscription())
                 partitionsPerTopic.put(topic, cluster.partitionCountForTopic(topic));
+            this.partitionsPerTopic = partitionsPerTopic;
+        }
 
-            if (!partitionsPerTopic.equals(this.partitionsPerTopic)) {
-                this.partitionsPerTopic = partitionsPerTopic;
-                return true;
-            }
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            MetadataSnapshot that = (MetadataSnapshot) o;
+            return partitionsPerTopic != null ? partitionsPerTopic.equals(that.partitionsPerTopic) : that.partitionsPerTopic == null;
+        }
 
-            return false;
+        @Override
+        public int hashCode() {
+            return partitionsPerTopic != null ? partitionsPerTopic.hashCode() : 0;
         }
     }
 

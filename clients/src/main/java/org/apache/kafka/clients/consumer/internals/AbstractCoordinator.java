@@ -410,10 +410,10 @@ public abstract class AbstractCoordinator implements Closeable {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
         return client.send(coordinator, ApiKeys.SYNC_GROUP, request)
-                .compose(new SyncGroupRequestHandler());
+                .compose(new SyncGroupResponseHandler());
     }
 
-    private class SyncGroupRequestHandler extends CoordinatorResponseHandler<SyncGroupResponse, ByteBuffer> {
+    private class SyncGroupResponseHandler extends CoordinatorResponseHandler<SyncGroupResponse, ByteBuffer> {
 
         @Override
         public SyncGroupResponse parse(ClientResponse response) {

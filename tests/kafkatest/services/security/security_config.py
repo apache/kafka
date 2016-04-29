@@ -75,7 +75,9 @@ class SecurityConfig(TemplateRenderer):
 
     ssl_stores = Keytool.generate_keystore_truststore('.')
 
-    def __init__(self, security_protocol=None, interbroker_security_protocol=None, sasl_mechanism=SASL_MECHANISM_GSSAPI, zk_sasl=False, template_props=""):
+    def __init__(self, security_protocol=None, interbroker_security_protocol=None,
+                 client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
+                 zk_sasl=False, template_props=""):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -104,13 +106,14 @@ class SecurityConfig(TemplateRenderer):
             'ssl.key.password' : SecurityConfig.ssl_stores['ssl.key.password'],
             'ssl.truststore.location' : SecurityConfig.TRUSTSTORE_PATH,
             'ssl.truststore.password' : SecurityConfig.ssl_stores['ssl.truststore.password'],
-            'sasl.mechanism' : sasl_mechanism,
+            'sasl.mechanism' : client_sasl_mechanism,
+            'sasl.mechanism.inter.broker.protocol' : interbroker_sasl_mechanism,
             'sasl.kerberos.service.name' : 'kafka'
         }
 
 
     def client_config(self, template_props=""):
-        return SecurityConfig(self.security_protocol, sasl_mechanism=self.sasl_mechanism, template_props=template_props)
+        return SecurityConfig(self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props)
 
     def setup_node(self, node):
         if self.has_ssl:
@@ -120,13 +123,15 @@ class SecurityConfig(TemplateRenderer):
 
         if self.has_sasl:
             node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
-            jaas_conf_file = self.sasl_mechanism.lower() + "_jaas.conf"
+            jaas_conf_file = "jaas.conf"
             java_version = node.account.ssh_capture("java -version")
             if any('IBM' in line for line in java_version):
                 is_ibm_jdk = True
             else:
                 is_ibm_jdk = False
-            jaas_conf = self.render(jaas_conf_file,  node=node, is_ibm_jdk=is_ibm_jdk)
+            jaas_conf = self.render(jaas_conf_file,  node=node, is_ibm_jdk=is_ibm_jdk,
+                                    client_sasl_mechanism=self.client_sasl_mechanism,
+                                    enabled_sasl_mechanisms=self.enabled_sasl_mechanisms)
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
             if self.has_sasl_kerberos:
                 node.account.scp_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
@@ -159,12 +164,20 @@ class SecurityConfig(TemplateRenderer):
         return self.properties['security.protocol']
 
     @property
-    def sasl_mechanism(self):
+    def client_sasl_mechanism(self):
         return self.properties['sasl.mechanism']
 
     @property
+    def interbroker_sasl_mechanism(self):
+        return self.properties['sasl.mechanism.inter.broker.protocol']
+
+    @property
+    def enabled_sasl_mechanisms(self):
+        return set([self.client_sasl_mechanism, self.interbroker_sasl_mechanism])
+
+    @property
     def has_sasl_kerberos(self):
-        return self.has_sasl and self.sasl_mechanism == SecurityConfig.SASL_MECHANISM_GSSAPI
+        return self.has_sasl and (SecurityConfig.SASL_MECHANISM_GSSAPI in self.enabled_sasl_mechanisms)
 
     @property
     def kafka_opts(self):

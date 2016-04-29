@@ -49,7 +49,7 @@ public class WindowedStreamPartitionerTest {
             new PartitionInfo(topicName, 5, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private Cluster cluster = new Cluster(Arrays.asList(Node.noNode()), infos, Collections.<String>emptySet());
+    private Cluster cluster = new Cluster(Collections.singletonList(Node.noNode()), infos, Collections.<String>emptySet());
 
     @Test
     public void testCopartitioning() {
@@ -71,7 +71,7 @@ public class WindowedStreamPartitionerTest {
             Integer expected = defaultPartitioner.partition("topic", key, keyBytes, value, valueBytes, cluster);
 
             for (int w = 0; w < 10; w++) {
-                HoppingWindow window = new HoppingWindow(10 * w, 20 * w);
+                TimeWindow window = new TimeWindow(10 * w, 20 * w);
 
                 Windowed<Integer> windowedKey = new Windowed<>(key, window);
                 Integer actual = streamPartitioner.partition(windowedKey, value, infos.size());

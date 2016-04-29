@@ -163,7 +163,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
         @SuppressWarnings("unchecked")
         @Override
         public T get(Windowed<K> windowedKey) {
-            K key = windowedKey.value();
+            K key = windowedKey.key();
             W window = (W) windowedKey.window();
 
             // this iterator should contain at most one element

@@ -32,6 +32,9 @@ public class MinTimestampTracker<E> implements TimestampTracker<E> {
     // record's timestamp
     private long lastKnownTime = NOT_KNOWN;
 
+    /**
+     * @throws NullPointerException if the element is null
+     */
     public void addElement(Stamped<E> elem) {
         if (elem == null) throw new NullPointerException();
 

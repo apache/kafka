@@ -73,7 +73,7 @@ import org.slf4j.LoggerFactory;
  * <pre>
  * {@code
  * Properties props = new Properties();
- * props.put("bootstrap.servers", "localhost:4242");
+ * props.put("bootstrap.servers", "localhost:9092");
  * props.put("acks", "all");
  * props.put("retries", 0);
  * props.put("batch.size", 16384);
@@ -338,7 +338,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private static int parseAcks(String acksString) {
         try {
-            return acksString.trim().toLowerCase().equals("all") ? -1 : Integer.parseInt(acksString.trim());
+            return acksString.trim().equalsIgnoreCase("all") ? -1 : Integer.parseInt(acksString.trim());
         } catch (NumberFormatException e) {
             throw new ConfigException("Invalid configuration value for 'acks': " + acksString);
         }

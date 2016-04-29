@@ -97,6 +97,12 @@ public class KafkaStreams {
     // usage only and should not be exposed to users at all.
     private final UUID processId;
 
+    /**
+     * Construct the stream instance.
+     *
+     * @param builder  the processor topology builder specifying the computational logic
+     * @param props    properties for the {@link StreamsConfig}
+     */
     public KafkaStreams(TopologyBuilder builder, Properties props) {
         this(builder, new StreamsConfig(props));
     }
@@ -104,8 +110,8 @@ public class KafkaStreams {
     /**
      * Construct the stream instance.
      *
-     * @param builder The processor topology builder specifying the computational logic
-     * @param config The stream configs
+     * @param builder  the processor topology builder specifying the computational logic
+     * @param config   the stream configs
      */
     public KafkaStreams(TopologyBuilder builder, StreamsConfig config) {
         // create the metrics
@@ -138,6 +144,7 @@ public class KafkaStreams {
 
     /**
      * Start the stream instance by starting all its threads.
+     * @throws IllegalStateException if process was already started
      */
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
@@ -157,6 +164,7 @@ public class KafkaStreams {
     /**
      * Shutdown this stream instance by signaling all the threads to stop,
      * and then wait for them to join.
+     * @throws IllegalStateException if process has not started yet
      */
     public synchronized void close() {
         log.debug("Stopping Kafka Stream process");

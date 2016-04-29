@@ -253,6 +253,7 @@ public class SimpleBenchmark {
 
         long endTime = System.currentTimeMillis();
 
+        consumer.close();
         System.out.println("Consumer Performance [MB/sec read]: " + megaBytePerSec(endTime - startTime));
     }
 
