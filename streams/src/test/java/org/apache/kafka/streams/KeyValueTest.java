@@ -66,8 +66,8 @@ public class KeyValueTest {
         assertFalse("must be false if value is different", differentValue.equals(kv));
 
         KeyValue<String, Long> differentKeyAndValue = KeyValue.pair(kv.key + "suffix", kv.value + 1L);
-        assertFalse("must be false if value is different", kv.equals(differentKeyAndValue));
-        assertFalse("must be false if value is different", differentKeyAndValue.equals(kv));
+        assertFalse("must be false if key and value are different", kv.equals(differentKeyAndValue));
+        assertFalse("must be false if key and value are different", differentKeyAndValue.equals(kv));
     }
 
 }
