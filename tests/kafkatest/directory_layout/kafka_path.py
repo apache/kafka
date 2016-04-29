@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.directory_layout.path_resolver import PathResolver
 from kafkatest.version.version import get_version, KafkaVersion, TRUNK
 
 import importlib
@@ -100,7 +99,7 @@ class KafkaPathResolverMixin(object):
         return self._path
 
 
-class KafkaSystemTestPathResolver(PathResolver):
+class KafkaSystemTestPathResolver(object):
     """Path resolver for Kafka system tests which assumes the following layout:
 
         /opt/kafka-trunk        # Current version of kafka under test
@@ -109,7 +108,8 @@ class KafkaSystemTestPathResolver(PathResolver):
         ...
     """
     def __init__(self, context, project="kafka"):
-        super(KafkaSystemTestPathResolver, self).__init__(context, project=project)
+        self.context = context
+        self.project = project
 
     def home(self, node_or_version=TRUNK):
         version = self._version(node_or_version)

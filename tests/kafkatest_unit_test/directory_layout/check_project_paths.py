@@ -16,7 +16,6 @@
 
 from kafkatest.directory_layout.kafka_path import create_path_resolver, KafkaSystemTestPathResolver, \
     KAFKA_PATH_RESOLVER_KEY
-from kafkatest.directory_layout.path_resolver import PathResolver
 from kafkatest.version.version import V_0_9_0_1
 
 
@@ -25,7 +24,7 @@ class DummyContext(object):
         self.globals = {}
 
 
-class DummyPathResolver(PathResolver):
+class DummyPathResolver(object):
     """Dummy class to help check path resolver creation."""
     pass
 
