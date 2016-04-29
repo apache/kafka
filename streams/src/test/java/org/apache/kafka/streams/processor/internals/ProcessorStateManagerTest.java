@@ -231,7 +231,8 @@ public class ProcessorStateManagerTest {
 
             ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, 1, noPartitions, baseDir, new MockRestoreConsumer(), false);
             try {
-                stateMgr.register(mockStateStore, true, mockStateStore.stateRestoreCallback);
+                stateMgr.registerStore(mockStateStore);
+                stateMgr.initStore(mockStateStore, true, mockStateStore.stateRestoreCallback);
             } finally {
                 stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
             }
@@ -275,9 +276,8 @@ public class ProcessorStateManagerTest {
                             new ConsumerRecord<>(persistentStoreTopicName, 2, 0L, offset, TimestampType.CREATE_TIME, 0L, 0, 0, key, 0)
                     );
                 }
-
-                stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
-
+                stateMgr.registerStore(persistentStore);
+                stateMgr.initStore(persistentStore, true, persistentStore.stateRestoreCallback);
                 assertEquals(new TopicPartition(persistentStoreTopicName, 2), restoreConsumer.assignedPartition);
                 assertEquals(lastCheckpointedOffset, restoreConsumer.seekOffset);
                 assertFalse(restoreConsumer.seekToBeginingCalled);
@@ -328,9 +328,8 @@ public class ProcessorStateManagerTest {
                             new ConsumerRecord<>(nonPersistentStoreTopicName, 2, 0L, offset, TimestampType.CREATE_TIME, 0L, 0, 0, key, 0)
                     );
                 }
-
-                stateMgr.register(nonPersistentStore, true, nonPersistentStore.stateRestoreCallback);
-
+                stateMgr.registerStore(nonPersistentStore);
+                stateMgr.initStore(nonPersistentStore, true, nonPersistentStore.stateRestoreCallback);
                 assertEquals(new TopicPartition(nonPersistentStoreTopicName, 2), restoreConsumer.assignedPartition);
                 assertEquals(0L, restoreConsumer.seekOffset);
                 assertTrue(restoreConsumer.seekToBeginingCalled);
@@ -392,10 +391,12 @@ public class ProcessorStateManagerTest {
             ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, 0, sourcePartitions, baseDir, restoreConsumer, true); // standby
             try {
                 restoreConsumer.reset();
-
-                stateMgr.register(store1, true, store1.stateRestoreCallback);
-                stateMgr.register(store2, true, store2.stateRestoreCallback);
-                stateMgr.register(store3, true, store3.stateRestoreCallback);
+                stateMgr.registerStore(store1);
+                stateMgr.registerStore(store2);
+                stateMgr.registerStore(store3);
+                stateMgr.initStore(store1, true, store1.stateRestoreCallback);
+                stateMgr.initStore(store2, true, store2.stateRestoreCallback);
+                stateMgr.initStore(store3, true, store3.stateRestoreCallback);
 
                 Map<TopicPartition, Long> changeLogOffsets = stateMgr.checkpointedOffsets();
 
@@ -430,7 +431,8 @@ public class ProcessorStateManagerTest {
 
             ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, 1, noPartitions, baseDir, restoreConsumer, false);
             try {
-                stateMgr.register(mockStateStore, true, mockStateStore.stateRestoreCallback);
+                stateMgr.registerStore(mockStateStore);
+                stateMgr.initStore(mockStateStore, true, mockStateStore.stateRestoreCallback);
 
                 assertNull(stateMgr.getStore("noSuchStore"));
                 assertEquals(mockStateStore, stateMgr.getStore(nonPersistentStoreName));
@@ -476,10 +478,12 @@ public class ProcessorStateManagerTest {
                 assertFalse(checkpointFile.exists());
 
                 restoreConsumer.reset();
-                stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
+                stateMgr.registerStore(persistentStore);
+                stateMgr.initStore(persistentStore, true, persistentStore.stateRestoreCallback);
 
                 restoreConsumer.reset();
-                stateMgr.register(nonPersistentStore, true, nonPersistentStore.stateRestoreCallback);
+                stateMgr.registerStore(nonPersistentStore);
+                stateMgr.initStore(nonPersistentStore, true, nonPersistentStore.stateRestoreCallback);
             } finally {
                 // close the state manager with the ack'ed offsets
                 stateMgr.close(ackedOffsets);

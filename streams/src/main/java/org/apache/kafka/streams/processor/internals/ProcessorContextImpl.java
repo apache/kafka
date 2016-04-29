@@ -109,11 +109,22 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
      * @throws IllegalStateException if this method is called before {@link #initialized()}
      */
     @Override
-    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
+    public void registerStore(StateStore store) {
         if (initialized)
             throw new IllegalStateException("Can only create state stores during initialization.");
 
-        stateMgr.register(store, loggingEnabled, stateRestoreCallback);
+        stateMgr.registerStore(store);
+    }
+
+    /**
+     * @throws IllegalStateException if this method is called before {@link #initialized()}
+     */
+    @Override
+    public void initStore(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
+        if (initialized)
+            throw new IllegalStateException("Can only create state stores during initialization.");
+
+        stateMgr.initStore(store, loggingEnabled, stateRestoreCallback);
     }
 
     /**

@@ -51,17 +51,23 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
         return this.storeName;
     }
 
+
+    /**
+     * Initializes the state store.
+     * @param context Processor context
+     * @param root State store
+     */
     @Override
     @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
         // construct the serde
         this.serdes = new StateSerdes<>(storeName,
-                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         this.changeLogger = new StoreChangeLogger<>(storeName, context, serdes);
 
-        context.register(root, true, new StateRestoreCallback() {
+        context.initStore(root, true, new StateRestoreCallback() {
             @Override
             public void restore(byte[] key, byte[] value) {
 
@@ -79,6 +85,7 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
             }
         };
     }
+
 
     @Override
     public boolean persistent() {

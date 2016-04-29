@@ -64,6 +64,7 @@ public class KStreamTestDriver {
 
         for (StateStoreSupplier stateStoreSupplier : topology.stateStoreSuppliers()) {
             StateStore store = stateStoreSupplier.get();
+            context.registerStore(store);
             store.init(context, store);
         }
 

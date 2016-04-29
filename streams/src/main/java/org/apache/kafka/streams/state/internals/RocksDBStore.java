@@ -96,6 +96,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private StoreChangeLogger.ValueGetter<Bytes, byte[]> getter;
 
+
     public KeyValueStore<K, V> enableLogging() {
         loggingEnabled = true;
 
@@ -137,7 +138,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         fOptions = new FlushOptions();
         fOptions.setWaitForFlush(true);
+
     }
+
 
     private class RocksDBCacheEntry {
         public V value;
@@ -155,16 +158,21 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @SuppressWarnings("unchecked")
     public void openDB(ProcessorContext context) {
+
         // we need to construct the serde while opening DB since
         // it is also triggered by windowed DB segments without initialization
         this.serdes = new StateSerdes<>(name,
                 keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                 valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
-
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
     }
 
+    /**
+     * Initializes the state store
+     * @param context Processor context
+     * @param root State store
+     */
     public void init(ProcessorContext context, StateStore root) {
         // open the DB dir
         openDB(context);
@@ -173,15 +181,15 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         if (this.cacheSize > 0) {
             this.cache = new MemoryLRUCache<K, RocksDBCacheEntry>(name, cacheSize)
-                    .whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<K, RocksDBCacheEntry>() {
-                        @Override
-                        public void apply(K key, RocksDBCacheEntry entry) {
-                            // flush all the dirty entries to RocksDB if this evicted entry is dirty
-                            if (entry.isDirty) {
-                                flushCache();
-                            }
+                .whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<K, RocksDBCacheEntry>() {
+                    @Override
+                    public void apply(K key, RocksDBCacheEntry entry) {
+                        // flush all the dirty entries to RocksDB if this evicted entry is dirty
+                        if (entry.isDirty) {
+                            flushCache();
                         }
-                    });
+                    }
+                });
 
             this.cacheDirtyKeys = new HashSet<>();
         } else {
@@ -198,7 +206,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             }
         };
 
-        context.register(root, loggingEnabled, new StateRestoreCallback() {
+        context.initStore(root, loggingEnabled, new StateRestoreCallback() {
 
             @Override
             public void restore(byte[] key, byte[] value) {

@@ -181,7 +181,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         this.changeLogger = this.loggingEnabled ? new StoreChangeLogger(name, context, WindowStoreUtils.INNER_SERDES) : null;
 
         // register and possibly restore the state from the logs
-        context.register(root, loggingEnabled, new StateRestoreCallback() {
+        context.initStore(root, loggingEnabled, new StateRestoreCallback() {
             @Override
             public void restore(byte[] key, byte[] value) {
                 // if the value is null, it means that this record has already been
