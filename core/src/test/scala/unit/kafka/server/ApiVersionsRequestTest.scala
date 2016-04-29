@@ -18,12 +18,8 @@
 package kafka.server
 
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
-import org.junit.Assert._
 import org.junit.Test
-
-import scala.collection.JavaConversions._
 
 class ApiVersionsRequestTest extends BaseRequestTest {
 
@@ -32,15 +28,7 @@ class ApiVersionsRequestTest extends BaseRequestTest {
   @Test
   def testApiVersionsRequest() {
     val apiVersionsResponse = sendApiVersionsRequest(new ApiVersionsRequest, 0)
-
-    assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.", ApiKeys.values.length, apiVersionsResponse.apiVersions.size)
-    for (expectedApiVersion: ApiVersion <- ApiVersionsResponse.apiVersionsResponse.apiVersions) {
-      val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
-      assertNotNull(s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.", actualApiVersion)
-      assertEquals("API key must be supported by the broker.", expectedApiVersion.apiKey, actualApiVersion.apiKey)
-      assertEquals(s"Received unexpected min version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.minVersion, actualApiVersion.minVersion)
-      assertEquals(s"Received unexpected max version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.maxVersion, actualApiVersion.maxVersion)
-    }
+    validateApiVersionsResponse(apiVersionsResponse)
   }
 
   private def sendApiVersionsRequest(request: ApiVersionsRequest, version: Short): ApiVersionsResponse = {
@@ -48,3 +36,4 @@ class ApiVersionsRequestTest extends BaseRequestTest {
     ApiVersionsResponse.parse(response)
   }
 }
+

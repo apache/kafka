@@ -26,8 +26,13 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader, ResponseHeader}
+import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.junit.Before
+import org.junit.Assert._
+
+import scala.collection.JavaConversions._
 
 abstract class BaseRequestTest extends KafkaServerTestHarness {
   private var correlationId = 0
@@ -39,7 +44,9 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   protected def propertyOverrides(properties: Properties) {}
 
   def generateConfigs() = {
-    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect, enableControlledShutdown = false)
+    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect, enableControlledShutdown = false,
+      interBrokerSecurityProtocol = Some(securityProtocol),
+      trustStoreFile = trustStoreFile, saslProperties = saslProperties)
     props.foreach(propertyOverrides)
     props.map(KafkaConfig.fromProps)
   }
@@ -57,7 +64,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     }.map(_.socketServer).getOrElse(throw new IllegalStateException("No live broker is available"))
   }
 
-  private def connect(s: SocketServer = socketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Socket = {
+  def connect(s: SocketServer = socketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Socket = {
     new Socket("localhost", s.boundPort(protocol))
   }
 
@@ -76,20 +83,24 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     response
   }
 
-  private def requestAndReceive(request: Array[Byte]): Array[Byte] = {
-    val plainSocket = connect()
+  def requestAndReceive(socket: Socket, request: Array[Byte]): Array[Byte] = {
+    sendRequest(socket, request)
+    receiveResponse(socket)
+  }
+
+  def send(request: AbstractRequest, apiKey: ApiKeys, version: Short): ByteBuffer = {
+    val socket = connect()
     try {
-      sendRequest(plainSocket, request)
-      receiveResponse(plainSocket)
+      send(socket, request, apiKey, version)
     } finally {
-      plainSocket.close()
+      socket.close()
     }
   }
 
   /**
     * Serializes and send the request to the given api. A ByteBuffer containing the response is returned.
     */
-  def send(request: AbstractRequest, apiKey: ApiKeys, version: Short): ByteBuffer = {
+  def send(socket: Socket, request: AbstractRequest, apiKey: ApiKeys, version: Short): ByteBuffer = {
     correlationId += 1
     val serializedBytes = {
       val header = new RequestHeader(apiKey.id, version, "", correlationId)
@@ -99,10 +110,21 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
       byteBuffer.array()
     }
 
-    val response = requestAndReceive(serializedBytes)
+    val response = requestAndReceive(socket, serializedBytes)
 
     val responseBuffer = ByteBuffer.wrap(response)
     ResponseHeader.parse(responseBuffer) // Parse the header to ensure its valid and move the buffer forward
     responseBuffer
+  }
+
+  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse) {
+    assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.", ApiKeys.values.length, apiVersionsResponse.apiVersions.size)
+    for (expectedApiVersion: ApiVersion <- ApiVersionsResponse.apiVersionsResponse.apiVersions) {
+      val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
+      assertNotNull(s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.", actualApiVersion)
+      assertEquals("API key must be supported by the broker.", expectedApiVersion.apiKey, actualApiVersion.apiKey)
+      assertEquals(s"Received unexpected min version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.minVersion, actualApiVersion.minVersion)
+      assertEquals(s"Received unexpected max version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.maxVersion, actualApiVersion.maxVersion)
+    }
   }
 }

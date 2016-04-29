@@ -220,23 +220,27 @@ public class SaslAuthenticatorTest {
     }
 
     /**
-     * Tests that Kafka ApiVersionRequests are handled by the SASL server authenticator
+     * Tests that Kafka ApiVersionsRequests are handled by the SASL server authenticator
      * prior to SASL handshake flow and that subsequent authentication succeeds
-     * when transport layer is PLAINTEXT.
+     * when transport layer is PLAINTEXT. This test simulates SASL authentication using a
+     * (non-SASL) PLAINTEXT client and sends ApiVersionsRequest straight after
+     * connection to the server is established, before any SASL-related packets are sent.
      */
     @Test
-    public void testUnauthenticatedApiVersionRequestOverPlaintext() throws Exception {
-        testUnauthenticatedApiVersionRequest(SecurityProtocol.SASL_PLAINTEXT);
+    public void testUnauthenticatedApiVersionsRequestOverPlaintext() throws Exception {
+        testUnauthenticatedApiVersionsRequest(SecurityProtocol.SASL_PLAINTEXT);
     }
 
     /**
-     * Tests that Kafka ApiVersionRequests are handled by the SASL server authenticator
+     * Tests that Kafka ApiVersionsRequests are handled by the SASL server authenticator
      * prior to SASL handshake flow and that subsequent authentication succeeds
-     * when transport layer is SSL.
+     * when transport layer is SSL. This test simulates SASL authentication using a
+     * (non-SASL) SSL client and sends ApiVersionsRequest straight after
+     * SSL handshake, before any SASL-related packets are sent.
      */
     @Test
-    public void testUnauthenticatedApiVersionRequestOverSsl() throws Exception {
-        testUnauthenticatedApiVersionRequest(SecurityProtocol.SASL_SSL);
+    public void testUnauthenticatedApiVersionsRequestOverSsl() throws Exception {
+        testUnauthenticatedApiVersionsRequest(SecurityProtocol.SASL_SSL);
     }
 
     /**
@@ -279,6 +283,9 @@ public class SaslAuthenticatorTest {
     /**
      * Tests that ApiVersionsRequest after Kafka SASL handshake request flow,
      * but prior to actual SASL authentication, results in authentication failure.
+     * This is similar to {@link #testUnauthenticatedApiVersionsRequest(SecurityProtocol)}
+     * where a non-SASL client is used to send requests that are processed by
+     * {@link SaslServerAuthenticator} of the server prior to client authentication.
      */
     @Test
     public void testInvalidApiVersionsRequestSequence() throws Exception {
@@ -425,7 +432,31 @@ public class SaslAuthenticatorTest {
         NetworkTestUtils.waitForChannelClose(selector, node);
     }
 
-    public void testUnauthenticatedApiVersionRequest(SecurityProtocol securityProtocol) throws Exception {
+    /**
+     * Tests that Kafka ApiVersionsRequests are handled by the SASL server authenticator
+     * prior to SASL handshake flow and that subsequent authentication succeeds
+     * when transport layer is PLAINTEXT/SSL. This test uses a non-SASL client that simulates
+     * SASL authentication after ApiVersionsRequest.
+     * <p>
+     * Test sequence (using <tt>securityProtocol=PLAINTEXT</tt> as an example):
+     * <ol>
+     *   <li>Starts a SASL_PLAINTEXT test server that simply echoes back client requests after authentication.</li>
+     *   <li>A (non-SASL) PLAINTEXT test client connects to the SASL server port. Client is now unauthenticated.<./li>
+     *   <li>The unauthenticated non-SASL client sends an ApiVersionsRequest and validates the response.
+     *       A valid response indicates that {@link SaslServerAuthenticator} of the test server responded to
+     *       the ApiVersionsRequest even though the client is not yet authenticated.</li>
+     *   <li>The unauthenticated non-SASL client sends a SaslHandshakeRequest and validates the response. A valid response
+     *       indicates that {@link SaslServerAuthenticator} of the test server responded to the SaslHandshakeRequest
+     *       after processing ApiVersionsRequest.</li>
+     *   <li>The unauthenticated non-SASL client sends the SASL/PLAIN packet containing username/password to authenticate
+     *       itself. The client is now authenticated by the server. At this point this test client is at the
+     *       same state as a regular SASL_PLAINTEXT client that is <tt>ready</tt>.</li>
+     *   <li>The authenticated client sends random data to the server and checks that the data is echoed
+     *       back by the test server (ie, not Kafka request-response) to ensure that the client now
+     *       behaves exactly as a regular SASL_PLAINTEXT client that has completed authentication.</li>
+     * </ol>
+     */
+    private void testUnauthenticatedApiVersionsRequest(SecurityProtocol securityProtocol) throws Exception {
         configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
 
