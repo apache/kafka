@@ -71,6 +71,7 @@ class VerifiableProducer(BackgroundThreadService):
         self.acked_values = []
         self.not_acked_values = []
         self.produced_count = {}
+        self.clean_shutdown_nodes = set()
         self.acks = acks
 
 
@@ -138,6 +139,11 @@ class VerifiableProducer(BackgroundThreadService):
 
                         last_produced_time = t
                         prev_msg = data
+
+                    elif data["name"] == "shutdown_complete":
+                        if node in self.clean_shutdown_nodes:
+                            raise Exception("Unexpected shutdown event from producer, already shutdown. Producer index: %d" % idx)
+                        self.clean_shutdown_nodes.add(node)
 
     def start_cmd(self, node, idx):
 
