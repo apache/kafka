@@ -38,7 +38,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         self.producer_throughput = 100
         self.num_producers = 1
         self.num_consumers = 1
-        self.acls = ACLs(self.context)
+        self.acls = ACLs(self.test_context)
 
         self.zk = ZookeeperService(self.test_context, num_nodes=3)
 

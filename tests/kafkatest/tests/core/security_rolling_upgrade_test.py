@@ -16,7 +16,6 @@
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.utils import is_int
@@ -34,7 +33,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         super(TestSecurityRollingUpgrade, self).__init__(test_context=test_context)
 
     def setUp(self):
-        self.acls = ACLs(self.context)
+        self.acls = ACLs(self.test_context)
         self.topic = "test_topic"
         self.group = "group"
         self.producer_throughput = 100
