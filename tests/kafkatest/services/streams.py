@@ -15,10 +15,11 @@
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
-from ducktape.errors import DucktapeError
 
 from kafkatest.services.kafka.directory import kafka_dir
-import signal, random, requests, os.path, json
+import signal
+import os.path
+
 
 class StreamsSmokeTestBaseService(Service):
     """Base class for Streams Smoke Test services providing some common settings and functionality"""
@@ -46,7 +47,7 @@ class StreamsSmokeTestBaseService(Service):
     def __init__(self, context, kafka, command):
         super(StreamsSmokeTestBaseService, self).__init__(context, 1)
         self.kafka = kafka
-        self.args = { 'command': command }
+        self.args = {'command': command}
 
     @property
     def node(self):
@@ -107,7 +108,7 @@ class StreamsSmokeTestBaseService(Service):
         args['kafka_dir'] = kafka_dir(node)
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
-              "/opt/%(kafka_dir)s/bin/kafka-run-class.sh org.apache.kafka.streams.smoketest.StreamsSmokeTest " \
+              "INCLUDE_TEST_JARS=true /opt/%(kafka_dir)s/bin/kafka-run-class.sh org.apache.kafka.streams.smoketest.StreamsSmokeTest " \
               " %(command)s %(kafka)s %(zk)s %(state_dir)s " \
               " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
@@ -130,6 +131,7 @@ class StreamsSmokeTestBaseService(Service):
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
     def __init__(self, context, kafka):
         super(StreamsSmokeTestDriverService, self).__init__(context, kafka, "run")
+
 
 class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
     def __init__(self, context, kafka):
