@@ -41,7 +41,8 @@ import java.util.Properties;
 import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertThat;
 
 /**
  * End-to-end integration test that demonstrates "fan-out", using an embedded Kafka cluster.
@@ -149,7 +150,7 @@ public class FanoutIntegrationTest {
         consumerConfigB.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerConfigB.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         List<String> actualValuesForB = IntegrationTestUtils.readValues(OUTPUT_TOPIC_B, consumerConfigB, inputValues.size());
-        assertThat(actualValuesForB).isEqualTo(expectedValuesForB);
+        assertThat(actualValuesForB, equalTo(expectedValuesForB));
 
         // Verify output topic C
         Properties consumerConfigC = new Properties();
@@ -159,7 +160,7 @@ public class FanoutIntegrationTest {
         consumerConfigC.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerConfigC.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         List<String> actualValuesForC = IntegrationTestUtils.readValues(OUTPUT_TOPIC_C, consumerConfigC, inputValues.size());
-        assertThat(actualValuesForC).isEqualTo(expectedValuesForC);
+        assertThat(actualValuesForC, equalTo(expectedValuesForC));
     }
 
 }

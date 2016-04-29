@@ -45,7 +45,6 @@ versions += [
   snappy: "1.1.2.4",
   zkclient: "0.8",
   zookeeper: "3.4.6",
-  assertj: "2.4.1",
 ]
 
 // Add Scala version
@@ -103,6 +102,5 @@ libs += [
   slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   zkclient: "com.101tec:zkclient:$versions.zkclient",
-  zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
-  assertj: "org.assertj:assertj-core:$versions.assertj"
+  zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper"
 ]

@@ -32,6 +32,8 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertThat;
 
 import java.util.Arrays;
 import java.util.List;
@@ -41,7 +43,6 @@ import java.util.Properties;
 import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * End-to-end integration test based on a simple word count example, using an embedded Kafka
@@ -66,7 +67,7 @@ public class WordCountIntegrationTest {
             new KeyValue<>("hello", 1L),
             new KeyValue<>("world", 1L),
             new KeyValue<>("world", 2L),
-            new KeyValue<>("hello", 2L),
+            new KeyValue<>("helloo", 2L),
             new KeyValue<>("world", 3L)
         );
 
@@ -142,7 +143,7 @@ public class WordCountIntegrationTest {
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
         List<KeyValue<String, Long>> actualWordCounts = IntegrationTestUtils.readKeyValues(DEFAULT_OUTPUT_TOPIC, consumerConfig);
-        assertThat(actualWordCounts).containsExactlyElementsOf(expectedWordCounts);
+        assertThat(actualWordCounts, equalTo(expectedWordCounts));
     }
 
 }

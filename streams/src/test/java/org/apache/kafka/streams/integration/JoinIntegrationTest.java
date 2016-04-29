@@ -43,7 +43,8 @@ import java.util.Properties;
 import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertThat;
 
 /**
  * End-to-end integration test that demonstrates how to perform a join between a KStream and a
@@ -259,7 +260,7 @@ public class JoinIntegrationTest {
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
         List<KeyValue<String, Long>> actualClicksPerRegion = IntegrationTestUtils.readKeyValues(OUTPUT_TOPIC, consumerConfig);
-        assertThat(actualClicksPerRegion).containsExactlyElementsOf(expectedClicksPerRegion);
+        assertThat(actualClicksPerRegion, equalTo(expectedClicksPerRegion));
     }
 
 }
