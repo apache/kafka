@@ -25,7 +25,7 @@ import java.util.Map;
  * The window specifications used for joins.
  * <p>
  * A {@link JoinWindows} instance defines a join over two stream on the same key and a maximum time difference.
- * The time difference can either be positive, negative, or both. In SQL-style you would express this join as
+ * In SQL-style you would express this join as
  * <pre>
  *     SELECT * FROM stream1, stream2
  *     WHERE

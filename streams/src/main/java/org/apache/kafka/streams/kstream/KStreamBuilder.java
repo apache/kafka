@@ -45,6 +45,8 @@ public class KStreamBuilder extends TopologyBuilder {
     /**
      * Create a {@link KStream} instance from the specified topics.
      * The default deserializers specified in the config are used.
+     * <p>
+     * If multiple topics are specified there are nor ordering guaranteed for records from different topics.
      *
      * @param topics    the topic names; must contain at least one topic name
      * @return a {@link KStream} for the specified topics
@@ -54,7 +56,9 @@ public class KStreamBuilder extends TopologyBuilder {
     }
 
     /**
-     * Create a {@link KStream} instance for the specified topics.
+     * Create a {@link KStream} instance from the specified topics.
+     * <p>
+     * If multiple topics are specified there are nor ordering guaranteed for records from different topics.
      *
      * @param keySerde  key serde used to read this source {@link KStream},
      *                  if not specified the default serde defined in the configs will be used
@@ -106,6 +110,8 @@ public class KStreamBuilder extends TopologyBuilder {
 
     /**
      * Create a new instance of {@link KStream} by merging the given streams.
+     * <p>
+     * There are nor ordering guaranteed for records from different streams.
      *
      * @param streams   the instances of {@link KStream} to be merged
      * @return a {@link KStream} containing all records of the given streams

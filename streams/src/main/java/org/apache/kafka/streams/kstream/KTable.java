@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 
 /**
  * {@link KTable} is an abstraction of a <i>changelog stream</i> from a primary-keyed table.
+ * Each record in this stream is an update on the primary-keyed table with the record key as the primary key.
  * <p>
  * A {@link KTable} is either defined from one or multiple Kafka topics that are consumed message by message or
  * the result of a {@link KTable} transformation. An aggregation of a {@link KStream} also yields a {@link KTable}.
@@ -33,6 +34,8 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
  *
  * @param <K> Type of primary keys
  * @param <V> Type of value changes
+ *
+ * @see KStream
  */
 @InterfaceStability.Unstable
 public interface KTable<K, V> {
@@ -116,7 +119,7 @@ public interface KTable<K, V> {
      *
      * @param topic         the topic name
      *
-     * @return a {@link KTable} that contains the exact same records as this {@link KTable}
+     * @return a new {@link KTable} that contains the exact same records as this {@link KTable}
      */
     KTable<K, V> through(String topic);
 
@@ -129,7 +132,7 @@ public interface KTable<K, V> {
      *                     if not specified producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner} will be used
      * @param topic        the topic name
      *
-     * @return a {@link KTable} that contains the exact same records as this {@link KTable}
+     * @return a new {@link KTable} that contains the exact same records as this {@link KTable}
      */
     KTable<K, V> through(StreamPartitioner<K, V> partitioner, String topic);
 
@@ -147,7 +150,7 @@ public interface KTable<K, V> {
      *                     if not specified the default value serde defined in the configuration will be used
      * @param topic        the topic name
      *
-     * @return a {@link KTable} that contains the exact same records as this {@link KTable}
+     * @return a new {@link KTable} that contains the exact same records as this {@link KTable}
      */
     KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic);
 
@@ -167,7 +170,7 @@ public interface KTable<K, V> {
      *                     &mdash; otherwise {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner} will be used
      * @param topic        the topic name
      *
-     * @return a {@link KTable} that contains the exact same records as this {@link KTable}
+     * @return a new {@link KTable} that contains the exact same records as this {@link KTable}
      */
     KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic);
 
@@ -221,7 +224,9 @@ public interface KTable<K, V> {
     /**
      * Convert this stream to a new instance of {@link KStream}.
      *
-     * @return a {@link KStream} that contains a record for each update of this {@link KTable}
+     * @return a {@link KStream} that contains the same records as this {@link KTable};
+     *         the records are no longer treated as updates on a primary-keyed table,
+     *         but rather as normal key-value pairs in a record stream
      */
     KStream<K, V> toStream();
 
@@ -233,6 +238,9 @@ public interface KTable<K, V> {
      * @param <K1> the new key type
      *
      * @return a {@link KStream} that contains records with new keys of different type for each update of this {@link KTable}
+     * @return a {@link KStream} that contains the transformed records from this {@link KTable};
+     *         the records are no longer treated as updates on a primary-keyed table,
+     *         but rather as normal key-value pairs in a record stream
      */
     <K1> KStream<K1, V> toStream(KeyValueMapper<K, V, K1> mapper);
 
@@ -244,7 +252,8 @@ public interface KTable<K, V> {
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
      *
-     * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner}
+     * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key
      */
     <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
@@ -256,7 +265,8 @@ public interface KTable<K, V> {
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
      *
-     * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner}
+     * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key
      */
     <V1, R> KTable<K, R> outerJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
@@ -268,7 +278,8 @@ public interface KTable<K, V> {
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
      *
-     * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner}
+     * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key
      */
     <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
@@ -294,7 +305,7 @@ public interface KTable<K, V> {
      * @param <K1>          the key type of the {@link KGroupedTable}
      * @param <V1>          the value type of the {@link KGroupedTable}
      *
-     * @return a {@link KGroupedTable} that containing the re-partitioned records of this {@link KTable}
+     * @return a {@link KGroupedTable} that contains the re-partitioned records of this {@link KTable}
      */
     <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector);
 

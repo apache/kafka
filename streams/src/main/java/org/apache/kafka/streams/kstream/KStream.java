@@ -34,6 +34,8 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
  *
  * @param <K> Type of keys
  * @param <V> Type of values
+ *
+ * @see KTable
  */
 @InterfaceStability.Unstable
 public interface KStream<K, V> {
@@ -291,7 +293,7 @@ public interface KStream<K, V> {
      * @param transformerSupplier   the instance of {@link TransformerSupplier} that generates {@link org.apache.kafka.streams.kstream.Transformer}
      * @param stateStoreNames       the names of the state store used by the processor
      *
-     * @return a arbitrarily transformed {@link KStream}
+     * @return a new {@link KStream} with transformed key and value types
      */
     <K1, V1> KStream<K1, V1> transform(TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier, String... stateStoreNames);
 
@@ -301,7 +303,7 @@ public interface KStream<K, V> {
      * @param valueTransformerSupplier  the instance of {@link ValueTransformerSupplier} that generates {@link org.apache.kafka.streams.kstream.ValueTransformer}
      * @param stateStoreNames           the names of the state store used by the processor
      *
-     * @return a {@link KStream} that contains records with unmodified keys and new values of different type
+     * @return a {@link KStream} that contains records with unmodified keys and transformed values with type {@code R}
      */
     <R> KStream<K, R> transformValues(ValueTransformerSupplier<V, R> valueTransformerSupplier, String... stateStoreNames);
 
@@ -328,7 +330,8 @@ public interface KStream<K, V> {
      * @param <V1>              the value type of the other stream
      * @param <R>               the value type of the new stream
      *
-     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner}
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key and within the joining window intervals
      */
     <V1, R> KStream<K, R> join(
             KStream<K, V1> otherStream,
@@ -348,7 +351,8 @@ public interface KStream<K, V> {
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
      *
-     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner}
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key and within the joining window intervals
      */
     <V1, R> KStream<K, R> join(
             KStream<K, V1> otherStream,
@@ -370,7 +374,8 @@ public interface KStream<K, V> {
      * @param <V1>              the value type of the other stream
      * @param <R>               the value type of the new stream
      *
-     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner}
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key and within the joining window intervals
      */
     <V1, R> KStream<K, R> outerJoin(
             KStream<K, V1> otherStream,
@@ -390,7 +395,8 @@ public interface KStream<K, V> {
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
      *
-     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner}
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key and within the joining window intervals
      */
     <V1, R> KStream<K, R> outerJoin(
             KStream<K, V1> otherStream,
@@ -410,7 +416,8 @@ public interface KStream<K, V> {
      * @param <V1>              the value type of the other stream
      * @param <R>               the value type of the new stream
      *
-     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner}
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key and within the joining window intervals
      */
     <V1, R> KStream<K, R> leftJoin(
             KStream<K, V1> otherStream,
@@ -429,7 +436,8 @@ public interface KStream<K, V> {
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
      *
-     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner}
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key and within the joining window intervals
      */
     <V1, R> KStream<K, R> leftJoin(
             KStream<K, V1> otherStream,
@@ -444,7 +452,8 @@ public interface KStream<K, V> {
      * @param <V1>      the value type of the table
      * @param <V2>      the value type of the new stream
      *
-     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner}
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key and within the joining window intervals
      */
     <V1, V2> KStream<K, V2> leftJoin(KTable<K, V1> table, ValueJoiner<V, V1, V2> joiner);
 
@@ -458,7 +467,9 @@ public interface KStream<K, V> {
      * @param valueSerde        value serdes for materializing the aggregated table,
      *                          if not specified the default serdes defined in the configs will be used
      *
-     * @return a windowed {@link KTable} that contains records with same key and value type
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values
+     *         that represent the latest (rolling) aggregate for each key within that window
      */
     <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
                                                           Windows<W> windows,
@@ -472,7 +483,9 @@ public interface KStream<K, V> {
      * @param reducer the instance of {@link Reducer}
      * @param windows the specification of the aggregation {@link Windows}
      *
-     * @return a windowed {@link KTable} that contains records with same key and value type
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values
+     *         that represent the latest (rolling) aggregate for each key within that window
      */
     <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer, Windows<W> windows);
 
@@ -515,7 +528,9 @@ public interface KStream<K, V> {
      *                      if not specified the default serdes defined in the configs will be used
      * @param <T>           the value type of the resulted {@link KTable}
      *
-     * @return a windowed {@link KTable} that contains records with same key type and different value type
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values with type {@code T}
+     *         that represent the latest (rolling) aggregate for each key within that window
      */
     <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
                                                                 Aggregator<K, V, T> aggregator,
@@ -532,7 +547,9 @@ public interface KStream<K, V> {
      * @param windows       the specification of the aggregation {@link Windows}
      * @param <T>           the value type of the resulted {@link KTable}
      *
-     * @return a windowed {@link KTable} that contains records with same key type and different value type
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values with type {@code T}
+     *         that represent the latest (rolling) aggregate for each key within that window
      */
     <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
                                                                 Aggregator<K, V, T> aggregator,
@@ -580,7 +597,9 @@ public interface KStream<K, V> {
      * @param keySerde      key serdes for materializing the counting table,
      *                      if not specified the default serdes defined in the configs will be used
      *
-     * @return a windowed {@link KTable} containing records with same key type and values that represent the latest window count (i.e., number of records) for each key
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values
+     *         that represent the latest (rolling) count (i.e., number of records) for each key within that window
      */
     <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows, Serde<K> keySerde);
 
@@ -590,7 +609,9 @@ public interface KStream<K, V> {
      *
      * @param windows       the specification of the aggregation {@link Windows}
      *
-     * @return a windowed {@link KTable} containing records with same key type and values that represent the latest window count (i.e., number of records) for each key
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values
+     *         that represent the latest (rolling) count (i.e., number of records) for each key within that window
      */
     <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows);
 
@@ -601,7 +622,7 @@ public interface KStream<K, V> {
      *                      if not specified the default serdes defined in the configs will be used
      * @param name          the name of the resulted {@link KTable}
      *
-     * @return a {@link KTable} containing records with unmodified keys and values that represent the latest (rolling) count (i.e., number of records) for each key
+     * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) count (i.e., number of records) for each key
      */
     KTable<K, Long> countByKey(Serde<K> keySerde, String name);
 
@@ -611,7 +632,7 @@ public interface KStream<K, V> {
      *
      * @param name          the name of the resulted {@link KTable}
      *
-     * @return a {@link KTable} containing records with unmodified keys and values that represent the latest (rolling) count (i.e., number of records) for each key
+     * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) count (i.e., number of records) for each key
      */
     KTable<K, Long> countByKey(String name);
 
