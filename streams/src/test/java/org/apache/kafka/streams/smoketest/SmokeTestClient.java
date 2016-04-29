@@ -28,7 +28,7 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.kstream.TumblingWindows;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -207,7 +207,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // windowed count
         data.countByKey(
-                TumblingWindows.of("tumbling-win-cnt").with(WINDOW_SIZE),
+                TimeWindows.of("tumbling-win-cnt", WINDOW_SIZE),
                 stringSerde
         ).toStream().map(
                 new KeyValueMapper<Windowed<String>, Long, KeyValue<String, Long>>() {
