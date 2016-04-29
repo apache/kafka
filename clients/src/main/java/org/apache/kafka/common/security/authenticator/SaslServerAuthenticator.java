@@ -61,6 +61,8 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractRequestResponse;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.requests.ResponseSend;
@@ -290,7 +292,11 @@ public class SaslServerAuthenticator implements Authenticator {
             isKafkaRequest = true;
 
             ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
+            LOG.debug("Handle Kafka request {}", apiKey);
             switch (apiKey) {
+                case API_VERSIONS:
+                    handleApiVersionsRequest(requestHeader, (ApiVersionsRequest) request);
+                    break;
                 case SASL_HANDSHAKE:
                     clientMechanism = handleHandshakeRequest(requestHeader, (SaslHandshakeRequest) request);
                     break;
@@ -334,6 +340,10 @@ public class SaslServerAuthenticator implements Authenticator {
             sendKafkaResponse(requestHeader, new SaslHandshakeResponse(Errors.UNSUPPORTED_SASL_MECHANISM.code(), enabledMechanisms));
             throw new UnsupportedSaslMechanismException("Unsupported SASL mechanism " + clientMechanism);
         }
+    }
+
+    private void handleApiVersionsRequest(RequestHeader requestHeader, ApiVersionsRequest versionRequest) throws IOException, UnsupportedSaslMechanismException {
+        sendKafkaResponse(requestHeader, ApiVersionsResponse.apiVersionsResponse());
     }
 
     private void sendKafkaResponse(RequestHeader requestHeader, AbstractRequestResponse response) throws IOException {

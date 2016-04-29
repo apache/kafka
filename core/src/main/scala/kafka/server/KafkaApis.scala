@@ -47,16 +47,6 @@ import scala.collection._
 import scala.collection.JavaConverters._
 import org.apache.kafka.common.requests.SaslHandshakeResponse
 
-object KafkaApis {
-  val apiVersionsResponse = new ApiVersionsResponse(Errors.NONE.code, buildApiKeysToApiVersions.values.toList.asJava)
-
-  private def buildApiKeysToApiVersions: Map[Short, ApiVersionsResponse.ApiVersion] = {
-    ApiKeys.values.map(apiKey =>
-      apiKey.id -> new ApiVersionsResponse.ApiVersion(apiKey.id, Protocol.MIN_VERSIONS(apiKey.id), Protocol.CURR_VERSION(apiKey.id))).toMap
-  }
-}
-
-
 /**
  * Logic to handle the various Kafka requests
  */
@@ -1041,7 +1031,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val isApiVersionsRequestVersionSupported = request.header.apiVersion <= Protocol.CURR_VERSION(ApiKeys.API_VERSIONS.id) &&
                                               request.header.apiVersion >= Protocol.MIN_VERSIONS(ApiKeys.API_VERSIONS.id)
     val responseBody = if (isApiVersionsRequestVersionSupported)
-      KafkaApis.apiVersionsResponse
+      ApiVersionsResponse.apiVersionsResponse
     else
       ApiVersionsResponse.fromError(Errors.UNSUPPORTED_VERSION)
     requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
