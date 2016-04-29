@@ -20,8 +20,7 @@ import subprocess
 from ducktape.services.background_thread import BackgroundThreadService
 from ducktape.utils.util import wait_until
 
-from kafkatest.directory_layout.kafka_path import create_path_resolver
-from kafkatest.version.version import get_version
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.version.version import TRUNK, LATEST_0_8_2, LATEST_0_9, V_0_10_0_0
 
@@ -66,7 +65,7 @@ Option                                  Description
 """
 
 
-class ConsoleConsumer(JmxMixin, BackgroundThreadService):
+class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService):
     # Root directory for persistent output
     PERSISTENT_ROOT = "/mnt/console_consumer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "console_consumer.stdout")
@@ -132,7 +131,6 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         self.print_key = print_key
         self.log_level = "TRACE"
         self.stop_timeout_sec = stop_timeout_sec
-        self.path = create_path_resolver(self.context)
 
         self.enable_systest_events = enable_systest_events
         if self.enable_systest_events:
@@ -166,7 +164,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         args['config_file'] = ConsoleConsumer.CONFIG_FILE
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['jmx_port'] = self.jmx_port
-        args['console_consumer'] = self.path.script("kafka-console-consumer.sh", get_version(node))
+        args['console_consumer'] = self.path.script("kafka-console-consumer.sh", node)
         args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
         args['kafka_opts'] = self.security_config.kafka_opts
 

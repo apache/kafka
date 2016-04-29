@@ -25,8 +25,7 @@ from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
 from config import KafkaConfig
-from kafkatest.directory_layout.kafka_path import create_path_resolver
-from kafkatest.version.version import get_version
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import config_property
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.minikdc import MiniKdc
@@ -35,7 +34,8 @@ from kafkatest.version.version import TRUNK
 
 Port = collections.namedtuple('Port', ['name', 'number', 'open'])
 
-class KafkaService(JmxMixin, Service):
+
+class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     PERSISTENT_ROOT = "/mnt"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "kafka.log")
@@ -106,7 +106,6 @@ class KafkaService(JmxMixin, Service):
             'SASL_SSL': Port('SASL_SSL', 9095, False)
         }
 
-        self.path = create_path_resolver(self.context)
         for node in self.nodes:
             node.version = version
             node.config = KafkaConfig(**{config_property.BROKER_ID: self.idx(node)})
@@ -178,7 +177,7 @@ class KafkaService(JmxMixin, Service):
         cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
         cmd += "%s %s 1>> %s 2>> %s &" % \
-               (self.path.script("kafka-server-start.sh", get_version(node)),
+               (self.path.script("kafka-server-start.sh", node),
                 KafkaService.CONFIG_FILE,
                 KafkaService.STDOUT_CAPTURE,
                 KafkaService.STDERR_CAPTURE)
@@ -246,7 +245,7 @@ class KafkaService(JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
         self.logger.info("Creating topic %s with settings %s", topic_cfg["topic"], topic_cfg)
-        kafka_topic_script = self.path.script("kafka-topics.sh", get_version(node))
+        kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
         cmd = kafka_topic_script + " "
         cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s --partitions %(partitions)d --replication-factor %(replication)d" % {
@@ -272,7 +271,7 @@ class KafkaService(JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
         cmd = "%s --zookeeper %s --topic %s --describe" % \
-              (self.path.script("kafka-topics.sh", get_version(node)), self.zk.connect_setting(), topic)
+              (self.path.script("kafka-topics.sh", node), self.zk.connect_setting(), topic)
         output = ""
         for line in node.account.ssh_capture(cmd):
             output += line
@@ -283,7 +282,7 @@ class KafkaService(JmxMixin, Service):
             node = self.nodes[0]
         self.logger.info("Altering message format version for topic %s with format %s", topic, msg_format_version)
         cmd = "%s --zookeeper %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
-              (self.path.script("kafka-configs.sh", get_version(node)), self.zk.connect_setting(), topic, msg_format_version)
+              (self.path.script("kafka-configs.sh", node), self.zk.connect_setting(), topic, msg_format_version)
         self.logger.info("Running alter message format command...\n%s" % cmd)
         node.account.ssh(cmd)
 
@@ -330,7 +329,7 @@ class KafkaService(JmxMixin, Service):
 
         # create command
         cmd = "echo %s > %s && " % (json_str, json_file)
-        cmd += "%s " % self.path.script("kafka-reassign-partitions.sh", get_version(node))
+        cmd += "%s " % self.path.script("kafka-reassign-partitions.sh", node)
         cmd += "--zookeeper %s " % self.zk.connect_setting()
         cmd += "--reassignment-json-file %s " % json_file
         cmd += "--verify "
@@ -363,7 +362,7 @@ class KafkaService(JmxMixin, Service):
 
         # create command
         cmd = "echo %s > %s && " % (json_str, json_file)
-        cmd += "%s " % self.path.script( "kafka-reassign-partitions.sh", get_version(node))
+        cmd += "%s " % self.path.script( "kafka-reassign-partitions.sh", node)
         cmd += "--zookeeper %s " % self.zk.connect_setting()
         cmd += "--reassignment-json-file %s " % json_file
         cmd += "--execute"
@@ -395,7 +394,7 @@ class KafkaService(JmxMixin, Service):
             # Check each data file to see if it contains the messages we want
             for log in files:
                 cmd = "%s kafka.tools.DumpLogSegments --print-data-log --files %s | grep -E \"%s\"" % \
-                      (self.path.script("kafka-run-class.sh", get_version(node)), log.strip(), payload_match)
+                      (self.path.script("kafka-run-class.sh", node), log.strip(), payload_match)
 
                 for line in node.account.ssh_capture(cmd, allow_fail=True):
                     for val in messages:
@@ -437,7 +436,7 @@ class KafkaService(JmxMixin, Service):
         """
         if node is None:
             node = self.nodes[0]
-        consumer_group_script = self.path.script("kafka-consumer-groups.sh", get_version(node))
+        consumer_group_script = self.path.script("kafka-consumer-groups.sh", node)
 
         if command_config is None:
             command_config = ""
@@ -464,7 +463,7 @@ class KafkaService(JmxMixin, Service):
         """
         if node is None:
             node = self.nodes[0]
-        consumer_group_script = self.path.script("kafka-consumer-groups.sh", get_version(node))
+        consumer_group_script = self.path.script("kafka-consumer-groups.sh", node)
 
         if command_config is None:
             command_config = ""
@@ -517,7 +516,7 @@ class KafkaService(JmxMixin, Service):
     def get_offset_shell(self, topic, partitions, max_wait_ms, offsets, time):
         node = self.nodes[0]
 
-        cmd = self.path.script("kafka-run-class.sh", get_version(node))
+        cmd = self.path.script("kafka-run-class.sh", node)
         cmd += " kafka.tools.GetOffsetShell"
         cmd += " --topic %s --broker-list %s --max-wait-ms %s --offsets %s --time %s" % (topic, self.bootstrap_servers(self.security_protocol), max_wait_ms, offsets, time)
 

@@ -20,12 +20,12 @@ import time
 
 from ducktape.services.service import Service
 
-from kafkatest.directory_layout.kafka_path import create_path_resolver
-from kafkatest.version.version import TRUNK, get_version
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.version.version import TRUNK
 from kafkatest.services.security.security_config import SecurityConfig
 
 
-class ZookeeperService(Service):
+class ZookeeperService(KafkaPathResolverMixin, Service):
 
     logs = {
         "zk_log": {
@@ -43,8 +43,6 @@ class ZookeeperService(Service):
         self.kafka_opts = ""
         self.zk_sasl = zk_sasl
         super(ZookeeperService, self).__init__(context, num_nodes)
-
-        self.path = create_path_resolver(self.context)
 
     @property
     def security_config(self):
@@ -75,7 +73,7 @@ class ZookeeperService(Service):
         node.account.create_file("/mnt/zookeeper.properties", config_file)
 
         start_cmd = "export KAFKA_OPTS=\"%s\";" % self.kafka_opts 
-        start_cmd += "%s " % self.path.script("zookeeper-server-start.sh", get_version(node))
+        start_cmd += "%s " % self.path.script("zookeeper-server-start.sh", node)
         start_cmd += "/mnt/zookeeper.properties 1>> %(path)s 2>> %(path)s &" % self.logs["zk_log"]
         node.account.ssh(start_cmd)
 
@@ -114,7 +112,7 @@ class ZookeeperService(Service):
     #
     def zookeeper_migration(self, node, zk_acl):
         la_migra_cmd = "%s --zookeeper.acl=%s --zookeeper.connect=%s" % \
-                       (self.path.script("zookeeper-security-migration.sh", get_version(node)), zk_acl, self.connect_setting())
+                       (self.path.script("zookeeper-security-migration.sh", node), zk_acl, self.connect_setting())
         node.account.ssh(la_migra_cmd)
 
     def query(self, path):

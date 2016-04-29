@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from kafkatest.directory_layout.path_resolver import PathResolver
-from kafkatest.version.version import TRUNK
+from kafkatest.version.version import get_version, KafkaVersion, TRUNK
 
 import importlib
 import os
@@ -82,6 +82,24 @@ def create_path_resolver(context, project="kafka"):
     return path_resolver
 
 
+class KafkaPathResolverMixin(object):
+    """Mixin to automatically provide pluggable path resolution functionality to any class using it.
+
+    Keep life simple, and don't add a constructor to this class:
+    Since use of a mixin entails multiple inheritence, it is *much* simpler to reason about the interaction of this
+    class with subclasses if we don't have to worry about method resolution order, constructor signatures etc.
+    """
+
+    @property
+    def path(self):
+        if not hasattr(self, "_path"):
+            setattr(self, "_path", create_path_resolver(self.context, "kafka"))
+            if hasattr(self.context, "logger") and self.context.logger is not None:
+                self.context.logger.debug("Using path resolver %s" % self._path.__class__.__name__)
+
+        return self._path
+
+
 class KafkaSystemTestPathResolver(PathResolver):
     """Path resolver for Kafka system tests which assumes the following layout:
 
@@ -93,21 +111,32 @@ class KafkaSystemTestPathResolver(PathResolver):
     def __init__(self, context, project="kafka"):
         super(KafkaSystemTestPathResolver, self).__init__(context, project=project)
 
-    def home(self, version=TRUNK):
+    def home(self, node_or_version=TRUNK):
+        version = self._version(node_or_version)
         home_dir = self.project
         if version is not None:
             home_dir += "-%s" % str(version)
 
         return os.path.join(DEFAULT_KAFKA_INSTALL_ROOT, home_dir)
 
-    def bin(self, version=TRUNK):
+    def bin(self, node_or_version=TRUNK):
+        version = self._version(node_or_version)
         return os.path.join(self.home(version), "bin")
 
-    def script(self, script_name, version=TRUNK):
+    def script(self, script_name, node_or_version=TRUNK):
+        version = self._version(node_or_version)
         return os.path.join(self.bin(version), script_name)
 
-    def jar(self, jar_name, version=TRUNK):
-        raise NotImplementedError("KafkaSystemTestPathResolver currently does not support the jar method")
+    def jar(self, jar_name, node_or_version=TRUNK):
+        version = self._version(node_or_version)
+        return JARS[version][jar_name]
 
     def scratch_space(self, service_instance):
         return os.path.join(DEFAULT_SCRATCH_ROOT, service_instance.name)
+
+    def _version(self, node_or_version):
+        if isinstance(node_or_version, KafkaVersion):
+            return node_or_version
+        else:
+            return get_version(node_or_version)
+

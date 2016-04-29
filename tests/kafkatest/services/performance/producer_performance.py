@@ -18,7 +18,7 @@ from ducktape.utils.util import wait_until
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version.version import TRUNK, V_0_9_0_0, get_version
+from kafkatest.version.version import TRUNK, V_0_9_0_0
 
 import os
 import subprocess
@@ -83,7 +83,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'jmx_port': self.jmx_port,
             'client_id': self.client_id,
-            'kafka_run_class': self.path.script("kafka-run-class.sh", get_version(node))
+            'kafka_run_class': self.path.script("kafka-run-class.sh", node)
             })
 
         cmd = ""

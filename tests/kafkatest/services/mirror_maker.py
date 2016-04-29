@@ -19,8 +19,7 @@ import subprocess
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
-from kafkatest.directory_layout.kafka_path import create_path_resolver
-from kafkatest.version.version import get_version
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
 """
 0.8.2.1 MirrorMaker options
@@ -56,7 +55,7 @@ Option                                  Description
 """
 
 
-class MirrorMaker(Service):
+class MirrorMaker(KafkaPathResolverMixin, Service):
 
     # Root directory for persistent output
     PERSISTENT_ROOT = "/mnt/mirror_maker"
@@ -103,7 +102,6 @@ class MirrorMaker(Service):
         self.blacklist = blacklist
         self.source = source
         self.target = target
-        self.path = create_path_resolver(self.context)
 
         self.offsets_storage = offsets_storage.lower()
         if not (self.offsets_storage in ["kafka", "zookeeper"]):
@@ -115,7 +113,7 @@ class MirrorMaker(Service):
         cmd = "export LOG_DIR=%s;" % MirrorMaker.LOG_DIR
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % MirrorMaker.LOG4J_CONFIG
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
-        cmd += " %s kafka.tools.MirrorMaker" % self.path.script("kafka-run-class.sh", get_version(node))
+        cmd += " %s kafka.tools.MirrorMaker" % self.path.script("kafka-run-class.sh", node)
         cmd += " --consumer.config %s" % MirrorMaker.CONSUMER_CONFIG
         cmd += " --producer.config %s" % MirrorMaker.PRODUCER_CONFIG
         cmd += " --offset.commit.interval.ms %s" % str(self.offset_commit_interval_ms)

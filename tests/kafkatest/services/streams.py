@@ -19,10 +19,10 @@ import signal
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
-from kafkatest.directory_layout.kafka_path import create_path_resolver
-from kafkatest.version.version import get_version
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
-class StreamsSmokeTestBaseService(Service):
+
+class StreamsSmokeTestBaseService(KafkaPathResolverMixin, Service):
     """Base class for Streams Smoke Test services providing some common settings and functionality"""
 
     PERSISTENT_ROOT = "/mnt/streams"
@@ -49,7 +49,6 @@ class StreamsSmokeTestBaseService(Service):
         super(StreamsSmokeTestBaseService, self).__init__(context, 1)
         self.kafka = kafka
         self.args = {'command': command}
-        self.path = create_path_resolver(self.context)
 
     @property
     def node(self):
@@ -107,7 +106,7 @@ class StreamsSmokeTestBaseService(Service):
         args['stderr'] = self.STDERR_FILE
         args['pidfile'] = self.PID_FILE
         args['log4j'] = self.LOG4J_CONFIG_FILE
-        args['kafka_run_class'] = self.path.script("kafka-run-class.sh", get_version(node))
+        args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s org.apache.kafka.streams.smoketest.StreamsSmokeTest " \

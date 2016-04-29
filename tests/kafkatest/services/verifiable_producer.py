@@ -21,12 +21,12 @@ import time
 
 from ducktape.services.background_thread import BackgroundThreadService
 
-from kafkatest.directory_layout.kafka_path import create_path_resolver
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.utils import is_int, is_int_with_prefix
-from kafkatest.version.version import TRUNK, LATEST_0_8_2, get_version
+from kafkatest.version.version import TRUNK, LATEST_0_8_2
 
 
-class VerifiableProducer(BackgroundThreadService):
+class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_producer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stdout")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
@@ -73,7 +73,6 @@ class VerifiableProducer(BackgroundThreadService):
         self.acked_values = []
         self.not_acked_values = []
         self.produced_count = {}
-        self.path = create_path_resolver(self.context)
         self.clean_shutdown_nodes = set()
         self.acks = acks
         self.stop_timeout_sec = stop_timeout_sec
@@ -161,7 +160,7 @@ class VerifiableProducer(BackgroundThreadService):
         cmd += "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
-        cmd += " " + self.path.script("kafka-run-class.sh", get_version(node))
+        cmd += " " + self.path.script("kafka-run-class.sh", node)
         cmd += " org.apache.kafka.tools.VerifiableProducer"
         cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol))
         if self.max_messages > 0:

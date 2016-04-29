@@ -20,9 +20,9 @@ import subprocess
 
 from ducktape.services.background_thread import BackgroundThreadService
 
-from kafkatest.directory_layout.kafka_path import create_path_resolver
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
-from kafkatest.version.version import TRUNK, get_version
+from kafkatest.version.version import TRUNK
 
 
 class ConsumerState:
@@ -112,7 +112,7 @@ class ConsumerEventHandler(object):
             return None
 
 
-class VerifiableConsumer(BackgroundThreadService):
+class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_consumer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.stdout")
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.stderr")
@@ -155,7 +155,6 @@ class VerifiableConsumer(BackgroundThreadService):
         self.event_handlers = {}
         self.global_position = {}
         self.global_committed = {}
-        self.path = create_path_resolver(self.context)
 
         for node in self.nodes:
             node.version = version
@@ -227,7 +226,7 @@ class VerifiableConsumer(BackgroundThreadService):
         cmd += "export LOG_DIR=%s;" % VerifiableConsumer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableConsumer.LOG4J_CONFIG
-        cmd += self.path.script("kafka-run-class.sh", get_version(node)) + " org.apache.kafka.tools.VerifiableConsumer" \
+        cmd += self.path.script("kafka-run-class.sh", node) + " org.apache.kafka.tools.VerifiableConsumer" \
               " --group-id %s --topic %s --broker-list %s --session-timeout %s --assignment-strategy %s %s" % \
                                             (self.group_id, self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol),
                self.session_timeout_sec*1000, self.assignment_strategy, "--enable-autocommit" if self.enable_autocommit else "")
