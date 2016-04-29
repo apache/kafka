@@ -168,10 +168,10 @@ public class PageViewTypedDemo {
                     public KeyValue<WindowedPageViewByRegion, RegionCount> apply(Windowed<String> key, Long value) {
                         WindowedPageViewByRegion wViewByRegion = new WindowedPageViewByRegion();
                         wViewByRegion.windowStart = key.window().start();
-                        wViewByRegion.region = key.value();
+                        wViewByRegion.region = key.key();
 
                         RegionCount rCount = new RegionCount();
-                        rCount.region = key.value();
+                        rCount.region = key.key();
                         rCount.count = value;
 
                         return new KeyValue<>(wViewByRegion, rCount);

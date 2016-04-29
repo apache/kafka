@@ -18,11 +18,18 @@
 package org.apache.kafka.streams.kstream;
 
 /**
- * The Reducer interface for combining two values of the same type into a new value.
+ * The {@link Reducer} interface for combining two values of the same type into a new value.
  *
  * @param <V>   value type
  */
 public interface Reducer<V> {
 
+    /**
+     * Aggregate the two given values into a single one.
+     *
+     * @param value1  the first value for the aggregation
+     * @param value2  the second value for the aggregation
+     * @return        the aggregated value
+     */
     V apply(V value1, V value2);
 }

@@ -26,7 +26,9 @@ import java.util.Map;
  */
 public class JoinWindows extends Windows<TimeWindow> {
 
+    /** Maximum time difference for tuples that are before the join tuple. */
     public final long before;
+    /** Maximum time difference for tuples that are after the join tuple. */
     public final long after;
 
     private JoinWindows(String name, long before, long after) {
@@ -41,40 +43,41 @@ public class JoinWindows extends Windows<TimeWindow> {
     }
 
     /**
-     * Specifies that records of the same key are joinable if their timestamp stamps are within
-     * timeDifference.
+     * Specifies that records of the same key are joinable if their timestamps are within {@code timeDifference}.
      *
-     * @param timeDifference    join window interval in milliseconds
+     * @param timeDifference    join window interval
      */
     public JoinWindows within(long timeDifference) {
         return new JoinWindows(this.name, timeDifference, timeDifference);
     }
 
     /**
-     * Specifies that records of the same key are joinable if their timestamp stamps are within
+     * Specifies that records of the same key are joinable if their timestamps are within
      * the join window interval, and if the timestamp of a record from the secondary stream is
      * earlier than or equal to the timestamp of a record from the first stream.
      *
-     * @param timeDifference    join window interval in milliseconds
+     * @param timeDifference    join window interval
      */
     public JoinWindows before(long timeDifference) {
         return new JoinWindows(this.name, timeDifference, this.after);
     }
 
     /**
-     * Specifies that records of the same key are joinable if their timestamp stamps are within
+     * Specifies that records of the same key are joinable if their timestamps are within
      * the join window interval, and if the timestamp of a record from the secondary stream
      * is later than or equal to the timestamp of a record from the first stream.
      *
-     * @param timeDifference    join window interval in milliseconds
+     * @param timeDifference    join window interval
      */
     public JoinWindows after(long timeDifference) {
         return new JoinWindows(this.name, this.before, timeDifference);
     }
 
+    /**
+     * Not supported by {@link JoinWindows}. Throws {@link UnsupportedOperationException}.
+     */
     @Override
     public Map<Long, TimeWindow> windowsFor(long timestamp) {
-        // this function should never be called
         throw new UnsupportedOperationException("windowsFor() is not supported in JoinWindows");
     }
 

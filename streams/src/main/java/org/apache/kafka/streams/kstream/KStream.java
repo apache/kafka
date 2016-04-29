@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 /**
- * KStream is an abstraction of a <i>record stream</i> of key-value pairs.
+ * {@link KStream} is an abstraction of a <i>record stream</i> of key-value pairs.
  *
  * @param <K> Type of keys
  * @param <V> Type of values
@@ -510,7 +510,7 @@ public interface KStream<K, V> {
                                     String name);
 
     /**
-     * Count number of messages of this stream by key on a window basis into a new instance of windowed {@link KTable}.
+     * Count number of records of this stream by key on a window basis into a new instance of windowed {@link KTable}.
      *
      * @param windows       the specification of the aggregation {@link Windows}
      * @param keySerde      key serdes for materializing the counting table,
@@ -519,7 +519,7 @@ public interface KStream<K, V> {
     <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows, Serde<K> keySerde);
 
     /**
-     * Count number of messages of this stream by key on a window basis into a new instance of windowed {@link KTable}
+     * Count number of records of this stream by key on a window basis into a new instance of windowed {@link KTable}
      * with default serializers and deserializers.
      *
      * @param windows       the specification of the aggregation {@link Windows}
@@ -527,7 +527,7 @@ public interface KStream<K, V> {
     <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows);
 
     /**
-     * Count number of messages of this stream by key into a new instance of ever-updating {@link KTable}.
+     * Count number of records of this stream by key into a new instance of ever-updating {@link KTable}.
      *
      * @param keySerde      key serdes for materializing the counting table,
      *                      if not specified the default serdes defined in the configs will be used
@@ -536,7 +536,7 @@ public interface KStream<K, V> {
     KTable<K, Long> countByKey(Serde<K> keySerde, String name);
 
     /**
-     * Count number of messages of this stream by key into a new instance of ever-updating {@link KTable}
+     * Count number of records of this stream by key into a new instance of ever-updating {@link KTable}
      * with default serializers and deserializers.
      *
      * @param name          the name of the resulted {@link KTable}

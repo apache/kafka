@@ -286,7 +286,7 @@ public class StreamThread extends Thread {
         removeStandbyTasks();
 
         // We need to first close the underlying clients before closing the state
-        // manager, for example we need to make sure producer's message sends
+        // manager, for example we need to make sure producer's record sends
         // have all been acked before the state manager records
         // changelog sent offsets
         try {

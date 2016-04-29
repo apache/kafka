@@ -29,6 +29,7 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
     private static final long DEFAULT_START_TIMESTAMP = 0L;
 
+    /** The start timestamp of the window. */
     public final long start;
 
     private UnlimitedWindows(String name, long start) {
@@ -41,12 +42,18 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
     }
 
     /**
-     * Returns an unlimited window definition
+     * Return an unlimited window starting at timestamp zero.
      */
     public static UnlimitedWindows of(String name) {
         return new UnlimitedWindows(name, DEFAULT_START_TIMESTAMP);
     }
 
+    /**
+     * Return a new unlimited window for the specified start timestamp.
+     *
+     * @param start  the window start time
+     * @return       a new unlimited window that starts at {@code start}
+     */
     public UnlimitedWindows startOn(long start) {
         return new UnlimitedWindows(this.name, start);
     }
