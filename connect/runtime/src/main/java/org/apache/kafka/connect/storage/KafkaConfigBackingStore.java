@@ -205,6 +205,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     // Connector and task configs: name or id -> config map
     private Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
     private Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
+
     // Set of connectors where we saw a task commit with an incomplete set of task config updates, indicating the data
     // is in an inconsistent state and we cannot safely use them until they have been refreshed.
     private Set<String> inconsistent = new HashSet<>();
@@ -339,12 +340,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
      * Write these task configurations and associated commit messages, unless an inconsistency is found that indicates
      * that we would be leaving one of the referenced connectors with an inconsistent state.
      *
-     * @param configs map containing task configurations
+     * @param connector the connector to write task configuration
+     * @param configs list of task configurations for the connector
      * @throws ConnectException if the task configurations do not resolve inconsistencies found in the existing root
      *                          and task configurations.
      */
     @Override
-    public void putTaskConfigs(String connector, Map<ConnectorTaskId, Map<String, String>> configs) {
+    public void putTaskConfigs(String connector, List<Map<String, String>> configs) {
         // Make sure we're at the end of the log. We should be the only writer, but we want to make sure we don't have
         // any outstanding lagging data to consume.
         try {
@@ -354,46 +356,33 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             throw new ConnectException("Error writing root configuration to Kafka", e);
         }
 
-        // In theory, there is only a single writer and we shouldn't need this lock since the background thread should
-        // not invoke any callbacks that would conflict, but in practice this guards against inconsistencies due to
-        // the root config being updated.
-        Map<String, Integer> newTaskCounts = new HashMap<>();
-        synchronized (lock) {
-            // Validate tasks in this assignment. Any task configuration updates should include updates for *all* tasks
-            // in the connector -- we should have all task IDs 0 - N-1 within a connector if any task is included here
-            Map<String, Set<Integer>> updatedConfigIdsByConnector = taskIdsByConnector(configs);
-            for (Map.Entry<String, Set<Integer>> taskConfigSetEntry : updatedConfigIdsByConnector.entrySet()) {
-                if (!completeTaskIdSet(taskConfigSetEntry.getValue(), taskConfigSetEntry.getValue().size())) {
-                    log.error("Submitted task configuration contain invalid range of task IDs, ignoring this submission");
-                    throw new ConnectException("Error writing task configurations: found some connectors with invalid connectors");
-                }
-                newTaskCounts.put(taskConfigSetEntry.getKey(), taskConfigSetEntry.getValue().size());
-            }
-        }
+        int taskCount = configs.size();
 
         // Start sending all the individual updates
-        for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : configs.entrySet()) {
+        int index = 0;
+        for (Map<String, String> taskConfig: configs) {
             Struct connectConfig = new Struct(TASK_CONFIGURATION_V0);
-            connectConfig.put("properties", taskConfigEntry.getValue());
+            connectConfig.put("properties", taskConfig);
             byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
-            log.debug("Writing configuration for task " + taskConfigEntry.getKey() + " configuration: " + taskConfigEntry.getValue());
-            configLog.send(TASK_KEY(taskConfigEntry.getKey()), serializedConfig);
+            log.debug("Writing configuration for task " + index + " configuration: " + taskConfig);
+            ConnectorTaskId connectorTaskId = new ConnectorTaskId(connector, index);
+            configLog.send(TASK_KEY(connectorTaskId), serializedConfig);
+            index++;
         }
 
         // Finally, send the commit to update the number of tasks and apply the new configs, then wait until we read to
         // the end of the log
         try {
             // Read to end to ensure all the task configs have been written
-            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-
-            // Write all the commit messages
-            for (Map.Entry<String, Integer> taskCountEntry : newTaskCounts.entrySet()) {
-                Struct connectConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
-                connectConfig.put("tasks", taskCountEntry.getValue());
-                byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
-                log.debug("Writing commit for connector " + taskCountEntry.getKey() + " with " + taskCountEntry.getValue() + " tasks.");
-                configLog.send(COMMIT_TASKS_KEY(taskCountEntry.getKey()), serializedConfig);
+            if (taskCount > 0) {
+                configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             }
+            // Write the commit message
+            Struct connectConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
+            connectConfig.put("tasks", taskCount);
+            byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
+            log.debug("Writing commit for connector " + connector + " with " + taskCount + " tasks.");
+            configLog.send(COMMIT_TASKS_KEY(connector), serializedConfig);
 
             // Read to end to ensure all the commit messages have been written
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -426,6 +415,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, new SystemTime());
     }
 
+    @SuppressWarnings("unchecked")
     private class ConsumeCallback implements Callback<ConsumerRecord<String, byte[]>> {
         @Override
         public void onCompletion(Throwable error, ConsumerRecord<String, byte[]> record) {
@@ -562,20 +552,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         log.error("Ignoring connector tasks configuration commit for connector " + connectorName + " because it is in the wrong format: " + value.value());
                         return;
                     }
-
                     Map<ConnectorTaskId, Map<String, String>> deferred = deferredTaskUpdates.get(connectorName);
 
                     int newTaskCount = intValue(((Map<String, Object>) value.value()).get("tasks"));
 
                     // Validate the configs we're supposed to update to ensure we're getting a complete configuration
                     // update of all tasks that are expected based on the number of tasks in the commit message.
-                    Map<String, Set<Integer>> updatedConfigIdsByConnector = taskIdsByConnector(deferred);
-                    Set<Integer> taskIdSet = updatedConfigIdsByConnector.get(connectorName);
-                    if (taskIdSet == null) {
-                        //TODO: Figure out why this happens (KAFKA-3321)
-                        log.error("Received a commit message for connector " + connectorName + " but there is no matching configuration for tasks in this connector. This should never happen.");
-                        return;
-                    }
+                    Set<Integer> taskIdSet = taskIds(connectorName, deferred);
                     if (!completeTaskIdSet(taskIdSet, newTaskCount)) {
                         // Given the logic for writing commit messages, we should only hit this condition due to compacted
                         // historical data, in which case we would not have applied any updates yet and there will be no
@@ -622,19 +605,18 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     }
 
     /**
-     * Given task configurations, get a set of integer task IDs organized by connector name.
+     * Given task configurations, get a set of integer task IDs for the connector.
      */
-    private Map<String, Set<Integer>> taskIdsByConnector(Map<ConnectorTaskId, Map<String, String>> configs) {
-        Map<String, Set<Integer>> connectorTaskIds = new HashMap<>();
-        if (configs == null)
-            return connectorTaskIds;
-        for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : configs.entrySet()) {
-            ConnectorTaskId taskId = taskConfigEntry.getKey();
-            if (!connectorTaskIds.containsKey(taskId.connector()))
-                connectorTaskIds.put(taskId.connector(), new TreeSet<Integer>());
-            connectorTaskIds.get(taskId.connector()).add(taskId.task());
+    private Set<Integer> taskIds(String connector, Map<ConnectorTaskId, Map<String, String>> configs) {
+        Set<Integer> tasks = new TreeSet<>();
+        if (configs == null) {
+            return tasks;
         }
-        return connectorTaskIds;
+        for (ConnectorTaskId taskId : configs.keySet()) {
+            assert taskId.connector().equals(connector);
+            tasks.add(taskId.task());
+        }
+        return tasks;
     }
 
     private boolean completeTaskIdSet(Set<Integer> idSet, int expectedSize) {
