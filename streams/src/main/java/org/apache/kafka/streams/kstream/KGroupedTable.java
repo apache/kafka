@@ -21,7 +21,11 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 
 /**
- * {@link KGroupedTable} is an abstraction of a <i>grouped changelog stream</i> from a primary-keyed table.
+ * {@link KGroupedTable} is an abstraction of a <i>grouped changelog stream</i> from a primary-keyed table,
+ * usually on a different grouping key than the original primary key.
+ * <p>
+ * It is an intermediate representation after a re-grouping of a {@link KTable} before an aggregation is applied
+ * to the new partitions resulting in a new {@link KTable}.
  *
  * @param <K> Type of primary keys
  * @param <V> Type of value changes
@@ -35,6 +39,8 @@ public interface KGroupedTable<K, V> {
      * @param adder         the instance of {@link Reducer} for addition
      * @param subtractor    the instance of {@link Reducer} for subtraction
      * @param name          the name of the resulted {@link KTable}
+     * @return a {@link KTable} with the same key and value types as this {@link KGroupedTable},
+     *         containing aggregated values for each key
      */
     KTable<K, V> reduce(Reducer<V> adder,
                         Reducer<V> subtractor,
@@ -50,6 +56,8 @@ public interface KGroupedTable<K, V> {
      *                      if not specified the default serdes defined in the configs will be used
      * @param name          the name of the resulted table
      * @param <T>           the value type of the aggregated {@link KTable}
+     * @return a {@link KTable} with same key and aggregated value type {@code T},
+     *         containing aggregated values for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                Aggregator<K, V, T> adder,
@@ -66,6 +74,8 @@ public interface KGroupedTable<K, V> {
      * @param substractor   the instance of {@link Aggregator} for subtraction
      * @param name          the name of the resulted {@link KTable}
      * @param <T>           the value type of the aggregated {@link KTable}
+     * @return a {@link KTable} with same key and aggregated value type {@code T},
+     *         containing aggregated values for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                Aggregator<K, V, T> adder,
@@ -76,6 +86,8 @@ public interface KGroupedTable<K, V> {
      * Count number of records of this stream by the selected key into a new instance of {@link KTable}.
      *
      * @param name          the name of the resulted {@link KTable}
+     * @return a {@link KTable} with same key and {@link Long} value type as this {@link KGroupedTable},
+     *         containing the number of values for each key
      */
     KTable<K, Long> count(String name);
 

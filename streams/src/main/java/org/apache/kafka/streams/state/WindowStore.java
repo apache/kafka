@@ -45,6 +45,8 @@ public interface WindowStore<K, V> extends StateStore {
     /**
      * Get all the key-value pairs with the given key and the time range from all
      * the existing windows.
+     *
+     * @return an iterator over key-value pairs {@code <timestamp, value>}
      */
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
 }
