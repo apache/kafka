@@ -30,32 +30,22 @@ DEFAULT_KAFKA_INSTALL_ROOT = "/opt"
 KAFKA_PATH_RESOLVER_KEY = "kafka-path-resolver"
 DEFAULT_KAFKA_PATH_RESOLVER = "kafkatest.directory_layout.kafka_path.KafkaSystemTestPathResolver"
 
+# Variables for jar path resolution
+CORE_JAR_NAME = "core"
+CORE_LIBS_JAR_NAME = "core-libs"
+CORE_DEPENDANT_TEST_LIBS_JAR_NAME = "core-dependant-testlibs"
+TOOLS_JAR_NAME = "tools"
+TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME = "tools-dependant-libs"
 
 JARS = {
     "trunk": {
-        "core": ["core/build/*/*.jar"],
-        "tools": ["tools/build/libs/kafka-tools*.jar", "tools/build/dependant-libs*/*.jar"]
+        CORE_JAR_NAME: "core/build/*/*.jar",
+        CORE_LIBS_JAR_NAME: "core/build/libs/*.jar",
+        CORE_DEPENDANT_TEST_LIBS_JAR_NAME: "core/build/dependant-testlibs/*.jar",
+        TOOLS_JAR_NAME: "tools/build/libs/kafka-tools*.jar",
+        TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "tools/build/dependant-libs*/*.jar"
     }
 }
-
-
-"""
-core jars
-
-def core_jar_paths(self, node, lib_dir_name):
-    lib_dir = "%s/core/build/%s" % home, lib_dir_name)
-    jars = node.account.ssh_capture("ls " + lib_dir)
-    return [os.path.join(lib_dir, jar.strip()) for jar in jars]
-"""
-
-
-"""
-tools jars - used in verifiable producer
-
-cmd += "for file in %s/tools/build/libs/kafka-tools*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % kafka_trunk_home
-cmd += "for file in %s/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % kafka_trunk_home
-cmd += "export CLASSPATH; "
-"""
 
 
 def create_path_resolver(context, project="kafka"):
@@ -129,7 +119,7 @@ class KafkaSystemTestPathResolver(object):
 
     def jar(self, jar_name, node_or_version=TRUNK):
         version = self._version(node_or_version)
-        return JARS[version][jar_name]
+        return os.path.join(self.home(version), JARS[str(version)][jar_name])
 
     def scratch_space(self, service_instance):
         return os.path.join(DEFAULT_SCRATCH_ROOT, service_instance.name)

@@ -76,7 +76,7 @@ class EndToEndLatencyService(PerformanceService):
             'zk_connect': self.kafka.zk.connect_setting(),
             'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'config_file': EndToEndLatencyService.CONFIG_FILE,
-            'kafka_run_class': self.path.script("kafka-run-class.sh")
+            'kafka_run_class': self.path.script("kafka-run-class.sh", node)
         })
 
         cmd = "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % EndToEndLatencyService.LOG4J_CONFIG

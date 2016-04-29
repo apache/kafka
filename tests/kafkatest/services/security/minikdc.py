@@ -22,7 +22,8 @@ from tempfile import mkstemp
 
 from ducktape.services.service import Service
 
-from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, CORE_LIBS_JAR_NAME, CORE_DEPENDANT_TEST_LIBS_JAR_NAME
+from kafkatest.version.version import TRUNK
 
 
 class MiniKdc(KafkaPathResolverMixin, Service):
@@ -67,9 +68,12 @@ class MiniKdc(KafkaPathResolverMixin, Service):
         principals = 'client ' + kafka_principals + self.extra_principals
         self.logger.info("Starting MiniKdc with principals " + principals)
 
-        jar_paths = self.core_jar_paths(node, "dependant-testlibs") + self.core_jar_paths(node, "libs")
-        classpath = ":".join(jar_paths)
-        cmd = "CLASSPATH=%s %s kafka.security.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (classpath, self.path.script("kafka-run-class.sh", node), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
+        core_libs_jar = self.path.jar(CORE_LIBS_JAR_NAME, TRUNK)
+        core_dependant_test_libs_jar = self.path.jar(CORE_DEPENDANT_TEST_LIBS_JAR_NAME, TRUNK)
+
+        cmd = "for file in %s; do CLASSPATH=$CLASSPATH:$file; done;" % core_libs_jar
+        cmd += " for file in %s; do CLASSPATH=$CLASSPATH:$file; done;" % core_dependant_test_libs_jar
+        cmd += " %s kafka.security.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (self.path.script("kafka-run-class.sh", node), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
         self.logger.debug("Attempting to start MiniKdc on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log(MiniKdc.LOG_FILE) as monitor:
             node.account.ssh(cmd)
@@ -80,11 +84,6 @@ class MiniKdc(KafkaPathResolverMixin, Service):
 
         # KDC is set to bind openly (via 0.0.0.0). Change krb5.conf to hold the specific KDC address
         self.replace_in_file(MiniKdc.LOCAL_KRB5CONF_FILE, '0.0.0.0', node.account.hostname)
-
-    def core_jar_paths(self, node, lib_dir_name):
-        lib_dir = "%s/core/build/%s" % (self.path.home(node), lib_dir_name)
-        jars = node.account.ssh_capture("ls " + lib_dir)
-        return [os.path.join(lib_dir, jar.strip()) for jar in jars]
 
     def stop_node(self, node):
         self.logger.info("Stopping %s on %s" % (type(self).__name__, node.account.hostname))
