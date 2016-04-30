@@ -17,9 +17,8 @@ from ducktape.utils.util import wait_until
 from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, LATEST_0_9
+from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, LATEST_0_9, V_0_10_0_0
 from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.services.security.security_config import SecurityConfig
 
 import itertools
 import os
@@ -184,9 +183,12 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
 
         # LoggingMessageFormatter was introduced after 0.9
         if node.version > LATEST_0_9:
-            cmd+=" --formatter kafka.tools.LoggingMessageFormatter"
+            cmd += " --formatter kafka.tools.LoggingMessageFormatter"
 
-        cmd += " --enable-systest-events"
+        # enable systest events is only available in 0.10.0 and later
+        if node.version >= V_0_10_0_0:
+            cmd += " --enable-systest-events"
+
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args
         return cmd
 
@@ -228,7 +230,9 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
 
             for line in itertools.chain([first_line], consumer_output):
                 msg = line.strip()
+
                 if msg == "shutdown_complete":
+                    # Note that we can only rely on shutdown_complete message if running 0.10.0 or greater
                     if node in self.clean_shutdown_nodes:
                         raise Exception("Unexpected shutdown event from consumer, already shutdown. Consumer index: %d" % idx)
                     self.clean_shutdown_nodes.add(node)
