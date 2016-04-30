@@ -83,8 +83,9 @@ public class RequestResponseTest {
                 createProduceRequest(),
                 createProduceRequest().getErrorResponse(2, new UnknownServerException()),
                 createProduceResponse(),
-                createStopReplicaRequest(),
-                createStopReplicaRequest().getErrorResponse(0, new UnknownServerException()),
+                createStopReplicaRequest(true),
+                createStopReplicaRequest(false),
+                createStopReplicaRequest(true).getErrorResponse(0, new UnknownServerException()),
                 createStopReplicaResponse(),
                 createUpdateMetadataRequest(2, "rack1"),
                 createUpdateMetadataRequest(2, null),
@@ -348,9 +349,9 @@ public class RequestResponseTest {
         return new ProduceResponse(responseData, 0);
     }
 
-    private AbstractRequest createStopReplicaRequest() {
+    private AbstractRequest createStopReplicaRequest(boolean deletePartitions) {
         Set<TopicPartition> partitions = new HashSet<>(Arrays.asList(new TopicPartition("test", 0)));
-        return new StopReplicaRequest(0, 1, true, partitions);
+        return new StopReplicaRequest(0, 1, deletePartitions, partitions);
     }
 
     private AbstractRequestResponse createStopReplicaResponse() {
