@@ -67,7 +67,7 @@ public class WordCountIntegrationTest {
             new KeyValue<>("hello", 1L),
             new KeyValue<>("world", 1L),
             new KeyValue<>("world", 2L),
-            new KeyValue<>("helloo", 2L),
+            new KeyValue<>("hello", 2L),
             new KeyValue<>("world", 3L)
         );
 
