@@ -32,6 +32,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.CommitFailedRetriableException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
@@ -69,6 +70,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.RETRIABLE_COMMIT_EXCEPTION;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -85,7 +87,7 @@ public class ConsumerCoordinatorTest {
     private boolean autoCommitEnabled = false;
     private long autoCommitIntervalMs = 2000;
     private MockPartitionAssignor partitionAssignor = new MockPartitionAssignor();
-    private List<PartitionAssignor> assignors = Arrays.<PartitionAssignor>asList(partitionAssignor);
+    private List<PartitionAssignor> assignors = Collections.<PartitionAssignor>singletonList(partitionAssignor);
     private MockTime time;
     private MockClient client;
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
@@ -97,6 +99,7 @@ public class ConsumerCoordinatorTest {
     private MockRebalanceListener rebalanceListener;
     private MockCommitCallback defaultOffsetCommitCallback;
     private ConsumerCoordinator coordinator;
+
 
     @Before
     public void setup() {
@@ -898,7 +901,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code())));
         coordinator.commitOffsetsAsync(Collections.singletonMap(tp, new OffsetAndMetadata(100L)), null);
         assertEquals(invokedBeforeTest + 1, defaultOffsetCommitCallback.invoked);
-        assertEquals(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.exception(), defaultOffsetCommitCallback.exception);
+        assertEquals(RETRIABLE_COMMIT_EXCEPTION, defaultOffsetCommitCallback.exception);
     }
 
     @Test
@@ -913,7 +916,7 @@ public class ConsumerCoordinatorTest {
 
         assertTrue(coordinator.coordinatorUnknown());
         assertEquals(1, cb.invoked);
-        assertEquals(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.exception(), cb.exception);
+        assertEquals(RETRIABLE_COMMIT_EXCEPTION, cb.exception);
     }
 
     @Test
@@ -928,7 +931,7 @@ public class ConsumerCoordinatorTest {
 
         assertTrue(coordinator.coordinatorUnknown());
         assertEquals(1, cb.invoked);
-        assertEquals(Errors.NOT_COORDINATOR_FOR_GROUP.exception(), cb.exception);
+        assertEquals(RETRIABLE_COMMIT_EXCEPTION, cb.exception);
     }
 
     @Test
@@ -943,7 +946,7 @@ public class ConsumerCoordinatorTest {
 
         assertTrue(coordinator.coordinatorUnknown());
         assertEquals(1, cb.invoked);
-        assertTrue(cb.exception instanceof DisconnectException);
+        assertTrue(cb.exception instanceof CommitFailedRetriableException);
     }
 
     @Test
