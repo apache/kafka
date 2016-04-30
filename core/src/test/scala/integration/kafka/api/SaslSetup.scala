@@ -18,11 +18,14 @@
 package kafka.api
 
 import java.io.File
+import java.util.Properties
 import javax.security.auth.login.Configuration
 import kafka.security.minikdc.MiniKdc
+import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.authenticator.LoginManager
+import org.apache.kafka.common.config.SaslConfigs
 
 /*
  * Implements an enumeration for the modes enabled here:
@@ -80,5 +83,15 @@ trait SaslSetup {
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     System.clearProperty("zookeeper.authProvider.1")
     Configuration.setConfiguration(null)
+  }
+
+  def kafkaSaslProperties(clientSaslMechanism: String, serverSaslMechanisms: Option[Seq[String]] = None) = {
+    val props = new Properties
+    props.put(SaslConfigs.SASL_MECHANISM, clientSaslMechanism)
+    serverSaslMechanisms.foreach { serverMechanisms =>
+        props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, clientSaslMechanism)
+        props.put(SaslConfigs.SASL_ENABLED_MECHANISMS, serverMechanisms.mkString(","))
+    }
+    props
   }
 }

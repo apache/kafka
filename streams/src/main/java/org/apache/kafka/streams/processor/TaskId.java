@@ -25,11 +25,13 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
- * The task id representation composed as topic group id plus the assigned partition id.
+ * The task ID representation composed as topic group ID plus the assigned partition ID.
  */
 public class TaskId implements Comparable<TaskId> {
 
+    /** The ID of the topic group. */
     public final int topicGroupId;
+    /** The ID of the partition. */
     public final int partition;
 
     public TaskId(int topicGroupId, int partition) {
@@ -42,7 +44,7 @@ public class TaskId implements Comparable<TaskId> {
     }
 
     /**
-     * @throws TaskIdFormatException if the string is not a valid TaskId
+     * @throws TaskIdFormatException if the string is not a valid {@link TaskId}
      */
     public static TaskId parse(String string) {
         int index = string.indexOf('_');

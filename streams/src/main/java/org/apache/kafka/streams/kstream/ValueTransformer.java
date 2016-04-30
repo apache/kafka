@@ -20,7 +20,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 /**
- * A stateful Value Transformer interface for transform a value into a new value.
+ * A stateful {@link ValueTransformer} interface to transform a value into a new value.
  *
  * @param <V>   value type
  * @param <R>   return type
@@ -31,7 +31,7 @@ public interface ValueTransformer<V, R> {
      * Initialize this transformer with the given context. The framework ensures this is called once per processor when the topology
      * that contains it is initialized.
      * <p>
-     * If this tranformer is to be {@link #punctuate(long) called periodically} by the framework, then this method should
+     * If this transformer is to be {@link #punctuate(long) called periodically} by the framework, then this method should
      * {@link ProcessorContext#schedule(long) schedule itself} with the provided context.
      *
      * @param context the context; may not be null
@@ -39,9 +39,9 @@ public interface ValueTransformer<V, R> {
     void init(ProcessorContext context);
 
     /**
-     * Transform the message with the given key and value.
+     * Transform the record with the given key and value.
      *
-     * @param value the value for the message
+     * @param value the value for the record
      * @return new value
      */
     R transform(V value);

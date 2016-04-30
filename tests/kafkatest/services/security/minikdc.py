@@ -23,6 +23,7 @@ from os import remove, close
 from io import open
 import uuid
 
+
 class MiniKdc(Service):
 
     logs = {
@@ -54,9 +55,7 @@ class MiniKdc(Service):
         remove(file_path)
         move(abs_path, file_path)
 
-
     def start_node(self, node):
-
         node.account.ssh("mkdir -p %s" % MiniKdc.WORK_DIR, allow_fail=False)
         props_file = self.render('minikdc.properties',  node=node)
         node.account.create_file(MiniKdc.PROPS_FILE, props_file)
@@ -69,7 +68,7 @@ class MiniKdc(Service):
 
         jar_paths = self.core_jar_paths(node, "dependant-testlibs") + self.core_jar_paths(node, "libs")
         classpath = ":".join(jar_paths)
-        cmd = "CLASSPATH=%s /opt/%s/bin/kafka-run-class.sh kafka.security.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (classpath, kafka_dir(node), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
+        cmd = "INCLUDE_TEST_JARS=true CLASSPATH=%s /opt/%s/bin/kafka-run-class.sh kafka.security.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (classpath, kafka_dir(node), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
         self.logger.debug("Attempting to start MiniKdc on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log(MiniKdc.LOG_FILE) as monitor:
             node.account.ssh(cmd)

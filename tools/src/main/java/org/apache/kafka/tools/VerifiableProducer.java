@@ -247,6 +247,14 @@ public class VerifiableProducer {
     /** Close the producer to flush any remaining messages. */
     public void close() {
         producer.close();
+        System.out.println(shutdownString());
+    }
+
+    String shutdownString() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("class", this.getClass().toString());
+        data.put("name", "shutdown_complete");
+        return toJsonString(data);
     }
 
     /**

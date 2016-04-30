@@ -97,6 +97,12 @@ public class KafkaStreams {
     // usage only and should not be exposed to users at all.
     private final UUID processId;
 
+    /**
+     * Construct the stream instance.
+     *
+     * @param builder  the processor topology builder specifying the computational logic
+     * @param props    properties for the {@link StreamsConfig}
+     */
     public KafkaStreams(TopologyBuilder builder, Properties props) {
         this(builder, new StreamsConfig(props));
     }
@@ -104,8 +110,8 @@ public class KafkaStreams {
     /**
      * Construct the stream instance.
      *
-     * @param builder The processor topology builder specifying the computational logic
-     * @param config The stream configs
+     * @param builder  the processor topology builder specifying the computational logic
+     * @param config   the stream configs
      */
     public KafkaStreams(TopologyBuilder builder, StreamsConfig config) {
         // create the metrics

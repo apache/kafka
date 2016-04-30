@@ -51,7 +51,9 @@ public interface StateStore {
     void close();
 
     /**
-     * If the storage is persistent
+     * Return if the storage is persistent or not.
+     *
+     * @return  {@code true} if the storage is persistent&mdash;{@code false} otherwise
      */
     boolean persistent();
 }

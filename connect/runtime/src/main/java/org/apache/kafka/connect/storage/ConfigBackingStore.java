@@ -22,6 +22,7 @@ import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -64,9 +65,9 @@ public interface ConfigBackingStore {
     /**
      * Update the task configurations for a connector.
      * @param connector name of the connector
-     * @param configs the new task configs
+     * @param configs the new task configs for the connector
      */
-    void putTaskConfigs(String connector, Map<ConnectorTaskId, Map<String, String>> configs);
+    void putTaskConfigs(String connector, List<Map<String, String>> configs);
 
     /**
      * Remove the task configs associated with a connector.
