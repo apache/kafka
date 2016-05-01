@@ -45,10 +45,6 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
 
   this.logIdent = "[Kafka Metadata Cache on broker %d] ".format(brokerId)
 
-  //private def getAliveEndpoints(brokers: Iterable[Int], protocol: SecurityProtocol): Seq[BrokerEndPoint] = {
-  //  brokers.map(aliveBrokers.getOrElse(_, null)).filter(_ != null).toSeq.map(_.getBrokerEndPoint(protocol))
-  //}
-
   private def getAliveEndpoints(brokers: Iterable[Int], protocol: SecurityProtocol): Seq[BrokerEndPoint] = {
     val result = new mutable.ArrayBuffer[BrokerEndPoint](math.min(aliveBrokers.size, brokers.size))
     brokers.foreach { brokerId =>
