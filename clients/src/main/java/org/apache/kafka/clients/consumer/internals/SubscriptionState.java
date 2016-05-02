@@ -285,7 +285,7 @@ public class SubscriptionState {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
         for (Map.Entry<TopicPartition, TopicPartitionState> entry : assignment.entrySet()) {
             TopicPartitionState state = entry.getValue();
-            if (state.hasValidPosition)
+            if (state.hasValidPosition())
                 allConsumed.put(entry.getKey(), new OffsetAndMetadata(state.position));
         }
         return allConsumed;
@@ -304,7 +304,7 @@ public class SubscriptionState {
     }
 
     public boolean isOffsetResetNeeded(TopicPartition partition) {
-        return assignedState(partition).awaitingReset;
+        return assignedState(partition).awaitingReset();
     }
 
     public OffsetResetStrategy resetStrategy(TopicPartition partition) {
@@ -313,7 +313,7 @@ public class SubscriptionState {
 
     public boolean hasAllFetchPositions() {
         for (TopicPartitionState state : assignment.values())
-            if (!state.hasValidPosition)
+            if (!state.hasValidPosition())
                 return false;
         return true;
     }
@@ -321,7 +321,7 @@ public class SubscriptionState {
     public Set<TopicPartition> missingFetchPositions() {
         Set<TopicPartition> missing = new HashSet<>();
         for (Map.Entry<TopicPartition, TopicPartitionState> entry : assignment.entrySet())
-            if (!entry.getValue().hasValidPosition)
+            if (!entry.getValue().hasValidPosition())
                 missing.add(entry.getKey());
         return missing;
     }
@@ -359,39 +359,38 @@ public class SubscriptionState {
     }
 
     private static class TopicPartitionState {
-        private Long position;
+        private Long position; // last consumed position
         private OffsetAndMetadata committed;  // last committed position
-
-        private boolean hasValidPosition; // whether we have valid consumed and fetched positions
         private boolean paused;  // whether this partition has been paused by the user
-        private boolean awaitingReset; // whether we are awaiting reset
-        private OffsetResetStrategy resetStrategy;  // the reset strategy if awaitingReset is set
+        private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
 
         public TopicPartitionState() {
             this.paused = false;
             this.position = null;
             this.committed = null;
-            this.awaitingReset = false;
-            this.hasValidPosition = false;
             this.resetStrategy = null;
         }
 
         private void awaitReset(OffsetResetStrategy strategy) {
-            this.awaitingReset = true;
             this.resetStrategy = strategy;
             this.position = null;
-            this.hasValidPosition = false;
+        }
+
+        public boolean awaitingReset() {
+            return resetStrategy != null;
+        }
+
+        public boolean hasValidPosition() {
+            return position != null;
         }
 
         private void seek(long offset) {
             this.position = offset;
-            this.awaitingReset = false;
             this.resetStrategy = null;
-            this.hasValidPosition = true;
         }
 
         private void position(long offset) {
-            if (!hasValidPosition)
+            if (position == null)
                 throw new IllegalStateException("Cannot update fetch position without valid consumed/fetched positions");
             this.position = offset;
         }
@@ -409,7 +408,7 @@ public class SubscriptionState {
         }
 
         private boolean isFetchable() {
-            return !paused && hasValidPosition;
+            return !paused && position != null;
         }
 
     }
