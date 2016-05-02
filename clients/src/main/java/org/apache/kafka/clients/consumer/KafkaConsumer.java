@@ -914,7 +914,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // task execution since the consumed positions has already been updated and we
                     // must return these records to users to process before being interrupted or
                     // auto-committing offsets
-                    fetcher.sendFetches(metadata.fetch());
+                    fetcher.sendFetches();
                     client.quickPoll(false);
                     return this.interceptors == null
                         ? new ConsumerRecords<>(records) : this.interceptors.onConsume(new ConsumerRecords<>(records));
@@ -937,6 +937,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The fetched records (may be empty)
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
+        long now = time.milliseconds();
+
         // TODO: Sub-requests should take into account the poll timeout (KAFKA-1894)
         coordinator.ensureCoordinatorKnown();
 
@@ -949,18 +951,19 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (!subscriptions.hasAllFetchPositions())
             updateFetchPositions(this.subscriptions.missingFetchPositions());
 
+        // execute delayed tasks (e.g. autocommits and heartbeats) prior to fetching records
+        client.executeDelayedTasks(now);
+
         // init any new fetches (won't resend pending fetches)
-        Cluster cluster = this.metadata.fetch();
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
 
         // if data is available already, e.g. from a previous network client poll() call to commit,
         // then just return it immediately
-        if (!records.isEmpty()) {
+        if (!records.isEmpty())
             return records;
-        }
 
-        fetcher.sendFetches(cluster);
-        client.poll(timeout);
+        fetcher.sendFetches();
+        client.poll(timeout, now);
         return fetcher.fetchedRecords();
     }
 

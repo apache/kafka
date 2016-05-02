@@ -182,13 +182,21 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
-     * Poll for any network IO. All send requests will either be transmitted on the network
-     * or failed when this call completes.
+     * Poll for any network IO.
      * @param timeout The maximum time to wait for an IO event.
      * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
     public void poll(long timeout) {
         poll(timeout, time.milliseconds(), true);
+    }
+
+    /**
+     * Poll for any network IO.
+     * @param timeout timeout in milliseconds
+     * @param now current time in milliseconds
+     */
+    public void poll(long timeout, long now) {
+        poll(timeout, now, true);
     }
 
     /**
@@ -227,6 +235,14 @@ public class ConsumerNetworkClient implements Closeable {
 
         // fail requests that couldn't be sent if they have expired
         failExpiredRequests(now);
+    }
+
+    /**
+     * Execute delayed tasks now.
+     * @param now current time in milliseconds
+     */
+    public void executeDelayedTasks(long now) {
+        delayedTasks.poll(now);
     }
 
     /**
