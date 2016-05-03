@@ -19,6 +19,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collection;
 
 /**
  * This interface is used to define custom partition assignment for use in
@@ -39,7 +40,7 @@ public interface PartitionAssignor {
      * Return a serializable object representing the local member's subscription. This can include
      * additional information as well (e.g. local host/rack information) which can be leveraged in
      * {@link #assign(Cluster, Map)}.
-     * @param topics Topics subscribed to through {@link org.apache.kafka.clients.consumer.KafkaConsumer#subscribe(List)}
+     * @param topics Topics subscribed to through {@link org.apache.kafka.clients.consumer.KafkaConsumer#subscribe(Collection)}
      *               and variants
      * @return Non-null subscription with optional user data
      */

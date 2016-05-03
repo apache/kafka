@@ -62,7 +62,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private static final Logger log = LoggerFactory.getLogger(ConsumerCoordinator.class);
 
     private final List<PartitionAssignor> assignors;
-    private final org.apache.kafka.clients.Metadata metadata;
+    private final Metadata metadata;
     private final ConsumerCoordinatorMetrics sensors;
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
