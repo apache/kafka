@@ -18,7 +18,7 @@ from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService, config_property
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.utils import is_version
-from kafkatest.version.version import LATEST_0_8_2, TRUNK
+from kafkatest.version import LATEST_0_8_2, TRUNK
 
 
 class KafkaVersionTest(Test):

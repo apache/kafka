@@ -22,7 +22,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
-from kafkatest.version.version import TRUNK
+from kafkatest.version import TRUNK
 
 
 class ConsumerState:

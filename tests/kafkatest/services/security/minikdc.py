@@ -23,7 +23,7 @@ from tempfile import mkstemp
 from ducktape.services.service import Service
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, CORE_LIBS_JAR_NAME, CORE_DEPENDANT_TEST_LIBS_JAR_NAME
-from kafkatest.version.version import TRUNK
+from kafkatest.version import TRUNK
 
 
 class MiniKdc(KafkaPathResolverMixin, Service):

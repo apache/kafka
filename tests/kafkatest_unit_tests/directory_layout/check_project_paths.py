@@ -16,7 +16,7 @@
 
 from kafkatest.directory_layout.kafka_path import create_path_resolver, KafkaSystemTestPathResolver, \
     KAFKA_PATH_RESOLVER_KEY
-from kafkatest.version.version import V_0_9_0_1, TRUNK, KafkaVersion
+from kafkatest.version import V_0_9_0_1, TRUNK, KafkaVersion
 
 
 class DummyContext(object):

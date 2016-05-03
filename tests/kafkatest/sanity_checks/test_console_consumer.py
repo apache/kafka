@@ -25,7 +25,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.utils.remote_account import line_count, file_exists
-from kafkatest.version.version import LATEST_0_8_2
+from kafkatest.version import LATEST_0_8_2
 
 
 class ConsoleConsumerTest(Test):

@@ -22,7 +22,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.utils import is_version
-from kafkatest.version.version import LATEST_0_8_2, LATEST_0_9, TRUNK, KafkaVersion
+from kafkatest.version import LATEST_0_8_2, LATEST_0_9, TRUNK, KafkaVersion
 
 
 class TestVerifiableProducer(Test):

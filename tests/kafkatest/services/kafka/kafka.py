@@ -30,7 +30,7 @@ from kafkatest.services.kafka import config_property
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version.version import TRUNK
+from kafkatest.version import TRUNK
 
 Port = collections.namedtuple('Port', ['name', 'number', 'open'])
 

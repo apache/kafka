@@ -13,12 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
+from kafkatest.version import TRUNK, V_0_9_0_0
 
-from kafkatest.version.version import TRUNK, V_0_9_0_0
-
-import os
 
 
 class EndToEndLatencyService(PerformanceService):

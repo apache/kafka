@@ -22,7 +22,7 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.version.version import TRUNK, LATEST_0_8_2, LATEST_0_9, V_0_10_0_0
+from kafkatest.version import TRUNK, LATEST_0_8_2, LATEST_0_9, V_0_10_0_0
 
 """
 0.8.2.1 ConsoleConsumer options

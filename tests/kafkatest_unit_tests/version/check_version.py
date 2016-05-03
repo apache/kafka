@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.version.version import TRUNK, V_0_8_2_2, get_version
-
 from mock import Mock
+
+from kafkatest.version import TRUNK, V_0_8_2_2, get_version
 
 class CheckVersion(object):
     def check_get_version(self):

@@ -13,16 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark import matrix
+from ducktape.mark import parametrize
 from ducktape.services.service import Service
 from ducktape.tests.test import Test
-from ducktape.mark import parametrize
-from ducktape.mark import matrix
 
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.version.version import TRUNK, KafkaVersion
 from kafkatest.services.performance import ProducerPerformanceService, EndToEndLatencyService, ConsumerPerformanceService, throughput, latency, compute_aggregate_throughput
-
+from kafkatest.services.zookeeper import ZookeeperService
+from kafkatest.version import TRUNK, KafkaVersion
 
 TOPIC_REP_ONE = "topic-replication-factor-one"
 TOPIC_REP_THREE = "topic-replication-factor-three"

@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.version.version import get_version, KafkaVersion, TRUNK
-
 import importlib
 import os
+
+from kafkatest.version import get_version, KafkaVersion, TRUNK
 
 
 """This module serves a few purposes:

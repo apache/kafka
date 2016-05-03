@@ -21,8 +21,8 @@ import time
 from ducktape.services.service import Service
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
-from kafkatest.version.version import TRUNK
 from kafkatest.services.security.security_config import SecurityConfig
+from kafkatest.version import TRUNK
 
 
 class ZookeeperService(KafkaPathResolverMixin, Service):

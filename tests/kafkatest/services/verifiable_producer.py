@@ -23,7 +23,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
 from kafkatest.utils import is_int, is_int_with_prefix
-from kafkatest.version.version import TRUNK, LATEST_0_8_2
+from kafkatest.version import TRUNK, LATEST_0_8_2
 
 
 class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
