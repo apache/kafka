@@ -55,7 +55,7 @@ import scala.collection.Map;
  */
 public class InternalTopicIntegrationTest {
     @ClassRule
-    public static EmbeddedSingleNodeKafkaCluster cluster = new EmbeddedSingleNodeKafkaCluster();
+    public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
     private static final String DEFAULT_INPUT_TOPIC = "inputTopic";
     private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
     private static final int DEFAULT_ZK_SESSION_TIMEOUT_MS = 10 * 1000;
@@ -63,8 +63,8 @@ public class InternalTopicIntegrationTest {
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
-        cluster.createTopic(DEFAULT_INPUT_TOPIC);
-        cluster.createTopic(DEFAULT_OUTPUT_TOPIC);
+        CLUSTER.createTopic(DEFAULT_INPUT_TOPIC);
+        CLUSTER.createTopic(DEFAULT_OUTPUT_TOPIC);
     }
 
     /**
@@ -79,12 +79,12 @@ public class InternalTopicIntegrationTest {
         // only ZooKeeper and will be returned when listing topics, but Kafka itself does not create the
         // topic.
         ZkClient zkClient = new ZkClient(
-            cluster.zKConnectString(),
+            CLUSTER.zKConnectString(),
             DEFAULT_ZK_SESSION_TIMEOUT_MS,
             DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
             ZKStringSerializer$.MODULE$);
         boolean isSecure = false;
-        ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(cluster.zKConnectString()), isSecure);
+        ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(CLUSTER.zKConnectString()), isSecure);
 
         Map<String, Properties> topicConfigs = AdminUtils.fetchAllTopicConfigs(zkUtils);
         Iterator it = topicConfigs.iterator();
@@ -118,8 +118,8 @@ public class InternalTopicIntegrationTest {
 
         Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "compact-topics-integration-test");
-        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, cluster.zKConnectString());
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, "/tmp/kafka-streams");
@@ -153,7 +153,7 @@ public class InternalTopicIntegrationTest {
         // Step 2: Produce some input data to the input topic.
         //
         Properties producerConfig = new Properties();
-        producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
         producerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
         producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);

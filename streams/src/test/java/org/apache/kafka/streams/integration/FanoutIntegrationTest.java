@@ -65,16 +65,16 @@ import static org.junit.Assert.assertThat;
  */
 public class FanoutIntegrationTest {
     @ClassRule
-    public static EmbeddedSingleNodeKafkaCluster cluster = new EmbeddedSingleNodeKafkaCluster();
+    public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
     private static final String INPUT_TOPIC_A = "A";
     private static final String OUTPUT_TOPIC_B = "B";
     private static final String OUTPUT_TOPIC_C = "C";
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
-        cluster.createTopic(INPUT_TOPIC_A);
-        cluster.createTopic(OUTPUT_TOPIC_B);
-        cluster.createTopic(OUTPUT_TOPIC_C);
+        CLUSTER.createTopic(INPUT_TOPIC_A);
+        CLUSTER.createTopic(OUTPUT_TOPIC_B);
+        CLUSTER.createTopic(OUTPUT_TOPIC_C);
     }
 
     @Test
@@ -94,8 +94,8 @@ public class FanoutIntegrationTest {
 
         Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "fanout-integration-test");
-        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, cluster.zKConnectString());
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
 
         KStream<byte[], String> stream1 = builder.stream(INPUT_TOPIC_A);
@@ -127,7 +127,7 @@ public class FanoutIntegrationTest {
         // Step 2: Produce some input data to the input topic.
         //
         Properties producerConfig = new Properties();
-        producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
         producerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
         producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
@@ -135,7 +135,7 @@ public class FanoutIntegrationTest {
         IntegrationTestUtils.produceValuesSynchronously(INPUT_TOPIC_A, inputValues, producerConfig);
 
         // Give the stream processing application some time to do its work.
-        Thread.sleep(10000);
+        Thread.sleep(5000);
         streams.close();
 
         //
@@ -144,7 +144,7 @@ public class FanoutIntegrationTest {
 
         // Verify output topic B
         Properties consumerConfigB = new Properties();
-        consumerConfigB.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        consumerConfigB.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerConfigB.put(ConsumerConfig.GROUP_ID_CONFIG, "fanout-integration-test-standard-consumer-topicB");
         consumerConfigB.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerConfigB.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
@@ -154,7 +154,7 @@ public class FanoutIntegrationTest {
 
         // Verify output topic C
         Properties consumerConfigC = new Properties();
-        consumerConfigC.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        consumerConfigC.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerConfigC.put(ConsumerConfig.GROUP_ID_CONFIG, "fanout-integration-test-standard-consumer-topicC");
         consumerConfigC.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerConfigC.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
