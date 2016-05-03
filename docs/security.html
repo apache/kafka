@@ -234,7 +234,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
   </li>
   <li><h4><a id="security_sasl_clientconfig"
     href="#security_sasl_clientconfig">SASL configuration for Kafka clients</a></h4>
-    SASL authentication is only supported for the new kafka producer and
+    SASL authentication is only supported for the new Java Kafka producer and
     consumer, the older API is not supported. To configure SASL authentication
     on the clients:
     <ol>
@@ -357,8 +357,12 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
         password="admin-secret"
         user_admin="admin-secret"
         user_alice="alice-secret";
-    };</pre></li>
-          This configuration defines two users (<i>admin</i> and <i>alice</i>). <i>admin</i> is used for inter-broker communication.
+    };</pre>
+            This configuration defines two users (<i>admin</i> and <i>alice</i>). The properties <tt>username</tt> and <tt>password</tt>
+            in the <tt>KafkaServer</tt> section are used by the broker to initiate connections to other brokers. In this example,
+            <i>admin</i> is the user for inter-broker communication. The set of properties <tt>user_<i>userName</i></tt> defines
+            the passwords for all users that connect to the broker and the broker validates all client connections including
+            those from other brokers using these properties.</li>
           <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
               <pre>    -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</pre></li>
           <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>.</pre> For example:
@@ -370,15 +374,18 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
       </li>
 
       <li><h5><a id="security_sasl_plain_clientconfig" href="#security_sasl_plain_clientconfig">Configuring Kafka Clients</a></h5>
-        To configure SASL authentication  on the clients:
+        To configure SASL authentication on the clients:
         <ol>
-          <li>The <tt>KafkaClient</tt> section describes how the clients like producer and consumer can connect to the Kafka Broker. The following is an example configuration for a client for the PLAIN mechanism:
+          <li>The <tt>KafkaClient</tt> section describes how the clients like producer and consumer can connect to the Kafka Broker.
+          The following is an example configuration for a client for the PLAIN mechanism:
             <pre>
     KafkaClient {
         org.apache.kafka.common.security.plain.PlainLoginModule required
         username="alice"
         password="alice-secret";
     };</pre>
+            The properties <tt>username</tt> and <tt>password</tt> in the <tt>KafkaClient</tt> section are used by clients to configure
+            the user for client connections. In this example, clients connect to the broker as user <i>alice</i>.
           </li>
           <li>Pass the JAAS config file location as JVM parameter to each client JVM:
             <pre>    -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
@@ -397,7 +404,21 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
             <code>org.apache.kafka.common.security.plain.PlainLoginModule</code> can be used as an example.</li>
           <li>In production systems, external authentication servers may implement password authentication. Kafka brokers can be integrated with these servers by adding
             your own implementation of <code>javax.security.sasl.SaslServer</code>. The default implementation included in Kafka in the package
-            <code>org.apache.kafka.common.security.plain</code> can be used as an example to get started.</li>
+            <code>org.apache.kafka.common.security.plain</code> can be used as an example to get started.
+            <ul>
+              <li>New providers must be installed and registered in the JVM. Providers can be installed by adding provider classes to
+              the normal <tt>CLASSPATH</tt> or bundled as a jar file and added to <tt><i>JAVA_HOME</i>/lib/ext</tt>.</li>
+              <li>Providers can be registered statically by adding a provider to the security properties file
+              <tt><i>JAVA_HOME</i>/lib/security/java.security</tt>.
+              <pre>    security.provider.n=providerClassName</pre>
+              where <i>providerClassName</i> is the fully qualified name of the new provider and <i>n</i> is the preference order with
+              lower numbers indicating higher preference.</li>
+              <li>Alternatively, you can register providers dynamically at runtime by invoking <code>Security.addProvider</code> at the beginning of the client
+              application or in a static initializer in the login module. For example:
+              <pre>    Security.addProvider(new PlainSaslServerProvider());</pre></li>
+              <li>For more details, see <a href="http://docs.oracle.com/javase/8/docs/technotes/guides/security/crypto/CryptoSpec.html">JCA Reference</a>.</li>
+            </ul>
+          </li>
         </ul>
       </li>
     </ol>
