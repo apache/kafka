@@ -24,7 +24,7 @@ import org.apache.kafka.common.utils.Utils._
 
 object BrokerEndPoint {
 
-  private val uriParseExp = """\[?([0-9a-zA-Z\-.:]*)\]?:([0-9]+)""".r
+  private val uriParseExp = """\[?([0-9a-zA-Z\-%.:]*)\]?:([0-9]+)""".r
 
   /**
    * BrokerEndPoint URI is host:port or [ipv6_host]:port
