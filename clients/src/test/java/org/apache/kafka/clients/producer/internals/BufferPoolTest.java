@@ -36,11 +36,11 @@ import static org.junit.Assert.fail;
 import static org.junit.Assert.assertEquals;
 
 public class BufferPoolTest {
-    private MockTime time = new MockTime();
-    private SystemTime systemTime = new SystemTime();
-    private Metrics metrics = new Metrics(time);
-    private final long maxBlockTimeMs =  2000;
-    String metricGroup = "TestMetrics";
+    private final MockTime time = new MockTime();
+    private final SystemTime systemTime = new SystemTime();
+    private final Metrics metrics = new Metrics(time);
+    private final long maxBlockTimeMs = 2000;
+    private final String metricGroup = "TestMetrics";
 
     @After
     public void teardown() {
@@ -99,7 +99,7 @@ public class BufferPoolTest {
         CountDownLatch allocation = asyncAllocate(pool, 5 * 1024);
         assertEquals("Allocation shouldn't have happened yet, waiting on memory.", 1L, allocation.getCount());
         doDealloc.countDown(); // return the memory
-        assertEquals("Allocation should succeed soon after de-allocation", true, allocation.await(1, TimeUnit.SECONDS));
+        assertTrue("Allocation should succeed soon after de-allocation", allocation.await(1, TimeUnit.SECONDS));
     }
 
     private CountDownLatch asyncDeallocate(final BufferPool pool, final ByteBuffer buffer) {
@@ -157,14 +157,16 @@ public class BufferPoolTest {
         ByteBuffer buffer1 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer2 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer3 = pool.allocate(1, maxBlockTimeMs);
+        // First two buffers will be de-allocated within maxBlockTimeMs since the most recent de-allocation
         delayedDeallocate(pool, buffer1, maxBlockTimeMs / 2 * 1);
         delayedDeallocate(pool, buffer2, maxBlockTimeMs / 2 * 2);
+        // The third buffer will be de-allocated after maxBlockTimeMs since the most recent de-allocation
         delayedDeallocate(pool, buffer3, maxBlockTimeMs / 2 * 5);
 
         long beginTimeMs = systemTime.milliseconds();
         try {
             pool.allocate(10, maxBlockTimeMs);
-            fail("The buffer allocated more memory than its maximum value 2");
+            fail("The buffer allocated more memory than its maximum value 10");
         } catch (TimeoutException e) {
             // this is good
         }
