@@ -41,7 +41,7 @@ class CheckCreatePathResolver(object):
         """
         mock_context = DummyContext()
         mock_context.globals[KAFKA_PATH_RESOLVER_KEY] = \
-            "kafkatest_unit_test.directory_layout.check_project_paths.DummyPathResolver"
+            "unit.directory_layout.check_project_paths.DummyPathResolver"
 
         resolver = create_path_resolver(mock_context)
         assert type(resolver) == DummyPathResolver

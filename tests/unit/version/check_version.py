@@ -17,6 +17,7 @@ from mock import Mock
 
 from kafkatest.version import TRUNK, V_0_8_2_2, get_version
 
+
 class CheckVersion(object):
     def check_get_version(self):
         """Check default and override behavior of get_version"""
