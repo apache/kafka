@@ -51,16 +51,11 @@ class ProducerBounceTest extends KafkaServerTestHarness {
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  private var consumer1: SimpleConsumer = null
-  private var consumer2: SimpleConsumer = null
-
   private var producer1: KafkaProducer[Array[Byte],Array[Byte]] = null
   private var producer2: KafkaProducer[Array[Byte],Array[Byte]] = null
   private var producer3: KafkaProducer[Array[Byte],Array[Byte]] = null
-  private var producer4: KafkaProducer[Array[Byte],Array[Byte]] = null
 
   private val topic1 = "topic-1"
-  private val topic2 = "topic-2"
 
   @Before
   override def setUp() {
@@ -76,7 +71,6 @@ class ProducerBounceTest extends KafkaServerTestHarness {
     if (producer1 != null) producer1.close
     if (producer2 != null) producer2.close
     if (producer3 != null) producer3.close
-    if (producer4 != null) producer4.close
 
     super.tearDown()
   }
@@ -102,9 +96,8 @@ class ProducerBounceTest extends KafkaServerTestHarness {
         Thread.sleep(2000)
       }
 
-      // Make sure the producer do not see any exception
-      // in returned metadata due to broker failures
-      assertTrue(scheduler.failed == false)
+      // Make sure the producer do not see any exception in returned metadata due to broker failures
+      assertFalse(scheduler.failed)
 
       // Make sure the leader still exists after bouncing brokers
       (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, partition))
@@ -114,7 +107,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
 
     // Make sure the producer do not see any exception
     // when draining the left messages on shutdown
-    assertTrue(scheduler.failed == false)
+    assertFalse(scheduler.failed)
 
     // double check that the leader info has been propagated after consecutive bounces
     val newLeaders = (0 until numPartitions).map(i => TestUtils.waitUntilMetadataIsPropagated(servers, topic1, i))
@@ -132,8 +125,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
     assertEquals("Should have fetched " + scheduler.sent + " unique messages", scheduler.sent, uniqueMessageSize)
   }
 
-  private class ProducerScheduler extends ShutdownableThread("daemon-producer", false)
-  {
+  private class ProducerScheduler extends ShutdownableThread("daemon-producer", false) {
     val numRecords = 1000
     var sent = 0
     var failed = false

@@ -96,7 +96,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   private var shutdownLatch = new CountDownLatch(1)
 
   private val jmxPrefix: String = "kafka.server"
-  private val reporters: java.util.List[MetricsReporter] =  config.metricReporterClasses
+  private val reporters: java.util.List[MetricsReporter] = config.metricReporterClasses
   reporters.add(new JmxReporter(jmxPrefix))
 
   // This exists because the Metrics package from clients has its own Time implementation.
@@ -239,7 +239,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           else
             (protocol, endpoint)
         }
-        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack, config.interBrokerProtocolVersion)
+        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack,
+          config.interBrokerProtocolVersion)
         kafkaHealthcheck.startup()
 
         // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
