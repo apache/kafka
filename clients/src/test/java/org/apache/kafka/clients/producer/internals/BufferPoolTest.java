@@ -175,6 +175,24 @@ public class BufferPoolTest {
     }
 
     /**
+     * Test if the  waiter that is waiting on availability of more memory is cleaned up when a timeout occurs
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testCleanupMemoryAvailabilityWaiterOnBlockTimeout() throws Exception {
+        BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
+        pool.allocate(1, maxBlockTimeMs);
+        try {
+            pool.allocate(2, maxBlockTimeMs);
+            fail("The buffer allocated more memory than its maximum value 2");
+        } catch (TimeoutException e) {
+            // this is good
+        }
+        assertTrue(pool.queued() == 0);
+    }
+
+    /**
      * This test creates lots of threads that hammer on the pool
      */
     @Test

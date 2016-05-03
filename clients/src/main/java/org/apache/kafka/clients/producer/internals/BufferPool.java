@@ -128,11 +128,12 @@ public final class BufferPool {
                     long timeNs = Math.max(0L, endWaitNs - startWaitNs);
                     this.waitTime.record(timeNs, time.milliseconds());
 
-                    if (waitingTimeElapsed)
+                    if (waitingTimeElapsed) {
+                        this.waiters.removeLast();
                         throw new TimeoutException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
+                    }
 
                     remainingTimeToBlockNs -= timeNs;
-
                     // check if we can satisfy this request from the free list,
                     // otherwise allocate memory
                     if (accumulated == 0 && size == this.poolableSize && !this.free.isEmpty()) {
