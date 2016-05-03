@@ -16,6 +16,7 @@ package org.apache.kafka.common.serialization;
 import org.apache.kafka.common.utils.Bytes;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 /**
  * Factory for creating serializers / deserializers.
@@ -23,6 +24,11 @@ import java.nio.ByteBuffer;
 public class Serdes {
 
     static public final class LongSerde implements Serde<Long> {
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            // do nothing
+        }
+
         @Override
         public Serializer<Long> serializer() {
             return new LongSerializer();
@@ -36,6 +42,11 @@ public class Serdes {
 
     static public final class IntegerSerde implements Serde<Integer> {
         @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            // do nothing
+        }
+
+        @Override
         public Serializer<Integer> serializer() {
             return new IntegerSerializer();
         }
@@ -48,6 +59,11 @@ public class Serdes {
 
     static public final class DoubleSerde implements Serde<Double> {
         @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            // do nothing
+        }
+
+        @Override
         public Serializer<Double> serializer() {
             return new DoubleSerializer();
         }
@@ -59,18 +75,32 @@ public class Serdes {
     }
 
     static public final class StringSerde implements Serde<String> {
+        private Serializer<String> serializer = new StringSerializer();
+        private Deserializer<String> deserializer = new StringDeserializer();
+
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            serializer.configure(configs, isKey);
+            deserializer.configure(configs, isKey);
+        }
+
         @Override
         public Serializer<String> serializer() {
-            return new StringSerializer();
+            return serializer;
         }
 
         @Override
         public Deserializer<String> deserializer() {
-            return new StringDeserializer();
+            return deserializer;
         }
     }
 
     static public final class ByteBufferSerde implements Serde<ByteBuffer> {
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            // do nothing
+        }
+
         @Override
         public Serializer<ByteBuffer> serializer() {
             return new ByteBufferSerializer();
@@ -84,6 +114,11 @@ public class Serdes {
 
     static public final class BytesSerde implements Serde<Bytes> {
         @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            // do nothing
+        }
+
+        @Override
         public Serializer<Bytes> serializer() {
             return new BytesSerializer();
         }
@@ -95,6 +130,11 @@ public class Serdes {
     }
 
     static public final class ByteArraySerde implements Serde<byte[]> {
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            // do nothing
+        }
+
         @Override
         public Serializer<byte[]> serializer() {
             return new ByteArraySerializer();
@@ -155,6 +195,12 @@ public class Serdes {
         }
 
         return new Serde<T>() {
+            @Override
+            public void configure(Map<String, ?> configs, boolean isKey) {
+                serializer.configure(configs, isKey);
+                deserializer.configure(configs, isKey);
+            }
+
             @Override
             public Serializer<T> serializer() {
                 return serializer;

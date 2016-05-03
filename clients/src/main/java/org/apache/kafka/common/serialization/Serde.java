@@ -13,12 +13,24 @@
 
 package org.apache.kafka.common.serialization;
 
+import java.util.Map;
+
 /**
  * The interface for wrapping a serializer and deserializer for the given data type.
  *
- * @param <T>
+ * @param <T> Type to be serialized from and deserialized into.
+ *
+ * A class that implements this interface is expected to have a constructor with no parameter.
  */
 public interface Serde<T> {
+
+    /**
+     * Configure this class, which will configure the underlying serializer and deserializer at the same time.
+     *
+     * @param configs configs in key/value pairs
+     * @param isKey whether is for key or value
+     */
+    void configure(Map<String, ?> configs, boolean isKey);
 
     Serializer<T> serializer();
 
