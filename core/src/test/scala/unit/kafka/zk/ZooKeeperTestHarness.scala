@@ -24,18 +24,19 @@ import org.scalatest.junit.JUnitSuite
 import org.apache.kafka.common.security.JaasUtils
 
 trait ZooKeeperTestHarness extends JUnitSuite with Logging {
-  var zookeeper: EmbeddedZookeeper = null
-  var zkPort: Int = -1
-  var zkUtils: ZkUtils = null
+
   val zkConnectionTimeout = 6000
   val zkSessionTimeout = 6000
-  def zkConnect: String = "127.0.0.1:" + zkPort
-  def confFile: String = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "")
+
+  var zkUtils: ZkUtils = null
+  var zookeeper: EmbeddedZookeeper = null
+
+  def zkPort: Int = zookeeper.port
+  def zkConnect: String = s"127.0.0.1:$zkPort"
   
   @Before
   def setUp() {
     zookeeper = new EmbeddedZookeeper()
-    zkPort = zookeeper.port
     zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, JaasUtils.isZkSecurityEnabled())
   }
 

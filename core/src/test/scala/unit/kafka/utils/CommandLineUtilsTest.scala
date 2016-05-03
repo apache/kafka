@@ -23,7 +23,7 @@ import org.junit.Test
 class CommandLineUtilsTest {
 
 
-  @Test (expected = classOf[java.lang.IllegalArgumentException])
+  @Test(expected = classOf[java.lang.IllegalArgumentException])
   def testParseEmptyArg() {
     val argArray = Array("my.empty.property=")
     CommandLineUtils.parseKeyValueArgs(argArray, false)

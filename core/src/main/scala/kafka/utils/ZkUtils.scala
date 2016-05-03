@@ -924,7 +924,7 @@ object ZkPath {
     isNamespacePresent = true
   }
 
-  def resetNamespaceCheckedState {
+  def resetNamespaceCheckedState() {
     isNamespacePresent = false
   }
 
