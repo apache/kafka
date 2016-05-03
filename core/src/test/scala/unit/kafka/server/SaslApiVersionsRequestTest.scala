@@ -19,11 +19,10 @@ package kafka.server
 import java.io.IOException
 import java.net.Socket
 import java.util.Collections
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.apache.kafka.common.requests.SaslHandshakeRequest
 import org.apache.kafka.common.requests.SaslHandshakeResponse
-import org.apache.kafka.common.protocol.Errors
 import org.junit.Test
 import org.junit.Assert._
 import kafka.api.SaslTestHarness
@@ -59,6 +58,20 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
       } catch {
         case ioe: IOException => // expected exception
       }
+    } finally {
+      plaintextSocket.close()
+    }
+  }
+
+  @Test
+  def testApiVersionsRequestWithUnsupportedVersion() {
+    val plaintextSocket = connect(protocol = securityProtocol)
+    try {
+      val apiVersionsResponse = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest, Short.MaxValue)
+      assertEquals(Errors.UNSUPPORTED_VERSION.code(), apiVersionsResponse.errorCode)
+      val apiVersionsResponse2 = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest, 0)
+      ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse2)
+      sendSaslHandshakeRequestValidateResponse(plaintextSocket)
     } finally {
       plaintextSocket.close()
     }

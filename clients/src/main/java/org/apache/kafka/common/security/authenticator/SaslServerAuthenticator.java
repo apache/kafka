@@ -51,6 +51,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.network.NetworkSend;
@@ -58,6 +59,7 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractRequestResponse;
@@ -75,7 +77,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerAuthenticator.class);
 
     public enum SaslState {
-        HANDSHAKE_REQUEST, AUTHENTICATE, COMPLETE, FAILED
+        GSSAPI_OR_HANDSHAKE_REQUEST, HANDSHAKE_REQUEST, AUTHENTICATE, COMPLETE, FAILED
     }
 
     private final String node;
@@ -215,6 +217,9 @@ public class SaslServerAuthenticator implements Authenticator {
             try {
                 switch (saslState) {
                     case HANDSHAKE_REQUEST:
+                        handleKafkaRequest(clientToken);
+                        break;
+                    case GSSAPI_OR_HANDSHAKE_REQUEST:
                         if (handleKafkaRequest(clientToken))
                             break;
                         // For default GSSAPI, fall through to authenticate using the client token as the first GSSAPI packet.
@@ -288,39 +293,53 @@ public class SaslServerAuthenticator implements Authenticator {
         try {
             ByteBuffer requestBuffer = ByteBuffer.wrap(requestBytes);
             RequestHeader requestHeader = RequestHeader.parse(requestBuffer);
-            AbstractRequest request = AbstractRequest.getRequest(requestHeader.apiKey(), requestHeader.apiVersion(), requestBuffer);
+            ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
+            // A valid Kafka request header was received. SASL authentication tokens are now expected only
+            // following a SaslHandshakeRequest since this is not a GSSAPI client token from a Kafka 0.9.0.x client.
+            setSaslState(SaslState.HANDSHAKE_REQUEST);
             isKafkaRequest = true;
 
-            ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
-            LOG.debug("Handle Kafka request {}", apiKey);
-            switch (apiKey) {
-                case API_VERSIONS:
-                    handleApiVersionsRequest(requestHeader, (ApiVersionsRequest) request);
-                    break;
-                case SASL_HANDSHAKE:
-                    clientMechanism = handleHandshakeRequest(requestHeader, (SaslHandshakeRequest) request);
-                    break;
-                default:
-                    throw new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL handshake.");
+            if (!Protocol.apiVersionSupported(requestHeader.apiKey(), requestHeader.apiVersion())) {
+                if (apiKey == ApiKeys.API_VERSIONS)
+                    sendKafkaResponse(requestHeader, ApiVersionsResponse.fromError(Errors.UNSUPPORTED_VERSION));
+                else
+                    throw new UnsupportedVersionException("Version " + requestHeader.apiVersion() + " is not supported for apiKey " + apiKey);
+            } else {
+                AbstractRequest request = AbstractRequest.getRequest(requestHeader.apiKey(), requestHeader.apiVersion(), requestBuffer);
+
+                LOG.debug("Handle Kafka request {}", apiKey);
+                switch (apiKey) {
+                    case API_VERSIONS:
+                        handleApiVersionsRequest(requestHeader, (ApiVersionsRequest) request);
+                        break;
+                    case SASL_HANDSHAKE:
+                        clientMechanism = handleHandshakeRequest(requestHeader, (SaslHandshakeRequest) request);
+                        break;
+                    default:
+                        throw new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL handshake.");
+                }
             }
         } catch (SchemaException | IllegalArgumentException e) {
-            // SchemaException is thrown if the request is not in Kafka format. IIlegalArgumentException is thrown
-            // if the API key is invalid. For compatibility with 0.9.0.x where the first packet is a GSSAPI token
-            // starting with 0x60, revert to GSSAPI for both these exceptions.
-            if (LOG.isDebugEnabled()) {
-                StringBuilder tokenBuilder = new StringBuilder();
-                for (byte b : requestBytes) {
-                    tokenBuilder.append(String.format("%02x", b));
-                    if (tokenBuilder.length() >= 20)
-                         break;
+            if (saslState == SaslState.GSSAPI_OR_HANDSHAKE_REQUEST) {
+                // SchemaException is thrown if the request is not in Kafka format. IIlegalArgumentException is thrown
+                // if the API key is invalid. For compatibility with 0.9.0.x where the first packet is a GSSAPI token
+                // starting with 0x60, revert to GSSAPI for both these exceptions.
+                if (LOG.isDebugEnabled()) {
+                    StringBuilder tokenBuilder = new StringBuilder();
+                    for (byte b : requestBytes) {
+                        tokenBuilder.append(String.format("%02x", b));
+                        if (tokenBuilder.length() >= 20)
+                             break;
+                    }
+                    LOG.debug("Received client packet of length {} starting with bytes 0x{}, process as GSSAPI packet", requestBytes.length, tokenBuilder);
                 }
-                LOG.debug("Received client packet of length {} starting with bytes 0x{}, process as GSSAPI packet", requestBytes.length, tokenBuilder);
-            }
-            if (enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM)) {
-                LOG.debug("First client packet is not a SASL mechanism request, using default mechanism GSSAPI");
-                clientMechanism = SaslConfigs.GSSAPI_MECHANISM;
+                if (enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM)) {
+                    LOG.debug("First client packet is not a SASL mechanism request, using default mechanism GSSAPI");
+                    clientMechanism = SaslConfigs.GSSAPI_MECHANISM;
+                } else
+                    throw new UnsupportedSaslMechanismException("Exception handling first SASL packet from client, GSSAPI is not supported by server", e);
             } else
-                throw new UnsupportedSaslMechanismException("Exception handling first SASL packet from client, GSSAPI is not supported by server", e);
+                throw e;
         }
         if (clientMechanism != null) {
             createSaslServer(clientMechanism);

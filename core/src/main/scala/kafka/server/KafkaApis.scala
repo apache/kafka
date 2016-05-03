@@ -1028,9 +1028,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // with client authentication which is performed at an earlier stage of the connection where the
     // ApiVersionRequest is not available.
     val responseHeader = new ResponseHeader(request.header.correlationId)
-    val isApiVersionsRequestVersionSupported = request.header.apiVersion <= Protocol.CURR_VERSION(ApiKeys.API_VERSIONS.id) &&
-                                              request.header.apiVersion >= Protocol.MIN_VERSIONS(ApiKeys.API_VERSIONS.id)
-    val responseBody = if (isApiVersionsRequestVersionSupported)
+    val responseBody = if (Protocol.apiVersionSupported(ApiKeys.API_VERSIONS.id, request.header.apiVersion))
       ApiVersionsResponse.apiVersionsResponse
     else
       ApiVersionsResponse.fromError(Errors.UNSUPPORTED_VERSION)
