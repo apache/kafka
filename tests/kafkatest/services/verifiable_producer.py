@@ -74,7 +74,7 @@ class VerifiableProducer(BackgroundThreadService):
         self.produced_count = {}
         self.clean_shutdown_nodes = set()
         self.acks = acks
-        self.stop_timeout_sec=stop_timeout_sec
+        self.stop_timeout_sec = stop_timeout_sec
 
     @property
     def security_config(self):
