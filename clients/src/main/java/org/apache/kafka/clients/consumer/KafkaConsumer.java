@@ -940,14 +940,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // and avoid block waiting for their responses to enable pipelining while the user
                     // is handling the fetched records.
                     //
-                    // NOTE that we use quickPoll() in this case which disables wakeups and delayed
-                    // task execution since the consumed positions has already been updated and we
-                    // must return these records to users to process before being interrupted or
-                    // auto-committing offsets
+                    // NOTE: since the consumed position has already been updated, we must not allow
+                    // wakeups or any other errors to be triggered prior to returning the fetched records.
+                    // Additionally, pollNoWakeup does not allow automatic commits to get triggered.
                     fetcher.sendFetches();
-                    client.quickPoll(false);
-                    return this.interceptors == null
-                        ? new ConsumerRecords<>(records) : this.interceptors.onConsume(new ConsumerRecords<>(records));
+                    client.pollNoWakeup();
+
+                    if (this.interceptors == null)
+                        return new ConsumerRecords<>(records);
+                    else
+                        return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
 
                 long elapsed = time.milliseconds() - start;
@@ -967,8 +969,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The fetched records (may be empty)
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
-        long now = time.milliseconds();
-
         // TODO: Sub-requests should take into account the poll timeout (KAFKA-1894)
         coordinator.ensureCoordinatorKnown();
 
@@ -980,6 +980,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // don't know the offset for
         if (!subscriptions.hasAllFetchPositions())
             updateFetchPositions(this.subscriptions.missingFetchPositions());
+
+        long now = time.milliseconds();
 
         // execute delayed tasks (e.g. autocommits and heartbeats) prior to fetching records
         client.executeDelayedTasks(now);

@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Higher level consumer access to the network layer with basic support for futures and
- * task scheduling. NOT thread-safe!
+ * task scheduling. This class is not thread-safe, except for wakeup().
  */
 public class ConsumerNetworkClient implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(ConsumerNetworkClient.class);
@@ -53,8 +53,10 @@ public class ConsumerNetworkClient implements Closeable {
     private final Time time;
     private final long retryBackoffMs;
     private final long unsentExpiryMs;
-    // wakeup enabled flag need to be volatile since it is allowed to be accessed concurrently
-    volatile private boolean wakeupsEnabled = true;
+
+    // this count is only accessed from the consumer's main thread
+    private int wakeupDisabledCount = 0;
+
 
     public ConsumerNetworkClient(KafkaClient client,
                                  Metadata metadata,
@@ -202,12 +204,14 @@ public class ConsumerNetworkClient implements Closeable {
     /**
      * Poll for network IO and return immediately. This will not trigger wakeups,
      * nor will it execute any delayed tasks.
-     * @param executeDelayedTasks Whether to allow delayed task execution (true allows)
      */
-    public void quickPoll(boolean executeDelayedTasks) {
+    public void pollNoWakeup() {
         disableWakeups();
-        poll(0, time.milliseconds(), executeDelayedTasks);
-        enableWakeups();
+        try {
+            poll(0, time.milliseconds(), false);
+        } finally {
+            enableWakeups();
+        }
     }
 
     private void poll(long timeout, long now, boolean executeDelayedTasks) {
@@ -352,22 +356,25 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void clientPoll(long timeout, long now) {
         client.poll(timeout, now);
-        if (wakeupsEnabled && wakeup.get()) {
+        if (wakeupDisabledCount == 0 && wakeup.get()) {
             wakeup.set(false);
             throw new WakeupException();
         }
     }
 
     public void disableWakeups() {
-        this.wakeupsEnabled = false;
+        wakeupDisabledCount++;
     }
 
     public void enableWakeups() {
-        this.wakeupsEnabled = true;
+        if (wakeupDisabledCount <= 0)
+            throw new IllegalStateException("Cannot enable wakeups since they were never disabled");
+
+        wakeupDisabledCount--;
 
         // re-wakeup the client if the flag was set since previous wake-up call
         // could be cleared by poll(0) while wakeups were disabled
-        if (wakeup.get())
+        if (wakeupDisabledCount == 0 && wakeup.get())
             this.client.wakeup();
     }
 

@@ -390,8 +390,8 @@ public class SubscriptionState {
         }
 
         private void position(long offset) {
-            if (position == null)
-                throw new IllegalStateException("Cannot update fetch position without valid consumed/fetched positions");
+            if (!hasValidPosition())
+                throw new IllegalStateException("Cannot set a new position without a valid current position");
             this.position = offset;
         }
 
@@ -408,7 +408,7 @@ public class SubscriptionState {
         }
 
         private boolean isFetchable() {
-            return !paused && position != null;
+            return !paused && hasValidPosition();
         }
 
     }
