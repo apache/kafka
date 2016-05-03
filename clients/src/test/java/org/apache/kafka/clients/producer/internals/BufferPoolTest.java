@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
@@ -27,6 +28,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertTrue;
@@ -34,10 +36,11 @@ import static org.junit.Assert.fail;
 import static org.junit.Assert.assertEquals;
 
 public class BufferPoolTest {
-    private MockTime time = new MockTime();
-    private Metrics metrics = new Metrics(time);
-    private final long maxBlockTimeMs =  2000;
-    String metricGroup = "TestMetrics";
+    private final MockTime time = new MockTime();
+    private final SystemTime systemTime = new SystemTime();
+    private final Metrics metrics = new Metrics(time);
+    private final long maxBlockTimeMs = 2000;
+    private final String metricGroup = "TestMetrics";
 
     @After
     public void teardown() {
@@ -96,7 +99,7 @@ public class BufferPoolTest {
         CountDownLatch allocation = asyncAllocate(pool, 5 * 1024);
         assertEquals("Allocation shouldn't have happened yet, waiting on memory.", 1L, allocation.getCount());
         doDealloc.countDown(); // return the memory
-        allocation.await();
+        assertTrue("Allocation should succeed soon after de-allocation", allocation.await(1, TimeUnit.SECONDS));
     }
 
     private CountDownLatch asyncDeallocate(final BufferPool pool, final ByteBuffer buffer) {
@@ -113,6 +116,16 @@ public class BufferPoolTest {
         };
         thread.start();
         return latch;
+    }
+
+    private void delayedDeallocate(final BufferPool pool, final ByteBuffer buffer, final long delayMs) {
+        Thread thread = new Thread() {
+            public void run() {
+                systemTime.sleep(delayMs);
+                pool.deallocate(buffer);
+            }
+        };
+        thread.start();
     }
 
     private CountDownLatch asyncAllocate(final BufferPool pool, final int size) {
@@ -133,20 +146,32 @@ public class BufferPoolTest {
     }
 
     /**
-     * Test if Timeout exception is thrown when there is not enough memory to allocate and the elapsed time is greater than the max specified block time
+     * Test if Timeout exception is thrown when there is not enough memory to allocate and the elapsed time is greater than the max specified block time.
+     * And verify that the allocation should finish soon after the maxBlockTimeMs.
      *
      * @throws Exception
      */
     @Test
     public void testBlockTimeout() throws Exception {
-        BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
-        pool.allocate(1, maxBlockTimeMs);
+        BufferPool pool = new BufferPool(10, 1, metrics, systemTime, metricGroup);
+        ByteBuffer buffer1 = pool.allocate(1, maxBlockTimeMs);
+        ByteBuffer buffer2 = pool.allocate(1, maxBlockTimeMs);
+        ByteBuffer buffer3 = pool.allocate(1, maxBlockTimeMs);
+        // First two buffers will be de-allocated within maxBlockTimeMs since the most recent de-allocation
+        delayedDeallocate(pool, buffer1, maxBlockTimeMs / 2);
+        delayedDeallocate(pool, buffer2, maxBlockTimeMs);
+        // The third buffer will be de-allocated after maxBlockTimeMs since the most recent de-allocation
+        delayedDeallocate(pool, buffer3, maxBlockTimeMs / 2 * 5);
+
+        long beginTimeMs = systemTime.milliseconds();
         try {
-            pool.allocate(2, maxBlockTimeMs);
-            fail("The buffer allocated more memory than its maximum value 2");
+            pool.allocate(10, maxBlockTimeMs);
+            fail("The buffer allocated more memory than its maximum value 10");
         } catch (TimeoutException e) {
             // this is good
         }
+        long endTimeMs = systemTime.milliseconds();
+        assertTrue("Allocation should finish not much later than maxBlockTimeMs", endTimeMs - beginTimeMs < maxBlockTimeMs + 1000);
     }
 
     /**
