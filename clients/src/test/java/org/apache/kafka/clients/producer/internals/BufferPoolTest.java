@@ -158,8 +158,8 @@ public class BufferPoolTest {
         ByteBuffer buffer2 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer3 = pool.allocate(1, maxBlockTimeMs);
         // First two buffers will be de-allocated within maxBlockTimeMs since the most recent de-allocation
-        delayedDeallocate(pool, buffer1, maxBlockTimeMs / 2 * 1);
-        delayedDeallocate(pool, buffer2, maxBlockTimeMs / 2 * 2);
+        delayedDeallocate(pool, buffer1, maxBlockTimeMs / 2);
+        delayedDeallocate(pool, buffer2, maxBlockTimeMs);
         // The third buffer will be de-allocated after maxBlockTimeMs since the most recent de-allocation
         delayedDeallocate(pool, buffer3, maxBlockTimeMs / 2 * 5);
 
