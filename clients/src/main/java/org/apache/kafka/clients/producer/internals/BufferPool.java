@@ -117,16 +117,21 @@ public final class BufferPool {
                 int accumulated = 0;
                 ByteBuffer buffer = null;
                 Condition moreMemory = this.lock.newCondition();
+                long remainingTimeToBlockMs = maxTimeToBlock;
                 this.waiters.addLast(moreMemory);
                 // loop over and over until we have a buffer or have reserved
                 // enough memory to allocate one
                 while (accumulated < size) {
-                    long startWait = time.nanoseconds();
-                    if (!moreMemory.await(maxTimeToBlock, TimeUnit.MILLISECONDS))
+                    long startWaitNs = time.nanoseconds();
+                    long endWaitNs;
+                    if (!moreMemory.await(remainingTimeToBlockMs, TimeUnit.MILLISECONDS)) {
+                        endWaitNs = time.nanoseconds();
+                        this.waitTime.record(endWaitNs - startWaitNs, endWaitNs / 1000000);
                         throw new TimeoutException("Failed to allocate memory within the configured max blocking time");
-                    long endWait = time.nanoseconds();
-                    maxTimeToBlock -= (endWait - startWait)/1000000;
-                    this.waitTime.record(endWait - startWait, time.milliseconds());
+                    }
+                    endWaitNs = time.nanoseconds();
+                    remainingTimeToBlockMs = Math.max(remainingTimeToBlockMs - (endWaitNs - startWaitNs) / 1000000, 0L);
+                    this.waitTime.record(endWaitNs - startWaitNs, endWaitNs / 1000000);
 
                     // check if we can satisfy this request from the free list,
                     // otherwise allocate memory
