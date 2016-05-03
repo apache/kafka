@@ -186,7 +186,11 @@ public class ProcessorStateManager {
                 // ignore
             }
 
-            for (PartitionInfo partitionInfo : restoreConsumer.partitionsFor(topic)) {
+            List<PartitionInfo> partitionInfos = restoreConsumer.partitionsFor(topic);
+            if (partitionInfos == null) {
+                throw new StreamsException("Could not find partition info for topic: " + topic);
+            }
+            for (PartitionInfo partitionInfo : partitionInfos) {
                 if (partitionInfo.partition() == partition) {
                     partitionNotFound = false;
                     break;
