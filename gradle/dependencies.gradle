@@ -23,9 +23,10 @@ ext {
 }
 
 versions += [
+  apacheda: "1.0.0-M33",
+  apacheds: "2.0.0-M21",
   argparse4j: "0.5.0",
   bcpkix: "1.54",
-  hadoop: "2.7.2",
   easymock: "3.4",
   jackson: "2.6.3",
   jetty: "9.2.15.v20160210",
@@ -36,18 +37,19 @@ versions += [
   metrics: "2.2.0",
   powermock: "1.6.4",
   reflections: "0.9.10",
-  rocksDB: "4.1.0",
+  rocksDB: "4.4.1",
   scalaTest: "2.2.6",
   scalaParserCombinators: "1.0.4",
-  slf4j: "1.7.18",
-  snappy: "1.1.2.1",
-  zkclient: "0.7",
+  scoverage: "1.1.1",
+  slf4j: "1.7.21",
+  snappy: "1.1.2.4",
+  zkclient: "0.8",
   zookeeper: "3.4.6",
 ]
 
 // Add Scala version
 def defaultScala210Version = '2.10.6'
-def defaultScala211Version = '2.11.7'
+def defaultScala211Version = '2.11.8'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.10') {
     versions["scala"] = defaultScala210Version
@@ -65,13 +67,22 @@ versions["baseScala"] = versions.scala.substring(0, versions.scala.lastIndexOf("
 
 libs += [
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
+  apacheda: "org.apache.directory.api:api-all:$versions.apacheda",
+  apachedsCoreApi: "org.apache.directory.server:apacheds-core-api:$versions.apacheds",
+  apachedsInterceptorKerberos: "org.apache.directory.server:apacheds-interceptor-kerberos:$versions.apacheds",
+  apachedsProtocolShared: "org.apache.directory.server:apacheds-protocol-shared:$versions.apacheds",
+  apachedsProtocolKerberos: "org.apache.directory.server:apacheds-protocol-kerberos:$versions.apacheds",
+  apachedsProtocolLdap: "org.apache.directory.server:apacheds-protocol-ldap:$versions.apacheds",
+  apachedsLdifPartition: "org.apache.directory.server:apacheds-ldif-partition:$versions.apacheds",
+  apachedsMavibotPartition: "org.apache.directory.server:apacheds-mavibot-partition:$versions.apacheds",
+  apachedsJdbmPartition: "org.apache.directory.server:apacheds-jdbm-partition:$versions.apacheds",
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
-  hadoopMiniKdc: "org.apache.hadoop:hadoop-minikdc:$versions.hadoop",
   easymock: "org.easymock:easymock:$versions.easymock",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonJaxrsJsonProvider: "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$versions.jackson",
   jettyServer: "org.eclipse.jetty:jetty-server:$versions.jetty",
   jettyServlet: "org.eclipse.jetty:jetty-servlet:$versions.jetty",
+  jettyServlets: "org.eclipse.jetty:jetty-servlets:$versions.jetty",
   jerseyContainerServlet: "org.glassfish.jersey.containers:jersey-container-servlet:$versions.jersey",
   junit: "junit:junit:$versions.junit",
   joptSimple: "net.sf.jopt-simple:jopt-simple:$versions.jopt",
@@ -85,6 +96,8 @@ libs += [
   scalaCompiler: "org.scala-lang:scala-compiler:$versions.scala",
   scalaTest: "org.scalatest:scalatest_$versions.baseScala:$versions.scalaTest",
   scalaParserCombinators: "org.scala-lang.modules:scala-parser-combinators_$versions.baseScala:$versions.scalaParserCombinators",
+  scoveragePlugin: "org.scoverage:scalac-scoverage-plugin_$versions.baseScala:$versions.scoverage",
+  scoverageRuntime: "org.scoverage:scalac-scoverage-runtime_$versions.baseScala:$versions.scoverage",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
   slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",

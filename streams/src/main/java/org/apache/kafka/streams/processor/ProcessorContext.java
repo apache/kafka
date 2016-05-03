@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 
 import java.io.File;
@@ -26,14 +26,15 @@ import java.io.File;
 /**
  * Processor context interface.
  */
+@InterfaceStability.Unstable
 public interface ProcessorContext {
 
     /**
-     * Returns the job id
+     * Returns the application id
      *
-     * @return the job id
+     * @return the application id
      */
-    String jobId();
+    String applicationId();
 
     /**
      * Returns the task id
@@ -43,32 +44,18 @@ public interface ProcessorContext {
     TaskId taskId();
 
     /**
-     * Returns the key serializer
+     * Returns the default key serde
      *
      * @return the key serializer
      */
-    Serializer<?> keySerializer();
+    Serde<?> keySerde();
 
     /**
-     * Returns the value serializer
+     * Returns the default value serde
      *
      * @return the value serializer
      */
-    Serializer<?> valueSerializer();
-
-    /**
-     * Returns the key deserializer
-     *
-     * @return the key deserializer
-     */
-    Deserializer<?> keyDeserializer();
-
-    /**
-     * Returns the value deserializer
-     *
-     * @return the value deserializer
-     */
-    Deserializer<?> valueDeserializer();
+    Serde<?> valueSerde();
 
     /**
      * Returns the state directory for the partition.
@@ -119,8 +106,17 @@ public interface ProcessorContext {
      * Forwards a key/value pair to one of the downstream processors designated by childIndex
      * @param key key
      * @param value value
+     * @param childIndex index in list of children of this node
      */
     <K, V> void forward(K key, V value, int childIndex);
+
+    /**
+     * Forwards a key/value pair to one of the downstream processors designated by the downstream processor name
+     * @param key key
+     * @param value value
+     * @param childName name of downstream processor
+     */
+    <K, V> void forward(K key, V value, String childName);
 
     /**
      * Requests a commit
@@ -128,29 +124,38 @@ public interface ProcessorContext {
     void commit();
 
     /**
-     * Returns the topic name of the current input record
+     * Returns the topic name of the current input record; could be null if it is not
+     * available (for example, if this method is invoked from the punctuate call)
      *
      * @return the topic name
      */
     String topic();
 
     /**
-     * Returns the partition id of the current input record
+     * Returns the partition id of the current input record; could be -1 if it is not
+     * available (for example, if this method is invoked from the punctuate call)
      *
      * @return the partition id
      */
     int partition();
 
     /**
-     * Returns the offset of the current input record
+     * Returns the offset of the current input record; could be -1 if it is not
+     * available (for example, if this method is invoked from the punctuate call)
      *
      * @return the offset
      */
     long offset();
 
     /**
-     * Returns the timestamp of the current input record. The timestamp is extracted from
+     * Returns the current timestamp.
+     *
+     * If it is triggered while processing a record streamed from the source processor, timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
      * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord} by {@link TimestampExtractor}.
+     *
+     * If it is triggered while processing a record generated not from the source processor (for example,
+     * if this method is invoked from the punctuate call), timestamp is defined as the current
+     * task's stream time, which is defined as the smallest among all its input stream partition timestamps.
      *
      * @return the timestamp
      */

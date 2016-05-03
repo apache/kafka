@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit
 import kafka.utils.Pool
 import kafka.common.{ClientIdAllBrokers, ClientIdBroker, ClientIdAndBroker}
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 class ProducerRequestMetrics(metricId: ClientIdBroker) extends KafkaMetricsGroup {
   val tags = metricId match {
     case ClientIdAndBroker(clientId, brokerHost, brokerPort) => Map("clientId" -> clientId, "brokerHost" -> brokerHost, "brokerPort" -> brokerPort.toString)
@@ -36,6 +37,7 @@ class ProducerRequestMetrics(metricId: ClientIdBroker) extends KafkaMetricsGroup
  * Tracks metrics of requests made by a given producer client to all brokers.
  * @param clientId ClientId of the given producer
  */
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 class ProducerRequestStats(clientId: String) {
   private val valueFactory = (k: ClientIdBroker) => new ProducerRequestMetrics(k)
   private val stats = new Pool[ClientIdBroker, ProducerRequestMetrics](Some(valueFactory))
@@ -51,6 +53,7 @@ class ProducerRequestStats(clientId: String) {
 /**
  * Stores the request stats information of each producer client in a (clientId -> ProducerRequestStats) map.
  */
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.10.0.0")
 object ProducerRequestStatsRegistry {
   private val valueFactory = (k: String) => new ProducerRequestStats(k)
   private val globalStats = new Pool[String, ProducerRequestStats](Some(valueFactory))

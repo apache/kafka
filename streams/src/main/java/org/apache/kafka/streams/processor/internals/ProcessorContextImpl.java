@@ -17,24 +17,20 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.TaskId;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.File;
 
 public class ProcessorContextImpl implements ProcessorContext, RecordCollector.Supplier {
 
-    private static final Logger log = LoggerFactory.getLogger(ProcessorContextImpl.class);
+    public static final String NONEXIST_TOPIC = "__null_topic__";
 
     private final TaskId id;
     private final StreamTask task;
@@ -42,10 +38,8 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     private final RecordCollector collector;
     private final ProcessorStateManager stateMgr;
 
-    private final Serializer<?> keySerializer;
-    private final Serializer<?> valSerializer;
-    private final Deserializer<?> keyDeserializer;
-    private final Deserializer<?> valDeserializer;
+    private final Serde<?> keySerde;
+    private final Serde<?> valSerde;
 
     private boolean initialized;
 
@@ -62,10 +56,8 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         this.collector = collector;
         this.stateMgr = stateMgr;
 
-        this.keySerializer = config.keySerializer();
-        this.valSerializer = config.valueSerializer();
-        this.keyDeserializer = config.keyDeserializer();
-        this.valDeserializer = config.valueDeserializer();
+        this.keySerde = config.keySerde();
+        this.valSerde = config.valueSerde();
 
         this.initialized = false;
     }
@@ -84,8 +76,8 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public String jobId() {
-        return task.jobId();
+    public String applicationId() {
+        return task.applicationId();
     }
 
     @Override
@@ -94,23 +86,13 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public Serializer<?> keySerializer() {
-        return this.keySerializer;
+    public Serde<?> keySerde() {
+        return this.keySerde;
     }
 
     @Override
-    public Serializer<?> valueSerializer() {
-        return this.valSerializer;
-    }
-
-    @Override
-    public Deserializer<?> keyDeserializer() {
-        return this.keyDeserializer;
-    }
-
-    @Override
-    public Deserializer<?> valueDeserializer() {
-        return this.valDeserializer;
+    public Serde<?> valueSerde() {
+        return this.valSerde;
     }
 
     @Override
@@ -123,6 +105,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return metrics;
     }
 
+    /**
+     * @throws IllegalStateException if this method is called before {@link #initialized()}
+     */
     @Override
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (initialized)
@@ -131,6 +116,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         stateMgr.register(store, loggingEnabled, stateRestoreCallback);
     }
 
+    /**
+     * @throws TopologyBuilderException if an attempt is made to access this state store from an unknown node
+     */
     @Override
     public StateStore getStateStore(String name) {
         ProcessorNode node = task.node();
@@ -138,21 +126,32 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         if (node == null)
             throw new TopologyBuilderException("Accessing from an unknown node");
 
-        // TODO: restore this once we fix the ValueGetter initialiation issue
+        // TODO: restore this once we fix the ValueGetter initialization issue
         //if (!node.stateStores.contains(name))
         //    throw new TopologyBuilderException("Processor " + node.name() + " has no access to StateStore " + name);
 
         return stateMgr.getStore(name);
     }
 
+    /**
+     * @throws IllegalStateException if the task's record is null
+     */
     @Override
     public String topic() {
         if (task.record() == null)
             throw new IllegalStateException("This should not happen as topic() should only be called while a record is processed");
 
-        return task.record().topic();
+        String topic = task.record().topic();
+
+        if (topic.equals(NONEXIST_TOPIC))
+            return null;
+        else
+            return topic;
     }
 
+    /**
+     * @throws IllegalStateException if the task's record is null
+     */
     @Override
     public int partition() {
         if (task.record() == null)
@@ -161,6 +160,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return task.record().partition();
     }
 
+    /**
+     * @throws IllegalStateException if the task's record is null
+     */
     @Override
     public long offset() {
         if (this.task.record() == null)
@@ -169,6 +171,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return this.task.record().offset();
     }
 
+    /**
+     * @throws IllegalStateException if the task's record is null
+     */
     @Override
     public long timestamp() {
         if (task.record() == null)
@@ -185,6 +190,11 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     @Override
     public <K, V> void forward(K key, V value, int childIndex) {
         task.forward(key, value, childIndex);
+    }
+
+    @Override
+    public <K, V> void forward(K key, V value, String childName) {
+        task.forward(key, value, childName);
     }
 
     @Override

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -129,58 +130,6 @@ import java.util.Set;
  */
 public class KeyValueStoreTestDriver<K, V> {
 
-    private static <T> Serializer<T> unusableSerializer() {
-        return new Serializer<T>() {
-            @Override
-            public void configure(Map<String, ?> configs, boolean isKey) {
-            }
-
-            @Override
-            public byte[] serialize(String topic, T data) {
-                throw new UnsupportedOperationException("This serializer should not be used");
-            }
-
-            @Override
-            public void close() {
-            }
-        };
-    };
-
-    private static <T> Deserializer<T> unusableDeserializer() {
-        return new Deserializer<T>() {
-            @Override
-            public void configure(Map<String, ?> configs, boolean isKey) {
-            }
-
-            @Override
-            public T deserialize(String topic, byte[] data) {
-                throw new UnsupportedOperationException("This deserializer should not be used");
-            }
-
-            @Override
-            public void close() {
-            }
-        };
-    };
-
-    /**
-     * Create a driver object that will have a {@link #context()} that records messages
-     * {@link ProcessorContext#forward(Object, Object) forwarded} by the store and that provides <em>unusable</em> default key and
-     * value serializers and deserializers. This can be used when the actual serializers and deserializers are supplied to the
-     * store during creation, which should eliminate the need for a store to depend on the ProcessorContext's default key and
-     * value serializers and deserializers.
-     *
-     * @return the test driver; never null
-     */
-    public static <K, V> KeyValueStoreTestDriver<K, V> create() {
-        Serializer<K> keySerializer = unusableSerializer();
-        Deserializer<K> keyDeserializer = unusableDeserializer();
-        Serializer<V> valueSerializer = unusableSerializer();
-        Deserializer<V> valueDeserializer = unusableDeserializer();
-        Serdes<K, V> serdes = new Serdes<K, V>("unexpected", keySerializer, keyDeserializer, valueSerializer, valueDeserializer);
-        return new KeyValueStoreTestDriver<K, V>(serdes);
-    }
-
     /**
      * Create a driver object that will have a {@link #context()} that records messages
      * {@link ProcessorContext#forward(Object, Object) forwarded} by the store and that provides default serializers and
@@ -195,7 +144,7 @@ public class KeyValueStoreTestDriver<K, V> {
      * @return the test driver; never null
      */
     public static <K, V> KeyValueStoreTestDriver<K, V> create(Class<K> keyClass, Class<V> valueClass) {
-        Serdes<K, V> serdes = Serdes.withBuiltinTypes("unexpected", keyClass, valueClass);
+        StateSerdes<K, V> serdes = StateSerdes.withBuiltinTypes("unexpected", keyClass, valueClass);
         return new KeyValueStoreTestDriver<K, V>(serdes);
     }
 
@@ -215,7 +164,9 @@ public class KeyValueStoreTestDriver<K, V> {
                                                               Deserializer<K> keyDeserializer,
                                                               Serializer<V> valueSerializer,
                                                               Deserializer<V> valueDeserializer) {
-        Serdes<K, V> serdes = new Serdes<K, V>("unexpected", keySerializer, keyDeserializer, valueSerializer, valueDeserializer);
+        StateSerdes<K, V> serdes = new StateSerdes<K, V>("unexpected",
+                Serdes.serdeFrom(keySerializer, keyDeserializer),
+                Serdes.serdeFrom(valueSerializer, valueDeserializer));
         return new KeyValueStoreTestDriver<K, V>(serdes);
     }
 
@@ -237,7 +188,7 @@ public class KeyValueStoreTestDriver<K, V> {
     private final RecordCollector recordCollector;
     private File stateDir = null;
 
-    protected KeyValueStoreTestDriver(final Serdes<K, V> serdes) {
+    protected KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
         ByteArraySerializer rawSerializer = new ByteArraySerializer();
         Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
 
@@ -247,19 +198,8 @@ public class KeyValueStoreTestDriver<K, V> {
             public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
                 // for byte arrays we need to wrap it for comparison
 
-                K key;
-                if (record.key() instanceof byte[]) {
-                    key = serdes.keyFrom((byte[]) record.key());
-                } else {
-                    key = (K) record.key();
-                }
-
-                V value;
-                if (record.key() instanceof byte[]) {
-                    value = serdes.valueFrom((byte[]) record.value());
-                } else {
-                    value = (V) record.value();
-                }
+                K key = serdes.keyFrom(keySerializer.serialize(record.topic(), record.key()));
+                V value = serdes.valueFrom(valueSerializer.serialize(record.topic(), record.value()));
 
                 recordFlushed(key, value);
             }
@@ -276,13 +216,10 @@ public class KeyValueStoreTestDriver<K, V> {
         Properties props = new Properties();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
-        props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, serdes.keySerializer().getClass());
-        props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, serdes.keyDeserializer().getClass());
-        props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, serdes.valueSerializer().getClass());
-        props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, serdes.valueDeserializer().getClass());
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, serdes.keySerde().getClass());
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, serdes.valueSerde().getClass());
 
-        this.context = new MockProcessorContext(null, this.stateDir, serdes.keySerializer(), serdes.keyDeserializer(), serdes.valueSerializer(),
-                serdes.valueDeserializer(), recordCollector) {
+        this.context = new MockProcessorContext(null, this.stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector) {
             @Override
             public TaskId taskId() {
                 return new TaskId(0, 1);
@@ -328,7 +265,7 @@ public class KeyValueStoreTestDriver<K, V> {
         }
     }
 
-    private void restoreEntries(StateRestoreCallback func, Serdes<K, V> serdes) {
+    private void restoreEntries(StateRestoreCallback func, StateSerdes<K, V> serdes) {
         for (KeyValue<K, V> entry : restorableEntries) {
             if (entry != null) {
                 byte[] rawKey = serdes.rawKey(entry.key);

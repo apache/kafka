@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Serdes;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -30,6 +29,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * An in-memory LRU cache store based on HashSet and HashMap.
+ *
+ *  * Note that the use of array-typed keys is discouraged because they result in incorrect ordering behavior.
+ * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
+ * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
+
+ *
+ * @param <K> The key type
+ * @param <V> The value type
+ *
+ * @see org.apache.kafka.streams.state.Stores#create(String)
+ */
 public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     public interface EldestEntryRemovalListener<K, V> {
@@ -41,9 +53,6 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     protected Set<K> keys;
 
     protected EldestEntryRemovalListener<K, V> listener;
-
-    private boolean loggingEnabled = false;
-    private Serdes<K, V> serdes = null;
 
     // this is used for extended MemoryNavigableLRUCache only
     public MemoryLRUCache() {}
@@ -69,11 +78,8 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         };
     }
 
-    public KeyValueStore<K, V> enableLogging(Serdes<K, V> serdes) {
-        this.loggingEnabled = true;
-        this.serdes = serdes;
-
-        return new InMemoryKeyValueLoggedStore<>(this.name, this, serdes);
+    public KeyValueStore<K, V> enableLogging(Serde<K> keySerde, Serde<V> valueSerde) {
+        return new InMemoryKeyValueLoggedStore<>(this.name, this, keySerde, valueSerde);
     }
 
     public MemoryLRUCache<K, V> whenEldestRemoved(EldestEntryRemovalListener<K, V> listener) {
@@ -88,17 +94,9 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
-        if (loggingEnabled) {
-            context.register(root, true, new StateRestoreCallback() {
-
-                @Override
-                public void restore(byte[] key, byte[] value) {
-                    put(serdes.keyFrom(key), serdes.valueFrom(value));
-                }
-            });
-
-        }
+        // do nothing
     }
 
     @Override
@@ -139,11 +137,17 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         return value;
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
         throw new UnsupportedOperationException("MemoryLRUCache does not support range() function.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public KeyValueIterator<K, V> all() {
         throw new UnsupportedOperationException("MemoryLRUCache does not support all() function.");

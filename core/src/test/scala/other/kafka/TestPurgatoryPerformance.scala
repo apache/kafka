@@ -95,7 +95,7 @@ object TestPurgatoryPerformance {
     val latencySamples = new LatencySamples(1000000, pct75, pct50)
     val intervalSamples = new IntervalSamples(1000000, requestRate)
 
-    val purgatory = new DelayedOperationPurgatory[FakeOperation]("fake purgatory")
+    val purgatory = DelayedOperationPurgatory[FakeOperation]("fake purgatory")
     val queue = new CompletionQueue()
 
     val gcNames = gcMXBeans.map(_.getName)

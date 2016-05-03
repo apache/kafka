@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
@@ -56,6 +57,9 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
         };
     }
 
+    /**
+     * @throws IllegalStateException since this method should never be called
+     */
     @Override
     public void enableSendingOldValues() {
         // this should never be called
@@ -73,9 +77,16 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
 
     private class KTableMapProcessor extends AbstractProcessor<K, Change<V>> {
 
+        /**
+         * @throws StreamsException if key is null
+         */
         @Override
         public void process(K key, Change<V> change) {
             KeyValue<K1, V1> newPair = computeValue(key, change.newValue);
+
+            // the selected repartition key should never be null
+            if (newPair.key == null)
+                throw new StreamsException("Record key for KTable repartition operator should not be null.");
 
             context().forward(newPair.key, new Change<>(newPair.value, null));
 

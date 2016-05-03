@@ -67,6 +67,9 @@ public class Sender implements Runnable {
     /* the metadata for the client */
     private final Metadata metadata;
 
+    /* the flag indicating whether the producer should guarantee the message order on the broker or not. */
+    private final boolean guaranteeMessageOrder;
+
     /* the maximum request size to attempt to send to the server */
     private final int maxRequestSize;
 
@@ -97,6 +100,7 @@ public class Sender implements Runnable {
     public Sender(KafkaClient client,
                   Metadata metadata,
                   RecordAccumulator accumulator,
+                  boolean guaranteeMessageOrder,
                   int maxRequestSize,
                   short acks,
                   int retries,
@@ -107,6 +111,7 @@ public class Sender implements Runnable {
         this.client = client;
         this.accumulator = accumulator;
         this.metadata = metadata;
+        this.guaranteeMessageOrder = guaranteeMessageOrder;
         this.maxRequestSize = maxRequestSize;
         this.running = true;
         this.acks = acks;
@@ -164,7 +169,7 @@ public class Sender implements Runnable {
      * @param now
      *            The current POSIX time in milliseconds
      */
-    public void run(long now) {
+    void run(long now) {
         Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
@@ -189,8 +194,15 @@ public class Sender implements Runnable {
                                                                          result.readyNodes,
                                                                          this.maxRequestSize,
                                                                          now);
+        if (guaranteeMessageOrder) {
+            // Mute all the partitions drained
+            for (List<RecordBatch> batchList : batches.values()) {
+                for (RecordBatch batch : batchList)
+                    this.accumulator.mutePartition(batch.topicPartition);
+            }
+        }
 
-        List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, cluster, now);
+        List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
         // update sensors
         for (RecordBatch expiredBatch : expiredBatches)
             this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
@@ -304,6 +316,9 @@ public class Sender implements Runnable {
         }
         if (error.exception() instanceof InvalidMetadataException)
             metadata.requestUpdate();
+        // Unmute the completed partition.
+        if (guaranteeMessageOrder)
+            this.accumulator.unmutePartition(batch.topicPartition);
     }
 
     /**

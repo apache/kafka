@@ -19,18 +19,19 @@ package kafka.security.auth
 import java.util
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
-import org.apache.zookeeper.Watcher.Event.KeeperState
-
 
 import kafka.network.RequestChannel.Session
+import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import org.I0Itec.zkclient.IZkStateListener
+import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import scala.collection.JavaConverters._
 import org.apache.log4j.Logger
+
+import scala.util.Random
 
 object SimpleAclAuthorizer {
   //optional override zookeeper cluster configuration where acls will be stored, if not specified acls will be stored in
@@ -62,6 +63,8 @@ object SimpleAclAuthorizer {
 
   //prefix of all the change notification sequence node.
   val AclChangedPrefix = "acl_changes_"
+
+  private case class VersionedAcls(acls: Set[Acl], zkVersion: Int)
 }
 
 class SimpleAclAuthorizer extends Authorizer with Logging {
@@ -71,8 +74,15 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   private var zkUtils: ZkUtils = null
   private var aclChangeListener: ZkNodeChangeNotificationListener = null
 
-  private val aclCache = new scala.collection.mutable.HashMap[Resource, Set[Acl]]
+  private val aclCache = new scala.collection.mutable.HashMap[Resource, VersionedAcls]
   private val lock = new ReentrantReadWriteLock()
+
+  // The maximum number of times we should try to update the resource acls in zookeeper before failing;
+  // This should never occur, but is a safeguard just in case.
+  protected[auth] var maxUpdateRetries = 10
+
+  private val retryBackoffMs = 100
+  private val retryBackoffJitterMs = 50
 
   /**
    * Guaranteed to be called before any authorize call is made.
@@ -164,67 +174,51 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def addAcls(acls: Set[Acl], resource: Resource) {
     if (acls != null && acls.nonEmpty) {
-      val updatedAcls = getAcls(resource) ++ acls
-      val path = toResourcePath(resource)
-
-      if (zkUtils.pathExists(path))
-        zkUtils.updatePersistentPath(path, Json.encode(Acl.toJsonCompatibleMap(updatedAcls)))
-      else
-        zkUtils.createPersistentPath(path, Json.encode(Acl.toJsonCompatibleMap(updatedAcls)))
-
-      updateAclChangedFlag(resource)
+      inWriteLock(lock) {
+        updateResourceAcls(resource) { currentAcls =>
+          currentAcls ++ acls
+        }
+      }
     }
   }
 
   override def removeAcls(aclsTobeRemoved: Set[Acl], resource: Resource): Boolean = {
-    if (zkUtils.pathExists(toResourcePath(resource))) {
-      val existingAcls = getAcls(resource)
-      val filteredAcls = existingAcls.filter((acl: Acl) => !aclsTobeRemoved.contains(acl))
-
-      val aclNeedsRemoval = (existingAcls != filteredAcls)
-      if (aclNeedsRemoval) {
-        val path: String = toResourcePath(resource)
-        if (filteredAcls.nonEmpty)
-          zkUtils.updatePersistentPath(path, Json.encode(Acl.toJsonCompatibleMap(filteredAcls)))
-        else
-          zkUtils.deletePath(toResourcePath(resource))
-
-        updateAclChangedFlag(resource)
+    inWriteLock(lock) {
+      updateResourceAcls(resource) { currentAcls =>
+        currentAcls -- aclsTobeRemoved
       }
-
-      aclNeedsRemoval
-    } else false
+    }
   }
 
   override def removeAcls(resource: Resource): Boolean = {
-    if (zkUtils.pathExists(toResourcePath(resource))) {
-      zkUtils.deletePath(toResourcePath(resource))
+    inWriteLock(lock) {
+      val result = zkUtils.deletePath(toResourcePath(resource))
+      updateCache(resource, VersionedAcls(Set(), 0))
       updateAclChangedFlag(resource)
-      true
-    } else false
+      result
+    }
   }
 
   override def getAcls(resource: Resource): Set[Acl] = {
     inReadLock(lock) {
-      aclCache.get(resource).getOrElse(Set.empty[Acl])
+      aclCache.get(resource).map(_.acls).getOrElse(Set.empty[Acl])
     }
   }
 
-  private def getAclsFromZk(resource: Resource): Set[Acl] = {
-    val aclJson = zkUtils.readDataMaybeNull(toResourcePath(resource))._1
-    aclJson.map(Acl.fromJson).getOrElse(Set.empty)
-  }
-
   override def getAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]] = {
-    aclCache.mapValues { acls =>
-      acls.filter(_.principal == principal)
-    }.filter { case (_, acls) =>
-      acls.nonEmpty
-    }.toMap
+    inReadLock(lock) {
+      aclCache.mapValues { versionedAcls =>
+        versionedAcls.acls.filter(_.principal == principal)
+      }.filter { case (_, acls) =>
+        acls.nonEmpty
+      }.toMap
+    }
   }
 
   override def getAcls(): Map[Resource, Set[Acl]] = {
-    aclCache.toMap
+    inReadLock(lock) {
+      aclCache.mapValues(_.acls).toMap
+    }
   }
 
   def close() {
@@ -233,25 +227,17 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def loadCache()  {
-    var acls = Set.empty[Acl]
-    val resourceTypes = zkUtils.getChildren(SimpleAclAuthorizer.AclZkPath)
-    for (rType <- resourceTypes) {
-      val resourceType = ResourceType.fromString(rType)
-      val resourceTypePath = SimpleAclAuthorizer.AclZkPath + "/" + resourceType.name
-      val resourceNames = zkUtils.getChildren(resourceTypePath)
-      for (resourceName <- resourceNames) {
-        acls = getAclsFromZk(Resource(resourceType, resourceName.toString))
-        updateCache(new Resource(resourceType, resourceName), acls)
-      }
-    }
-  }
-
-  private def updateCache(resource: Resource, acls: Set[Acl]) {
     inWriteLock(lock) {
-      if (acls.nonEmpty)
-        aclCache.put(resource, acls)
-      else
-        aclCache.remove(resource)
+      val resourceTypes = zkUtils.getChildren(SimpleAclAuthorizer.AclZkPath)
+      for (rType <- resourceTypes) {
+        val resourceType = ResourceType.fromString(rType)
+        val resourceTypePath = SimpleAclAuthorizer.AclZkPath + "/" + resourceType.name
+        val resourceNames = zkUtils.getChildren(resourceTypePath)
+        for (resourceName <- resourceNames) {
+          val versionedAcls = getAclsFromZk(Resource(resourceType, resourceName.toString))
+          updateCache(new Resource(resourceType, resourceName), versionedAcls)
+        }
+      }
     }
   }
 
@@ -264,16 +250,117 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     authorizerLogger.debug(s"Principal = $principal is $permissionType Operation = $operation from host = $host on resource = $resource")
   }
 
+  /**
+    * Safely updates the resources ACLs by ensuring reads and writes respect the expected zookeeper version.
+    * Continues to retry until it succesfully updates zookeeper.
+    *
+    * Returns a boolean indicating if the content of the ACLs was actually changed.
+    *
+    * @param resource the resource to change ACLs for
+    * @param getNewAcls function to transform existing acls to new ACLs
+    * @return boolean indicating if a change was made
+    */
+  private def updateResourceAcls(resource: Resource)(getNewAcls: Set[Acl] => Set[Acl]): Boolean = {
+    val path = toResourcePath(resource)
+
+    var currentVersionedAcls =
+      if (aclCache.contains(resource))
+        getAclsFromCache(resource)
+      else
+        getAclsFromZk(resource)
+    var newVersionedAcls: VersionedAcls = null
+    var writeComplete = false
+    var retries = 0
+    while (!writeComplete && retries <= maxUpdateRetries) {
+      val newAcls = getNewAcls(currentVersionedAcls.acls)
+      val data = Json.encode(Acl.toJsonCompatibleMap(newAcls))
+      val (updateSucceeded, updateVersion) =
+        if (!newAcls.isEmpty) {
+         updatePath(path, data, currentVersionedAcls.zkVersion)
+        } else {
+          trace(s"Deleting path for $resource because it had no ACLs remaining")
+          (zkUtils.conditionalDeletePath(path, currentVersionedAcls.zkVersion), 0)
+        }
+
+      if (!updateSucceeded) {
+        trace(s"Failed to update ACLs for $resource. Used version ${currentVersionedAcls.zkVersion}. Reading data and retrying update.")
+        Thread.sleep(backoffTime)
+        currentVersionedAcls = getAclsFromZk(resource);
+        retries += 1
+      } else {
+        newVersionedAcls = VersionedAcls(newAcls, updateVersion)
+        writeComplete = updateSucceeded
+      }
+    }
+
+    if(!writeComplete)
+      throw new IllegalStateException(s"Failed to update ACLs for $resource after trying a maximum of $maxUpdateRetries times")
+
+    if (newVersionedAcls.acls != currentVersionedAcls.acls) {
+      debug(s"Updated ACLs for $resource to ${newVersionedAcls.acls} with version ${newVersionedAcls.zkVersion}")
+      updateCache(resource, newVersionedAcls)
+      updateAclChangedFlag(resource)
+      true
+    } else {
+      debug(s"Updated ACLs for $resource, no change was made")
+      updateCache(resource, newVersionedAcls) // Even if no change, update the version
+      false
+    }
+  }
+
+  /**
+    * Updates a zookeeper path with an expected version. If the topic does not exist, it will create it.
+    * Returns if the update was successful and the new version.
+    */
+  private def updatePath(path: String, data: String, expectedVersion: Int): (Boolean, Int) = {
+    try {
+      zkUtils.conditionalUpdatePersistentPathIfExists(path, data, expectedVersion)
+    } catch {
+      case e: ZkNoNodeException =>
+        try {
+          debug(s"Node $path does not exist, attempting to create it.")
+          zkUtils.createPersistentPath(path, data)
+          (true, 0)
+        } catch {
+          case e: ZkNodeExistsException =>
+            debug(s"Failed to create node for $path because it already exists.")
+            (false, 0)
+        }
+    }
+  }
+
+  private def getAclsFromCache(resource: Resource): VersionedAcls = {
+    aclCache.getOrElse(resource, throw new IllegalArgumentException(s"ACLs do not exist in the cache for resource $resource"))
+  }
+
+  private def getAclsFromZk(resource: Resource): VersionedAcls = {
+    val (aclJson, stat) = zkUtils.readDataMaybeNull(toResourcePath(resource))
+    VersionedAcls(aclJson.map(Acl.fromJson).getOrElse(Set()), stat.getVersion)
+  }
+
+  private def updateCache(resource: Resource, versionedAcls: VersionedAcls) {
+    if (versionedAcls.acls.nonEmpty) {
+      aclCache.put(resource, versionedAcls)
+    } else {
+      aclCache.remove(resource)
+    }
+  }
+
   private def updateAclChangedFlag(resource: Resource) {
     zkUtils.createSequentialPersistentPath(SimpleAclAuthorizer.AclChangedZkPath + "/" + SimpleAclAuthorizer.AclChangedPrefix, resource.toString)
   }
 
-  object AclChangedNotificationHandler extends NotificationHandler {
+  private def backoffTime = {
+    retryBackoffMs + Random.nextInt(retryBackoffJitterMs)
+  }
 
+  object AclChangedNotificationHandler extends NotificationHandler {
     override def processNotification(notificationMessage: String) {
       val resource: Resource = Resource.fromString(notificationMessage)
-      val acls = getAclsFromZk(resource)
-      updateCache(resource, acls)
+      inWriteLock(lock) {
+        val versionedAcls = getAclsFromZk(resource)
+        updateCache(resource, versionedAcls)
+      }
     }
   }
 }

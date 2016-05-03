@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.BrokerEndPoint;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -78,10 +78,10 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     private final int controllerId;
     private final int controllerEpoch;
     private final Map<TopicPartition, PartitionState> partitionStates;
-    private final Set<BrokerEndPoint> liveLeaders;
+    private final Set<Node> liveLeaders;
 
     public LeaderAndIsrRequest(int controllerId, int controllerEpoch, Map<TopicPartition, PartitionState> partitionStates,
-                               Set<BrokerEndPoint> liveLeaders) {
+                               Set<Node> liveLeaders) {
         super(new Struct(CURRENT_SCHEMA));
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
@@ -104,7 +104,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         struct.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
 
         List<Struct> leadersData = new ArrayList<>(liveLeaders.size());
-        for (BrokerEndPoint leader : liveLeaders) {
+        for (Node leader : liveLeaders) {
             Struct leaderData = struct.instance(LIVE_LEADERS_KEY_NAME);
             leaderData.set(END_POINT_ID_KEY_NAME, leader.id());
             leaderData.set(HOST_KEY_NAME, leader.host());
@@ -148,13 +148,13 @@ public class LeaderAndIsrRequest extends AbstractRequest {
 
         }
 
-        Set<BrokerEndPoint> leaders = new HashSet<>();
+        Set<Node> leaders = new HashSet<>();
         for (Object leadersDataObj : struct.getArray(LIVE_LEADERS_KEY_NAME)) {
             Struct leadersData = (Struct) leadersDataObj;
             int id = leadersData.getInt(END_POINT_ID_KEY_NAME);
             String host = leadersData.getString(HOST_KEY_NAME);
             int port = leadersData.getInt(PORT_KEY_NAME);
-            leaders.add(new BrokerEndPoint(id, host, port));
+            leaders.add(new Node(id, host, port));
         }
 
         controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
@@ -191,7 +191,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         return partitionStates;
     }
 
-    public Set<BrokerEndPoint> liveLeaders() {
+    public Set<Node> liveLeaders() {
         return liveLeaders;
     }
 

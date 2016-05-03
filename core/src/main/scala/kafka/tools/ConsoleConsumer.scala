@@ -103,6 +103,10 @@ object ConsoleConsumer extends Logging {
         consumer.stop()
 
         shutdownLatch.await()
+
+        if (conf.enableSystestEventsLogging) {
+          System.out.println("shutdown_complete")
+        }
       }
     })
   }
@@ -253,6 +257,9 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("deserializer for values")
       .ofType(classOf[String])
+    val enableSystestEventsLoggingOpt = parser.accepts("enable-systest-events",
+                                                       "Log lifecycle events of the consumer in addition to logging consumed " +
+                                                       "messages. (This is specific for system tests.)")
 
     if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
@@ -260,6 +267,7 @@ object ConsoleConsumer extends Logging {
     var groupIdPassed = true
     val options: OptionSet = tryParse(parser, args)
     val useNewConsumer = options.has(useNewConsumerOpt)
+    val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
     // If using old consumer, exactly one of whitelist/blacklist/topic is required.
     // If using new consumer, topic must be specified.
@@ -349,9 +357,9 @@ class DefaultMessageFormatter extends MessageFormatter {
 
   override def init(props: Properties) {
     if (props.containsKey("print.timestamp"))
-      printTimestamp = props.getProperty("print.timestamp").trim.toLowerCase.equals("true")
+      printTimestamp = props.getProperty("print.timestamp").trim.equalsIgnoreCase("true")
     if (props.containsKey("print.key"))
-      printKey = props.getProperty("print.key").trim.toLowerCase.equals("true")
+      printKey = props.getProperty("print.key").trim.equalsIgnoreCase("true")
     if (props.containsKey("key.separator"))
       keySeparator = props.getProperty("key.separator").getBytes
     if (props.containsKey("line.separator"))

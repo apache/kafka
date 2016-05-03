@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,8 +19,10 @@ package kafka.cluster
 
 import java.nio.ByteBuffer
 
+import kafka.api.ApiUtils._
 import kafka.common.{BrokerEndPointNotAvailableException, BrokerNotAvailableException, KafkaException}
 import kafka.utils.Json
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.protocol.SecurityProtocol
 
 /**
@@ -31,26 +33,41 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 object Broker {
 
   /**
-   * Create a broker object from id and JSON string.
-   * @param id
-   * @param brokerInfoString
-   *
-   * Version 1 JSON schema for a broker is:
-   * {"version":1,
-   *  "host":"localhost",
-   *  "port":9092
-   *  "jmx_port":9999,
-   *  "timestamp":"2233345666" }
-   *
-   * The current JSON schema for a broker is:
-   * {"version":2,
-   *  "host","localhost",
-   *  "port",9092
-   *  "jmx_port":9999,
-   *  "timestamp":"2233345666",
-   *  "endpoints": ["PLAINTEXT://host1:9092",
-   *                "SSL://host1:9093"]
-   */
+    * Create a broker object from id and JSON string.
+    *
+    * @param id
+    * @param brokerInfoString
+    *
+    * Version 1 JSON schema for a broker is:
+    * {
+    *   "version":1,
+    *   "host":"localhost",
+    *   "port":9092
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666"
+    * }
+    *
+    * Version 2 JSON schema for a broker is:
+    * {
+    *   "version":2,
+    *   "host":"localhost",
+    *   "port":9092
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"]
+    * }
+    *
+    * Version 3 (current) JSON schema for a broker is:
+    * {
+    *   "version":3,
+    *   "host":"localhost",
+    *   "port":9092
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"],
+    *   "rack":"dc1"
+    * }
+    */
   def createBroker(id: Int, brokerInfoString: String): Broker = {
     if (brokerInfoString == null)
       throw new BrokerNotAvailableException(s"Broker id $id does not exist")
@@ -74,9 +91,8 @@ object Broker {
                 (ep.protocolType, ep)
               }.toMap
             }
-
-
-          new Broker(id, endpoints)
+          val rack = brokerInfo.get("rack").filter(_ != null).map(_.asInstanceOf[String])
+          new Broker(id, endpoints, rack)
         case None =>
           throw new BrokerNotAvailableException(s"Broker id $id does not exist")
       }
@@ -85,61 +101,35 @@ object Broker {
         throw new KafkaException(s"Failed to parse the broker info from zookeeper: $brokerInfoString", t)
     }
   }
-
-  /**
-   *
-   * @param buffer Containing serialized broker.
-   *               Current serialization is:
-   *               id (int), number of endpoints (int), serialized endpoints
-   * @return broker object
-   */
-  def readFrom(buffer: ByteBuffer): Broker = {
-    val id = buffer.getInt
-    val numEndpoints = buffer.getInt
-
-    val endpoints = List.range(0, numEndpoints).map(i => EndPoint.readFrom(buffer))
-            .map(ep => ep.protocolType -> ep).toMap
-    new Broker(id, endpoints)
-  }
 }
 
-case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) {
+case class Broker(id: Int, endPoints: collection.Map[SecurityProtocol, EndPoint], rack: Option[String]) {
 
-  override def toString: String = id + " : " + endPoints.values.mkString("(",",",")")
+  override def toString: String =
+    s"$id : ${endPoints.values.mkString("(",",",")")} : ${rack.orNull}"
+
+  def this(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) = {
+    this(id, endPoints, None)
+  }
 
   def this(id: Int, host: String, port: Int, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
-    this(id, Map(protocol -> EndPoint(host, port, protocol)))
+    this(id, Map(protocol -> EndPoint(host, port, protocol)), None)
   }
 
   def this(bep: BrokerEndPoint, protocol: SecurityProtocol) = {
     this(bep.id, bep.host, bep.port, protocol)
   }
 
-
-  def writeTo(buffer: ByteBuffer) {
-    buffer.putInt(id)
-    buffer.putInt(endPoints.size)
-    for(endpoint <- endPoints.values) {
-      endpoint.writeTo(buffer)
-    }
-  }
-
-  def sizeInBytes: Int =
-    4 + /* broker id*/
-    4 + /* number of endPoints */
-    endPoints.values.map(_.sizeInBytes).sum /* end points */
-
-  def supportsChannel(protocolType: SecurityProtocol): Unit = {
-    endPoints.contains(protocolType)
+  def getNode(protocolType: SecurityProtocol): Node = {
+    val endpoint = endPoints.getOrElse(protocolType,
+      throw new BrokerEndPointNotAvailableException(s"End point with security protocol $protocolType not found for broker $id"))
+    new Node(id, endpoint.host, endpoint.port, rack.orNull)
   }
 
   def getBrokerEndPoint(protocolType: SecurityProtocol): BrokerEndPoint = {
-    val endpoint = endPoints.get(protocolType)
-    endpoint match {
-      case Some(endpoint) => new BrokerEndPoint(id, endpoint.host, endpoint.port)
-      case None =>
-        throw new BrokerEndPointNotAvailableException("End point %s not found for broker %d".format(protocolType,id))
-    }
+    val endpoint = endPoints.getOrElse(protocolType,
+      throw new BrokerEndPointNotAvailableException(s"End point with security protocol $protocolType not found for broker $id"))
+    new BrokerEndPoint(id, endpoint.host, endpoint.port)
   }
 
 }

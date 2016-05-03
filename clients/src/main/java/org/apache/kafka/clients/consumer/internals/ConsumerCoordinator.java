@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.internals.TopicConstants;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -62,13 +63,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private final List<PartitionAssignor> assignors;
     private final org.apache.kafka.clients.Metadata metadata;
-    private final MetadataSnapshot metadataSnapshot;
     private final ConsumerCoordinatorMetrics sensors;
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
     private final AutoCommitTask autoCommitTask;
-    private final ConsumerInterceptors interceptors;
+    private final ConsumerInterceptors<?, ?> interceptors;
+    private final boolean excludeInternalTopics;
+
+    private MetadataSnapshot metadataSnapshot;
+    private MetadataSnapshot assignmentSnapshot;
 
     /**
      * Initialize the coordination manager.
@@ -87,7 +91,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                OffsetCommitCallback defaultOffsetCommitCallback,
                                boolean autoCommitEnabled,
                                long autoCommitIntervalMs,
-                               ConsumerInterceptors interceptors) {
+                               ConsumerInterceptors<?, ?> interceptors,
+                               boolean excludeInternalTopics) {
         super(client,
                 groupId,
                 sessionTimeoutMs,
@@ -99,7 +104,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.metadata = metadata;
 
         this.metadata.requestUpdate();
-        this.metadataSnapshot = new MetadataSnapshot();
+        this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch());
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = defaultOffsetCommitCallback;
         this.autoCommitEnabled = autoCommitEnabled;
@@ -107,9 +112,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         addMetadataListener();
 
-        this.autoCommitTask = autoCommitEnabled ? new AutoCommitTask(autoCommitIntervalMs) : null;
+        if (autoCommitEnabled) {
+            this.autoCommitTask = new AutoCommitTask(autoCommitIntervalMs);
+            this.autoCommitTask.reschedule();
+        } else {
+            this.autoCommitTask = null;
+        }
+
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
+        this.excludeInternalTopics = excludeInternalTopics;
     }
 
     @Override
@@ -140,7 +152,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     final List<String> topicsToSubscribe = new ArrayList<>();
 
                     for (String topic : cluster.topics())
-                        if (subscriptions.getSubscribedPattern().matcher(topic).matches())
+                        if (subscriptions.getSubscribedPattern().matcher(topic).matches() &&
+                                !(excludeInternalTopics && TopicConstants.INTERNAL_TOPICS.contains(topic)))
                             topicsToSubscribe.add(topic);
 
                     subscriptions.changeSubscription(topicsToSubscribe);
@@ -148,8 +161,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 }
 
                 // check if there are any changes to the metadata which should trigger a rebalance
-                if (metadataSnapshot.update(subscriptions, cluster) && subscriptions.partitionsAutoAssigned())
-                    subscriptions.needReassignment();
+                if (subscriptions.partitionsAutoAssigned()) {
+                    MetadataSnapshot snapshot = new MetadataSnapshot(subscriptions, cluster);
+                    if (!snapshot.equals(metadataSnapshot)) {
+                        metadataSnapshot = snapshot;
+                        subscriptions.needReassignment();
+                    }
+                }
+
             }
         });
     }
@@ -167,6 +186,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                   String memberId,
                                   String assignmentStrategy,
                                   ByteBuffer assignmentBuffer) {
+        // if we were the assignor, then we need to make sure that there have been no metadata updates
+        // since the rebalance begin. Otherwise, we won't rebalance again until the next metadata change
+        if (assignmentSnapshot != null && !assignmentSnapshot.equals(metadataSnapshot)) {
+            subscriptions.needReassignment();
+            return;
+        }
+
         PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
@@ -182,21 +208,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // give the assignor a chance to update internal state based on the received assignment
         assignor.onAssignment(assignment);
 
-        // restart the autocommit task if needed
+        // reschedule the auto commit starting from now
         if (autoCommitEnabled)
-            autoCommitTask.enable();
+            autoCommitTask.reschedule();
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.listener();
-        log.debug("Setting newly assigned partitions {}", subscriptions.assignedPartitions());
+        log.info("Setting newly assigned partitions {} for group {}", subscriptions.assignedPartitions(), groupId);
         try {
             Set<TopicPartition> assigned = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsAssigned(assigned);
         } catch (WakeupException e) {
             throw e;
         } catch (Exception e) {
-            log.error("User provided listener " + listener.getClass().getName()
-                    + " failed on partition assignment: ", e);
+            log.error("User provided listener {} for group {} failed on partition assignment",
+                    listener.getClass().getName(), groupId, e);
         }
     }
 
@@ -220,13 +246,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // which ensures that all metadata changes will eventually be seen
         this.subscriptions.groupSubscribe(allSubscribedTopics);
         metadata.setTopics(this.subscriptions.groupSubscription());
-        client.ensureFreshMetadata();
 
-        log.debug("Performing {} assignment for subscriptions {}", assignor.name(), subscriptions);
+        // update metadata (if needed) and keep track of the metadata used for assignment so that
+        // we can check after rebalance completion whether anything has changed
+        client.ensureFreshMetadata();
+        assignmentSnapshot = metadataSnapshot;
+
+        log.debug("Performing assignment for group {} using strategy {} with subscriptions {}",
+                groupId, assignor.name(), subscriptions);
 
         Map<String, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions);
 
-        log.debug("Finished assignment: {}", assignment);
+        log.debug("Finished assignment for group {}: {}", groupId, assignment);
 
         Map<String, ByteBuffer> groupAssignment = new HashMap<>();
         for (Map.Entry<String, Assignment> assignmentEntry : assignment.entrySet()) {
@@ -244,17 +275,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.listener();
-        log.debug("Revoking previously assigned partitions {}", subscriptions.assignedPartitions());
+        log.info("Revoking previously assigned partitions {} for group {}", subscriptions.assignedPartitions(), groupId);
         try {
             Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsRevoked(revoked);
         } catch (WakeupException e) {
             throw e;
         } catch (Exception e) {
-            log.error("User provided listener " + listener.getClass().getName()
-                    + " failed on partition revocation: ", e);
+            log.error("User provided listener {} for group {} failed on partition revocation",
+                    listener.getClass().getName(), groupId, e);
         }
 
+        assignmentSnapshot = null;
         subscriptions.needReassignment();
     }
 
@@ -339,6 +371,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 cb.onComplete(offsets, e);
             }
         });
+
+        // ensure commit has a chance to be transmitted (without blocking on its completion)
+        // note that we allow delayed tasks to be executed in case heartbeats need to be sent
+        client.quickPoll(true);
     }
 
     /**
@@ -374,59 +410,40 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private class AutoCommitTask implements DelayedTask {
         private final long interval;
-        private boolean enabled = false;
-        private boolean requestInFlight = false;
 
         public AutoCommitTask(long interval) {
             this.interval = interval;
         }
 
-        public void enable() {
-            if (!enabled) {
-                // there shouldn't be any instances scheduled, but call unschedule anyway to ensure
-                // that this task is only ever scheduled once
-                client.unschedule(this);
-                this.enabled = true;
-
-                if (!requestInFlight) {
-                    long now = time.milliseconds();
-                    client.schedule(this, interval + now);
-                }
-            }
-        }
-
-        public void disable() {
-            this.enabled = false;
-            client.unschedule(this);
+        private void reschedule() {
+            client.schedule(this, time.milliseconds() + interval);
         }
 
         private void reschedule(long at) {
-            if (enabled)
-                client.schedule(this, at);
+            client.schedule(this, at);
         }
 
         public void run(final long now) {
-            if (!enabled)
-                return;
-
             if (coordinatorUnknown()) {
-                log.debug("Cannot auto-commit offsets now since the coordinator is unknown, will retry after backoff");
-                client.schedule(this, now + retryBackoffMs);
+                log.debug("Cannot auto-commit offsets for group {} since the coordinator is unknown", groupId);
+                reschedule(now + retryBackoffMs);
                 return;
             }
 
-            requestInFlight = true;
+            if (needRejoin()) {
+                // skip the commit when we're rejoining since we'll commit offsets synchronously
+                // before the revocation callback is invoked
+                reschedule(now + interval);
+                return;
+            }
+
             commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
                 @Override
                 public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                    requestInFlight = false;
                     if (exception == null) {
                         reschedule(now + interval);
-                    } else if (exception instanceof SendFailedException) {
-                        log.debug("Failed to send automatic offset commit, will retry immediately");
-                        reschedule(now);
                     } else {
-                        log.warn("Auto offset commit failed: {}", exception.getMessage());
+                        log.warn("Auto offset commit failed for group {}: {}", groupId, exception.getMessage());
                         reschedule(now + interval);
                     }
                 }
@@ -436,10 +453,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private void maybeAutoCommitOffsetsSync() {
         if (autoCommitEnabled) {
-            // disable periodic commits prior to committing synchronously. note that they will
-            // be re-enabled after a rebalance completes
-            autoCommitTask.disable();
-
             try {
                 commitOffsetsSync(subscriptions.allConsumed());
             } catch (WakeupException e) {
@@ -447,7 +460,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 throw e;
             } catch (Exception e) {
                 // consistent with async auto-commit failures, we do not propagate the exception
-                log.warn("Auto offset commit failed: ", e.getMessage());
+                log.warn("Auto offset commit failed for group {}: {}", groupId, e.getMessage());
             }
         }
     }
@@ -481,7 +494,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 OffsetCommitRequest.DEFAULT_RETENTION_TIME,
                 offsetData);
 
-        log.trace("Sending offset-commit request with {} to {}", offsets, coordinator);
+        log.trace("Sending offset-commit request with {} to coordinator {} for group {}", offsets, coordinator, groupId);
 
         return client.send(coordinator, ApiKeys.OFFSET_COMMIT, req)
                 .compose(new OffsetCommitResponseHandler(offsets));
@@ -520,12 +533,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 Errors error = Errors.forCode(entry.getValue());
                 if (error == Errors.NONE) {
-                    log.debug("Committed offset {} for partition {}", offset, tp);
+                    log.debug("Group {} committed offset {} for partition {}", groupId, offset, tp);
                     if (subscriptions.isAssigned(tp))
                         // update the local cache only if the partition is still assigned
                         subscriptions.committed(tp, offsetAndMetadata);
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                    log.error("Unauthorized to commit for group {}", groupId);
+                    log.error("Not authorized to commit offsets for group {}", groupId);
                     future.raise(new GroupAuthorizationException(groupId));
                     return;
                 } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
@@ -533,18 +546,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 } else if (error == Errors.OFFSET_METADATA_TOO_LARGE
                         || error == Errors.INVALID_COMMIT_OFFSET_SIZE) {
                     // raise the error to the user
-                    log.info("Offset commit for group {} failed on partition {} due to {}, will retry", groupId, tp, error);
+                    log.debug("Offset commit for group {} failed on partition {}: {}", groupId, tp, error.message());
                     future.raise(error);
                     return;
                 } else if (error == Errors.GROUP_LOAD_IN_PROGRESS) {
                     // just retry
-                    log.info("Offset commit for group {} failed due to {}, will retry", groupId, error);
+                    log.debug("Offset commit for group {} failed: {}", groupId, error.message());
                     future.raise(error);
                     return;
                 } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
                         || error == Errors.NOT_COORDINATOR_FOR_GROUP
                         || error == Errors.REQUEST_TIMED_OUT) {
-                    log.info("Offset commit for group {} failed due to {}, will find new coordinator and retry", groupId, error);
+                    log.debug("Offset commit for group {} failed: {}", groupId, error.message());
                     coordinatorDead();
                     future.raise(error);
                     return;
@@ -552,19 +565,24 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         || error == Errors.ILLEGAL_GENERATION
                         || error == Errors.REBALANCE_IN_PROGRESS) {
                     // need to re-join group
-                    log.error("Error {} occurred while committing offsets for group {}", error, groupId);
+                    log.debug("Offset commit for group {} failed: {}", groupId, error.message());
                     subscriptions.needReassignment();
-                    future.raise(new CommitFailedException("Commit cannot be completed due to group rebalance"));
+                    future.raise(new CommitFailedException("Commit cannot be completed since the group has already " +
+                            "rebalanced and assigned the partitions to another member. This means that the time " +
+                            "between subsequent calls to poll() was longer than the configured session.timeout.ms, " +
+                            "which typically implies that the poll loop is spending too much time message processing. " +
+                            "You can address this either by increasing the session timeout or by reducing the maximum " +
+                            "size of batches returned in poll() with max.poll.records."));
                     return;
                 } else {
-                    log.error("Error committing partition {} at offset {}: {}", tp, offset, error.exception().getMessage());
-                    future.raise(new KafkaException("Unexpected error in commit: " + error.exception().getMessage()));
+                    log.error("Group {} failed to commit partition {} at offset {}: {}", groupId, tp, offset, error.message());
+                    future.raise(new KafkaException("Unexpected error in commit: " + error.message()));
                     return;
                 }
             }
 
             if (!unauthorizedTopics.isEmpty()) {
-                log.error("Unauthorized to commit to topics {}", unauthorizedTopics);
+                log.error("Not authorized to commit to topics {} for group {}", unauthorizedTopics, groupId);
                 future.raise(new TopicAuthorizationException(unauthorizedTopics));
             } else {
                 future.complete(null);
@@ -583,9 +601,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
 
-        log.debug("Fetching committed offsets for partitions: {}",  partitions);
+        log.debug("Group {} fetching committed offsets for partitions: {}", groupId, partitions);
         // construct the request
-        OffsetFetchRequest request = new OffsetFetchRequest(this.groupId, new ArrayList<TopicPartition>(partitions));
+        OffsetFetchRequest request = new OffsetFetchRequest(this.groupId, new ArrayList<>(partitions));
 
         // send the request with a callback
         return client.send(coordinator, ApiKeys.OFFSET_FETCH, request)
@@ -606,31 +624,30 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 TopicPartition tp = entry.getKey();
                 OffsetFetchResponse.PartitionData data = entry.getValue();
                 if (data.hasError()) {
-                    log.debug("Error fetching offset for topic-partition {}: {}", tp, Errors.forCode(data.errorCode)
-                            .exception()
-                            .getMessage());
-                    if (data.errorCode == Errors.GROUP_LOAD_IN_PROGRESS.code()) {
+                    Errors error = Errors.forCode(data.errorCode);
+                    log.debug("Group {} failed to fetch offset for partition {}: {}", groupId, tp, error.message());
+
+                    if (error == Errors.GROUP_LOAD_IN_PROGRESS) {
                         // just retry
-                        future.raise(Errors.GROUP_LOAD_IN_PROGRESS);
-                    } else if (data.errorCode == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
+                        future.raise(error);
+                    } else if (error == Errors.NOT_COORDINATOR_FOR_GROUP) {
                         // re-discover the coordinator and retry
                         coordinatorDead();
-                        future.raise(Errors.NOT_COORDINATOR_FOR_GROUP);
-                    } else if (data.errorCode == Errors.UNKNOWN_MEMBER_ID.code()
-                            || data.errorCode == Errors.ILLEGAL_GENERATION.code()) {
+                        future.raise(error);
+                    } else if (error == Errors.UNKNOWN_MEMBER_ID
+                            || error == Errors.ILLEGAL_GENERATION) {
                         // need to re-join group
                         subscriptions.needReassignment();
-                        future.raise(Errors.forCode(data.errorCode));
+                        future.raise(error);
                     } else {
-                        future.raise(new KafkaException("Unexpected error in fetch offset response: "
-                                + Errors.forCode(data.errorCode).exception().getMessage()));
+                        future.raise(new KafkaException("Unexpected error in fetch offset response: " + error.message()));
                     }
                     return;
                 } else if (data.offset >= 0) {
                     // record the position with the offset (-1 indicates no committed offset to fetch)
                     offsets.put(tp, new OffsetAndMetadata(data.offset, data.metadata));
                 } else {
-                    log.debug("No committed offset for partition " + tp);
+                    log.debug("Group {} has no committed offset for partition {}", groupId, tp);
                 }
             }
 
@@ -672,19 +689,26 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private static class MetadataSnapshot {
-        private Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        private final Map<String, Integer> partitionsPerTopic;
 
-        public boolean update(SubscriptionState subscription, Cluster cluster) {
+        public MetadataSnapshot(SubscriptionState subscription, Cluster cluster) {
             Map<String, Integer> partitionsPerTopic = new HashMap<>();
             for (String topic : subscription.groupSubscription())
                 partitionsPerTopic.put(topic, cluster.partitionCountForTopic(topic));
+            this.partitionsPerTopic = partitionsPerTopic;
+        }
 
-            if (!partitionsPerTopic.equals(this.partitionsPerTopic)) {
-                this.partitionsPerTopic = partitionsPerTopic;
-                return true;
-            }
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            MetadataSnapshot that = (MetadataSnapshot) o;
+            return partitionsPerTopic != null ? partitionsPerTopic.equals(that.partitionsPerTopic) : that.partitionsPerTopic == null;
+        }
 
-            return false;
+        @Override
+        public int hashCode() {
+            return partitionsPerTopic != null ? partitionsPerTopic.hashCode() : 0;
         }
     }
 

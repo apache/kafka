@@ -37,8 +37,8 @@ public class WindowedStreamPartitionerTest {
 
     private String topicName = "topic";
 
-    private IntegerSerializer keySerializer = new IntegerSerializer();
-    private StringSerializer valSerializer = new StringSerializer();
+    private IntegerSerializer intSerializer = new IntegerSerializer();
+    private StringSerializer stringSerializer = new StringSerializer();
 
     private List<PartitionInfo> infos = Arrays.asList(
             new PartitionInfo(topicName, 0, Node.noNode(), new Node[0], new Node[0]),
@@ -49,7 +49,7 @@ public class WindowedStreamPartitionerTest {
             new PartitionInfo(topicName, 5, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private Cluster cluster = new Cluster(Arrays.asList(Node.noNode()), infos, Collections.<String>emptySet());
+    private Cluster cluster = new Cluster(Collections.singletonList(Node.noNode()), infos, Collections.<String>emptySet());
 
     @Test
     public void testCopartitioning() {
@@ -58,20 +58,20 @@ public class WindowedStreamPartitionerTest {
 
         DefaultPartitioner defaultPartitioner = new DefaultPartitioner();
 
-        WindowedSerializer<Integer> windowedSerializer = new WindowedSerializer<>(keySerializer);
+        WindowedSerializer<Integer> windowedSerializer = new WindowedSerializer<>(intSerializer);
         WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(windowedSerializer);
 
         for (int k = 0; k < 10; k++) {
             Integer key = rand.nextInt();
-            byte[] keyBytes = keySerializer.serialize(topicName, key);
+            byte[] keyBytes = intSerializer.serialize(topicName, key);
 
             String value = key.toString();
-            byte[] valueBytes = valSerializer.serialize(topicName, value);
+            byte[] valueBytes = stringSerializer.serialize(topicName, value);
 
             Integer expected = defaultPartitioner.partition("topic", key, keyBytes, value, valueBytes, cluster);
 
             for (int w = 0; w < 10; w++) {
-                HoppingWindow window = new HoppingWindow(10 * w, 20 * w);
+                TimeWindow window = new TimeWindow(10 * w, 20 * w);
 
                 Windowed<Integer> windowedKey = new Windowed<>(key, window);
                 Integer actual = streamPartitioner.partition(windowedKey, value, infos.size());

@@ -210,6 +210,18 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     }
   }
 
+  def maybeTruncateCheckpoint(dataDir: File, topicAndPartition: TopicAndPartition, offset: Long) {
+    inLock(lock) {
+      if (logs.get(topicAndPartition).config.compact) {
+        val checkpoint = checkpoints(dataDir)
+        val existing = checkpoint.read()
+
+        if (existing.getOrElse(topicAndPartition, 0L) > offset)
+          checkpoint.write(existing + (topicAndPartition -> offset))
+      }
+    }
+  }
+
   /**
    * Save out the endOffset and remove the given log from the in-progress set, if not aborted.
    */

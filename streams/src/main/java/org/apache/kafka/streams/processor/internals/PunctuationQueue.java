@@ -21,7 +21,7 @@ import java.util.PriorityQueue;
 
 public class PunctuationQueue {
 
-    private PriorityQueue<PunctuationSchedule> pq = new PriorityQueue<>();
+    private final PriorityQueue<PunctuationSchedule> pq = new PriorityQueue<>();
 
     public void schedule(PunctuationSchedule sched) {
         synchronized (pq) {
@@ -43,7 +43,7 @@ public class PunctuationQueue {
                 PunctuationSchedule sched = top;
                 pq.poll();
                 punctuator.punctuate(sched.node(), timestamp);
-                pq.add(sched.next());
+                pq.add(sched.next(timestamp));
                 punctuated = true;
 
                 top = pq.peek();

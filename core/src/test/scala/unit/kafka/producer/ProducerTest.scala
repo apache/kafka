@@ -37,6 +37,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.exceptions.TestFailedException
 
+@deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
 class ProducerTest extends ZooKeeperTestHarness with Logging{
   private val brokerId1 = 0
   private val brokerId2 = 1
@@ -95,8 +96,8 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
     server1.shutdown
     server2.shutdown
-    CoreUtils.rm(server1.config.logDirs)
-    CoreUtils.rm(server2.config.logDirs)
+    CoreUtils.delete(server1.config.logDirs)
+    CoreUtils.delete(server2.config.logDirs)
     super.tearDown()
   }
 
@@ -353,7 +354,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       // create topic
       AdminUtils.createTopic(zkUtils, "new-topic", 2, 1)
       TestUtils.waitUntilTrue(() =>
-        AdminUtils.fetchTopicMetadataFromZk("new-topic", zkUtils).errorCode != Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
+        AdminUtils.fetchTopicMetadataFromZk("new-topic", zkUtils).error != Errors.UNKNOWN_TOPIC_OR_PARTITION,
         "Topic new-topic not created after timeout",
         waitTime = zookeeper.tickTime)
       TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "new-topic", 0)

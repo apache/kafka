@@ -89,9 +89,12 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
     static {
         TASK_PROPS.put(SinkConnector.TOPICS_CONFIG, TOPIC);
+        TASK_PROPS.put(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
     }
+    private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
+    private TargetState initialState = TargetState.STARTED;
     private Time time;
     @Mock private SinkTask sinkTask;
     private Capture<WorkerSinkTaskContext> sinkTaskContext = EasyMock.newCapture();
@@ -104,6 +107,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     @Mock private TaskStatus.Listener statusListener;
 
     private long recordsReturned;
+
 
     @SuppressWarnings("unchecked")
     @Override
@@ -121,7 +125,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, workerConfig, keyConverter, valueConverter, time);
+                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, time);
 
         recordsReturned = 0;
     }
@@ -136,7 +140,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
         // First iteration initializes partition assignment
@@ -147,7 +151,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
             workerTask.iteration();
         }
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         // Verify contents match expected values, i.e. that they were translated properly. With max
@@ -180,7 +183,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
         // Initialize partition assignment
@@ -193,7 +196,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         // Commit finishes synchronously for testing so we can check this immediately
         assertEquals(0, workerTask.commitFailures());
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         assertEquals(2, capturedRecords.getValues().size());
@@ -220,7 +222,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
         // Initialize partition assignment
@@ -233,7 +235,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         assertEquals(1, workerTask.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         PowerMock.verifyAll();
@@ -259,7 +260,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
         // Initialize partition assignment
@@ -274,7 +275,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         assertEquals(1, workerTask.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         PowerMock.verifyAll();
@@ -292,7 +292,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
         // Initialize partition assignment
@@ -306,7 +306,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         assertEquals(1, workerTask.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         PowerMock.verifyAll();
@@ -325,7 +324,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
         // Initialize partition assignment
@@ -342,7 +341,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         assertEquals(1, workerTask.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         PowerMock.verifyAll();
@@ -377,9 +375,9 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 return null;
             }
         });
-        consumer.pause(UNASSIGNED_TOPIC_PARTITION);
+        consumer.pause(Arrays.asList(UNASSIGNED_TOPIC_PARTITION));
         PowerMock.expectLastCall().andThrow(new IllegalStateException("unassigned topic partition"));
-        consumer.pause(TOPIC_PARTITION, TOPIC_PARTITION2);
+        consumer.pause(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
         PowerMock.expectLastCall();
 
         expectOnePoll().andAnswer(new IAnswer<Object>() {
@@ -396,22 +394,21 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 return null;
             }
         });
-        consumer.resume(UNASSIGNED_TOPIC_PARTITION);
+        consumer.resume(Arrays.asList(UNASSIGNED_TOPIC_PARTITION));
         PowerMock.expectLastCall().andThrow(new IllegalStateException("unassigned topic partition"));
-        consumer.resume(TOPIC_PARTITION, TOPIC_PARTITION2);
+        consumer.resume(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
         PowerMock.expectLastCall();
 
         expectStopTask(0);
 
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
         workerTask.iteration();
         workerTask.iteration();
         workerTask.iteration();
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         PowerMock.verifyAll();
@@ -449,13 +446,12 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         expectStopTask(3);
         PowerMock.replayAll();
 
-        workerTask.initialize(TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
         workerTask.iteration();
         workerTask.iteration();
         workerTask.iteration();
         workerTask.stop();
-        workerTask.awaitStop(Long.MAX_VALUE);
         workerTask.close();
 
         PowerMock.verifyAll();
@@ -535,6 +531,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         return capturedRecords;
     }
 
+    @SuppressWarnings("unchecked")
     private IExpectationSetters<Object> expectOnePoll() {
         // Currently the SinkTask's put() method will not be invoked unless we provide some data, so instead of
         // returning empty data, we return one record. The expectation is that the data will be ignored by the
@@ -594,6 +591,9 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
             }
         });
         return capturedCallback;
+    }
+
+    private static abstract class TestSinkTask extends SinkTask {
     }
 
 }

@@ -19,7 +19,6 @@ package kafka.integration
 
 import java.io.File
 import java.util.Arrays
-
 import kafka.common.KafkaException
 import kafka.server._
 import kafka.utils.{CoreUtils, TestUtils}
@@ -27,8 +26,8 @@ import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{After, Before}
-
 import scala.collection.mutable.Buffer
+import java.util.Properties
 
 /**
  * A test harness that brings up some number of broker nodes
@@ -57,6 +56,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
 
   protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
   protected def trustStoreFile: Option[File] = None
+  protected def saslProperties: Option[Properties] = None
 
   @Before
   override def setUp() {
@@ -77,17 +77,15 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
     // The following method does nothing by default, but
     // if the test case requires setting up a cluster ACL,
     // then it needs to be implemented.
-    setClusterAcl match {
-      case Some(f) =>
-        f()
-      case None => // Nothing to do
-    }
+    setClusterAcl.foreach(_.apply)
   }
 
   @After
   override def tearDown() {
-    servers.foreach(_.shutdown())
-    servers.foreach(_.config.logDirs.foreach(CoreUtils.rm(_)))
+    if (servers != null) {
+      servers.foreach(_.shutdown())
+      servers.foreach(server => CoreUtils.delete(server.config.logDirs))
+    }
     super.tearDown
   }
   

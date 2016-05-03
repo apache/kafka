@@ -20,7 +20,7 @@ import kafka.common.KafkaException
 import kafka.coordinator.{GroupOverview, GroupSummary, MemberSummary}
 import kafka.utils.Logging
 import org.apache.kafka.clients._
-import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture, SendFailedException}
+import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.errors.DisconnectException
@@ -43,21 +43,15 @@ class AdminClient(val time: Time,
   private def send(target: Node,
                    api: ApiKeys,
                    request: AbstractRequest): Struct = {
-    var now = time.milliseconds()
-    val deadline = now + requestTimeoutMs
     var future: RequestFuture[ClientResponse] = null
 
-    do {
-      future = client.send(target, api, request)
-      client.poll(future)
+    future = client.send(target, api, request)
+    client.poll(future)
 
-      if (future.succeeded())
-        return future.value().responseBody()
-
-      now = time.milliseconds()
-    } while (now < deadline && future.exception().isInstanceOf[SendFailedException])
-
-    throw future.exception()
+    if (future.succeeded())
+      return future.value().responseBody()
+    else
+      throw future.exception()
   }
 
   private def sendAnyNode(api: ApiKeys, request: AbstractRequest): Struct = {
@@ -92,8 +86,9 @@ class AdminClient(val time: Time,
     val request = new MetadataRequest(List[String]())
     val responseBody = sendAnyNode(ApiKeys.METADATA, request)
     val response = new MetadataResponse(responseBody)
-    if (!response.errors().isEmpty)
-      debug(s"Metadata request contained errors: ${response.errors()}")
+    val errors = response.errors()
+    if (!errors.isEmpty)
+      debug(s"Metadata request contained errors: ${errors}")
     response.cluster().nodes().asScala.toList
   }
 
@@ -243,7 +238,8 @@ object AdminClient {
       networkClient,
       metadata,
       time,
-      DefaultRetryBackoffMs)
+      DefaultRetryBackoffMs,
+      DefaultRequestTimeoutMs)
 
     new AdminClient(
       time,

@@ -18,7 +18,7 @@ package kafka.utils.timer
 
 trait TimerTask extends Runnable {
 
-  val expirationMs: Long // timestamp in millisecond
+  val delayMs: Long // timestamp in millisecond
 
   private[this] var timerTaskEntry: TimerTaskEntry = null
 

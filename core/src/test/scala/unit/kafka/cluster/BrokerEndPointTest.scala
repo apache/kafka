@@ -28,20 +28,6 @@ import scala.collection.mutable
 class BrokerEndPointTest extends Logging {
 
   @Test
-  def testSerDe() {
-
-    val endpoint = new EndPoint("myhost", 9092, SecurityProtocol.PLAINTEXT)
-    val listEndPoints = Map(SecurityProtocol.PLAINTEXT -> endpoint)
-    val origBroker = new Broker(1, listEndPoints)
-    val brokerBytes = ByteBuffer.allocate(origBroker.sizeInBytes)
-
-    origBroker.writeTo(brokerBytes)
-
-    val newBroker = Broker.readFrom(brokerBytes.flip().asInstanceOf[ByteBuffer])
-    assert(origBroker == newBroker)
-  }
-
-  @Test
   def testHashAndEquals() {
     val endpoint1 = new EndPoint("myhost", 9092, SecurityProtocol.PLAINTEXT)
     val endpoint2 = new EndPoint("myhost", 9092, SecurityProtocol.PLAINTEXT)

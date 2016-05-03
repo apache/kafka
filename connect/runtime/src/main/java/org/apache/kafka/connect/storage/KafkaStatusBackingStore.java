@@ -300,6 +300,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
                 return null;
             }
 
+            @SuppressWarnings("unchecked")
             Map<String, Object> statusMap = (Map<String, Object>) schemaAndValue.value();
             TaskStatus.State state = TaskStatus.State.valueOf((String) statusMap.get(STATE_KEY_NAME));
             String trace = (String) statusMap.get(TRACE_KEY_NAME);
@@ -319,6 +320,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
                 log.error("Invalid connector status type {}", schemaAndValue.value().getClass());
                 return null;
             }
+            @SuppressWarnings("unchecked")
             Map<String, Object> statusMap = (Map<String, Object>) schemaAndValue.value();
             TaskStatus.State state = TaskStatus.State.valueOf((String) statusMap.get(STATE_KEY_NAME));
             String trace = (String) statusMap.get(TRACE_KEY_NAME);

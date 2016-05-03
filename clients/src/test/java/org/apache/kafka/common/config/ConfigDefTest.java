@@ -12,21 +12,26 @@
  */
 package org.apache.kafka.common.config;
 
-import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Range;
+import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigDef.ValidString;
+import org.apache.kafka.common.config.ConfigDef.Validator;
+import org.apache.kafka.common.config.ConfigDef.Width;
+import org.apache.kafka.common.config.types.Password;
+import org.junit.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import org.apache.kafka.common.config.ConfigDef.Importance;
-import org.apache.kafka.common.config.ConfigDef.Validator;
-import org.apache.kafka.common.config.ConfigDef.Range;
-import org.apache.kafka.common.config.ConfigDef.ValidString;
-import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.config.types.Password;
-import org.junit.Test;
+import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class ConfigDefTest {
 
@@ -149,6 +154,193 @@ public class ConfigDefTest {
         assertEquals(Password.HIDDEN, vals.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG).toString());
         assertEquals(new Password("truststore_password"), vals.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
         assertEquals(Password.HIDDEN, vals.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).toString());
+    }
+
+    @Test
+    public void testNullDefaultWithValidator() {
+        final String key = "enum_test";
+
+        ConfigDef def = new ConfigDef();
+        def.define(key, Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
+                   ValidString.in("ONE", "TWO", "THREE"), Importance.HIGH, "docs");
+
+        Properties props = new Properties();
+        props.put(key, "ONE");
+        Map<String, Object> vals = def.parse(props);
+        assertEquals("ONE", vals.get(key));
+    }
+
+    @Test
+    public void testGroupInference() {
+        List<String> expected1 = Arrays.asList("group1", "group2");
+        ConfigDef def1 = new ConfigDef()
+            .define("a", Type.INT, Importance.HIGH, "docs", "group1", 1, Width.SHORT, "a")
+            .define("b", Type.INT, Importance.HIGH, "docs", "group2", 1, Width.SHORT, "b")
+            .define("c", Type.INT, Importance.HIGH, "docs", "group1", 2, Width.SHORT, "c");
+
+        assertEquals(expected1, def1.groups());
+
+        List<String> expected2 = Arrays.asList("group2", "group1");
+        ConfigDef def2 = new ConfigDef()
+            .define("a", Type.INT, Importance.HIGH, "docs", "group2", 1, Width.SHORT, "a")
+            .define("b", Type.INT, Importance.HIGH, "docs", "group2", 2, Width.SHORT, "b")
+            .define("c", Type.INT, Importance.HIGH, "docs", "group1", 2, Width.SHORT, "c");
+
+        assertEquals(expected2, def2.groups());
+    }
+
+    @Test
+    public void testParseForValidate() {
+        Map<String, Object> expectedParsed = new HashMap<>();
+        expectedParsed.put("a", 1);
+        expectedParsed.put("b", null);
+        expectedParsed.put("c", null);
+        expectedParsed.put("d", 10);
+
+        Map<String, ConfigValue> expected = new HashMap<>();
+        String errorMessageB = "Missing required configuration \"b\" which has no default value.";
+        String errorMessageC = "Missing required configuration \"c\" which has no default value.";
+        ConfigValue configA = new ConfigValue("a", 1, Collections.<Object>emptyList(), Collections.<String>emptyList());
+        ConfigValue configB = new ConfigValue("b", null, Collections.<Object>emptyList(), Arrays.asList(errorMessageB, errorMessageB));
+        ConfigValue configC = new ConfigValue("c", null, Collections.<Object>emptyList(), Arrays.asList(errorMessageC));
+        ConfigValue configD = new ConfigValue("d", 10, Collections.<Object>emptyList(), Collections.<String>emptyList());
+        expected.put("a", configA);
+        expected.put("b", configB);
+        expected.put("c", configC);
+        expected.put("d", configD);
+
+        ConfigDef def = new ConfigDef()
+            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
+            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
+            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
+            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false));
+
+        Map<String, String> props = new HashMap<>();
+        props.put("a", "1");
+        props.put("d", "10");
+
+        Map<String, ConfigValue> configValues = new HashMap<>();
+
+        for (String name: def.configKeys().keySet()) {
+            configValues.put(name, new ConfigValue(name));
+        }
+
+        Map<String, Object> parsed = def.parseForValidate(props, configValues);
+
+        assertEquals(expectedParsed, parsed);
+        assertEquals(expected, configValues);
+    }
+
+    @Test
+    public void testValidate() {
+        Map<String, ConfigValue> expected = new HashMap<>();
+        String errorMessageB = "Missing required configuration \"b\" which has no default value.";
+        String errorMessageC = "Missing required configuration \"c\" which has no default value.";
+
+        ConfigValue configA = new ConfigValue("a", 1, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
+        ConfigValue configB = new ConfigValue("b", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageB, errorMessageB));
+        ConfigValue configC = new ConfigValue("c", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageC));
+        ConfigValue configD = new ConfigValue("d", 10, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
+
+        expected.put("a", configA);
+        expected.put("b", configB);
+        expected.put("c", configC);
+        expected.put("d", configD);
+
+        ConfigDef def = new ConfigDef()
+            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
+            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
+            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
+            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false));
+
+        Map<String, String> props = new HashMap<>();
+        props.put("a", "1");
+        props.put("d", "10");
+
+        List<ConfigValue> configs = def.validate(props);
+        for (ConfigValue config : configs) {
+            String name = config.name();
+            ConfigValue expectedConfig = expected.get(name);
+            assertEquals(expectedConfig, config);
+        }
+    }
+
+    @Test
+    public void testValidateMissingConfigKey() {
+        Map<String, ConfigValue> expected = new HashMap<>();
+        String errorMessageB = "Missing required configuration \"b\" which has no default value.";
+        String errorMessageC = "Missing required configuration \"c\" which has no default value.";
+        String errorMessageD = "d is referred in the dependents, but not defined.";
+
+        ConfigValue configA = new ConfigValue("a", 1, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
+        ConfigValue configB = new ConfigValue("b", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageB));
+        ConfigValue configC = new ConfigValue("c", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageC));
+        ConfigValue configD = new ConfigValue("d", null, Collections.emptyList(), Arrays.asList(errorMessageD));
+        configD.visible(false);
+
+        expected.put("a", configA);
+        expected.put("b", configB);
+        expected.put("c", configC);
+        expected.put("d", configD);
+
+        ConfigDef def = new ConfigDef()
+            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c", "d"), new IntegerRecommender(false))
+            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
+            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true));
+
+        Map<String, String> props = new HashMap<>();
+        props.put("a", "1");
+
+        List<ConfigValue> configs = def.validate(props);
+        for (ConfigValue config: configs) {
+            String name = config.name();
+            ConfigValue expectedConfig = expected.get(name);
+            assertEquals(expectedConfig, config);
+        }
+    }
+
+    @Test
+    public void testValidateCannotParse() {
+        Map<String, ConfigValue> expected = new HashMap<>();
+        String errorMessageB = "Invalid value non_integer for configuration a: Not a number of type INT";
+        ConfigValue configA = new ConfigValue("a", null, Collections.emptyList(), Arrays.asList(errorMessageB));
+        expected.put("a", configA);
+
+        ConfigDef def = new ConfigDef().define("a", Type.INT, Importance.HIGH, "docs");
+        Map<String, String> props = new HashMap<>();
+        props.put("a", "non_integer");
+
+        List<ConfigValue> configs = def.validate(props);
+        for (ConfigValue config: configs) {
+            String name = config.name();
+            ConfigValue expectedConfig = expected.get(name);
+            assertEquals(expectedConfig, config);
+        }
+    }
+
+    private static class IntegerRecommender implements ConfigDef.Recommender {
+
+        private boolean hasParent;
+
+        public IntegerRecommender(boolean hasParent) {
+            this.hasParent = hasParent;
+        }
+
+        @Override
+        public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
+            List<Object> values = new LinkedList<>();
+            if (!hasParent) {
+                values.addAll(Arrays.asList(1, 2, 3));
+            } else {
+                values.addAll(Arrays.asList(4, 5));
+            }
+            return values;
+        }
+
+        @Override
+        public boolean visible(String name, Map<String, Object> parsedConfig) {
+            return true;
+        }
     }
 
     private void testValidators(Type type, Validator validator, Object defaultVal, Object[] okValues, Object[] badValues) {

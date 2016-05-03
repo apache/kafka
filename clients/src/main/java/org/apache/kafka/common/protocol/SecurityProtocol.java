@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -85,7 +86,7 @@ public enum SecurityProtocol {
 
     /** Case insensitive lookup by protocol name */
     public static SecurityProtocol forName(String name) {
-        return SecurityProtocol.valueOf(name.toUpperCase());
+        return SecurityProtocol.valueOf(name.toUpperCase(Locale.ROOT));
     }
 
     /**

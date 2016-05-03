@@ -101,6 +101,20 @@ public class WorkerConfig extends AbstractConfig {
     private static final String REST_ADVERTISED_PORT_DOC
             = "If this is set, this is the port that will be given out to other workers to connect to.";
 
+    public static final String ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG = "access.control.allow.origin";
+    protected static final String ACCESS_CONTROL_ALLOW_ORIGIN_DOC =
+            "Value to set the Access-Control-Allow-Origin header to for REST API requests." +
+                    "To enable cross origin access, set this to the domain of the application that should be permitted" +
+                    " to access the API, or '*' to allow access from any domain. The default value only allows access" +
+                    " from the domain of the REST API.";
+    protected static final String ACCESS_CONTROL_ALLOW_ORIGIN_DEFAULT = "";
+
+    public static final String ACCESS_CONTROL_ALLOW_METHODS_CONFIG = "access.control.allow.methods";
+    protected static final String ACCESS_CONTROL_ALLOW_METHODS_DOC =
+        "Sets the methods supported for cross origin requests by setting the Access-Control-Allow-Methods header. "
+        + "The default value of the Access-Control-Allow-Methods header allows cross origin requests for GET, POST and HEAD.";
+    protected static final String ACCESS_CONTROL_ALLOW_METHODS_DEFAULT = "";
+
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
      * bootstrap their own ConfigDef.
@@ -129,7 +143,13 @@ public class WorkerConfig extends AbstractConfig {
                 .define(REST_HOST_NAME_CONFIG, Type.STRING, null, Importance.LOW, REST_HOST_NAME_DOC)
                 .define(REST_PORT_CONFIG, Type.INT, REST_PORT_DEFAULT, Importance.LOW, REST_PORT_DOC)
                 .define(REST_ADVERTISED_HOST_NAME_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_HOST_NAME_DOC)
-                .define(REST_ADVERTISED_PORT_CONFIG, Type.INT,  null, Importance.LOW, REST_ADVERTISED_PORT_DOC);
+                .define(REST_ADVERTISED_PORT_CONFIG, Type.INT,  null, Importance.LOW, REST_ADVERTISED_PORT_DOC)
+                .define(ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, Type.STRING,
+                        ACCESS_CONTROL_ALLOW_ORIGIN_DEFAULT, Importance.LOW,
+                        ACCESS_CONTROL_ALLOW_ORIGIN_DOC)
+                .define(ACCESS_CONTROL_ALLOW_METHODS_CONFIG, Type.STRING,
+                        ACCESS_CONTROL_ALLOW_METHODS_DEFAULT, Importance.LOW,
+                        ACCESS_CONTROL_ALLOW_METHODS_DOC);
     }
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {

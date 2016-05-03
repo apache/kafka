@@ -21,40 +21,39 @@ import java.io._
 import java.nio._
 import java.nio.file.Files
 import java.nio.channels._
-import java.util.Random
-import java.util.Properties
+import java.util.concurrent.{Callable, Executors, TimeUnit}
+import java.util.{Collections, Properties, Random}
 import java.security.cert.X509Certificate
 import javax.net.ssl.X509TrustManager
 import charset.Charset
-
-import kafka.security.auth.{Resource, Authorizer, Acl}
+import kafka.security.auth.{Acl, Authorizer, Resource}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.test.TestSslUtils
-
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-
 import kafka.server._
 import kafka.producer._
 import kafka.message._
 import kafka.api._
-import kafka.cluster.Broker
-import kafka.consumer.{ConsumerTimeoutException, KafkaStream, ConsumerConfig}
-import kafka.serializer.{StringEncoder, DefaultEncoder, Encoder}
+import kafka.cluster.{Broker, EndPoint}
+import kafka.consumer.{ConsumerConfig, ConsumerTimeoutException, KafkaStream}
+import kafka.serializer.{DefaultEncoder, Encoder, StringEncoder}
 import kafka.common.TopicAndPartition
 import kafka.admin.AdminUtils
-import kafka.producer.ProducerConfig
 import kafka.log._
 import kafka.utils.ZkUtils._
-
 import org.junit.Assert._
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.consumer.{RangeAssignor, KafkaConsumer}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.network.Mode
+import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
+import org.apache.kafka.common.utils.Utils
 
 import scala.collection.Map
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 /**
  * Utility functions to help with testing
@@ -94,15 +93,8 @@ object TestUtils extends Logging {
   def tempRelativeDir(parent: String): File = {
     val parentFile = new File(parent)
     parentFile.mkdirs()
-    val f = Files.createTempDirectory(parentFile.toPath, "kafka-").toFile
-    f.deleteOnExit()
 
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      override def run() = {
-        CoreUtils.rm(f)
-      }
-    })
-    f
+    org.apache.kafka.test.TestUtils.tempDirectory(parentFile.toPath, "kafka-");
   }
 
   /**
@@ -132,6 +124,7 @@ object TestUtils extends Logging {
   /**
    * Create a kafka server instance with appropriate test settings
    * USING THIS IS A SIGN YOU ARE NOT WRITING A REAL UNIT TEST
+   *
    * @param config The configuration of the server
    */
   def createServer(config: KafkaConfig, time: Time = SystemTime): KafkaServer = {
@@ -142,7 +135,7 @@ object TestUtils extends Logging {
 
   /**
    * Create a test config for the provided parameters.
-    *
+   *
    * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
    */
   def createBrokerConfigs(numConfigs: Int,
@@ -151,14 +144,16 @@ object TestUtils extends Logging {
     enableDeleteTopic: Boolean = false,
     interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
     trustStoreFile: Option[File] = None,
+    saslProperties: Option[Properties] = None,
     enablePlaintext: Boolean = true,
     enableSsl: Boolean = false,
     enableSaslPlaintext: Boolean = false,
-    enableSaslSsl: Boolean = false): Seq[Properties] = {
+    enableSaslSsl: Boolean = false,
+    rackInfo: Map[Int, String] = Map()): Seq[Properties] = {
     (0 until numConfigs).map { node =>
       createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
-        interBrokerSecurityProtocol, trustStoreFile, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
-        enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl)
+        interBrokerSecurityProtocol, trustStoreFile, saslProperties, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
+        enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node))
     }
   }
 
@@ -177,10 +172,11 @@ object TestUtils extends Logging {
     port: Int = RandomPort,
     interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
     trustStoreFile: Option[File] = None,
+    saslProperties: Option[Properties] = None,
     enablePlaintext: Boolean = true,
     enableSaslPlaintext: Boolean = false, saslPlaintextPort: Int = RandomPort,
     enableSsl: Boolean = false, sslPort: Int = RandomPort,
-    enableSaslSsl: Boolean = false, saslSslPort: Int = RandomPort)
+    enableSaslSsl: Boolean = false, saslSslPort: Int = RandomPort, rack: Option[String] = None)
   : Properties = {
 
     def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
@@ -210,9 +206,13 @@ object TestUtils extends Logging {
     props.put("delete.topic.enable", enableDeleteTopic.toString)
     props.put("controlled.shutdown.retry.backoff.ms", "100")
     props.put("log.cleaner.dedupe.buffer.size", "2097152")
+    rack.foreach(props.put("broker.rack", _))
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
       props.putAll(sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId"))
+
+    if (protocolAndPorts.exists { case (protocol, _) => usesSaslTransportLayer(protocol) })
+      props.putAll(saslConfigs(saslProperties))
 
     interBrokerSecurityProtocol.foreach { protocol =>
       props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
@@ -280,6 +280,7 @@ object TestUtils extends Logging {
 
   /**
    * Wrap the message in a message set
+   *
    * @param payload The bytes of the message
    */
   def singleMessageSet(payload: Array[Byte],
@@ -290,6 +291,7 @@ object TestUtils extends Logging {
 
   /**
    * Generate an array of random bytes
+   *
    * @param numBytes The size of the array
    */
   def randomBytes(numBytes: Int): Array[Byte] = {
@@ -300,6 +302,7 @@ object TestUtils extends Logging {
 
   /**
    * Generate a random string of letters and digits of the given length
+   *
    * @param len The length of the string
    * @return The random string
    */
@@ -342,7 +345,7 @@ object TestUtils extends Logging {
 
     // check if the actual iterator was longer
     if (actual.hasNext) {
-      var length2 = length;
+      var length2 = length
       while (actual.hasNext) {
         actual.next
         length2 += 1
@@ -419,6 +422,7 @@ object TestUtils extends Logging {
    * Create a producer with a few pre-configured properties.
    * If certain properties need to be overridden, they can be provided in producerProps.
    */
+  @deprecated("This method has been deprecated and it will be removed in a future release.", "0.10.0.0")
   def createProducer[K, V](brokerList: String,
                            encoder: String = classOf[DefaultEncoder].getName,
                            keyEncoder: String = classOf[DefaultEncoder].getName,
@@ -433,36 +437,42 @@ object TestUtils extends Logging {
     props.put("serializer.class", encoder)
     props.put("key.serializer.class", keyEncoder)
     props.put("partitioner.class", partitioner)
-    new Producer[K, V](new ProducerConfig(props))
+    new Producer[K, V](new kafka.producer.ProducerConfig(props))
   }
 
   private def securityConfigs(mode: Mode,
                               securityProtocol: SecurityProtocol,
                               trustStoreFile: Option[File],
-                              certAlias: String): Properties = {
+                              certAlias: String,
+                              saslProperties: Option[Properties]): Properties = {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
       props.putAll(sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias))
+    if (usesSaslTransportLayer(securityProtocol))
+      props.putAll(saslConfigs(saslProperties))
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }
 
-  def producerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File]): Properties =
-    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "producer")
+  def producerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
+    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "producer", saslProperties)
 
   /**
    * Create a (new) producer with a few pre-configured properties.
    */
-  def createNewProducer(brokerList: String,
+  def createNewProducer[K, V](brokerList: String,
                         acks: Int = -1,
                         maxBlockMs: Long = 60 * 1000L,
                         bufferSize: Long = 1024L * 1024L,
                         retries: Int = 0,
                         lingerMs: Long = 0,
+                        requestTimeoutMs: Long = 10 * 1024L,
                         securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                         trustStoreFile: Option[File] = None,
-                        props: Option[Properties] = None): KafkaProducer[Array[Byte], Array[Byte]] = {
-    import org.apache.kafka.clients.producer.ProducerConfig
+                        saslProperties: Option[Properties] = None,
+                        keySerializer: Serializer[K] = new ByteArraySerializer,
+                        valueSerializer: Serializer[V] = new ByteArraySerializer,
+                        props: Option[Properties] = None): KafkaProducer[K, V] = {
 
     val producerProps = props.getOrElse(new Properties)
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
@@ -470,15 +480,15 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
     producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
     producerProps.put(ProducerConfig.RETRIES_CONFIG, retries.toString)
+    producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString)
 
     /* Only use these if not already set */
     val defaultProps = Map(
       ProducerConfig.RETRY_BACKOFF_MS_CONFIG -> "100",
       ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG -> "200",
-      ProducerConfig.LINGER_MS_CONFIG -> lingerMs.toString,
-      ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArraySerializer",
-      ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArraySerializer"
+      ProducerConfig.LINGER_MS_CONFIG -> lingerMs.toString
     )
+
     defaultProps.foreach { case (key, value) =>
       if (!producerProps.containsKey(key)) producerProps.put(key, value)
     }
@@ -489,10 +499,10 @@ object TestUtils extends Logging {
      * invoke it before this call in IntegrationTestHarness, otherwise the
      * SSL client auth fails.
      */
-    if(!producerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
-      producerProps.putAll(producerSecurityConfigs(securityProtocol, trustStoreFile))
+    if (!producerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
+      producerProps.putAll(producerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties))
 
-    new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
+    new KafkaProducer[K, V](producerProps, keySerializer, valueSerializer)
   }
 
   private def usesSslTransportLayer(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
@@ -500,8 +510,13 @@ object TestUtils extends Logging {
     case _ => false
   }
 
-  def consumerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File]): Properties =
-    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "consumer")
+  private def usesSaslTransportLayer(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
+    case SecurityProtocol.SASL_PLAINTEXT | SecurityProtocol.SASL_SSL => true
+    case _ => false
+  }
+
+  def consumerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
+    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "consumer", saslProperties)
 
   /**
    * Create a new consumer with a few pre-configured properties.
@@ -514,6 +529,7 @@ object TestUtils extends Logging {
                         sessionTimeout: Int = 30000,
                         securityProtocol: SecurityProtocol,
                         trustStoreFile: Option[File] = None,
+                        saslProperties: Option[Properties] = None,
                         props: Option[Properties] = None) : KafkaConsumer[Array[Byte],Array[Byte]] = {
     import org.apache.kafka.clients.consumer.ConsumerConfig
 
@@ -542,7 +558,7 @@ object TestUtils extends Logging {
      * SSL client auth fails.
      */
     if(!consumerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
-      consumerProps.putAll(consumerSecurityConfigs(securityProtocol, trustStoreFile))
+      consumerProps.putAll(consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties))
 
     new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
   }
@@ -558,8 +574,6 @@ object TestUtils extends Logging {
     props.put("request.timeout.ms", "2000")
     props.put("request.required.acks", "-1")
     props.put("send.buffer.bytes", "65536")
-    props.put("connect.timeout.ms", "100000")
-    props.put("reconnect.interval", "10000")
 
     props
   }
@@ -577,6 +591,7 @@ object TestUtils extends Logging {
   def updateConsumerOffset(config : ConsumerConfig, path : String, offset : Long) = {
     val zkUtils = ZkUtils(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
     zkUtils.updatePersistentPath(path, offset.toString)
+    zkUtils.close()
 
   }
 
@@ -591,9 +606,16 @@ object TestUtils extends Logging {
     }
   }
 
-  def createBrokersInZk(zkUtils: ZkUtils, ids: Seq[Int]): Seq[Broker] = {
-    val brokers = ids.map(id => new Broker(id, "localhost", 6667, SecurityProtocol.PLAINTEXT))
-    brokers.foreach(b => zkUtils.registerBrokerInZk(b.id, "localhost", 6667, b.endPoints, jmxPort = -1))
+  def createBrokersInZk(zkUtils: ZkUtils, ids: Seq[Int]): Seq[Broker] =
+    createBrokersInZk(ids.map(kafka.admin.BrokerMetadata(_, None)), zkUtils)
+
+  def createBrokersInZk(brokerMetadatas: Seq[kafka.admin.BrokerMetadata], zkUtils: ZkUtils): Seq[Broker] = {
+    val brokers = brokerMetadatas.map { b =>
+      val protocol = SecurityProtocol.PLAINTEXT
+      Broker(b.id, Map(protocol -> EndPoint("localhost", 6667, protocol)).toMap, b.rack)
+    }
+    brokers.foreach(b => zkUtils.registerBrokerInZk(b.id, "localhost", 6667, b.endPoints, jmxPort = -1,
+      rack = b.rack, ApiVersion.latestVersion))
     brokers
   }
 
@@ -613,23 +635,25 @@ object TestUtils extends Logging {
   /**
    * Create a wired format request based on simple basic information
    */
+  @deprecated("This method has been deprecated and it will be removed in a future release", "0.10.0.0")
   def produceRequest(topic: String,
                      partition: Int,
                      message: ByteBufferMessageSet,
-                     acks: Int = SyncProducerConfig.DefaultRequiredAcks,
-                     timeout: Int = SyncProducerConfig.DefaultAckTimeoutMs,
+                     acks: Int,
+                     timeout: Int,
                      correlationId: Int = 0,
-                     clientId: String = SyncProducerConfig.DefaultClientId): ProducerRequest = {
+                     clientId: String): ProducerRequest = {
     produceRequestWithAcks(Seq(topic), Seq(partition), message, acks, timeout, correlationId, clientId)
   }
 
+  @deprecated("This method has been deprecated and it will be removed in a future release", "0.10.0.0")
   def produceRequestWithAcks(topics: Seq[String],
                              partitions: Seq[Int],
                              message: ByteBufferMessageSet,
-                             acks: Int = SyncProducerConfig.DefaultRequiredAcks,
-                             timeout: Int = SyncProducerConfig.DefaultAckTimeoutMs,
+                             acks: Int,
+                             timeout: Int,
                              correlationId: Int = 0,
-                             clientId: String = SyncProducerConfig.DefaultClientId): ProducerRequest = {
+                             clientId: String): ProducerRequest = {
     val data = topics.flatMap(topic =>
       partitions.map(partition => (TopicAndPartition(topic,  partition), message))
     )
@@ -668,6 +692,7 @@ object TestUtils extends Logging {
    *  If neither oldLeaderOpt nor newLeaderOpt is defined, wait until the leader of a partition is elected.
    *  If oldLeaderOpt is defined, it waits until the new leader is different from the old leader.
    *  If newLeaderOpt is defined, it waits until the new leader becomes the expected new leader.
+   *
    * @return The new leader or assertion failure if timeout is reached.
    */
   def waitUntilLeaderIsElectedOrChanged(zkUtils: ZkUtils, topic: String, partition: Int, timeoutMs: Long = 5000L,
@@ -775,6 +800,7 @@ object TestUtils extends Logging {
   /**
    * Wait until a valid leader is propagated to the metadata cache in each broker.
    * It assumes that the leader propagated to each broker is the same.
+   *
    * @param servers The list of servers that the metadata should reach to
    * @param topic The topic name
    * @param partition The partition Id
@@ -801,7 +827,7 @@ object TestUtils extends Logging {
   }
 
   def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long = 5000L): Unit = {
-    TestUtils.waitUntilTrue(() => 
+    TestUtils.waitUntilTrue(() =>
       servers.exists { server =>
         server.replicaManager.getPartition(topic, partition).exists(_.leaderReplicaIfLocal().isDefined)
       },
@@ -882,6 +908,8 @@ object TestUtils extends Logging {
                    time = time,
                    brokerState = new BrokerState())
   }
+
+  @deprecated("This method has been deprecated and it will be removed in a future release.", "0.10.0.0")
   def sendMessages(servers: Seq[KafkaServer],
                    topic: String,
                    numMessages: Int,
@@ -901,7 +929,7 @@ object TestUtils extends Logging {
           partitioner = classOf[FixedValuePartitioner].getName,
           producerProps = props)
 
-      producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)):_*)
+      producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)): _*)
       debug("Sent %d messages for partition [%s,%d]".format(ms.size, topic, partition))
       producer.close()
       ms.toList
@@ -913,35 +941,53 @@ object TestUtils extends Logging {
         keyEncoder = classOf[StringEncoder].getName,
         partitioner = classOf[DefaultPartitioner].getName,
         producerProps = props)
-      producer.send(ms.map(m => new KeyedMessage[String, String](topic, topic, m)):_*)
+      producer.send(ms.map(m => new KeyedMessage[String, String](topic, topic, m)): _*)
       producer.close()
       debug("Sent %d messages for topic [%s]".format(ms.size, topic))
       ms.toList
     }
-
   }
 
-  def sendMessage(servers: Seq[KafkaServer],
-                  topic: String,
-                  message: String) = {
+  def produceMessages(servers: Seq[KafkaServer],
+                      topic: String,
+                      numMessages: Int): Seq[String] = {
 
-    val producer: Producer[String, String] =
-      createProducer(TestUtils.getBrokerListStrFromServers(servers),
-        encoder = classOf[StringEncoder].getName(),
-        keyEncoder = classOf[StringEncoder].getName())
+    val producer = createNewProducer(
+      TestUtils.getBrokerListStrFromServers(servers),
+      retries = 5,
+      requestTimeoutMs = 2000
+    )
 
-    producer.send(new KeyedMessage[String, String](topic, topic, message))
+    val values = (0 until numMessages).map(x => s"test-$x")
+    
+    val futures = values.map { value =>
+      producer.send(new ProducerRecord(topic, null, null, value.getBytes))
+    }
+    futures.foreach(_.get)
+    producer.close()
+
+    debug(s"Sent ${values.size} messages for topic [$topic]")
+
+    values
+  }
+
+  def produceMessage(servers: Seq[KafkaServer], topic: String, message: String) {
+    val producer = createNewProducer(
+      TestUtils.getBrokerListStrFromServers(servers),
+      retries = 5,
+      requestTimeoutMs = 2000
+    )
+    producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
     producer.close()
   }
 
   /**
    * Consume all messages (or a specific number of messages)
+   *
    * @param topicMessageStreams the Topic Message Streams
    * @param nMessagesPerThread an optional field to specify the exact number of messages to be returned.
    *                           ConsumerTimeoutException will be thrown if there are no messages to be consumed.
    *                           If not specified, then all available messages will be consumed, and no exception is thrown.
-   *
-   *
    * @return the list of messages consumed.
    */
   def getMessages(topicMessageStreams: Map[String, List[KafkaStream[String, String]]],
@@ -1001,6 +1047,7 @@ object TestUtils extends Logging {
 
   /**
    * Translate the given buffer into a string
+   *
    * @param buffer The buffer to translate
    * @param encoding The encoding to use in translating bytes to characters
    */
@@ -1024,6 +1071,13 @@ object TestUtils extends Logging {
     sslProps
   }
 
+  def saslConfigs(saslProperties: Option[Properties]): Properties = {
+    saslProperties match {
+      case Some(properties) => properties
+      case None => new Properties
+    }
+  }
+
   // a X509TrustManager to trust self-signed certs for unit tests.
   def trustAllCerts: X509TrustManager = {
     val trustManager = new X509TrustManager() {
@@ -1043,24 +1097,60 @@ object TestUtils extends Logging {
       s"expected acls $expected but got ${authorizer.getAcls(resource)}", waitTime = 10000)
   }
 
+  /**
+    * To use this you pass in a sequence of functions that are your arrange/act/assert test on the SUT.
+    * They all run at the same time in the assertConcurrent method; the chances of triggering a multithreading code error,
+    * and thereby failing some assertion are greatly increased.
+    */
+  def assertConcurrent(message: String, functions: Seq[() => Any], timeoutMs: Int) {
+
+    def failWithTimeout() {
+      fail(s"$message. Timed out, the concurrent functions took more than $timeoutMs milliseconds")
+    }
+
+    val numThreads = functions.size
+    val threadPool = Executors.newFixedThreadPool(numThreads)
+    val exceptions = ArrayBuffer[Throwable]()
+    try {
+      val runnables = functions.map { function =>
+        new Callable[Unit] {
+          override def call(): Unit = function()
+        }
+      }.asJava
+      val futures = threadPool.invokeAll(runnables, timeoutMs, TimeUnit.MILLISECONDS).asScala
+      futures.foreach { future =>
+        if (future.isCancelled)
+          failWithTimeout()
+        else
+          try future.get()
+          catch { case e: Exception =>
+            exceptions += e
+          }
+      }
+    } catch {
+      case ie: InterruptedException => failWithTimeout()
+      case e: Throwable => exceptions += e
+    } finally {
+      threadPool.shutdownNow()
+    }
+    assertTrue(s"$message failed with exception(s) $exceptions", exceptions.isEmpty)
+
+  }
+
 }
 
 class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {
   override def toBytes(n: Int) = n.toString.getBytes
 }
 
-class StaticPartitioner(props: VerifiableProperties = null) extends Partitioner{
+@deprecated("This class is deprecated and it will be removed in a future release.", "0.10.0.0")
+class StaticPartitioner(props: VerifiableProperties = null) extends Partitioner {
   def partition(data: Any, numPartitions: Int): Int = {
     (data.asInstanceOf[String].length % numPartitions)
   }
 }
 
-class HashPartitioner(props: VerifiableProperties = null) extends Partitioner {
-  def partition(data: Any, numPartitions: Int): Int = {
-    (data.hashCode % numPartitions)
-  }
-}
-
+@deprecated("This class has been deprecated and it will be removed in a future release.", "0.10.0.0")
 class FixedValuePartitioner(props: VerifiableProperties = null) extends Partitioner {
   def partition(data: Any, numPartitions: Int): Int = data.asInstanceOf[Int]
 }

@@ -12,9 +12,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
@@ -24,48 +22,70 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class MetadataRequest extends AbstractRequest {
-    
+
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.METADATA.id);
     private static final String TOPICS_KEY_NAME = "topics";
 
+    private static final MetadataRequest ALL_TOPICS_REQUEST = new MetadataRequest((List<String>) null); // Unusual cast to work around constructor ambiguity
+
     private final List<String> topics;
 
+    public static MetadataRequest allTopics() {
+        return ALL_TOPICS_REQUEST;
+    }
+
+    /**
+     * In v0 null is not allowed and and empty list indicates requesting all topics.
+     * In v1 null indicates requesting all topics, and an empty list indicates requesting no topics.
+     */
     public MetadataRequest(List<String> topics) {
         super(new Struct(CURRENT_SCHEMA));
-        struct.set(TOPICS_KEY_NAME, topics.toArray());
+        if (topics == null)
+            struct.set(TOPICS_KEY_NAME, null);
+        else
+            struct.set(TOPICS_KEY_NAME, topics.toArray());
         this.topics = topics;
     }
 
     public MetadataRequest(Struct struct) {
         super(struct);
         Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
-        topics = new ArrayList<String>();
-        for (Object topicObj: topicArray) {
-            topics.add((String) topicObj);
+        if (topicArray != null) {
+            topics = new ArrayList<>();
+            for (Object topicObj: topicArray) {
+                topics.add((String) topicObj);
+            }
+        } else {
+            topics = null;
         }
     }
 
     @Override
     public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
-        Map<String, Errors> topicErrors = new HashMap<String, Errors>();
-        for (String topic : topics) {
-            topicErrors.put(topic, Errors.forException(e));
+        List<MetadataResponse.TopicMetadata> topicMetadatas = new ArrayList<>();
+        Errors error = Errors.forException(e);
+        List<MetadataResponse.PartitionMetadata> partitions = Collections.emptyList();
+
+        if (topics != null) {
+            for (String topic : topics)
+                topicMetadatas.add(new MetadataResponse.TopicMetadata(error, topic, false, partitions));
         }
 
-        Cluster cluster = new Cluster(Collections.<Node>emptyList(), Collections.<PartitionInfo>emptyList(),
-                Collections.<String>emptySet());
         switch (versionId) {
             case 0:
-                return new MetadataResponse(cluster, topicErrors);
+            case 1:
+                return new MetadataResponse(Collections.<Node>emptyList(), MetadataResponse.NO_CONTROLLER_ID, topicMetadatas, versionId);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.METADATA.id)));
         }
+    }
+
+    public boolean isAllTopics() {
+        return topics == null;
     }
 
     public List<String> topics() {

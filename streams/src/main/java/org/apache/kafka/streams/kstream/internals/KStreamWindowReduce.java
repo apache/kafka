@@ -69,6 +69,11 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
         @Override
         public void process(K key, V value) {
+            // if the key is null, we do not need proceed aggregating the record
+            // the record with the table
+            if (key == null)
+                return;
+
             // first get the matching windows
             long timestamp = context().timestamp();
 
@@ -152,7 +157,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
         @SuppressWarnings("unchecked")
         @Override
         public V get(Windowed<K> windowedKey) {
-            K key = windowedKey.value();
+            K key = windowedKey.key();
             W window = (W) windowedKey.window();
 
             // this iterator should only contain one element

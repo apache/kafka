@@ -17,12 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -39,18 +35,16 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamImplTest {
 
+    final private Serde<String> stringSerde = Serdes.String();
+    final private Serde<Integer> intSerde = Serdes.Integer();
+
     @Test
     public void testNumProcesses() {
-        final Serializer<String> stringSerializer = new StringSerializer();
-        final Deserializer<String> stringDeserializer = new StringDeserializer();
-        final Serializer<Integer> integerSerializer = new IntegerSerializer();
-        final Deserializer<Integer> integerDeserializer = new IntegerDeserializer();
-
         final KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> source1 = builder.stream(stringDeserializer, stringDeserializer, "topic-1", "topic-2");
+        KStream<String, String> source1 = builder.stream(stringSerde, stringSerde, "topic-1", "topic-2");
 
-        KStream<String, String> source2 = builder.stream(stringDeserializer, stringDeserializer, "topic-3", "topic-4");
+        KStream<String, String> source2 = builder.stream(stringSerde, stringSerde, "topic-3", "topic-4");
 
         KStream<String, String> stream1 =
             source1.filter(new Predicate<String, String>() {
@@ -58,7 +52,7 @@ public class KStreamImplTest {
                 public boolean test(String key, String value) {
                     return true;
                 }
-            }).filterOut(new Predicate<String, String>() {
+            }).filterNot(new Predicate<String, String>() {
                 @Override
                 public boolean test(String key, String value) {
                     return false;
@@ -114,14 +108,14 @@ public class KStreamImplTest {
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of("join-0"), stringSerializer, integerSerializer, integerSerializer, stringDeserializer, integerDeserializer, integerDeserializer);
+        }, JoinWindows.of("join-0"), stringSerde, intSerde, intSerde);
 
         KStream<String, Integer> stream5 = streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of("join-1"), stringSerializer, integerSerializer, integerSerializer, stringDeserializer, integerDeserializer, integerDeserializer);
+        }, JoinWindows.of("join-1"), stringSerde, intSerde, intSerde);
 
         stream4.to("topic-5");
 
@@ -137,6 +131,13 @@ public class KStreamImplTest {
             1 + // to
             2 + // through
             1, // process
-            builder.build(null).processors().size());
+            builder.build("X", null).processors().size());
+    }
+
+    @Test
+    public void testToWithNullValueSerdeDoesntNPE() {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KStream<String, String> inputStream = builder.stream(stringSerde, stringSerde, "input");
+        inputStream.to(stringSerde, null, "output");
     }
 }

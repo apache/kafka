@@ -24,13 +24,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * The window specification interface that can be extended for windowing operation in joins and aggregations.
  *
- * @param <W> Type of the window instance
+ * @param <W>   type of the window instance
  */
 public abstract class Windows<W extends Window> {
 
     private static final int DEFAULT_NUM_SEGMENTS = 3;
-
-    private static final long DEFAULT_EMIT_DURATION = 1000L;
 
     private static final long DEFAULT_MAINTAIN_DURATION = 24 * 60 * 60 * 1000L;   // one day
 
@@ -38,17 +36,17 @@ public abstract class Windows<W extends Window> {
 
     protected String name;
 
-    private long emitDuration;
-
-    private long maintainDuration;
+    private long maintainDurationMs;
 
     public int segments;
 
     protected Windows(String name) {
+        if (name == null || name.isEmpty()) {
+            throw new IllegalArgumentException("name must not be null or empty");
+        }
         this.name = name;
         this.segments = DEFAULT_NUM_SEGMENTS;
-        this.emitDuration = DEFAULT_EMIT_DURATION;
-        this.maintainDuration = DEFAULT_MAINTAIN_DURATION;
+        this.maintainDurationMs = DEFAULT_MAINTAIN_DURATION;
     }
 
     public String name() {
@@ -56,29 +54,21 @@ public abstract class Windows<W extends Window> {
     }
 
     /**
-     * Set the window emit duration in milliseconds of system time
-     */
-    public Windows emit(long duration) {
-        this.emitDuration = duration;
-
-        return this;
-    }
-
-    /**
-     * Set the window maintain duration in milliseconds of system time
-     */
-    public Windows until(long duration) {
-        this.maintainDuration = duration;
-
-        return this;
-    }
-
-    /**
-     * Specifies the number of segments to be used for rolling the window store,
-     * this function is not exposed to users but can be called by developers that extend this JoinWindows specs
+     * Set the window maintain duration in milliseconds of system time.
      *
-     * @param segments
-     * @return
+     * @return  itself
+     */
+    public Windows until(long durationMs) {
+        this.maintainDurationMs = durationMs;
+
+        return this;
+    }
+
+    /**
+     * Specify the number of segments to be used for rolling the window store,
+     * this function is not exposed to users but can be called by developers that extend this JoinWindows specs.
+     *
+     * @return  itself
      */
     protected Windows segments(int segments) {
         this.segments = segments;
@@ -86,19 +76,21 @@ public abstract class Windows<W extends Window> {
         return this;
     }
 
-    public long emitEveryMs() {
-        return this.emitDuration;
-    }
-
+    /**
+     * Return the window maintain duration in milliseconds of system time.
+     *
+     * @return the window maintain duration in milliseconds of system time
+     */
     public long maintainMs() {
-        return this.maintainDuration;
+        return this.maintainDurationMs;
     }
 
-    protected String newName(String prefix) {
-        return prefix + String.format("%010d", NAME_INDEX.getAndIncrement());
-    }
-
-    public abstract boolean equalTo(Windows other);
-
+    /**
+     * Creates all windows that contain the provided timestamp.
+     *
+     * @param timestamp  the timestamp window should get created for
+     * @return  a map of {@code windowStartTimestamp -> Window} entries
+     */
     public abstract Map<Long, W> windowsFor(long timestamp);
+
 }
