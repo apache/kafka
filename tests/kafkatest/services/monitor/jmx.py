@@ -17,7 +17,9 @@
 class JmxMixin(object):
     """This mixin helps existing service subclasses start JmxTool on their worker nodes and collect jmx stats.
 
-    Note that this is not a service in its own right.
+    A couple things worth noting:
+    - this is not a service in its own right.
+    - we assume the service using JmxMixin also uses KafkaPathResolverMixin
     """
     def __init__(self, num_nodes, jmx_object_names=None, jmx_attributes=[]):
         self.jmx_object_names = jmx_object_names
@@ -37,7 +39,7 @@ class JmxMixin(object):
         if self.started[idx-1] or self.jmx_object_names is None:
             return
 
-        cmd = "%s kafka.tools.JmxTool " % self.path.script("kafka-run-class.sh")
+        cmd = "%s kafka.tools.JmxTool " % self.path.script("kafka-run-class.sh", node)
         cmd += "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % self.jmx_port
         for jmx_object_name in self.jmx_object_names:
             cmd += " --object-name %s" % jmx_object_name
