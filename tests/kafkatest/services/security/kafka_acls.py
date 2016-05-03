@@ -13,13 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.directory_layout.kafka_path import create_path_resolver
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
 
-class ACLs(object):
+class ACLs(KafkaPathResolverMixin):
     def __init__(self, context):
         self.context = context
-        self.path = create_path_resolver(self.context)
 
     def set_acls(self, protocol, kafka, zk, topic, group):
         node = kafka.nodes[0]
