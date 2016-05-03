@@ -63,7 +63,8 @@ class KafkaService(JmxMixin, Service):
     }
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
-                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, authorizer_class_name=None, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None,
+                 client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
+                 authorizer_class_name=None, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None,
                  jmx_attributes=[], zk_connect_timeout=5000):
         """
         :type context
@@ -78,7 +79,8 @@ class KafkaService(JmxMixin, Service):
 
         self.security_protocol = security_protocol
         self.interbroker_security_protocol = interbroker_security_protocol
-        self.sasl_mechanism = sasl_mechanism
+        self.client_sasl_mechanism = client_sasl_mechanism
+        self.interbroker_sasl_mechanism = interbroker_sasl_mechanism
         self.topics = topics
         self.minikdc = None
         self.authorizer_class_name = authorizer_class_name
@@ -108,7 +110,9 @@ class KafkaService(JmxMixin, Service):
 
     @property
     def security_config(self):
-        return SecurityConfig(self.security_protocol, self.interbroker_security_protocol, zk_sasl = self.zk.zk_sasl , sasl_mechanism=self.sasl_mechanism)
+        return SecurityConfig(self.security_protocol, self.interbroker_security_protocol,
+                              zk_sasl = self.zk.zk_sasl,
+                              client_sasl_mechanism=self.client_sasl_mechanism, interbroker_sasl_mechanism=self.interbroker_sasl_mechanism)
 
     def open_port(self, protocol):
         self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=True)
@@ -163,9 +167,7 @@ class KafkaService(JmxMixin, Service):
         # TODO - clean up duplicate configuration logic
         prop_file = cfg.render()
         prop_file += self.render('kafka.properties', node=node, broker_id=self.idx(node),
-                                 security_config=self.security_config,
-                                 interbroker_security_protocol=self.interbroker_security_protocol,
-                                 sasl_mechanism=self.sasl_mechanism)
+                                 security_config=self.security_config)
         return prop_file
 
     def start_cmd(self, node):
@@ -242,7 +244,7 @@ class KafkaService(JmxMixin, Service):
         cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s --partitions %(partitions)d --replication-factor %(replication)d" % {
                 'zk_connect': self.zk.connect_setting(),
                 'topic': topic_cfg.get("topic"),
-                'partitions': topic_cfg.get('partitions', 1),
+                'partitions': topic_cfg.get('partitions', 1), 
                 'replication': topic_cfg.get('replication-factor', 1)
             }
 
@@ -267,6 +269,15 @@ class KafkaService(JmxMixin, Service):
         for line in node.account.ssh_capture(cmd):
             output += line
         return output
+    
+    def alter_message_format(self, topic, msg_format_version, node=None):
+        if node is None:
+            node = self.nodes[0]
+        self.logger.info("Altering message format version for topic %s with format %s", topic, msg_format_version)
+        cmd = "/opt/%s/bin/kafka-configs.sh --zookeeper %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
+              (kafka_dir(node), self.zk.connect_setting(), topic, msg_format_version)
+        self.logger.info("Running alter message format command...\n%s" % cmd)
+        node.account.ssh(cmd)
 
     def parse_describe_topic(self, topic_description):
         """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
@@ -458,7 +469,7 @@ class KafkaService(JmxMixin, Service):
         output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):
-            if not (line.startswith("SLF4J") or line.startswith("GROUP, TOPIC") or line.startswith("Could not fetch offset")):
+            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.startswith("Could not fetch offset")):
                 output += line
         self.logger.debug(output)
         return output
@@ -491,3 +502,21 @@ class KafkaService(JmxMixin, Service):
         controller_idx = int(controller_info["brokerid"])
         self.logger.info("Controller's ID: %d" % (controller_idx))
         return self.get_node(controller_idx)
+
+    def get_offset_shell(self, topic, partitions, max_wait_ms, offsets, time):
+        node = self.nodes[0]
+
+        cmd = "/opt/%s/bin/" % kafka_dir(node)
+        cmd += "kafka-run-class.sh kafka.tools.GetOffsetShell"
+        cmd += " --topic %s --broker-list %s --max-wait-ms %s --offsets %s --time %s" % (topic, self.bootstrap_servers(self.security_protocol), max_wait_ms, offsets, time)
+
+        if partitions:
+            cmd += '  --partitions %s' % partitions
+
+        cmd += " 2>> /mnt/get_offset_shell.log | tee -a /mnt/get_offset_shell.log &"
+        output = ""
+        self.logger.debug(cmd)
+        for line in node.account.ssh_capture(cmd):
+            output += line
+        self.logger.debug(output)
+        return output

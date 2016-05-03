@@ -29,6 +29,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Properties;
 
+import static java.util.Collections.singleton;
+import static org.junit.Assert.assertEquals;
+
 public class KafkaConsumerTest {
 
     private final String topic = "test";
@@ -47,9 +50,9 @@ public class KafkaConsumerTest {
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<byte[], byte[]>(
                     props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         } catch (KafkaException e) {
-            Assert.assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
-            Assert.assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
-            Assert.assertEquals("Failed to construct kafka consumer", e.getMessage());
+            assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
+            assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
+            assertEquals("Failed to construct kafka consumer", e.getMessage());
             return;
         }
         Assert.fail("should have caught an exception and returned");
@@ -60,7 +63,7 @@ public class KafkaConsumerTest {
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
 
         consumer.subscribe(Collections.singletonList(topic));
-        Assert.assertEquals(Collections.singleton(topic), consumer.subscription());
+        assertEquals(singleton(topic), consumer.subscription());
         Assert.assertTrue(consumer.assignment().isEmpty());
 
         consumer.subscribe(Collections.<String>emptyList());
@@ -69,11 +72,13 @@ public class KafkaConsumerTest {
 
         consumer.assign(Collections.singletonList(tp0));
         Assert.assertTrue(consumer.subscription().isEmpty());
-        Assert.assertEquals(Collections.singleton(tp0), consumer.assignment());
+        assertEquals(singleton(tp0), consumer.assignment());
 
         consumer.unsubscribe();
         Assert.assertTrue(consumer.subscription().isEmpty());
         Assert.assertTrue(consumer.assignment().isEmpty());
+
+        consumer.close();
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -82,10 +87,13 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testSeekNegative");
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
-
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
-        consumer.assign(Arrays.asList(new TopicPartition("nonExistTopic", 0)));
-        consumer.seek(new TopicPartition("nonExistTopic", 0), -1);
+        try {
+            consumer.assign(Arrays.asList(new TopicPartition("nonExistTopic", 0)));
+            consumer.seek(new TopicPartition("nonExistTopic", 0), -1);
+        } finally {
+            consumer.close();
+        }
     }
 
     @Test
@@ -98,12 +106,12 @@ public class KafkaConsumerTest {
 
             KafkaConsumer<String, String> consumer = new KafkaConsumer<String, String>(
                     props, new StringDeserializer(), new StringDeserializer());
-            Assert.assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
-            Assert.assertEquals(0, MockConsumerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
+            assertEquals(0, MockConsumerInterceptor.CLOSE_COUNT.get());
 
             consumer.close();
-            Assert.assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
-            Assert.assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
+            assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
         } finally {
             // cleanup since we are using mutable static variables in MockConsumerInterceptor
             MockConsumerInterceptor.resetCounters();
@@ -115,17 +123,19 @@ public class KafkaConsumerTest {
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
 
         consumer.assign(Collections.singletonList(tp0));
-        Assert.assertEquals(Collections.singleton(tp0), consumer.assignment());
+        assertEquals(singleton(tp0), consumer.assignment());
         Assert.assertTrue(consumer.paused().isEmpty());
 
-        consumer.pause(tp0);
-        Assert.assertEquals(Collections.singleton(tp0), consumer.paused());
+        consumer.pause(singleton(tp0));
+        assertEquals(singleton(tp0), consumer.paused());
 
-        consumer.resume(tp0);
+        consumer.resume(singleton(tp0));
         Assert.assertTrue(consumer.paused().isEmpty());
 
         consumer.unsubscribe();
         Assert.assertTrue(consumer.paused().isEmpty());
+
+        consumer.close();
     }
 
     private KafkaConsumer<byte[], byte[]> newConsumer() {

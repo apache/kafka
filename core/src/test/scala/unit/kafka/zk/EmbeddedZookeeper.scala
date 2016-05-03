@@ -21,10 +21,9 @@ import org.apache.zookeeper.server.ZooKeeperServer
 import org.apache.zookeeper.server.NIOServerCnxnFactory
 import kafka.utils.TestUtils
 import java.net.InetSocketAddress
-import javax.security.auth.login.Configuration
+
 import kafka.utils.CoreUtils
-import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.utils.Utils.getPort
+import org.apache.kafka.common.utils.Utils
 
 class EmbeddedZookeeper() {
   val snapshotDir = TestUtils.tempDir()
@@ -40,8 +39,8 @@ class EmbeddedZookeeper() {
   def shutdown() {
     CoreUtils.swallow(zookeeper.shutdown())
     CoreUtils.swallow(factory.shutdown())
-    CoreUtils.rm(logDir)
-    CoreUtils.rm(snapshotDir)
+    Utils.delete(logDir)
+    Utils.delete(snapshotDir)
   }
   
 }

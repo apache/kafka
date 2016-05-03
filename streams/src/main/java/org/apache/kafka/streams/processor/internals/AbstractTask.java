@@ -37,15 +37,18 @@ import java.util.Set;
 
 public abstract class AbstractTask {
     protected final TaskId id;
-    protected final String jobId;
+    protected final String applicationId;
     protected final ProcessorTopology topology;
     protected final Consumer consumer;
     protected final ProcessorStateManager stateMgr;
     protected final Set<TopicPartition> partitions;
     protected ProcessorContext processorContext;
 
+    /**
+     * @throws ProcessorStateException if the state manager cannot be created
+     */
     protected AbstractTask(TaskId id,
-                           String jobId,
+                           String applicationId,
                            Collection<TopicPartition> partitions,
                            ProcessorTopology topology,
                            Consumer<byte[], byte[]> consumer,
@@ -53,17 +56,17 @@ public abstract class AbstractTask {
                            StreamsConfig config,
                            boolean isStandby) {
         this.id = id;
-        this.jobId = jobId;
+        this.applicationId = applicationId;
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
 
         // create the processor state manager
         try {
-            File jobStateDir = StreamThread.makeStateDir(jobId, config.getString(StreamsConfig.STATE_DIR_CONFIG));
-            File stateFile = new File(jobStateDir.getCanonicalPath(), id.toString());
+            File applicationStateDir = StreamThread.makeStateDir(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG));
+            File stateFile = new File(applicationStateDir.getCanonicalPath(), id.toString());
             // if partitions is null, this is a standby task
-            this.stateMgr = new ProcessorStateManager(jobId, id.partition, partitions, stateFile, restoreConsumer, isStandby);
+            this.stateMgr = new ProcessorStateManager(applicationId, id.partition, partitions, stateFile, restoreConsumer, isStandby);
         } catch (IOException e) {
             throw new ProcessorStateException("Error while creating the state manager", e);
         }
@@ -83,8 +86,8 @@ public abstract class AbstractTask {
         return id;
     }
 
-    public final String jobId() {
-        return jobId;
+    public final String applicationId() {
+        return applicationId;
     }
 
     public final Set<TopicPartition> partitions() {
@@ -101,6 +104,9 @@ public abstract class AbstractTask {
 
     public abstract void commit();
 
+    /**
+     * @throws ProcessorStateException if there is an error while closing the state manager
+     */
     public void close() {
         try {
             stateMgr.close(recordCollectorOffsets());

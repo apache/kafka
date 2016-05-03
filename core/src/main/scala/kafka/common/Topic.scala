@@ -18,14 +18,12 @@
 package kafka.common
 
 import util.matching.Regex
-import kafka.coordinator.GroupCoordinator
+import org.apache.kafka.common.internals.TopicConstants.INTERNAL_TOPICS
 
 object Topic {
   val legalChars = "[a-zA-Z0-9\\._\\-]"
-  private val maxNameLength = 255
+  private val maxNameLength = 249
   private val rgx = new Regex(legalChars + "+")
-
-  val InternalTopics = Set(GroupCoordinator.GroupMetadataTopicName)
 
   def validate(topic: String) {
     if (topic.length <= 0)
@@ -63,5 +61,8 @@ object Topic {
   def hasCollision(topicA: String, topicB: String): Boolean = {
     topicA.replace('.', '_') == topicB.replace('.', '_')
   }
+
+  def isInternal(topic: String): Boolean =
+    INTERNAL_TOPICS.contains(topic)
 
 }

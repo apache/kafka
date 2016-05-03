@@ -13,10 +13,7 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.BrokerEndPoint;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -53,7 +50,7 @@ public class RequestResponseTest {
                 createControlledShutdownResponse(),
                 createControlledShutdownRequest().getErrorResponse(1, new UnknownServerException()),
                 createFetchRequest(),
-                createFetchRequest().getErrorResponse(0, new UnknownServerException()),
+                createFetchRequest().getErrorResponse(1, new UnknownServerException()),
                 createFetchResponse(),
                 createHeartBeatRequest(),
                 createHeartBeatRequest().getErrorResponse(0, new UnknownServerException()),
@@ -73,11 +70,12 @@ public class RequestResponseTest {
                 createListOffsetRequest(),
                 createListOffsetRequest().getErrorResponse(0, new UnknownServerException()),
                 createListOffsetResponse(),
-                createMetadataRequest(),
-                createMetadataRequest().getErrorResponse(0, new UnknownServerException()),
-                createMetadataResponse(),
-                createOffsetCommitRequest(),
-                createOffsetCommitRequest().getErrorResponse(0, new UnknownServerException()),
+                MetadataRequest.allTopics(),
+                createMetadataRequest(Arrays.asList("topic1")),
+                createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(1, new UnknownServerException()),
+                createMetadataResponse(1),
+                createOffsetCommitRequest(2),
+                createOffsetCommitRequest(2).getErrorResponse(2, new UnknownServerException()),
                 createOffsetCommitResponse(),
                 createOffsetFetchRequest(),
                 createOffsetFetchRequest().getErrorResponse(0, new UnknownServerException()),
@@ -85,22 +83,40 @@ public class RequestResponseTest {
                 createProduceRequest(),
                 createProduceRequest().getErrorResponse(2, new UnknownServerException()),
                 createProduceResponse(),
-                createStopReplicaRequest(),
-                createStopReplicaRequest().getErrorResponse(0, new UnknownServerException()),
+                createStopReplicaRequest(true),
+                createStopReplicaRequest(false),
+                createStopReplicaRequest(true).getErrorResponse(0, new UnknownServerException()),
                 createStopReplicaResponse(),
-                createUpdateMetadataRequest(1),
-                createUpdateMetadataRequest(1).getErrorResponse(1, new UnknownServerException()),
+                createUpdateMetadataRequest(2, "rack1"),
+                createUpdateMetadataRequest(2, null),
+                createUpdateMetadataRequest(2, "rack1").getErrorResponse(2, new UnknownServerException()),
                 createUpdateMetadataResponse(),
                 createLeaderAndIsrRequest(),
                 createLeaderAndIsrRequest().getErrorResponse(0, new UnknownServerException()),
-                createLeaderAndIsrResponse()
+                createLeaderAndIsrResponse(),
+                createSaslHandshakeRequest(),
+                createSaslHandshakeRequest().getErrorResponse(0, new UnknownServerException()),
+                createSaslHandshakeResponse(),
+                createApiVersionRequest(),
+                createApiVersionRequest().getErrorResponse(0, new UnknownServerException()),
+                createApiVersionResponse()
         );
 
         for (AbstractRequestResponse req : requestResponseList)
             checkSerialization(req, null);
 
-        checkSerialization(createUpdateMetadataRequest(0), 0);
-        checkSerialization(createUpdateMetadataRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
+        createMetadataResponse(0);
+        createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(0, new UnknownServerException());
+        checkSerialization(createFetchRequest().getErrorResponse(0, new UnknownServerException()), 0);
+        checkSerialization(createOffsetCommitRequest(0), 0);
+        checkSerialization(createOffsetCommitRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
+        checkSerialization(createOffsetCommitRequest(1), 1);
+        checkSerialization(createOffsetCommitRequest(1).getErrorResponse(1, new UnknownServerException()), 1);
+        checkSerialization(createUpdateMetadataRequest(0, null), 0);
+        checkSerialization(createUpdateMetadataRequest(0, null).getErrorResponse(0, new UnknownServerException()), 0);
+        checkSerialization(createUpdateMetadataRequest(1, null), 1);
+        checkSerialization(createUpdateMetadataRequest(1, "rack1"), 1);
+        checkSerialization(createUpdateMetadataRequest(1, null).getErrorResponse(1, new UnknownServerException()), 1);
     }
 
     private void checkSerialization(AbstractRequestResponse req, Integer version) throws Exception {
@@ -122,7 +138,7 @@ public class RequestResponseTest {
 
     @Test
     public void produceResponseVersionTest() {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
+        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000, Record.NO_TIMESTAMP));
         ProduceResponse v0Response = new ProduceResponse(responseData);
         ProduceResponse v1Response = new ProduceResponse(responseData, 10, 1);
@@ -140,7 +156,7 @@ public class RequestResponseTest {
 
     @Test
     public void fetchResponseVersionTest() {
-        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<TopicPartition, FetchResponse.PartitionData>();
+        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE.code(), 1000000, ByteBuffer.allocate(10)));
 
         FetchResponse v0Response = new FetchResponse(responseData);
@@ -194,14 +210,14 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createFetchRequest() {
-        Map<TopicPartition, FetchRequest.PartitionData> fetchData = new HashMap<TopicPartition, FetchRequest.PartitionData>();
+        Map<TopicPartition, FetchRequest.PartitionData> fetchData = new HashMap<>();
         fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 1000000));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 1000000));
         return new FetchRequest(-1, 100, 100000, fetchData);
     }
 
     private AbstractRequestResponse createFetchResponse() {
-        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<TopicPartition, FetchResponse.PartitionData>();
+        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE.code(), 1000000, ByteBuffer.allocate(10)));
         return new FetchResponse(responseData, 0);
     }
@@ -261,43 +277,51 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createListOffsetRequest() {
-        Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = new HashMap<TopicPartition, ListOffsetRequest.PartitionData>();
+        Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = new HashMap<>();
         offsetData.put(new TopicPartition("test", 0), new ListOffsetRequest.PartitionData(1000000L, 10));
         return new ListOffsetRequest(-1, offsetData);
     }
 
     private AbstractRequestResponse createListOffsetResponse() {
-        Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<TopicPartition, ListOffsetResponse.PartitionData>();
+        Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE.code(), Arrays.asList(100L)));
         return new ListOffsetResponse(responseData);
     }
 
-    private AbstractRequest createMetadataRequest() {
-        return new MetadataRequest(Arrays.asList("topic1"));
+    private AbstractRequest createMetadataRequest(List<String> topics) {
+        return new MetadataRequest(topics);
     }
 
-    private AbstractRequestResponse createMetadataResponse() {
+    private AbstractRequestResponse createMetadataResponse(int version) {
         Node node = new Node(1, "host1", 1001);
-        Node[] replicas = new Node[1];
-        replicas[0] = node;
-        Node[] isr = new Node[1];
-        isr[0] = node;
-        Cluster cluster = new Cluster(Arrays.asList(node), Arrays.asList(new PartitionInfo("topic1", 1, node, replicas, isr)),
-                Collections.<String>emptySet());
+        List<Node> replicas = Arrays.asList(node);
+        List<Node> isr = Arrays.asList(node);
 
-        Map<String, Errors> errors = new HashMap<String, Errors>();
-        errors.put("topic2", Errors.LEADER_NOT_AVAILABLE);
-        return new MetadataResponse(cluster, errors);
+        List<MetadataResponse.TopicMetadata> allTopicMetadata = new ArrayList<>();
+        allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "__consumer_offsets", true,
+                Arrays.asList(new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node, replicas, isr))));
+        allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2", false,
+                Collections.<MetadataResponse.PartitionMetadata>emptyList()));
+
+        return new MetadataResponse(Arrays.asList(node), MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata, version);
     }
 
-    private AbstractRequest createOffsetCommitRequest() {
-        Map<TopicPartition, OffsetCommitRequest.PartitionData> commitData = new HashMap<TopicPartition, OffsetCommitRequest.PartitionData>();
+    private AbstractRequest createOffsetCommitRequest(int version) {
+        Map<TopicPartition, OffsetCommitRequest.PartitionData> commitData = new HashMap<>();
         commitData.put(new TopicPartition("test", 0), new OffsetCommitRequest.PartitionData(100, ""));
-        return new OffsetCommitRequest("group1", 100, "consumer1", 1000000, commitData);
+        commitData.put(new TopicPartition("test", 1), new OffsetCommitRequest.PartitionData(200, null));
+        if (version == 0) {
+            return new OffsetCommitRequest("group1", commitData);
+        } else if (version == 1) {
+            return new OffsetCommitRequest("group1", 100, "consumer1", commitData);
+        } else if (version == 2) {
+            return new OffsetCommitRequest("group1", 100, "consumer1", 1000000, commitData);
+        }
+        throw new IllegalArgumentException("Unknown offset commit request version " + version);
     }
 
     private AbstractRequestResponse createOffsetCommitResponse() {
-        Map<TopicPartition, Short> responseData = new HashMap<TopicPartition, Short>();
+        Map<TopicPartition, Short> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), Errors.NONE.code());
         return new OffsetCommitResponse(responseData);
     }
@@ -307,26 +331,27 @@ public class RequestResponseTest {
     }
 
     private AbstractRequestResponse createOffsetFetchResponse() {
-        Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<TopicPartition, OffsetFetchResponse.PartitionData>();
+        Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(100L, "", Errors.NONE.code()));
+        responseData.put(new TopicPartition("test", 1), new OffsetFetchResponse.PartitionData(100L, null, Errors.NONE.code()));
         return new OffsetFetchResponse(responseData);
     }
 
     private AbstractRequest createProduceRequest() {
-        Map<TopicPartition, ByteBuffer> produceData = new HashMap<TopicPartition, ByteBuffer>();
+        Map<TopicPartition, ByteBuffer> produceData = new HashMap<>();
         produceData.put(new TopicPartition("test", 0), ByteBuffer.allocate(10));
         return new ProduceRequest((short) 1, 5000, produceData);
     }
 
     private AbstractRequestResponse createProduceResponse() {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
+        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000, Record.NO_TIMESTAMP));
         return new ProduceResponse(responseData, 0);
     }
 
-    private AbstractRequest createStopReplicaRequest() {
+    private AbstractRequest createStopReplicaRequest(boolean deletePartitions) {
         Set<TopicPartition> partitions = new HashSet<>(Arrays.asList(new TopicPartition("test", 0)));
-        return new StopReplicaRequest(0, 1, true, partitions);
+        return new StopReplicaRequest(0, 1, deletePartitions, partitions);
     }
 
     private AbstractRequestResponse createStopReplicaResponse() {
@@ -358,9 +383,9 @@ public class RequestResponseTest {
         partitionStates.put(new TopicPartition("topic20", 1),
                 new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
-        Set<BrokerEndPoint> leaders = new HashSet<>(Arrays.asList(
-                new BrokerEndPoint(0, "test0", 1223),
-                new BrokerEndPoint(1, "test1", 1223)
+        Set<Node> leaders = new HashSet<>(Arrays.asList(
+                new Node(0, "test0", 1223),
+                new Node(1, "test1", 1223)
         ));
 
         return new LeaderAndIsrRequest(1, 10, partitionStates, leaders);
@@ -372,7 +397,8 @@ public class RequestResponseTest {
         return new LeaderAndIsrResponse(Errors.NONE.code(), responses);
     }
 
-    private AbstractRequest createUpdateMetadataRequest(int version) {
+    @SuppressWarnings("deprecation")
+    private AbstractRequest createUpdateMetadataRequest(int version, String rack) {
         Map<TopicPartition, UpdateMetadataRequest.PartitionState> partitionStates = new HashMap<>();
         List<Integer> isr = Arrays.asList(1, 2);
         List<Integer> replicas = Arrays.asList(1, 2, 3, 4);
@@ -384,9 +410,9 @@ public class RequestResponseTest {
                 new UpdateMetadataRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
         if (version == 0) {
-            Set<BrokerEndPoint> liveBrokers = new HashSet<>(Arrays.asList(
-                    new BrokerEndPoint(0, "host1", 1223),
-                    new BrokerEndPoint(1, "host2", 1234)
+            Set<Node> liveBrokers = new HashSet<>(Arrays.asList(
+                    new Node(0, "host1", 1223),
+                    new Node(1, "host2", 1234)
             ));
 
             return new UpdateMetadataRequest(1, 10, liveBrokers, partitionStates);
@@ -398,11 +424,10 @@ public class RequestResponseTest {
             endPoints2.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1244));
             endPoints2.put(SecurityProtocol.SSL, new UpdateMetadataRequest.EndPoint("host2", 1234));
 
-            Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1),
-                    new UpdateMetadataRequest.Broker(1, endPoints2)
+            Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1, rack),
+                    new UpdateMetadataRequest.Broker(1, endPoints2, rack)
             ));
-
-            return new UpdateMetadataRequest(1, 10, partitionStates, liveBrokers);
+            return new UpdateMetadataRequest(version, 1, 10, partitionStates, liveBrokers);
         }
     }
 
@@ -410,5 +435,20 @@ public class RequestResponseTest {
         return new UpdateMetadataResponse(Errors.NONE.code());
     }
 
+    private AbstractRequest createSaslHandshakeRequest() {
+        return new SaslHandshakeRequest("PLAIN");
+    }
 
+    private AbstractRequestResponse createSaslHandshakeResponse() {
+        return new SaslHandshakeResponse(Errors.NONE.code(), Collections.singletonList("GSSAPI"));
+    }
+
+    private AbstractRequest createApiVersionRequest() {
+        return new ApiVersionsRequest();
+    }
+
+    private AbstractRequestResponse createApiVersionResponse() {
+        List<ApiVersionsResponse.ApiVersion> apiVersions = Arrays.asList(new ApiVersionsResponse.ApiVersion((short) 0, (short) 0, (short) 2));
+        return new ApiVersionsResponse(Errors.NONE.code(), apiVersions);
+    }
 }

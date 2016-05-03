@@ -28,7 +28,8 @@ import java.util.Set;
  *
  * This grouper also acts as the stream task creation function along with partition distribution
  * such that each generated partition group is assigned with a distinct {@link TaskId};
- * the created task ids will then be assigned to Kafka Streams instances that host the stream job.
+ * the created task ids will then be assigned to Kafka Streams instances that host the stream
+ * processing application.
  */
 public interface PartitionGrouper {
 
@@ -37,9 +38,10 @@ public interface PartitionGrouper {
      * expected to be processed together must be in the same group. DefaultPartitionGrouper implements this
      * interface. See {@link DefaultPartitionGrouper} for more information.
      *
-     * @param topicGroups The map from the {@link TopologyBuilder#topicGroups() topic group} id to topics
+     * @param topicGroups The map from the {@link TopologyBuilder#topicGroups(String)} topic group} id to topics
      * @param metadata Metadata of the consuming cluster
      * @return a map of task ids to groups of partitions
      */
     Map<TaskId, Set<TopicPartition>> partitionGroups(Map<Integer, Set<String>> topicGroups, Cluster metadata);
+
 }

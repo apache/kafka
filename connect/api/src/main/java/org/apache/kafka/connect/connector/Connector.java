@@ -18,6 +18,9 @@
 package org.apache.kafka.connect.connector;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.Config;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 
 import java.util.List;
 import java.util.Map;
@@ -121,4 +124,22 @@ public abstract class Connector {
      * Stop this connector.
      */
     public abstract void stop();
+
+    /**
+     * Validate the connector configuration values against configuration definitions.
+     * @param connectorConfigs the provided configuration values
+     * @return List of Config, each Config contains the updated configuration information given
+     * the current configuration values.
+     */
+    public Config validate(Map<String, String> connectorConfigs) {
+        ConfigDef configDef = config();
+        List<ConfigValue> configValues = configDef.validate(connectorConfigs);
+        return new Config(configValues);
+    }
+
+    /**
+     * Define the configuration for the connector.
+     * @return The ConfigDef for this connector.
+     */
+    public abstract ConfigDef config();
 }

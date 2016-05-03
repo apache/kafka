@@ -36,7 +36,9 @@ public enum ApiKeys {
     LEAVE_GROUP(13, "LeaveGroup"),
     SYNC_GROUP(14, "SyncGroup"),
     DESCRIBE_GROUPS(15, "DescribeGroups"),
-    LIST_GROUPS(16, "ListGroups");
+    LIST_GROUPS(16, "ListGroups"),
+    SASL_HANDSHAKE(17, "SaslHandshake"),
+    API_VERSIONS(18, "ApiVersions");
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;
@@ -70,4 +72,30 @@ public enum ApiKeys {
                     "and `%s` (inclusive)", id, MIN_API_KEY, MAX_API_KEY));
         return ID_TO_TYPE[id];
     }
+
+    private static String toHtml() {
+        final StringBuilder b = new StringBuilder();
+        b.append("<table class=\"data-table\"><tbody>\n");
+        b.append("<tr>");
+        b.append("<th>Name</th>\n");
+        b.append("<th>Key</th>\n");
+        b.append("</tr>");
+        for (ApiKeys key : ApiKeys.values()) {
+            b.append("<tr>\n");
+            b.append("<td>");
+            b.append(key.name);
+            b.append("</td>");
+            b.append("<td>");
+            b.append(key.id);
+            b.append("</td>");
+            b.append("</tr>\n");
+        }
+        b.append("</table>\n");
+        return b.toString();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(toHtml());
+    }
+
 }

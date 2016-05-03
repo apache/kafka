@@ -17,7 +17,7 @@ from ducktape.utils.util import wait_until
 from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
+from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, LATEST_0_9
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.security_config import SecurityConfig
 
@@ -123,6 +123,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         self.from_beginning = from_beginning
         self.message_validator = message_validator
         self.messages_consumed = {idx: [] for idx in range(1, num_nodes + 1)}
+        self.clean_shutdown_nodes = set()
         self.client_id = client_id
         self.print_key = print_key
         self.log_level = "TRACE"
@@ -181,10 +182,11 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         if self.print_key:
             cmd += " --property print.key=true"
 
-        # LoggingMessageFormatter was introduced in 0.9.0.0
-        if node.version > LATEST_0_8_2:
+        # LoggingMessageFormatter was introduced after 0.9
+        if node.version > LATEST_0_9:
             cmd+=" --formatter kafka.tools.LoggingMessageFormatter"
 
+        cmd += " --enable-systest-events"
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args
         return cmd
 
@@ -226,10 +228,15 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
 
             for line in itertools.chain([first_line], consumer_output):
                 msg = line.strip()
-                if self.message_validator is not None:
-                    msg = self.message_validator(msg)
-                if msg is not None:
-                    self.messages_consumed[idx].append(msg)
+                if msg == "shutdown_complete":
+                    if node in self.clean_shutdown_nodes:
+                        raise Exception("Unexpected shutdown event from consumer, already shutdown. Consumer index: %d" % idx)
+                    self.clean_shutdown_nodes.add(node)
+                else:
+                    if self.message_validator is not None:
+                        msg = self.message_validator(msg)
+                    if msg is not None:
+                        self.messages_consumed[idx].append(msg)
 
             self.read_jmx_output(idx, node)
 

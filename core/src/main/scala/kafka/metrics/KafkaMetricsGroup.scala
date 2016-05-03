@@ -192,6 +192,7 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
     removeAllMetricsInList(KafkaMetricsGroup.consumerMetricNameList, clientId)
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.10.0.0")
   def removeAllProducerMetrics(clientId: String) {
     ProducerRequestStatsRegistry.removeProducerRequestStats(clientId)
     ProducerTopicStatsRegistry.removeProducerTopicStats(clientId)

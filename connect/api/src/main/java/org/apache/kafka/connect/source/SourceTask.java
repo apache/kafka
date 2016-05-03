@@ -79,4 +79,20 @@ public abstract class SourceTask implements Task {
      * {@link java.nio.channels.Selector#wakeup() wakeup()} to interrupt any ongoing requests.
      */
     public abstract void stop();
+
+    /**
+     * <p>
+     * Commit an individual {@link SourceRecord} when the callback from the producer client is received.
+     * </p>
+     * <p>
+     * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
+     * automatically. This hook is provided for systems that also need to store offsets internally
+     * in their own system.
+     * </p>
+     * @param record {@link SourceRecord} that was successfully sent via the producer.
+     * @throws InterruptedException
+     */
+    public void commitRecord(SourceRecord record) throws InterruptedException {
+        // This space intentionally left blank.
+    }
 }

@@ -43,7 +43,7 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
     /**
      * Finishes the process of connecting a socket channel.
      */
-    void finishConnect() throws IOException;
+    boolean finishConnect() throws IOException;
 
     /**
      * disconnect socketChannel

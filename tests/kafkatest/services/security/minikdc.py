@@ -23,6 +23,7 @@ from os import remove, close
 from io import open
 import uuid
 
+
 class MiniKdc(Service):
 
     logs = {
@@ -54,9 +55,7 @@ class MiniKdc(Service):
         remove(file_path)
         move(abs_path, file_path)
 
-
     def start_node(self, node):
-
         node.account.ssh("mkdir -p %s" % MiniKdc.WORK_DIR, allow_fail=False)
         props_file = self.render('minikdc.properties',  node=node)
         node.account.create_file(MiniKdc.PROPS_FILE, props_file)
@@ -67,10 +66,9 @@ class MiniKdc(Service):
         principals = 'client ' + kafka_principals + self.extra_principals
         self.logger.info("Starting MiniKdc with principals " + principals)
 
-        lib_dir = "/opt/%s/core/build/dependant-testlibs" % kafka_dir(node)
-        kdc_jars = node.account.ssh_capture("ls " + lib_dir)
-        classpath = ":".join([os.path.join(lib_dir, jar.strip()) for jar in kdc_jars])
-        cmd = "CLASSPATH=%s /opt/%s/bin/kafka-run-class.sh org.apache.hadoop.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (classpath, kafka_dir(node), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
+        jar_paths = self.core_jar_paths(node, "dependant-testlibs") + self.core_jar_paths(node, "libs")
+        classpath = ":".join(jar_paths)
+        cmd = "INCLUDE_TEST_JARS=true CLASSPATH=%s /opt/%s/bin/kafka-run-class.sh kafka.security.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (classpath, kafka_dir(node), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
         self.logger.debug("Attempting to start MiniKdc on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log(MiniKdc.LOG_FILE) as monitor:
             node.account.ssh(cmd)
@@ -81,6 +79,11 @@ class MiniKdc(Service):
 
         #KDC is set to bind openly (via 0.0.0.0). Change krb5.conf to hold the specific KDC address
         self.replace_in_file(MiniKdc.LOCAL_KRB5CONF_FILE, '0.0.0.0', node.account.hostname)
+
+    def core_jar_paths(self, node, lib_dir_name):
+        lib_dir = "/opt/%s/core/build/%s" % (kafka_dir(node), lib_dir_name)
+        jars = node.account.ssh_capture("ls " + lib_dir)
+        return [os.path.join(lib_dir, jar.strip()) for jar in jars]
 
     def stop_node(self, node):
         self.logger.info("Stopping %s on %s" % (type(self).__name__, node.account.hostname))

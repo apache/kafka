@@ -27,7 +27,7 @@ import scala.util.Random
 
 class TimerTest {
 
-  private class TestTask(override val expirationMs: Long, id: Int, latch: CountDownLatch, output: ArrayBuffer[Int]) extends TimerTask {
+  private class TestTask(override val delayMs: Long, id: Int, latch: CountDownLatch, output: ArrayBuffer[Int]) extends TimerTask {
     private[this] val completed = new AtomicBoolean(false)
     def run(): Unit = {
       if (completed.compareAndSet(false, true)) {
@@ -37,31 +37,30 @@ class TimerTest {
     }
   }
 
-  private[this] var executor: ExecutorService = null
+  private[this] var timer: Timer = null
 
   @Before
   def setup() {
-    executor = Executors.newSingleThreadExecutor()
+    timer = new SystemTimer("test", tickMs = 1, wheelSize = 3)
   }
 
   @After
   def teardown(): Unit = {
-    executor.shutdown()
-    executor = null
+    timer.shutdown()
   }
 
   @Test
   def testAlreadyExpiredTask(): Unit = {
-    val startTime = System.currentTimeMillis()
-    val timer = new Timer(taskExecutor = executor, tickMs = 1, wheelSize = 3, startMs = startTime)
     val output = new ArrayBuffer[Int]()
 
 
     val latches = (-5 until 0).map { i =>
       val latch = new CountDownLatch(1)
-      timer.add(new TestTask(startTime + i, i, latch, output))
+      timer.add(new TestTask(i, i, latch, output))
       latch
     }
+
+    timer.advanceClock(0)
 
     latches.take(5).foreach { latch =>
       assertEquals("already expired tasks should run immediately", true, latch.await(3, TimeUnit.SECONDS))
@@ -72,8 +71,6 @@ class TimerTest {
 
   @Test
   def testTaskExpiration(): Unit = {
-    val startTime = System.currentTimeMillis()
-    val timer = new Timer(taskExecutor = executor, tickMs = 1, wheelSize = 3, startMs = startTime)
     val output = new ArrayBuffer[Int]()
 
     val tasks = new ArrayBuffer[TestTask]()
@@ -82,27 +79,27 @@ class TimerTest {
     val latches =
       (0 until 5).map { i =>
         val latch = new CountDownLatch(1)
-        tasks += new TestTask(startTime + i, i, latch, output)
+        tasks += new TestTask(i, i, latch, output)
         ids += i
         latch
       } ++ (10 until 100).map { i =>
         val latch = new CountDownLatch(2)
-        tasks += new TestTask(startTime + i, i, latch, output)
-        tasks += new TestTask(startTime + i, i, latch, output)
+        tasks += new TestTask(i, i, latch, output)
+        tasks += new TestTask(i, i, latch, output)
         ids += i
         ids += i
         latch
       } ++ (100 until 500).map { i =>
         val latch = new CountDownLatch(1)
-        tasks += new TestTask(startTime + i, i, latch, output)
+        tasks += new TestTask(i, i, latch, output)
         ids += i
         latch
       }
 
     // randomly submit requests
-    Random.shuffle(tasks.toSeq).foreach { task => timer.add(task) }
+    tasks.foreach { task => timer.add(task) }
 
-    while (timer.advanceClock(1000)) {}
+    while (timer.advanceClock(2000)) {}
 
     latches.foreach { latch => latch.await() }
 

@@ -22,11 +22,11 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
     final long interval;
 
     public PunctuationSchedule(ProcessorNode node, long interval) {
-        this(node, System.currentTimeMillis(), interval);
+        this(node, 0L, interval);
     }
 
     public PunctuationSchedule(ProcessorNode node, long time, long interval) {
-        super(node, time + interval);
+        super(node, time);
         this.interval = interval;
     }
 
@@ -34,8 +34,13 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
         return value;
     }
 
-    public PunctuationSchedule next() {
-        return new PunctuationSchedule(value, timestamp, interval);
+    public PunctuationSchedule next(long currTimestamp) {
+        // we need to special handle the case when it is firstly triggered (i.e. the timestamp
+        // is equal to the interval) by reschedule based on the currTimestamp
+        if (timestamp == 0L)
+            return new PunctuationSchedule(value, currTimestamp + interval, interval);
+        else
+            return new PunctuationSchedule(value, timestamp + interval, interval);
     }
 
 }

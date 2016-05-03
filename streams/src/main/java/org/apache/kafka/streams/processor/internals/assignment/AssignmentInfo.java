@@ -54,6 +54,10 @@ public class AssignmentInfo {
         this.standbyTasks = standbyTasks;
     }
 
+    /**
+     * @throws TaskAssignmentException if method fails to encode the data, e.g., if there is an
+     * IO exception during encoding
+     */
     public ByteBuffer encode() {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(baos);
@@ -96,6 +100,9 @@ public class AssignmentInfo {
         }
     }
 
+    /**
+     * @throws TaskAssignmentException if method fails to decode the data or if the data version is unknown
+     */
     public static AssignmentInfo decode(ByteBuffer data) {
         // ensure we are at the beginning of the ByteBuffer
         data.rewind();

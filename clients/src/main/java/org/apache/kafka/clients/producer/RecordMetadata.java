@@ -17,11 +17,17 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.Record;
 
 /**
  * The metadata for a record that has been acknowledged by the server
  */
 public final class RecordMetadata {
+
+    /**
+     * Partition value for record without partition assigned
+     */
+    public static final int UNKNOWN_PARTITION = -1;
 
     private final long offset;
     // The timestamp of the message.
@@ -44,6 +50,11 @@ public final class RecordMetadata {
         this.serializedKeySize = serializedKeySize;
         this.serializedValueSize = serializedValueSize;
         this.topicPartition = topicPartition;
+    }
+
+    @Deprecated
+    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset) {
+        this(topicPartition, baseOffset, relativeOffset, Record.NO_TIMESTAMP, -1, -1, -1);
     }
 
     public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset,

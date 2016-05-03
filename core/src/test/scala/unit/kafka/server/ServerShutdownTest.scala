@@ -18,15 +18,14 @@ package kafka.server
 
 import kafka.zk.ZooKeeperTestHarness
 import kafka.consumer.SimpleConsumer
-import kafka.producer._
-import kafka.utils.{IntEncoder, TestUtils, CoreUtils}
+import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
 import kafka.api.FetchRequestBuilder
 import kafka.message.ByteBufferMessageSet
-import kafka.serializer.StringEncoder
-
 import java.io.File
 
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
@@ -46,27 +45,34 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
 
   @Test
   def testCleanShutdown() {
+
+    def createProducer(server: KafkaServer): KafkaProducer[Integer, String] =
+      TestUtils.createNewProducer(
+        TestUtils.getBrokerListStrFromServers(Seq(server)),
+        retries = 5,
+        keySerializer = new IntegerSerializer,
+        valueSerializer = new StringSerializer
+      )
+
     var server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
     server.startup()
-    var producer = TestUtils.createProducer[Int, String](TestUtils.getBrokerListStrFromServers(Seq(server)),
-      encoder = classOf[StringEncoder].getName,
-      keyEncoder = classOf[IntEncoder].getName)
+    var producer = createProducer(server)
 
     // create topic
     createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
 
     // send some messages
-    producer.send(sent1.map(m => new KeyedMessage[Int, String](topic, 0, m)):_*)
+    sent1.map(value => producer.send(new ProducerRecord(topic, 0, value))).foreach(_.get)
 
     // do a clean shutdown and check that offset checkpoint file exists
     server.shutdown()
-    for(logDir <- config.logDirs) {
+    for (logDir <- config.logDirs) {
       val OffsetCheckpointFile = new File(logDir, server.logManager.RecoveryPointCheckpointFile)
       assertTrue(OffsetCheckpointFile.exists)
       assertTrue(OffsetCheckpointFile.length() > 0)
     }
     producer.close()
-    
+
     /* now restart the server and check that the written data is still readable and everything still works */
     server = new KafkaServer(config)
     server.startup()
@@ -74,13 +80,11 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     // wait for the broker to receive the update metadata request after startup
     TestUtils.waitUntilMetadataIsPropagated(Seq(server), topic, 0)
 
-    producer = TestUtils.createProducer[Int, String](TestUtils.getBrokerListStrFromServers(Seq(server)),
-      encoder = classOf[StringEncoder].getName,
-      keyEncoder = classOf[IntEncoder].getName)
+    producer = createProducer(server)
     val consumer = new SimpleConsumer(host, server.boundPort(), 1000000, 64*1024, "")
 
     var fetchedMessage: ByteBufferMessageSet = null
-    while(fetchedMessage == null || fetchedMessage.validBytes == 0) {
+    while (fetchedMessage == null || fetchedMessage.validBytes == 0) {
       val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).maxWait(0).build())
       fetchedMessage = fetched.messageSet(topic, 0)
     }
@@ -88,10 +92,10 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     val newOffset = fetchedMessage.last.nextOffset
 
     // send some more messages
-    producer.send(sent2.map(m => new KeyedMessage[Int, String](topic, 0, m)):_*)
+    sent2.map(value => producer.send(new ProducerRecord(topic, 0, value))).foreach(_.get)
 
     fetchedMessage = null
-    while(fetchedMessage == null || fetchedMessage.validBytes == 0) {
+    while (fetchedMessage == null || fetchedMessage.validBytes == 0) {
       val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, newOffset, 10000).build())
       fetchedMessage = fetched.messageSet(topic, 0)
     }
@@ -100,7 +104,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     consumer.close()
     producer.close()
     server.shutdown()
-    CoreUtils.rm(server.config.logDirs)
+    CoreUtils.delete(server.config.logDirs)
     verifyNonDaemonThreadsStatus
   }
 
@@ -113,7 +117,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     server.startup()
     server.shutdown()
     server.awaitShutdown()
-    CoreUtils.rm(server.config.logDirs)
+    CoreUtils.delete(server.config.logDirs)
     verifyNonDaemonThreadsStatus
   }
 
@@ -141,7 +145,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
         server.shutdown()
       server.awaitShutdown()
     }
-    CoreUtils.rm(server.config.logDirs)
+    CoreUtils.delete(server.config.logDirs)
     verifyNonDaemonThreadsStatus
   }
 

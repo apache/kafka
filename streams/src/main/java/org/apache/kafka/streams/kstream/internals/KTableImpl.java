@@ -17,39 +17,38 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 
-import java.util.Collections;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 import java.util.Set;
 
 /**
- * The implementation class of KTable
+ * The implementation class of {@link KTable}.
  * @param <K> the key type
  * @param <S> the source's (parent's) value type
  * @param <V> the value type
  */
 public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, V> {
 
-    private static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
-
-    private static final String AGGREGATE_NAME = "KTABLE-AGGREGATE-";
-
     private static final String FILTER_NAME = "KTABLE-FILTER-";
+
+    private static final String FOREACH_NAME = "KTABLE-FOREACH-";
 
     public static final String JOINTHIS_NAME = "KTABLE-JOINTHIS-";
 
@@ -67,7 +66,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     public static final String OUTEROTHER_NAME = "KTABLE-OUTEROTHER-";
 
-    private static final String REDUCE_NAME = "KTABLE-REDUCE-";
+    private static final String PRINTING_NAME = "KSTREAM-PRINTER-";
 
     private static final String SELECT_NAME = "KTABLE-SELECT-";
 
@@ -75,13 +74,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
 
-
     public final ProcessorSupplier<?, ?> processorSupplier;
 
-    private final Serializer<K> keySerializer;
-    private final Serializer<V> valSerializer;
-    private final Deserializer<K> keyDeserializer;
-    private final Deserializer<V> valDeserializer;
+    private final Serde<K> keySerde;
+    private final Serde<V> valSerde;
 
     private boolean sendOldValues = false;
 
@@ -89,23 +85,19 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       String name,
                       ProcessorSupplier<?, ?> processorSupplier,
                       Set<String> sourceNodes) {
-        this(topology, name, processorSupplier, sourceNodes, null, null, null, null);
+        this(topology, name, processorSupplier, sourceNodes, null, null);
     }
 
     public KTableImpl(KStreamBuilder topology,
                       String name,
                       ProcessorSupplier<?, ?> processorSupplier,
                       Set<String> sourceNodes,
-                      Serializer<K> keySerializer,
-                      Serializer<V> valSerializer,
-                      Deserializer<K> keyDeserializer,
-                      Deserializer<V> valDeserializer) {
+                      Serde<K> keySerde,
+                      Serde<V> valSerde) {
         super(topology, name, sourceNodes);
         this.processorSupplier = processorSupplier;
-        this.keySerializer = keySerializer;
-        this.valSerializer = valSerializer;
-        this.keyDeserializer = keyDeserializer;
-        this.valDeserializer = valDeserializer;
+        this.keySerde = keySerde;
+        this.valSerde = valSerde;
     }
 
     @Override
@@ -118,7 +110,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public KTable<K, V> filterOut(final Predicate<K, V> predicate) {
+    public KTable<K, V> filterNot(final Predicate<K, V> predicate) {
         String name = topology.newName(FILTER_NAME);
         KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, true);
 
@@ -138,29 +130,92 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public KTable<K, V> through(String topic,
-                                Serializer<K> keySerializer,
-                                Serializer<V> valSerializer,
-                                Deserializer<K> keyDeserializer,
-                                Deserializer<V> valDeserializer) {
-        to(topic, keySerializer, valSerializer);
+    public void print() {
+        print(null, null);
+    }
 
-        return topology.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic);
+    @Override
+    public void print(Serde<K> keySerde, Serde<V> valSerde) {
+        String name = topology.newName(PRINTING_NAME);
+        topology.addProcessor(name, new KeyValuePrinter<>(keySerde, valSerde), this.name);
+    }
+
+
+    @Override
+    public void writeAsText(String filePath) {
+        writeAsText(filePath, null, null);
+    }
+
+    /**
+     * @throws TopologyBuilderException if file is not found
+     */
+    @Override
+    public void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde) {
+        String name = topology.newName(PRINTING_NAME);
+        try {
+            PrintStream printStream = new PrintStream(new FileOutputStream(filePath));
+            topology.addProcessor(name, new KeyValuePrinter<>(printStream, keySerde, valSerde), this.name);
+        } catch (FileNotFoundException e) {
+            String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
+            throw new TopologyBuilderException(message);
+        }
+    }
+
+    @Override
+    public KTable<K, V> through(Serde<K> keySerde,
+                                Serde<V> valSerde,
+                                StreamPartitioner<K, V> partitioner,
+                                String topic) {
+        to(keySerde, valSerde, partitioner, topic);
+
+        return topology.table(keySerde, valSerde, topic);
+    }
+
+    @Override
+    public void foreach(final ForeachAction<K, V> action) {
+        String name = topology.newName(FOREACH_NAME);
+        KStreamForeach<K, Change<V>> processorSupplier = new KStreamForeach<>(new ForeachAction<K, Change<V>>() {
+            @Override
+            public void apply(K key, Change<V> value) {
+                action.apply(key, value.newValue);
+            }
+        });
+        topology.addProcessor(name, processorSupplier, this.name);
+    }
+
+    @Override
+    public KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic) {
+        return through(keySerde, valSerde, null, topic);
+    }
+
+    @Override
+    public KTable<K, V> through(StreamPartitioner<K, V> partitioner, String topic) {
+        return through(null, null, partitioner, topic);
     }
 
     @Override
     public KTable<K, V> through(String topic) {
-        return through(topic, null, null, null, null);
+        return through(null, null, null, topic);
     }
 
     @Override
     public void to(String topic) {
-        to(topic, null, null);
+        to(null, null, null, topic);
     }
 
     @Override
-    public void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
-        this.toStream().to(topic, keySerializer, valSerializer);
+    public void to(StreamPartitioner<K, V> partitioner, String topic) {
+        to(null, null, partitioner, topic);
+    }
+
+    @Override
+    public void to(Serde<K> keySerde, Serde<V> valSerde, String topic) {
+        this.toStream().to(keySerde, valSerde, null, topic);
+    }
+
+    @Override
+    public void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic) {
+        this.toStream().to(keySerde, valSerde, partitioner, topic);
     }
 
     @Override
@@ -175,6 +230,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }), this.name);
 
         return new KStreamImpl<>(topology, name, sourceNodes);
+    }
+
+    @Override
+    public <K1> KStream<K1, V> toStream(KeyValueMapper<K, V, K1> mapper) {
+        return toStream().selectKey(mapper);
     }
 
     @SuppressWarnings("unchecked")
@@ -247,140 +307,24 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1, V1, T> KTable<K1, T> aggregate(Initializer<T> initializer,
-                                               Aggregator<K1, V1, T> add,
-                                               Aggregator<K1, V1, T> remove,
-                                               KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                               Serializer<K1> keySerializer,
-                                               Serializer<V1> valueSerializer,
-                                               Serializer<T> aggValueSerializer,
-                                               Deserializer<K1> keyDeserializer,
-                                               Deserializer<V1> valueDeserializer,
-                                               Deserializer<T> aggValueDeserializer,
-                                               String name) {
+    public <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
+                                                  Serde<K1> keySerde,
+                                                  Serde<V1> valueSerde) {
 
         String selectName = topology.newName(SELECT_NAME);
-        String sinkName = topology.newName(KStreamImpl.SINK_NAME);
-        String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
-        String aggregateName = topology.newName(AGGREGATE_NAME);
-
-        String topic = name + REPARTITION_TOPIC_SUFFIX;
-
-        ChangedSerializer<V1> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
-        ChangedDeserializer<V1> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
 
         KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
-
-        ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableAggregate<>(name, initializer, add, remove);
-
-        StateStoreSupplier aggregateStore = Stores.create(name)
-                .withKeys(keySerializer, keyDeserializer)
-                .withValues(aggValueSerializer, aggValueDeserializer)
-                .persistent()
-                .build();
 
         // select the aggregate key and values (old and new), it would require parent to send old values
         topology.addProcessor(selectName, selectSupplier, this.name);
         this.enableSendingOldValues();
 
-        // send the aggregate key-value pairs to the intermediate topic for partitioning
-        topology.addInternalTopic(topic);
-        topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, selectName);
-
-        // read the intermediate topic
-        topology.addSource(sourceName, keyDeserializer, changedValueDeserializer, topic);
-
-        // aggregate the values with the aggregator and local store
-        topology.addProcessor(aggregateName, aggregateSupplier, sourceName);
-        topology.addStateStore(aggregateStore, aggregateName);
-
-        // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(topology, aggregateName, aggregateSupplier, Collections.singleton(sourceName));
+        return new KGroupedTableImpl<>(topology, selectName, this.name, keySerde, valueSerde);
     }
 
     @Override
-    public <K1> KTable<K1, Long> count(final KeyValueMapper<K, V, K1> selector,
-                                       Serializer<K1> keySerializer,
-                                       Serializer<V> valueSerializer,
-                                       Serializer<Long> aggValueSerializer,
-                                       Deserializer<K1> keyDeserializer,
-                                       Deserializer<V> valueDeserializer,
-                                       Deserializer<Long> aggValueDeserializer,
-                                       String name) {
-
-        return this.aggregate(
-                new Initializer<Long>() {
-                    @Override
-                    public Long apply() {
-                        return 0L;
-                    }
-                },
-                new Aggregator<K1, V, Long>() {
-                    @Override
-                    public Long apply(K1 aggKey, V value, Long aggregate) {
-                        return aggregate + 1L;
-                    }
-                }, new Aggregator<K1, V, Long>() {
-                    @Override
-                    public Long apply(K1 aggKey, V value, Long aggregate) {
-                        return aggregate - 1L;
-                    }
-                }, new KeyValueMapper<K, V, KeyValue<K1, V>>() {
-                    @Override
-                    public KeyValue<K1, V> apply(K key, V value) {
-                        return new KeyValue<>(selector.apply(key, value), value);
-                    }
-                },
-                keySerializer, valueSerializer, aggValueSerializer, keyDeserializer, valueDeserializer, aggValueDeserializer, name);
-    }
-
-    @Override
-    public <K1, V1> KTable<K1, V1> reduce(Reducer<V1> addReducer,
-                                          Reducer<V1> removeReducer,
-                                          KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
-                                          Serializer<K1> keySerializer,
-                                          Serializer<V1> valueSerializer,
-                                          Deserializer<K1> keyDeserializer,
-                                          Deserializer<V1> valueDeserializer,
-                                          String name) {
-
-        String selectName = topology.newName(SELECT_NAME);
-        String sinkName = topology.newName(KStreamImpl.SINK_NAME);
-        String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
-        String reduceName = topology.newName(REDUCE_NAME);
-
-        String topic = name + REPARTITION_TOPIC_SUFFIX;
-
-        ChangedSerializer<V1> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
-        ChangedDeserializer<V1> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
-
-        KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
-
-        ProcessorSupplier<K1, Change<V1>> aggregateSupplier = new KTableReduce<>(name, addReducer, removeReducer);
-
-        StateStoreSupplier aggregateStore = Stores.create(name)
-                .withKeys(keySerializer, keyDeserializer)
-                .withValues(valueSerializer, valueDeserializer)
-                .persistent()
-                .build();
-
-        // select the aggregate key and values (old and new), it would require parent to send old values
-        topology.addProcessor(selectName, selectSupplier, this.name);
-        this.enableSendingOldValues();
-
-        // send the aggregate key-value pairs to the intermediate topic for partitioning
-        topology.addInternalTopic(topic);
-        topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, selectName);
-
-        // read the intermediate topic
-        topology.addSource(sourceName, keyDeserializer, changedValueDeserializer, topic);
-
-        // aggregate the values with the aggregator and local store
-        topology.addProcessor(reduceName, aggregateSupplier, sourceName);
-        topology.addStateStore(aggregateStore, reduceName);
-
-        // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(topology, reduceName, aggregateSupplier, Collections.singleton(sourceName));
+    public <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector) {
+        return this.groupBy(selector, null, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -420,7 +364,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         synchronized (source) {
             if (!source.isMaterialized()) {
                 StateStoreSupplier storeSupplier =
-                        new KTableStoreSupplier<>(source.topic, keySerializer, keyDeserializer, valSerializer, valDeserializer, null);
+                        new KTableStoreSupplier<>(source.topic, keySerde, valSerde, null);
                 // mark this state as non internal hence it is read directly from a user topic
                 topology.addStateStore(storeSupplier, false, name);
                 source.materialize();

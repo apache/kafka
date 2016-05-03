@@ -47,9 +47,7 @@ import com.yammer.metrics.core.Gauge
  *
  * A subclass of DelayedOperation needs to provide an implementation of both onComplete() and tryComplete().
  */
-abstract class DelayedOperation(delayMs: Long) extends TimerTask with Logging {
-
-  override val expirationMs = delayMs + System.currentTimeMillis()
+abstract class DelayedOperation(override val delayMs: Long) extends TimerTask with Logging {
 
   private val completed = new AtomicBoolean(false)
 
@@ -110,18 +108,26 @@ abstract class DelayedOperation(delayMs: Long) extends TimerTask with Logging {
   }
 }
 
+object DelayedOperationPurgatory {
+
+  def apply[T <: DelayedOperation](purgatoryName: String,
+                                   brokerId: Int = 0,
+                                   purgeInterval: Int = 1000): DelayedOperationPurgatory[T] = {
+    val timer = new SystemTimer(purgatoryName)
+    new DelayedOperationPurgatory[T](purgatoryName, timer, brokerId, purgeInterval)
+  }
+
+}
+
 /**
  * A helper purgatory class for bookkeeping delayed operations with a timeout, and expiring timed out operations.
  */
-class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, brokerId: Int = 0, purgeInterval: Int = 1000)
+class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
+                                                       timeoutTimer: Timer,
+                                                       brokerId: Int = 0,
+                                                       purgeInterval: Int = 1000,
+                                                       reaperEnabled: Boolean = true)
         extends Logging with KafkaMetricsGroup {
-
-  // timeout timer
-  private[this] val executor = Executors.newFixedThreadPool(1, new ThreadFactory() {
-    def newThread(runnable: Runnable): Thread =
-      Utils.newThread("executor-"+purgatoryName, runnable, false)
-  })
-  private[this] val timeoutTimer = new Timer(executor)
 
   /* a list of operation watching keys */
   private val watchersForKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers(key)))
@@ -152,7 +158,8 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
     metricsTags
   )
 
-  expirationReaper.start()
+  if (reaperEnabled)
+    expirationReaper.start()
 
   /**
    * Check if the operation can be completed, if not watch it based on the given watch keys
@@ -275,8 +282,9 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
    * Shutdown the expire reaper thread
    */
   def shutdown() {
-    expirationReaper.shutdown()
-    executor.shutdown()
+    if (reaperEnabled)
+      expirationReaper.shutdown()
+    timeoutTimer.shutdown()
   }
 
   /**
@@ -338,6 +346,23 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
     }
   }
 
+  def advanceClock(timeoutMs: Long) {
+    timeoutTimer.advanceClock(timeoutMs)
+
+    // Trigger a purge if the number of completed but still being watched operations is larger than
+    // the purge threshold. That number is computed by the difference btw the estimated total number of
+    // operations and the number of pending delayed operations.
+    if (estimatedTotalOperations.get - delayed > purgeInterval) {
+      // now set estimatedTotalOperations to delayed (the number of pending operations) since we are going to
+      // clean up watchers. Note that, if more operations are completed during the clean up, we may end up with
+      // a little overestimated total number of operations.
+      estimatedTotalOperations.getAndSet(delayed)
+      debug("Begin purging watch lists")
+      val purged = allWatchers.map(_.purgeCompleted()).sum
+      debug("Purged %d elements from watch lists.".format(purged))
+    }
+  }
+
   /**
    * A background reaper to expire delayed operations that have timed out
    */
@@ -346,20 +371,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
     false) {
 
     override def doWork() {
-      timeoutTimer.advanceClock(200L)
-
-      // Trigger a purge if the number of completed but still being watched operations is larger than
-      // the purge threshold. That number is computed by the difference btw the estimated total number of
-      // operations and the number of pending delayed operations.
-      if (estimatedTotalOperations.get - delayed > purgeInterval) {
-        // now set estimatedTotalOperations to delayed (the number of pending operations) since we are going to
-        // clean up watchers. Note that, if more operations are completed during the clean up, we may end up with
-        // a little overestimated total number of operations.
-        estimatedTotalOperations.getAndSet(delayed)
-        debug("Begin purging watch lists")
-        val purged = allWatchers.map(_.purgeCompleted()).sum
-        debug("Purged %d elements from watch lists.".format(purged))
-      }
+      advanceClock(200L)
     }
   }
 }

@@ -55,7 +55,7 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
   @After
   override def tearDown() {
     server.shutdown
-    CoreUtils.rm(server.config.logDirs)
+    CoreUtils.delete(server.config.logDirs)
     super.tearDown()
   }
 

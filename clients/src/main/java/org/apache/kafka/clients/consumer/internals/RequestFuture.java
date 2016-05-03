@@ -42,7 +42,7 @@ public class RequestFuture<T> {
     private boolean isDone = false;
     private T value;
     private RuntimeException exception;
-    private List<RequestFutureListener<T>> listeners = new ArrayList<RequestFutureListener<T>>();
+    private List<RequestFutureListener<T>> listeners = new ArrayList<>();
 
 
     /**
@@ -129,12 +129,12 @@ public class RequestFuture<T> {
     }
 
     private void fireSuccess() {
-        for (RequestFutureListener listener: listeners)
+        for (RequestFutureListener<T> listener : listeners)
             listener.onSuccess(value);
     }
 
     private void fireFailure() {
-        for (RequestFutureListener listener: listeners)
+        for (RequestFutureListener<T> listener : listeners)
             listener.onFailure(exception);
     }
 

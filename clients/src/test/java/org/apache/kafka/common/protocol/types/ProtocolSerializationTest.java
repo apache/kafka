@@ -18,6 +18,7 @@ package org.apache.kafka.common.protocol.types;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 import java.nio.ByteBuffer;
@@ -33,7 +34,8 @@ public class ProtocolSerializationTest {
 
     @Before
     public void setup() {
-        this.schema = new Schema(new Field("int8", Type.INT8),
+        this.schema = new Schema(new Field("boolean", Type.BOOLEAN),
+                                 new Field("int8", Type.INT8),
                                  new Field("int16", Type.INT16),
                                  new Field("int32", Type.INT32),
                                  new Field("int64", Type.INT64),
@@ -42,8 +44,10 @@ public class ProtocolSerializationTest {
                                  new Field("bytes", Type.BYTES),
                                  new Field("nullable_bytes", Type.NULLABLE_BYTES),
                                  new Field("array", new ArrayOf(Type.INT32)),
+                                 new Field("null_array", ArrayOf.nullable(Type.INT32)),
                                  new Field("struct", new Schema(new Field("field", new ArrayOf(Type.INT32)))));
-        this.struct = new Struct(this.schema).set("int8", (byte) 1)
+        this.struct = new Struct(this.schema).set("boolean", true)
+                                             .set("int8", (byte) 1)
                                              .set("int16", (short) 1)
                                              .set("int32", 1)
                                              .set("int64", 1L)
@@ -51,12 +55,15 @@ public class ProtocolSerializationTest {
                                              .set("nullable_string", null)
                                              .set("bytes", ByteBuffer.wrap("1".getBytes()))
                                              .set("nullable_bytes", null)
-                                             .set("array", new Object[] {1});
+                                             .set("array", new Object[] {1})
+                                             .set("null_array", null);
         this.struct.set("struct", this.struct.instance("struct").set("field", new Object[] {1, 2, 3}));
     }
 
     @Test
     public void testSimple() {
+        check(Type.BOOLEAN, false);
+        check(Type.BOOLEAN, true);
         check(Type.INT8, (byte) -111);
         check(Type.INT16, (short) -11111);
         check(Type.INT32, -11111111);
@@ -75,6 +82,7 @@ public class ProtocolSerializationTest {
         check(new ArrayOf(Type.INT32), new Object[] {1, 2, 3, 4});
         check(new ArrayOf(Type.STRING), new Object[] {});
         check(new ArrayOf(Type.STRING), new Object[] {"hello", "there", "beautiful"});
+        check(ArrayOf.nullable(Type.STRING), null);
     }
 
     @Test
@@ -117,7 +125,7 @@ public class ProtocolSerializationTest {
     }
 
     @Test
-    public void testArray() {
+    public void testReadArraySizeTooLarge() {
         Type type = new ArrayOf(Type.INT8);
         int size = 10;
         ByteBuffer invalidBuffer = ByteBuffer.allocate(4 + size);
@@ -131,6 +139,104 @@ public class ProtocolSerializationTest {
         } catch (SchemaException e) {
             // Expected exception
         }
+    }
+
+    @Test
+    public void testReadNegativeArraySize() {
+        Type type = new ArrayOf(Type.INT8);
+        int size = 10;
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(4 + size);
+        invalidBuffer.putInt(-1);
+        for (int i = 0; i < size; i++)
+            invalidBuffer.put((byte) i);
+        invalidBuffer.rewind();
+        try {
+            type.read(invalidBuffer);
+            fail("Array size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+    }
+
+    @Test
+    public void testReadStringSizeTooLarge() {
+        byte[] stringBytes = "foo".getBytes();
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(2 + stringBytes.length);
+        invalidBuffer.putShort((short) (stringBytes.length * 5));
+        invalidBuffer.put(stringBytes);
+        invalidBuffer.rewind();
+        try {
+            Type.STRING.read(invalidBuffer);
+            fail("String size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+        invalidBuffer.rewind();
+        try {
+            Type.NULLABLE_STRING.read(invalidBuffer);
+            fail("String size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+    }
+
+    @Test
+    public void testReadNegativeStringSize() {
+        byte[] stringBytes = "foo".getBytes();
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(2 + stringBytes.length);
+        invalidBuffer.putShort((short) -1);
+        invalidBuffer.put(stringBytes);
+        invalidBuffer.rewind();
+        try {
+            Type.STRING.read(invalidBuffer);
+            fail("String size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+    }
+
+    @Test
+    public void testReadBytesSizeTooLarge() {
+        byte[] stringBytes = "foo".getBytes();
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(4 + stringBytes.length);
+        invalidBuffer.putInt(stringBytes.length * 5);
+        invalidBuffer.put(stringBytes);
+        invalidBuffer.rewind();
+        try {
+            Type.BYTES.read(invalidBuffer);
+            fail("Bytes size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+        invalidBuffer.rewind();
+        try {
+            Type.NULLABLE_BYTES.read(invalidBuffer);
+            fail("Bytes size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+    }
+
+    @Test
+    public void testReadNegativeBytesSize() {
+        byte[] stringBytes = "foo".getBytes();
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(4 + stringBytes.length);
+        invalidBuffer.putInt(-20);
+        invalidBuffer.put(stringBytes);
+        invalidBuffer.rewind();
+        try {
+            Type.BYTES.read(invalidBuffer);
+            fail("Bytes size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+    }
+
+    @Test
+    public void testToString() {
+        String structStr = this.struct.toString();
+        assertNotNull("Struct string should not be null.", structStr);
+        assertFalse("Struct string should not be empty.", structStr.isEmpty());
     }
 
     private Object roundtrip(Type type, Object obj) {

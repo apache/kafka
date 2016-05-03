@@ -43,6 +43,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
       case configException: ConfigException =>
       case exception: Throwable => fail("Should have thrown ConfigException")
     }
+    zkUtils.close()
   }
 
   @Test
@@ -57,6 +58,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     }
 
     assertTrue("Failed to create persistent path", zkUtils.pathExists(path))
+    zkUtils.close()
   }
 
   @Test
@@ -73,6 +75,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
       case configException: ConfigException =>
       case exception: Throwable => fail("Should have thrown ConfigException")
     }
+    zkUtils.close()
   }
 
   @Test
@@ -87,6 +90,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     }
 
     assertTrue("Failed to create persistent path", zkUtils.pathExists(path))
+    zkUtils.close()
   }
 
   @Test
@@ -103,6 +107,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
       case configException: ConfigException =>
       case exception: Throwable => fail("Should have thrown ConfigException")
     }
+    zkUtils.close()
   }
 
   @Test
@@ -117,6 +122,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     }
 
     assertTrue("Failed to create ephemeral path", zkUtils.pathExists(path))
+    zkUtils.close()
   }
 
   @Test
@@ -133,6 +139,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
       case configException: ConfigException =>
       case exception: Throwable => fail("Should have thrown ConfigException")
     }
+    zkUtils.close()
   }
 
   @Test
@@ -149,5 +156,6 @@ class ZKPathTest extends ZooKeeperTestHarness {
     }
 
     assertTrue("Failed to create persistent path", zkUtils.pathExists(actualPath))
+    zkUtils.close()
   }
 }

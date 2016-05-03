@@ -14,8 +14,8 @@ package org.apache.kafka.clients.producer.internals;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -39,8 +39,6 @@ import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.common.utils.Time;
 import org.junit.After;
 import org.junit.Test;
 
@@ -299,7 +297,75 @@ public class RecordAccumulatorTest {
 
     @Test
     public void testExpiredBatches() throws InterruptedException {
-        Time time = new SystemTime();
+        long retryBackoffMs = 100L;
+        long lingerMs = 3000L;
+        int requestTimeout = 60;
+
+        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time);
+        int appends = 1024 / msgSize;
+
+        // Test batches not in retry
+        for (int i = 0; i < appends; i++) {
+            accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
+            assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+        }
+        // Make the batches ready due to batch full
+        accum.append(tp1, 0L, key, value, null, 0);
+        Set<Node> readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
+        // Advance the clock to expire the batch.
+        time.sleep(requestTimeout + 1);
+        accum.mutePartition(tp1);
+        List<RecordBatch> expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
+        assertEquals("The batch should not be expired when the partition is muted", 0, expiredBatches.size());
+
+        accum.unmutePartition(tp1);
+        expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
+        assertEquals("The batch should be expired", 1, expiredBatches.size());
+        assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+
+        // Advance the clock to make the next batch ready due to linger.ms
+        time.sleep(lingerMs);
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
+        time.sleep(requestTimeout + 1);
+
+        accum.mutePartition(tp1);
+        expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
+        assertEquals("The batch should not be expired when metadata is still available and partition is muted", 0, expiredBatches.size());
+
+        accum.unmutePartition(tp1);
+        expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
+        assertEquals("The batch should be expired when the partition is not muted", 1, expiredBatches.size());
+        assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+
+        // Test batches in retry.
+        // Create a retried batch
+        accum.append(tp1, 0L, key, value, null, 0);
+        time.sleep(lingerMs);
+        readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
+        Map<Integer, List<RecordBatch>> drained = accum.drain(cluster, readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertEquals("There should be only one batch.", drained.get(node1.id()).size(), 1);
+        time.sleep(1000L);
+        accum.reenqueue(drained.get(node1.id()).get(0), time.milliseconds());
+
+        // test expiration.
+        time.sleep(requestTimeout + retryBackoffMs);
+        expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
+        assertEquals("The batch should not be expired.", 0, expiredBatches.size());
+        time.sleep(1L);
+
+        accum.mutePartition(tp1);
+        expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
+        assertEquals("The batch should not be expired when the partition is muted", 0, expiredBatches.size());
+
+        accum.unmutePartition(tp1);
+        expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
+        assertEquals("The batch should be expired when the partition is not muted.", 1, expiredBatches.size());
+    }
+
+    @Test
+    public void testMutedPartitions() throws InterruptedException {
         long now = time.milliseconds();
         RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, 10, 100L, metrics, time);
         int appends = 1024 / msgSize;
@@ -308,13 +374,25 @@ public class RecordAccumulatorTest {
             assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).readyNodes.size());
         }
         time.sleep(2000);
-        accum.ready(cluster, now);
-        accum.append(tp1, 0L, key, value, null, 0);
-        Set<Node> readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
-        Cluster cluster = new Cluster(new ArrayList<Node>(), new ArrayList<PartitionInfo>(), Collections.<String>emptySet());
-        now = time.milliseconds();
-        List<RecordBatch> expiredBatches = accum.abortExpiredBatches(60, cluster, now);
-        assertEquals(1, expiredBatches.size());
+
+        // Test ready with muted partition
+        accum.mutePartition(tp1);
+        RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
+        assertEquals("No node should be ready", 0, result.readyNodes.size());
+
+        // Test ready without muted partition
+        accum.unmutePartition(tp1);
+        result = accum.ready(cluster, time.milliseconds());
+        assertTrue("The batch should be ready", result.readyNodes.size() > 0);
+
+        // Test drain with muted partition
+        accum.mutePartition(tp1);
+        Map<Integer, List<RecordBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertEquals("No batch should have been drained", 0, drained.get(node1.id()).size());
+
+        // Test drain without muted partition.
+        accum.unmutePartition(tp1);
+        drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertTrue("The batch should have been drained.", drained.get(node1.id()).size() > 0);
     }
 }

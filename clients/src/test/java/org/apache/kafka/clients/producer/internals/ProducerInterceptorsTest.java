@@ -30,6 +30,9 @@ public class ProducerInterceptorsTest {
     private final TopicPartition tp = new TopicPartition("test", 0);
     private final ProducerRecord<Integer, String> producerRecord = new ProducerRecord<>("test", 0, 1, "value");
     private int onAckCount = 0;
+    private int onErrorAckCount = 0;
+    private int onErrorAckWithTopicSetCount = 0;
+    private int onErrorAckWithTopicPartitionSetCount = 0;
     private int onSendCount = 0;
 
     private class AppendProducerInterceptor implements ProducerInterceptor<Integer, String> {
@@ -59,6 +62,16 @@ public class ProducerInterceptorsTest {
         @Override
         public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
             onAckCount++;
+            if (exception != null) {
+                onErrorAckCount++;
+                // the length check is just to call topic() method and let it throw an exception
+                // if RecordMetadata.TopicPartition is null
+                if (metadata != null && metadata.topic().length() >= 0) {
+                    onErrorAckWithTopicSetCount++;
+                    if (metadata.partition() >= 0)
+                        onErrorAckWithTopicPartitionSetCount++;
+                }
+            }
             if (throwExceptionOnAck)
                 throw new KafkaException("Injected exception in AppendProducerInterceptor.onAcknowledgement");
         }
@@ -140,6 +153,51 @@ public class ProducerInterceptorsTest {
         interceptor2.injectOnAcknowledgementError(true);
         interceptors.onAcknowledgement(meta, null);
         assertEquals(6, onAckCount);
+
+        interceptors.close();
+    }
+
+    @Test
+    public void testOnAcknowledgementWithErrorChain() {
+        List<ProducerInterceptor<Integer, String>> interceptorList = new ArrayList<>();
+        AppendProducerInterceptor interceptor1 = new AppendProducerInterceptor("One");
+        interceptorList.add(interceptor1);
+        ProducerInterceptors<Integer, String> interceptors = new ProducerInterceptors<>(interceptorList);
+
+        // verify that metadata contains both topic and partition
+        interceptors.onSendError(producerRecord,
+                                 new TopicPartition(producerRecord.topic(), producerRecord.partition()),
+                                 new KafkaException("Test"));
+        assertEquals(1, onErrorAckCount);
+        assertEquals(1, onErrorAckWithTopicPartitionSetCount);
+
+        // verify that metadata contains both topic and partition (because record already contains partition)
+        interceptors.onSendError(producerRecord, null, new KafkaException("Test"));
+        assertEquals(2, onErrorAckCount);
+        assertEquals(2, onErrorAckWithTopicPartitionSetCount);
+
+        // if producer record does not contain partition, interceptor should get partition == -1
+        ProducerRecord<Integer, String> record2 = new ProducerRecord<>("test2", null, 1, "value");
+        interceptors.onSendError(record2, null, new KafkaException("Test"));
+        assertEquals(3, onErrorAckCount);
+        assertEquals(3, onErrorAckWithTopicSetCount);
+        assertEquals(2, onErrorAckWithTopicPartitionSetCount);
+
+        // if producer record does not contain partition, but topic/partition is passed to
+        // onSendError, then interceptor should get valid partition
+        int reassignedPartition = producerRecord.partition() + 1;
+        interceptors.onSendError(record2,
+                                 new TopicPartition(record2.topic(), reassignedPartition),
+                                 new KafkaException("Test"));
+        assertEquals(4, onErrorAckCount);
+        assertEquals(4, onErrorAckWithTopicSetCount);
+        assertEquals(3, onErrorAckWithTopicPartitionSetCount);
+
+        // if both record and topic/partition are null, interceptor should not receive metadata
+        interceptors.onSendError(null, null, new KafkaException("Test"));
+        assertEquals(5, onErrorAckCount);
+        assertEquals(4, onErrorAckWithTopicSetCount);
+        assertEquals(3, onErrorAckWithTopicPartitionSetCount);
 
         interceptors.close();
     }

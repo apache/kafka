@@ -41,14 +41,14 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val numServers = 2
     overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
     TestUtils.createBrokerConfigs(numServers, zkConnect, false, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile).map(KafkaConfig.fromProps(_, overridingProps))
+      trustStoreFile = trustStoreFile, saslProperties = saslProperties).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null
   private val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
-  private val topic = "topic"
+  protected val topic = "topic"
   private val numRecords = 100
 
   @Before
@@ -72,7 +72,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
   private def createProducer(brokerList: String, retries: Int = 0, lingerMs: Long = 0, props: Option[Properties] = None): KafkaProducer[Array[Byte],Array[Byte]] = {
     val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
-      retries = retries, lingerMs = lingerMs, props = props)
+      saslProperties = saslProperties, retries = retries, lingerMs = lingerMs, props = props)
     producers += producer
     producer
   }
@@ -225,26 +225,6 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     } finally {
       producer.close()
     }
-  }
-
-  @Test
-  def testWrongSerializer() {
-    // send a record with a wrong type should receive a serialization exception
-    try {
-      val producer = createProducerWithWrongSerializer(brokerList)
-      val record5 = new ProducerRecord[Array[Byte], Array[Byte]](topic, new Integer(0), "key".getBytes, "value".getBytes)
-      producer.send(record5)
-      fail("Should have gotten a SerializationException")
-    } catch {
-      case se: SerializationException => // this is ok
-    }
-  }
-
-  private def createProducerWithWrongSerializer(brokerList: String): KafkaProducer[Array[Byte], Array[Byte]] = {
-    val producerProps = new Properties()
-    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
-    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
-    createProducer(brokerList, props = Some(producerProps))
   }
 
   /**

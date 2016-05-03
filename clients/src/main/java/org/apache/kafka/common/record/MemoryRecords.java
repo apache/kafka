@@ -115,7 +115,10 @@ public class MemoryRecords implements Records {
      * to accept this single record.
      */
     public boolean hasRoomFor(byte[] key, byte[] value) {
-        return this.writable && this.compressor.numRecordsWritten() == 0 ?
+        if (!this.writable)
+            return false;
+
+        return this.compressor.numRecordsWritten() == 0 ?
             this.initialCapacity >= Records.LOG_OVERHEAD + Record.recordSize(key, value) :
             this.writeLimit >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(key, value);
     }

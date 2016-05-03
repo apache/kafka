@@ -59,6 +59,47 @@ public abstract class Type {
         return false;
     }
 
+    /**
+     * The Boolean type represents a boolean value in a byte by using
+     * the value of 0 to represent false, and 1 to represent true.
+     *
+     * If for some reason a value that is not 0 or 1 is read,
+     * then any non-zero value will return true.
+     */
+    public static final Type BOOLEAN = new Type() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if ((Boolean) o)
+                buffer.put((byte) 1);
+            else
+                buffer.put((byte) 0);
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            byte value = buffer.get();
+            return value != 0;
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            return 1;
+        }
+
+        @Override
+        public String toString() {
+            return "BOOLEAN";
+        }
+
+        @Override
+        public Boolean validate(Object item) {
+            if (item instanceof Boolean)
+                return (Boolean) item;
+            else
+                throw new SchemaException(item + " is not a Boolean.");
+        }
+    };
+
     public static final Type INT8 = new Type() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
@@ -184,14 +225,19 @@ public abstract class Type {
         public void write(ByteBuffer buffer, Object o) {
             byte[] bytes = Utils.utf8((String) o);
             if (bytes.length > Short.MAX_VALUE)
-                throw new SchemaException("String is longer than the maximum string length.");
+                throw new SchemaException("String length " + bytes.length + " is larger than the maximum string length.");
             buffer.putShort((short) bytes.length);
             buffer.put(bytes);
         }
 
         @Override
         public Object read(ByteBuffer buffer) {
-            int length = buffer.getShort();
+            short length = buffer.getShort();
+            if (length < 0)
+                throw new SchemaException("String length " + length + " cannot be negative");
+            if (length > buffer.remaining())
+                throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
+
             byte[] bytes = new byte[length];
             buffer.get(bytes);
             return Utils.utf8(bytes);
@@ -231,16 +277,18 @@ public abstract class Type {
 
             byte[] bytes = Utils.utf8((String) o);
             if (bytes.length > Short.MAX_VALUE)
-                throw new SchemaException("String is longer than the maximum string length.");
+                throw new SchemaException("String length " + bytes.length + " is larger than the maximum string length.");
             buffer.putShort((short) bytes.length);
             buffer.put(bytes);
         }
 
         @Override
         public Object read(ByteBuffer buffer) {
-            int length = buffer.getShort();
+            short length = buffer.getShort();
             if (length < 0)
                 return null;
+            if (length > buffer.remaining())
+                throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
 
             byte[] bytes = new byte[length];
             buffer.get(bytes);
@@ -285,6 +333,11 @@ public abstract class Type {
         @Override
         public Object read(ByteBuffer buffer) {
             int size = buffer.getInt();
+            if (size < 0)
+                throw new SchemaException("Bytes size " + size + " cannot be negative");
+            if (size > buffer.remaining())
+                throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
+
             ByteBuffer val = buffer.slice();
             val.limit(size);
             buffer.position(buffer.position() + size);
@@ -336,6 +389,8 @@ public abstract class Type {
             int size = buffer.getInt();
             if (size < 0)
                 return null;
+            if (size > buffer.remaining())
+                throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
             ByteBuffer val = buffer.slice();
             val.limit(size);

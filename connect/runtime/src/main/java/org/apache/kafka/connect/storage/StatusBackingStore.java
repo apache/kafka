@@ -102,5 +102,5 @@ public interface StatusBackingStore {
      * Configure class with the given key-value pairs
      * @param config config for StatusBackingStore
      */
-    public void configure(WorkerConfig config);
+    void configure(WorkerConfig config);
 }

@@ -68,8 +68,8 @@ public class KafkaChannel {
     }
 
 
-    public void finishConnect() throws IOException {
-        transportLayer.finishConnect();
+    public boolean finishConnect() throws IOException {
+        return transportLayer.finishConnect();
     }
 
     public boolean isConnected() {

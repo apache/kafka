@@ -12,6 +12,13 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -19,13 +26,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A convenient base class for configurations to extend.
@@ -46,7 +46,7 @@ public class AbstractConfig {
     private final Map<String, Object> values;
 
     @SuppressWarnings("unchecked")
-    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, Boolean doLog) {
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
         /* check that all the keys are really strings */
         for (Object key : originals.keySet())
             if (!(key instanceof String))
@@ -60,6 +60,12 @@ public class AbstractConfig {
 
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
         this(definition, originals, true);
+    }
+
+    public AbstractConfig(Map<String, Object> parsedConfig) {
+        this.values = parsedConfig;
+        this.originals = new HashMap<>();
+        this.used = Collections.synchronizedSet(new HashSet<String>());
     }
 
     protected Object get(String key) {
@@ -94,7 +100,7 @@ public class AbstractConfig {
         return (List<String>) get(key);
     }
 
-    public boolean getBoolean(String key) {
+    public Boolean getBoolean(String key) {
         return (Boolean) get(key);
     }
 
@@ -125,13 +131,14 @@ public class AbstractConfig {
     /**
      * Get all the original settings, ensuring that all values are of type String.
      * @return the original settings
-     * @throw ClassCastException if any of the values are not strings
+     * @throws ClassCastException if any of the values are not strings
      */
     public Map<String, String> originalsStrings() {
         Map<String, String> copy = new RecordingMap<>();
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (!(entry.getValue() instanceof String))
-                throw new ClassCastException("Non-string value found in original settings");
+                throw new ClassCastException("Non-string value found in original settings for key " + entry.getKey() +
+                        ": " + (entry.getValue() == null ? null : entry.getValue().getClass().getName()));
             copy.put(entry.getKey(), (String) entry.getValue());
         }
         return copy;
