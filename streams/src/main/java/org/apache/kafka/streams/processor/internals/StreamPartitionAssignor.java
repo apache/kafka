@@ -161,11 +161,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                                                             boolean compactTopic,
                                                             boolean postPartitionPhase) {
         Map<TopicPartition, PartitionInfo> partitionInfos = new HashMap<>();
-        log.debug("Starting to validate internal topics in partition assignor.");
-        for (Map.Entry<String, Set<TaskId>> entry : topicToTaskIds.entrySet()) {
-            String topic = entry.getKey();
-            // if ZK is specified, prepare the internal source topic before calling partition grouper
-            if (internalTopicManager != null) {
+        // if ZK is specified, prepare the internal source topic before calling partition grouper
+        if (internalTopicManager != null) {
+            log.debug("Starting to validate internal topics in partition assignor.");
+
+            for (Map.Entry<String, Set<TaskId>> entry : topicToTaskIds.entrySet()) {
+                String topic = entry.getKey();
                 int numPartitions = 0;
                 if (postPartitionPhase) {
                     // the expected number of partitions is the max value of TaskId.partition + 1
@@ -191,16 +192,23 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
                 for (PartitionInfo partition : partitions)
                     partitionInfos.put(new TopicPartition(partition.topic(), partition.partition()), partition);
-            } else {
+            }
+
+            log.info("Completed validating internal topics in partition assignor.");
+        } else {
+            List<String> missingTopics = new ArrayList<>();
+            for (String topic : topicToTaskIds.keySet()) {
                 List<PartitionInfo> partitions = streamThread.restoreConsumer.partitionsFor(topic);
                 if (partitions == null) {
-                    log.warn("Topic '{}' not exists but couldn't created as the config '{}' isn't supplied",
-                             topic, StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
+                    missingTopics.add(topic);
                 }
             }
-        }
+            if (!missingTopics.isEmpty()) {
+                log.warn("Topic {} do not exists but couldn't created as the config '{}' isn't supplied",
+                         missingTopics, StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
 
-        log.info("Completed validating internal topics in partition assignor.");
+            }
+        }
 
         return partitionInfos;
     }
