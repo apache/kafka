@@ -125,6 +125,7 @@ public final class BufferPool {
                     if (!moreMemory.await(maxTimeToBlock, TimeUnit.MILLISECONDS))
                         throw new TimeoutException("Failed to allocate memory within the configured max blocking time");
                     long endWait = time.nanoseconds();
+                    maxTimeToBlock -= (endWait - startWait)/1000000;
                     this.waitTime.record(endWait - startWait, time.milliseconds());
 
                     // check if we can satisfy this request from the free list,
