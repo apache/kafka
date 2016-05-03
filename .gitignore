@@ -37,5 +37,6 @@ results
 tests/results
 .ducktape
 tests/.ducktape
+.cache
 
 docs/generated/
