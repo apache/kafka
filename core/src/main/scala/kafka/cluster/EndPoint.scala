@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.Utils
 
 object EndPoint {
 
-  private val uriParseExp = """^(.*)://\[?([0-9a-zA-Z\-.:]*)\]?:(-?[0-9]+)""".r
+  private val uriParseExp = """^(.*)://\[?([0-9a-zA-Z\-%.:]*)\]?:(-?[0-9]+)""".r
 
   def readFrom(buffer: ByteBuffer): EndPoint = {
     val port = buffer.getInt()
