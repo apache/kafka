@@ -18,12 +18,14 @@
 package kafka.server
 
 import java.io.File
+import java.util.concurrent.atomic.AtomicLong
 import java.util.{Properties, Random}
 
 import kafka.admin.AdminUtils
 import kafka.api.{FetchRequestBuilder, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.common.TopicAndPartition
 import kafka.consumer.SimpleConsumer
+import kafka.log.{Log, LogSegment}
 import kafka.message.{ByteBufferMessageSet, Message, NoCompressionCodec}
 import kafka.utils.TestUtils._
 import kafka.utils._
@@ -31,11 +33,12 @@ import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Utils
+import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 class LogOffsetTest extends ZooKeeperTestHarness {
-  val random = new Random() 
+  val random = new Random()
   var logDir: File = null
   var topicLogDir: File = null
   var server: KafkaServer = null
@@ -192,6 +195,23 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val consumerOffsets =
       simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
     assertEquals(Seq(0L), consumerOffsets)
+  }
+
+  /* We test that `fetchOffsetsBefore` works correctly if `LogSegment.size` changes after each invocation (simulating
+   * a race condition) */
+  @Test
+  def testFetchOffsetsBeforeWithChangingSegmentSize() {
+    val log = EasyMock.niceMock(classOf[Log])
+    val logSegment = EasyMock.niceMock(classOf[LogSegment])
+    EasyMock.expect(logSegment.size).andStubAnswer(new IAnswer[Long] {
+      private val value = new AtomicLong(0)
+      def answer: Long = value.getAndIncrement()
+    })
+    EasyMock.replay(logSegment)
+    val logSegments = Seq(logSegment)
+    EasyMock.expect(log.logSegments).andStubReturn(logSegments)
+    EasyMock.replay(log)
+    server.apis.fetchOffsetsBefore(log, System.currentTimeMillis, 100)
   }
 
   private def createBrokerConfig(nodeId: Int): Properties = {

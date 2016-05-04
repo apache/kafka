@@ -579,17 +579,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def fetchOffsetsBefore(log: Log, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
+  private[server] def fetchOffsetsBefore(log: Log, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
     val segsArray = log.logSegments.toArray
     var offsetTimeArray: Array[(Long, Long)] = null
-    if (segsArray.last.size > 0)
+    val lastSegmentHasSize = segsArray.last.size > 0
+    if (lastSegmentHasSize)
       offsetTimeArray = new Array[(Long, Long)](segsArray.length + 1)
     else
       offsetTimeArray = new Array[(Long, Long)](segsArray.length)
 
     for (i <- 0 until segsArray.length)
       offsetTimeArray(i) = (segsArray(i).baseOffset, segsArray(i).lastModified)
-    if (segsArray.last.size > 0)
+    if (lastSegmentHasSize)
       offsetTimeArray(segsArray.length) = (log.logEndOffset, SystemTime.milliseconds)
 
     var startIndex = -1
