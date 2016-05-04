@@ -97,13 +97,13 @@ object TopicCommand extends Logging {
     try {
       if (opts.options.has(opts.replicaAssignmentOpt)) {
         val assignment = parseReplicaAssignment(opts.options.valueOf(opts.replicaAssignmentOpt))
-        warnOnMaxMessagesChange(configs, assignment.valuesIterator.next().length)
+        warnOnMaxMessagesChange(configs, assignment.valuesIterator.next().length, opts.options.has(opts.forceOpt))
         AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignment, configs, update = false)
       } else {
         CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.partitionsOpt, opts.replicationFactorOpt)
         val partitions = opts.options.valueOf(opts.partitionsOpt).intValue
         val replicas = opts.options.valueOf(opts.replicationFactorOpt).intValue
-        warnOnMaxMessagesChange(configs, replicas)
+        warnOnMaxMessagesChange(configs, replicas, opts.options.has(opts.forceOpt))
         val rackAwareMode = if (opts.options.has(opts.disableRackAware)) RackAwareMode.Disabled
                             else RackAwareMode.Enforced
         AdminUtils.createTopic(zkUtils, topic, partitions, replicas, configs, rackAwareMode)
@@ -326,6 +326,9 @@ object TopicCommand extends Logging {
                                         "if set when creating topics, the action will only execute if the topic does not already exist")
 
     val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
+
+    val forceOpt = parser.accepts("force", "Suppress console prompts")
+
     val options = parser.parse(args : _*)
 
     val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
@@ -354,7 +357,7 @@ object TopicCommand extends Logging {
       CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, allTopicLevelOpts -- Set(createOpt))
     }
   }
-  def warnOnMaxMessagesChange(configs: Properties, replicas: Integer): Unit = {
+  def warnOnMaxMessagesChange(configs: Properties, replicas: Integer, force: Boolean): Unit = {
     val maxMessageBytes =  configs.get(LogConfig.MaxMessageBytesProp) match {
       case n: String => n.toInt
       case _ => -1
@@ -362,7 +365,8 @@ object TopicCommand extends Logging {
     if (maxMessageBytes > Defaults.MaxMessageSize)
       if (replicas > 1) {
         error(longMessageSizeWarning(maxMessageBytes))
-        askToProceed
+        if (!force)
+          askToProceed
       }
       else
         warn(shortMessageSizeWarning(maxMessageBytes))
@@ -405,3 +409,4 @@ object TopicCommand extends Logging {
       s"- Default Consumer fetch.message.max.bytes: ${ConsumerConfig.FetchSize}\n\n"
   }
 }
+
