@@ -44,7 +44,7 @@ class VerifiableProducer(BackgroundThreadService):
 
     def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
                  message_validator=is_int, compression_types=None, version=TRUNK, acks=None,
-                 stop_timeout_sec=300):
+                 stop_timeout_sec=150):
         """
         :param max_messages is a number of messages to be produced per producer
         :param message_validator checks for an expected format of messages produced. There are
