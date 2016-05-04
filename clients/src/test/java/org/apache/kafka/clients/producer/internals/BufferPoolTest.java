@@ -185,7 +185,7 @@ public class BufferPoolTest {
         } catch (TimeoutException e) {
             // this is good
         }
-        assertTrue(pool.queued() == 0);
+        assertEquals(pool.queued(), 0);
     }
 
     /**
