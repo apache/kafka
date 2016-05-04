@@ -16,93 +16,84 @@ package org.apache.kafka.common.serialization;
 import org.apache.kafka.common.utils.Bytes;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 /**
  * Factory for creating serializers / deserializers.
  */
 public class Serdes {
 
-    static public final class LongSerde implements Serde<Long> {
-        @Override
-        public Serializer<Long> serializer() {
-            return new LongSerializer();
+    static private class WrapperSerde<T> implements Serde<T> {
+        final private Serializer<T> serializer;
+        final private Deserializer<T> deserializer;
+
+        public WrapperSerde(Serializer<T> serializer, Deserializer<T> deserializer) {
+            this.serializer = serializer;
+            this.deserializer = deserializer;
         }
 
         @Override
-        public Deserializer<Long> deserializer() {
-            return new LongDeserializer();
-        }
-    }
-
-    static public final class IntegerSerde implements Serde<Integer> {
-        @Override
-        public Serializer<Integer> serializer() {
-            return new IntegerSerializer();
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            serializer.configure(configs, isKey);
+            deserializer.configure(configs, isKey);
         }
 
         @Override
-        public Deserializer<Integer> deserializer() {
-            return new IntegerDeserializer();
-        }
-    }
-
-    static public final class DoubleSerde implements Serde<Double> {
-        @Override
-        public Serializer<Double> serializer() {
-            return new DoubleSerializer();
+        public void close() {
+            serializer.close();
+            deserializer.close();
         }
 
         @Override
-        public Deserializer<Double> deserializer() {
-            return new DoubleDeserializer();
+        public Serializer<T> serializer() {
+            return serializer;
+        }
+
+        @Override
+        public Deserializer<T> deserializer() {
+            return deserializer;
         }
     }
 
-    static public final class StringSerde implements Serde<String> {
-        @Override
-        public Serializer<String> serializer() {
-            return new StringSerializer();
-        }
-
-        @Override
-        public Deserializer<String> deserializer() {
-            return new StringDeserializer();
+    static public final class LongSerde extends WrapperSerde<Long> {
+        public LongSerde() {
+            super(new LongSerializer(), new LongDeserializer());
         }
     }
 
-    static public final class ByteBufferSerde implements Serde<ByteBuffer> {
-        @Override
-        public Serializer<ByteBuffer> serializer() {
-            return new ByteBufferSerializer();
-        }
-
-        @Override
-        public Deserializer<ByteBuffer> deserializer() {
-            return new ByteBufferDeserializer();
+    static public final class IntegerSerde extends WrapperSerde<Integer> {
+        public IntegerSerde() {
+            super(new IntegerSerializer(), new IntegerDeserializer());
         }
     }
 
-    static public final class BytesSerde implements Serde<Bytes> {
-        @Override
-        public Serializer<Bytes> serializer() {
-            return new BytesSerializer();
-        }
-
-        @Override
-        public Deserializer<Bytes> deserializer() {
-            return new BytesDeserializer();
+    static public final class DoubleSerde extends WrapperSerde<Double> {
+        public DoubleSerde() {
+            super(new DoubleSerializer(), new DoubleDeserializer());
         }
     }
 
-    static public final class ByteArraySerde implements Serde<byte[]> {
-        @Override
-        public Serializer<byte[]> serializer() {
-            return new ByteArraySerializer();
+    static public final class StringSerde extends WrapperSerde<String> {
+        public StringSerde() {
+            super(new StringSerializer(), new StringDeserializer());
         }
+    }
 
-        @Override
-        public Deserializer<byte[]> deserializer() {
-            return new ByteArrayDeserializer();
+    static public final class ByteBufferSerde extends WrapperSerde<ByteBuffer> {
+        public ByteBufferSerde() {
+            super(new ByteBufferSerializer(), new ByteBufferDeserializer());
+        }
+    }
+
+    static public final class BytesSerde extends WrapperSerde<Bytes> {
+        public BytesSerde() {
+            super(new BytesSerializer(), new BytesDeserializer());
+        }
+    }
+
+    static public final class ByteArraySerde extends WrapperSerde<byte[]> {
+        public ByteArraySerde() {
+            super(new ByteArraySerializer(), new ByteArrayDeserializer());
         }
     }
 
@@ -154,17 +145,7 @@ public class Serdes {
             throw new IllegalArgumentException("deserializer must not be null");
         }
 
-        return new Serde<T>() {
-            @Override
-            public Serializer<T> serializer() {
-                return serializer;
-            }
-
-            @Override
-            public Deserializer<T> deserializer() {
-                return deserializer;
-            }
-        };
+        return new WrapperSerde<>(serializer, deserializer);
     }
 
     /*
