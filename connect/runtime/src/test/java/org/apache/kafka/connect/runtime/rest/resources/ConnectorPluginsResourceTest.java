@@ -25,9 +25,11 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Recommender;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.AbstractHerder;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
@@ -70,15 +72,22 @@ public class ConnectorPluginsResourceTest {
 
     private static Map<String, String> props = new HashMap<>();
     static {
+        props.put("name", "test");
         props.put("test.string.config", "testString");
         props.put("test.int.config", "1");
         props.put("test.list.config", "a,b");
     }
 
     private static final ConfigInfos CONFIG_INFOS;
+    private static final int ERROR_COUNT = 1;
 
     static {
         List<ConfigInfo> configs = new LinkedList<>();
+
+        ConfigDef connectorConfigDef = ConnectorConfig.configDef();
+        List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(props);
+        ConfigInfos result = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), connectorConfigValues, Collections.<String>emptyList());
+        configs.addAll(result.values());
 
         ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", true, "", "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", Collections.<String>emptyList());
         ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", Collections.<String>emptyList(), Collections.<String>emptyList(), true);
@@ -100,7 +109,7 @@ public class ConnectorPluginsResourceTest {
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
 
-        CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), 0, Collections.singletonList("Test"), configs);
+        CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), ERROR_COUNT, Collections.singletonList("Test"), configs);
     }
 
     @Mock
@@ -121,10 +130,20 @@ public class ConnectorPluginsResourceTest {
         PowerMock.expectLastCall().andAnswer(new IAnswer<ConfigInfos>() {
             @Override
             public ConfigInfos answer() {
-                Config config = new ConnectorPluginsResourceTestConnector().validate(props);
+                ConfigDef connectorConfigDef = ConnectorConfig.configDef();
+                List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(props);
+
                 Connector connector = new ConnectorPluginsResourceTestConnector();
+                Config config = connector.validate(props);
                 ConfigDef configDef = connector.config();
-                return AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), configDef.configKeys(), config.configValues(), configDef.groups());
+                Map<String, ConfigDef.ConfigKey> configKeys = configDef.configKeys();
+                List<ConfigValue> configValues = config.configValues();
+
+                Map<String, ConfigDef.ConfigKey> resultConfigKeys = new HashMap<>(configKeys);
+                resultConfigKeys.putAll(connectorConfigDef.configKeys());
+                configValues.addAll(connectorConfigValues);
+
+                return AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), resultConfigKeys, configValues, Collections.singletonList("Test"));
             }
         });
         PowerMock.replayAll();
