@@ -31,7 +31,9 @@
   <module name="TreeWalker">
 
     <!-- code cleanup -->
-    <module name="UnusedImports"/>
+    <module name="UnusedImports">
+      <property name="processJavadoc" value="true" />
+    </module>
     <module name="RedundantImport"/>
     <module name="IllegalImport" />
     <module name="EqualsHashCode"/>
