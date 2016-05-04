@@ -190,14 +190,15 @@ object TopicCommand extends Logging {
 
   def describeTopic(zkUtils: ZkUtils, opts: TopicCommandOptions) {
     val topics = getTopics(zkUtils, opts)
-    val reportUnderReplicatedPartitions = if (opts.options.has(opts.reportUnderReplicatedPartitionsOpt)) true else false
-    val reportUnavailablePartitions = if (opts.options.has(opts.reportUnavailablePartitionsOpt)) true else false
-    val reportOverriddenConfigs = if (opts.options.has(opts.topicsWithOverridesOpt)) true else false
+    val reportUnderReplicatedPartitions = opts.options.has(opts.reportUnderReplicatedPartitionsOpt)
+    val reportUnavailablePartitions = opts.options.has(opts.reportUnavailablePartitionsOpt)
+    val reportUnbalancedPartitions = opts.options.has(opts.reportUnbalancedPartitionsOpt)
+    val reportOverriddenConfigs = opts.options.has(opts.topicsWithOverridesOpt)
     val liveBrokers = zkUtils.getAllBrokersInCluster().map(_.id).toSet
     for (topic <- topics) {
       zkUtils.getPartitionAssignmentForTopics(List(topic)).get(topic) match {
         case Some(topicPartitionAssignment) =>
-          val describeConfigs: Boolean = !reportUnavailablePartitions && !reportUnderReplicatedPartitions
+          val describeConfigs: Boolean = !reportUnavailablePartitions && !reportUnderReplicatedPartitions && !reportUnbalancedPartitions
           val describePartitions: Boolean = !reportOverriddenConfigs
           val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
           if (describeConfigs) {
@@ -213,9 +214,7 @@ object TopicCommand extends Logging {
             for ((partitionId, assignedReplicas) <- sortedPartitions) {
               val inSyncReplicas = zkUtils.getInSyncReplicasForPartition(topic, partitionId)
               val leader = zkUtils.getLeaderForPartition(topic, partitionId)
-              if ((!reportUnderReplicatedPartitions && !reportUnavailablePartitions) ||
-                  (reportUnderReplicatedPartitions && inSyncReplicas.size < assignedReplicas.size) ||
-                  (reportUnavailablePartitions && (!leader.isDefined || !liveBrokers.contains(leader.get)))) {
+              if (shouldPrintDescription(reportUnderReplicatedPartitions, reportUnavailablePartitions, reportUnbalancedPartitions, liveBrokers, assignedReplicas, inSyncReplicas, leader)) {
                 print("\tTopic: " + topic)
                 print("\tPartition: " + partitionId)
                 print("\tLeader: " + (if(leader.isDefined) leader.get else "none"))
@@ -228,6 +227,18 @@ object TopicCommand extends Logging {
           println("Topic " + topic + " doesn't exist!")
       }
     }
+  }
+
+  private def shouldPrintDescription(reportUnderReplicatedPartitions: Boolean, reportUnavailablePartitions: Boolean, reportUnbalancedPartitions: Boolean,
+                             liveBrokers: Set[Int], assignedReplicas: Seq[Int], inSyncReplicas: Seq[Int], leader: Option[Int]): Boolean = {
+    // If not asked for any specific report
+    (!reportUnderReplicatedPartitions && !reportUnavailablePartitions && !reportUnbalancedPartitions) ||
+    // If asked for only under-replicated partitions description and the partition is under-replicated
+      (reportUnderReplicatedPartitions && inSyncReplicas.size < assignedReplicas.size) ||
+    // If asked for only unavailable partitions and the partition is unavailable
+      (reportUnavailablePartitions && (leader.isEmpty || !liveBrokers.contains(leader.get))) ||
+    // If asked for only unbalanced partitions and the partition is unbalanced
+      (reportUnbalancedPartitions && (leader.isDefined && (leader.get != assignedReplicas.head)))
   }
 
   def parseTopicConfigsToBeAdded(opts: TopicCommandOptions): Properties = {
@@ -318,6 +329,8 @@ object TopicCommand extends Logging {
                                                             "if set when describing topics, only show under replicated partitions")
     val reportUnavailablePartitionsOpt = parser.accepts("unavailable-partitions",
                                                             "if set when describing topics, only show partitions whose leader is not available")
+    val reportUnbalancedPartitionsOpt = parser.accepts("unbalanced-partitions",
+                                                       "if set when describing topics, only show partitions whose leader is not on its preferred replica")
     val topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
                                                 "if set when describing topics, only show topics that have overridden configs")
     val ifExistsOpt = parser.accepts("if-exists",
@@ -345,11 +358,13 @@ object TopicCommand extends Logging {
       if(options.has(createOpt))
           CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, Set(partitionsOpt, replicationFactorOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, reportUnderReplicatedPartitionsOpt,
-        allTopicLevelOpts -- Set(describeOpt) + reportUnavailablePartitionsOpt + topicsWithOverridesOpt)
+        allTopicLevelOpts -- Set(describeOpt) + reportUnavailablePartitionsOpt + topicsWithOverridesOpt + reportUnbalancedPartitionsOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, reportUnavailablePartitionsOpt,
-        allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + topicsWithOverridesOpt)
+        allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + topicsWithOverridesOpt + reportUnbalancedPartitionsOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, topicsWithOverridesOpt,
-        allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + reportUnavailablePartitionsOpt)
+        allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + reportUnavailablePartitionsOpt + reportUnbalancedPartitionsOpt)
+      CommandLineUtils.checkInvalidArgs(parser, options, reportUnbalancedPartitionsOpt,
+        allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + reportUnavailablePartitionsOpt + topicsWithOverridesOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, ifExistsOpt, allTopicLevelOpts -- Set(alterOpt, deleteOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, allTopicLevelOpts -- Set(createOpt))
     }
