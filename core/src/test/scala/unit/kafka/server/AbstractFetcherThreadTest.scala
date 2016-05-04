@@ -25,11 +25,17 @@ import kafka.server.AbstractFetcherThread.{FetchRequest, PartitionData}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.Errors
 import org.junit.Assert.{assertFalse, assertTrue}
-import org.junit.Test
+import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 
 class AbstractFetcherThreadTest {
+
+  @Before
+  def cleanMetricRegistry(): Unit = {
+    for (metricName <- Metrics.defaultRegistry().allMetrics().keySet().asScala)
+      Metrics.defaultRegistry().removeMetric(metricName)
+  }
 
   @Test
   def testMetricsRemovedOnShutdown() {
@@ -43,7 +49,7 @@ class AbstractFetcherThreadTest {
 
     // wait until all fetcher metrics are present
     TestUtils.waitUntilTrue(() =>
-      allMetricsByName == Set(FetcherMetrics.BytesPerSec, FetcherMetrics.RequestsPerSec, FetcherMetrics.ConsumerLag),
+      allMetricsNames == Set(FetcherMetrics.BytesPerSec, FetcherMetrics.RequestsPerSec, FetcherMetrics.ConsumerLag),
       "Failed waiting for all fetcher metrics to be registered")
 
     fetcherThread.shutdown()
@@ -63,19 +69,19 @@ class AbstractFetcherThreadTest {
     fetcherThread.addPartitions(Map(partition -> 0L))
 
     // wait until lag metric is present
-    TestUtils.waitUntilTrue(() => allMetricsByName(FetcherMetrics.ConsumerLag),
+    TestUtils.waitUntilTrue(() => allMetricsNames(FetcherMetrics.ConsumerLag),
       "Failed waiting for consumer lag metric")
 
     // remove the partition to simulate leader migration
     fetcherThread.removePartitions(Set(partition))
 
     // the lag metric should now be gone
-    assertFalse(allMetricsByName(FetcherMetrics.ConsumerLag))
+    assertFalse(allMetricsNames(FetcherMetrics.ConsumerLag))
 
     fetcherThread.shutdown()
   }
 
-  private def allMetricsByName = Metrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName)
+  private def allMetricsNames = Metrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName)
 
   class DummyFetchRequest(val offsets: collection.Map[TopicAndPartition, Long]) extends FetchRequest {
     override def isEmpty: Boolean = offsets.isEmpty

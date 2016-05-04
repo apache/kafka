@@ -78,6 +78,7 @@ abstract class AbstractFetcherThread(name: String,
     }
     awaitShutdown()
 
+    // we don't need the lock since the thread has finished shutdown and metric removal is safe
     fetcherStats.unregister()
     fetcherLagStats.unregister()
   }
@@ -288,8 +289,9 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
   }
 
   def unregister() {
-    stats.values.foreach(_.unregister())
-    stats.clear()
+    stats.keys.toBuffer.foreach { key: ClientIdTopicPartition =>
+      unregister(key.topic, key.partitionId)
+    }
   }
 }
 
