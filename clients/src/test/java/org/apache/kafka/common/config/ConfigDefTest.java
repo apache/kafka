@@ -132,9 +132,9 @@ public class ConfigDefTest {
 
     @Test
     public void testValidators() {
-        testValidators(Type.INT, Range.between(0, 10), 5, new Object[]{1, 5, 9}, new Object[]{-1, 11});
+        testValidators(Type.INT, Range.between(0, 10), 5, new Object[]{1, 5, 9}, new Object[]{-1, 11, null});
         testValidators(Type.STRING, ValidString.in("good", "values", "default"), "default",
-                new Object[]{"good", "values", "default"}, new Object[]{"bad", "inputs"});
+                new Object[]{"good", "values", "default"}, new Object[]{"bad", "inputs", null});
     }
 
     @Test
