@@ -148,8 +148,6 @@ public class BufferPoolTest {
     /**
      * Test if Timeout exception is thrown when there is not enough memory to allocate and the elapsed time is greater than the max specified block time.
      * And verify that the allocation should finish soon after the maxBlockTimeMs.
-     *
-     * @throws Exception
      */
     @Test
     public void testBlockTimeout() throws Exception {
@@ -176,8 +174,6 @@ public class BufferPoolTest {
 
     /**
      * Test if the  waiter that is waiting on availability of more memory is cleaned up when a timeout occurs
-     *
-     * @throws Exception
      */
     @Test
     public void testCleanupMemoryAvailabilityWaiterOnBlockTimeout() throws Exception {
