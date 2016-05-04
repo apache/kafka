@@ -234,11 +234,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     public ConfigInfos validateConfigs(String connType, Map<String, String> connectorConfig) {
         ConfigDef connectorConfigDef = ConnectorConfig.configDef();
         List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(connectorConfig);
-        ConfigInfos result = generateResult(connType, connectorConfigDef.configKeys(), connectorConfigValues, Collections.<String>emptyList());
-
-        if (result.errorCount() != 0) {
-            return result;
-        }
 
         Connector connector = getConnector(connType);
 
