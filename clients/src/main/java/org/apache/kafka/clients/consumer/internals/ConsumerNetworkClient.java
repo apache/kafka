@@ -244,9 +244,11 @@ public class ConsumerNetworkClient implements Closeable {
     /**
      * Execute delayed tasks now.
      * @param now current time in milliseconds
+     * @throws WakeupException if a wakeup has been requested
      */
     public void executeDelayedTasks(long now) {
         delayedTasks.poll(now);
+        maybeTriggerWakeup();
     }
 
     /**
@@ -356,6 +358,10 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void clientPoll(long timeout, long now) {
         client.poll(timeout, now);
+        maybeTriggerWakeup();
+    }
+
+    private void maybeTriggerWakeup() {
         if (wakeupDisabledCount == 0 && wakeup.get()) {
             wakeup.set(false);
             throw new WakeupException();

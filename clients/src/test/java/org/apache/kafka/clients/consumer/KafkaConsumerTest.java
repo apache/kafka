@@ -455,15 +455,15 @@ public class KafkaConsumerTest {
 
         consumer.wakeup();
 
-        // wakeup is skipped because we have data available
-        ConsumerRecords<String, String> records = consumer.poll(0);
-        assertEquals(5, records.count());
-
         try {
             consumer.poll(0);
             fail();
         } catch (WakeupException e) {
         }
+
+        // the next poll should return the completed fetch
+        ConsumerRecords<String, String> records = consumer.poll(0);
+        assertEquals(5, records.count());
     }
 
     private Struct joinGroupFollowerResponse(PartitionAssignor assignor, int generationId, String memberId, String leaderId, short error) {

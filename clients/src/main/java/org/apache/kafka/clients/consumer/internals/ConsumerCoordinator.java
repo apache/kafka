@@ -355,10 +355,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-        commitOffsetsAsync(offsets, callback, true);
-    }
-
-    private void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback, boolean executeDelayedTasks) {
         this.subscriptions.needRefreshCommits();
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
         final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
@@ -376,11 +372,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         });
 
-        // allow delayed tasks to be executed in case heartbeats need to be sent
-        if (executeDelayedTasks)
-            client.executeDelayedTasks(time.milliseconds());
-
-        // ensure commit has a chance to be transmitted (without blocking on its completion)
+        // ensure the commit has a chance to be transmitted (without blocking on its completion).
+        // Note that commits are treated as heartbeats by the coordinator, so there is no need to
+        // explicitly allow heartbeats through delayed task execution.
         client.pollNoWakeup();
     }
 
@@ -454,7 +448,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         reschedule(now + interval);
                     }
                 }
-            }, false);
+            });
         }
     }
 
