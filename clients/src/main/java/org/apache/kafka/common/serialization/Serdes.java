@@ -24,17 +24,12 @@ import java.util.Map;
 public class Serdes {
 
     static private class WrapperSerde<T> implements Serde<T> {
-        protected Serializer<T> serializer;
-        protected Deserializer<T> deserializer;
+        final private Serializer<T> serializer;
+        final private Deserializer<T> deserializer;
 
         public WrapperSerde(Serializer<T> serializer, Deserializer<T> deserializer) {
             this.serializer = serializer;
             this.deserializer = deserializer;
-        }
-
-        protected WrapperSerde() {
-            serializer = null;
-            deserializer = null;
         }
 
         @Override
@@ -62,57 +57,43 @@ public class Serdes {
 
     static public final class LongSerde extends WrapperSerde<Long> {
         public LongSerde() {
-            super();
-            serializer = new LongSerializer();
-            deserializer = new LongDeserializer();
+            super(new LongSerializer(), new LongDeserializer());
         }
     }
 
     static public final class IntegerSerde extends WrapperSerde<Integer> {
         public IntegerSerde() {
-            super();
-            serializer = new IntegerSerializer();
-            deserializer = new IntegerDeserializer();
+            super(new IntegerSerializer(), new IntegerDeserializer());
         }
     }
 
     static public final class DoubleSerde extends WrapperSerde<Double> {
         public DoubleSerde() {
-            super();
-            serializer = new DoubleSerializer();
-            deserializer = new DoubleDeserializer();
+            super(new DoubleSerializer(), new DoubleDeserializer());
         }
     }
 
     static public final class StringSerde extends WrapperSerde<String> {
         public StringSerde() {
-            super();
-            serializer = new StringSerializer();
-            deserializer = new StringDeserializer();
+            super(new StringSerializer(), new StringDeserializer());
         }
     }
 
     static public final class ByteBufferSerde extends WrapperSerde<ByteBuffer> {
         public ByteBufferSerde() {
-            super();
-            serializer = new ByteBufferSerializer();
-            deserializer = new ByteBufferDeserializer();
+            super(new ByteBufferSerializer(), new ByteBufferDeserializer());
         }
     }
 
     static public final class BytesSerde extends WrapperSerde<Bytes> {
         public BytesSerde() {
-            super();
-            serializer = new BytesSerializer();
-            deserializer = new BytesDeserializer();
+            super(new BytesSerializer(), new BytesDeserializer());
         }
     }
 
     static public final class ByteArraySerde extends WrapperSerde<byte[]> {
         public ByteArraySerde() {
-            super();
-            serializer = new ByteArraySerializer();
-            deserializer = new ByteArrayDeserializer();
+            super(new ByteArraySerializer(), new ByteArrayDeserializer());
         }
     }
 

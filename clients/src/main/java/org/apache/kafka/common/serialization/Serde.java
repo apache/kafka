@@ -26,7 +26,7 @@ import java.util.Map;
 public interface Serde<T> extends Closeable {
 
     /**
-     * Configure this class, which will configure the underlying serializer and deserializer at the same time.
+     * Configure this class, which will configure the underlying serializer and deserializer.
      *
      * @param configs configs in key/value pairs
      * @param isKey whether is for key or value
@@ -34,7 +34,7 @@ public interface Serde<T> extends Closeable {
     void configure(Map<String, ?> configs, boolean isKey);
 
     /**
-     * Close this serde class, which will close the underlying serializer and deserializer at the same time.
+     * Close this serde class, which will close the underlying serializer and deserializer.
      * This method has to be idempotent because it might be called multiple times.
      */
     @Override
