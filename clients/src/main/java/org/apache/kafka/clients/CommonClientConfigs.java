@@ -57,6 +57,9 @@ public class CommonClientConfigs {
     public static final String RETRY_BACKOFF_MS_CONFIG = "retry.backoff.ms";
     public static final String RETRY_BACKOFF_MS_DOC = "The amount of time to wait before attempting to retry a failed request to a given topic partition. This avoids repeatedly sending requests in a tight loop under some failure scenarios.";
 
+    public static final String METRIC_ID_CONFIG = "metric.id";
+    public static final String METRIC_ID_DOC = "An id string to uniquely identify metrics among client instances under the same client id on the same jvm.";
+
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = "metrics.sample.window.ms";
     public static final String METRICS_SAMPLE_WINDOW_MS_DOC = "The window of time a metrics sample is computed over.";
 

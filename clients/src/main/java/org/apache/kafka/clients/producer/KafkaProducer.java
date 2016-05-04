@@ -14,6 +14,7 @@ package org.apache.kafka.clients.producer;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -130,6 +131,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaProducer.class);
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
+    private static final Map<String, AtomicInteger> METRIC_ID_SEQUENCE_PER_CLIENT_ID = new HashMap<String, AtomicInteger>();
     private static final String JMX_PREFIX = "kafka.producer";
 
     private String clientId;
@@ -213,8 +215,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0)
                 clientId = "producer-" + PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement();
+            synchronized (KafkaProducer.class) {
+                if (!METRIC_ID_SEQUENCE_PER_CLIENT_ID.containsKey(clientId))
+                    METRIC_ID_SEQUENCE_PER_CLIENT_ID.put(clientId, new AtomicInteger(1));
+            }
+            String metricId = config.getString(ProducerConfig.METRIC_ID_CONFIG);
+            if (metricId.isEmpty()) {
+                metricId = "" + METRIC_ID_SEQUENCE_PER_CLIENT_ID.get(clientId).getAndIncrement();
+            }
             Map<String, String> metricTags = new LinkedHashMap<String, String>();
             metricTags.put("client-id", clientId);
+            metricTags.put("metric-id", metricId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                     .tags(metricTags);

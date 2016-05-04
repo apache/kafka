@@ -501,6 +501,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumer.class);
     private static final long NO_CURRENT_THREAD = -1L;
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
+    private static final Map<String, AtomicInteger> METRIC_ID_SEQUENCE_PER_CLIENT_ID = new HashMap<String, AtomicInteger>();
     private static final String JMX_PREFIX = "kafka.consumer";
 
     private final String clientId;
@@ -606,8 +607,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (clientId.length() <= 0)
                 clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
             this.clientId = clientId;
+            synchronized (KafkaConsumer.class) {
+                if (!METRIC_ID_SEQUENCE_PER_CLIENT_ID.containsKey(clientId))
+                    METRIC_ID_SEQUENCE_PER_CLIENT_ID.put(clientId, new AtomicInteger(1));
+            }
+            String metricId = config.getString(ConsumerConfig.METRIC_ID_CONFIG);
+            if (metricId.isEmpty()) {
+                metricId = "" + METRIC_ID_SEQUENCE_PER_CLIENT_ID.get(clientId).getAndIncrement();
+            }
             Map<String, String> metricsTags = new LinkedHashMap<>();
             metricsTags.put("client-id", clientId);
+            metricsTags.put("metric-id", metricId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                     .tags(metricsTags);
