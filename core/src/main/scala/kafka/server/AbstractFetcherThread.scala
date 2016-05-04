@@ -211,10 +211,10 @@ abstract class AbstractFetcherThread(name: String,
   def removePartitions(topicAndPartitions: Set[TopicAndPartition]) {
     partitionMapLock.lockInterruptibly()
     try {
-      topicAndPartitions.foreach(topicAndPartition => {
+      topicAndPartitions.foreach { topicAndPartition =>
         partitionMap.remove(topicAndPartition)
         fetcherLagStats.unregister(topicAndPartition.topic, topicAndPartition.partition)
-      })
+      }
     } finally partitionMapLock.unlock()
   }
 
