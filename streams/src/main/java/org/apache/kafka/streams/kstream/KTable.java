@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 
 /**
  * {@link KTable} is an abstraction of a <i>changelog stream</i> from a primary-keyed table.
@@ -114,7 +115,7 @@ public interface KTable<K, V> {
 
     /**
      * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic
-     * using default serializers and deserializers and producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner}.
+     * using default serializers and deserializers and producer's {@link DefaultPartitioner}.
      * This is equivalent to calling {@link #to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(String)}.
      *
      * @param topic         the topic name
@@ -129,7 +130,7 @@ public interface KTable<K, V> {
      * This is equivalent to calling {@link #to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(String)}.
      *
      * @param partitioner  the function used to determine how records are distributed among partitions of the topic,
-     *                     if not specified producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner} will be used
+     *                     if not specified producer's {@link DefaultPartitioner} will be used
      * @param topic        the topic name
      *
      * @return a new {@link KTable} that contains the exact same records as this {@link KTable}
@@ -140,7 +141,7 @@ public interface KTable<K, V> {
      * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic.
      * If {@code keySerde} provides a {@link org.apache.kafka.streams.kstream.internals.WindowedSerializer}
      * for the key {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner} is used
-     * &mdash; otherwise producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner} is used.
+     * &mdash; otherwise producer's {@link DefaultPartitioner} is used.
      * This is equivalent to calling {@link #to(Serde, Serde, String)} and
      * {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(Serde, Serde, String)}.
      *
@@ -167,7 +168,7 @@ public interface KTable<K, V> {
      * @param partitioner  the function used to determine how records are distributed among partitions of the topic,
      *                     if not specified and {@code keySerde} provides a {@link org.apache.kafka.streams.kstream.internals.WindowedSerializer} for the key
      *                     {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner} will be used
-     *                     &mdash; otherwise {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner} will be used
+     *                     &mdash; otherwise {@link DefaultPartitioner} will be used
      * @param topic        the topic name
      *
      * @return a new {@link KTable} that contains the exact same records as this {@link KTable}
@@ -176,7 +177,7 @@ public interface KTable<K, V> {
 
     /**
      * Materialize this stream to a topic using default serializers specified in the config
-     * and producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner}.
+     * and producer's {@link DefaultPartitioner}.
      *
      * @param topic         the topic name
      */
@@ -187,7 +188,7 @@ public interface KTable<K, V> {
      * and a customizable {@link StreamPartitioner} to determine the distribution of records to partitions.
      *
      * @param partitioner  the function used to determine how records are distributed among partitions of the topic,
-     *                     if not specified producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner} will be used
+     *                     if not specified producer's {@link DefaultPartitioner} will be used
      * @param topic        the topic name
      */
     void to(StreamPartitioner<K, V> partitioner, String topic);
@@ -196,7 +197,7 @@ public interface KTable<K, V> {
      * Materialize this stream to a topic. If {@code keySerde} provides a
      * {@link org.apache.kafka.streams.kstream.internals.WindowedSerializer} for the key
      * {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner} is used
-     * &mdash; otherwise producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner} is used.
+     * &mdash; otherwise producer's {@link DefaultPartitioner} is used.
      *
      * @param keySerde     key serde used to send key-value pairs,
      *                     if not specified the default serde defined in the configs will be used
@@ -216,7 +217,7 @@ public interface KTable<K, V> {
      * @param partitioner  the function used to determine how records are distributed among partitions of the topic,
      *                     if not specified and {@code keySerde} provides a {@link org.apache.kafka.streams.kstream.internals.WindowedSerializer} for the key
      *                     {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner} will be used
-     *                     &mdash; otherwise {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner} will be used
+     *                     &mdash; otherwise {@link DefaultPartitioner} will be used
      * @param topic        the topic name
      */
     void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic);
@@ -237,7 +238,6 @@ public interface KTable<K, V> {
      * @param mapper  @param mapper  the instance of {@link KeyValueMapper}
      * @param <K1> the new key type
      *
-     * @return a {@link KStream} that contains records with new keys of different type for each update of this {@link KTable}
      * @return a {@link KStream} that contains the transformed records from this {@link KTable};
      *         the records are no longer treated as updates on a primary-keyed table,
      *         but rather as normal key-value pairs in a record stream
