@@ -277,14 +277,10 @@ object ConsumerGroupCommand {
 
     private def getZkConsumer(brokerId: Int): Option[SimpleConsumer] = {
       try {
-        zkUtils.getBrokerInfo(brokerId) match {
-          case Some(brokerInfo) =>
-            Some(new SimpleConsumer(brokerInfo.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).host,
-                                    brokerInfo.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).port,
-                                    10000, 100000, "ConsumerGroupCommand"))
-          case None =>
-            throw new BrokerNotAvailableException("Broker id %d does not exist".format(brokerId))
-        }
+        zkUtils.getBrokerInfo(brokerId)
+          .map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT))
+          .map(endPoint => new SimpleConsumer(endPoint.host, endPoint.port, 10000, 100000, "ConsumerGroupCommand"))
+          .orElse(throw new BrokerNotAvailableException("Broker id %d does not exist".format(brokerId)))
       } catch {
         case t: Throwable =>
           println("Could not parse broker info due to " + t.getMessage)

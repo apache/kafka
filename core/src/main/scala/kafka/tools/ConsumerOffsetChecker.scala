@@ -41,14 +41,10 @@ object ConsumerOffsetChecker extends Logging {
 
   private def getConsumer(zkUtils: ZkUtils, bid: Int): Option[SimpleConsumer] = {
     try {
-      zkUtils.getBrokerInfo(bid) match {
-        case Some(brokerInfo) =>
-          Some(new SimpleConsumer(brokerInfo.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).host,
-                                  brokerInfo.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).port,
-                                  10000, 100000, "ConsumerOffsetChecker"))
-        case None =>
-          throw new BrokerNotAvailableException("Broker id %d does not exist".format(bid))
-      }
+      zkUtils.getBrokerInfo(bid)
+        .map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT))
+        .map(endPoint => new SimpleConsumer(endPoint.host, endPoint.port, 10000, 100000, "ConsumerOffsetChecker"))
+        .orElse(throw new BrokerNotAvailableException("Broker id %d does not exist".format(bid)))
     } catch {
       case t: Throwable =>
         println("Could not parse broker info due to " + t.getCause)
