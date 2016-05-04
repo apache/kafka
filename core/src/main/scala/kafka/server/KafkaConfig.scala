@@ -102,6 +102,10 @@ object Defaults {
   val NumRecoveryThreadsPerDataDir = 1
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
+  val MessageTimestampType = "CreateTime"
+  val MessageTimestampDifferenceMaxMs = Long.MaxValue
+  val LogRecoveryThreads = 1
+  val LogRecoveryMaxIntervalMs = Long.MaxValue
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMs = RequestTimeoutMs
@@ -262,6 +266,9 @@ object KafkaConfig {
   val LogFlushIntervalMsProp = "log.flush.interval.ms"
   val LogFlushOffsetCheckpointIntervalMsProp = "log.flush.offset.checkpoint.interval.ms"
   val LogPreAllocateProp = "log.preallocate"
+  val LogRecoveryThreads = "log.recovery.threads"
+  val LogRecoveryMaxIntervalMs = "log.recovery.max.interval.ms"
+  val MessageFormatVersionProp = "message.format.version"
   val LogMessageFormatVersionProp = LogConfigPrefix + LogConfig.MessageFormatVersionProp
   val LogMessageTimestampTypeProp = LogConfigPrefix + LogConfig.MessageTimestampTypeProp
   val LogMessageTimestampDifferenceMaxMsProp = LogConfigPrefix + LogConfig.MessageTimestampDifferenceMaxMsProp
@@ -440,6 +447,8 @@ object KafkaConfig {
   val LogFlushIntervalMsDoc = "The maximum time in ms that a message in any topic is kept in memory before flushed to disk. If not set, the value in " + LogFlushSchedulerIntervalMsProp + " is used"
   val LogFlushOffsetCheckpointIntervalMsDoc = "The frequency with which we update the persistent record of the last flush which acts as the log recovery point"
   val LogPreAllocateEnableDoc = "Should pre allocate file when create new segment? If you are using Kafka on Windows, you probably need to set it to true."
+  val LogRecoveryThreadsDoc = "The no of threads needed to recover the unflushed log segments when not shutdown in a controlled way"
+  val LogRecoveryMaxIntervalMsDoc = "The max time in ms to wait before stopping the recovery of logs when controlled shutdown is not enabled"
   val LogMessageFormatVersionDoc = "Specify the message format version the broker will use to append messages to the logs. The value should be a valid ApiVersion. " +
     "Some examples are: 0.8.2, 0.9.0.0, 0.10.0, check ApiVersion for more details. By setting a particular message format version, the " +
     "user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting this value incorrectly " +
@@ -628,6 +637,8 @@ object KafkaConfig {
       .define(LogFlushIntervalMsProp, LONG, null, HIGH, LogFlushIntervalMsDoc)
       .define(LogFlushOffsetCheckpointIntervalMsProp, INT, Defaults.LogFlushOffsetCheckpointIntervalMs, atLeast(0), HIGH, LogFlushOffsetCheckpointIntervalMsDoc)
       .define(LogPreAllocateProp, BOOLEAN, Defaults.LogPreAllocateEnable, MEDIUM, LogPreAllocateEnableDoc)
+      .define(LogRecoveryThreads, INT, Defaults.LogRecoveryThreads, atLeast(1), MEDIUM, LogRecoveryThreadsDoc)
+      .define(LogRecoveryMaxIntervalMs, LONG, Defaults.LogRecoveryMaxIntervalMs, atLeast(1000), MEDIUM, LogRecoveryMaxIntervalMsDoc)
       .define(NumRecoveryThreadsPerDataDirProp, INT, Defaults.NumRecoveryThreadsPerDataDir, atLeast(1), HIGH, NumRecoveryThreadsPerDataDirDoc)
       .define(AutoCreateTopicsEnableProp, BOOLEAN, Defaults.AutoCreateTopicsEnable, HIGH, AutoCreateTopicsEnableDoc)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), HIGH, MinInSyncReplicasDoc)
@@ -827,6 +838,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val logRollTimeJitterMillis: java.lang.Long = Option(getLong(KafkaConfig.LogRollTimeJitterMillisProp)).getOrElse(60 * 60 * 1000L * getInt(KafkaConfig.LogRollTimeJitterHoursProp))
   val logFlushIntervalMs: java.lang.Long = Option(getLong(KafkaConfig.LogFlushIntervalMsProp)).getOrElse(getLong(KafkaConfig.LogFlushSchedulerIntervalMsProp))
   val logRetentionTimeMillis = getLogRetentionTimeMillis
+  val logRecoveryThreads = getInt(LogConfig.LogRecoveryThreads)
+  val logRecoveryMaxIntervalMs = getLong(LogConfig.LogRecoveryMaxIntervalMs)
   val minInSyncReplicas = getInt(KafkaConfig.MinInSyncReplicasProp)
   val logPreAllocateEnable: java.lang.Boolean = getBoolean(KafkaConfig.LogPreAllocateProp)
   // We keep the user-provided String as `ApiVersion.apply` can choose a slightly different version (eg if `0.10.0`

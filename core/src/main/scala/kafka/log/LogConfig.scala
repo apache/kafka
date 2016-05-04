@@ -48,9 +48,11 @@ object Defaults {
   val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
   val CompressionType = kafka.server.Defaults.CompressionType
   val PreAllocateEnable = kafka.server.Defaults.LogPreAllocateEnable
-  val MessageFormatVersion = kafka.server.Defaults.LogMessageFormatVersion
-  val MessageTimestampType = kafka.server.Defaults.LogMessageTimestampType
-  val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs
+  val MessageFormatVersion = kafka.server.Defaults.MessageFormatVersion
+  val MessageTimestampType = kafka.server.Defaults.MessageTimestampType
+  val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.MessageTimestampDifferenceMaxMs
+  val LogRecoveryThreads = kafka.server.Defaults.LogRecoveryThreads
+  val LogRecoveryMaxIntervalMs = kafka.server.Defaults.LogRecoveryMaxIntervalMs
 }
 
 case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
@@ -79,6 +81,8 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val messageFormatVersion = ApiVersion(getString(LogConfig.MessageFormatVersionProp))
   val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp).longValue
+  val logRecoveryThreads = getInt(LogConfig.LogRecoveryThreads)
+  val logRecoveryMaxIntervalMs = getLong(LogConfig.LogRecoveryMaxIntervalMs)
 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
@@ -111,9 +115,11 @@ object LogConfig {
   val MinInSyncReplicasProp = "min.insync.replicas"
   val CompressionTypeProp = "compression.type"
   val PreAllocateEnableProp = "preallocate"
-  val MessageFormatVersionProp = "message.format.version"
-  val MessageTimestampTypeProp = "message.timestamp.type"
-  val MessageTimestampDifferenceMaxMsProp = "message.timestamp.difference.max.ms"
+  val MessageFormatVersionProp = KafkaConfig.MessageFormatVersionProp
+  val MessageTimestampTypeProp = KafkaConfig.MessageTimestampTypeProp
+  val MessageTimestampDifferenceMaxMsProp = KafkaConfig.MessageTimestampDifferenceMaxMsProp
+  val LogRecoveryThreads = KafkaConfig.LogRecoveryThreads
+  val LogRecoveryMaxIntervalMs = KafkaConfig.LogRecoveryMaxIntervalMs
 
   val SegmentSizeDoc = "The hard maximum for the size of a segment file in the log"
   val SegmentMsDoc = "The soft maximum on the amount of time before a new log segment is rolled"
@@ -138,9 +144,11 @@ object LogConfig {
     "standard compression codecs ('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to " +
     "no compression; and 'producer' which means retain the original compression codec set by the producer."
   val PreAllocateEnableDoc ="Should pre allocate file when create new segment?"
-  val MessageFormatVersionDoc = KafkaConfig.LogMessageFormatVersionDoc
-  val MessageTimestampTypeDoc = KafkaConfig.LogMessageTimestampTypeDoc
-  val MessageTimestampDifferenceMaxMsDoc = KafkaConfig.LogMessageTimestampDifferenceMaxMsDoc
+  val MessageFormatVersionDoc = KafkaConfig.MessageFormatVersionDoc
+  val MessageTimestampTypeDoc = KafkaConfig.MessageTimestampTypeDoc
+  val MessageTimestampDifferenceMaxMsDoc = KafkaConfig.MessageTimestampDifferenceMaxMsDoc
+  val LogRecoveryThreadsDoc = KafkaConfig.LogRecoveryThreadsDoc
+  val LogRecoveryMaxIntervalMsDoc = KafkaConfig.LogRecoveryMaxIntervalMsDoc
 
   private val configDef = {
     import org.apache.kafka.common.config.ConfigDef.Importance._
@@ -176,12 +184,14 @@ object LogConfig {
       .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, MEDIUM, MessageFormatVersionDoc)
       .define(MessageTimestampTypeProp, STRING, Defaults.MessageTimestampType, MEDIUM, MessageTimestampTypeDoc)
       .define(MessageTimestampDifferenceMaxMsProp, LONG, Defaults.MessageTimestampDifferenceMaxMs, atLeast(0), MEDIUM, MessageTimestampDifferenceMaxMsDoc)
+      .define(LogRecoveryThreads, INT, Defaults.LogRecoveryThreads, atLeast(1), MEDIUM, LogRecoveryThreadsDoc)
+      .define(LogRecoveryMaxIntervalMs, LONG, Defaults.LogRecoveryMaxIntervalMs, atLeast(1000), MEDIUM, LogRecoveryMaxIntervalMsDoc)
   }
 
   def apply(): LogConfig = LogConfig(new Properties())
 
   def configNames: Seq[String] = configDef.names.asScala.toSeq.sorted
-  
+
   /**
    * Create a log config instance using the given properties and defaults
    */
