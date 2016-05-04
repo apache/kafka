@@ -67,7 +67,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void testSerde() {
+    public void defaultSerdeShouldBeConfigured() {
         Map<String, Object> serializerConfigs = new HashMap<String, Object>();
         serializerConfigs.put("key.serializer.encoding", "UTF8");
         serializerConfigs.put("value.serializer.encoding", "UTF-16");
@@ -77,11 +77,11 @@ public class StreamsConfigTest {
         String topic = "my topic";
 
         serializer.configure(serializerConfigs, true);
-        assertEquals("Should get the original string after serialization and deserialization",
+        assertEquals("Should get the original string after serialization and deserialization with the configured encoding",
                 str, streamsConfig.keySerde().deserializer().deserialize(topic, serializer.serialize(topic, str)));
 
         serializer.configure(serializerConfigs, false);
-        assertEquals("Should get the original string after serialization and deserialization",
+        assertEquals("Should get the original string after serialization and deserialization with the configured encoding",
                 str, streamsConfig.valueSerde().deserializer().deserialize(topic, serializer.serialize(topic, str)));
     }
 }
