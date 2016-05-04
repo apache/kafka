@@ -13,6 +13,7 @@
 
 package org.apache.kafka.common.serialization;
 
+import java.io.Closeable;
 import java.util.Map;
 
 /**
@@ -22,7 +23,7 @@ import java.util.Map;
  *
  * A class that implements this interface is expected to have a constructor with no parameter.
  */
-public interface Serde<T> {
+public interface Serde<T> extends Closeable {
 
     /**
      * Configure this class, which will configure the underlying serializer and deserializer at the same time.
@@ -31,6 +32,13 @@ public interface Serde<T> {
      * @param isKey whether is for key or value
      */
     void configure(Map<String, ?> configs, boolean isKey);
+
+    /**
+     * Close this serde class, which will close the underlying serializer and deserializer at the same time.
+     * This method has to be idempotent because it might be called multiple times.
+     */
+    @Override
+    void close();
 
     Serializer<T> serializer();
 

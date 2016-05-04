@@ -23,60 +23,19 @@ import java.util.Map;
  */
 public class Serdes {
 
-    static public final class LongSerde implements Serde<Long> {
-        @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-            // do nothing
+    static private class WrapperSerde<T> implements Serde<T> {
+        protected Serializer<T> serializer;
+        protected Deserializer<T> deserializer;
+
+        public WrapperSerde(Serializer<T> serializer, Deserializer<T> deserializer) {
+            this.serializer = serializer;
+            this.deserializer = deserializer;
         }
 
-        @Override
-        public Serializer<Long> serializer() {
-            return new LongSerializer();
+        protected WrapperSerde() {
+            serializer = null;
+            deserializer = null;
         }
-
-        @Override
-        public Deserializer<Long> deserializer() {
-            return new LongDeserializer();
-        }
-    }
-
-    static public final class IntegerSerde implements Serde<Integer> {
-        @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-            // do nothing
-        }
-
-        @Override
-        public Serializer<Integer> serializer() {
-            return new IntegerSerializer();
-        }
-
-        @Override
-        public Deserializer<Integer> deserializer() {
-            return new IntegerDeserializer();
-        }
-    }
-
-    static public final class DoubleSerde implements Serde<Double> {
-        @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-            // do nothing
-        }
-
-        @Override
-        public Serializer<Double> serializer() {
-            return new DoubleSerializer();
-        }
-
-        @Override
-        public Deserializer<Double> deserializer() {
-            return new DoubleDeserializer();
-        }
-    }
-
-    static public final class StringSerde implements Serde<String> {
-        private Serializer<String> serializer = new StringSerializer();
-        private Deserializer<String> deserializer = new StringDeserializer();
 
         @Override
         public void configure(Map<String, ?> configs, boolean isKey) {
@@ -85,64 +44,75 @@ public class Serdes {
         }
 
         @Override
-        public Serializer<String> serializer() {
+        public void close() {
+            serializer.close();
+            deserializer.close();
+        }
+
+        @Override
+        public Serializer<T> serializer() {
             return serializer;
         }
 
         @Override
-        public Deserializer<String> deserializer() {
+        public Deserializer<T> deserializer() {
             return deserializer;
         }
     }
 
-    static public final class ByteBufferSerde implements Serde<ByteBuffer> {
-        @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-            // do nothing
-        }
-
-        @Override
-        public Serializer<ByteBuffer> serializer() {
-            return new ByteBufferSerializer();
-        }
-
-        @Override
-        public Deserializer<ByteBuffer> deserializer() {
-            return new ByteBufferDeserializer();
+    static public final class LongSerde extends WrapperSerde<Long> {
+        public LongSerde() {
+            super();
+            serializer = new LongSerializer();
+            deserializer = new LongDeserializer();
         }
     }
 
-    static public final class BytesSerde implements Serde<Bytes> {
-        @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-            // do nothing
-        }
-
-        @Override
-        public Serializer<Bytes> serializer() {
-            return new BytesSerializer();
-        }
-
-        @Override
-        public Deserializer<Bytes> deserializer() {
-            return new BytesDeserializer();
+    static public final class IntegerSerde extends WrapperSerde<Integer> {
+        public IntegerSerde() {
+            super();
+            serializer = new IntegerSerializer();
+            deserializer = new IntegerDeserializer();
         }
     }
 
-    static public final class ByteArraySerde implements Serde<byte[]> {
-        @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-            // do nothing
+    static public final class DoubleSerde extends WrapperSerde<Double> {
+        public DoubleSerde() {
+            super();
+            serializer = new DoubleSerializer();
+            deserializer = new DoubleDeserializer();
         }
+    }
 
-        @Override
-        public Serializer<byte[]> serializer() {
-            return new ByteArraySerializer();
+    static public final class StringSerde extends WrapperSerde<String> {
+        public StringSerde() {
+            super();
+            serializer = new StringSerializer();
+            deserializer = new StringDeserializer();
         }
+    }
 
-        @Override
-        public Deserializer<byte[]> deserializer() {
-            return new ByteArrayDeserializer();
+    static public final class ByteBufferSerde extends WrapperSerde<ByteBuffer> {
+        public ByteBufferSerde() {
+            super();
+            serializer = new ByteBufferSerializer();
+            deserializer = new ByteBufferDeserializer();
+        }
+    }
+
+    static public final class BytesSerde extends WrapperSerde<Bytes> {
+        public BytesSerde() {
+            super();
+            serializer = new BytesSerializer();
+            deserializer = new BytesDeserializer();
+        }
+    }
+
+    static public final class ByteArraySerde extends WrapperSerde<byte[]> {
+        public ByteArraySerde() {
+            super();
+            serializer = new ByteArraySerializer();
+            deserializer = new ByteArrayDeserializer();
         }
     }
 
@@ -194,23 +164,7 @@ public class Serdes {
             throw new IllegalArgumentException("deserializer must not be null");
         }
 
-        return new Serde<T>() {
-            @Override
-            public void configure(Map<String, ?> configs, boolean isKey) {
-                serializer.configure(configs, isKey);
-                deserializer.configure(configs, isKey);
-            }
-
-            @Override
-            public Serializer<T> serializer() {
-                return serializer;
-            }
-
-            @Override
-            public Deserializer<T> deserializer() {
-                return deserializer;
-            }
-        };
+        return new WrapperSerde<>(serializer, deserializer);
     }
 
     /*
