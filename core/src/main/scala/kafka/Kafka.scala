@@ -35,7 +35,7 @@ object Kafka extends Logging {
       .ofType(classOf[String])
 
     if (args.length == 0) {
-      CommandLineUtils.printUsageAndDie(optionParser, "USAGE: java [options] %s server.properties [--override property=value]*".format(classOf[KafkaServer].getSimpleName()))
+      CommandLineUtils.printUsageAndDie(optionParser, "USAGE: java [options] %s server.properties [--override property=value]*".format(classOf[KafkaServer].getSimpleName))
     }
 
     val props = Utils.loadProps(args(0))
@@ -58,14 +58,14 @@ object Kafka extends Logging {
       val kafkaServerStartable = KafkaServerStartable.fromProps(serverProps)
 
       // attach shutdown handler to catch control-c
-      Runtime.getRuntime().addShutdownHook(new Thread() {
+      Runtime.getRuntime.addShutdownHook(new Thread() {
         override def run() = {
-          kafkaServerStartable.shutdown
+          kafkaServerStartable.shutdown()
         }
       })
 
-      kafkaServerStartable.startup
-      kafkaServerStartable.awaitShutdown
+      kafkaServerStartable.startup()
+      kafkaServerStartable.awaitShutdown()
     }
     catch {
       case e: Throwable =>

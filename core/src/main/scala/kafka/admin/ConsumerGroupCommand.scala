@@ -47,7 +47,7 @@ object ConsumerGroupCommand {
       CommandLineUtils.printUsageAndDie(opts.parser, "List all consumer groups, describe a consumer group, or delete consumer group info.")
 
     // should have exactly one action
-    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has _)
+    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has)
     if (actions != 1)
       CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete")
 
@@ -305,7 +305,7 @@ object ConsumerGroupCommand {
     private val adminClient = createAdminClient()
 
     // `consumer` is only needed for `describe`, so we instantiate it lazily
-    private var consumer: KafkaConsumer[String, String] = null
+    private lazy val consumer: KafkaConsumer[String, String] = createNewConsumer()
 
     def list() {
       adminClient.listAllConsumerGroupsFlattened().foreach(x => println(x.groupId))
@@ -316,7 +316,7 @@ object ConsumerGroupCommand {
       if (consumerSummaries.isEmpty)
         println(s"Consumer group `${group}` does not exist or is rebalancing.")
       else {
-        val consumer = getConsumer()
+        val consumer = getConsumer
         printDescribeHeader()
         consumerSummaries.foreach { consumerSummary =>
           val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
@@ -332,7 +332,7 @@ object ConsumerGroupCommand {
     }
 
     protected def getLogEndOffset(topic: String, partition: Int): LogEndOffsetResult = {
-      val consumer = getConsumer()
+      val consumer = getConsumer
       val topicPartition = new TopicPartition(topic, partition)
       consumer.assign(List(topicPartition).asJava)
       consumer.seekToEnd(List(topicPartition).asJava)
@@ -351,9 +351,7 @@ object ConsumerGroupCommand {
       AdminClient.create(props)
     }
 
-    private def getConsumer() = {
-      if (consumer == null)
-        consumer = createNewConsumer()
+    private def getConsumer = {
       consumer
     }
 

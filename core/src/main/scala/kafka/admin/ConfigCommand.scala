@@ -48,7 +48,7 @@ object ConfigCommand {
     val zkUtils = ZkUtils(opts.options.valueOf(opts.zkConnectOpt),
                           30000,
                           30000,
-                          JaasUtils.isZkSecurityEnabled())
+                          JaasUtils.isZkSecurityEnabled)
 
     try {
       if (opts.options.has(opts.alterOpt))
@@ -57,7 +57,7 @@ object ConfigCommand {
         describeConfig(zkUtils, opts)
     } catch {
       case e: Throwable =>
-        println("Error while executing topic command " + e.getMessage)
+        println(s"Error while executing topic command ${e.getMessage}")
         println(Utils.stackTrace(e))
     } finally {
       zkUtils.close()
@@ -93,7 +93,7 @@ object ConfigCommand {
     if (maxMessageBytes > Defaults.MaxMessageSize){
       error(TopicCommand.longMessageSizeWarning(maxMessageBytes))
       if (!force)
-        TopicCommand.askToProceed
+        TopicCommand.askToProceed()
     }
   }
 
@@ -172,7 +172,7 @@ object ConfigCommand {
 
     def checkArgs() {
       // should have exactly one action
-      val actions = Seq(alterOpt, describeOpt).count(options.has _)
+      val actions = Seq(alterOpt, describeOpt).count(options.has)
       if(actions != 1)
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --describe, --alter")
 

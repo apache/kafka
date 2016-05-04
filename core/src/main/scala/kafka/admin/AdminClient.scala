@@ -19,11 +19,10 @@ import java.util.concurrent.atomic.AtomicInteger
 import kafka.common.KafkaException
 import kafka.coordinator.{GroupOverview, GroupSummary, MemberSummary}
 import kafka.utils.Logging
-import org.apache.kafka.clients._
+import org.apache.kafka.clients.{ClientResponse, CommonClientConfigs, ClientUtils, NetworkClient, Metadata}
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
-import org.apache.kafka.common.errors.DisconnectException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.types.Struct
@@ -49,7 +48,7 @@ class AdminClient(val time: Time,
     client.poll(future)
 
     if (future.succeeded())
-      return future.value().responseBody()
+      future.value().responseBody()
     else
       throw future.exception()
   }
@@ -93,7 +92,7 @@ class AdminClient(val time: Time,
   }
 
   def listAllGroups(): Map[Node, List[GroupOverview]] = {
-    findAllBrokers.map {
+    findAllBrokers().map {
       case broker =>
         broker -> {
           try {
@@ -114,11 +113,11 @@ class AdminClient(val time: Time,
   }
 
   def listAllGroupsFlattened(): List[GroupOverview] = {
-    listAllGroups.values.flatten.toList
+    listAllGroups().values.flatten.toList
   }
 
   def listAllConsumerGroupsFlattened(): List[GroupOverview] = {
-    listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
+    listAllGroupsFlattened().filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
   }
 
   def describeGroup(groupId: String): GroupSummary = {

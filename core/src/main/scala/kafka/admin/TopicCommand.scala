@@ -18,20 +18,21 @@
 package kafka.admin
 
 import java.util.Properties
+
 import joptsimple._
 import kafka.common.{AdminCommandFailedException, Topic, TopicExistsException}
 import kafka.consumer.{ConsumerConfig, Whitelist}
-import kafka.coordinator.GroupCoordinator
 import kafka.log.{Defaults, LogConfig}
 import kafka.server.ConfigType
 import kafka.utils.ZkUtils._
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
+import org.apache.kafka.common.internals.TopicConstants
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
+
 import scala.collection.JavaConversions._
 import scala.collection._
-import org.apache.kafka.common.internals.TopicConstants
 
 
 object TopicCommand extends Logging {
@@ -44,7 +45,7 @@ object TopicCommand extends Logging {
       CommandLineUtils.printUsageAndDie(opts.parser, "Create, delete, describe, or change a topic.")
 
     // should have exactly one action
-    val actions = Seq(opts.createOpt, opts.listOpt, opts.alterOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has _)
+    val actions = Seq(opts.createOpt, opts.listOpt, opts.alterOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has)
     if(actions != 1)
       CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete")
 
@@ -53,7 +54,7 @@ object TopicCommand extends Logging {
     val zkUtils = ZkUtils(opts.options.valueOf(opts.zkConnectOpt),
                           30000,
                           30000,
-                          JaasUtils.isZkSecurityEnabled())
+                          JaasUtils.isZkSecurityEnabled)
     var exitCode = 0
     try {
       if(opts.options.has(opts.createOpt))
@@ -366,13 +367,13 @@ object TopicCommand extends Logging {
       if (replicas > 1) {
         error(longMessageSizeWarning(maxMessageBytes))
         if (!force)
-          askToProceed
+          askToProceed()
       }
       else
         warn(shortMessageSizeWarning(maxMessageBytes))
   }
 
-  def askToProceed: Unit = {
+  def askToProceed(): Unit = {
     println("Are you sure you want to continue? [y/n]")
     if (!Console.readLine().equalsIgnoreCase("y")) {
       println("Ending your session")
