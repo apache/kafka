@@ -179,12 +179,22 @@ public class BufferPoolTest {
     public void testCleanupMemoryAvailabilityWaiterOnBlockTimeout() throws Exception {
         BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
         pool.allocate(1, maxBlockTimeMs);
-        try {
-            pool.allocate(2, maxBlockTimeMs);
-            fail("The buffer allocated more memory than its maximum value 2");
-        } catch (TimeoutException e) {
-            // this is good
-        }
+        Runnable r = () -> {
+            try {
+                pool.allocate(2, maxBlockTimeMs);
+                fail("The buffer allocated more memory than its maximum value 2");
+            } catch (TimeoutException e) {
+                // this is good
+            } catch (InterruptedException e) {
+                // this can be neglected
+            }
+        };
+        Thread t1 = new Thread(r);
+        Thread t2 = new Thread(r);
+        t1.start();
+        t2.start();
+        t1.join();
+        t2.join();
         assertEquals(pool.queued(), 0);
     }
 
