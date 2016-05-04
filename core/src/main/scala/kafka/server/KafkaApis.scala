@@ -579,7 +579,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def fetchOffsetsBefore(log: Log, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
+  private[server] def fetchOffsetsBefore(log: Log, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
     val segsArray = log.logSegments.toArray
     var offsetTimeArray: Array[(Long, Long)] = null
     val lastSegmentHasSize = segsArray.last.size > 0
