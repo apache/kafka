@@ -87,7 +87,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final String host;
 
     // Current SASL state
-    private SaslState saslState = SaslState.HANDSHAKE_REQUEST;
+    private SaslState saslState = SaslState.GSSAPI_OR_HANDSHAKE_REQUEST;
     // Next SASL state to be set when outgoing writes associated with the current SASL state complete
     private SaslState pendingSaslState = null;
     private SaslServer saslServer;
