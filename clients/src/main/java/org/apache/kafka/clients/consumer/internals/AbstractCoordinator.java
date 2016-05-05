@@ -171,9 +171,9 @@ public abstract class AbstractCoordinator implements Closeable {
                                            ByteBuffer memberAssignment);
 
     /**
-     * Block until the coordinator for this group is known.
+     * Block until the coordinator for this group is known and is ready to receive requests.
      */
-    public void ensureCoordinatorKnown() {
+    public void ensureCoordinatorReady() {
         while (coordinatorUnknown()) {
             RequestFuture<Void> future = sendGroupCoordinatorRequest();
             client.poll(future);
@@ -183,7 +183,13 @@ public abstract class AbstractCoordinator implements Closeable {
                     client.awaitMetadataUpdate();
                 else
                     throw future.exception();
+            } else if (coordinator != null && client.connectionFailed(coordinator)) {
+                // we found the coordinator, but the connection has failed, so mark
+                // it dead and backoff before retrying discovery
+                coordinatorDead();
+                time.sleep(retryBackoffMs);
             }
+
         }
     }
 
@@ -208,7 +214,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         while (needRejoin()) {
-            ensureCoordinatorKnown();
+            ensureCoordinatorReady();
 
             // ensure that there are no pending requests to the coordinator. This is important
             // in particular to avoid resending a pending JoinGroup request.
