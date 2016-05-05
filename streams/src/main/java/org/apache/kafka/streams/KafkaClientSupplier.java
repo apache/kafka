@@ -24,23 +24,24 @@ import org.apache.kafka.clients.producer.Producer;
 
 public interface KafkaClientSupplier {
     /**
-     * Creates an instance of Producer which is used to produce records to brokers by this StreamThread.
-     * @param config Producer config which supplied by StreamsConfig given to KafkaStreams
-     * @return An instance of kafka Producer.
+     * Creates an instance of Producer which is used to produce records.
+     * @param config producer config which supplied by {@link StreamsConfig} given to {@link KafkaStreams}
+     * @return an instance of kafka Producer
      */
     Producer<byte[], byte[]> getProducer(Map<String, Object> config);
 
     /**
-     * Creates an instance of Consumer which is used to consume records from brokers by this StreamThread.
-     * @param config Consumer config which supplied by StreamsConfig given to KafkaStreams
-     * @return An instance of kafka Consumer.
+     * Creates an instance of Consumer which is used to consume records of source topics.
+     * @param config consumer config which supplied by {@link StreamsConfig} given to {@link KafkaStreams}
+     * @return an instance of kafka Consumer
      */
     Consumer<byte[], byte[]> getConsumer(Map<String, Object> config);
 
     /**
-     * Creates an instance of Consumer which is used to consume records from brokers by this StreamThread.
-     * @param config Restore consumer config which supplied by StreamsConfig given to KafkaStreams
-     * @return An instance of kafka Consumer.
+     * Creates an instance of Consumer which is used to consume records of internal topics.
+     * @param config restore consumer config which supplied by {@link StreamsConfig} given to
+     * {@link KafkaStreams}
+     * @return an instance of kafka Consumer
      */
     Consumer<byte[], byte[]> getRestoreConsumer(Map<String, Object> config);
 }
