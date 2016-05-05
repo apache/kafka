@@ -18,9 +18,11 @@ package org.apache.kafka.clients;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
@@ -58,6 +60,7 @@ public class MockClient implements KafkaClient {
     private int correlation = 0;
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
+    private final Map<Node, Long> blackedOut = new HashMap<>();
     private final Queue<ClientRequest> requests = new ArrayDeque<>();
     private final Queue<ClientResponse> responses = new ArrayDeque<>();
     private final Queue<FutureResponse> futureResponses = new ArrayDeque<>();
@@ -73,6 +76,8 @@ public class MockClient implements KafkaClient {
 
     @Override
     public boolean ready(Node node, long now) {
+        if (isBlackedOut(node))
+            return false;
         ready.add(node.idString());
         return true;
     }
@@ -82,9 +87,26 @@ public class MockClient implements KafkaClient {
         return 0;
     }
 
+    public void blackout(Node node, long duration) {
+        blackedOut.put(node, time.milliseconds() + duration);
+    }
+
+    private boolean isBlackedOut(Node node) {
+        if (blackedOut.containsKey(node)) {
+            long expiration = blackedOut.get(node);
+            if (time.milliseconds() > expiration) {
+                blackedOut.remove(node);
+                return false;
+            } else {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public boolean connectionFailed(Node node) {
-        return false;
+        return isBlackedOut(node);
     }
 
     public void disconnect(String node) {
