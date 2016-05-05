@@ -31,7 +31,32 @@ class OffsetMapTest extends JUnitSuite {
     validateMap(1000)
     validateMap(5000)
   }
-  
+
+  @Test
+  def testPut() {
+    val map = new SkimpyOffsetMap(120)
+    for (i <- 0 until 5)
+      assertTrue(map.put(key(i), i))
+    assertFalse(map.put(key(6), 6L))
+  }
+
+  @Test
+  def testPutAll() {
+    val map1 = new SkimpyOffsetMap(128)
+    for(i <- 0 until 5)
+      map1.put(key(i), i)
+    val map2 = new SkimpyOffsetMap(128)
+    for(i <- 0 until 5)
+      map2.put(key(i), i+1)
+    assertTrue(map1.putAll(map2))
+    for(i <- 0 until 5)
+      assertEquals(map1.get(key(i)), i+1)
+    val map3 = new SkimpyOffsetMap(128)
+    for (i <- 1 until 6)
+      map3.put(key(i), i)
+    assertFalse(map1.putAll(map3))
+  }
+
   @Test
   def testClear() {
     val map = new SkimpyOffsetMap(4000)

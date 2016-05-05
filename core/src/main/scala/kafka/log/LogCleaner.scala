@@ -190,8 +190,10 @@ class LogCleaner(val config: CleanerConfig,
       warn("Cannot use more than 2G of cleaner buffer space per cleaner thread, ignoring excess buffer space...")
 
     val cleaner = new Cleaner(id = threadId,
-                              offsetMap = new SkimpyOffsetMap(memory = math.min(config.dedupeBufferSize / config.numThreads, Int.MaxValue).toInt, 
-                                                              hashAlgorithm = config.hashAlgorithm),
+                              offsetMap = new SkimpyOffsetMap(memory = math.min(config.dedupeBufferSize / config.numThreads / 2, Int.MaxValue).toInt,
+                                                        hashAlgorithm = config.hashAlgorithm),
+                              scratchMap = new SkimpyOffsetMap(memory = math.min(config.dedupeBufferSize / config.numThreads / 2, Int.MaxValue).toInt,
+                                                        hashAlgorithm = config.hashAlgorithm),
                               ioBufferSize = config.ioBufferSize / config.numThreads / 2,
                               maxIoBufferSize = config.maxMessageSize,
                               dupBufferLoadFactor = config.dedupeBufferLoadFactor,
@@ -279,8 +281,10 @@ class LogCleaner(val config: CleanerConfig,
 
 /**
  * This class holds the actual logic for cleaning a log
+ *
  * @param id An identifier used for logging
  * @param offsetMap The map used for deduplication
+ * @param scratchMap An offset map used to compact per-segment information
  * @param ioBufferSize The size of the buffers to use. Memory usage will be 2x this number as there is a read and write buffer.
  * @param maxIoBufferSize The maximum size of a message that can appear in the log
  * @param dupBufferLoadFactor The maximum percent full for the deduplication buffer
@@ -290,6 +294,7 @@ class LogCleaner(val config: CleanerConfig,
  */
 private[log] class Cleaner(val id: Int,
                            val offsetMap: OffsetMap,
+                           val scratchMap: OffsetMap,
                            ioBufferSize: Int,
                            maxIoBufferSize: Int,
                            dupBufferLoadFactor: Double,
@@ -315,7 +320,6 @@ private[log] class Cleaner(val id: Int,
    * Clean the given log
    *
    * @param cleanable The log to be cleaned
-   *
    * @return The first offset not cleaned
    */
   private[log] def clean(cleanable: LogToClean): Long = {
@@ -359,8 +363,8 @@ private[log] class Cleaner(val id: Int,
    * @param deleteHorizonMs The time to retain delete tombstones
    */
   private[log] def cleanSegments(log: Log,
-                                 segments: Seq[LogSegment], 
-                                 map: OffsetMap, 
+                                 segments: Seq[LogSegment],
+                                 map: OffsetMap,
                                  deleteHorizonMs: Long) {
     // create a new segment with the suffix .cleaned appended to both the log and index name
     val logFile = new File(segments.head.log.file.getPath + Log.CleanedFileSuffix)
@@ -599,11 +603,10 @@ private[log] class Cleaner(val id: Int,
 
   /**
    * Build a map of key_hash => offset for the keys in the dirty portion of the log to use in cleaning.
+   *
    * @param log The log to use
    * @param start The offset at which dirty messages begin
    * @param end The ending offset for the map that is being built
-   * @param map The map in which to store the mappings
-   *
    * @return The final offset the map covers
    */
   private[log] def buildOffsetMap(log: Log, start: Long, end: Long, map: OffsetMap): Long = {
@@ -615,17 +618,16 @@ private[log] class Cleaner(val id: Int,
     // but we may be able to fit more (if there is lots of duplication in the dirty section of the log)
     var offset = dirty.head.baseOffset
     require(offset == start, "Last clean offset is %d but segment base offset is %d for log %s.".format(start, offset, log.name))
-    val maxDesiredMapSize = (map.slots * this.dupBufferLoadFactor).toInt
-    var full = false
-    for (segment <- dirty if !full) {
-      checkDone(log.topicAndPartition)
-      val segmentSize = segment.nextOffset() - segment.baseOffset
 
-      require(segmentSize <= maxDesiredMapSize, "%d messages in segment %s/%s but offset map can fit only %d. You can increase log.cleaner.dedupe.buffer.size or decrease log.cleaner.threads".format(segmentSize,  log.name, segment.log.file.getName, maxDesiredMapSize))
-      if (map.size + segmentSize <= maxDesiredMapSize)
-        offset = buildOffsetMapForSegment(log.topicAndPartition, segment, map)
+    val maxDesiredMapSize = (map.slots * this.dupBufferLoadFactor).toInt
+    var didPut = true
+    for (segment <- dirty if (map.size < maxDesiredMapSize && didPut)) {
+      checkDone(log.topicAndPartition)
+      val next_offset = buildOffsetMapForSegment(log.topicAndPartition, segment)
+      if (map.putAll(scratchMap))
+        offset = next_offset
       else
-        full = true
+        didPut = false
     }
     info("Offset map for log %s complete.".format(log.name))
     offset
@@ -635,11 +637,10 @@ private[log] class Cleaner(val id: Int,
    * Add the messages in the given segment to the offset map
    *
    * @param segment The segment to index
-   * @param map The map in which to store the key=>offset mapping
-   *
    * @return The final offset covered by the map
    */
-  private def buildOffsetMapForSegment(topicAndPartition: TopicAndPartition, segment: LogSegment, map: OffsetMap): Long = {
+  private def buildOffsetMapForSegment(topicAndPartition: TopicAndPartition, segment: LogSegment): Long = {
+    scratchMap.clear()
     var position = 0
     var offset = segment.baseOffset
     while (position < segment.log.sizeInBytes) {
@@ -650,8 +651,10 @@ private[log] class Cleaner(val id: Int,
       val startPosition = position
       for (entry <- messages) {
         val message = entry.message
-        if (message.hasKey)
-          map.put(message.key, entry.offset)
+        if (message.hasKey) {
+          val ok = scratchMap.put(message.key, entry.offset)
+          require(ok, "%d slots of scratchMap filled up processing segment %s. You can increase log.cleaner.dedupe.buffer.size or decrease log.cleaner.threads".format(scratchMap.slots, segment.log.file.getName))
+        }
         offset = entry.offset
         stats.indexMessagesRead(1)
       }
