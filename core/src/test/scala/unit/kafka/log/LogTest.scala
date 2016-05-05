@@ -222,7 +222,7 @@ class LogTest extends JUnitSuite {
     // now manually truncate off all but one message from the first segment to create a gap in the messages
     log.logSegments.head.truncateTo(1)
 
-    assertEquals("A read should now return the last message in the log", log.logEndOffset-1, log.read(1, 200, None).messageSet.head.offset)
+    assertEquals("A read should now return the last message in the log", log.logEndOffset - 1, log.read(1, 200, None).messageSet.head.offset)
   }
 
   /**
@@ -235,23 +235,29 @@ class LogTest extends JUnitSuite {
   def testReadOutOfRange() {
     createEmptyLogs(logDir, 1024)
     val logProps = new Properties()
+
+    // set up replica log starting with offset 1024 and with one message (at offset 1024)
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
     val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
     log.append(new ByteBufferMessageSet(NoCompressionCodec, messages = new Message("42".getBytes)))
-    assertEquals("Reading just beyond end of log should produce 0 byte read.", 0, log.read(1025, 1000).messageSet.sizeInBytes)
+
+    assertEquals("Reading at the log end offset should produce 0 byte read.", 0, log.read(1025, 1000).messageSet.sizeInBytes)
+
     try {
-      log.read(0, 1025)
-      fail("Expected exception on invalid read.")
-    } catch {
-      case e: OffsetOutOfRangeException => "This is good."
-    }
-    try {
-      log.read(1026, 1000)
-      fail("Expected exception on invalid read.")
+      log.read(0, 1000)
+      fail("Reading below the log start offset should throw OffsetOutOfRangeException")
     } catch {
       case e: OffsetOutOfRangeException => // This is good.
     }
-    assertEquals("Reading from maxOffset should produce 0 byte read.", 0, log.read(1024, 1000, Some(1024)).messageSet.sizeInBytes)
+
+    try {
+      log.read(1026, 1000)
+      fail("Reading at beyond the log end offset should throw OffsetOutOfRangeException")
+    } catch {
+      case e: OffsetOutOfRangeException => // This is good.
+    }
+
+    assertEquals("Reading from below the specified maxOffset should produce 0 byte read.", 0, log.read(1025, 1000, Some(1024)).messageSet.sizeInBytes)
   }
 
   /**
