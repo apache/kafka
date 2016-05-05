@@ -26,11 +26,14 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Condition;
 
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assert.assertEquals;
@@ -148,8 +151,6 @@ public class BufferPoolTest {
     /**
      * Test if Timeout exception is thrown when there is not enough memory to allocate and the elapsed time is greater than the max specified block time.
      * And verify that the allocation should finish soon after the maxBlockTimeMs.
-     *
-     * @throws Exception
      */
     @Test
     public void testBlockTimeout() throws Exception {
@@ -172,6 +173,78 @@ public class BufferPoolTest {
         }
         long endTimeMs = systemTime.milliseconds();
         assertTrue("Allocation should finish not much later than maxBlockTimeMs", endTimeMs - beginTimeMs < maxBlockTimeMs + 1000);
+    }
+
+    /**
+     * Test if the  waiter that is waiting on availability of more memory is cleaned up when a timeout occurs
+     */
+    @Test
+    public void testCleanupMemoryAvailabilityWaiterOnBlockTimeout() throws Exception {
+        BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
+        pool.allocate(1, maxBlockTimeMs);
+        try {
+            pool.allocate(2, maxBlockTimeMs);
+            fail("The buffer allocated more memory than its maximum value 2");
+        } catch (TimeoutException e) {
+            // this is good
+        }
+        assertTrue(pool.queued() == 0);
+    }
+
+    /**
+     * Test if the  waiter that is waiting on availability of more memory is cleaned up when an interruption occurs
+     */
+    @Test
+    public void testCleanupMemoryAvailabilityWaiterOnInterruption() throws Exception {
+        BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
+        long blockTime = 5000;
+        pool.allocate(1, maxBlockTimeMs);
+        Thread t1 = new Thread(new BufferPoolAllocator(pool, blockTime));
+        Thread t2 = new Thread(new BufferPoolAllocator(pool, blockTime));
+        // start thread t1 which will try to allocate more memory on to the Buffer pool
+        t1.start();
+        // sleep for 500ms. Condition variable c1 associated with pool.allocate() by thread t1 will be inserted in the waiters queue.
+        Thread.sleep(500);
+        Deque<Condition> waiters = pool.waiters();
+        // get the condition object associated with pool.allocate() by thread t1
+        Condition c1 = waiters.getFirst();
+        // start thread t2 which will try to allocate more memory on to the Buffer pool
+        t2.start();
+        // sleep for 500ms. Condition variable c2 associated with pool.allocate() by thread t2 will be inserted in the waiters queue. The waiters queue will have 2 entries c1 and c2.
+        Thread.sleep(500);
+        t1.interrupt();
+        // sleep for 500ms.
+        Thread.sleep(500);
+        // get the condition object associated with allocate() by thread t2
+        Condition c2 = waiters.getLast();
+        t2.interrupt();
+        assertNotEquals(c1, c2);
+        t1.join();
+        t2.join();
+        // both the allocate() called by threads t1 and t2 should have been interrupted and the waiters queue should be empty
+        assertEquals(pool.queued(), 0);
+    }
+
+    private static class BufferPoolAllocator implements Runnable {
+        BufferPool pool;
+        long maxBlockTimeMs;
+
+        BufferPoolAllocator(BufferPool pool, long maxBlockTimeMs) {
+            this.pool = pool;
+            this.maxBlockTimeMs = maxBlockTimeMs;
+        }
+
+        @Override
+        public void run() {
+            try {
+                pool.allocate(2, maxBlockTimeMs);
+                fail("The buffer allocated more memory than its maximum value 2");
+            } catch (TimeoutException e) {
+                // this is good
+            } catch (InterruptedException e) {
+                // this can be neglected
+            }
+        }
     }
 
     /**

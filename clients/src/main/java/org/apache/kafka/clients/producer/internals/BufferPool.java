@@ -123,16 +123,25 @@ public final class BufferPool {
                 // enough memory to allocate one
                 while (accumulated < size) {
                     long startWaitNs = time.nanoseconds();
-                    boolean waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
-                    long endWaitNs = time.nanoseconds();
-                    long timeNs = Math.max(0L, endWaitNs - startWaitNs);
-                    this.waitTime.record(timeNs, time.milliseconds());
+                    long timeNs;
+                    boolean waitingTimeElapsed;
+                    try {
+                        waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
+                    } catch (InterruptedException e) {
+                        this.waiters.remove(moreMemory);
+                        throw e;
+                    } finally {
+                        long endWaitNs = time.nanoseconds();
+                        timeNs = Math.max(0L, endWaitNs - startWaitNs);
+                        this.waitTime.record(timeNs, time.milliseconds());
+                    }
 
-                    if (waitingTimeElapsed)
+                    if (waitingTimeElapsed) {
+                        this.waiters.remove(moreMemory);
                         throw new TimeoutException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
+                    }
 
                     remainingTimeToBlockNs -= timeNs;
-
                     // check if we can satisfy this request from the free list,
                     // otherwise allocate memory
                     if (accumulated == 0 && size == this.poolableSize && !this.free.isEmpty()) {
@@ -261,5 +270,10 @@ public final class BufferPool {
      */
     public long totalMemory() {
         return this.totalMemory;
+    }
+
+    // package-private method used only for testing
+    Deque<Condition> waiters() {
+        return this.waiters;
     }
 }
