@@ -136,10 +136,6 @@ public final class BufferPool {
                         this.waitTime.record(timeNs, time.milliseconds());
                     }
 
-                    long endWaitNs = time.nanoseconds();
-                    timeNs = Math.max(0L, endWaitNs - startWaitNs);
-                    this.waitTime.record(timeNs, time.milliseconds());
-
                     if (waitingTimeElapsed) {
                         this.waiters.remove(moreMemory);
                         throw new TimeoutException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
