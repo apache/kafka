@@ -259,14 +259,14 @@ of the <code>WordCountDemo</code> example code (converted to use Java 8 lambda e
 </p>
 <pre>
 KStream<String, Long> wordCounts = textLines
-// Split each text line, by whitespace, into words.
-.flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
-// Ensure the words are available as message keys for the next aggregate operation.
-.map((key, value) -> new KeyValue<>(value, value))
-// Count the occurrences of each word (message key).
-.countByKey(stringSerializer, longSerializer, stringDeserializer, longDeserializer, "Counts")
-// Convert the resulted aggregate table into another stream.
-.toStream();
+    // Split each text line, by whitespace, into words.
+    .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
+
+    // Ensure the words are available as message keys for the next aggregate operation.
+    .map((key, value) -> new KeyValue<>(value, value))
+
+    // Count the occurrences of each word (message key).
+    .countByKey("Counts")
 </pre>
 
 <p>
