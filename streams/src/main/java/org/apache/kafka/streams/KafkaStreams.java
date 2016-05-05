@@ -116,7 +116,8 @@ public class KafkaStreams {
      *
      * @param builder         the processor topology builder specifying the computational logic
      * @param config          the stream configs
-     * @param clientSupplier  the kafka clients supplier which provides clients for this {@link KafkaStreams}
+     * @param clientSupplier  the kafka clients supplier which provides underlying producer and consumer clients
+     * for this {@link KafkaStreams} instance
      */
     public KafkaStreams(TopologyBuilder builder, StreamsConfig config, KafkaClientSupplier clientSupplier) {
         // create the metrics
