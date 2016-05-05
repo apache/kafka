@@ -173,7 +173,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Block until the coordinator for this group is known.
      */
-    public void ensureCoordinatorKnown() {
+    public void ensureCoordinatorReady() {
         while (coordinatorUnknown()) {
             RequestFuture<Void> future = sendGroupCoordinatorRequest();
             client.poll(future);
@@ -214,7 +214,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         while (needRejoin()) {
-            ensureCoordinatorKnown();
+            ensureCoordinatorReady();
 
             // ensure that there are no pending requests to the coordinator. This is important
             // in particular to avoid resending a pending JoinGroup request.
