@@ -67,13 +67,10 @@ class KafkaLog4jAppender(BackgroundThreadService):
 
     def stop_node(self, node):
         node.account.kill_process("VerifiableLog4jAppender", allow_fail=False)
-        if self.worker_threads is None:
-            return
 
-        # block until the corresponding thread exits
-        if len(self.worker_threads) >= self.idx(node):
-            # Need to guard this because stop is preemptively called before the worker threads are added and started
-            self.worker_threads[self.idx(node) - 1].join()
+        stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
+        assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
+                        (str(node.account), str(self.stop_timeout_sec))
 
     def clean_node(self, node):
         node.account.kill_process("VerifiableLog4jAppender", clean_shutdown=False, allow_fail=False)
