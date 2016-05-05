@@ -31,17 +31,18 @@ import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.MockStrict;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.core.Response;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.client.Invocation;
+import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.Response;
 
 import static org.junit.Assert.assertEquals;
 
@@ -71,15 +72,15 @@ public class RestServerTest {
 
     @Test
     public void testCORSEnabled() {
-        checkCORSRequest("*", "http://bar.com", "http://bar.com");
+        checkCORSRequest("*", "http://bar.com", "http://bar.com", "PUT");
     }
 
     @Test
     public void testCORSDisabled() {
-        checkCORSRequest("", "http://bar.com", null);
+        checkCORSRequest("", "http://bar.com", null, null);
     }
 
-    public void checkCORSRequest(String corsDomain, String origin, String expectedHeader) {
+    public void checkCORSRequest(String corsDomain, String origin, String expectedHeader, String method) {
         // To be able to set the Origin, we need to toggle this flag
         System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
 
@@ -92,10 +93,12 @@ public class RestServerTest {
                 return null;
             }
         });
+
         PowerMock.replayAll();
 
         Map<String, String> workerProps = baseWorkerProps();
         workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, corsDomain);
+        workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG, method);
         WorkerConfig workerConfig = new StandaloneConfig(workerProps);
         server = new RestServer(workerConfig);
         server.start(herder);
@@ -107,6 +110,15 @@ public class RestServerTest {
         assertEquals(200, response.getStatus());
 
         assertEquals(expectedHeader, response.getHeaderString("Access-Control-Allow-Origin"));
+
+        response = request("/connector-plugins/FileStreamSource/validate")
+            .header("Referer", origin + "/page")
+            .header("Origin", origin)
+            .header("Access-Control-Request-Method", method)
+            .options();
+        assertEquals(404, response.getStatus());
+        assertEquals(expectedHeader, response.getHeaderString("Access-Control-Allow-Origin"));
+        assertEquals(method, response.getHeaderString("Access-Control-Allow-Methods"));
         PowerMock.verifyAll();
     }
 

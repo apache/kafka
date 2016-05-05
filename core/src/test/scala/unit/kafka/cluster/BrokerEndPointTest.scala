@@ -102,6 +102,11 @@ class BrokerEndPointTest extends Logging {
     endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
     assert(endpoint.host == "::1")
     assert(endpoint.port == 9092)
+    // test for ipv6 with % character
+    connectionString = "[fe80::b1da:69ca:57f7:63d8%3]:9092"
+    endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
+    assert(endpoint.host == "fe80::b1da:69ca:57f7:63d8%3")
+    assert(endpoint.port == 9092)
     // add test for uppercase in hostname
     connectionString = "MyHostname:9092"
     endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
@@ -128,6 +133,12 @@ class BrokerEndPointTest extends Logging {
     assert(endpoint.host == "::1")
     assert(endpoint.port == 9092)
     assert(endpoint.connectionString ==  "PLAINTEXT://[::1]:9092")
+    // test for ipv6 with % character
+    connectionString = "PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:9092"
+    endpoint = EndPoint.createEndPoint(connectionString)
+    assert(endpoint.host == "fe80::b1da:69ca:57f7:63d8%3")
+    assert(endpoint.port == 9092)
+    assert(endpoint.connectionString ==  "PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:9092")
     // test hostname
     connectionString = "PLAINTEXT://MyHostname:9092"
     endpoint = EndPoint.createEndPoint(connectionString)

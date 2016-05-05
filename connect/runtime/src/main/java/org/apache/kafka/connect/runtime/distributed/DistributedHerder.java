@@ -44,7 +44,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -435,16 +434,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     @Override
     public void putConnectorConfig(final String connName, final Map<String, String> config, final boolean allowReplace,
                                    final Callback<Created<ConnectorInfo>> callback) {
-        final Map<String, String> connConfig;
-        if (config == null) {
-            connConfig = null;
-        } else if (!config.containsKey(ConnectorConfig.NAME_CONFIG)) {
-            connConfig = new HashMap<>(config);
-            connConfig.put(ConnectorConfig.NAME_CONFIG, connName);
-        } else {
-            connConfig = config;
-        }
-
         log.trace("Submitting connector config write request {}", connName);
 
         addRequest(
@@ -463,7 +452,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             return null;
                         }
 
-                        if (connConfig == null) {
+                        if (config == null) {
                             if (!exists) {
                                 callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                             } else {
@@ -475,11 +464,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         }
 
                         log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
-                        configBackingStore.putConnectorConfig(connName, connConfig);
+                        configBackingStore.putConnectorConfig(connName, config);
 
                         // Note that we use the updated connector config despite the fact that we don't have an updated
                         // snapshot yet. The existing task info should still be accurate.
-                        ConnectorInfo info = new ConnectorInfo(connName, connConfig, configState.tasks(connName));
+                        ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName));
                         callback.onCompletion(null, new Created<>(!exists, info));
                         return null;
                     }
@@ -553,7 +542,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         else if (!configState.contains(connName))
                             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                         else {
-                            configBackingStore.putTaskConfigs(connName, taskConfigListAsMap(connName, configs));
+                            configBackingStore.putTaskConfigs(connName, configs);
                             callback.onCompletion(null, null);
                         }
                         return null;
@@ -863,7 +852,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
             if (changed) {
                 if (isLeader()) {
-                    configBackingStore.putTaskConfigs(connName, taskConfigListAsMap(connName, taskProps));
+                    configBackingStore.putTaskConfigs(connName, taskProps);
                     cb.onCompletion(null, null);
                 } else {
                     // We cannot forward the request on the same thread because this reconfiguration can happen as a result of connector
@@ -1074,14 +1063,4 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    private static Map<ConnectorTaskId, Map<String, String>> taskConfigListAsMap(String connName, List<Map<String, String>> configs) {
-        int index = 0;
-        Map<ConnectorTaskId, Map<String, String>> result = new HashMap<>();
-        for (Map<String, String> taskConfigMap : configs) {
-            ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
-            result.put(taskId, taskConfigMap);
-            index++;
-        }
-        return result;
-    }
 }

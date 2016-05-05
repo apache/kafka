@@ -27,11 +27,7 @@ public class UnlimitedWindow extends Window {
 
     @Override
     public boolean overlap(Window other) {
-        return super.overlap(other) && other.getClass().equals(UnlimitedWindow.class);
+        return getClass() == other.getClass() && super.overlap(other);
     }
 
-    @Override
-    public boolean equalsTo(Window other) {
-        return super.equalsTo(other) && other.getClass().equals(UnlimitedWindow.class);
-    }
 }

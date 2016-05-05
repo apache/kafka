@@ -44,6 +44,7 @@ import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import javax.ws.rs.BadRequestException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -288,6 +289,13 @@ public class ConnectorsResourceTest {
         connectorsResource.putConnectorConfig(CONNECTOR_NAME, FORWARD, CONNECTOR_CONFIG);
 
         PowerMock.verifyAll();
+    }
+
+    @Test(expected = BadRequestException.class)
+    public void testPutConnectorConfigNameMismatch() throws Throwable {
+        Map<String, String> connConfig = new HashMap<>(CONNECTOR_CONFIG);
+        connConfig.put(ConnectorConfig.NAME_CONFIG, "mismatched-name");
+        connectorsResource.putConnectorConfig(CONNECTOR_NAME, FORWARD, connConfig);
     }
 
     @Test

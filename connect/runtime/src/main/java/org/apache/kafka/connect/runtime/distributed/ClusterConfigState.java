@@ -22,10 +22,11 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * An immutable snapshot of the configuration state of connectors and tasks in a Kafka Connect cluster.
@@ -116,15 +117,15 @@ public class ClusterConfigState {
     /**
      * Get all task configs for a connector.
      * @param connector name of the connector
-     * @return a map from the task id to its configuration
+     * @return a list of task configurations
      */
-    public Map<ConnectorTaskId, Map<String, String>> allTaskConfigs(String connector) {
-        Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
+    public List<Map<String, String>> allTaskConfigs(String connector) {
+        Map<Integer, Map<String, String>> taskConfigs = new TreeMap<>();
         for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : this.taskConfigs.entrySet()) {
             if (taskConfigEntry.getKey().connector().equals(connector))
-                taskConfigs.put(taskConfigEntry.getKey(), taskConfigEntry.getValue());
+                taskConfigs.put(taskConfigEntry.getKey().task(), taskConfigEntry.getValue());
         }
-        return taskConfigs;
+        return new LinkedList<>(taskConfigs.values());
     }
 
     /**

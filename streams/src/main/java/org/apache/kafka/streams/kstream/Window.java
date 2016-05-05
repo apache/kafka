@@ -25,44 +25,53 @@ public abstract class Window {
     private long start;
     private long end;
 
+    /**
+     * Create a new window for the given start time (inclusive) and end time (exclusive).
+     *
+     * @param start  the start timestamp of the window (inclusive)
+     * @param end    the end timestamp of the window (exclusive)
+     */
     public Window(long start, long end) {
         this.start = start;
         this.end = end;
     }
 
     /**
-     * Returns the start timestamp of this window, inclusive
+     * Return the start timestamp of this window, inclusive
      */
     public long start() {
         return start;
     }
 
     /**
-     * Returns the end timestamp of this window, exclusive
+     * Return the end timestamp of this window, exclusive
      */
     public long end() {
         return end;
     }
 
+    /**
+     * Check if the given window overlaps with this window.
+     *
+     * @param other  another window
+     * @return       {@code true} if {@code other} overlaps with this window&mdash;{@code false} otherwise
+     */
     public boolean overlap(Window other) {
         return this.start() < other.end() || other.start() < this.end();
     }
 
-    public boolean equalsTo(Window other) {
-        return this.start() == other.start() && this.end() == other.end();
-    }
-
     @Override
     public boolean equals(Object obj) {
-        if (obj == this)
+        if (obj == this) {
             return true;
+        }
 
-        if (!(obj instanceof Window))
+        if (getClass() != obj.getClass()) {
             return false;
+        }
 
         Window other = (Window) obj;
-
-        return this.equalsTo(other) && this.start == other.start && this.end == other.end;
+        return this.start == other.start && this.end == other.end;
     }
 
     @Override
@@ -70,4 +79,5 @@ public abstract class Window {
         long n = (this.start << 32) | this.end;
         return (int) (n % 0xFFFFFFFFL);
     }
+
 }

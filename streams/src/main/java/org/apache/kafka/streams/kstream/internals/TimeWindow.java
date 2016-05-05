@@ -17,22 +17,17 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-
 import org.apache.kafka.streams.kstream.Window;
 
-public class TumblingWindow extends Window {
+public class TimeWindow extends Window {
 
-    public TumblingWindow(long start, long end) {
+    public TimeWindow(long start, long end) {
         super(start, end);
     }
 
     @Override
     public boolean overlap(Window other) {
-        return super.overlap(other) && other.getClass().equals(TumblingWindow.class);
+        return getClass() == other.getClass() && super.overlap(other);
     }
 
-    @Override
-    public boolean equalsTo(Window other) {
-        return super.equalsTo(other) && other.getClass().equals(TumblingWindow.class);
-    }
 }

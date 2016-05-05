@@ -18,7 +18,7 @@
 package org.apache.kafka.streams.kstream;
 
 /**
- * The ValueJoiner interface for joining two values and return a the joined new value.
+ * The {@link ValueJoiner} interface for joining two values into a new value.
  *
  * @param <V1>  first value type
  * @param <V2>  second value type
@@ -26,5 +26,12 @@ package org.apache.kafka.streams.kstream;
  */
 public interface ValueJoiner<V1, V2, R> {
 
+    /**
+     * Return a joined value consisting of {@code value1} and {@code value2}.
+     *
+     * @param value1  the first value for joining
+     * @param value2  the second value for joining
+     * @return        the joined value
+     */
     R apply(V1 value1, V2 value2);
 }

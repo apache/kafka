@@ -103,6 +103,10 @@ object ConsoleConsumer extends Logging {
         consumer.stop()
 
         shutdownLatch.await()
+
+        if (conf.enableSystestEventsLogging) {
+          System.out.println("shutdown_complete")
+        }
       }
     })
   }
@@ -253,6 +257,9 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("deserializer for values")
       .ofType(classOf[String])
+    val enableSystestEventsLoggingOpt = parser.accepts("enable-systest-events",
+                                                       "Log lifecycle events of the consumer in addition to logging consumed " +
+                                                       "messages. (This is specific for system tests.)")
 
     if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
@@ -260,6 +267,7 @@ object ConsoleConsumer extends Logging {
     var groupIdPassed = true
     val options: OptionSet = tryParse(parser, args)
     val useNewConsumer = options.has(useNewConsumerOpt)
+    val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
     // If using old consumer, exactly one of whitelist/blacklist/topic is required.
     // If using new consumer, topic must be specified.

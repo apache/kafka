@@ -15,23 +15,19 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.test;
 
-import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.ValueJoiner;
 
-public class HoppingWindow extends Window {
+public class MockValueJoiner {
 
-    public HoppingWindow(long start, long end) {
-        super(start, end);
-    }
+    private static class StringJoin implements ValueJoiner<String, String, String> {
 
-    @Override
-    public boolean overlap(Window other) {
-        return super.overlap(other) && other.getClass().equals(HoppingWindow.class);
-    }
+        @Override
+        public String apply(String value1, String value2) {
+            return value1 + "+" + value2;
+        }
+    };
 
-    @Override
-    public boolean equalsTo(Window other) {
-        return super.equalsTo(other) && other.getClass().equals(HoppingWindow.class);
-    }
+    public final static ValueJoiner<String, String, String> STRING_JOINER = new StringJoin();
 }

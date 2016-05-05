@@ -26,7 +26,7 @@ public class MockKeyValueMapper {
 
         @Override
         public KeyValue<K, V> apply(K key, V value) {
-            return new KeyValue<>(key, value);
+            return KeyValue.pair(key, value);
         }
     }
 

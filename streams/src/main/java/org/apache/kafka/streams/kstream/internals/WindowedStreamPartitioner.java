@@ -29,12 +29,12 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
     }
 
     /**
-     * WindowedStreamPartitioner determines the partition number for a message with the given windowed key and value
+     * WindowedStreamPartitioner determines the partition number for a record with the given windowed key and value
      * and the current number of partitions. The partition number id determined by the original key of the windowed key
      * using the same logic as DefaultPartitioner so that the topic is partitioned by the original key.
      *
-     * @param windowedKey the key of the message
-     * @param value the value of the message
+     * @param windowedKey the key of the record
+     * @param value the value of the record
      * @param numPartitions the total number of partitions
      * @return an integer between 0 and {@code numPartitions-1}, or {@code null} if the default partitioning logic should be used
      */

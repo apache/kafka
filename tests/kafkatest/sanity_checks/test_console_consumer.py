@@ -45,11 +45,14 @@ class ConsoleConsumerTest(Test):
         self.zk.start()
 
     @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
+    @parametrize(security_protocol='SASL_SSL', sasl_mechanism='PLAIN')
     @matrix(security_protocol=['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'])
-    def test_lifecycle(self, security_protocol, new_consumer=True):
+    def test_lifecycle(self, security_protocol, new_consumer=True, sasl_mechanism='GSSAPI'):
         """Check that console consumer starts/stops properly, and that we are capturing log output."""
 
         self.kafka.security_protocol = security_protocol
+        self.kafka.client_sasl_mechanism = sasl_mechanism
+        self.kafka.interbroker_sasl_mechanism = sasl_mechanism
         self.kafka.start()
 
         self.consumer.security_protocol = security_protocol

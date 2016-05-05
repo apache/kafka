@@ -35,7 +35,7 @@ import java.util.Properties
  * End to end tests of the primitive apis against a local server
  */
 @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
-class PrimitiveApiTest extends ProducerConsumerTestHarness with ZooKeeperTestHarness {
+class PrimitiveApiTest extends ProducerConsumerTestHarness {
   val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
 
   def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))

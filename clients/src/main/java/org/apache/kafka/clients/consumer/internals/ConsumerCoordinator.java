@@ -23,7 +23,9 @@ import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscriptio
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.TopicConstants;
@@ -62,7 +64,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private static final Logger log = LoggerFactory.getLogger(ConsumerCoordinator.class);
 
     private final List<PartitionAssignor> assignors;
-    private final org.apache.kafka.clients.Metadata metadata;
+    private final Metadata metadata;
     private final ConsumerCoordinatorMetrics sensors;
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
@@ -354,6 +356,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+
     public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         this.subscriptions.needRefreshCommits();
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
@@ -368,7 +371,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             @Override
             public void onFailure(RuntimeException e) {
-                cb.onComplete(offsets, e);
+                if (e instanceof RetriableException) {
+                    cb.onComplete(offsets, new RetriableCommitFailedException("Commit offsets failed with retriable exception. You should retry committing offsets.", e));
+                } else {
+                    cb.onComplete(offsets, e);
+                }
             }
         });
 

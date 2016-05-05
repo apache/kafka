@@ -49,7 +49,7 @@ public class StopReplicaRequest extends AbstractRequest {
 
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
-        struct.set(DELETE_PARTITIONS_KEY_NAME, deletePartitions ? (byte) 1 : (byte) 0);
+        struct.set(DELETE_PARTITIONS_KEY_NAME, deletePartitions);
 
         List<Struct> partitionDatas = new ArrayList<>(partitions.size());
         for (TopicPartition partition : partitions) {
@@ -80,7 +80,7 @@ public class StopReplicaRequest extends AbstractRequest {
 
         controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
         controllerEpoch = struct.getInt(CONTROLLER_EPOCH_KEY_NAME);
-        deletePartitions = ((byte) struct.get(DELETE_PARTITIONS_KEY_NAME)) != 0;
+        deletePartitions = struct.getBoolean(DELETE_PARTITIONS_KEY_NAME);
     }
 
     @Override

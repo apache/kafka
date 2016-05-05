@@ -18,31 +18,33 @@
 package kafka.server
 
 import java.net.InetAddress
+import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 import kafka.api.ApiVersion
 import kafka.cluster.EndPoint
+import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.I0Itec.zkclient.IZkStateListener
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
-
 /**
  * This class registers the broker in zookeeper to allow 
  * other brokers and consumers to detect failures. It uses an ephemeral znode with the path:
- *   /brokers/[0...N] --> advertisedHost:advertisedPort
+ *   /brokers/ids/[0...N] --> advertisedHost:advertisedPort
  *   
  * Right now our definition of health is fairly naive. If we register in zk we are healthy, otherwise
  * we are dead.
  */
-class KafkaHealthcheck(private val brokerId: Int,
-                       private val advertisedEndpoints: Map[SecurityProtocol, EndPoint],
-                       private val zkUtils: ZkUtils,
-                       private val rack: Option[String],
-                       private val interBrokerProtocolVersion: ApiVersion) extends Logging {
+class KafkaHealthcheck(brokerId: Int,
+                       advertisedEndpoints: Map[SecurityProtocol, EndPoint],
+                       zkUtils: ZkUtils,
+                       rack: Option[String],
+                       interBrokerProtocolVersion: ApiVersion) extends Logging {
 
-  val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + brokerId
-  val sessionExpireListener = new SessionExpireListener
+  private val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + brokerId
+  private[server] val sessionExpireListener = new SessionExpireListener
 
   def startup() {
     zkUtils.zkClient.subscribeStateChanges(sessionExpireListener)
@@ -70,31 +72,44 @@ class KafkaHealthcheck(private val brokerId: Int,
   }
 
   /**
-   *  When we get a SessionExpired event, we lost all ephemeral nodes and zkclient has reestablished a
-   *  connection for us. We need to re-register this broker in the broker registry.
+   *  When we get a SessionExpired event, it means that we have lost all ephemeral nodes and ZKClient has re-established
+   *  a connection for us. We need to re-register this broker in the broker registry. We rely on `handleStateChanged`
+   *  to record ZooKeeper connection state metrics.
    */
-  class SessionExpireListener() extends IZkStateListener {
-    @throws(classOf[Exception])
-    def handleStateChanged(state: KeeperState) {}
+  class SessionExpireListener extends IZkStateListener with KafkaMetricsGroup {
 
-    /**
-     * Called after the zookeeper session has expired and a new session has been created. You would have to re-create
-     * any ephemeral nodes here.
-     *
-     * @throws Exception
-     *             On any error.
-     */
+    private[server] val stateToMeterMap = {
+      import KeeperState._
+      val stateToEventTypeMap = Map(
+        Disconnected -> "Disconnects",
+        SyncConnected -> "SyncConnects",
+        AuthFailed -> "AuthFailures",
+        ConnectedReadOnly -> "ReadOnlyConnects",
+        SaslAuthenticated -> "SaslAuthentications",
+        Expired -> "Expires"
+      )
+      stateToEventTypeMap.map { case (state, eventType) =>
+        state -> newMeter(s"ZooKeeper${eventType}PerSec", eventType.toLowerCase(Locale.ROOT), TimeUnit.SECONDS)
+      }
+    }
+
     @throws(classOf[Exception])
-    def handleNewSession() {
+    override def handleStateChanged(state: KeeperState) {
+      stateToMeterMap.get(state).foreach(_.mark())
+    }
+
+    @throws(classOf[Exception])
+    override def handleNewSession() {
       info("re-registering broker info in ZK for broker " + brokerId)
       register()
       info("done re-registering broker")
       info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
     }
 
-    override def handleSessionEstablishmentError(error: Throwable): Unit = {
+    override def handleSessionEstablishmentError(error: Throwable) {
       fatal("Could not establish session with zookeeper", error)
     }
+
   }
 
 }
