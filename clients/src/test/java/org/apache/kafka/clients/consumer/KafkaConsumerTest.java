@@ -461,6 +461,9 @@ public class KafkaConsumerTest {
         } catch (WakeupException e) {
         }
 
+        // make sure the position hasn't been updated
+        assertEquals(0, consumer.position(partition));
+
         // the next poll should return the completed fetch
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(5, records.count());
