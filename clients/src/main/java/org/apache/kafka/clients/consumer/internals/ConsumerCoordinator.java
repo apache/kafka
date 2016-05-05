@@ -321,7 +321,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     public Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(Set<TopicPartition> partitions) {
         while (true) {
-            ensureCoordinatorKnown();
+            ensureCoordinatorReady();
 
             // contact coordinator to fetch committed offsets
             RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future = sendOffsetFetchRequest(partitions);
@@ -397,7 +397,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return;
 
         while (true) {
-            ensureCoordinatorKnown();
+            ensureCoordinatorReady();
 
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
             client.poll(future);
