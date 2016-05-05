@@ -137,26 +137,25 @@ class LogSegment(val log: FileMessageSet,
       return FetchDataInfo(offsetMetadata, MessageSet.Empty)
 
     // calculate the length of the message set to read based on whether or not they gave us a maxOffset
-    val length =
-      maxOffset match {
-        case None =>
-          // no max offset, just read until the max position
-          min((maxPosition - startPosition.position).toInt, maxSize)
-        case Some(offset) => {
-          // there is a max offset, translate it to a file position and use that to calculate the max read size;
-          // if the max offset is smaller than the start offset, return empty response as it can happen when the max offset
-          // is bounded by the high watermark for a fetch request from normal consumer.
-          if(offset < startOffset)
-            return FetchDataInfo(offsetMetadata, MessageSet.Empty)
-          val mapping = translateOffset(offset, startPosition.position)
-          val endPosition =
-            if(mapping == null)
-              logSize // the max offset is off the end of the log, use the end of the file
-            else
-              mapping.position
-          min(min(maxPosition, endPosition) - startPosition.position, maxSize).toInt
-        }
-      }
+    val length = maxOffset match {
+      case None =>
+        // no max offset, just read until the max position
+        min((maxPosition - startPosition.position).toInt, maxSize)
+      case Some(offset) =>
+        // there is a max offset, translate it to a file position and use that to calculate the max read size;
+        // if the max offset is smaller than the start offset, return empty response as it can happen when the max offset
+        // is bounded by the high watermark for a fetch request from normal consumer.
+        if(offset < startOffset)
+          return FetchDataInfo(offsetMetadata, MessageSet.Empty)
+        val mapping = translateOffset(offset, startPosition.position)
+        val endPosition =
+          if(mapping == null)
+            logSize // the max offset is off the end of the log, use the end of the file
+          else
+            mapping.position
+        min(min(maxPosition, endPosition) - startPosition.position, maxSize).toInt
+    }
+
     FetchDataInfo(offsetMetadata, log.read(startPosition.position, length))
   }
 

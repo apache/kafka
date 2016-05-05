@@ -35,7 +35,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
-import org.junit.Assert.{assertEquals, assertTrue, assertNotEquals}
+import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{Test, Before, After}
 
 import scala.collection.JavaConverters._
@@ -240,14 +240,14 @@ class ReplicaManagerTest {
       rm.fetchMessages(
         timeout = 1000,
         replicaId = 1,
-        fetchMinBytes = 1,
+        fetchMinBytes = 0,
         fetchInfo = collection.immutable.Map(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
         responseCallback = fetchCallback)
         
       
       assertTrue(fetchCallbackFired)
       assertEquals("Should not give an exception", Errors.NONE.code, fetchError)
-      assertNotEquals("Should not return empty response", MessageSet.Empty, fetchedMessages)
+      assertTrue("Should return some data", fetchedMessages.iterator.hasNext)
       fetchCallbackFired = false
       
       // Fetch a message above the high watermark as a consumer
