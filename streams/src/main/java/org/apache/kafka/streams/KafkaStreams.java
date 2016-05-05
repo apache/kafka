@@ -112,7 +112,7 @@ public class KafkaStreams {
      *
      * @param builder  the processor topology builder specifying the computational logic
      * @param config   the stream configs
-    */
+     */
     public KafkaStreams(TopologyBuilder builder, StreamsConfig config) {
         this(builder, config, new DefaultKafkaClientSupplier());
     }
