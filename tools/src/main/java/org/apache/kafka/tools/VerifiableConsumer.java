@@ -265,11 +265,6 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         public long timestamp() {
             return timestamp;
         }
-
-        @JsonProperty("class")
-        public String clazz() {
-            return VerifiableConsumer.class.getName();
-        }
     }
 
     private static class ShutdownComplete extends ConsumerEvent {

@@ -18,14 +18,23 @@ from ducktape.services.background_thread import BackgroundThreadService
 
 class PerformanceService(BackgroundThreadService):
 
-    def __init__(self, context, num_nodes):
+    def __init__(self, context, num_nodes, stop_timeout_sec=30):
         super(PerformanceService, self).__init__(context, num_nodes)
         self.results = [None] * self.num_nodes
         self.stats = [[] for x in range(self.num_nodes)]
+        self.stop_timeout_sec = stop_timeout_sec
+
+    def stop_node(self, node):
+        node.account.kill_process("java", clean_shutdown=True, allow_fail=True)
+
+        stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
+        assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
+                        (str(node.account), str(self.stop_timeout_sec))
 
     def clean_node(self, node):
         node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf /mnt/*", allow_fail=False)
+
 
 def throughput(records_per_sec, mb_per_sec):
     """Helper method to ensure uniform representation of throughput data"""
