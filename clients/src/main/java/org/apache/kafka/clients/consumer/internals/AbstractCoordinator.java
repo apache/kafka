@@ -183,7 +183,13 @@ public abstract class AbstractCoordinator implements Closeable {
                     client.awaitMetadataUpdate();
                 else
                     throw future.exception();
+            } else if (coordinator != null && client.connectionFailed(coordinator)) {
+                // we found the coordinator, but the connection has failed, so mark
+                // it dead and backoff before retrying discovery
+                coordinatorDead();
+                time.sleep(retryBackoffMs);
             }
+
         }
     }
 
