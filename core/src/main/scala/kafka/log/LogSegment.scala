@@ -143,8 +143,9 @@ class LogSegment(val log: FileMessageSet,
         min((maxPosition - startPosition.position).toInt, maxSize)
       case Some(offset) =>
         // there is a max offset, translate it to a file position and use that to calculate the max read size;
-        // if the max offset is smaller than the start offset, return empty response as it can happen when the max offset
-        // is bounded by the high watermark for a fetch request from normal consumer.
+        // when the leader of a partition changes, it's possible for the new leader's high watermark to be less than the
+        // true high watermark in the previous leader for a short window. In this window, if a consumer fetches on an
+        // offset between new leader's high watermark and the log end offset, we want to return an empty response.
         if(offset < startOffset)
           return FetchDataInfo(offsetMetadata, MessageSet.Empty)
         val mapping = translateOffset(offset, startPosition.position)
