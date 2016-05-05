@@ -247,7 +247,7 @@ public class JoinIntegrationTest {
         IntegrationTestUtils.produceKeyValuesSynchronously(USER_CLICKS_TOPIC, userClicks, userClicksProducerConfig);
 
         // Give the stream processing application some time to do its work.
-        Thread.sleep(5000);
+        Thread.sleep(10000);
         streams.close();
 
         //

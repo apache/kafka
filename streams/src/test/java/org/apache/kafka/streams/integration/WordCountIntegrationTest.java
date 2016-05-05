@@ -134,7 +134,7 @@ public class WordCountIntegrationTest {
         //
         // Step 3: Verify the application's output data.
         //
-        Thread.sleep(5000);
+        Thread.sleep(10000);
         streams.close();
         Properties consumerConfig = new Properties();
         consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
