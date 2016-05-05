@@ -47,6 +47,7 @@ import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestSend;
+import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.JaasUtils;
@@ -241,6 +242,62 @@ public class SaslAuthenticatorTest {
     @Test
     public void testUnauthenticatedApiVersionsRequestOverSsl() throws Exception {
         testUnauthenticatedApiVersionsRequest(SecurityProtocol.SASL_SSL);
+    }
+
+    /**
+     * Tests that unsupported version of ApiVersionsRequest before SASL handshake request
+     * returns error response and does not result in authentication failure. This test
+     * is similar to {@link #testUnauthenticatedApiVersionsRequest(SecurityProtocol)}
+     * where a non-SASL client is used to send requests that are processed by
+     * {@link SaslServerAuthenticator} of the server prior to client authentication.
+     */
+    @Test
+    public void testApiVersionsRequestWithUnsupportedVersion() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
+        server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
+
+        // Send ApiVersionsRequest with unsupported version and validate error response.
+        String node = "1";
+        createClientConnection(SecurityProtocol.PLAINTEXT, node);
+        RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS.id, Short.MAX_VALUE, "someclient", 1);
+        selector.send(new NetworkSend(node, RequestSend.serialize(header, new ApiVersionsRequest().toStruct())));
+        ByteBuffer responseBuffer = waitForResponse();
+        ResponseHeader.parse(responseBuffer);
+        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer);
+        assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.errorCode());
+
+        // Send ApiVersionsRequest with a supported version. This should succeed.
+        sendVersionRequestReceiveResponse(node);
+
+        // Test that client can authenticate successfully
+        sendHandshakeRequestReceiveResponse(node);
+        authenticateUsingSaslPlainAndCheckConnection(node);
+    }
+
+    /**
+     * Tests that unsupported version of SASL handshake request returns error
+     * response and fails authentication. This test is similar to
+     * {@link #testUnauthenticatedApiVersionsRequest(SecurityProtocol)}
+     * where a non-SASL client is used to send requests that are processed by
+     * {@link SaslServerAuthenticator} of the server prior to client authentication.
+     */
+    @Test
+    public void testSaslHandshakeRequestWithUnsupportedVersion() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
+        server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
+
+        // Send ApiVersionsRequest and validate error response.
+        String node1 = "invalid1";
+        createClientConnection(SecurityProtocol.PLAINTEXT, node1);
+        RequestHeader header = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id, Short.MAX_VALUE, "someclient", 2);
+        selector.send(new NetworkSend(node1, RequestSend.serialize(header, new SaslHandshakeRequest("PLAIN").toStruct())));
+        NetworkTestUtils.waitForChannelClose(selector, node1);
+        selector.close();
+
+        // Test good connection still works
+        createAndCheckClientConnection(securityProtocol, "good1");
     }
 
     /**
@@ -485,6 +542,11 @@ public class SaslAuthenticatorTest {
         SaslHandshakeResponse handshakeResponse = sendHandshakeRequestReceiveResponse(node);
         assertEquals(Collections.singletonList("PLAIN"), handshakeResponse.enabledMechanisms());
 
+        // Complete manual authentication and check send/receive succeed
+        authenticateUsingSaslPlainAndCheckConnection(node);
+    }
+
+    private void authenticateUsingSaslPlainAndCheckConnection(String node) throws Exception {
         // Authenticate using PLAIN username/password
         String authString = "\u0000" + TestJaasConfig.USERNAME + "\u0000" + TestJaasConfig.PASSWORD;
         selector.send(new NetworkSend(node, ByteBuffer.wrap(authString.getBytes("UTF-8"))));
