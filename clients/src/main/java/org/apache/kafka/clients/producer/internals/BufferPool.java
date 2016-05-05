@@ -123,9 +123,20 @@ public final class BufferPool {
                 // enough memory to allocate one
                 while (accumulated < size) {
                     long startWaitNs = time.nanoseconds();
-                    boolean waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
-                    long endWaitNs = time.nanoseconds();
-                    long timeNs = Math.max(0L, endWaitNs - startWaitNs);
+                    boolean waitingTimeElapsed = false;
+                    long endWaitNs;
+                    long timeNs;
+                    try {
+                        waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
+                    } catch (InterruptedException e) {
+                        this.waiters.remove(moreMemory);
+                        endWaitNs = time.nanoseconds();
+                        timeNs = Math.max(0L, endWaitNs - startWaitNs);
+                        this.waitTime.record(timeNs, time.milliseconds());
+                        throw e;
+                    }
+                    endWaitNs = time.nanoseconds();
+                    timeNs = Math.max(0L, endWaitNs - startWaitNs);
                     this.waitTime.record(timeNs, time.milliseconds());
 
                     if (waitingTimeElapsed) {
@@ -262,5 +273,10 @@ public final class BufferPool {
      */
     public long totalMemory() {
         return this.totalMemory;
+    }
+
+    // package-private method used only for testing
+    Deque<Condition> waiters() {
+        return this.waiters;
     }
 }

@@ -26,14 +26,14 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Condition;
 
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 public class BufferPoolTest {
     private final MockTime time = new MockTime();
@@ -178,8 +178,43 @@ public class BufferPoolTest {
     @Test
     public void testCleanupMemoryAvailabilityWaiterOnBlockTimeout() throws Exception {
         BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
+        long blockTime = 5000;
         pool.allocate(1, maxBlockTimeMs);
-        Runnable r = () -> {
+        Thread t1 = new Thread(new BufferPoolAllocator(pool, blockTime));
+        Thread t2 = new Thread(new BufferPoolAllocator(pool, blockTime));
+        // allocate
+        t1.start();
+        // sleep for 1 sec, the waiters queue will be populated with the condition variable for the allocate by thread t1
+        Thread.sleep(1000);
+        Deque<Condition> waiters =  pool.waiters();
+        // get the condition object associated with allocate() by thread t1
+        Condition c1 = waiters.getFirst();
+        // sleep for 4 sec, the waiter queue should have been cleared by now since the blockTime threshold must have kicked in
+        Thread.sleep(4000);
+        // allocate
+        t2.start();
+        // sleep for 1 sec, the waiters queue will be populated with the condition variable for the allocate by thread t2
+        Thread.sleep(1000);
+        // get the condition object associated with allocate() by thread t1
+        Condition c2 = waiters.getLast();
+        assertNotEquals(c1, c2);
+        t1.join();
+        t2.join();
+        // both the allocate() called by threads t1 and t2 should have timed out and the waiters queue should be empty
+        assertEquals(pool.queued(), 0);
+    }
+
+    private static class BufferPoolAllocator implements Runnable{
+        BufferPool pool;
+        long maxBlockTimeMs;
+
+        BufferPoolAllocator(BufferPool pool, long maxBlockTimeMs) {
+            this.pool = pool;
+            this.maxBlockTimeMs = maxBlockTimeMs;
+        }
+
+        @Override
+        public void run() {
             try {
                 pool.allocate(2, maxBlockTimeMs);
                 fail("The buffer allocated more memory than its maximum value 2");
@@ -188,14 +223,7 @@ public class BufferPoolTest {
             } catch (InterruptedException e) {
                 // this can be neglected
             }
-        };
-        Thread t1 = new Thread(r);
-        Thread t2 = new Thread(r);
-        t1.start();
-        t2.start();
-        t1.join();
-        t2.join();
-        assertEquals(pool.queued(), 0);
+        }
     }
 
     /**
