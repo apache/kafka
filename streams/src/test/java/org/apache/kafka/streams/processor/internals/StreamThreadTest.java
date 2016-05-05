@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import org.apache.kafka.clients.consumer.Consumer;
@@ -458,6 +459,18 @@ public class StreamThreadTest {
         } finally {
             Utils.delete(baseDir);
         }
+    }
+
+    @Test
+    public void testInjectClients() {
+        TopologyBuilder builder = new TopologyBuilder();
+        StreamsConfig config = new StreamsConfig(configProps());
+        MockClientSupplier clientSupplier = new MockClientSupplier();
+        StreamThread thread = new StreamThread(builder, config, clientSupplier, applicationId,
+                                               clientId,  processId, new Metrics(), new MockTime());
+        assertSame(clientSupplier.producer, thread.producer);
+        assertSame(clientSupplier.consumer, thread.consumer);
+        assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer);
     }
 
     private void initPartitionGrouper(StreamsConfig config, StreamThread thread) {
