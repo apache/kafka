@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.KafkaException;
 
@@ -24,5 +24,9 @@ public class RetriableCommitFailedException extends KafkaException {
 
     public RetriableCommitFailedException(String message) {
         super(message);
+    }
+
+    public RetriableCommitFailedException(String message, Throwable t) {
+        super(message, t);
     }
 }

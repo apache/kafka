@@ -1046,6 +1046,19 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * (if provided) or discarded.
      *
      * @param callback Callback to invoke when the commit completes
+     *
+     * @throws org.apache.kafka.clients.consumer.RetriableCommitFailedException if the commit failed and can be retried.
+     *             This can occur if there are some transient issue such as group coordinator is loading or some
+     *             transient issue that causes timeout.
+     * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
+     *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
+     *             or if there is an active group with the same groupId which is using group management.
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
+     *             is too large or if the committed offset is invalid).
      */
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
@@ -1071,6 +1084,19 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param offsets A map of offsets by partition with associate metadata. This map will be copied internally, so it
      *                is safe to mutate the map after returning.
      * @param callback Callback to invoke when the commit completes
+     *
+     * @throws org.apache.kafka.clients.consumer.RetriableCommitFailedException if the commit failed and can be retried.
+     *             This can occur if there are some transient issue such as group coordinator is loading or some
+     *             transient issue that causes timeout.
+     * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
+     *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
+     *             or if there is an active group with the same groupId which is using group management.
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
+     *             is too large or if the committed offset is invalid).
      */
     @Override
     public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
