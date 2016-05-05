@@ -53,8 +53,6 @@ public class RangeAssignorTest {
         String consumerId = "consumer";
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 0);
-
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
                 Collections.singletonMap(consumerId, Arrays.asList(topic)));
         assertEquals(Collections.singleton(consumerId), assignment.keySet());

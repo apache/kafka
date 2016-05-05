@@ -45,14 +45,6 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         return "range";
     }
 
-    private List<TopicPartition> partitions(String topic,
-                                            int numPartitions) {
-        List<TopicPartition> partitions = new ArrayList<>();
-        for (int i = 0; i < numPartitions; i++)
-            partitions.add(new TopicPartition(topic, i));
-        return partitions;
-    }
-
     private Map<String, List<String>> consumersPerTopic(Map<String, List<String>> consumerMetadata) {
         Map<String, List<String>> res = new HashMap<>();
         for (Map.Entry<String, List<String>> subscriptionEntry : consumerMetadata.entrySet()) {
@@ -84,7 +76,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
             int numPartitionsPerConsumer = numPartitionsForTopic / consumersForTopic.size();
             int consumersWithExtraPartition = numPartitionsForTopic % consumersForTopic.size();
 
-            List<TopicPartition> partitions = partitions(topic, numPartitionsForTopic);
+            List<TopicPartition> partitions = AbstractPartitionAssignor.partitions(topic, numPartitionsForTopic);
             for (int i = 0, n = consumersForTopic.size(); i < n; i++) {
                 int start = numPartitionsPerConsumer * i + Math.min(i, consumersWithExtraPartition);
                 int length = numPartitionsPerConsumer + (i + 1 > consumersWithExtraPartition ? 0 : 1);
