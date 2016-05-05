@@ -123,19 +123,20 @@ public final class BufferPool {
                 // enough memory to allocate one
                 while (accumulated < size) {
                     long startWaitNs = time.nanoseconds();
-                    boolean waitingTimeElapsed = false;
-                    long endWaitNs;
                     long timeNs;
+                    boolean waitingTimeElapsed;
                     try {
                         waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
                     } catch (InterruptedException e) {
                         this.waiters.remove(moreMemory);
-                        endWaitNs = time.nanoseconds();
+                        throw e;
+                    } finally {
+                        long endWaitNs = time.nanoseconds();
                         timeNs = Math.max(0L, endWaitNs - startWaitNs);
                         this.waitTime.record(timeNs, time.milliseconds());
-                        throw e;
                     }
-                    endWaitNs = time.nanoseconds();
+
+                    long endWaitNs = time.nanoseconds();
                     timeNs = Math.max(0L, endWaitNs - startWaitNs);
                     this.waitTime.record(timeNs, time.milliseconds());
 
