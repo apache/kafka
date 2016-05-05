@@ -171,7 +171,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                            ByteBuffer memberAssignment);
 
     /**
-     * Block until the coordinator for this group is known.
+     * Block until the coordinator for this group is known and is ready to receive requests.
      */
     public void ensureCoordinatorReady() {
         while (coordinatorUnknown()) {
