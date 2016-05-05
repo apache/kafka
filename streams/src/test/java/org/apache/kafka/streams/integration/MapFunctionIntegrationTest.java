@@ -108,7 +108,7 @@ public class MapFunctionIntegrationTest {
         IntegrationTestUtils.produceValuesSynchronously(DEFAULT_INPUT_TOPIC, inputValues, producerConfig);
 
         // Give the stream processing application some time to do its work.
-        Thread.sleep(5000);
+        Thread.sleep(10000);
         streams.close();
 
         //
