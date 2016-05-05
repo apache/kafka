@@ -14,6 +14,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Collection;
 import java.util.Map;
 
 /**
@@ -28,6 +29,16 @@ public interface OffsetCommitCallback {
      *
      * @param offsets A map of the offsets and associated metadata that this callback applies to
      * @param exception The exception thrown during processing of the request, or null if the commit completed successfully
+     *
+     * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
+     *             This can only occur if you are using automatic group management with {@link KafkaConsumer#subscribe(Collection)},
+     *             or if there is an active group with the same groupId which is using group management.
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link KafkaConsumer#wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
+     *             is too large or if the committed offset is invalid).
      */
     void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception);
 }

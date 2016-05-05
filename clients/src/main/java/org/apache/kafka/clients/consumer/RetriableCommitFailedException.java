@@ -16,19 +16,17 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.RetriableException;
 
-/**
- * This exception is raised when an offset commit with {@link KafkaConsumer#commitSync()} fails
- * with an unrecoverable error. This can happen when a group rebalance completes before the commit
- * could be successfully applied. In this case, the commit cannot generally be retried because some
- * of the partitions may have already been assigned to another member in the group.
- */
-public class CommitFailedException extends KafkaException {
+public class RetriableCommitFailedException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public CommitFailedException(String message) {
+    public RetriableCommitFailedException(String message) {
         super(message);
+    }
+
+    public RetriableCommitFailedException(String message, Throwable t) {
+        super(message, t);
     }
 }
