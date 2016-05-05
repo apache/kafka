@@ -320,7 +320,31 @@ class CleanerTest extends JUnitSuite {
     checkRange(map, segments(1).baseOffset.toInt, segments(3).baseOffset.toInt)
     checkRange(map, segments(3).baseOffset.toInt, log.logEndOffset.toInt)
   }
-  
+
+  @Test
+  def testBuildOffsetMapFakeLarge() {
+    val map = new FakeOffsetMap(1000)
+    val log = makeLog()
+    val cleaner = makeCleaner(Int.MaxValue)
+    val start = 0
+    val end = 500
+    writeToLog(log, (start until end) zip (start until end))
+    val offsetSeq = Seq(7206178L)
+    val offsets = writeToLog(log, Seq(500) zip Seq(500), offsetSeq)
+    def checkRange(map: FakeOffsetMap, start: Int, end: Int) {
+      val endOffset = cleaner.buildOffsetMap(log, start, end, map) + 1
+      assertEquals("Last offset should be the end offset.", end, endOffset)
+      assertEquals("Should have the expected number of messages in the map.", end-start, map.size)
+      for(i <- start until end)
+        assertEquals("Should find all the keys", i.toLong, map.get(key(i)))
+      assertEquals("Should not find a value too small", -1L, map.get(key(start - 1)))
+      assertEquals("Should not find a value too large", -1L, map.get(key(end)))
+    }
+    val segments = log.logSegments.toSeq
+    checkRange(map, 0, segments(1).baseOffset.toInt)
+    checkRange(map, segments(1).baseOffset.toInt, segments(3).baseOffset.toInt)
+    checkRange(map, segments(3).baseOffset.toInt, log.logEndOffset.toInt)
+  }
   
   /**
    * Tests recovery if broker crashes at the following stages during the cleaning sequence
@@ -438,17 +462,29 @@ class CleanerTest extends JUnitSuite {
                 dupBufferLoadFactor = 0.75,                
                 throttler = throttler, 
                 time = time,
-                checkDone = checkDone )
+                checkDone = checkDone)
   
   def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for((key, value) <- seq)
       yield log.append(message(key, value)).firstOffset
+  }
+
+  def writeToLog(log: Log, seq: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
+    for(((key, value), offset) <- seq.zip(offsetSeq))
+      yield log.append(messageWithOffset(key, value, offset)).firstOffset
   }
   
   def key(id: Int) = ByteBuffer.wrap(id.toString.getBytes)
   
   def message(key: Int, value: Int) = 
     new ByteBufferMessageSet(new Message(key = key.toString.getBytes,
+                                         bytes = value.toString.getBytes,
+                                         timestamp = Message.NoTimestamp,
+                                         magicValue = Message.MagicValue_V1))
+
+  def messageWithOffset(key: Int, value: Int, offset: Long) =
+    new ByteBufferMessageSet(Seq(offset),
+                             new Message(key = key.toString.getBytes,
                                          bytes = value.toString.getBytes,
                                          timestamp = Message.NoTimestamp,
                                          magicValue = Message.MagicValue_V1))
@@ -466,12 +502,14 @@ class CleanerTest extends JUnitSuite {
 
 class FakeOffsetMap(val slots: Int) extends OffsetMap {
   val map = new java.util.HashMap[String, Long]()
-  
+
   private def keyFor(key: ByteBuffer) = 
     new String(Utils.readBytes(key.duplicate), "UTF-8")
   
-  def put(key: ByteBuffer, offset: Long): Unit = 
+  def put(key: ByteBuffer, offset: Long): Unit = {
     map.put(keyFor(key), offset)
+  }
+
   
   def get(key: ByteBuffer): Long = {
     val k = keyFor(key)
@@ -484,5 +522,8 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
   def clear() = map.clear()
   
   def size: Int = map.size
-  
+
+  def availableSlots = slots - size
+
+  def notFull = size < slots
 }
