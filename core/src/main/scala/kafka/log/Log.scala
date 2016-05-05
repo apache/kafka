@@ -483,14 +483,14 @@ class Log(val dir: File,
   }
 
   /**
-   * Read messages from the log
+   * Read messages from the log.
    *
    * @param startOffset The offset to begin reading at
    * @param maxLength The maximum number of bytes to read
-   * @param maxOffset -The offset to read up to, exclusive. (i.e. the first offset NOT included in the resulting message set).
+   * @param maxOffset The offset to read up to, exclusive. (i.e. this offset NOT included in the resulting message set)
    *
    * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the base offset of the first segment.
-   * @return The fetch data information including fetch starting offset metadata and messages read
+   * @return The fetch data information including fetch starting offset metadata and messages read.
    */
   def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None): FetchDataInfo = {
     trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
