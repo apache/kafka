@@ -846,6 +846,10 @@ public class Protocol {
         }
     }
 
+    public static boolean apiVersionSupported(short apiKey, short apiVersion) {
+        return apiKey < CURR_VERSION.length && apiVersion >= MIN_VERSIONS[apiKey] && apiVersion <= CURR_VERSION[apiKey];
+    }
+
     private static String indentString(int size) {
         StringBuilder b = new StringBuilder(size);
         for (int i = 0; i < size; i++)

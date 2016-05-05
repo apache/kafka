@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.junit.Assert._
@@ -46,6 +46,12 @@ class ApiVersionsRequestTest extends BaseRequestTest {
   def testApiVersionsRequest() {
     val apiVersionsResponse = sendApiVersionsRequest(new ApiVersionsRequest, 0)
     ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
+  }
+
+  @Test
+  def testApiVersionsRequestWithUnsupportedVersion() {
+    val apiVersionsResponse = sendApiVersionsRequest(new ApiVersionsRequest, Short.MaxValue)
+    assertEquals(Errors.UNSUPPORTED_VERSION.code(), apiVersionsResponse.errorCode)
   }
 
   private def sendApiVersionsRequest(request: ApiVersionsRequest, version: Short): ApiVersionsResponse = {
