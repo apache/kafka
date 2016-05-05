@@ -113,7 +113,7 @@ class LogSegment(val log: FileMessageSet,
    * @param startOffset A lower bound on the first offset to include in the message set we read
    * @param maxSize The maximum number of bytes to include in the message set we read
    * @param maxOffset An optional maximum offset for the message set we read
-   * @param maxPosition An optional maximum position in the log segment that should be exposed for read.
+   * @param maxPosition The maximum position in the log segment that should be exposed for read
    *
    * @return The fetched data and the offset metadata of the first message whose offset is >= startOffset,
    *         or null if the startOffset is larger than the largest offset in this log
@@ -143,9 +143,11 @@ class LogSegment(val log: FileMessageSet,
           // no max offset, just read until the max position
           min((maxPosition - startPosition.position).toInt, maxSize)
         case Some(offset) => {
-          // there is a max offset, translate it to a file position and use that to calculate the max read size
+          // there is a max offset, translate it to a file position and use that to calculate the max read size;
+          // if the max offset is smaller than the start offset, return empty response as it can happen when the max offset
+          // is bounded by the high watermark for a fetch request from normal consumer.
           if(offset < startOffset)
-            throw new IllegalArgumentException("Attempt to read with a maximum offset (%d) less than the start offset (%d).".format(offset, startOffset))
+            return FetchDataInfo(offsetMetadata, MessageSet.Empty)
           val mapping = translateOffset(offset, startPosition.position)
           val endPosition =
             if(mapping == null)
