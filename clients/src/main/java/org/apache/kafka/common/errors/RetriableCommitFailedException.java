@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.common.errors;
 
-public class CommitFailedRetriableException extends RetriableException {
+import org.apache.kafka.common.KafkaException;
+
+public class RetriableCommitFailedException extends KafkaException {
 
     private static final long serialVersionUID = 1L;
 
-    public CommitFailedRetriableException(String message) {
+    public RetriableCommitFailedException(String message) {
         super(message);
     }
 }

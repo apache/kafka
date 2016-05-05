@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscriptio
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.CommitFailedRetriableException;
+import org.apache.kafka.common.errors.RetriableCommitFailedException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -75,9 +75,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private MetadataSnapshot metadataSnapshot;
     private MetadataSnapshot assignmentSnapshot;
-
-    static final CommitFailedRetriableException RETRIABLE_COMMIT_EXCEPTION =
-        new CommitFailedRetriableException("Commit offsets failed with retriable exception. You should retry committing offsets.");
 
     /**
      * Initialize the coordination manager.
@@ -374,7 +371,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             @Override
             public void onFailure(RuntimeException e) {
                 if (e instanceof RetriableException) {
-                    cb.onComplete(offsets, RETRIABLE_COMMIT_EXCEPTION);
+                    cb.onComplete(offsets, new RetriableCommitFailedException("Commit offsets failed with retriable exception. You should retry committing offsets."));
                 } else {
                     cb.onComplete(offsets, new CommitFailedException("Offset commit failed with non retriable exception.", e));
                 }
