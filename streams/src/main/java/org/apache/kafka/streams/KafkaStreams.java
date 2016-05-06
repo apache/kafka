@@ -25,6 +25,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,7 +105,7 @@ public class KafkaStreams {
      * @param props    properties for the {@link StreamsConfig}
      */
     public KafkaStreams(TopologyBuilder builder, Properties props) {
-        this(builder, new StreamsConfig(props));
+        this(builder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
     }
 
     /**
@@ -114,6 +115,18 @@ public class KafkaStreams {
      * @param config   the stream configs
      */
     public KafkaStreams(TopologyBuilder builder, StreamsConfig config) {
+        this(builder, config, new DefaultKafkaClientSupplier());
+    }
+
+    /**
+     * Construct the stream instance.
+     *
+     * @param builder         the processor topology builder specifying the computational logic
+     * @param config          the stream configs
+     * @param clientSupplier  the kafka clients supplier which provides underlying producer and consumer clients
+     * for this {@link KafkaStreams} instance
+     */
+    public KafkaStreams(TopologyBuilder builder, StreamsConfig config, KafkaClientSupplier clientSupplier) {
         // create the metrics
         Time time = new SystemTime();
 
@@ -138,7 +151,7 @@ public class KafkaStreams {
 
         this.threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(builder, config, applicationId, clientId, processId, metrics, time);
+            this.threads[i] = new StreamThread(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
         }
     }
 
