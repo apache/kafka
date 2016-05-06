@@ -87,7 +87,7 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
      * @throws IOException
      */
     public KafkaLZ4BlockInputStream(InputStream in) throws IOException {
-        this(in, true);
+        this(in, false);
     }
 
     /**
