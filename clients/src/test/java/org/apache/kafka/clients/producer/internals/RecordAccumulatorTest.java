@@ -296,11 +296,10 @@ public class RecordAccumulatorTest {
         delayedInterrupt(Thread.currentThread(), 2000L);
         try {
             accum.awaitFlushCompletion();
+            fail("awaitFlushCompletion should throw InterruptException");
         } catch (InterruptedException e) {
             assertFalse("flushInProgress count should be decremented even if thread is interrupted", accum.flushInProgress());
-            return;
         }
-        fail("awaitFlushCompletion should throw InterruptException");
     }
 
 
