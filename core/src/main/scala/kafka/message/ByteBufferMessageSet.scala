@@ -273,6 +273,10 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       None, TimestampType.CREATE_TIME, messages:_*))
   }
 
+  def this(offsetSeq: Seq[Long], messages: Message*) {
+    this(NoCompressionCodec, offsetSeq, messages: _*)
+  }
+
   def this(compressionCodec: CompressionCodec, messages: Message*) {
     this(compressionCodec, new LongRef(0L), messages: _*)
   }

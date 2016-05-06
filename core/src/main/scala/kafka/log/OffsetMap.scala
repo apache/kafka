@@ -30,6 +30,8 @@ trait OffsetMap {
   def clear()
   def size: Int
   def utilization: Double = size.toDouble / slots
+  def notFull: Boolean
+  def availableSlots: Int
 }
 
 /**
@@ -176,5 +178,9 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     key.reset()
     digest.digest(buffer, 0, hashSize)
   }
-  
+
+  override def notFull = entries < slots
+
+  override def availableSlots = slots - entries
+
 }

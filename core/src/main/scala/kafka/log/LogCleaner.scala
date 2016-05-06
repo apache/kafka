@@ -610,22 +610,26 @@ private[log] class Cleaner(val id: Int,
     map.clear()
     val dirty = log.logSegments(start, end).toSeq
     info("Building offset map for log %s for %d segments in offset range [%d, %d).".format(log.name, dirty.size, start, end))
-    
+
     // Add all the dirty segments. We must take at least map.slots * load_factor,
     // but we may be able to fit more (if there is lots of duplication in the dirty section of the log)
     var offset = dirty.head.baseOffset
     require(offset == start, "Last clean offset is %d but segment base offset is %d for log %s.".format(start, offset, log.name))
-    val maxDesiredMapSize = (map.slots * this.dupBufferLoadFactor).toInt
     var full = false
-    for (segment <- dirty if !full) {
+    if (dirty.nonEmpty) {
+      val firstSeg = dirty.head
       checkDone(log.topicAndPartition)
-      val segmentSize = segment.nextOffset() - segment.baseOffset
-
-      require(segmentSize <= maxDesiredMapSize, "%d messages in segment %s/%s but offset map can fit only %d. You can increase log.cleaner.dedupe.buffer.size or decrease log.cleaner.threads".format(segmentSize,  log.name, segment.log.file.getName, maxDesiredMapSize))
-      if (map.size + segmentSize <= maxDesiredMapSize)
-        offset = buildOffsetMapForSegment(log.topicAndPartition, segment, map)
-      else
-        full = true
+      offset = buildOffsetMapForSegment(log.topicAndPartition, firstSeg, map, true)
+      val maxDesiredMapSize = (map.availableSlots * this.dupBufferLoadFactor).toInt
+      val remaining = dirty.tail
+      for (segment <- remaining if !full) {
+        checkDone(log.topicAndPartition)
+        val segmentSize = segment.nextOffset() - segment.baseOffset
+        if (map.size + segmentSize <= maxDesiredMapSize)
+          offset = buildOffsetMapForSegment(log.topicAndPartition, segment, map)
+        else
+          full = true
+      }
     }
     info("Offset map for log %s complete.".format(log.name))
     offset
@@ -636,10 +640,9 @@ private[log] class Cleaner(val id: Int,
    *
    * @param segment The segment to index
    * @param map The map in which to store the key=>offset mapping
-   *
    * @return The final offset covered by the map
    */
-  private def buildOffsetMapForSegment(topicAndPartition: TopicAndPartition, segment: LogSegment, map: OffsetMap): Long = {
+  private def buildOffsetMapForSegment(topicAndPartition: TopicAndPartition, segment: LogSegment, map: OffsetMap, checkSize: Boolean = false): Long = {
     var position = 0
     var offset = segment.baseOffset
     while (position < segment.log.sizeInBytes) {
@@ -650,8 +653,18 @@ private[log] class Cleaner(val id: Int,
       val startPosition = position
       for (entry <- messages) {
         val message = entry.message
-        if (message.hasKey)
-          map.put(message.key, entry.offset)
+        if (message.hasKey) {
+          if (checkSize) {
+            if (map.notFull) {
+              map.put(message.key, entry.offset)
+            } else {
+              throw new Exception("map is full")
+            }
+          } else {
+            map.put(message.key, entry.offset)
+          }
+
+        }
         offset = entry.offset
         stats.indexMessagesRead(1)
       }
