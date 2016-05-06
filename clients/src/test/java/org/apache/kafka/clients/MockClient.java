@@ -18,9 +18,11 @@ package org.apache.kafka.clients;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
@@ -45,11 +47,13 @@ public class MockClient implements KafkaClient {
         public final Struct responseBody;
         public final boolean disconnected;
         public final RequestMatcher requestMatcher;
+        public Node node;
 
-        public FutureResponse(Struct responseBody, boolean disconnected, RequestMatcher requestMatcher) {
+        public FutureResponse(Struct responseBody, boolean disconnected, RequestMatcher requestMatcher, Node node) {
             this.responseBody = responseBody;
             this.disconnected = disconnected;
             this.requestMatcher = requestMatcher;
+            this.node = node;
         }
 
     }
@@ -58,6 +62,7 @@ public class MockClient implements KafkaClient {
     private int correlation = 0;
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
+    private final Map<Node, Long> blackedOut = new HashMap<>();
     private final Queue<ClientRequest> requests = new ArrayDeque<>();
     private final Queue<ClientResponse> responses = new ArrayDeque<>();
     private final Queue<FutureResponse> futureResponses = new ArrayDeque<>();
@@ -73,6 +78,8 @@ public class MockClient implements KafkaClient {
 
     @Override
     public boolean ready(Node node, long now) {
+        if (isBlackedOut(node))
+            return false;
         ready.add(node.idString());
         return true;
     }
@@ -82,9 +89,26 @@ public class MockClient implements KafkaClient {
         return 0;
     }
 
+    public void blackout(Node node, long duration) {
+        blackedOut.put(node, time.milliseconds() + duration);
+    }
+
+    private boolean isBlackedOut(Node node) {
+        if (blackedOut.containsKey(node)) {
+            long expiration = blackedOut.get(node);
+            if (time.milliseconds() > expiration) {
+                blackedOut.remove(node);
+                return false;
+            } else {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public boolean connectionFailed(Node node) {
-        return false;
+        return isBlackedOut(node);
     }
 
     public void disconnect(String node) {
@@ -102,17 +126,23 @@ public class MockClient implements KafkaClient {
 
     @Override
     public void send(ClientRequest request, long now) {
-        if (!futureResponses.isEmpty()) {
-            FutureResponse futureResp = futureResponses.poll();
+        Iterator<FutureResponse> iterator = futureResponses.iterator();
+        while (iterator.hasNext()) {
+            FutureResponse futureResp = iterator.next();
+            if (futureResp.node != null && !request.request().destination().equals(futureResp.node.idString()))
+                continue;
+
             if (!futureResp.requestMatcher.matches(request))
                 throw new IllegalStateException("Next in line response did not match expected request");
 
             ClientResponse resp = new ClientResponse(request, time.milliseconds(), futureResp.disconnected, futureResp.responseBody);
             responses.add(resp);
-        } else {
-            request.setSendTimeMs(now);
-            this.requests.add(request);
+            iterator.remove();
+            return;
         }
+
+        request.setSendTimeMs(now);
+        this.requests.add(request);
     }
 
     @Override
@@ -141,8 +171,29 @@ public class MockClient implements KafkaClient {
         responses.add(new ClientResponse(request, time.milliseconds(), disconnected, body));
     }
 
+    public void respondFrom(Struct body, Node node) {
+        respondFrom(body, node, false);
+    }
+
+    public void respondFrom(Struct body, Node node, boolean disconnected) {
+        Iterator<ClientRequest> iterator = requests.iterator();
+        while (iterator.hasNext()) {
+            ClientRequest request = iterator.next();
+            if (request.request().destination().equals(node.idString())) {
+                iterator.remove();
+                responses.add(new ClientResponse(request, time.milliseconds(), disconnected, body));
+                return;
+            }
+        }
+        throw new IllegalArgumentException("No requests available to node " + node);
+    }
+
     public void prepareResponse(Struct body) {
         prepareResponse(ALWAYS_TRUE, body, false);
+    }
+
+    public void prepareResponseFrom(Struct body, Node node) {
+        prepareResponseFrom(ALWAYS_TRUE, body, node, false);
     }
 
     /**
@@ -155,8 +206,16 @@ public class MockClient implements KafkaClient {
         prepareResponse(matcher, body, false);
     }
 
+    public void prepareResponseFrom(RequestMatcher matcher, Struct body, Node node) {
+        prepareResponseFrom(matcher, body, node, false);
+    }
+
     public void prepareResponse(Struct body, boolean disconnected) {
         prepareResponse(ALWAYS_TRUE, body, disconnected);
+    }
+
+    public void prepareResponseFrom(Struct body, Node node, boolean disconnected) {
+        prepareResponseFrom(ALWAYS_TRUE, body, node, disconnected);
     }
 
     /**
@@ -167,7 +226,11 @@ public class MockClient implements KafkaClient {
      * @param disconnected Whether the request was disconnected
      */
     public void prepareResponse(RequestMatcher matcher, Struct body, boolean disconnected) {
-        futureResponses.add(new FutureResponse(body, disconnected, matcher));
+        prepareResponseFrom(matcher, body, null, disconnected);
+    }
+
+    public void prepareResponseFrom(RequestMatcher matcher, Struct body, Node node, boolean disconnected) {
+        futureResponses.add(new FutureResponse(body, disconnected, matcher, node));
     }
 
     public void setNode(Node node) {

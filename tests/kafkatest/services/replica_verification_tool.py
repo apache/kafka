@@ -15,12 +15,13 @@
 
 from ducktape.services.background_thread import BackgroundThreadService
 
-from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.security.security_config import SecurityConfig
 
 import re
 
-class ReplicaVerificationTool(BackgroundThreadService):
+
+class ReplicaVerificationTool(KafkaPathResolverMixin, BackgroundThreadService):
 
     logs = {
         "producer_log": {
@@ -28,7 +29,7 @@ class ReplicaVerificationTool(BackgroundThreadService):
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, report_interval_ms, security_protocol="PLAINTEXT"):
+    def __init__(self, context, num_nodes, kafka, topic, report_interval_ms, security_protocol="PLAINTEXT", stop_timeout_sec=30):
         super(ReplicaVerificationTool, self).__init__(context, num_nodes)
 
         self.kafka = kafka
@@ -37,6 +38,7 @@ class ReplicaVerificationTool(BackgroundThreadService):
         self.security_protocol = security_protocol
         self.security_config = SecurityConfig(security_protocol)
         self.partition_lag = {}
+        self.stop_timeout_sec = stop_timeout_sec
 
     def _worker(self, idx, node):
         cmd = self.start_cmd(node)
@@ -66,8 +68,8 @@ class ReplicaVerificationTool(BackgroundThreadService):
         return lag
 
     def start_cmd(self, node):
-        cmd = "/opt/%s/bin/" % kafka_dir(node)
-        cmd += "kafka-run-class.sh kafka.tools.ReplicaVerificationTool"
+        cmd = self.path.script("kafka-run-class.sh", node)
+        cmd += " kafka.tools.ReplicaVerificationTool"
         cmd += " --broker-list %s --topic-white-list %s --time -2 --report-interval-ms %s" % (self.kafka.bootstrap_servers(self.security_protocol), self.topic, self.report_interval_ms)
 
         cmd += " 2>> /mnt/replica_verification_tool.log | tee -a /mnt/replica_verification_tool.log &"
@@ -75,6 +77,10 @@ class ReplicaVerificationTool(BackgroundThreadService):
 
     def stop_node(self, node):
         node.account.kill_process("java", clean_shutdown=True, allow_fail=True)
+
+        stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
+        assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
+                        (str(node.account), str(self.stop_timeout_sec))
 
     def clean_node(self, node):
         node.account.kill_process("java", clean_shutdown=False, allow_fail=True)

@@ -13,17 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.utils.util import wait_until
-from ducktape.services.background_thread import BackgroundThreadService
-
-from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, LATEST_0_9, V_0_10_0_0
-from kafkatest.services.monitor.jmx import JmxMixin
-
 import itertools
 import os
 import subprocess
 
+from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.utils.util import wait_until
+
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.monitor.jmx import JmxMixin
+from kafkatest.version import TRUNK, LATEST_0_8_2, LATEST_0_9, V_0_10_0_0
 
 """
 0.8.2.1 ConsoleConsumer options
@@ -66,7 +65,7 @@ Option                                  Description
 """
 
 
-class ConsoleConsumer(JmxMixin, BackgroundThreadService):
+class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService):
     # Root directory for persistent output
     PERSISTENT_ROOT = "/mnt/console_consumer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "console_consumer.stdout")
@@ -91,7 +90,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
     def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=False,
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=TRUNK,
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=[],
-                 enable_systest_events=False):
+                 enable_systest_events=False, stop_timeout_sec=15):
         """
         Args:
             context:                    standard context
@@ -108,6 +107,8 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
             print_key                   if True, print each message's key in addition to its value
             enable_systest_events       if True, console consumer will print additional lifecycle-related information
                                         only available in 0.10.0 and later.
+            stop_timeout_sec            After stopping a node, wait up to stop_timeout_sec for the node to stop,
+                                        and the corresponding background thread to finish successfully.
         """
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
         BackgroundThreadService.__init__(self, context, num_nodes)
@@ -129,6 +130,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         self.client_id = client_id
         self.print_key = print_key
         self.log_level = "TRACE"
+        self.stop_timeout_sec = stop_timeout_sec
 
         self.enable_systest_events = enable_systest_events
         if self.enable_systest_events:
@@ -162,7 +164,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         args['config_file'] = ConsoleConsumer.CONFIG_FILE
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['jmx_port'] = self.jmx_port
-        args['kafka_dir'] = kafka_dir(node)
+        args['console_consumer'] = self.path.script("kafka-console-consumer.sh", node)
         args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
         args['kafka_opts'] = self.security_config.kafka_opts
 
@@ -170,7 +172,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
               "export LOG_DIR=%(log_dir)s; " \
               "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j_config)s\"; " \
               "export KAFKA_OPTS=%(kafka_opts)s; " \
-              "/opt/%(kafka_dir)s/bin/kafka-console-consumer.sh " \
+              "%(console_consumer)s " \
               "--topic %(topic)s --consumer.config %(config_file)s" % args
 
         if self.new_consumer:
@@ -259,8 +261,10 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
 
     def stop_node(self, node):
         node.account.kill_process("console_consumer", allow_fail=True)
-        wait_until(lambda: not self.alive(node), timeout_sec=10, backoff_sec=.2,
-                   err_msg="Timed out waiting for consumer to stop.")
+
+        stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
+        assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
+                        (str(node.account), str(self.stop_timeout_sec))
 
     def clean_node(self, node):
         if self.alive(node):
