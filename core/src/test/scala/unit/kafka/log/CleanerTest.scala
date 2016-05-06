@@ -324,26 +324,22 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testBuildOffsetMapFakeLarge() {
     val map = new FakeOffsetMap(1000)
-    val log = makeLog()
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 72: java.lang.Integer)
+    logProps.put(LogConfig.SegmentIndexBytesProp, 72: java.lang.Integer)
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    val logConfig = LogConfig(logProps)
+    val log = makeLog(config=logConfig)
     val cleaner = makeCleaner(Int.MaxValue)
     val start = 0
-    val end = 500
-    writeToLog(log, (start until end) zip (start until end))
-    val offsetSeq = Seq(7206178L)
-    val offsets = writeToLog(log, Seq(500) zip Seq(500), offsetSeq)
-    def checkRange(map: FakeOffsetMap, start: Int, end: Int) {
-      val endOffset = cleaner.buildOffsetMap(log, start, end, map) + 1
-      assertEquals("Last offset should be the end offset.", end, endOffset)
-      assertEquals("Should have the expected number of messages in the map.", end-start, map.size)
-      for(i <- start until end)
-        assertEquals("Should find all the keys", i.toLong, map.get(key(i)))
-      assertEquals("Should not find a value too small", -1L, map.get(key(start - 1)))
-      assertEquals("Should not find a value too large", -1L, map.get(key(end)))
-    }
-    val segments = log.logSegments.toSeq
-    checkRange(map, 0, segments(1).baseOffset.toInt)
-    checkRange(map, segments(1).baseOffset.toInt, segments(3).baseOffset.toInt)
-    checkRange(map, segments(3).baseOffset.toInt, log.logEndOffset.toInt)
+    val end = 2
+    val offsetSeq = Seq(0L, 7206178L)
+    val offsets = writeToLog(log, (start until end) zip (start until end), offsetSeq)
+    val endOffset = cleaner.buildOffsetMap(log, start, end, map) + 1
+    assertEquals("Last offset should be the end offset.", 7206179, endOffset)
+    assertEquals("Should have the expected number of messages in the map.", end-start, map.size)
+    assertEquals("Map should contain first value", 0L, map.get(key(0)))
+    assertEquals("Map should contain second value", 7206178L, map.get(key(1)))
   }
   
   /**
@@ -471,7 +467,7 @@ class CleanerTest extends JUnitSuite {
 
   def writeToLog(log: Log, seq: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for(((key, value), offset) <- seq.zip(offsetSeq))
-      yield log.append(messageWithOffset(key, value, offset)).firstOffset
+      yield log.append(messageWithOffset(key, value, offset), assignOffsets = false).firstOffset
   }
   
   def key(id: Int) = ByteBuffer.wrap(id.toString.getBytes)
