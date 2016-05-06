@@ -45,7 +45,7 @@ public class ClientUtils {
                 try {
                     InetSocketAddress address = new InetSocketAddress(host, port);
                     if (address.isUnresolved()) {
-                        log.warn("DNS resolution failed for url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+                        log.warn("Removing server from " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " as DNS resolution failed: " + url);
                     } else {
                         addresses.add(address);
                     }

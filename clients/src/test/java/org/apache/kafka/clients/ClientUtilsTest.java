@@ -18,8 +18,11 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.Test;
+import static org.junit.Assert.assertEquals;
 
+import java.net.InetSocketAddress;
 import java.util.Arrays;
+import java.util.List;
 
 public class ClientUtilsTest {
 
@@ -29,7 +32,11 @@ public class ClientUtilsTest {
         check("mydomain.com:8080");
         check("[::1]:8000");
         check("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "mydomain.com:10000");
-        check("some.invalid.hostname.foo.bar:9999", "mydomain.com:10000");
+        List<InetSocketAddress> validatedAddresses = check("some.invalid.hostname.foo.bar:9999", "mydomain.com:10000");
+        assertEquals(1,validatedAddresses.size());
+        InetSocketAddress onlyAddress = validatedAddresses.get(0);
+        assertEquals("mydomain.com",onlyAddress.getHostName());
+        assertEquals(10000,onlyAddress.getPort());
     }
 
     @Test(expected = ConfigException.class)
@@ -42,7 +49,7 @@ public class ClientUtilsTest {
         check("some.invalid.hostname.foo.bar:9999");
     }
 
-    private void check(String... url) {
-        ClientUtils.parseAndValidateAddresses(Arrays.asList(url));
+    private List<InetSocketAddress> check(String... url) {
+        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url));
     }
 }
