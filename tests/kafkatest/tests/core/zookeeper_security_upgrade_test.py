@@ -19,11 +19,9 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.services.security.kafka_acls import ACLs
 from kafkatest.utils import is_int
-import time
 
 class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
     """Tests a rolling upgrade for zookeeper.
@@ -38,7 +36,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         self.producer_throughput = 100
         self.num_producers = 1
         self.num_consumers = 1
-        self.acls = ACLs()
+        self.acls = ACLs(self.test_context)
 
         self.zk = ZookeeperService(self.test_context, num_nodes=3)
 

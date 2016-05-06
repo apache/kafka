@@ -13,21 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+
+from ducktape.mark import matrix
+from ducktape.mark import parametrize
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize
-from ducktape.mark import matrix
 
-from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.version import LATEST_0_8_2
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.utils.remote_account import line_count, file_exists
+from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.security.security_config import SecurityConfig
-
-
-import time
+from kafkatest.services.zookeeper import ZookeeperService
+from kafkatest.utils.remote_account import line_count, file_exists
+from kafkatest.version import LATEST_0_8_2
 
 
 class ConsoleConsumerTest(Test):

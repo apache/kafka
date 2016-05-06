@@ -14,14 +14,15 @@
 # limitations under the License.
 
 from ducktape.mark import parametrize
-from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.version import LATEST_0_8_2, LATEST_0_9, TRUNK, KafkaVersion
-from kafkatest.services.verifiable_producer import VerifiableProducer
+
 from kafkatest.services.console_consumer import ConsoleConsumer
+from kafkatest.services.kafka import KafkaService
 from kafkatest.services.kafka import config_property
+from kafkatest.services.verifiable_producer import VerifiableProducer
+from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
+from kafkatest.version import LATEST_0_8_2, LATEST_0_9, TRUNK, KafkaVersion
 
 
 class TestUpgrade(ProduceConsumeValidateTest):
