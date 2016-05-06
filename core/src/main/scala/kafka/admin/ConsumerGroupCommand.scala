@@ -389,7 +389,7 @@ object ConsumerGroupCommand {
     val GroupDoc = "The consumer group we wish to act on."
     val TopicDoc = "The topic whose consumer group information should be deleted."
     val ListDoc = "List all consumer groups."
-    val DescribeDoc = "Describe consumer group and list offset lag related to given group."
+    val DescribeDoc = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group."
     val nl = System.getProperty("line.separator")
     val DeleteDoc = "Pass in groups to delete topic partition offsets and ownership information " +
       "over the entire consumer group. For instance --group g1 --group g2" + nl +
