@@ -293,7 +293,7 @@ public class RecordAccumulatorTest {
 
         accum.beginFlush();
         assertTrue(accum.flushInProgress());
-        delayedInterrupt(Thread.currentThread(), 2000L);
+        delayedInterrupt(Thread.currentThread(), 1000L);
         try {
             accum.awaitFlushCompletion();
             fail("awaitFlushCompletion should throw InterruptException");
