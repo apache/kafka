@@ -13,15 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os.path
+import signal
+
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
-from kafkatest.services.kafka.directory import kafka_dir
-import signal
-import os.path
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
 
-class StreamsSmokeTestBaseService(Service):
+class StreamsSmokeTestBaseService(KafkaPathResolverMixin, Service):
     """Base class for Streams Smoke Test services providing some common settings and functionality"""
 
     PERSISTENT_ROOT = "/mnt/streams"
@@ -105,10 +106,10 @@ class StreamsSmokeTestBaseService(Service):
         args['stderr'] = self.STDERR_FILE
         args['pidfile'] = self.PID_FILE
         args['log4j'] = self.LOG4J_CONFIG_FILE
-        args['kafka_dir'] = kafka_dir(node)
+        args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
-              "INCLUDE_TEST_JARS=true /opt/%(kafka_dir)s/bin/kafka-run-class.sh org.apache.kafka.streams.smoketest.StreamsSmokeTest " \
+              "INCLUDE_TEST_JARS=true %(kafka_run_class)s org.apache.kafka.streams.smoketest.StreamsSmokeTest " \
               " %(command)s %(kafka)s %(zk)s %(state_dir)s " \
               " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 

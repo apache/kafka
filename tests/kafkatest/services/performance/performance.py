@@ -14,9 +14,10 @@
 # limitations under the License.
 
 from ducktape.services.background_thread import BackgroundThreadService
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
 
-class PerformanceService(BackgroundThreadService):
+class PerformanceService(KafkaPathResolverMixin, BackgroundThreadService):
 
     def __init__(self, context, num_nodes, stop_timeout_sec=30):
         super(PerformanceService, self).__init__(context, num_nodes)
