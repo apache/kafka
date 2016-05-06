@@ -52,8 +52,8 @@ class CheckCreatePathResolver(object):
         resolver = create_path_resolver(DummyContext())
         assert type(resolver) == KafkaSystemTestPathResolver
 
-    def check_source_paths(self):
-        """Check expected path resolution when installing from source. Aka SOURCE_INSTALL."""
+    def check_paths(self):
+        """Check expected path resolution without any version specified."""
         resolver = create_path_resolver(DummyContext())
 
         assert resolver.home() == "/opt/kafka-trunk"
