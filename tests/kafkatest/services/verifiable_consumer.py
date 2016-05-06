@@ -13,16 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.services.background_thread import BackgroundThreadService
-
-from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.kafka.version import TRUNK
-from kafkatest.services.kafka import TopicPartition
-
 import json
 import os
 import signal
 import subprocess
+
+from ducktape.services.background_thread import BackgroundThreadService
+
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.kafka import TopicPartition
+from kafkatest.version import TRUNK
 
 
 class ConsumerState:
@@ -112,7 +112,7 @@ class ConsumerEventHandler(object):
             return None
 
 
-class VerifiableConsumer(BackgroundThreadService):
+class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_consumer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.stdout")
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.stderr")
@@ -226,9 +226,9 @@ class VerifiableConsumer(BackgroundThreadService):
         cmd += "export LOG_DIR=%s;" % VerifiableConsumer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableConsumer.LOG4J_CONFIG
-        cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-run-class.sh org.apache.kafka.tools.VerifiableConsumer" \
+        cmd += self.path.script("kafka-run-class.sh", node) + " org.apache.kafka.tools.VerifiableConsumer" \
               " --group-id %s --topic %s --broker-list %s --session-timeout %s --assignment-strategy %s %s" % \
-              (self.group_id, self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol),
+                                            (self.group_id, self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol),
                self.session_timeout_sec*1000, self.assignment_strategy, "--enable-autocommit" if self.enable_autocommit else "")
                
         if self.max_messages > 0:

@@ -13,17 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.utils.util import wait_until
-from ducktape.services.background_thread import BackgroundThreadService
-
-from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, LATEST_0_9, V_0_10_0_0
-from kafkatest.services.monitor.jmx import JmxMixin
-
 import itertools
 import os
 import subprocess
 
+from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.utils.util import wait_until
+
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.monitor.jmx import JmxMixin
+from kafkatest.version import TRUNK, LATEST_0_8_2, LATEST_0_9, V_0_10_0_0
 
 """
 0.8.2.1 ConsoleConsumer options
@@ -66,7 +65,7 @@ Option                                  Description
 """
 
 
-class ConsoleConsumer(JmxMixin, BackgroundThreadService):
+class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService):
     # Root directory for persistent output
     PERSISTENT_ROOT = "/mnt/console_consumer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "console_consumer.stdout")
@@ -165,7 +164,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         args['config_file'] = ConsoleConsumer.CONFIG_FILE
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['jmx_port'] = self.jmx_port
-        args['kafka_dir'] = kafka_dir(node)
+        args['console_consumer'] = self.path.script("kafka-console-consumer.sh", node)
         args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
         args['kafka_opts'] = self.security_config.kafka_opts
 
@@ -173,7 +172,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
               "export LOG_DIR=%(log_dir)s; " \
               "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j_config)s\"; " \
               "export KAFKA_OPTS=%(kafka_opts)s; " \
-              "/opt/%(kafka_dir)s/bin/kafka-console-consumer.sh " \
+              "%(console_consumer)s " \
               "--topic %(topic)s --consumer.config %(config_file)s" % args
 
         if self.new_consumer:
