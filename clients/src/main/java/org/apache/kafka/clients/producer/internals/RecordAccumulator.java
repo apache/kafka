@@ -430,8 +430,10 @@ public final class RecordAccumulator {
     
     /**
      * Are there any threads currently waiting on a flush?
+     *
+     * package private for test
      */
-    private boolean flushInProgress() {
+    boolean flushInProgress() {
         return flushesInProgress.get() > 0;
     }
     

@@ -16,6 +16,7 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -39,6 +40,7 @@ import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.junit.After;
 import org.junit.Test;
 
@@ -57,6 +59,7 @@ public class RecordAccumulatorTest {
     private PartitionInfo part2 = new PartitionInfo(topic, partition2, node1, null, null);
     private PartitionInfo part3 = new PartitionInfo(topic, partition3, node2, null, null);
     private MockTime time = new MockTime();
+    private SystemTime systemTime = new SystemTime();
     private byte[] key = "key".getBytes();
     private byte[] value = "value".getBytes();
     private int msgSize = Records.LOG_OVERHEAD + Record.recordSize(key, value);
@@ -271,6 +274,35 @@ public class RecordAccumulatorTest {
         accum.awaitFlushCompletion();
         assertFalse(accum.hasUnsent());
     }
+
+
+    private void delayedInterrupt(final Thread thread, final long delayMs) {
+        Thread t = new Thread() {
+            public void run() {
+                systemTime.sleep(delayMs);
+                thread.interrupt();
+            }
+        };
+        t.start();
+    }
+
+    @Test
+    public void testAwaitFlushComplete() throws Exception {
+        RecordAccumulator accum = new RecordAccumulator(4 * 1024, 64 * 1024, CompressionType.NONE, Long.MAX_VALUE, 100L, metrics, time);
+        accum.append(new TopicPartition(topic, 0), 0L, key, value, null, maxBlockTimeMs);
+
+        accum.beginFlush();
+        assertTrue(accum.flushInProgress());
+        delayedInterrupt(Thread.currentThread(), 2000L);
+        try {
+            accum.awaitFlushCompletion();
+        } catch (InterruptedException e) {
+            assertFalse("flushInProgress count should be decremented even if thread is interrupted", accum.flushInProgress());
+            return;
+        }
+        fail("awaitFlushCompletion should throw InterruptException");
+    }
+
 
     @Test
     public void testAbortIncompleteBatches() throws Exception {
