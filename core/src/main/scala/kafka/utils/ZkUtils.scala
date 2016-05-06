@@ -792,24 +792,16 @@ class ZkUtils(val zkClient: ZkClient,
   /**
     * This API produces a sequence number by creating / updating given path in zookeeper
     * It uses the stat returned by the zookeeper and return the version. Every time
-    * client updates the path stat.version gets incremented
+    * client updates the path stat.version gets incremented. Starting value of sequence number is 1.
     */
   def getSequenceId(path: String, acls: java.util.List[ACL] = DefaultAcls): Int = {
+    def writeToZk: Int = zkClient.writeDataReturnStat(path, "", -1).getVersion
     try {
-      val stat = zkClient.writeDataReturnStat(path, "", -1)
-      stat.getVersion
+      writeToZk
     } catch {
-      case e: ZkNoNodeException => {
-        createParentPath(BrokerSequenceIdPath, acls)
-        try {
-          zkClient.createPersistent(BrokerSequenceIdPath, "", acls)
-          1
-        } catch {
-          case e: ZkNodeExistsException =>
-            val stat = zkClient.writeDataReturnStat(BrokerSequenceIdPath, "", -1)
-            stat.getVersion
-        }
-      }
+      case e1: ZkNoNodeException =>
+        makeSurePersistentPathExists(path)
+        writeToZk
     }
   }
 
