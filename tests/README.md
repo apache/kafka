@@ -143,6 +143,7 @@ Where are the unit tests?
 * The kafkatest unit tests are located under kafka/tests/unit
 
 How do I run the unit tests?
+* cd kafka/tests # The base system test directory
 * python setup.py test
 
 How can I add a unit test?
