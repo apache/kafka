@@ -258,14 +258,14 @@ This quickstart example will demonstrate how to run a streaming application code
 of the <code>WordCountDemo</code> example code (converted to use Java 8 lambda expressions for easy reading).
 </p>
 <pre>
-KStream<String, Long> wordCounts = textLines
+KTable<String, Long> wordCounts = textLines
     // Split each text line, by whitespace, into words.
     .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
 
     // Ensure the words are available as message keys for the next aggregate operation.
     .map((key, value) -> new KeyValue<>(value, value))
 
-    // Count the occurrences of each word (message key).
+    // Count the occurrences of each word (message key) and store the results into a table named "Counts".
     .countByKey("Counts")
 </pre>
 
