@@ -134,7 +134,7 @@ my-group        my-topic                       1   0               0            
 </pre>
 
 
-Note, however, after 0.9.0, the kafka.tools.ConsumerOffsetChecker tool is deprecated and you should use the kafka.admin.ConsumerGroupCommand (or the bin/kafka-consumer-groups.sh script) to manage consumer groups, including consumers created with the <a href="https://cwiki.apache.org/confluence/display/KAFKA/Consumer+Client+Re-Design">new consumer-groups API</a>.
+Note, however, after 0.9.0, the kafka.tools.ConsumerOffsetChecker tool is deprecated and you should use the kafka.admin.ConsumerGroupCommand (or the bin/kafka-consumer-groups.sh script) to manage consumer groups, including consumers created with the <a href="http://kafka.apache.org/documentation.html#newconsumerapi">new consumer API</a>.
 
 <h4><a id="basic_ops_consumer_group" href="#basic_ops_consumer_group">Managing Consumer Groups</a></h4>
 
@@ -156,7 +156,7 @@ test-consumer-group            test-foo                       0          1      
 </pre>
 
 
-When you're using the <a href="https://cwiki.apache.org/confluence/display/KAFKA/Consumer+Client+Re-Design">new consumer-groups API</a> where the broker handles coordination of partition handling and rebalance, you can manage the groups with the "--new-consumer" flags:
+When you're using the <a href="http://kafka.apache.org/documentation.html#newconsumerapi">new consumer API</a> where the broker handles coordination of partition handling and rebalance, you can manage the groups with the "--new-consumer" flags:
 
 <pre>
  &gt; bin/kafka-consumer-groups.sh --new-consumer --bootstrap-server broker1:9092 --list
