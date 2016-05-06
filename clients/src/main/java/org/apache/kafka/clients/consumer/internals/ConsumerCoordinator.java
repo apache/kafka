@@ -321,7 +321,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     public Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(Set<TopicPartition> partitions) {
         while (true) {
-            ensureCoordinatorKnown();
+            ensureCoordinatorReady();
 
             // contact coordinator to fetch committed offsets
             RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future = sendOffsetFetchRequest(partitions);
@@ -379,9 +379,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         });
 
-        // ensure commit has a chance to be transmitted (without blocking on its completion)
-        // note that we allow delayed tasks to be executed in case heartbeats need to be sent
-        client.quickPoll(true);
+        // ensure the commit has a chance to be transmitted (without blocking on its completion).
+        // Note that commits are treated as heartbeats by the coordinator, so there is no need to
+        // explicitly allow heartbeats through delayed task execution.
+        client.pollNoWakeup();
     }
 
     /**
@@ -397,7 +398,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return;
 
         while (true) {
-            ensureCoordinatorKnown();
+            ensureCoordinatorReady();
 
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
             client.poll(future);

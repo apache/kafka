@@ -43,7 +43,8 @@ class VerifiableProducer(BackgroundThreadService):
         }
 
     def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
-                 message_validator=is_int, compression_types=None, version=TRUNK, acks=None):
+                 message_validator=is_int, compression_types=None, version=TRUNK, acks=None,
+                 stop_timeout_sec=150):
         """
         :param max_messages is a number of messages to be produced per producer
         :param message_validator checks for an expected format of messages produced. There are
@@ -73,7 +74,7 @@ class VerifiableProducer(BackgroundThreadService):
         self.produced_count = {}
         self.clean_shutdown_nodes = set()
         self.acks = acks
-
+        self.stop_timeout_sec = stop_timeout_sec
 
     @property
     def security_config(self):
@@ -220,14 +221,11 @@ class VerifiableProducer(BackgroundThreadService):
             return True
 
     def stop_node(self, node):
-        self.kill_node(node, clean_shutdown=False, allow_fail=False)
-        if self.worker_threads is None:
-            return
+        self.kill_node(node, clean_shutdown=True, allow_fail=False)
 
-        # block until the corresponding thread exits
-        if len(self.worker_threads) >= self.idx(node):
-            # Need to guard this because stop is preemptively called before the worker threads are added and started
-            self.worker_threads[self.idx(node) - 1].join()
+        stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
+        assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
+                        (str(node.account), str(self.stop_timeout_sec))
 
     def clean_node(self, node):
         self.kill_node(node, clean_shutdown=False, allow_fail=False)

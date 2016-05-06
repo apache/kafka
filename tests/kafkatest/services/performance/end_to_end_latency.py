@@ -17,9 +17,10 @@ from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
 
 from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.kafka.version import TRUNK, V_0_9_0_0, V_0_10_0_0
+from kafkatest.services.kafka.version import TRUNK, V_0_9_0_0
 
 import os
+
 
 class EndToEndLatencyService(PerformanceService):
     MESSAGE_BYTES = 21  # 0.8.X messages are fixed at 21 bytes, so we'll match that for other versions
@@ -44,7 +45,6 @@ class EndToEndLatencyService(PerformanceService):
             "path": LOG_FILE,
             "collect_default": True}
     }
-
 
     def __init__(self, context, num_nodes, kafka, topic, num_records, compression_type="none", version=TRUNK, acks=1):
         super(EndToEndLatencyService, self).__init__(context, num_nodes)
