@@ -23,6 +23,7 @@ import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
+import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.Worker;
@@ -251,11 +252,20 @@ public class StandaloneHerder extends AbstractHerder {
 
     private List<Map<String, String>> recomputeTaskConfigs(String connName) {
         Map<String, String> config = configState.connectorConfig(connName);
-        ConnectorConfig connConfig = new ConnectorConfig(config);
 
-        return worker.connectorTaskConfigs(connName,
-                connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG),
-                connConfig.getList(ConnectorConfig.TOPICS_CONFIG));
+        ConnectorConfig connConfig;
+        if (worker.isSinkConnector(connName)) {
+            connConfig = new SinkConnectorConfig(config);
+            return worker.connectorTaskConfigs(connName,
+                                               connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG),
+                                               connConfig.getList(SinkConnectorConfig.TOPICS_CONFIG));
+        } else {
+            connConfig = new ConnectorConfig(config);
+            return worker.connectorTaskConfigs(connName,
+                                               connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG),
+                                               null);
+        }
+
     }
 
     private void createConnectorTasks(String connName, TargetState initialState) {
