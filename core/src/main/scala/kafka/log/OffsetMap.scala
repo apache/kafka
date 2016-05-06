@@ -25,7 +25,8 @@ import org.apache.kafka.common.utils.Utils
 
 trait OffsetMap {
   def slots: Int
-  def put(key: ByteBuffer, offset: Long)
+  def put(key: ByteBuffer, offset: Long): Boolean
+  def putAll(map: OffsetMap): Boolean
   def get(key: ByteBuffer): Long
   def clear()
   def size: Int
@@ -33,8 +34,9 @@ trait OffsetMap {
 }
 
 /**
- * An hash table used for deduplicating the log. This hash table uses a cryptographicly secure hash of the key as a proxy for the key
+ * An hash table used for deduplicating the log. This hash table uses a cryptographically secure hash of the key as a proxy for the key
  * for comparisons and to save space on object overhead. Collisions are resolved by probing. This hash table does not support deletes.
+ *
  * @param memory The amount of memory this map can use
  * @param hashAlgorithm The hash algorithm instance to use: MD2, MD5, SHA-1, SHA-256, SHA-384, SHA-512
  */
@@ -73,16 +75,27 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
   
   /**
    * Associate this offset to the given key.
+   *
    * @param key The key
    * @param offset The offset
+   *
+   * @return true if insert succeeded
    */
-  override def put(key: ByteBuffer, offset: Long) {
-    require(entries < slots, "Attempt to add a new entry to a full offset map.")
+  override def put(key: ByteBuffer, offset: Long): Boolean = {
+    // cannot accept puts when full
+    if (entries == slots)
+      return false
+
     lookups += 1
     hashInto(key, hash1)
+    putHash1(offset)
+    return true
+  }
+
+  private def putHash1(offset: Long) {
     // probe until we find the first empty slot
     var attempt = 0
-    var pos = positionOf(hash1, attempt)  
+    var pos = positionOf(hash1, attempt)
     while(!isEmpty(pos)) {
       bytes.position(pos)
       bytes.get(hash2)
@@ -100,7 +113,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     bytes.putLong(offset)
     entries += 1
   }
-  
+
   /**
    * Check that there is no entry at the given position
    */
@@ -109,12 +122,17 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
   
   /**
    * Get the offset associated with this key.
+   *
    * @param key The key
    * @return The offset associated with this key or -1 if the key is not found
    */
   override def get(key: ByteBuffer): Long = {
     lookups += 1
     hashInto(key, hash1)
+    getHash1()
+  }
+
+  private def getHash1(): Long = {
     // search for the hash of this key by repeated probing until we find the hash we are looking for or we find an empty slot
     var attempt = 0
     var pos = 0
@@ -125,10 +143,47 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
         return -1L
       bytes.get(hash2)
       attempt += 1
+      if (attempt > slots)
+        return -1L
     } while(!Arrays.equals(hash1, hash2))
     bytes.getLong()
   }
-  
+
+  /**
+    * This copies all entries from an OffsetMap, taking all or none of the entries depending on available space. Values
+    * for identical keys are overwritten.
+    *
+    * @param from The OffsetMap to copy from
+    *
+    * @return If the put succeeded.
+    */
+  override def putAll(from: OffsetMap): Boolean = {
+    require(from.getClass == this.getClass, "cannot merge %s with SkimpyOffsetMap".format(from.getClass))
+
+    val map = from.asInstanceOf[SkimpyOffsetMap]
+    require(map.hashAlgorithm == hashAlgorithm, "SkimpyOffsetMap cannot merge maps with different hashAlgorithms")
+
+    var common = 0
+    map.bytes.rewind()
+    while (map.bytes.remaining() >= bytesPerEntry) {
+      map.bytes.get(hash1)
+      if (getHash1() >= 0L)
+        common += 1
+      map.bytes.getLong() // discard offset
+    }
+
+    if (size + map.size - common > slots)
+      return false
+
+    map.bytes.rewind()
+    while (map.bytes.remaining() >= bytesPerEntry) {
+      map.bytes.get(hash1)
+      putHash1(map.bytes.getLong())
+    }
+
+    return true
+  }
+
   /**
    * Change the salt used for key hashing making all existing keys unfindable.
    * Doesn't actually zero out the array.
@@ -144,7 +199,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * The number of entries put into the map (note that not all may remain)
    */
   override def size: Int = entries
-  
+
   /**
    * The rate of collisions in the lookups
    */
@@ -154,8 +209,10 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
   /**
    * Calculate the ith probe position. We first try reading successive integers from the hash itself
    * then if all of those fail we degrade to linear probing.
+   *
    * @param hash The hash of the key to find the position for
    * @param attempt The ith probe
+   *
    * @return The byte offset in the buffer at which the ith probing for the given hash would reside
    */
   private def positionOf(hash: Array[Byte], attempt: Int): Int = {
@@ -167,6 +224,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
   
   /**
    * The offset at which we have stored the given key
+   *
    * @param key The key to hash
    * @param buffer The buffer to store the hash into
    */

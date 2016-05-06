@@ -432,7 +432,8 @@ class CleanerTest extends JUnitSuite {
 
   def makeCleaner(capacity: Int, checkDone: (TopicAndPartition) => Unit = noOpCheckDone) =
     new Cleaner(id = 0, 
-                offsetMap = new FakeOffsetMap(capacity), 
+                offsetMap = new FakeOffsetMap(capacity),
+                scratchMap = new FakeOffsetMap(capacity),
                 ioBufferSize = 64*1024, 
                 maxIoBufferSize = 64*1024,
                 dupBufferLoadFactor = 0.75,                
@@ -465,14 +466,22 @@ class CleanerTest extends JUnitSuite {
 }
 
 class FakeOffsetMap(val slots: Int) extends OffsetMap {
-  val map = new java.util.HashMap[String, Long]()
+  private val map = new java.util.HashMap[String, Long]()
   
   private def keyFor(key: ByteBuffer) = 
     new String(Utils.readBytes(key.duplicate), "UTF-8")
   
-  def put(key: ByteBuffer, offset: Long): Unit = 
+  def put(key: ByteBuffer, offset: Long): Boolean = {
     map.put(keyFor(key), offset)
-  
+    true
+  }
+
+  def putAll(from: OffsetMap): Boolean = {
+    val fom = from.asInstanceOf[FakeOffsetMap]
+    map.putAll(fom.map)
+    return true
+  }
+
   def get(key: ByteBuffer): Long = {
     val k = keyFor(key)
     if(map.containsKey(k))
