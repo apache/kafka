@@ -131,10 +131,9 @@ public class Fetcher<K, V> {
     /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't have one.
      *
-     * @param cluster The current cluster metadata
      */
-    public void sendFetches(Cluster cluster) {
-        for (Map.Entry<Node, FetchRequest> fetchEntry: createFetchRequests(cluster).entrySet()) {
+    public void sendFetches() {
+        for (Map.Entry<Node, FetchRequest> fetchEntry: createFetchRequests().entrySet()) {
             final FetchRequest fetch = fetchEntry.getValue();
             client.send(fetchEntry.getKey(), ApiKeys.FETCH, fetch)
                     .addListener(new RequestFutureListener<ClientResponse>() {
@@ -525,8 +524,9 @@ public class Fetcher<K, V> {
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
      */
-    private Map<Node, FetchRequest> createFetchRequests(Cluster cluster) {
+    private Map<Node, FetchRequest> createFetchRequests() {
         // create the fetch info
+        Cluster cluster = metadata.fetch();
         Map<Node, Map<TopicPartition, FetchRequest.PartitionData>> fetchable = new HashMap<>();
         for (TopicPartition partition : fetchablePartitions()) {
             Node node = cluster.leaderFor(partition);
@@ -586,11 +586,14 @@ public class Fetcher<K, V> {
                 ByteBuffer buffer = partition.recordSet;
                 MemoryRecords records = MemoryRecords.readableRecords(buffer);
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
+                boolean skippedRecords = false;
                 for (LogEntry logEntry : records) {
                     // Skip the messages earlier than current position.
                     if (logEntry.offset() >= position) {
                         parsed.add(parseRecord(tp, logEntry));
                         bytes += logEntry.size();
+                    } else {
+                        skippedRecords = true;
                     }
                 }
 
@@ -599,7 +602,7 @@ public class Fetcher<K, V> {
                     ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
                     this.records.add(new PartitionRecords<>(fetchOffset, tp, parsed));
                     this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
-                } else if (buffer.limit() > 0) {
+                } else if (buffer.limit() > 0 && !skippedRecords) {
                     // we did not read a single message from a non-empty buffer
                     // because that message's size is larger than fetch size, in this case
                     // record this exception

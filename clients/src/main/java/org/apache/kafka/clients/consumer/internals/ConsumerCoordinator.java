@@ -379,9 +379,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         });
 
-        // ensure commit has a chance to be transmitted (without blocking on its completion)
-        // note that we allow delayed tasks to be executed in case heartbeats need to be sent
-        client.quickPoll(true);
+        // ensure the commit has a chance to be transmitted (without blocking on its completion).
+        // Note that commits are treated as heartbeats by the coordinator, so there is no need to
+        // explicitly allow heartbeats through delayed task execution.
+        client.pollNoWakeup();
     }
 
     /**
