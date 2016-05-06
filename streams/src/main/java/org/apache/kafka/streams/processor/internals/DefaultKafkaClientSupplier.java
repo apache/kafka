@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams;
+package org.apache.kafka.streams.processor.internals;
 
 import java.util.Map;
 
@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.streams.KafkaClientSupplier;
 
 public class DefaultKafkaClientSupplier implements KafkaClientSupplier {
     @Override
