@@ -504,7 +504,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.consumer";
 
-    private String clientId;
+    private final String clientId;
     private final ConsumerCoordinator coordinator;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
@@ -517,7 +517,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final SubscriptionState subscriptions;
     private final Metadata metadata;
     private final long retryBackoffMs;
-    private long requestTimeoutMs;
+    private final long requestTimeoutMs;
     private boolean closed = false;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
@@ -602,10 +602,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new ConfigException(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG + " should be greater than " + ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG + " and " + ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG);
             this.time = new SystemTime();
 
-            clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
+            String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0)
                 clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
-            Map<String, String> metricsTags = new LinkedHashMap<String, String>();
+            this.clientId = clientId;
+            Map<String, String> metricsTags = new LinkedHashMap<>();
             metricsTags.put("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
@@ -700,6 +701,35 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
         }
+    }
+
+    // visible for testing
+    KafkaConsumer(String clientId,
+                  ConsumerCoordinator coordinator,
+                  Deserializer<K> keyDeserializer,
+                  Deserializer<V> valueDeserializer,
+                  Fetcher<K, V> fetcher,
+                  ConsumerInterceptors<K, V> interceptors,
+                  Time time,
+                  ConsumerNetworkClient client,
+                  Metrics metrics,
+                  SubscriptionState subscriptions,
+                  Metadata metadata,
+                  long retryBackoffMs,
+                  long requestTimeoutMs) {
+        this.clientId = clientId;
+        this.coordinator = coordinator;
+        this.keyDeserializer = keyDeserializer;
+        this.valueDeserializer = valueDeserializer;
+        this.fetcher = fetcher;
+        this.interceptors = interceptors;
+        this.time = time;
+        this.client = client;
+        this.metrics = metrics;
+        this.subscriptions = subscriptions;
+        this.metadata = metadata;
+        this.retryBackoffMs = retryBackoffMs;
+        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     /**
@@ -910,14 +940,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // and avoid block waiting for their responses to enable pipelining while the user
                     // is handling the fetched records.
                     //
-                    // NOTE that we use quickPoll() in this case which disables wakeups and delayed
-                    // task execution since the consumed positions has already been updated and we
-                    // must return these records to users to process before being interrupted or
-                    // auto-committing offsets
-                    fetcher.sendFetches(metadata.fetch());
-                    client.quickPoll(false);
-                    return this.interceptors == null
-                        ? new ConsumerRecords<>(records) : this.interceptors.onConsume(new ConsumerRecords<>(records));
+                    // NOTE: since the consumed position has already been updated, we must not allow
+                    // wakeups or any other errors to be triggered prior to returning the fetched records.
+                    // Additionally, pollNoWakeup does not allow automatic commits to get triggered.
+                    fetcher.sendFetches();
+                    client.pollNoWakeup();
+
+                    if (this.interceptors == null)
+                        return new ConsumerRecords<>(records);
+                    else
+                        return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
 
                 long elapsed = time.milliseconds() - start;
@@ -949,18 +981,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (!subscriptions.hasAllFetchPositions())
             updateFetchPositions(this.subscriptions.missingFetchPositions());
 
+        long now = time.milliseconds();
+
+        // execute delayed tasks (e.g. autocommits and heartbeats) prior to fetching records
+        client.executeDelayedTasks(now);
+
         // init any new fetches (won't resend pending fetches)
-        Cluster cluster = this.metadata.fetch();
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
 
         // if data is available already, e.g. from a previous network client poll() call to commit,
         // then just return it immediately
-        if (!records.isEmpty()) {
+        if (!records.isEmpty())
             return records;
-        }
 
-        fetcher.sendFetches(cluster);
-        client.poll(timeout);
+        fetcher.sendFetches();
+        client.poll(timeout, now);
         return fetcher.fetchedRecords();
     }
 
