@@ -26,7 +26,7 @@ import org.apache.kafka.common.record.{KafkaLZ4BlockInputStream, KafkaLZ4BlockOu
 
 object CompressionFactory {
   
-  def apply(compressionCodec: CompressionCodec, stream: OutputStream): OutputStream = {
+  def apply(compressionCodec: CompressionCodec, messageVersion: Byte, stream: OutputStream): OutputStream = {
     compressionCodec match {
       case DefaultCompressionCodec => new GZIPOutputStream(stream)
       case GZIPCompressionCodec => new GZIPOutputStream(stream)
@@ -34,13 +34,13 @@ object CompressionFactory {
         import org.xerial.snappy.SnappyOutputStream
         new SnappyOutputStream(stream)
       case LZ4CompressionCodec =>
-        new KafkaLZ4BlockOutputStream(stream)
+        new KafkaLZ4BlockOutputStream(stream, messageVersion == Message.MagicValue_V0)
       case _ =>
         throw new kafka.common.UnknownCodecException("Unknown Codec: " + compressionCodec)
     }
   }
   
-  def apply(compressionCodec: CompressionCodec, stream: InputStream): InputStream = {
+  def apply(compressionCodec: CompressionCodec, messageVersion: Byte, stream: InputStream): InputStream = {
     compressionCodec match {
       case DefaultCompressionCodec => new GZIPInputStream(stream)
       case GZIPCompressionCodec => new GZIPInputStream(stream)
@@ -48,7 +48,7 @@ object CompressionFactory {
         import org.xerial.snappy.SnappyInputStream
         new SnappyInputStream(stream)
       case LZ4CompressionCodec =>
-        new KafkaLZ4BlockInputStream(stream)
+        new KafkaLZ4BlockInputStream(stream, messageVersion == Message.MagicValue_V0)
       case _ =>
         throw new kafka.common.UnknownCodecException("Unknown Codec: " + compressionCodec)
     }
