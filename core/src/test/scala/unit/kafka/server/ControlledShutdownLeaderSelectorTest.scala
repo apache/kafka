@@ -31,27 +31,43 @@ class ControlledShutdownLeaderSelectorTest {
 
   @Test
   def testSelectLeader() {
-    val liveBrokerIds = mutable.Set(1, 3, 4, 6)
-    val shuttingDownBrokerIds = mutable.Set(2, 5)
-    val assignment = Seq(6, 5, 4, 3, 2, 1)
     val topicPartition = TopicAndPartition("topic", 1)
-    val isr = List(1, 3, 5)
-    val partitionReplicaAssignment = mutable.Map(topicPartition -> assignment)
+    val assignment = Seq(6, 5, 4, 3, 2, 1)
+    val preferredReplicaId = assignment.head
+
+    val firstIsr = List(1, 3, 6)
+    val firstLeader = 1
 
     val zkUtils = EasyMock.mock(classOf[ZkUtils])
     val controllerContext = new ControllerContext(zkUtils, zkSessionTimeout = 1000)
-    controllerContext.liveBrokers = (liveBrokerIds ++ shuttingDownBrokerIds).map(Broker(_, Map.empty, None))
-    controllerContext.shuttingDownBrokerIds = shuttingDownBrokerIds
-    controllerContext.partitionReplicaAssignment = partitionReplicaAssignment
+    controllerContext.liveBrokers = assignment.map(Broker(_, Map.empty, None)).toSet
+    controllerContext.shuttingDownBrokerIds = mutable.Set(2, 3)
+    controllerContext.partitionReplicaAssignment = mutable.Map(topicPartition -> assignment)
 
     val leaderSelector = new ControlledShutdownLeaderSelector(controllerContext)
-    val leaderAndIsr = new LeaderAndIsr(1, isr)
-    val (newLeaderAndIsr, replicas) = leaderSelector.selectLeader(topicPartition, leaderAndIsr)
+    val firstLeaderAndIsr = new LeaderAndIsr(firstLeader, firstIsr)
+    val (secondLeaderAndIsr, secondReplicas) = leaderSelector.selectLeader(topicPartition, firstLeaderAndIsr)
 
-    assertEquals(3, newLeaderAndIsr.leader)
-    assertEquals(Seq(1, 3), newLeaderAndIsr.isr)
-    assertEquals(1, newLeaderAndIsr.zkVersion)
-    assertEquals(1, newLeaderAndIsr.leaderEpoch)
+    assertEquals(preferredReplicaId, secondLeaderAndIsr.leader)
+    assertEquals(Seq(1, 6), secondLeaderAndIsr.isr)
+    assertEquals(1, secondLeaderAndIsr.zkVersion)
+    assertEquals(1, secondLeaderAndIsr.leaderEpoch)
+    assertEquals(assignment, secondReplicas)
+
+    controllerContext.shuttingDownBrokerIds += preferredReplicaId
+
+    val deadBrokerId = 2
+    controllerContext.liveBrokers = controllerContext.liveOrShuttingDownBrokers.filter(_.id != deadBrokerId)
+    controllerContext.shuttingDownBrokerIds -= deadBrokerId
+
+    val (thirdLeaderAndIsr, thirdReplicas) = leaderSelector.selectLeader(topicPartition, secondLeaderAndIsr)
+
+    assertEquals(1, thirdLeaderAndIsr.leader)
+    assertEquals(Seq(1), thirdLeaderAndIsr.isr)
+    assertEquals(2, thirdLeaderAndIsr.zkVersion)
+    assertEquals(2, thirdLeaderAndIsr.leaderEpoch)
+    assertEquals(Seq(6, 5, 4, 3, 1), thirdReplicas)
+
   }
 
 }
