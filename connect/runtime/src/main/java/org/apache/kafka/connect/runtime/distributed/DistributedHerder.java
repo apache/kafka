@@ -307,15 +307,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void processTargetStateChanges(Set<String> connectorTargetStateChanges) {
-        if (!connectorTargetStateChanges.isEmpty()) {
-            for (String connector : connectorTargetStateChanges) {
-                if (worker.connectorNames().contains(connector)) {
-                    TargetState targetState = configState.targetState(connector);
-                    worker.setTargetState(connector, targetState);
-                    if (targetState == TargetState.STARTED)
-                        reconfigureConnectorTasksWithRetry(connector);
-                }
-            }
+        for (String connector : connectorTargetStateChanges) {
+            TargetState targetState = configState.targetState(connector);
+            worker.setTargetState(connector, targetState);
+            if (targetState == TargetState.STARTED)
+                reconfigureConnectorTasksWithRetry(connector);
         }
     }
 
