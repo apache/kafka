@@ -22,6 +22,9 @@ import kafka.controller.{ControlledShutdownLeaderSelector, ControllerContext}
 import org.easymock.EasyMock
 import org.junit.{Assert, Test}
 import Assert._
+import kafka.cluster.Broker
+import kafka.utils.ZkUtils
+
 import scala.collection.mutable
 
 class ControlledShutdownLeaderSelectorTest {
@@ -35,11 +38,11 @@ class ControlledShutdownLeaderSelectorTest {
     val isr = List(1, 3, 5)
     val partitionReplicaAssignment = mutable.Map(topicPartition -> assignment)
 
-    val controllerContext = EasyMock.niceMock(classOf[ControllerContext])
-    EasyMock.expect(controllerContext.liveOrShuttingDownBrokerIds).andStubReturn(liveBrokerIds ++ shuttingDownBrokerIds)
-    EasyMock.expect(controllerContext.shuttingDownBrokerIds).andStubReturn(shuttingDownBrokerIds)
-    EasyMock.expect(controllerContext.partitionReplicaAssignment).andStubReturn(partitionReplicaAssignment)
-    EasyMock.replay(controllerContext)
+    val zkUtils = EasyMock.mock(classOf[ZkUtils])
+    val controllerContext = new ControllerContext(zkUtils, zkSessionTimeout = 1000)
+    controllerContext.liveBrokers = (liveBrokerIds ++ shuttingDownBrokerIds).map(Broker(_, Map.empty, None))
+    controllerContext.shuttingDownBrokerIds = shuttingDownBrokerIds
+    controllerContext.partitionReplicaAssignment = partitionReplicaAssignment
 
     val leaderSelector = new ControlledShutdownLeaderSelector(controllerContext)
     val leaderAndIsr = new LeaderAndIsr(1, isr)
