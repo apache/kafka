@@ -20,7 +20,7 @@ package kafka.admin
 import java.util.Properties
 import joptsimple._
 import kafka.common.{AdminCommandFailedException, Topic, TopicExistsException}
-import kafka.consumer.{ConsumerConfig, Whitelist}
+import kafka.consumer.{ConsumerConfig => OldConsumerConfig, Whitelist}
 import kafka.coordinator.GroupCoordinator
 import kafka.log.{Defaults, LogConfig}
 import kafka.server.ConfigType
@@ -31,6 +31,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
 import scala.collection.JavaConversions._
 import scala.collection._
+import org.apache.kafka.clients.consumer.{ConsumerConfig => NewConsumerConfig}
 import org.apache.kafka.common.internals.TopicConstants
 
 
@@ -379,29 +380,33 @@ object TopicCommand extends Logging {
   def shortMessageSizeWarning(maxMessageBytes: Int): String = {
     "\n\n" +
       "*****************************************************************************************************\n" +
-      "*** WARNING: you are creating a topic where the max.message.bytes is greater than the consumer ***\n" +
-      "*** default. This operation is potentially dangerous. Consumers will get failures if their        ***\n" +
-      "*** fetch.message.max.bytes < the value you are using.                                            ***\n" +
+      "*** WARNING: you are creating a topic where the max.message.bytes is greater than the broker's    ***\n" +
+      "*** default max.message.bytes. This operation is potentially dangerous. Consumers will get        ***\n" +
+      s"*** failures if their fetch.message.max.bytes (old consumer) or ${NewConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG}         ***\n"+ 
+      "*** (new consumer) < the value you are using.                                                     ***\n" +
       "*****************************************************************************************************\n" +
       s"- value set here: $maxMessageBytes\n" +
-      s"- Default Consumer fetch.message.max.bytes: ${ConsumerConfig.FetchSize}\n" +
+      s"- Default Old Consumer fetch.message.max.bytes: ${OldConsumerConfig.FetchSize}\n" +
+      s"- Default New Consumer ${NewConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG}: ${NewConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES}\n" +
       s"- Default Broker max.message.bytes: ${kafka.server.Defaults.MessageMaxBytes}\n\n"
   }
 
   def longMessageSizeWarning(maxMessageBytes: Int): String = {
     "\n\n" +
-      "****************************************************************************************************\n" +
-      "*** WARNING: you are creating a topic where the max.message.bytes is greater than the broker      ***\n" +
-      "*** default. This operation is dangerous. There are two potential side effects:                  ***\n" +
-      "*** - Consumers will get failures if their fetch.message.max.bytes < the value you are using     ***\n" +
-      "*** - Producer requests larger than replica.fetch.max.bytes will not replicate and hence have    ***\n" +
-      "***   a higher risk of data loss                                                                 ***\n" +
-      "*** You should ensure both of these settings are greater than the value set here before using    ***\n" +
-      "*** this topic.                                                                                  ***\n" +
-      "****************************************************************************************************\n" +
+      "*****************************************************************************************************\n" +
+      "*** WARNING: you are creating a topic where the max.message.bytes is greater than the broker's    ***\n" +
+      "*** default max.message.bytes. This operation is dangerous. There are two potential side effects: ***\n" +
+      "*** - Consumers will get failures if their fetch.message.max.bytes (old consumer) or              ***\n" +
+      s"***   ${NewConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG} (new consumer) < the value you are using                          ***\n" +
+      "*** - Producer requests larger than replica.fetch.max.bytes will not replicate and hence have     ***\n" +
+      "***   a higher risk of data loss                                                                  ***\n" +
+      "*** You should ensure both of these settings are greater than the value set here before using     ***\n" +
+      "*** this topic.                                                                                   ***\n" +
+      "*****************************************************************************************************\n" +
       s"- value set here: $maxMessageBytes\n" +
       s"- Default Broker replica.fetch.max.bytes: ${kafka.server.Defaults.ReplicaFetchMaxBytes}\n" +
       s"- Default Broker max.message.bytes: ${kafka.server.Defaults.MessageMaxBytes}\n" +
-      s"- Default Consumer fetch.message.max.bytes: ${ConsumerConfig.FetchSize}\n\n"
+      s"- Default Old Consumer fetch.message.max.bytes: ${OldConsumerConfig.FetchSize}\n" +
+      s"- Default New Consumer ${NewConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG}: ${NewConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES}\n\n"
   }
 }
