@@ -466,13 +466,8 @@ public class StandaloneHerderTest {
         // the input topic partitions
         Map<String, String> generatedTaskProps = taskConfig(taskClass, sink);
 
-        if (sink) {
-            EasyMock.expect(worker.connectorTaskConfigs(CONNECTOR_NAME, DEFAULT_MAX_TASKS, TOPICS_LIST))
-                .andReturn(Collections.singletonList(generatedTaskProps));
-        } else {
-            EasyMock.expect(worker.connectorTaskConfigs(CONNECTOR_NAME, DEFAULT_MAX_TASKS, null))
-                .andReturn(Collections.singletonList(generatedTaskProps));
-        }
+        EasyMock.expect(worker.connectorTaskConfigs(CONNECTOR_NAME, DEFAULT_MAX_TASKS, sink ? TOPICS_LIST: null))
+            .andReturn(Collections.singletonList(generatedTaskProps));
 
         worker.startTask(new ConnectorTaskId(CONNECTOR_NAME, 0), new TaskConfig(generatedTaskProps), herder, TargetState.STARTED);
         EasyMock.expectLastCall();
