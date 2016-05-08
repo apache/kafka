@@ -24,6 +24,7 @@ import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
+import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.Worker;
@@ -260,7 +261,7 @@ public class StandaloneHerder extends AbstractHerder {
                                                connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG),
                                                connConfig.getList(SinkConnectorConfig.TOPICS_CONFIG));
         } else {
-            connConfig = new ConnectorConfig(config);
+            connConfig = new SourceConnectorConfig(config);
             return worker.connectorTaskConfigs(connName,
                                                connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG),
                                                null);

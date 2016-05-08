@@ -60,7 +60,7 @@ public class ConnectorConfig extends AbstractConfig {
 
     private static final String TASK_MAX_DISPLAY = "Tasks max";
 
-    private static ConfigDef config;
+    protected static ConfigDef config;
 
     static {
         config = new ConfigDef()

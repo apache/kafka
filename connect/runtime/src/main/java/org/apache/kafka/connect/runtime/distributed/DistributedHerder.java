@@ -29,6 +29,7 @@ import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
+import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.Worker;
@@ -835,7 +836,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 connConfig = new SinkConnectorConfig(configs);
                 sinkTopics = connConfig.getList(SinkConnectorConfig.TOPICS_CONFIG);
             } else {
-                connConfig = new ConnectorConfig(configs);
+                connConfig = new SourceConnectorConfig(configs);
             }
 
             final List<Map<String, String>> taskProps
