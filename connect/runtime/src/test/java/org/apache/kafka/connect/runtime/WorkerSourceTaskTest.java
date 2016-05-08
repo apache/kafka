@@ -203,7 +203,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         int priorCount = count.get();
         Thread.sleep(100);
-        assertEquals(priorCount, count.get());
+
+        // since the transition is observed asynchronously, the count could be off by one loop iteration
+        assertTrue(count.get() - priorCount <= 1);
 
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));

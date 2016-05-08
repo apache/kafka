@@ -317,8 +317,14 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     @Override
     public void removeConnectorConfig(String connector) {
         log.debug("Removing connector configuration for connector {}", connector);
-        updateConnectorConfig(connector, null);
-        configLog.send(TARGET_STATE_KEY(connector), null);
+        try {
+            configLog.send(CONNECTOR_KEY(connector), null);
+            configLog.send(TARGET_STATE_KEY(connector), null);
+            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            log.error("Failed to remove connector configuration from Kafka: ", e);
+            throw new ConnectException("Error removing connector configuration from Kafka", e);
+        }
     }
 
     @Override
@@ -438,7 +444,11 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             if (record.key().startsWith(TARGET_STATE_PREFIX)) {
                 String connectorName = record.key().substring(TARGET_STATE_PREFIX.length());
                 synchronized (lock) {
-                    if (value.value() != null) {
+                    if (value.value() == null) {
+                        // when connector configs are removed, we also write tombstones for the target state
+                        log.debug("Removed target state for connector {} due to null value in topic.", connectorName);
+                        connectorTargetStates.remove(connectorName);
+                    } else {
                         if (!(value.value() instanceof Map)) {
                             log.error("Found target state ({}) in wrong format: {}",  record.key(), value.value().getClass());
                             return;

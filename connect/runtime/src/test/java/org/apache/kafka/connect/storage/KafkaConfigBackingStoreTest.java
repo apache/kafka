@@ -181,14 +181,11 @@ public class KafkaConfigBackingStoreTest {
         EasyMock.expectLastCall();
 
         // Config deletion
-        expectConvertWriteAndRead(
-                CONNECTOR_CONFIG_KEYS.get(1), KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, null, null, null);
+        expectConnectorRemoval(CONNECTOR_CONFIG_KEYS.get(1), TARGET_STATE_KEYS.get(1));
         configUpdateListener.onConnectorConfigRemove(CONNECTOR_IDS.get(1));
         EasyMock.expectLastCall();
-
-        // Target state deletion
-        storeLog.send(TARGET_STATE_KEYS.get(1), null);
-        PowerMock.expectLastCall();
+        configUpdateListener.onConnectorTargetStateChange(CONNECTOR_IDS.get(1));
+        EasyMock.expectLastCall();
 
         expectStop();
 
@@ -220,9 +217,10 @@ public class KafkaConfigBackingStoreTest {
         // Deletion should remove the second one we added
         configStorage.removeConnectorConfig(CONNECTOR_IDS.get(1));
         configState = configStorage.snapshot();
-        assertEquals(3, configState.offset());
+        assertEquals(4, configState.offset());
         assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
+        assertNull(configState.targetState(CONNECTOR_IDS.get(1)));
 
         configStorage.stop();
 
@@ -596,6 +594,15 @@ public class KafkaConfigBackingStoreTest {
                 });
     }
 
+    private void expectConnectorRemoval(String configKey, String targetStateKey) {
+        expectConvertWriteRead(configKey, KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, null, null, null);
+        expectConvertWriteRead(targetStateKey, KafkaConfigBackingStore.TARGET_STATE_V0, null, null, null);
+
+        LinkedHashMap<String, byte[]> recordsToRead = new LinkedHashMap<>();
+        recordsToRead.put(configKey, null);
+        recordsToRead.put(targetStateKey, null);
+        expectReadToEnd(recordsToRead);
+    }
 
     private void expectConvertWriteAndRead(final String configKey, final Schema valueSchema, final byte[] serialized,
                                            final String dataFieldName, final Object dataFieldValue) {
