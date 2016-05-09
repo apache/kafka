@@ -61,6 +61,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
 
 
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"])
+    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"], new_consumer=True, security_protocol="SASL_SSL")
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["snappy"], new_consumer=True)
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["lz4"])
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["lz4"], new_consumer=True)
@@ -70,7 +71,8 @@ class TestUpgrade(ProduceConsumeValidateTest):
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=str(LATEST_0_9), compression_types=["lz4"], new_consumer=True)
     @parametrize(from_kafka_version=str(LATEST_0_8_2), to_message_format_version=None, compression_types=["none"])
     @parametrize(from_kafka_version=str(LATEST_0_8_2), to_message_format_version=None, compression_types=["snappy"])
-    def test_upgrade(self, from_kafka_version, to_message_format_version, compression_types, new_consumer=False):
+    def test_upgrade(self, from_kafka_version, to_message_format_version, compression_types,
+                     new_consumer=False, security_protocol="PLAINTEXT"):
         """Test upgrade of Kafka broker cluster from 0.8.2 or 0.9.0 to 0.10
 
         from_kafka_version is a Kafka version to upgrade from: either 0.8.2.X or 0.9
@@ -93,6 +95,8 @@ class TestUpgrade(ProduceConsumeValidateTest):
                                   version=KafkaVersion(from_kafka_version),
                                   topics={self.topic: {"partitions": 3, "replication-factor": 3,
                                                        'configs': {"min.insync.replicas": 2}}})
+        self.kafka.security_protocol = security_protocol
+        self.kafka.interbroker_security_protocol = security_protocol
         self.kafka.start()
 
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
