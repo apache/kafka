@@ -21,7 +21,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
@@ -867,40 +866,6 @@ public class DistributedHerderTest {
         herder.tick(); // join
         configUpdateListener.onConnectorTargetStateChange("unknown-connector");
         herder.tick(); // continue
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testUnexpectedTargetStateDeletion() throws Exception {
-        EasyMock.expect(member.memberId()).andStubReturn("member");
-        EasyMock.expect(worker.connectorNames()).andStubReturn(Collections.singleton(CONN1));
-
-        // join
-        expectRebalance(1, Collections.<String>emptyList(), Collections.singletonList(TASK0));
-        expectPostRebalanceCatchup(SNAPSHOT);
-        worker.startTask(EasyMock.eq(TASK0), EasyMock.<TaskConfig>anyObject(), EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
-        PowerMock.expectLastCall();
-        member.poll(EasyMock.anyInt());
-        PowerMock.expectLastCall();
-
-        // expect state change with unexpected deletion
-        member.wakeup();
-        member.ensureActive();
-        PowerMock.expectLastCall();
-
-        EasyMock.expect(configStorage.snapshot()).andReturn(SNAPSHOT_MISSING_CONN1_TARGET_STATE);
-        PowerMock.expectLastCall();
-
-        PowerMock.replayAll();
-
-        herder.tick(); // join
-        configUpdateListener.onConnectorTargetStateChange(CONN1);
-        try {
-            herder.tick(); // should raise an exception
-            fail();
-        } catch (ConnectException e) {
-        }
 
         PowerMock.verifyAll();
     }

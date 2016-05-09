@@ -309,12 +309,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void processTargetStateChanges(Set<String> connectorTargetStateChanges) {
         for (String connector : connectorTargetStateChanges) {
             TargetState targetState = configState.targetState(connector);
-            if (targetState == null) {
-                // The target state was deleted. This should follow only after deletion of the
-                // connector's configuration itself, so raise an error if otherwise.
-                if (configState.connectors().contains(connector))
-                    throw new ConnectException("Unexpected removal of target state for connector " + connector);
-
+            if (!configState.connectors().contains(connector)) {
+                log.debug("Received target state change for unknown connector: {}", connector);
                 continue;
             }
 

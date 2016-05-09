@@ -443,11 +443,18 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
             if (record.key().startsWith(TARGET_STATE_PREFIX)) {
                 String connectorName = record.key().substring(TARGET_STATE_PREFIX.length());
+                boolean removed = false;
                 synchronized (lock) {
                     if (value.value() == null) {
-                        // when connector configs are removed, we also write tombstones for the target state
+                        // When connector configs are removed, we also write tombstones for the target state.
                         log.debug("Removed target state for connector {} due to null value in topic.", connectorName);
                         connectorTargetStates.remove(connectorName);
+                        removed = true;
+
+                        // If for some reason we still have configs for the connector, add back the default
+                        // STARTED state to ensure each connector always has a valid target state.
+                        if (connectorConfigs.containsKey(connectorName))
+                            connectorTargetStates.put(connectorName, TargetState.STARTED);
                     } else {
                         if (!(value.value() instanceof Map)) {
                             log.error("Found target state ({}) in wrong format: {}",  record.key(), value.value().getClass());
@@ -469,10 +476,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                             return;
                         }
                     }
+
+                    // Note that we do not notify the update listener if the target state has been removed.
+                    // Instead we depend on the removal callback of the connector config itself to notify the worker.
+                    if (!starting && !removed)
+                        updateListener.onConnectorTargetStateChange(connectorName);
                 }
 
-                if (!starting)
-                    updateListener.onConnectorTargetStateChange(connectorName);
             } else if (record.key().startsWith(CONNECTOR_PREFIX)) {
                 String connectorName = record.key().substring(CONNECTOR_PREFIX.length());
                 boolean removed = false;
@@ -497,6 +507,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         log.debug("Updating configuration for connector " + connectorName + " configuration: " + newConnectorConfig);
                         connectorConfigs.put(connectorName, (Map<String, String>) newConnectorConfig);
 
+                        // Set the initial state of the connector to STARTED, which handles
                         if (!connectorTargetStates.containsKey(connectorName))
                             connectorTargetStates.put(connectorName, TargetState.STARTED);
                     }
