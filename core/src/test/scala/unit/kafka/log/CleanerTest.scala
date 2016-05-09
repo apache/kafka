@@ -423,6 +423,39 @@ class CleanerTest extends JUnitSuite {
     recoverAndCheck(config, cleanedKeys)
     
   }
+
+  @Test
+  def testBuildOffsetMapFakeLarge() {
+    val map = new FakeOffsetMap(1000)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 72: java.lang.Integer)
+    logProps.put(LogConfig.SegmentIndexBytesProp, 72: java.lang.Integer)
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    val logConfig = LogConfig(logProps)
+    val log = makeLog(config=logConfig)
+    val cleaner = makeCleaner(Int.MaxValue)
+    val start = 0
+    val end = 2
+    val offsetSeq = Seq(0L, 7206178L)
+    val offsets = writeToLog(log, (start until end) zip (start until end), offsetSeq)
+    val endOffset = cleaner.buildOffsetMap(log, start, end, map) + 1
+    assertEquals("Last offset should be the end offset.", 7206179, endOffset)
+    assertEquals("Should have the expected number of messages in the map.", end-start, map.size)
+    assertEquals("Map should contain first value", 0L, map.get(key(0)))
+    assertEquals("Map should contain second value", 7206178L, map.get(key(1)))
+  }
+
+  def writeToLog(log: Log, seq: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
+    for(((key, value), offset) <- seq.zip(offsetSeq))
+      yield log.append(messageWithOffset(key, value, offset), assignOffsets = false).firstOffset
+  }
+
+  def messageWithOffset(key: Int, value: Int, offset: Long) =
+    new ByteBufferMessageSet(NoCompressionCodec, Seq(offset),
+                             new Message(key = key.toString.getBytes,
+                                         bytes = value.toString.getBytes,
+                                         timestamp = Message.NoTimestamp,
+                                         magicValue = Message.MagicValue_V1))
   
   
   def makeLog(dir: File = dir, config: LogConfig = logConfig) =

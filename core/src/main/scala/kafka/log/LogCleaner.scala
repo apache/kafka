@@ -620,12 +620,12 @@ private[log] class Cleaner(val id: Int,
       checkDone(log.topicAndPartition)
 
       val newOffset = buildOffsetMapForSegment(log.topicAndPartition, segment, map)
-      if (newOffset > -1)
+      if (newOffset > -1L)
         offset = newOffset
       else {
         // If not even one segment can fit in the map, compaction cannot happen
-        require(offset > 0, "Unable to build the offset map for segment %s/%s. You can increase log.cleaner.dedupe.buffer.size or decrease log.cleaner.threads".format(log.name, segment.log.file.getName))
-        info("Offset map is full, segment with base offset %d is partially mapped".format(segment.baseOffset))
+        require(offset > start, "Unable to build the offset map for segment %s/%s. You can increase log.cleaner.dedupe.buffer.size or decrease log.cleaner.threads".format(log.name, segment.log.file.getName))
+        debug("Offset map is full, %d segments fully mapped, segment with base offset %d is partially mapped".format(dirty.indexOf(segment), segment.baseOffset))
         full = true
       }
     }
@@ -658,7 +658,7 @@ private[log] class Cleaner(val id: Int,
             map.put(message.key, entry.offset)
           else {
             // The map is full, stop looping and return
-            return -1
+            return -1L
           }
         }
         offset = entry.offset
