@@ -236,7 +236,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Connector connector = getConnector(connType);
         ConfigDef connectorConfigDef;
         if (connector instanceof SourceConnector) {
-            connectorConfigDef = ConnectorConfig.configDef();
+            connectorConfigDef = SourceConnectorConfig.configDef();
         } else {
             connectorConfigDef = SinkConnectorConfig.configDef();
         }
