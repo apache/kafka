@@ -309,15 +309,21 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void processTargetStateChanges(Set<String> connectorTargetStateChanges) {
-        if (!connectorTargetStateChanges.isEmpty()) {
-            for (String connector : connectorTargetStateChanges) {
-                if (worker.connectorNames().contains(connector)) {
-                    TargetState targetState = configState.targetState(connector);
-                    worker.setTargetState(connector, targetState);
-                    if (targetState == TargetState.STARTED)
-                        reconfigureConnectorTasksWithRetry(connector);
-                }
+        for (String connector : connectorTargetStateChanges) {
+            TargetState targetState = configState.targetState(connector);
+            if (!configState.connectors().contains(connector)) {
+                log.debug("Received target state change for unknown connector: {}", connector);
+                continue;
             }
+
+            // we must propagate the state change to the worker so that the connector's
+            // tasks can transition to the new target state
+            worker.setTargetState(connector, targetState);
+
+            // additionally, if the worker is running the connector itself, then we need to
+            // request reconfiguration to ensure that config changes while paused take effect
+            if (worker.ownsConnector(connector) && targetState == TargetState.STARTED)
+                reconfigureConnectorTasksWithRetry(connector);
         }
     }
 
