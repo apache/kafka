@@ -132,9 +132,6 @@ public class DistributedHerderTest {
     private static final ClusterConfigState SNAPSHOT_PAUSED_CONN1 = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.PAUSED),
             TASK_CONFIGS_MAP, Collections.<String>emptySet());
-    private static final ClusterConfigState SNAPSHOT_MISSING_CONN1_TARGET_STATE = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
-            Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.<String, TargetState>emptyMap(),
-            TASK_CONFIGS_MAP, Collections.<String>emptySet());
     private static final ClusterConfigState SNAPSHOT_UPDATED_CONN1_CONFIG = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG_UPDATED), Collections.singletonMap(CONN1, TargetState.STARTED),
             TASK_CONFIGS_MAP, Collections.<String>emptySet());
