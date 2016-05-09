@@ -27,6 +27,7 @@ kafka.iws
 .vagrant
 Vagrantfile.local
 /logs
+.DS_Store
 
 config/server-*
 config/zookeeper-*
