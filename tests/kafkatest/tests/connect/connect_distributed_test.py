@@ -161,12 +161,12 @@ class ConnectDistributedTest(Test):
         self.sink = VerifiableSink(self.cc)
         self.sink.start()
 
-        # wait until all nodes report the paused transition
         wait_until(lambda: self.is_running(self.sink), timeout_sec=30,
                    err_msg="Failed to see connector transition to the RUNNING state")
         
         self.cc.pause_connector(self.sink.name)
 
+        # wait until all nodes report the paused transition
         for node in self.cc.nodes:
             wait_until(lambda: self.is_paused(self.sink, node), timeout_sec=30,
                        err_msg="Failed to see connector transition to the PAUSED state")
