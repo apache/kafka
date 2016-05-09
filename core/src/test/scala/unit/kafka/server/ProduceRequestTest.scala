@@ -17,10 +17,11 @@
 
 package kafka.server
 
-import kafka.message.{ByteBufferMessageSet, LZ4CompressionCodec, Message}
 import kafka.utils.TestUtils
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, ProtoUtils}
+import org.apache.kafka.common.record.{CompressionType, Record}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -36,10 +37,11 @@ class ProduceRequestTest extends BaseRequestTest {
   @Test
   def testSimpleProduceRequest() {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
-    val messageBuffer = new ByteBufferMessageSet(new Message("value".getBytes, "key".getBytes,
-      System.currentTimeMillis(), 1: Byte)).buffer
+
+    val recordBuffer = JTestUtils.partitionRecordBuffer(0,
+      new Record(System.currentTimeMillis(), "key".getBytes, "value".getBytes), CompressionType.NONE)
     val topicPartition = new TopicPartition("topic", partition)
-    val partitionRecords = Map(topicPartition -> messageBuffer)
+    val partitionRecords = Map(topicPartition -> recordBuffer)
     val produceResponse = sendProduceRequest(leader, new ProduceRequest(-1, 3000, partitionRecords.asJava))
     assertEquals(1, produceResponse.responses.size)
     val (tp, partitionResponse) = produceResponse.responses.asScala.head
@@ -60,12 +62,13 @@ class ProduceRequestTest extends BaseRequestTest {
   @Test
   def testCorruptLz4ProduceRequest() {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
-    val messageBuffer = new ByteBufferMessageSet(LZ4CompressionCodec, new Message("value".getBytes, "key".getBytes,
-      System.currentTimeMillis(), 1: Byte)).buffer
+    val timestamp = 1000000
+    val recordBuffer = JTestUtils.partitionRecordBuffer(0,
+      new Record(timestamp, "key".getBytes, "value".getBytes), CompressionType.LZ4)
     // Change the lz4 checksum value so that it doesn't match the contents
-    messageBuffer.array.update(40, 0)
+    recordBuffer.array.update(40, 0)
     val topicPartition = new TopicPartition("topic", partition)
-    val partitionRecords = Map(topicPartition -> messageBuffer)
+    val partitionRecords = Map(topicPartition -> recordBuffer)
     val produceResponse = sendProduceRequest(leader, new ProduceRequest(-1, 3000, partitionRecords.asJava))
     assertEquals(1, produceResponse.responses.size)
     val (tp, partitionResponse) = produceResponse.responses.asScala.head

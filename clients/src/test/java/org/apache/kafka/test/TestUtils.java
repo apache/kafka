@@ -20,6 +20,7 @@ import static java.util.Arrays.asList;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -31,8 +32,11 @@ import java.util.Random;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
-
 
 /**
  * Helper functions for writing unit tests
@@ -139,6 +143,20 @@ public class TestUtils {
         });
 
         return file;
+    }
+
+    /**
+     * Create a record buffer including the offset and message size at the start, which is required if the buffer is to
+     * be sent as part of `ProduceRequest`. This is the reason why we can't simply use
+     * `Record(long timestamp, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize)` as this
+     * constructor does not include either of these fields.
+     */
+    public static ByteBuffer partitionRecordBuffer(long offset, Record record, CompressionType compressionType) {
+        ByteBuffer buffer = ByteBuffer.allocate(Records.LOG_OVERHEAD + record.size());
+        MemoryRecords records = MemoryRecords.emptyRecords(buffer, compressionType);
+        records.append(offset, record);
+        records.close();
+        return records.buffer();
     }
 
 }
