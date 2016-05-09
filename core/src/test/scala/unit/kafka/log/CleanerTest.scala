@@ -445,8 +445,8 @@ class CleanerTest extends JUnitSuite {
     assertEquals("Map should contain second value", 7206178L, map.get(key(1)))
   }
 
-  def writeToLog(log: Log, seq: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
-    for(((key, value), offset) <- seq.zip(offsetSeq))
+  def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
+    for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
       yield log.append(messageWithOffset(key, value, offset), assignOffsets = false).firstOffset
   }
 
