@@ -23,11 +23,7 @@ import java.nio.ByteBuffer
 import java.nio.channels._
 import java.io._
 import java.util.ArrayDeque
-import java.util.concurrent.atomic.AtomicLong
 
-import scala.collection.JavaConverters._
-
-import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.errors.InvalidTimestampException
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
@@ -96,7 +92,12 @@ object ByteBufferMessageSet {
       if (wrapperMessage.payload == null)
         throw new KafkaException(s"Message payload is null: $wrapperMessage")
       val inputStream = new ByteBufferBackedInputStream(wrapperMessage.payload)
-      val compressed = new DataInputStream(CompressionFactory(wrapperMessage.compressionCodec, wrapperMessage.magic, inputStream))
+      val compressed = try {
+        new DataInputStream(CompressionFactory(wrapperMessage.compressionCodec, wrapperMessage.magic, inputStream))
+      } catch {
+        case ioe: IOException =>
+          throw new InvalidMessageException(s"Failed to instantiate input stream compressed with ${wrapperMessage.compressionCodec}", ioe)
+      }
       var lastInnerOffset = -1L
 
       val messageAndOffsets = if (wrapperMessageAndOffset.message.magic > MagicValue_V0) {
@@ -108,7 +109,7 @@ object ByteBufferMessageSet {
           case eofe: EOFException =>
             compressed.close()
           case ioe: IOException =>
-            throw new CorruptRecordException(ioe)
+            throw new InvalidMessageException(s"Error while reading message from stream compressed with ${wrapperMessage.compressionCodec}", ioe)
         }
         Some(innerMessageAndOffsets)
       } else None
