@@ -141,11 +141,11 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def resume_connector(self, name, node=None):
         return self._rest('/connectors/' + name + '/resume', method="PUT")
 
-    def list_connector_plugins(self, node=None):
-        return self._rest('/connector-plugins/', node=node)
+    def list_connector_plugins(self, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connector-plugins/', node=node, retries=retries, retry_backoff=retry_backoff)
 
-    def validate_config(self, type, validate_request, node=None):
-        return self._rest('/connector-plugins/' + type + '/config/validate', validate_request, node=node, method="PUT")
+    def validate_config(self, connector_type, validate_request, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connector-plugins/' + connector_type + '/config/validate', validate_request, node=node, method="PUT", retries=retries, retry_backoff=retry_backoff)
 
     def _rest(self, path, body=None, node=None, method="GET"):
         if node is None:
