@@ -156,7 +156,7 @@ class SocketServerTest extends JUnitSuite {
       // Server closes client connection when it processes the request length because
       // it is too big. The write of request body may fail if the connection has been closed.
       outgoing.write(tooManyBytes)
-      outgoing.flush
+      outgoing.flush()
       receiveResponse(socket)
     } catch {
       case e: IOException => // thats fine
