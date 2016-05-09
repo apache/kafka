@@ -77,9 +77,9 @@ public class ConnectStandalone {
 
         Herder herder = new StandaloneHerder(worker);
         final Connect connect = new Connect(herder, rest);
-        connect.start();
-
+        
         try {
+            connect.start();
             for (final String connectorPropsFile : Arrays.copyOfRange(args, 1, args.length)) {
                 Map<String, String> connectorProps = Utils.propsToStringMap(Utils.loadProps(connectorPropsFile));
                 FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>(new Callback<Herder.Created<ConnectorInfo>>() {
