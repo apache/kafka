@@ -29,6 +29,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.tools.VerifiableSinkConnector;
@@ -232,10 +233,14 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public ConfigInfos validateConfigs(String connType, Map<String, String> connectorConfig) {
-        ConfigDef connectorConfigDef = ConnectorConfig.configDef();
-        List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(connectorConfig);
-
         Connector connector = getConnector(connType);
+        ConfigDef connectorConfigDef;
+        if (connector instanceof SourceConnector) {
+            connectorConfigDef = SourceConnectorConfig.configDef();
+        } else {
+            connectorConfigDef = SinkConnectorConfig.configDef();
+        }
+        List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(connectorConfig);
 
         Config config = connector.validate(connectorConfig);
         ConfigDef configDef = connector.config();
