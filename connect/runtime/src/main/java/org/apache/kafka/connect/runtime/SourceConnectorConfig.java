@@ -17,9 +17,15 @@
 
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.config.ConfigDef;
+
 import java.util.Map;
 
 public class SourceConnectorConfig extends ConnectorConfig {
+
+    public static ConfigDef configDef() {
+        return config;
+    }
 
     public SourceConnectorConfig(Map<String, String> props) {
         super(config, props);
