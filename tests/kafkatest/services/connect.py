@@ -13,14 +13,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+import os.path
+import random
+import signal
+
+import requests
+from ducktape.errors import DucktapeError
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
-from ducktape.errors import DucktapeError
+from kafkatest.utils.util import retry_on_exception
 
-from kafkatest.services.kafka.directory import kafka_dir
-import signal, random, requests, os.path, json
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
-class ConnectServiceBase(Service):
+
+class ConnectServiceBase(KafkaPathResolverMixin, Service):
     """Base class for Kafka Connect services providing some common settings and functionality"""
 
     PERSISTENT_ROOT = "/mnt/connect"
@@ -96,31 +103,30 @@ class ConnectServiceBase(Service):
     def config_filenames(self):
         return [os.path.join(self.PERSISTENT_ROOT, "connect-connector-" + str(idx) + ".properties") for idx, template in enumerate(self.connector_config_templates or [])]
 
+    def list_connectors(self, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connectors', node=node, retries=retries, retry_backoff=retry_backoff)
 
-    def list_connectors(self, node=None):
-        return self._rest('/connectors', node=node)
-
-    def create_connector(self, config, node=None):
+    def create_connector(self, config, node=None, retries=0, retry_backoff=.01):
         create_request = {
             'name': config['name'],
             'config': config
         }
-        return self._rest('/connectors', create_request, node=node, method="POST")
+        return self._rest_with_retry('/connectors', create_request, node=node, method="POST", retries=retries, retry_backoff=retry_backoff)
 
-    def get_connector(self, name, node=None):
-        return self._rest('/connectors/' + name, node=node)
+    def get_connector(self, name, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connectors/' + name, node=node, retries=retries, retry_backoff=retry_backoff)
 
-    def get_connector_config(self, name, node=None):
-        return self._rest('/connectors/' + name + '/config', node=node)
+    def get_connector_config(self, name, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connectors/' + name + '/config', node=node, retries=retries, retry_backoff=retry_backoff)
 
-    def set_connector_config(self, name, config, node=None):
-        return self._rest('/connectors/' + name + '/config', config, node=node, method="PUT")
+    def set_connector_config(self, name, config, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connectors/' + name + '/config', config, node=node, method="PUT", retries=retries, retry_backoff=retry_backoff)
 
-    def get_connector_tasks(self, name, node=None):
-        return self._rest('/connectors/' + name + '/tasks', node=node)
+    def get_connector_tasks(self, name, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connectors/' + name + '/tasks', node=node, retries=retries, retry_backoff=retry_backoff)
 
-    def delete_connector(self, name, node=None):
-        return self._rest('/connectors/' + name, node=node, method="DELETE")
+    def delete_connector(self, name, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connectors/' + name, node=node, method="DELETE", retries=retries, retry_backoff=retry_backoff)
 
     def _rest(self, path, body=None, node=None, method="GET"):
         if node is None:
@@ -138,9 +144,12 @@ class ConnectServiceBase(Service):
         else:
             return resp.json()
 
+    def _rest_with_retry(self, path, body=None, node=None, method="GET", retries=0, retry_backoff=.01):
+        return retry_on_exception(lambda: self._rest(path, body, node, method), ConnectRestError, retries, retry_backoff)
 
     def _base_url(self, node):
         return 'http://' + node.account.externally_routable_ip + ':' + '8083'
+
 
 class ConnectStandaloneService(ConnectServiceBase):
     """Runs Kafka Connect in standalone mode."""
@@ -156,7 +165,7 @@ class ConnectStandaloneService(ConnectServiceBase):
     def start_cmd(self, node, connector_configs):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
-        cmd += "/opt/%s/bin/connect-standalone.sh %s " % (kafka_dir(node), self.CONFIG_FILE)
+        cmd += "%s %s " % (self.path.script("connect-standalone.sh", node), self.CONFIG_FILE)
         cmd += " ".join(connector_configs)
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
@@ -195,7 +204,7 @@ class ConnectDistributedService(ConnectServiceBase):
     def start_cmd(self, node):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
-        cmd += "/opt/%s/bin/connect-distributed.sh %s " % (kafka_dir(node), self.CONFIG_FILE)
+        cmd += "%s %s " % (self.path.script("connect-distributed.sh", node), self.CONFIG_FILE)
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
 
@@ -217,8 +226,6 @@ class ConnectDistributedService(ConnectServiceBase):
             raise RuntimeError("No process ids recorded")
 
 
-
-
 class ConnectRestError(RuntimeError):
     def __init__(self, status, msg, url):
         self.status = status
@@ -227,7 +234,6 @@ class ConnectRestError(RuntimeError):
 
     def __unicode__(self):
         return "Kafka Connect REST call failed: returned " + self.status + " for " + self.url + ". Response: " + self.message
-
 
 
 class VerifiableConnector(object):
@@ -255,6 +261,7 @@ class VerifiableConnector(object):
         self.logger.info("Destroying connector %s %s", type(self).__name__, self.name)
         self.cc.delete_connector(self.name)
 
+
 class VerifiableSource(VerifiableConnector):
     """
     Helper class for running a verifiable source connector on a Kafka Connect cluster and analyzing the output.
@@ -277,6 +284,7 @@ class VerifiableSource(VerifiableConnector):
             'topic': self.topic,
             'throughput': self.throughput
         })
+
 
 class VerifiableSink(VerifiableConnector):
     """

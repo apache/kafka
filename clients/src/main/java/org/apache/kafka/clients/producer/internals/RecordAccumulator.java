@@ -430,8 +430,10 @@ public final class RecordAccumulator {
     
     /**
      * Are there any threads currently waiting on a flush?
+     *
+     * package private for test
      */
-    private boolean flushInProgress() {
+    boolean flushInProgress() {
         return flushesInProgress.get() > 0;
     }
     
@@ -453,9 +455,12 @@ public final class RecordAccumulator {
      * Mark all partitions as ready to send and block until the send is complete
      */
     public void awaitFlushCompletion() throws InterruptedException {
-        for (RecordBatch batch: this.incomplete.all())
-            batch.produceFuture.await();
-        this.flushesInProgress.decrementAndGet();
+        try {
+            for (RecordBatch batch : this.incomplete.all())
+                batch.produceFuture.await();
+        } finally {
+            this.flushesInProgress.decrementAndGet();
+        }
     }
 
     /**

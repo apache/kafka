@@ -28,6 +28,8 @@ import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
+import org.apache.kafka.connect.runtime.SinkConnectorConfig;
+import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.Worker;
@@ -307,15 +309,21 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void processTargetStateChanges(Set<String> connectorTargetStateChanges) {
-        if (!connectorTargetStateChanges.isEmpty()) {
-            for (String connector : connectorTargetStateChanges) {
-                if (worker.connectorNames().contains(connector)) {
-                    TargetState targetState = configState.targetState(connector);
-                    worker.setTargetState(connector, targetState);
-                    if (targetState == TargetState.STARTED)
-                        reconfigureConnectorTasksWithRetry(connector);
-                }
+        for (String connector : connectorTargetStateChanges) {
+            TargetState targetState = configState.targetState(connector);
+            if (!configState.connectors().contains(connector)) {
+                log.debug("Received target state change for unknown connector: {}", connector);
+                continue;
             }
+
+            // we must propagate the state change to the worker so that the connector's
+            // tasks can transition to the new target state
+            worker.setTargetState(connector, targetState);
+
+            // additionally, if the worker is running the connector itself, then we need to
+            // request reconfiguration to ensure that config changes while paused take effect
+            if (worker.ownsConnector(connector) && targetState == TargetState.STARTED)
+                reconfigureConnectorTasksWithRetry(connector);
         }
     }
 
@@ -827,10 +835,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
 
             Map<String, String> configs = configState.connectorConfig(connName);
-            ConnectorConfig connConfig = new ConnectorConfig(configs);
+
+            ConnectorConfig connConfig;
             List<String> sinkTopics = null;
-            if (worker.isSinkConnector(connName))
-                sinkTopics = connConfig.getList(ConnectorConfig.TOPICS_CONFIG);
+            if (worker.isSinkConnector(connName)) {
+                connConfig = new SinkConnectorConfig(configs);
+                sinkTopics = connConfig.getList(SinkConnectorConfig.TOPICS_CONFIG);
+            } else {
+                connConfig = new SourceConnectorConfig(configs);
+            }
 
             final List<Map<String, String>> taskProps
                     = worker.connectorTaskConfigs(connName, connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG), sinkTopics);
