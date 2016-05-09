@@ -507,7 +507,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         log.debug("Updating configuration for connector " + connectorName + " configuration: " + newConnectorConfig);
                         connectorConfigs.put(connectorName, (Map<String, String>) newConnectorConfig);
 
-                        // Set the initial state of the connector to STARTED, which handles
+                        // Set the initial state of the connector to STARTED, which ensures that any connectors
+                        // which were created with 0.9 Connect will be initialized in the STARTED state.
                         if (!connectorTargetStates.containsKey(connectorName))
                             connectorTargetStates.put(connectorName, TargetState.STARTED);
                     }
