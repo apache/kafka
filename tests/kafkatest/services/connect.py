@@ -88,12 +88,15 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
 
         node.account.ssh("rm -f " + self.PID_FILE, allow_fail=False)
 
-    def restart(self):
+    def restart(self, clean_shutdown=True):
         # We don't want to do any clean up here, just restart the process.
         for node in self.nodes:
             self.logger.info("Restarting Kafka Connect on " + str(node.account))
-            self.stop_node(node)
-            self.start_node(node)
+            self.restart_node(node, clean_shutdown)
+
+    def restart_node(self, node, clean_shutdown=True):
+        self.stop_node(node, clean_shutdown)
+        self.start_node(node)
 
     def clean_node(self, node):
         node.account.kill_process("connect", clean_shutdown=False, allow_fail=True)
@@ -128,6 +131,15 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def delete_connector(self, name, node=None, retries=0, retry_backoff=.01):
         return self._rest_with_retry('/connectors/' + name, node=node, method="DELETE", retries=retries, retry_backoff=retry_backoff)
 
+    def get_connector_status(self, name, node=None):
+        return self._rest('/connectors/' + name + '/status', node=node)
+
+    def pause_connector(self, name, node=None):
+        return self._rest('/connectors/' + name + '/pause', method="PUT")
+
+    def resume_connector(self, name, node=None):
+        return self._rest('/connectors/' + name + '/resume', method="PUT")
+
     def _rest(self, path, body=None, node=None, method="GET"):
         if node is None:
             node = random.choice(self.nodes)
@@ -139,7 +151,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         self.logger.debug("%s %s response: %d", url, method, resp.status_code)
         if resp.status_code > 400:
             raise ConnectRestError(resp.status_code, resp.text, resp.url)
-        if resp.status_code == 204:
+        if resp.status_code == 204 or resp.status_code == 202:
             return None
         else:
             return resp.json()
@@ -185,7 +197,7 @@ class ConnectStandaloneService(ConnectServiceBase):
         self.logger.info("Starting Kafka Connect standalone process on " + str(node.account))
         with node.account.monitor_log(self.LOG_FILE) as monitor:
             node.account.ssh(self.start_cmd(node, remote_connector_configs))
-            monitor.wait_until('Kafka Connect started', timeout_sec=15, err_msg="Never saw message indicating Kafka Connect finished startup on " + str(node.account))
+            monitor.wait_until('Kafka Connect started', timeout_sec=30, err_msg="Never saw message indicating Kafka Connect finished startup on " + str(node.account))
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
@@ -297,6 +309,12 @@ class VerifiableSink(VerifiableConnector):
         self.name = name
         self.tasks = tasks
         self.topics = topics
+
+    def flushed_messages(self):
+        return filter(lambda m: 'flushed' in m and m['flushed'], self.messages())
+
+    def received_messages(self):
+        return filter(lambda m: 'flushed' not in m or not m['flushed'], self.messages())
 
     def start(self):
         self.logger.info("Creating connector VerifiableSinkConnector %s", self.name)

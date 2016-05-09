@@ -227,7 +227,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         for pid in pids:
             node.account.signal(pid, sig, allow_fail=False)
-        wait_until(lambda: len(self.pids(node)) == 0, timeout_sec=20, err_msg="Kafka node failed to stop")
+        wait_until(lambda: len(self.pids(node)) == 0, timeout_sec=60, err_msg="Kafka node failed to stop")
 
     def clean_node(self, node):
         JmxMixin.clean_node(self, node)
