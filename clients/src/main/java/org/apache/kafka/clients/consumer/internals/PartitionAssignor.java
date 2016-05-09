@@ -89,6 +89,12 @@ public interface PartitionAssignor {
             return userData;
         }
 
+        @Override
+        public String toString() {
+            return "Subscription(" +
+                    "topics=" + topics +
+                    ')';
+        }
     }
 
     class Assignment {
@@ -112,6 +118,12 @@ public interface PartitionAssignor {
             return userData;
         }
 
+        @Override
+        public String toString() {
+            return "Assignment(" +
+                    "partitions=" + partitions +
+                    ')';
+        }
     }
 
 }
