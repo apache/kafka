@@ -438,19 +438,19 @@ class CleanerTest extends JUnitSuite {
     val end = 2
     val offsetSeq = Seq(0L, 7206178L)
     val offsets = writeToLog(log, (start until end) zip (start until end), offsetSeq)
-    val endOffset = cleaner.buildOffsetMap(log, start, end, map) + 1
-    assertEquals("Last offset should be the end offset.", 7206179, endOffset)
+    val endOffset = cleaner.buildOffsetMap(log, start, end, map)
+    assertEquals("Last offset should be the end offset.", 7206178L, endOffset)
     assertEquals("Should have the expected number of messages in the map.", end - start, map.size)
     assertEquals("Map should contain first value", 0L, map.get(key(0)))
     assertEquals("Map should contain second value", 7206178L, map.get(key(1)))
   }
 
-  def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
+  private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
       yield log.append(messageWithOffset(key, value, offset), assignOffsets = false).firstOffset
   }
 
-  def messageWithOffset(key: Int, value: Int, offset: Long) =
+  private def messageWithOffset(key: Int, value: Int, offset: Long) =
     new ByteBufferMessageSet(NoCompressionCodec, Seq(offset),
                              new Message(key = key.toString.getBytes,
                                          bytes = value.toString.getBytes,
