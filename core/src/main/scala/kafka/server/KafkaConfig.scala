@@ -422,7 +422,7 @@ object KafkaConfig {
   val LogRetentionTimeHoursDoc = "The number of hours to keep a log file before deleting it (in hours), tertiary to " + LogRetentionTimeMillisProp + " property"
 
   val LogRetentionBytesDoc = "The maximum size of the log before deleting it"
-  val LogRetentionDiskUsagePercentDoc = "The percentage of disk capacity to keep free (per-disk) by deleting logs"
+  val LogRetentionDiskUsagePercentDoc = "The maximum percentage of disk space to use (per-disk). Deletes oldest segments (across all topics) to maintain this usage ceiling."
   val LogCleanupIntervalMsDoc = "The frequency in milliseconds that the log cleaner checks whether any log is eligible for deletion"
   val LogCleanupPolicyDoc = "The default cleanup policy for segments beyond the retention window, must be either \"delete\" or \"compact\""
   val LogCleanerThreadsDoc = "The number of background threads to use for log cleaning"
