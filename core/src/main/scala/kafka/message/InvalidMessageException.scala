@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.CorruptRecordException
  * Because ByteBufferMessageSet.scala and Message.scala are used in both server and client code having
  * InvalidMessageException extend CorruptRecordException allows us to change server code without affecting the client.
  */
-class InvalidMessageException(message: String) extends CorruptRecordException(message) {
+class InvalidMessageException(message: String, throwable: Throwable) extends CorruptRecordException(message, throwable) {
+  def this(message: String) = this(null, null)
   def this() = this(null)
 }
