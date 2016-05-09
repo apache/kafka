@@ -15,9 +15,12 @@
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.connect import ConnectDistributedService, ConnectRestError
+from kafkatest.utils.util import retry_on_exception
 from ducktape.utils.util import wait_until
-import hashlib, subprocess, json, itertools
-import time
+import subprocess
+import json
+import itertools
+
 
 class ConnectRestApiTest(KafkaTest):
     """
@@ -66,9 +69,9 @@ class ConnectRestApiTest(KafkaTest):
         sink_connector_props = self.render("connect-file-sink.properties")
         for connector_props in [source_connector_props, sink_connector_props]:
             connector_config = self._config_dict_from_props(connector_props)
-            wait_until(lambda: self.not_throw_rest_error(lambda: self.cc.create_connector(connector_config)), timeout_sec=120, err_msg="Create connectors throws exception.")
+            retry_on_exception(lambda: self.cc.create_connector(connector_config), exception=ConnectRestError, timeout_sec=120, err_msg="Create connectors throws exception.")
 
-        wait_until(lambda: self.not_throw_rest_error(lambda: self.cc.list_connectors()), timeout_sec=120, err_msg="List connectors throws exception.")
+        retry_on_exception(lambda: self.cc.list_connectors(), exception=ConnectRestError, timeout_sec=120, err_msg="List connectors throws exception.")
 
         # We should see the connectors appear
         wait_until(lambda: set(self.cc.list_connectors()) == set(["local-file-source", "local-file-sink"]),
@@ -140,10 +143,11 @@ class ConnectRestApiTest(KafkaTest):
             node.account.ssh("echo -e -n " + repr(self.LONER_INPUTS) + " >> " + self.INPUT_FILE2)
         wait_until(lambda: self.validate_output(self.LONGER_INPUT_LIST), timeout_sec=120, err_msg="Data added to input file was not seen in the output file in a reasonable amount of time.")
 
-        wait_until(lambda: self.not_throw_rest_error(lambda: self.cc.delete_connector("local-file-source")), timeout_sec=120, err_msg="Delete connector throws exception.")
-        wait_until(lambda: self.not_throw_rest_error(lambda: self.cc.delete_connector("local-file-sink")), timeout_sec=120, err_msg="Delete connector throws exception.")
+        retry_on_exception(lambda: self.cc.delete_connector("local-file-source"), exception=ConnectRestError, timeout_sec=120, err_msg="Delete connector throws exception.")
+        retry_on_exception(lambda: self.cc.delete_connector("local-file-sink"), exception=ConnectRestError, timeout_sec=120, err_msg="Delete connector throws exception.")
 
-        wait_until(lambda: self.not_throw_rest_error(lambda: self.cc.list_connectors()), timeout_sec=120, err_msg="List connectors throws exception.")
+        retry_on_exception(lambda: self.cc.list_connectors(), exception=ConnectRestError, timeout_sec=120, err_msg="List connectors throws exception.")
+
         wait_until(lambda: len(self.cc.list_connectors()) == 0, timeout_sec=10, err_msg="Deleted connectors did not disappear from REST listing")
 
     def validate_output(self, input):
@@ -165,12 +169,3 @@ class ConnectRestApiTest(KafkaTest):
     def _config_dict_from_props(self, connector_props):
         return dict([line.strip().split('=', 1) for line in connector_props.split('\n') if line.strip() and not line.strip().startswith('#')])
 
-    def not_throw_exception(self, fun, exception):
-        try:
-            fun()
-            return True
-        except exception:
-            return False
-
-    def not_throw_rest_error(self, fun):
-        return self.not_throw_exception(fun, ConnectRestError)

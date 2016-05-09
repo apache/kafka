@@ -102,7 +102,6 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def config_filenames(self):
         return [os.path.join(self.PERSISTENT_ROOT, "connect-connector-" + str(idx) + ".properties") for idx, template in enumerate(self.connector_config_templates or [])]
 
-
     def list_connectors(self, node=None):
         return self._rest('/connectors', node=node)
 
@@ -144,9 +143,9 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         else:
             return resp.json()
 
-
     def _base_url(self, node):
         return 'http://' + node.account.externally_routable_ip + ':' + '8083'
+
 
 class ConnectStandaloneService(ConnectServiceBase):
     """Runs Kafka Connect in standalone mode."""
@@ -223,8 +222,6 @@ class ConnectDistributedService(ConnectServiceBase):
             raise RuntimeError("No process ids recorded")
 
 
-
-
 class ConnectRestError(RuntimeError):
     def __init__(self, status, msg, url):
         self.status = status
@@ -233,7 +230,6 @@ class ConnectRestError(RuntimeError):
 
     def __unicode__(self):
         return "Kafka Connect REST call failed: returned " + self.status + " for " + self.url + ". Response: " + self.message
-
 
 
 class VerifiableConnector(object):
@@ -261,6 +257,7 @@ class VerifiableConnector(object):
         self.logger.info("Destroying connector %s %s", type(self).__name__, self.name)
         self.cc.delete_connector(self.name)
 
+
 class VerifiableSource(VerifiableConnector):
     """
     Helper class for running a verifiable source connector on a Kafka Connect cluster and analyzing the output.
@@ -283,6 +280,7 @@ class VerifiableSource(VerifiableConnector):
             'topic': self.topic,
             'throughput': self.throughput
         })
+
 
 class VerifiableSink(VerifiableConnector):
     """
