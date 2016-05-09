@@ -14,9 +14,11 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
 
 * Install Virtual Box from [https://www.virtualbox.org/](https://www.virtualbox.org/) (run `$ vboxmanage --version` to check if it's installed).
 * Install Vagrant >= 1.6.4 from [http://www.vagrantup.com/](http://www.vagrantup.com/) (run `vagrant --version` to check if it's installed).
-* Install system test dependiences, including ducktape, a command-line tool and library for testing distributed systems.
+* Install system test dependencies, including ducktape, a command-line tool and library for testing distributed systems. We recommend to use virtual env for system test development
 
         $ cd kafka/tests
+        $ virtualenv venv
+        $ . ./venv/bin/activate
         $ python setup.py develop
         $ cd ..  # back to base kafka directory
 
