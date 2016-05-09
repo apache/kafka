@@ -262,10 +262,10 @@ KTable<String, Long> wordCounts = textLines
     // Split each text line, by whitespace, into words.
     .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
 
-    // Ensure the words are available as message keys for the next aggregate operation.
+    // Ensure the words are available as record keys for the next aggregate operation.
     .map((key, value) -> new KeyValue<>(value, value))
 
-    // Count the occurrences of each word (message key) and store the results into a table named "Counts".
+    // Count the occurrences of each word (record key) and store the results into a table named "Counts".
     .countByKey("Counts")
 </pre>
 
