@@ -69,12 +69,10 @@ class ConnectRestApiTest(KafkaTest):
         sink_connector_props = self.render("connect-file-sink.properties")
         for connector_props in [source_connector_props, sink_connector_props]:
             connector_config = self._config_dict_from_props(connector_props)
-            retry_on_exception(lambda: self.cc.create_connector(connector_config), exception=ConnectRestError, timeout_sec=120, err_msg="Create connectors throws exception.")
-
-        retry_on_exception(lambda: self.cc.list_connectors(), exception=ConnectRestError, timeout_sec=120, err_msg="List connectors throws exception.")
+            self.cc.create_connector(connector_config, retries=120, retry_backoff=1)
 
         # We should see the connectors appear
-        wait_until(lambda: set(self.cc.list_connectors()) == set(["local-file-source", "local-file-sink"]),
+        wait_until(lambda: set(self.cc.list_connectors(retries=5, retry_backoff=1)) == set(["local-file-source", "local-file-sink"]),
                    timeout_sec=10, err_msg="Connectors that were just created did not appear in connector listing")
 
         # We'll only do very simple validation that the connectors and tasks really ran.
@@ -143,12 +141,9 @@ class ConnectRestApiTest(KafkaTest):
             node.account.ssh("echo -e -n " + repr(self.LONER_INPUTS) + " >> " + self.INPUT_FILE2)
         wait_until(lambda: self.validate_output(self.LONGER_INPUT_LIST), timeout_sec=120, err_msg="Data added to input file was not seen in the output file in a reasonable amount of time.")
 
-        retry_on_exception(lambda: self.cc.delete_connector("local-file-source"), exception=ConnectRestError, timeout_sec=120, err_msg="Delete connector throws exception.")
-        retry_on_exception(lambda: self.cc.delete_connector("local-file-sink"), exception=ConnectRestError, timeout_sec=120, err_msg="Delete connector throws exception.")
-
-        retry_on_exception(lambda: self.cc.list_connectors(), exception=ConnectRestError, timeout_sec=120, err_msg="List connectors throws exception.")
-
-        wait_until(lambda: len(self.cc.list_connectors()) == 0, timeout_sec=10, err_msg="Deleted connectors did not disappear from REST listing")
+        self.cc.delete_connector("local-file-source", retries=120, retry_backoff=1)
+        self.cc.delete_connector("local-file-sink", retries=120, retry_backoff=1)
+        wait_until(lambda: len(self.cc.list_connectors(retries=5, retry_backoff=1)) == 0, timeout_sec=10, err_msg="Deleted connectors did not disappear from REST listing")
 
     def validate_output(self, input):
         input_set = set(input)

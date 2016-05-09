@@ -15,7 +15,7 @@
 from kafkatest import __version__ as __kafkatest_version__
 
 import re
-from ducktape.utils.util import wait_until
+import time
 
 
 def kafkatest_version():
@@ -74,13 +74,12 @@ def is_int_with_prefix(msg):
                         "are not integers. Message: %s" % (msg))
 
 
-def not_throw_exception(fun, exception):
-    try:
-        fun()
-        return True
-    except exception:
-        return False
-
-
-def retry_on_exception(fun, exception, timeout_sec, err_msg):
-    wait_until(lambda: not_throw_exception(fun, exception), timeout_sec=timeout_sec, err_msg=err_msg)
+def retry_on_exception(fun, exception, retries, retry_backoff=.01):
+    exception_to_throw = None
+    for i in range(0, retries + 1):
+        try:
+            return fun()
+        except exception as e:
+            exception_to_throw = e
+            time.sleep(retry_backoff)
+    raise exception_to_throw

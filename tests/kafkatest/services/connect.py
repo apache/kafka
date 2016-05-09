@@ -22,6 +22,7 @@ import requests
 from ducktape.errors import DucktapeError
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
+from kafkatest.utils.util import retry_on_exception
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
@@ -102,30 +103,30 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def config_filenames(self):
         return [os.path.join(self.PERSISTENT_ROOT, "connect-connector-" + str(idx) + ".properties") for idx, template in enumerate(self.connector_config_templates or [])]
 
-    def list_connectors(self, node=None):
-        return self._rest('/connectors', node=node)
+    def list_connectors(self, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connectors', node=node, retries=retries, retry_backoff=retry_backoff)
 
-    def create_connector(self, config, node=None):
+    def create_connector(self, config, node=None, retries=0, retry_backoff=.01):
         create_request = {
             'name': config['name'],
             'config': config
         }
-        return self._rest('/connectors', create_request, node=node, method="POST")
+        return self._rest_with_retry('/connectors', create_request, node=node, method="POST", retries=retries, retry_backoff=retry_backoff)
 
-    def get_connector(self, name, node=None):
-        return self._rest('/connectors/' + name, node=node)
+    def get_connector(self, name, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connectors/' + name, node=node, retries=retries, retry_backoff=retry_backoff)
 
-    def get_connector_config(self, name, node=None):
-        return self._rest('/connectors/' + name + '/config', node=node)
+    def get_connector_config(self, name, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connectors/' + name + '/config', node=node, retries=retries, retry_backoff=retry_backoff)
 
-    def set_connector_config(self, name, config, node=None):
-        return self._rest('/connectors/' + name + '/config', config, node=node, method="PUT")
+    def set_connector_config(self, name, config, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connectors/' + name + '/config', config, node=node, method="PUT", retries=retries, retry_backoff=retry_backoff)
 
-    def get_connector_tasks(self, name, node=None):
-        return self._rest('/connectors/' + name + '/tasks', node=node)
+    def get_connector_tasks(self, name, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connectors/' + name + '/tasks', node=node, retries=retries, retry_backoff=retry_backoff)
 
-    def delete_connector(self, name, node=None):
-        return self._rest('/connectors/' + name, node=node, method="DELETE")
+    def delete_connector(self, name, node=None, retries=0, retry_backoff=.01):
+        return self._rest_with_retry('/connectors/' + name, node=node, method="DELETE", retries=retries, retry_backoff=retry_backoff)
 
     def _rest(self, path, body=None, node=None, method="GET"):
         if node is None:
@@ -142,6 +143,9 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
             return None
         else:
             return resp.json()
+
+    def _rest_with_retry(self, path, body=None, node=None, method="GET", retries=0, retry_backoff=.01):
+        return retry_on_exception(lambda: self._rest(path, body, node, method), ConnectRestError, retries, retry_backoff)
 
     def _base_url(self, node):
         return 'http://' + node.account.externally_routable_ip + ':' + '8083'
