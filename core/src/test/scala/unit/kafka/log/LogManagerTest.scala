@@ -159,6 +159,44 @@ class LogManagerTest {
   }
 
   /**
+   * Test disk-usage-percent-based cleanup. Based on testCleanupExpiredSegments(),
+   * but sets target disk usage percent to 0 and moves the clock by logManager.InitialTaskDelayMs,
+   * the retention check interval, rather than the max log age.
+   */
+  @Test
+  def testCleanupSegmentsToMaintainFreeSpace() {
+    logManager.shutdown()
+
+    logManager = createLogManager(retentionDiskUsagePercent = 0L)
+    logManager.startup
+
+    val log = logManager.createLog(TopicAndPartition(name, 0), logConfig)
+    var offset = 0L
+    for(i <- 0 until 200) {
+      var set = TestUtils.singleMessageSet("test".getBytes())
+      val info = log.append(set)
+      offset = info.lastOffset
+    }
+    assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
+
+    // this cleanup shouldn't find any expired segments, but should delete some to reduce usage
+    time.sleep(logManager.InitialTaskDelayMs)
+    assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
+    time.sleep(log.config.fileDeleteDelayMs + 1)
+    assertEquals("Files should have been deleted", log.numberOfSegments * 2, log.dir.list.length)
+    assertEquals("Should get empty fetch off new log.", 0, log.read(offset+1, 1024).messageSet.sizeInBytes)
+
+    try {
+      log.read(0, 1024)
+      fail("Should get exception from fetching earlier.")
+    } catch {
+      case e: OffsetOutOfRangeException => "This is good."
+    }
+    // log should still be appendable
+    log.append(TestUtils.singleMessageSet("test".getBytes()))
+  }
+
+  /**
    * Test that flush is invoked by the background scheduler thread.
    */
   @Test
@@ -271,10 +309,12 @@ class LogManagerTest {
   }
 
 
-  private def createLogManager(logDirs: Array[File] = Array(this.logDir)): LogManager = {
+  private def createLogManager(logDirs: Array[File] = Array(this.logDir),
+                               retentionDiskUsagePercent: Long = 100L): LogManager = {
     TestUtils.createLogManager(
       defaultConfig = logConfig,
       logDirs = logDirs,
+      retentionDiskUsagePercent = retentionDiskUsagePercent,
       time = this.time)
   }
 }

@@ -75,6 +75,7 @@ object Defaults {
   val LogRetentionHours = 24 * 7
 
   val LogRetentionBytes = -1L
+  val LogRetentionDiskUsagePercent = 100L
   val LogCleanupIntervalMs = 5 * 60 * 1000L
   val Delete = "delete"
   val Compact = "compact"
@@ -243,6 +244,7 @@ object KafkaConfig {
   val LogRetentionTimeHoursProp = "log.retention.hours"
 
   val LogRetentionBytesProp = "log.retention.bytes"
+  val LogRetentionDiskUsagePercentProp = "log.retention.disk.usage.percent"
   val LogCleanupIntervalMsProp = "log.retention.check.interval.ms"
   val LogCleanupPolicyProp = "log.cleanup.policy"
   val LogCleanerThreadsProp = "log.cleaner.threads"
@@ -420,6 +422,7 @@ object KafkaConfig {
   val LogRetentionTimeHoursDoc = "The number of hours to keep a log file before deleting it (in hours), tertiary to " + LogRetentionTimeMillisProp + " property"
 
   val LogRetentionBytesDoc = "The maximum size of the log before deleting it"
+  val LogRetentionDiskUsagePercentDoc = "The percentage of disk capacity to keep free (per-disk) by deleting logs"
   val LogCleanupIntervalMsDoc = "The frequency in milliseconds that the log cleaner checks whether any log is eligible for deletion"
   val LogCleanupPolicyDoc = "The default cleanup policy for segments beyond the retention window, must be either \"delete\" or \"compact\""
   val LogCleanerThreadsDoc = "The number of background threads to use for log cleaning"
@@ -609,6 +612,7 @@ object KafkaConfig {
       .define(LogRetentionTimeHoursProp, INT, Defaults.LogRetentionHours, HIGH, LogRetentionTimeHoursDoc)
 
       .define(LogRetentionBytesProp, LONG, Defaults.LogRetentionBytes, HIGH, LogRetentionBytesDoc)
+      .define(LogRetentionDiskUsagePercentProp, LONG, Defaults.LogRetentionDiskUsagePercent, MEDIUM, LogRetentionDiskUsagePercentDoc)
       .define(LogCleanupIntervalMsProp, LONG, Defaults.LogCleanupIntervalMs, atLeast(1), MEDIUM, LogCleanupIntervalMsDoc)
       .define(LogCleanupPolicyProp, STRING, Defaults.LogCleanupPolicy, in(Defaults.Compact, Defaults.Delete), MEDIUM, LogCleanupPolicyDoc)
       .define(LogCleanerThreadsProp, INT, Defaults.LogCleanerThreads, atLeast(0), MEDIUM, LogCleanerThreadsDoc)
@@ -814,6 +818,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val offsetsRetentionMinutes = getInt(KafkaConfig.OffsetsRetentionMinutesProp)
   val offsetsRetentionCheckIntervalMs = getLong(KafkaConfig.OffsetsRetentionCheckIntervalMsProp)
   val logRetentionBytes = getLong(KafkaConfig.LogRetentionBytesProp)
+  val logRetentionDiskUsagePercent = getLong(KafkaConfig.LogRetentionDiskUsagePercentProp)
   val logCleanerDedupeBufferSize = getLong(KafkaConfig.LogCleanerDedupeBufferSizeProp)
   val logCleanerDedupeBufferLoadFactor = getDouble(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp)
   val logCleanerIoBufferSize = getInt(KafkaConfig.LogCleanerIoBufferSizeProp)
@@ -1002,6 +1007,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
     require(logRollTimeMillis >= 1, "log.roll.ms must be equal or greater than 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be equal or greater than 0")
     require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, equal or greater than 1")
+    require(logRetentionDiskUsagePercent >= 0 && logRetentionDiskUsagePercent <= 100, "log.retention.disk.usage.percent must be between 0 and 100, inclusive")
     require(logDirs.size > 0)
     require(logCleanerDedupeBufferSize / logCleanerThreads > 1024 * 1024, "log.cleaner.dedupe.buffer.size must be at least 1MB per cleaner thread.")
     require(replicaFetchWaitMaxMs <= replicaSocketTimeoutMs, "replica.socket.timeout.ms should always be at least replica.fetch.wait.max.ms" +

@@ -895,6 +895,7 @@ object TestUtils extends Logging {
   def createLogManager(logDirs: Array[File] = Array.empty[File],
                        defaultConfig: LogConfig = LogConfig(),
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
+                       retentionDiskUsagePercent: Long = 100L,
                        time: MockTime = new MockTime()): LogManager = {
     new LogManager(logDirs = logDirs,
                    topicConfigs = Map(),
@@ -904,6 +905,7 @@ object TestUtils extends Logging {
                    flushCheckMs = 1000L,
                    flushCheckpointMs = 10000L,
                    retentionCheckMs = 1000L,
+                   retentionDiskUsagePercent = retentionDiskUsagePercent,
                    scheduler = time.scheduler,
                    time = time,
                    brokerState = new BrokerState())
