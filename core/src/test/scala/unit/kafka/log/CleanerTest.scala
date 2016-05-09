@@ -432,7 +432,7 @@ class CleanerTest extends JUnitSuite {
     logProps.put(LogConfig.SegmentIndexBytesProp, 72: java.lang.Integer)
     logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
     val logConfig = LogConfig(logProps)
-    val log = makeLog(config=logConfig)
+    val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(Int.MaxValue)
     val start = 0
     val end = 2
@@ -440,7 +440,7 @@ class CleanerTest extends JUnitSuite {
     val offsets = writeToLog(log, (start until end) zip (start until end), offsetSeq)
     val endOffset = cleaner.buildOffsetMap(log, start, end, map) + 1
     assertEquals("Last offset should be the end offset.", 7206179, endOffset)
-    assertEquals("Should have the expected number of messages in the map.", end-start, map.size)
+    assertEquals("Should have the expected number of messages in the map.", end - start, map.size)
     assertEquals("Map should contain first value", 0L, map.get(key(0)))
     assertEquals("Map should contain second value", 7206178L, map.get(key(1)))
   }
