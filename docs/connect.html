@@ -192,7 +192,7 @@ public List&lt;Map&lt;String, String&gt;&gt; getTaskConfigs(int maxTasks) {
 </pre>
 
 Although not used in the example, <code>SourceTask</code> also provides two APIs to commit offsets in the source system: <code>commit</code> and <code>commitSourceRecord</code>. The APIs are provided for source systems which have an acknowledgement mechanism for messages. Overriding these methods allows the source connector to acknowledge messages in the source system, either in bulk or individually, once they have been written to Kafka.
-The <code>commit<code> API stores the offsets in the source system, up to the offsets that have been returned by <code>poll</code>. The implementation of this API should block until the commit is complete. The <code>commitSourceRecord</code> API saves the offset in the source system for each <code>SourceRecord</code> after it is written to Kafka. As Kafka Connect will record offsets automatically, <code>SourceTask<code>s are not required to implement them. In cases where a connector does need to acknowledge messages in the source system, only one of the APIs is typically required.
+The <code>commit</code> API stores the offsets in the source system, up to the offsets that have been returned by <code>poll</code>. The implementation of this API should block until the commit is complete. The <code>commitSourceRecord</code> API saves the offset in the source system for each <code>SourceRecord</code> after it is written to Kafka. As Kafka Connect will record offsets automatically, <code>SourceTask</code>s are not required to implement them. In cases where a connector does need to acknowledge messages in the source system, only one of the APIs is typically required.
 
 Even with multiple tasks, this method implementation is usually pretty simple. It just has to determine the number of input tasks, which may require contacting the remote service it is pulling data from, and then divvy them up. Because some patterns for splitting work among tasks are so common, some utilities are provided in <code>ConnectorUtils</code> to simplify these cases.
 
@@ -232,7 +232,7 @@ Next, we implement the main functionality of the task, the <code>poll()</code> m
 public List&lt;SourceRecord&gt; poll() throws InterruptedException {
     try {
         ArrayList&lt;SourceRecord&gt; records = new ArrayList&lt;&gt;();
-        while (streamValid(stream) && records.isEmpty()) {
+        while (streamValid(stream) &amp;&amp; records.isEmpty()) {
             LineAndOffset line = readToNextLine(stream);
             if (line != null) {
                 Map<String, Object> sourcePartition = Collections.singletonMap("filename", filename);
