@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -30,7 +32,9 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -215,6 +219,13 @@ public class KafkaStreams {
     public void setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler eh) {
         for (StreamThread thread : threads)
             thread.setUncaughtExceptionHandler(eh);
+    }
+
+    /**
+     * Get the full set of internal metrics maintained by this KafkaStreams instance.
+     */
+    public Map<MetricName, ? extends Metric> metrics() {
+        return Collections.unmodifiableMap(this.metrics.metrics());
     }
 
 }
