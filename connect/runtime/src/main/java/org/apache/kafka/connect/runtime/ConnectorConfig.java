@@ -60,17 +60,11 @@ public class ConnectorConfig extends AbstractConfig {
 
     private static final String TASK_MAX_DISPLAY = "Tasks max";
 
-    protected static ConfigDef config;
-
-    static {
-        config = new ConfigDef()
-                .define(NAME_CONFIG, Type.STRING, Importance.HIGH, NAME_DOC, COMMON_GROUP, 1, Width.MEDIUM, NAME_DISPLAY)
-                .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, 2, Width.LONG, CONNECTOR_CLASS_DISPLAY)
-                .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT,  atLeast(TASKS_MIN_CONFIG), Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, 3, Width.SHORT, TASK_MAX_DISPLAY);
-    }
-
     public static ConfigDef configDef() {
-        return config;
+        return new ConfigDef()
+            .define(NAME_CONFIG, Type.STRING, Importance.HIGH, NAME_DOC, COMMON_GROUP, 1, Width.MEDIUM, NAME_DISPLAY)
+            .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, 2, Width.LONG, CONNECTOR_CLASS_DISPLAY)
+            .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT,  atLeast(TASKS_MIN_CONFIG), Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, 3, Width.SHORT, TASK_MAX_DISPLAY);
     }
 
     public ConnectorConfig() {
@@ -78,7 +72,7 @@ public class ConnectorConfig extends AbstractConfig {
     }
 
     public ConnectorConfig(Map<String, String> props) {
-        super(config, props);
+        super(configDef(), props);
     }
 
     public ConnectorConfig(ConfigDef subClassConfig, Map<String, String> props) {
