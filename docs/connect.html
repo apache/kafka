@@ -100,8 +100,8 @@ Since Kafka Connect is intended to be run as a service, it also provides a REST 
     <li><code>GET /connectors/{name}/tasks/{taskid}/status</code> - get current status of the task, including if it is running, failed, paused, etc., which worker it is assigned to, and error information if it has failed</li>
     <li><code>PUT /connectors/{name}/pause</code> - pause the connector and its tasks, which stops message processing until the connector is resumed</li>
     <li><code>PUT /connectors/{name}/resume</code> - resume a paused connector (or do nothing if the connector is not paused)</li>
-    <li><code>POST /connectors/{name}/restart</code> - restart a connector task</li>
-    <li><code>POST /connectors/{name}/tasks/{taskId}/restart</code> - restart an individual task</li>
+    <li><code>POST /connectors/{name}/restart</code> - restart a connector (typically because it has failed)</li>
+    <li><code>POST /connectors/{name}/tasks/{taskId}/restart</code> - restart an individual task (typically because it has failed)</li>
     <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
 </ul>
 
@@ -370,14 +370,14 @@ When a connector is first submitted to the cluster, the workers rebalance the fu
 </pre>
 
 <p>
-Connectors publish task status updates to a shared topic (configured with <code>status.storage.topic</code>) which all workers in the cluster monitor. Because the workers consume this topic asynchronously, there is typically a (short) delay before a state change is visible using this API. The following states are possible for a connector or one of its tasks:
+Connectors publish task status updates to a shared topic (configured with <code>status.storage.topic</code>) which all workers in the cluster monitor. Because the workers consume this topic asynchronously, there is typically a (short) delay before a state change is visible from the status API. The following states are possible for a connector or one of its tasks:
 </p>
 
 <ul>
   <li><b>UNASSIGNED:</b> The connector/task has not yet been assigned to a worker.</li>
   <li><b>RUNNING:</b> The connector/task is running.</li>
   <li><b>PAUSED:</b> The connector/task has been administratively paused.</li>
-  <li><b>FAILED:</b> The connector/task has failed (usually by raising an exception, which is reported in the status output)</li>
+  <li><b>FAILED:</b> The connector/task has failed (usually by raising an exception, which is reported in the status output).</li>
 </ul>
 
 <p>
