@@ -60,8 +60,6 @@ public class ConnectorConfig extends AbstractConfig {
 
     private static final String TASK_MAX_DISPLAY = "Tasks max";
 
-    private static ConfigDef config = configDef();
-
     public static ConfigDef configDef() {
         return new ConfigDef()
             .define(NAME_CONFIG, Type.STRING, Importance.HIGH, NAME_DOC, COMMON_GROUP, 1, Width.MEDIUM, NAME_DISPLAY)
@@ -74,7 +72,7 @@ public class ConnectorConfig extends AbstractConfig {
     }
 
     public ConnectorConfig(Map<String, String> props) {
-        super(config, props);
+        super(configDef(), props);
     }
 
     public ConnectorConfig(ConfigDef subClassConfig, Map<String, String> props) {
