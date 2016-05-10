@@ -282,7 +282,7 @@ When an element in a path is denoted [xyz], that means that the value of xyz is 
 
 <h4><a id="impl_zkbroker" href="#impl_zkbroker">Broker Node Registry</a></h4>
 <pre>
-/brokers/ids/[0...N] --> host:port (ephemeral node)
+/brokers/ids/[0...N] --> {"jmx_port":...,"timestamp":...,"endpoints":[...],"host":...,"version":...,"port":...} (ephemeral node)
 </pre>
 <p>
 This is a list of all present broker nodes, each of which provides a unique logical broker id which identifies it to consumers (which must be given as part of its configuration). On startup, a broker node registers itself by creating a znode with the logical broker id under /brokers/ids. The purpose of the logical broker id is to allow a broker to be moved to a different physical machine without affecting consumers. An attempt to register a broker id that is already in use (say because two servers are configured with the same broker id) results in an error.
@@ -292,7 +292,7 @@ Since the broker registers itself in ZooKeeper using ephemeral znodes, this regi
 </p>
 <h4><a id="impl_zktopic" href="#impl_zktopic">Broker Topic Registry</a></h4>
 <pre>
-/brokers/topics/[topic]/[0...N] --> nPartitions (ephemeral node)
+/brokers/topics/[topic]/partitions/[0...N]/state --> {"controller_epoch":...,"leader":...,"version":...,"leader_epoch":...,"isr":[...]} (ephemeral node)
 </pre>
 
 <p>
@@ -317,7 +317,7 @@ The consumers in a group divide up the partitions as fairly as possible, each pa
 <p>
 In addition to the group_id which is shared by all consumers in a group, each consumer is given a transient, unique consumer_id (of the form hostname:uuid) for identification purposes. Consumer ids are registered in the following directory.
 <pre>
-/consumers/[group_id]/ids/[consumer_id] --> {"topic1": #streams, ..., "topicN": #streams} (ephemeral node)
+/consumers/[group_id]/ids/[consumer_id] --> {"version":...,"subscription":{...:...},"pattern":...,"timestamp":...} (ephemeral node)
 </pre>
 Each of the consumers in the group registers under its group and creates a znode with its consumer_id. The value of the znode contains a map of &lt;topic, #streams&gt;. This id is simply used to identify each of the consumers which is currently active within a group. This is an ephemeral node so it will disappear if the consumer process dies.
 </p>
@@ -327,7 +327,7 @@ Each of the consumers in the group registers under its group and creates a znode
 Consumers track the maximum offset they have consumed in each partition. This value is stored in a ZooKeeper directory if <code>offsets.storage=zookeeper</code>.
 </p>
 <pre>
-/consumers/[group_id]/offsets/[topic]/[broker_id-partition_id] --> offset_counter_value ((persistent node)
+/consumers/[group_id]/offsets/[topic]/[partition_id] --> offset_counter_value ((persistent node)
 </pre>
 
 <h4><a id="impl_zkowner" href="#impl_zkowner">Partition Owner registry</a></h4>
@@ -337,7 +337,7 @@ Each broker partition is consumed by a single consumer within a given consumer g
 </p>
 
 <pre>
-/consumers/[group_id]/owners/[topic]/[broker_id-partition_id] --> consumer_node_id (ephemeral node)
+/consumers/[group_id]/owners/[topic]/[partition_id] --> consumer_node_id (ephemeral node)
 </pre>
 
 <h4><a id="impl_brokerregistration" href="#impl_brokerregistration">Broker node registration</a></h4>

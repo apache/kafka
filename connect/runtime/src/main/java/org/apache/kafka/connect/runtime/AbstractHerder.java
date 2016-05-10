@@ -241,7 +241,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             connectorConfigDef = SinkConnectorConfig.configDef();
         }
         List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(connectorConfig);
-
+        
         Config config = connector.validate(connectorConfig);
         ConfigDef configDef = connector.config();
         Map<String, ConfigKey> configKeys = configDef.configKeys();
