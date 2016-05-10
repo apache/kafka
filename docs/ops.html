@@ -924,6 +924,154 @@ The following metrics are available on new producer instances.
     </tr>
 </tbody></table>
 
+
+<h4><a id="new_consumer_monitoring" href="#new_consumer_monitoring">New consumer monitoring</a></h4>
+
+The following metrics are available on new consumer instances.
+
+<h5><a id="new_consumer_group_monitoring" href="#new_consumer_group_monitoring">Consumer Group Metrics</a></h5>
+<table class="data-table">
+  <tbody>
+    <tr>
+      <th>Metric/Attribute name</th>
+      <th>Description</th>
+      <th>Mbean name</th>
+    </tr>
+    <tr>
+      <td>commit-latency-avg</td>
+      <td>The average time taken for a commit request</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>commit-latency-max</td>
+      <td>The max time taken for a commit request</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>commit-rate</td>
+      <td>The number of commit calls per second</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>assigned-partitions</td>
+      <td>The number of partitions currently assigned to this consumer</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>heartbeat-response-time-max</td>
+      <td>The max time taken to receive a response to a heartbeat request</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>heartbeat-rate</td>
+      <td>The average number of heartbeats per second</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>join-time-avg</td>
+      <td>The average time taken for a group rejoin</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>join-time-max</td>
+      <td>The max time taken for a group rejoin</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>join-rate</td>
+      <td>The number of group joins per second</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>sync-time-avg</td>
+      <td>The average time taken for a group sync</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>sync-time-max</td>
+      <td>The max time taken for a group sync</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>sync-rate</td>
+      <td>The number of group syncs per second</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>last-heartbeat-seconds-ago</td>
+      <td>The number of seconds since the last controller heartbeat</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h5><a id="new_consumer_fetch_monitoring" href="#new_consumer_fetch_monitoring">Fetch Metrics</a></h5>
+
+<table class="data-table">
+  <tbody>
+    <tr>
+      <th>Metric/Attribute name</th>
+      <th>Description</th>
+      <th>Mbean name</th>
+    </tr>
+    <tr>
+      <td>fetch-size-avg</td>
+      <td>The average number of bytes fetched per request</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>fetch-size-max</td>
+      <td>The maximum number of bytes fetched per request</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>bytes-consumed-rate</td>
+      <td>The average number of bytes consumed per second</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>records-per-request-avg</td>
+      <td>The average number of records in each request</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>records-consumed-rate</td>
+      <td>The average number of records consumed per second</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>fetch-latency-avg</td>
+      <td>The average time taken for a fetch request</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>fetch-latency-max</td>
+      <td>The max time taken for a fetch request</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>fetch-rate</td>
+      <td>The number of fetch requests per second</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>records-lag-max</td>
+      <td>The maximum lag in terms of number of records for any partition in this window</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>fetch-throttle-time-avg</td>
+      <td>The average throttle time in ms</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>fetch-throttle-time-max</td>
+      <td>The maximum throttle time in ms</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+  </tbody>
+</table>
+
 We recommend monitoring GC time and other stats and various server stats such as CPU utilization, I/O service time, etc.
 
 On the client side, we recommend monitoring the message/byte rate (global and per topic), request rate/size/time, and on the consumer side, max lag in messages among all partitions and min fetch request rate. For a consumer to keep up, max lag needs to be less than a threshold and min fetch rate needs to be larger than 0.
