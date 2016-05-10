@@ -50,85 +50,85 @@ fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
 shopt -s nullglob
-for dir in $base_dir/core/build/dependant-libs-${SCALA_VERSION}*;
+for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
 do
-  if [ -z $CLASSPATH ] ; then
-    CLASSPATH=$dir/*
+  if [ -z "$CLASSPATH" ] ; then
+    CLASSPATH="$dir"/*
   else
-    CLASSPATH=$CLASSPATH:$dir/*
+    CLASSPATH="$CLASSPATH":"$dir"/*
   fi
 done
 
-for file in $base_dir/examples/build/libs/kafka-examples*.jar;
+for file in "$base_dir"/examples/build/libs/kafka-examples*.jar;
 do
   if should_include_file "$file"; then
-    CLASSPATH=$CLASSPATH:$file
+    CLASSPATH="$CLASSPATH":"$file"
   fi
 done
 
-for file in $base_dir/clients/build/libs/kafka-clients*.jar;
+for file in "$base_dir"/clients/build/libs/kafka-clients*.jar;
 do
   if should_include_file "$file"; then
-    CLASSPATH=$CLASSPATH:$file
+    CLASSPATH="$CLASSPATH":"$file"
   fi
 done
 
-for file in $base_dir/streams/build/libs/kafka-streams*.jar;
+for file in "$base_dir"/streams/build/libs/kafka-streams*.jar;
 do
   if should_include_file "$file"; then
-    CLASSPATH=$CLASSPATH:$file
+    CLASSPATH="$CLASSPATH":"$file"
   fi
 done
 
-for file in $base_dir/streams/examples/build/libs/kafka-streams-examples*.jar;
+for file in "$base_dir"/streams/examples/build/libs/kafka-streams-examples*.jar;
 do
   if should_include_file "$file"; then
-    CLASSPATH=$CLASSPATH:$file
+    CLASSPATH="$CLASSPATH":"$file"
   fi
 done
 
-for file in $base_dir/streams/build/dependant-libs-${SCALA_VERSION}/rocksdb*.jar;
+for file in "$base_dir"/streams/build/dependant-libs-${SCALA_VERSION}/rocksdb*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  CLASSPATH="$CLASSPATH":"$file"
 done
 
-for file in $base_dir/tools/build/libs/kafka-tools*.jar;
+for file in "$base_dir"/tools/build/libs/kafka-tools*.jar;
 do
   if should_include_file "$file"; then
-    CLASSPATH=$CLASSPATH:$file
+    CLASSPATH="$CLASSPATH":"$file"
   fi
 done
 
-for dir in $base_dir/tools/build/dependant-libs-${SCALA_VERSION}*;
+for dir in "$base_dir"/tools/build/dependant-libs-${SCALA_VERSION}*;
 do
-  CLASSPATH=$CLASSPATH:$dir/*
+  CLASSPATH="$CLASSPATH":"$dir"/*
 done
 
 for cc_pkg in "api" "runtime" "file" "json" "tools"
 do
-  for file in $base_dir/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
+  for file in "$base_dir"/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
   do
     if should_include_file "$file"; then
-      CLASSPATH=$CLASSPATH:$file
+      CLASSPATH="$CLASSPATH":"$file"
     fi
   done
   if [ -d "$base_dir/connect/${cc_pkg}/build/dependant-libs" ] ; then
-    CLASSPATH=$CLASSPATH:$base_dir/connect/${cc_pkg}/build/dependant-libs/*
+    CLASSPATH="$CLASSPATH":"$base_dir"/connect/${cc_pkg}/build/dependant-libs/*
   fi
 done
 
 # classpath addition for release
-for file in $base_dir/libs/*;
+for file in "$base_dir"/libs/*;
 do
   if should_include_file "$file"; then
-    CLASSPATH=$CLASSPATH:$file
+    CLASSPATH="$CLASSPATH":"$file"
   fi
 done
 
-for file in $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
+for file in "$base_dir"/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
 do
   if should_include_file "$file"; then
-    CLASSPATH=$CLASSPATH:$file
+    CLASSPATH="$CLASSPATH":"$file"
   fi
 done
 shopt -u nullglob
