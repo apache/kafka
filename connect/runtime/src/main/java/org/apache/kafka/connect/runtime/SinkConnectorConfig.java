@@ -40,6 +40,10 @@ public class SinkConnectorConfig extends ConnectorConfig {
         this(new HashMap<String, String>());
     }
 
+    public static ConfigDef configDef() {
+        return config;
+    }
+
     public SinkConnectorConfig(Map<String, String> props) {
         super(config, props);
     }
