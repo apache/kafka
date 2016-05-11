@@ -30,11 +30,8 @@ import java.nio.channels.SelectionKey;
 import java.security.Principal;
 
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class PlaintextTransportLayer implements TransportLayer {
-    private static final Logger log = LoggerFactory.getLogger(PlaintextTransportLayer.class);
     private final SelectionKey key;
     private final SocketChannel socketChannel;
     private final Principal principal = KafkaPrincipal.ANONYMOUS;
@@ -84,10 +81,13 @@ public class PlaintextTransportLayer implements TransportLayer {
      */
     @Override
     public void close() throws IOException {
-        socketChannel.socket().close();
-        socketChannel.close();
-        key.attach(null);
-        key.cancel();
+        try {
+            socketChannel.socket().close();
+            socketChannel.close();
+        } finally {
+            key.attach(null);
+            key.cancel();
+        }
     }
 
     /**
