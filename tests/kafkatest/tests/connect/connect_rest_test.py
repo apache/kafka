@@ -21,12 +21,6 @@ import json
 import itertools
 
 
-def merge_two_dicts(x, y):
-    z = x.copy()
-    z.update(y)
-    return z
-
-
 class ConnectRestApiTest(KafkaTest):
     """
     Test of Kafka Connect's REST API endpoints.
@@ -35,26 +29,8 @@ class ConnectRestApiTest(KafkaTest):
     FILE_SOURCE_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSourceConnector'
     FILE_SINK_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSinkConnector'
 
-    COMMON_GROUP = 'Common'
-    # The value denote whether the config is required or not.
-    COMMON_CONNECTOR_CONFIGS = {
-        'name': {'required': True, 'type': 'STRING', 'importance': 'HIGH', 'group': COMMON_GROUP, 'order': 1, 'width': 'MEDIUM'},
-        'connector.class': {'required': True, 'type': 'STRING', 'importance': 'HIGH', 'group': COMMON_GROUP, 'order': 2, 'width': 'LONG'},
-        'task.max': {'required': False, 'type': 'INT', 'importance': 'HIGH', 'group': COMMON_GROUP, 'order': 3, 'width': 'SHORT'}
-    }
-
-    FILE_SOURCE_CONFIGS = {
-        'topic': {'required': True, 'type': 'STRING', 'importance': 'HIGH', 'group': None, 'order': -1, 'width': 'NONE'},
-        'file': {'required': True, 'type': 'STRING', 'importance': 'HIGH', 'group': None, 'order': -1, 'width': 'NONE'}
-    }
-
-    FILE_SINK_CONFIGS = {
-        'topics': {'required': False, 'type': 'LIST', 'importance': 'HIGH', 'group': COMMON_GROUP, 'order': 4, 'width': 'LONG'},
-        'file': {'required': True, 'type': 'STRING', 'importance': 'HIGH', 'group': None, 'order': -1, 'width': 'NONE'}
-    }
-
-    FILE_SOURCE_ALL_CONFIGS = merge_two_dicts(COMMON_CONNECTOR_CONFIGS, FILE_SOURCE_CONFIGS)
-    FILE_SINK_ALL_CONFIGS = merge_two_dicts(COMMON_CONNECTOR_CONFIGS, FILE_SINK_CONFIGS)
+    FILE_SOURCE_CONFIGS = {'name', 'connector.class', 'tasks.max', 'topic', 'file'}
+    FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'topics', 'file'}
 
     INPUT_FILE = "/mnt/connect.input"
     INPUT_FILE2 = "/mnt/connect.input2"
@@ -98,38 +74,18 @@ class ConnectRestApiTest(KafkaTest):
         source_connector_props = self.render("connect-file-source.properties")
         sink_connector_props = self.render("connect-file-sink.properties")
 
+        self.logger.info("Validating connector configurations")
         source_connector_config = self._config_dict_from_props(source_connector_props)
-        expected_source_config_values = {
-            'name': {'name': 'name', 'value': 'local-file-source', 'errors': [], 'recommended_values': [], 'visible': True},
-            'connector.class': {'name': 'connector.class', 'value': self.FILE_SOURCE_CONNECTOR, 'errors': [], 'recommended_values': [], 'visible': True},
-            'tasks.max': {'name': 'tasks.max', 'value': '1', 'errors': [], 'recommended_values': [], 'visible': True},
-            'file': {'name': 'file', 'value': self.INPUT_FILE, 'errors': [], 'recommended_values': [], 'visible': True},
-            'topic': {'name': 'topic', 'value': self.TOPIC, 'errors': [], 'recommended_values': [], 'visible': True}
-        }
-        configs = self.validate_config_def(self.FILE_SOURCE_CONNECTOR, self.FILE_SOURCE_ALL_CONFIGS, source_connector_config)
-        # Should have zero errors
-        assert 0 == configs['error_count']
-        actual_config_values = self.get_config_values(configs)
-        assert expected_source_config_values == actual_config_values
+        configs = self.cc.validate_config(self.FILE_SOURCE_CONNECTOR, source_connector_config)
+        self.verify_config(self.FILE_SOURCE_CONNECTOR, self.FILE_SOURCE_CONFIGS, configs)
 
         sink_connector_config = self._config_dict_from_props(sink_connector_props)
-        expected_sink_config_values = {
-            'name': {'name': 'name', 'value': 'local-file-sink', 'errors': [], 'recommended_values': [], 'visible': True},
-            'connector.class': {'name': 'connector.class', 'value': self.FILE_SINK_CONNECTOR, 'errors': [], 'recommended_values': [], 'visible': True},
-            'tasks.max': {'name': 'tasks.max', 'value': '1', 'errors': [], 'recommended_values': [], 'visible': True},
-            'topics': {'name': 'topics', 'value': self.TOPIC, 'errors': [], 'recommended_values': [], 'visible': True},
-            'file': {'name': 'file', 'value': self.OUTPUT_FILE, 'errors': [], 'recommended_values': [], 'visible': True},
-        }
-        configs = self.validate_config_def(self.FILE_SINK_CONNECTOR, self.FILE_SINK_ALL_CONFIGS, sink_connector_config)
-        # Should have zero errors
-        assert 0 == configs['error_count']
-        actual_config_values = self.get_config_values(configs)
-        assert expected_sink_config_values == actual_config_values
+        configs = self.cc.validate_config(self.FILE_SINK_CONNECTOR, sink_connector_config)
+        self.verify_config(self.FILE_SINK_CONNECTOR, self.FILE_SINK_CONFIGS, configs)
 
         self.logger.info("Creating connectors")
-        for connector_props in [source_connector_props, sink_connector_props]:
-            connector_config = self._config_dict_from_props(connector_props)
-            self.cc.create_connector(connector_config, retries=120, retry_backoff=1)
+        self.cc.create_connector(source_connector_config, retries=120, retry_backoff=1)
+        self.cc.create_connector(sink_connector_config, retries=120, retry_backoff=1)
 
         # We should see the connectors appear
         wait_until(lambda: set(self.cc.list_connectors(retries=5, retry_backoff=1)) == set(["local-file-source", "local-file-sink"]),
@@ -151,7 +107,7 @@ class ConnectRestApiTest(KafkaTest):
         expected_source_info = {
             'name': 'local-file-source',
             'config': self._config_dict_from_props(source_connector_props),
-            'tasks': [{ 'connector': 'local-file-source', 'task': 0 }]
+            'tasks': [{'connector': 'local-file-source', 'task': 0}]
         }
         source_info = self.cc.get_connector("local-file-source")
         assert expected_source_info == source_info, "Incorrect info:" + json.dumps(source_info)
@@ -160,7 +116,7 @@ class ConnectRestApiTest(KafkaTest):
         expected_sink_info = {
             'name': 'local-file-sink',
             'config': self._config_dict_from_props(sink_connector_props),
-            'tasks': [{'connector': 'local-file-sink', 'task': 0 }]
+            'tasks': [{'connector': 'local-file-sink', 'task': 0}]
         }
         sink_info = self.cc.get_connector("local-file-sink")
         assert expected_sink_info == sink_info, "Incorrect info:" + json.dumps(sink_info)
@@ -224,38 +180,11 @@ class ConnectRestApiTest(KafkaTest):
     def _config_dict_from_props(self, connector_props):
         return dict([line.strip().split('=', 1) for line in connector_props.split('\n') if line.strip() and not line.strip().startswith('#')])
 
-    def validate_config_def(self, connector_type, expected_configs, config_values):
-        configs = self.cc.validate_config(connector_type, config_values)
-        config_list = configs['configs']
-        name = configs['name']
-        error_count = configs['error_count']
-
-        assert name == connector_type
-
-        total_errors = 0
-        for config in config_list:
-            total_errors += len(config['value']['errors'])
-
-        assert error_count == total_errors
-
-        for config in config_list:
-            if config in expected_configs.keys():
-                config_def = config['definition']
-                config_name = config_def['name']
-                assert expected_configs[config_name]['required'] == config_def['required']
-                assert expected_configs[config_name]['type'] == config_def['type']
-                assert expected_configs[config_name]['importance'] == config_def['importance']
-                assert expected_configs[config_name]['group'] == config_def['group']
-                assert expected_configs[config_name]['order'] == config_def['order']
-                assert expected_configs[config_name]['width'] == config_def['width']
-        return configs
-
-    def get_config_values(self, configs):
-        config_list = configs['configs']
-        config_values = {}
-        for config in config_list:
-            config_def = config['definition']
-            config_value = config['value']
-            config_name = config_def['name']
-            config_values[config_name] = config_value
-        return config_values
+    def verify_config(self, name, config_def, configs):
+        # Should have zero errors
+        assert name == configs['name']
+        # Should have zero errors
+        assert 0 == configs['error_count']
+        # Should return all configuration
+        config_names = [config['definition']['name'] for config in configs['configs']]
+        assert config_def == set(config_names)

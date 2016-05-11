@@ -52,7 +52,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
             "collect_default": True},
     }
 
-    def __init__(self, context, num_nodes, kafka, files=[]):
+    def __init__(self, context, num_nodes, kafka, files):
         super(ConnectServiceBase, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
@@ -141,11 +141,11 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def resume_connector(self, name, node=None):
         return self._rest('/connectors/' + name + '/resume', method="PUT")
 
-    def list_connector_plugins(self, node=None, retries=0, retry_backoff=.01):
-        return self._rest_with_retry('/connector-plugins/', node=node, retries=retries, retry_backoff=retry_backoff)
+    def list_connector_plugins(self, node=None):
+        return self._rest('/connector-plugins/', node=node)
 
-    def validate_config(self, connector_type, validate_request, node=None, retries=0, retry_backoff=.01):
-        return self._rest_with_retry('/connector-plugins/' + connector_type + '/config/validate', validate_request, node=node, method="PUT", retries=retries, retry_backoff=retry_backoff)
+    def validate_config(self, connector_type, validate_request, node=None):
+        return self._rest('/connector-plugins/' + connector_type + '/config/validate', validate_request, node=node, method="PUT")
 
     def _rest(self, path, body=None, node=None, method="GET"):
         if node is None:
@@ -173,7 +173,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
 class ConnectStandaloneService(ConnectServiceBase):
     """Runs Kafka Connect in standalone mode."""
 
-    def __init__(self, context, kafka, files=[]):
+    def __init__(self, context, kafka, files):
         super(ConnectStandaloneService, self).__init__(context, 1, kafka, files)
 
     # For convenience since this service only makes sense with a single node
@@ -213,7 +213,7 @@ class ConnectStandaloneService(ConnectServiceBase):
 class ConnectDistributedService(ConnectServiceBase):
     """Runs Kafka Connect in distributed mode."""
 
-    def __init__(self, context, num_nodes, kafka, files=[], offsets_topic="connect-offsets",
+    def __init__(self, context, num_nodes, kafka, files, offsets_topic="connect-offsets",
                  configs_topic="connect-configs", status_topic="connect-status"):
         super(ConnectDistributedService, self).__init__(context, num_nodes, kafka, files)
         self.offsets_topic = offsets_topic
