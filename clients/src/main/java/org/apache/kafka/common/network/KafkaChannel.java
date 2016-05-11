@@ -26,6 +26,8 @@ import java.nio.channels.SelectionKey;
 
 import java.security.Principal;
 
+import org.apache.kafka.common.utils.Utils;
+
 public class KafkaChannel {
     private final String id;
     private final TransportLayer transportLayer;
@@ -42,22 +44,7 @@ public class KafkaChannel {
     }
 
     public void close() throws IOException {
-        IOException exception = null;
-        try {
-            transportLayer.close();
-        } catch (IOException e) {
-            exception = e;
-        }
-        try {
-            authenticator.close();
-        } catch (IOException e) {
-            if (exception != null)
-                exception.addSuppressed(e);
-            else
-                exception = e;
-        }
-        if (exception != null)
-            throw exception;
+        Utils.closeAll(transportLayer, authenticator);
     }
 
     /**
