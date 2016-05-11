@@ -109,7 +109,6 @@ The algorithm used to assign replicas to brokers ensures that the number of lead
 <p></p>
 However if racks are assigned different numbers of brokers, the assignment of replicas will not be even. Racks with fewer brokers will get more replicas, meaning they will use more storage and put more resources into replication. Hence it is sensible to configure an equal number of brokers per rack.
 
-
 <h4><a id="basic_ops_mirror_maker" href="#basic_ops_mirror_maker">Mirroring data between clusters</a></h4>
 
 We refer to the process of replicating data <i>between</i> Kafka clusters "mirroring" to avoid confusion with the replication that happens amongst the nodes in a single cluster. Kafka comes with a tool for mirroring data between Kafka clusters. The tool reads from a source cluster and writes to a destination cluster, like this:
