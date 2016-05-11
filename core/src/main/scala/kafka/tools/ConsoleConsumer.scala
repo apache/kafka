@@ -58,15 +58,15 @@ object ConsoleConsumer extends Logging {
   def run(conf: ConsumerConfig) {
 
     val consumer =
-      if (conf.useNewConsumer) {
+      if (conf.useOldConsumer) {
+        checkZk(conf)
+        new OldConsumer(conf.filterSpec, getOldConsumerProps(conf))
+      } else {
         val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
         if (conf.partitionArg.isDefined)
           new NewShinyConsumer(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, getNewConsumerProps(conf), timeoutMs)
         else
           new NewShinyConsumer(Option(conf.topicArg), None, None, Option(conf.whitelistArg), getNewConsumerProps(conf), timeoutMs)
-      } else {
-        checkZk(conf)
-        new OldConsumer(conf.filterSpec, getOldConsumerProps(conf))
       }
 
     addShutdownHook(consumer, conf)
@@ -265,7 +265,8 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
-    val useNewConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation.")
+    val useNewConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation. This is the default.")
+    val useOldConsumerOpt = parser.accepts("old-consumer", "Use the old consumer implementation.")
     val bootstrapServerOpt = parser.accepts("bootstrap-server")
       .withRequiredArg
       .describedAs("server to connect to")
@@ -287,7 +288,7 @@ object ConsoleConsumer extends Logging {
 
     var groupIdPassed = true
     val options: OptionSet = tryParse(parser, args)
-    val useNewConsumer = options.has(useNewConsumerOpt)
+    val useOldConsumer = options.has(useOldConsumerOpt)
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
     // If using old consumer, exactly one of whitelist/blacklist/topic is required.
@@ -314,21 +315,21 @@ object ConsoleConsumer extends Logging {
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
     formatter.init(formatterArgs)
 
-    if (useNewConsumer) {
-      val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
-      if (topicOrFilterOpt.size != 1)
-        CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/topic is required.")
-      topicArg = options.valueOf(topicIdOpt)
-      whitelistArg = options.valueOf(whitelistOpt)
-    } else {
+    if (useOldConsumer) {
       val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
       if (topicOrFilterOpt.size != 1)
         CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/blacklist/topic is required.")
       topicArg = options.valueOf(topicOrFilterOpt.head)
       filterSpec = if (options.has(blacklistOpt)) new Blacklist(topicArg) else new Whitelist(topicArg)
+    } else {
+      val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
+      if (topicOrFilterOpt.size != 1)
+        CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/topic is required.")
+      topicArg = options.valueOf(topicIdOpt)
+      whitelistArg = options.valueOf(whitelistOpt)
     }
 
-    if (!useNewConsumer && (partitionArg.isDefined || options.has(offsetOpt)))
+    if (useOldConsumer && (partitionArg.isDefined || options.has(offsetOpt)))
       CommandLineUtils.printUsageAndDie(parser, "Partition-offset based consumption is supported in the new consumer only.")
 
     if (partitionArg.isDefined) {
@@ -361,7 +362,7 @@ object ConsoleConsumer extends Logging {
       else if (fromBeginning) OffsetRequest.EarliestTime
       else OffsetRequest.LatestTime
 
-    CommandLineUtils.checkRequiredArgs(parser, options, if (useNewConsumer) bootstrapServerOpt else zkConnectOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, if (useOldConsumer) zkConnectOpt else bootstrapServerOpt)
 
     if (options.has(csvMetricsReporterEnabledOpt)) {
       val csvReporterProps = new Properties()
