@@ -66,7 +66,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None,
-                 jmx_attributes=[], zk_connect_timeout=5000):
+                 jmx_attributes=[], zk_connect_timeout=5000, zk_session_timeout=6000):
         """
         :type context
         :type zk: ZookeeperService
@@ -98,6 +98,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # it can be overriden by setting the corresponding parameter
         # for this constructor.
         self.zk_connect_timeout = zk_connect_timeout
+
+        # Also allow the session timeout to be provided explicitly,
+        # primarily so that test cases can depend on it when waiting
+        # e.g. brokers to deregister after a hard kill.
+        self.zk_session_timeout = zk_session_timeout
 
         self.port_mappings = {
             'PLAINTEXT': Port('PLAINTEXT', 9092, False),
@@ -512,6 +517,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         controller_idx = int(controller_info["brokerid"])
         self.logger.info("Controller's ID: %d" % (controller_idx))
         return self.get_node(controller_idx)
+
+    def is_registered(self, node):
+        """
+        Check whether a broker is registered in Zookeeper
+        """
+        self.logger.debug("Querying zookeeper to see if broker %s is registered", node)
+        broker_info = self.zk.query("/brokers/ids/%s" % self.idx(node))
+        self.logger.debug("Broker info: %s", broker_info)
+        return broker_info is not None
 
     def get_offset_shell(self, topic, partitions, max_wait_ms, offsets, time):
         node = self.nodes[0]
