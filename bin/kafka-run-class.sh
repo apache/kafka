@@ -53,9 +53,9 @@ shopt -s nullglob
 for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
 do
   if [ -z "$CLASSPATH" ] ; then
-    CLASSPATH="$dir"/*
+    CLASSPATH="$dir/*"
   else
-    CLASSPATH="$CLASSPATH":"$dir"/*
+    CLASSPATH="$CLASSPATH:$dir/*"
   fi
 done
 
@@ -101,7 +101,7 @@ done
 
 for dir in "$base_dir"/tools/build/dependant-libs-${SCALA_VERSION}*;
 do
-  CLASSPATH="$CLASSPATH":"$dir"/*
+  CLASSPATH="$CLASSPATH:$dir/*"
 done
 
 for cc_pkg in "api" "runtime" "file" "json" "tools"
@@ -113,7 +113,7 @@ do
     fi
   done
   if [ -d "$base_dir/connect/${cc_pkg}/build/dependant-libs" ] ; then
-    CLASSPATH="$CLASSPATH":"$base_dir"/connect/${cc_pkg}/build/dependant-libs/*
+    CLASSPATH="$CLASSPATH:$base_dir/connect/${cc_pkg}/build/dependant-libs/*"
   fi
 done
 
