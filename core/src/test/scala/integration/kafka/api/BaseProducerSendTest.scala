@@ -220,7 +220,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, baseTimestamp + i, "key".getBytes, "value".getBytes)
         producer.send(record, callback)
       }
-      producer.close(5000L, TimeUnit.MILLISECONDS)
+      producer.close(10000L, TimeUnit.MILLISECONDS)
       assertEquals(s"Should have offset $numRecords but only successfully sent ${callback.offset}", numRecords, callback.offset)
     } finally {
       producer.close()
