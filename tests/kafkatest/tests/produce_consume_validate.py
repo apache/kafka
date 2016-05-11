@@ -35,7 +35,7 @@ class ProduceConsumeValidateTest(Test):
     def start_producer_and_consumer(self):
         # Start background producer and consumer
         self.producer.start()
-        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=10,
+        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=20,
              err_msg="Producer failed to start in a reasonable amount of time.")
         self.consumer.start()
         wait_until(lambda: len(self.consumer.messages_consumed[1]) > 0, timeout_sec=60,
