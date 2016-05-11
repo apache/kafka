@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.network;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.Map;
 import java.security.Principal;
@@ -27,7 +28,7 @@ import org.apache.kafka.common.KafkaException;
 /**
  * Authentication for Channel
  */
-public interface Authenticator {
+public interface Authenticator extends Closeable {
 
     /**
      * Configures Authenticator using the provided parameters.
@@ -53,12 +54,5 @@ public interface Authenticator {
      * returns true if authentication is complete otherwise returns false;
      */
     boolean complete();
-
-    /**
-     * Closes this Authenticator
-     *
-     * @throws IOException if any I/O error occurs
-     */
-    void close() throws IOException;
 
 }
