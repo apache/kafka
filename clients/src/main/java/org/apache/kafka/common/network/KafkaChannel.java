@@ -42,11 +42,22 @@ public class KafkaChannel {
     }
 
     public void close() throws IOException {
+        IOException exception = null;
         try {
             transportLayer.close();
-        } finally {
-            authenticator.close();
+        } catch (IOException e) {
+            exception = e;
         }
+        try {
+            authenticator.close();
+        } catch (IOException e) {
+            if (exception != null)
+                exception.addSuppressed(e);
+            else
+                exception = e;
+        }
+        if (exception != null)
+            throw exception;
     }
 
     /**
