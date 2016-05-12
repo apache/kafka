@@ -146,17 +146,21 @@ public class TestUtils {
     }
 
     /**
-     * Create a record buffer including the offset and message size at the start, which is required if the buffer is to
-     * be sent as part of `ProduceRequest`. This is the reason why we can't simply use
+     * Create a records buffer including the offset and message size at the start, which is required if the buffer is to
+     * be sent as part of `ProduceRequest`. This is the reason why we can't use
      * `Record(long timestamp, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize)` as this
      * constructor does not include either of these fields.
      */
-    public static ByteBuffer partitionRecordBuffer(long offset, Record record, CompressionType compressionType) {
-        ByteBuffer buffer = ByteBuffer.allocate(Records.LOG_OVERHEAD + record.size());
-        MemoryRecords records = MemoryRecords.emptyRecords(buffer, compressionType);
-        records.append(offset, record);
-        records.close();
-        return records.buffer();
+    public static ByteBuffer partitionRecordsBuffer(long offset, CompressionType compressionType, Record... records) {
+        int bufferSize = 0;
+        for (Record record : records)
+            bufferSize += Records.LOG_OVERHEAD + record.size();
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        MemoryRecords memoryRecords = MemoryRecords.emptyRecords(buffer, compressionType);
+        for (Record record : records)
+            memoryRecords.append(offset, record);
+        memoryRecords.close();
+        return memoryRecords.buffer();
     }
 
 }

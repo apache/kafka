@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import java.nio.ByteBuffer
+
 import kafka.utils.TestUtils
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.apache.kafka.common.TopicPartition
@@ -38,17 +40,25 @@ class ProduceRequestTest extends BaseRequestTest {
   def testSimpleProduceRequest() {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
 
-    val recordBuffer = JTestUtils.partitionRecordBuffer(0,
-      new Record(System.currentTimeMillis(), "key".getBytes, "value".getBytes), CompressionType.NONE)
-    val topicPartition = new TopicPartition("topic", partition)
-    val partitionRecords = Map(topicPartition -> recordBuffer)
-    val produceResponse = sendProduceRequest(leader, new ProduceRequest(-1, 3000, partitionRecords.asJava))
-    assertEquals(1, produceResponse.responses.size)
-    val (tp, partitionResponse) = produceResponse.responses.asScala.head
-    assertEquals(topicPartition, tp)
-    assertEquals(Errors.NONE.code, partitionResponse.errorCode)
-    assertEquals(0, partitionResponse.baseOffset)
-    assertEquals(-1, partitionResponse.timestamp)
+    def sendAndCheck(recordBuffer: ByteBuffer, expectedOffset: Long): ProduceResponse.PartitionResponse = {
+      val topicPartition = new TopicPartition("topic", partition)
+      val partitionRecords = Map(topicPartition -> recordBuffer)
+      val produceResponse = sendProduceRequest(leader, new ProduceRequest(-1, 3000, partitionRecords.asJava))
+      assertEquals(1, produceResponse.responses.size)
+      val (tp, partitionResponse) = produceResponse.responses.asScala.head
+      assertEquals(topicPartition, tp)
+      assertEquals(Errors.NONE.code, partitionResponse.errorCode)
+      assertEquals(expectedOffset, partitionResponse.baseOffset)
+      assertEquals(-1, partitionResponse.timestamp)
+      partitionResponse
+    }
+
+    sendAndCheck(JTestUtils.partitionRecordsBuffer(0, CompressionType.NONE,
+      new Record(System.currentTimeMillis(), "key".getBytes, "value".getBytes)), 0)
+
+    sendAndCheck(JTestUtils.partitionRecordsBuffer(0, CompressionType.GZIP,
+      new Record(System.currentTimeMillis(), "key1".getBytes, "value1".getBytes),
+      new Record(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
   }
 
   /* returns a pair of partition id and leader id */
@@ -63,8 +73,8 @@ class ProduceRequestTest extends BaseRequestTest {
   def testCorruptLz4ProduceRequest() {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
     val timestamp = 1000000
-    val recordBuffer = JTestUtils.partitionRecordBuffer(0,
-      new Record(timestamp, "key".getBytes, "value".getBytes), CompressionType.LZ4)
+    val recordBuffer = JTestUtils.partitionRecordsBuffer(0, CompressionType.LZ4,
+      new Record(timestamp, "key".getBytes, "value".getBytes))
     // Change the lz4 checksum value so that it doesn't match the contents
     recordBuffer.array.update(40, 0)
     val topicPartition = new TopicPartition("topic", partition)
