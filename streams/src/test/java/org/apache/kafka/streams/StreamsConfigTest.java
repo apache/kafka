@@ -20,14 +20,20 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
 
 public class StreamsConfigTest {
 
@@ -98,4 +104,18 @@ public class StreamsConfigTest {
         assertEquals("Should get the original string after serialization and deserialization with the configured encoding",
                 str, streamsConfig.valueSerde().deserializer().deserialize(topic, serializer.serialize(topic, str)));
     }
+
+    @Test
+    public void shouldSupportMultipleBootstrapServers() {
+        List<String> expectedBootstrapServers = Arrays.asList("broker1:9092", "broker2:9092");
+        String bootstrapServersString = Utils.mkString(expectedBootstrapServers, ",").toString();
+        Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "irrelevant");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServersString);
+        StreamsConfig config = new StreamsConfig(props);
+
+        List<String> actualBootstrapServers = config.getList(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+        assertThat(actualBootstrapServers, equalTo(expectedBootstrapServers));
+    }
+
 }
