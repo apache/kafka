@@ -64,7 +64,11 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     is set to 0.10.0, one should not change it back to an earlier format as it may break consumers on versions before 0.10.0.0.
 </p>
 <p>
-    <b>Note:</b> Due to the additional timestamp introduced in each message, producers sending small messages may see a message throughput degrade because of the increased overhead.
+    <b>Note:</b> Due to the additional timestamp introduced in each message, producers sending small messages may see a
+    message throughput degradation because of the increased overhead. When receiving compressed messages, 0.10.0
+    brokers avoid recompressing the messages, which in general reduces the latency and improves the throughput. In
+    certain cases, this may reduce the batching size on the producer, which could lead to worse throughput. If this
+    happens, users can tune linger.ms and batch.size of the producer for better throughput.
 </p>
 
 <h5><a id="upgrade_10_breaking" href="#upgrade_10_breaking">Potential breaking changes in 0.10.0.0</a></h5>
