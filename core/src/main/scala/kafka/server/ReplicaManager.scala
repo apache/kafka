@@ -225,7 +225,11 @@ class ReplicaManager(val config: KafkaConfig,
           val removedPartition = allPartitions.remove((topic, partitionId))
           if (removedPartition != null) {
             removedPartition.delete() // this will delete the local log
-            BrokerTopicStats.onPartitionDelete(topic, removedPartition)
+            val topicPartitionCount = allPartitions.keys.count {
+              case (t, p) => topic == t
+            }
+            if (topicPartitionCount == 0)
+                BrokerTopicStats.removeMetrics(topic)
           }
         }
       case None =>
@@ -272,10 +276,8 @@ class ReplicaManager(val config: KafkaConfig,
     if (partition == null) {
       val newPartition = new Partition(topic, partitionId, time, this)
       partition = allPartitions.putIfNotExists((topic, partitionId), newPartition)
-      if (partition == null) {
+      if (partition == null)
           partition = newPartition
-          BrokerTopicStats.onPartitionAdd(topic, partition)
-      }
     }
     partition
   }

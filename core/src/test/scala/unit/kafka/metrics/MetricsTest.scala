@@ -80,7 +80,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
-  def testBrokerTopicMetricsAfterDeletingTopic() {
+  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic() {
     val topic = "test-broker-topic-metric"
     AdminUtils.createTopic(zkUtils, topic, 2, 1)
     createAndShutdownStep("group0", "consumer0", "producer0")
