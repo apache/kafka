@@ -40,7 +40,7 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     private static final Logger log = LoggerFactory.getLogger(MemoryOffsetBackingStore.class);
 
     protected Map<ByteBuffer, ByteBuffer> data = new HashMap<>();
-    protected ExecutorService executor = Executors.newSingleThreadExecutor();
+    protected ExecutorService executor;
 
     public MemoryOffsetBackingStore() {
 
@@ -52,11 +52,15 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
 
     @Override
     public synchronized void start() {
+        executor = Executors.newSingleThreadExecutor();
     }
 
     @Override
     public synchronized void stop() {
-        // Nothing to do since this doesn't maintain any outstanding connections/data
+        if (executor != null) {
+            executor.shutdown();
+            executor = null;
+        }
     }
 
     @Override
