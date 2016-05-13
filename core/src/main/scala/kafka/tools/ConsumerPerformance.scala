@@ -58,7 +58,7 @@ object ConsumerPerformance {
     }
 
     var startMs, endMs = 0L
-    if (config.useNewConsumer) {
+    if(!config.useOldConsumer) {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
       consumer.subscribe(List(config.topic))
       startMs = System.currentTimeMillis
@@ -203,7 +203,8 @@ object ConsumerPerformance {
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1)
-    val useNewConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation.")
+    val useNewConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation. This is the default.")
+    val useOldConsumerOpt = parser.accepts("old-consumer", "Use the old consumer implementation.")
     val consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file.")
       .withRequiredArg
       .describedAs("config file")
@@ -213,13 +214,14 @@ object ConsumerPerformance {
 
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt)
 
-    val useNewConsumer = options.has(useNewConsumerOpt)
-
+    val useOldConsumer = options.has(useOldConsumerOpt)
+    
     val props = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
     else
       new Properties
-    if (useNewConsumer) {
+    if(!useOldConsumer) {
+      CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServersOpt)
       import org.apache.kafka.clients.consumer.ConsumerConfig
       props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))
       props.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt))

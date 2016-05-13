@@ -54,8 +54,8 @@ object ConsumerGroupCommand {
     opts.checkArgs()
 
     val consumerGroupService = {
-      if (opts.options.has(opts.newConsumerOpt)) new KafkaConsumerGroupService(opts)
-      else new ZkConsumerGroupService(opts)
+      if (opts.options.has(opts.oldConsumerOpt)) new ZkConsumerGroupService(opts)
+      else new KafkaConsumerGroupService(opts)
     }
 
     try {
@@ -376,9 +376,9 @@ object ConsumerGroupCommand {
   }
 
   class ConsumerGroupCommandOptions(args: Array[String]) {
-    val ZkConnectDoc = "REQUIRED (unless new-consumer is used): The connection string for the zookeeper connection in the form host:port. " +
+    val ZkConnectDoc = "REQUIRED (only when using old-consumer): The connection string for the zookeeper connection in the form host:port. " +
       "Multiple URLS can be given to allow fail-over."
-    val BootstrapServerDoc = "REQUIRED (only when using new-consumer): The server to connect to."
+    val BootstrapServerDoc = "REQUIRED (unless old-consumer is used): The server to connect to."
     val GroupDoc = "The consumer group we wish to act on."
     val TopicDoc = "The topic whose consumer group information should be deleted."
     val ListDoc = "List all consumer groups."
@@ -391,7 +391,8 @@ object ConsumerGroupCommand {
       "Pass in just a topic to delete the given topic's partition offsets and ownership information " +
       "for every consumer group. For instance --topic t1" + nl +
       "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
-    val NewConsumerDoc = "Use new consumer."
+    val NewConsumerDoc = "Use new consumer. This is the default."
+    val OldConsumerDoc = "Use old consumer."
     val CommandConfigDoc = "Property file containing configs to be passed to Admin Client and Consumer."
     val parser = new OptionParser
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
@@ -414,6 +415,7 @@ object ConsumerGroupCommand {
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
     val newConsumerOpt = parser.accepts("new-consumer", NewConsumerDoc)
+    val oldConsumerOpt = parser.accepts("old-consumer", OldConsumerDoc)
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
                                   .withRequiredArg
                                   .describedAs("command config property file")
@@ -424,23 +426,22 @@ object ConsumerGroupCommand {
 
     def checkArgs() {
       // check required args
-      if (options.has(newConsumerOpt)) {
-        CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
-
-        if (options.has(zkConnectOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $zkConnectOpt is not valid with $newConsumerOpt")
-
-        if (options.has(deleteOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $deleteOpt is not valid with $newConsumerOpt. Note that " +
-            "there's no need to delete group metadata for the new consumer as it is automatically deleted when the last " +
-            "member leaves")
-
-      } else {
+      if (options.has(oldConsumerOpt)) {
         CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
 
         if (options.has(bootstrapServerOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is only valid with $newConsumerOpt")
+          CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $oldConsumerOpt")
 
+      } else {
+        CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
+
+        if (options.has(zkConnectOpt))
+          CommandLineUtils.printUsageAndDie(parser, s"Option $zkConnectOpt is only valid with $oldConsumerOpt.")
+
+        if (options.has(deleteOpt))
+          CommandLineUtils.printUsageAndDie(parser, s"Option $deleteOpt is only valid with $oldConsumerOpt. Note that " +
+            "there's no need to delete group metadata for the new consumer as it is automatically deleted when the last " +
+            "member leaves")
       }
 
       if (options.has(describeOpt))
