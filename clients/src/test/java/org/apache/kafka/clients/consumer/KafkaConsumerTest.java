@@ -33,6 +33,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
@@ -59,7 +60,9 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -69,9 +72,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class KafkaConsumerTest {
-
-    private final String topic = "test";
-    private final TopicPartition tp0 = new TopicPartition("test", 0);
 
     @Test
     public void testConstructorClose() throws Exception {
@@ -96,6 +96,9 @@ public class KafkaConsumerTest {
 
     @Test
     public void testSubscription() {
+        final String topic = "test";
+        final TopicPartition tp0 = new TopicPartition(topic, 0);
+
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
 
         consumer.subscribe(Collections.singletonList(topic));
@@ -156,6 +159,8 @@ public class KafkaConsumerTest {
 
     @Test
     public void testPause() {
+        final TopicPartition tp0 = new TopicPartition("test", 0);
+
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
 
         consumer.assign(Collections.singletonList(tp0));
@@ -186,8 +191,8 @@ public class KafkaConsumerTest {
 
     @Test
     public void verifyHeartbeatSent() {
-        String topic = "topic";
-        TopicPartition partition = new TopicPartition(topic, 0);
+        final String topic = "topic";
+        final TopicPartition partition = new TopicPartition(topic, 0);
 
         int sessionTimeoutMs = 30000;
         int heartbeatIntervalMs = 3000;
@@ -203,32 +208,11 @@ public class KafkaConsumerTest {
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
-                sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
+                sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
 
-        consumer.subscribe(Arrays.asList(topic), new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
 
-            }
-
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                // set initial position so we don't need a lookup
-                for (TopicPartition partition : partitions)
-                    consumer.seek(partition, 0);
-            }
-        });
-
-        // lookup coordinator
-        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
-
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-
-        // join group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
-
-        // sync group
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition), Errors.NONE.code()), coordinator);
+        Node coordinator = prepareRebalance(client, node, assignor, partition);
 
         // initial fetch
         client.prepareResponseFrom(fetchResponse(partition, 0, 0), node);
@@ -255,8 +239,8 @@ public class KafkaConsumerTest {
 
     @Test
     public void verifyHeartbeatSentWhenFetchedDataReady() {
-        String topic = "topic";
-        TopicPartition partition = new TopicPartition(topic, 0);
+        final String topic = "topic";
+        final TopicPartition partition = new TopicPartition(topic, 0);
 
         int sessionTimeoutMs = 30000;
         int heartbeatIntervalMs = 3000;
@@ -272,32 +256,11 @@ public class KafkaConsumerTest {
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
-                sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
-        consumer.subscribe(Arrays.asList(topic), new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
 
-            }
+        consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
 
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                // set initial position so we don't need a lookup
-                for (TopicPartition partition : partitions)
-                    consumer.seek(partition, 0);
-            }
-        });
-
-        // lookup coordinator
-        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
-
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-
-        // join group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
-
-        // sync group
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition), Errors.NONE.code()), coordinator);
-
+        Node coordinator = prepareRebalance(client, node, assignor, partition);
         consumer.poll(0);
 
         // respond to the outstanding fetch so that we have data available on the next poll
@@ -323,7 +286,7 @@ public class KafkaConsumerTest {
 
     @Test
     public void testAutoCommitSentBeforePositionUpdate() {
-        String topic = "topic";
+        final String topic = "topic";
         final TopicPartition partition = new TopicPartition(topic, 0);
 
         int sessionTimeoutMs = 30000;
@@ -343,32 +306,10 @@ public class KafkaConsumerTest {
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
-                sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
-        consumer.subscribe(Arrays.asList(topic), new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
+        consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
 
-            }
-
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                // set initial position so we don't need a lookup
-                for (TopicPartition partition : partitions)
-                    consumer.seek(partition, 0);
-            }
-        });
-
-        // lookup coordinator
-        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
-
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-
-        // join group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
-
-        // sync group
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition), Errors.NONE.code()), coordinator);
-
+        Node coordinator = prepareRebalance(client, node, assignor, partition);
         consumer.poll(0);
 
         // respond to the outstanding fetch so that we have data available on the next poll
@@ -392,7 +333,7 @@ public class KafkaConsumerTest {
                 }
                 return false;
             }
-        }, new OffsetCommitResponse(Collections.singletonMap(partition, Errors.NONE.code())).toStruct(), coordinator);
+        }, offsetCommitResponse(Collections.singletonMap(partition, Errors.NONE.code())), coordinator);
 
         consumer.poll(0);
 
@@ -401,7 +342,7 @@ public class KafkaConsumerTest {
 
     @Test
     public void testWakeupWithFetchDataAvailable() {
-        String topic = "topic";
+        final String topic = "topic";
         final TopicPartition partition = new TopicPartition(topic, 0);
 
         int sessionTimeoutMs = 30000;
@@ -421,32 +362,10 @@ public class KafkaConsumerTest {
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
-                sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
-        consumer.subscribe(Arrays.asList(topic), new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
+        consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
 
-            }
-
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                // set initial position so we don't need a lookup
-                for (TopicPartition partition : partitions)
-                    consumer.seek(partition, 0);
-            }
-        });
-
-        // lookup coordinator
-        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
-
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-
-        // join group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
-
-        // sync group
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition), Errors.NONE.code()), coordinator);
-
+        prepareRebalance(client, node, assignor, partition);
         consumer.poll(0);
 
         // respond to the outstanding fetch so that we have data available on the next poll
@@ -467,6 +386,266 @@ public class KafkaConsumerTest {
         // the next poll should return the completed fetch
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(5, records.count());
+    }
+
+    /**
+     * "consumer" subscribes to "topic" (with only one partition) and has auto-commit enabled.
+     * "consumer" reads 5 records from that single topic partition starting from offset 0.
+     * "consumer" unsubscribes from "topic".
+     * Since auto-commit is enabled, the last committed offset of that partition should be 5.
+     */
+    @Test
+    public void testUnsubscribeAndOffsetCommitWithAutoCommitEnabled() {
+        final String topic = "topic";
+        final TopicPartition partition = new TopicPartition(topic, 0);
+
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 3000;
+
+        // adjust auto commit interval lower than heartbeat so we don't need to deal with
+        // a concurrent heartbeat request
+        int autoCommitIntervalMs = 1000;
+
+        Time time = new MockTime();
+        MockClient client = new MockClient(time);
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+        Node node = cluster.nodes().get(0);
+        client.setNode(node);
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        metadata.update(cluster, time.milliseconds());
+        PartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
+        consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
+
+        Node coordinator = prepareRebalance(client, node, assignor, partition);
+        consumer.poll(0);
+
+        // respond to the outstanding fetch so that we have data available on the next poll
+        client.respondFrom(fetchResponse(partition, 0, 5), node);
+        client.poll(0, time.milliseconds());
+
+        // the next poll should return the completed fetch
+        consumer.poll(0);
+
+        final AtomicBoolean commitReceived = new AtomicBoolean(false);
+        client.prepareResponseFrom(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                OffsetCommitRequest commitRequest = new OffsetCommitRequest(request.request().body());
+                OffsetCommitRequest.PartitionData partitionData = commitRequest.offsetData().get(partition);
+                // 5 records have been returned to the consumer and auto commit is enabled, so the committed offset should be 5
+                if (partitionData.offset == 5) {
+                    commitReceived.set(true);
+                    return true;
+                }
+                return false;
+            }
+        }, offsetCommitResponse(Collections.singletonMap(partition, Errors.NONE.code())), coordinator);
+
+        consumer.unsubscribe();
+
+        consumer.poll(0);
+
+        assertTrue(commitReceived.get());
+    }
+
+    /**
+     * "consumer" subscribes to "topic" (with only one partition) and has auto-commit disabled.
+     * "consumer" unsubscribes from "topic".
+     * Since auto-commit is disabled, no offset commit request should be sent.
+     */
+    @Test
+    public void testUnsubscribeAndOffsetCommitWithAutoCommitDisabled() {
+        final String topic = "topic";
+        final TopicPartition partition = new TopicPartition(topic, 0);
+
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 3000;
+
+        // adjust auto commit interval lower than heartbeat so we don't need to deal with
+        // a concurrent heartbeat request
+        int autoCommitIntervalMs = 1000;
+
+        Time time = new MockTime();
+        MockClient client = new MockClient(time);
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+        Node node = cluster.nodes().get(0);
+        client.setNode(node);
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        metadata.update(cluster, time.milliseconds());
+        PartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                sessionTimeoutMs, heartbeatIntervalMs, false, autoCommitIntervalMs);
+        consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
+
+        prepareRebalance(client, node, assignor, partition);
+        consumer.poll(0);
+
+        // the next poll should return the completed fetch
+        consumer.poll(0);
+
+        // the auto commit is disabled, so no offset commit request should be sent
+        consumer.unsubscribe();
+
+        for (ClientRequest req: client.requests()) {
+            assertTrue(req.request().header().apiKey() != ApiKeys.OFFSET_COMMIT.id);
+        }
+    }
+
+    /**
+     * "consumer" subscribes to "topic1" (with only one partition) and has auto-commit enabled.
+     * "consumer" reads 5 records from the single partition of "topic1" from offset 0.
+     * "consumer" changes subscription to "topic2".
+     * Since auto-commit is enabled, the last committed offset of "topic1" partition should be 5.
+     */
+    @Test
+    public void testSubscriptionChangeAndOffsetCommitWithAutoCommitEnabled() {
+        final String topic1 = "topic1";
+        final TopicPartition partition1 = new TopicPartition(topic1, 0);
+        final String topic2 = "topic2";
+
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 3000;
+
+        // adjust auto commit interval lower than heartbeat so we don't need to deal with
+        // a concurrent heartbeat request
+        int autoCommitIntervalMs = 1000;
+
+        Time time = new MockTime();
+        MockClient client = new MockClient(time);
+        Map<String, Integer> tpCounts = new HashMap<>();
+        tpCounts.put(topic1, 1);
+        tpCounts.put(topic2, 1);
+        Cluster cluster = TestUtils.singletonCluster(tpCounts);
+        Node node = cluster.nodes().get(0);
+        client.setNode(node);
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        metadata.update(cluster, time.milliseconds());
+        PartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
+        consumer.subscribe(Arrays.asList(topic1), getConsumerRebalanceListener(consumer));
+
+        Node coordinator = prepareRebalance(client, node, assignor, partition1);
+        consumer.poll(0);
+
+        // respond to the outstanding fetch so that we have data available on the next poll
+        client.respondFrom(fetchResponse(partition1, 0, 5), node);
+        client.poll(0, time.milliseconds());
+
+        // the next poll should return the completed fetch
+        consumer.poll(0);
+
+        // subscription change
+
+        final AtomicBoolean commitAsExpected = new AtomicBoolean(false);
+        Map<TopicPartition, Short> responseMap = new HashMap<>();
+        responseMap.put(partition1, Errors.NONE.code());
+        client.prepareResponseFrom(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                OffsetCommitRequest commitRequest = new OffsetCommitRequest(request.request().body());
+                OffsetCommitRequest.PartitionData partition1Data = commitRequest.offsetData().get(partition1);
+                // 5 records from topic1 partition have been returned to the consumer and auto commit is enabled;
+                // therefore, the committed offset of topic1 partition should be 5.
+                if (partition1Data.offset == 5) {
+                    commitAsExpected.set(true);
+                    return true;
+                }
+                return false;
+            }
+        }, offsetCommitResponse(responseMap), coordinator);
+
+        consumer.subscribe(Collections.singletonList(topic2));
+        assertTrue(commitAsExpected.get());
+    }
+
+    /**
+     * "consumer" subscribes to "topic1" (with only one partition) and has auto-commit disabled.
+     * "consumer" changes subscription to "topic2" (with only one partition).
+     * Since auto-commit is disabled, no offset commit request should be sent.
+     */
+    @Test
+    public void testSubscriptionChangeAndOffsetCommitWithAutoCommitDisabled() {
+        final String topic1 = "topic1";
+        final TopicPartition partition1 = new TopicPartition(topic1, 0);
+        final String topic2 = "topic2";
+
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 3000;
+
+        // adjust auto commit interval lower than heartbeat so we don't need to deal with
+        // a concurrent heartbeat request
+        int autoCommitIntervalMs = 1000;
+
+        Time time = new MockTime();
+        MockClient client = new MockClient(time);
+        Map<String, Integer> tpCounts = new HashMap<>();
+        tpCounts.put(topic1, 1);
+        tpCounts.put(topic2, 1);
+        Cluster cluster = TestUtils.singletonCluster(tpCounts);
+        Node node = cluster.nodes().get(0);
+        client.setNode(node);
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        metadata.update(cluster, time.milliseconds());
+        PartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                sessionTimeoutMs, heartbeatIntervalMs, false, autoCommitIntervalMs);
+        consumer.subscribe(Arrays.asList(topic1), getConsumerRebalanceListener(consumer));
+
+        prepareRebalance(client, node, assignor, partition1);
+        consumer.poll(0);
+
+        // the next poll should return the completed fetch
+        consumer.poll(0);
+
+        // subscription change
+        consumer.subscribe(Collections.singletonList(topic2));
+        // the auto commit is disabled, so no offset commit request should be sent
+        for (ClientRequest req: client.requests()) {
+            assertTrue(req.request().header().apiKey() != ApiKeys.OFFSET_COMMIT.id);
+        }
+    }
+
+    private ConsumerRebalanceListener getConsumerRebalanceListener(final KafkaConsumer<String, String> consumer) {
+        return new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                // set initial position so we don't need a lookup
+                for (TopicPartition partition : partitions)
+                    consumer.seek(partition, 0);
+            }
+        };
+    }
+
+    private Node prepareRebalance(MockClient client, Node node, PartitionAssignor assignor, TopicPartition partition) {
+        // lookup coordinator
+        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
+
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+
+        // join group
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
+
+        // sync group
+        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition), Errors.NONE.code()), coordinator);
+
+        return coordinator;
+    }
+
+    private Struct offsetCommitResponse(Map<TopicPartition, Short> responseData) {
+        OffsetCommitResponse response = new OffsetCommitResponse(responseData);
+        return response.toStruct();
     }
 
     private Struct joinGroupFollowerResponse(PartitionAssignor assignor, int generationId, String memberId, String leaderId, short error) {
@@ -495,6 +674,7 @@ public class KafkaConsumerTest {
                                                       PartitionAssignor assignor,
                                                       int sessionTimeoutMs,
                                                       int heartbeatIntervalMs,
+                                                      boolean autoCommitEnabled,
                                                       int autoCommitIntervalMs) {
         // create a consumer with mocked time and mocked network
 
@@ -503,7 +683,6 @@ public class KafkaConsumerTest {
         String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
         long requestTimeoutMs = 30000;
-        boolean autoCommitEnabled = true;
         boolean excludeInternalTopics = true;
         int minBytes = 1;
         int maxWaitMs = 500;
@@ -569,6 +748,7 @@ public class KafkaConsumerTest {
                 subscriptions,
                 metadata,
                 retryBackoffMs,
+                autoCommitEnabled,
                 requestTimeoutMs);
     }
 }

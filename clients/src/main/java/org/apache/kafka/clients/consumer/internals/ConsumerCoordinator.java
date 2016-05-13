@@ -358,9 +358,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
 
     public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
+        final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
+
+        if (offsets.isEmpty()) {
+            cb.onComplete(offsets, null);
+            return;
+        }
+
         this.subscriptions.needRefreshCommits();
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
-        final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
         future.addListener(new RequestFutureListener<Void>() {
             @Override
             public void onSuccess(Void value) {
