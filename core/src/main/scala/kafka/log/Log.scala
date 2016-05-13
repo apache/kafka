@@ -75,7 +75,7 @@ case class LogAppendInfo(var firstOffset: Long,
  *
  */
 @threadsafe
-class Log(val dir: File,
+class Log(@volatile var dir: File,
           @volatile var config: LogConfig,
           @volatile var recoveryPoint: Long = 0L,
           scheduler: Scheduler,
@@ -98,7 +98,7 @@ class Log(val dir: File,
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
-  loadSegments()
+    loadSegments()
 
   /* Calculate the offset of the next message */
   @volatile var nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset, activeSegment.size.toInt)
@@ -240,9 +240,11 @@ class Log(val dir: File,
                                      initFileSize = this.initFileSize(),
                                      preallocate = config.preallocate))
     } else {
-      recoverLog()
-      // reset the index size of the currently active log segment to allow more entries
-      activeSegment.index.resize(config.maxIndexSize)
+      if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
+        recoverLog()
+        // reset the index size of the currently active log segment to allow more entries
+        activeSegment.index.resize(config.maxIndexSize)
+      }
     }
 
   }
@@ -565,19 +567,20 @@ class Log(val dir: File,
   def deleteOldSegments(predicate: LogSegment => Boolean): Int = {
     // find any segments that match the user-supplied predicate UNLESS it is the final segment
     // and it is empty (since we would just end up re-creating it
-    val lastSegment = activeSegment
-    val deletable = logSegments.takeWhile(s => predicate(s) && (s.baseOffset != lastSegment.baseOffset || s.size > 0))
-    val numToDelete = deletable.size
-    if(numToDelete > 0) {
-      lock synchronized {
+    lock synchronized {
+      val lastSegment = activeSegment
+      val deletable = logSegments.takeWhile(s => predicate(s) && (s.baseOffset != lastSegment.baseOffset || s.size > 0))
+      val numToDelete = deletable.size
+      if(numToDelete > 0) {
         // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
         if(segments.size == numToDelete)
           roll()
         // remove the segments for lookups
         deletable.foreach(deleteSegment(_))
-      }
+       }
+
+      numToDelete
     }
-    numToDelete
   }
 
   /**
@@ -775,7 +778,12 @@ class Log(val dir: File,
   /**
    * The active segment that is currently taking appends
    */
-  def activeSegment = segments.lastEntry.getValue
+  def activeSegment: LogSegment = {
+    if (segments.size() > 0)
+      segments.lastEntry.getValue
+    else
+      null
+  }
 
   /**
    * All the log segments in this log ordered from oldest to newest
@@ -922,6 +930,9 @@ object Log {
   /** TODO: Get rid of CleanShutdownFile in 0.8.2 */
   val CleanShutdownFile = ".kafka_cleanshutdown"
 
+  /** a directory that is scheduled to be deleted */
+  val DeleteDirSuffix = "-delete"
+
   /**
    * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros
    * so that ls sorts the files numerically.
@@ -957,9 +968,13 @@ object Log {
    * Parse the topic and partition out of the directory name of a log
    */
   def parseTopicPartitionName(dir: File): TopicAndPartition = {
-    val name: String = dir.getName
+    var name: String = dir.getName
     if (name == null || name.isEmpty || !name.contains('-')) {
       throwException(dir)
+    }
+
+    if (name.endsWith(DeleteDirSuffix)) {
+      name = name.substring(0, name.indexOf('.'))
     }
     val index = name.lastIndexOf('-')
     val topic: String = name.substring(0, index)
@@ -969,6 +984,7 @@ object Log {
     }
     TopicAndPartition(topic, partition.toInt)
   }
+
 
   def throwException(dir: File) {
     throw new KafkaException("Found directory " + dir.getCanonicalPath + ", " +
