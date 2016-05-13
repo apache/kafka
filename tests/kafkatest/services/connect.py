@@ -101,7 +101,8 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def clean_node(self, node):
         node.account.kill_process("connect", clean_shutdown=False, allow_fail=True)
         self.security_config.clean_node(node)
-        node.account.ssh("rm -rf " + " ".join([self.CONFIG_FILE, self.LOG4J_CONFIG_FILE, self.PID_FILE, self.LOG_FILE, self.STDOUT_FILE, self.STDERR_FILE] + self.config_filenames() + self.files), allow_fail=False)
+        all_files = " ".join([self.CONFIG_FILE, self.LOG4J_CONFIG_FILE, self.PID_FILE, self.LOG_FILE, self.STDOUT_FILE, self.STDERR_FILE] + self.config_filenames() + self.files)
+        node.account.ssh("rm -rf " + all_files, allow_fail=False)
 
     def config_filenames(self):
         return [os.path.join(self.PERSISTENT_ROOT, "connect-connector-" + str(idx) + ".properties") for idx, template in enumerate(self.connector_config_templates or [])]
@@ -139,6 +140,12 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
 
     def resume_connector(self, name, node=None):
         return self._rest('/connectors/' + name + '/resume', method="PUT")
+
+    def list_connector_plugins(self, node=None):
+        return self._rest('/connector-plugins/', node=node)
+
+    def validate_config(self, connector_type, validate_request, node=None):
+        return self._rest('/connector-plugins/' + connector_type + '/config/validate', validate_request, node=node, method="PUT")
 
     def _rest(self, path, body=None, node=None, method="GET"):
         if node is None:
