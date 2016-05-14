@@ -37,10 +37,10 @@ public interface ConsumerConnector {
      *          The number of items in the list is #streams. Each stream supports
      *          an iterator over message/metadata pairs.
      */
-    public <K, V> Map<String, List<KafkaStream<K, V>>>
+    <K, V> Map<String, List<KafkaStream<K, V>>>
         createMessageStreams(Map<String, Integer> topicCountMap, Decoder<K> keyDecoder, Decoder<V> valueDecoder);
 
-    public Map<String, List<KafkaStream<byte[], byte[]>>> createMessageStreams(Map<String, Integer> topicCountMap);
+    Map<String, List<KafkaStream<byte[], byte[]>>> createMessageStreams(Map<String, Integer> topicCountMap);
 
     /**
      *  Create a list of MessageAndTopicStreams containing messages of type T.
@@ -53,19 +53,19 @@ public interface ConsumerConnector {
      *  @return a list of KafkaStream. Each stream supports an
      *          iterator over its MessageAndMetadata elements.
      */
-    public <K, V> List<KafkaStream<K, V>>
+    <K, V> List<KafkaStream<K, V>>
         createMessageStreamsByFilter(TopicFilter topicFilter, int numStreams, Decoder<K> keyDecoder, Decoder<V> valueDecoder);
 
-    public List<KafkaStream<byte[], byte[]>> createMessageStreamsByFilter(TopicFilter topicFilter, int numStreams);
+    List<KafkaStream<byte[], byte[]>> createMessageStreamsByFilter(TopicFilter topicFilter, int numStreams);
 
-    public List<KafkaStream<byte[], byte[]>> createMessageStreamsByFilter(TopicFilter topicFilter);
+    List<KafkaStream<byte[], byte[]>> createMessageStreamsByFilter(TopicFilter topicFilter);
 
     /**
      *  Commit the offsets of all broker partitions connected by this connector.
      */
-    public void commitOffsets();
+    void commitOffsets();
 
-    public void commitOffsets(boolean retryOnFailure);
+    void commitOffsets(boolean retryOnFailure);
 
     /**
      *  Commit offsets using the provided offsets map
@@ -73,16 +73,16 @@ public interface ConsumerConnector {
      *  @param offsetsToCommit a map containing the offset to commit for each partition.
      *  @param retryOnFailure enable retries on the offset commit if it fails.
      */
-    public void commitOffsets(Map<TopicAndPartition, OffsetAndMetadata> offsetsToCommit, boolean retryOnFailure);
+    void commitOffsets(Map<TopicAndPartition, OffsetAndMetadata> offsetsToCommit, boolean retryOnFailure);
 
     /**
      * Wire in a consumer rebalance listener to be executed when consumer rebalance occurs.
      * @param listener The consumer rebalance listener to wire in
      */
-    public void setConsumerRebalanceListener(ConsumerRebalanceListener listener);
+    void setConsumerRebalanceListener(ConsumerRebalanceListener listener);
 
     /**
      *  Shut down the connector
      */
-    public void shutdown();
+    void shutdown();
 }
