@@ -45,17 +45,17 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
             <li>validity: the valid time of the certificate in days.</li>
         </ol>
         <br>
-	Note: By default the property ssl.endpoint.identification.algorithim has been set to null. Unless configured otherwise hostname verification will not performed. In order to enable hostname verification the following property will need to be set:
+	Note: By default the property <code>ssl.endpoint.identification.algorithm</code> is not defined, so hostname verification is not performed. In order to enable hostname verification, set the following property:
 
-	<pre>	ssl.endpoint.identification.algorithim = HTTPS </pre>
+	<pre>	ssl.endpoint.identification.algorithm=HTTPS </pre>
 
-	Once enabled clients will verify the server's fully qualified domain name (FQDN) against of the following two fields:
+	Once enabled, clients will verify the server's fully qualified domain name (FQDN) against one of the following two fields:
 	<ol>
 		<li>Common Name (CN)*
 		<li>Subject Alternative Name (SAN)
 	</ol>
 	<br>
-	*The Common Name, although technically valid, is only used to keep backward compatibility. In order to more strictly adhere to RFC-2818 the servers FQDN should be placed in a SAN field. To accomplish this append the following argument -ext SAN=DNS:{FQDN} to the keytool command:
+	Both fileds are valid, RFC-2818 recommends the use of SAN however. SAN is also more flexible, allowing for mutliple DNS entries to be decalred. This leaves the CN available for more meaningful authorization purposes. To add a SAN field  append the following argument -ext SAN=DNS:{FQDN} to the keytool command:
 	<pre>
 	keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -ext SAN=DNS:{FQDN}
 	</pre>
