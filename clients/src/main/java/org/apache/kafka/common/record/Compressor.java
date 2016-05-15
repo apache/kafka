@@ -218,7 +218,29 @@ public class Compressor {
 
     private void putRecord(final long crc, final byte attributes, final long timestamp, final byte[] key, final byte[] value, final int valueOffset, final int valueSize) {
         maxTimestamp = Math.max(maxTimestamp, timestamp);
-        Record.write(this, crc, attributes, timestamp, key, value, valueOffset, valueSize);
+        // write crc
+        putInt((int) (crc & 0xffffffffL));
+        // write magic value
+        putByte(Record.CURRENT_MAGIC_VALUE);
+        // write attributes
+        putByte(attributes);
+        // write timestamp
+        putLong(timestamp);
+        // write the key
+        if (key == null) {
+            putInt(-1);
+        } else {
+            putInt(key.length);
+            put(key, 0, key.length);
+        }
+        // write the value
+        if (value == null) {
+            putInt(-1);
+        } else {
+            int size = valueSize >= 0 ? valueSize : (value.length - valueOffset);
+            putInt(size);
+            put(value, valueOffset, size);
+        }
     }
 
     public void recordWritten(int size) {
