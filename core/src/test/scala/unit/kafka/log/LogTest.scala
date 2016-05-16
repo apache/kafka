@@ -930,4 +930,32 @@ class LogTest extends JUnitSuite {
   def topicPartitionName(topic: String, partition: String): String =
     File.separator + topic + "-" + partition
 
+  @Test
+  def testDeleteOldSegmentsMethod() {
+    val set = TestUtils.singleMessageSet("test".getBytes)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, set.sizeInBytes * 5: java.lang.Integer)
+    logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
+    val config = LogConfig(logProps)
+    val log = new Log(logDir,
+      config,
+      recoveryPoint = 0L,
+      time.scheduler,
+      time)
+
+    // append some messages to create some segments
+    for (i <- 0 until 100)
+      log.append(set)
+
+    log.deleteOldSegments(_ => true)
+    assertEquals("The deleted segments should be gone.", 1, log.numberOfSegments)
+
+    // append some messages to create some segments
+    for (i <- 0 until 100)
+      log.append(set)
+
+    log.delete()
+    assertEquals("The number of segments should be 0", 0, log.numberOfSegments)
+    assertEquals("The number of deleted segments shoud be zero.", 0, log.deleteOldSegments(_ => true))
+  }
 }

@@ -179,7 +179,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     // converter/serializer changes causing keys to change. We need to absolutely ensure that the keys remain precisely
     // the same.
     public static final Schema CONNECTOR_CONFIGURATION_V0 = SchemaBuilder.struct()
-            .field("properties", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA))
+            .field("properties", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA).build())
             .build();
     public static final Schema TASK_CONFIGURATION_V0 = CONNECTOR_CONFIGURATION_V0;
     public static final Schema CONNECTOR_TASKS_COMMIT_V0 = SchemaBuilder.struct()

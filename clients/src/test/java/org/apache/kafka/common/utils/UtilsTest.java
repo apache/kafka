@@ -18,6 +18,8 @@ package org.apache.kafka.common.utils;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.io.Closeable;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.junit.Test;
@@ -26,6 +28,8 @@ import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class UtilsTest {
 
@@ -113,5 +117,81 @@ public class UtilsTest {
         assertEquals(1, Utils.min(1, 2, 3));
         assertEquals(1, Utils.min(2, 1, 3));
         assertEquals(1, Utils.min(2, 3, 1));
+    }
+
+    @Test
+    public void testCloseAll() {
+        TestCloseable[] closeablesWithoutException = TestCloseable.createCloseables(false, false, false);
+        try {
+            Utils.closeAll(closeablesWithoutException);
+            TestCloseable.checkClosed(closeablesWithoutException);
+        } catch (IOException e) {
+            fail("Unexpected exception: " + e);
+        }
+
+        TestCloseable[] closeablesWithException = TestCloseable.createCloseables(true, true, true);
+        try {
+            Utils.closeAll(closeablesWithException);
+            fail("Expected exception not thrown");
+        } catch (IOException e) {
+            TestCloseable.checkClosed(closeablesWithException);
+            TestCloseable.checkException(e, closeablesWithException);
+        }
+
+        TestCloseable[] singleExceptionCloseables = TestCloseable.createCloseables(false, true, false);
+        try {
+            Utils.closeAll(singleExceptionCloseables);
+            fail("Expected exception not thrown");
+        } catch (IOException e) {
+            TestCloseable.checkClosed(singleExceptionCloseables);
+            TestCloseable.checkException(e, singleExceptionCloseables[1]);
+        }
+
+        TestCloseable[] mixedCloseables = TestCloseable.createCloseables(false, true, false, true, true);
+        try {
+            Utils.closeAll(mixedCloseables);
+            fail("Expected exception not thrown");
+        } catch (IOException e) {
+            TestCloseable.checkClosed(mixedCloseables);
+            TestCloseable.checkException(e, mixedCloseables[1], mixedCloseables[3], mixedCloseables[4]);
+        }
+    }
+
+    private static class TestCloseable implements Closeable {
+        private final int id;
+        private final IOException closeException;
+        private boolean closed;
+
+        TestCloseable(int id, boolean exceptionOnClose) {
+            this.id = id;
+            this.closeException = exceptionOnClose ? new IOException("Test close exception " + id) : null;
+        }
+
+        @Override
+        public void close() throws IOException {
+            closed = true;
+            if (closeException != null)
+                throw closeException;
+        }
+
+        static TestCloseable[] createCloseables(boolean... exceptionOnClose) {
+            TestCloseable[] closeables = new TestCloseable[exceptionOnClose.length];
+            for (int i = 0; i < closeables.length; i++)
+                closeables[i] = new TestCloseable(i, exceptionOnClose[i]);
+            return closeables;
+        }
+
+        static void checkClosed(TestCloseable... closeables) {
+            for (TestCloseable closeable : closeables)
+                assertTrue("Close not invoked for " + closeable.id, closeable.closed);
+        }
+
+        static void checkException(IOException e, TestCloseable... closeablesWithException) {
+            assertEquals(closeablesWithException[0].closeException, e);
+            Throwable[] suppressed = e.getSuppressed();
+            assertEquals(closeablesWithException.length - 1, suppressed.length);
+            for (int i = 1; i < closeablesWithException.length; i++)
+                assertEquals(closeablesWithException[i].closeException, suppressed[i - 1]);
+        }
     }
 }

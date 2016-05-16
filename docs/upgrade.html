@@ -63,6 +63,16 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     message format version. Otherwise consumers before 0.10.0.0 might break. In particular, after the message format
     is set to 0.10.0, one should not change it back to an earlier format as it may break consumers on versions before 0.10.0.0.
 </p>
+<p>
+    <b>Note:</b> Due to the additional timestamp introduced in each message, producers sending small messages may see a
+    message throughput degradation because of the increased overhead.
+    Likewise, replication now transmits an additional 8 bytes per message.
+    If you're running close to the network capacity of your cluster, it's possible that you'll overwhelm the network cards
+    and see failures and performance issues due to the overload. When receiving compressed messages, 0.10.0
+    brokers avoid recompressing the messages, which in general reduces the latency and improves the throughput. In
+    certain cases, this may reduce the batching size on the producer, which could lead to worse throughput. If this
+    happens, users can tune linger.ms and batch.size of the producer for better throughput.
+</p>
 
 <h5><a id="upgrade_10_breaking" href="#upgrade_10_breaking">Potential breaking changes in 0.10.0.0</a></h5>
 <ul>
@@ -91,6 +101,7 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
 
 <ul>
     <li> Starting from Kafka 0.10.0.0, a new client library named <b>Kafka Streams</b> is available for stream processing on data stored in Kafka topics. This new client library only works with 0.10.x and upward versioned brokers due to message format changes mentioned above. For more information please read <a href="#streams_overview">this section</a>.</li>
+    <li> If compression with snappy or gzip is enabled, the new producer will use the compression scheme's default buffer size (this is already the case for LZ4) instead of 1 KB in order to improve the compression ratio. Note that the default buffer sizes for gzip, snappy and LZ4 are 0.5 KB, 2x32 KB and 2x64KB respectively. For the snappy case, a producer with 5000 partitions will require an additional 315 MB of JVM heap.</li>
     <li> The default value of the configuration parameter <code>receive.buffer.bytes</code> is now 64K for the new consumer.</li>
     <li> The new consumer now exposes the configuration parameter <code>exclude.internal.topics</code> to restrict internal topics (such as the consumer offsets topic) from accidentally being included in regular expression subscriptions. By default, it is enabled.</li>
     <li> The old Scala producer has been deprecated. Users should migrate their code to the Java producer included in the kafka-clients JAR as soon as possible. </li>

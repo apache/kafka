@@ -563,21 +563,23 @@ class Log(val dir: File,
    * @return The number of segments deleted
    */
   def deleteOldSegments(predicate: LogSegment => Boolean): Int = {
-    // find any segments that match the user-supplied predicate UNLESS it is the final segment
-    // and it is empty (since we would just end up re-creating it
-    val lastSegment = activeSegment
-    val deletable = logSegments.takeWhile(s => predicate(s) && (s.baseOffset != lastSegment.baseOffset || s.size > 0))
-    val numToDelete = deletable.size
-    if(numToDelete > 0) {
-      lock synchronized {
+    lock synchronized {
+      //find any segments that match the user-supplied predicate UNLESS it is the final segment
+      //and it is empty (since we would just end up re-creating it)
+      val lastEntry = segments.lastEntry
+      val deletable =
+        if (lastEntry == null) Seq.empty
+        else logSegments.takeWhile(s => predicate(s) && (s.baseOffset != lastEntry.getValue.baseOffset || s.size > 0))
+      val numToDelete = deletable.size
+      if (numToDelete > 0) {
         // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
-        if(segments.size == numToDelete)
+        if (segments.size == numToDelete)
           roll()
         // remove the segments for lookups
         deletable.foreach(deleteSegment(_))
       }
+      numToDelete
     }
-    numToDelete
   }
 
   /**
