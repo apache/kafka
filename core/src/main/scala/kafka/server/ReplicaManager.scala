@@ -110,8 +110,9 @@ class ReplicaManager(val config: KafkaConfig,
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   private val localBrokerId = config.brokerId
-  private val partitionFactory = (k: (String, Int)) => new Partition(k._1, k._2, time, this)
-  private val allPartitions = new Pool[(String, Int), Partition](Some(partitionFactory))
+  private val allPartitions = new Pool[(String, Int), Partition](valueFactory = Some { case (t, p) =>
+    new Partition(t, p, time, this)
+  })
   private val replicaStateChangeLock = new Object
   val replicaFetcherManager = new ReplicaFetcherManager(config, this, metrics, jTime, threadNamePrefix)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
