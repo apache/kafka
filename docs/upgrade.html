@@ -68,13 +68,18 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     message throughput degradation because of the increased overhead.
     Likewise, replication now transmits an additional 8 bytes per message.
     If you're running close to the network capacity of your cluster, it's possible that you'll overwhelm the network cards
-    and see failures and performance issues due to the overload. When receiving compressed messages, 0.10.0
+    and see failures and performance issues due to the overload.
+</p>
+    <b>Note:</b> If you have enabled compression on producers, you may notice reduced producer throughput and/or
+    lower compression rate on the broker in some cases. When receiving compressed messages, 0.10.0
     brokers avoid recompressing the messages, which in general reduces the latency and improves the throughput. In
-    certain cases, this may reduce the batching size on the producer, which could lead to worse throughput. If this
-    happens, users can tune linger.ms and batch.size of the producer for better throughput. Finally, the producer buffer
+    certain cases, however, this may reduce the batching size on the producer, which could lead to worse throughput. If this
+    happens, users can tune linger.ms and batch.size of the producer for better throughput. In addition, the producer buffer
     used for compressing messages with snappy is smaller than the one used by the broker, which may have a negative
     impact on the compression ratio for the messages on disk. We intend to make this configurable in a future Kafka
     release.
+<p>
+
 </p>
 
 <h5><a id="upgrade_10_breaking" href="#upgrade_10_breaking">Potential breaking changes in 0.10.0.0</a></h5>
