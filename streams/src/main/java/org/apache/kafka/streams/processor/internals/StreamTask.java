@@ -209,7 +209,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
     public boolean maybePunctuate() {
         long timestamp = partitionGroup.timestamp();
 
-        return punctuationQueue.mayPunctuate(timestamp, this);
+        // if the timestamp is not known yet, meaning there is not enough data accumulated
+        // to reason stream partition time, then skip.
+        if (timestamp == TimestampTracker.NOT_KNOWN)
+            return false;
+        else
+            return punctuationQueue.mayPunctuate(timestamp, this);
     }
 
     /**
