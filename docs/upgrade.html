@@ -65,7 +65,10 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
 </p>
 <p>
     <b>Note:</b> Due to the additional timestamp introduced in each message, producers sending small messages may see a
-    message throughput degradation because of the increased overhead. When receiving compressed messages, 0.10.0
+    message throughput degradation because of the increased overhead.
+    Likewise, replication now transmits an additional 8 bytes per message.
+    If you're running close to the network capacity of your cluster, it's possible that you'll overwhelm the network cards
+    and see failures and performance issues due to the overload. When receiving compressed messages, 0.10.0
     brokers avoid recompressing the messages, which in general reduces the latency and improves the throughput. In
     certain cases, this may reduce the batching size on the producer, which could lead to worse throughput. If this
     happens, users can tune linger.ms and batch.size of the producer for better throughput.
