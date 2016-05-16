@@ -110,7 +110,8 @@ class ReplicaManager(val config: KafkaConfig,
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   private val localBrokerId = config.brokerId
-  private val allPartitions = new Pool[(String, Int), Partition]
+  private val partitionFactory = (k: (String, Int)) => new Partition(k._1, k._2, time, this)
+  private val allPartitions = new Pool[(String, Int), Partition](Some(partitionFactory))
   private val replicaStateChangeLock = new Object
   val replicaFetcherManager = new ReplicaFetcherManager(config, this, metrics, jTime, threadNamePrefix)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
@@ -225,10 +226,8 @@ class ReplicaManager(val config: KafkaConfig,
           val removedPartition = allPartitions.remove((topic, partitionId))
           if (removedPartition != null) {
             removedPartition.delete() // this will delete the local log
-            val topicPartitionCount = allPartitions.keys.count {
-              case (t, p) => topic == t
-            }
-            if (topicPartitionCount == 0)
+            val topicHasPartitions = allPartitions.keys.exists { case (t, _) => topic == t }
+            if (!topicHasPartitions)
                 BrokerTopicStats.removeMetrics(topic)
           }
         }
@@ -272,14 +271,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def getOrCreatePartition(topic: String, partitionId: Int): Partition = {
-    var partition = allPartitions.get((topic, partitionId))
-    if (partition == null) {
-      val newPartition = new Partition(topic, partitionId, time, this)
-      partition = allPartitions.putIfNotExists((topic, partitionId), newPartition)
-      if (partition == null)
-          partition = newPartition
-    }
-    partition
+    allPartitions.getAndMaybePut((topic, partitionId))
   }
 
   def getPartition(topic: String, partitionId: Int): Option[Partition] = {

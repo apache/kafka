@@ -23,8 +23,6 @@ import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.TimeUnit
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.utils.Utils
-import kafka.cluster.Partition
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * A thread that answers kafka requests.
@@ -144,10 +142,8 @@ object BrokerTopicStats extends Logging {
   }
 
   def removeMetrics(topic: String) {
-    val metrics = stats.get(topic)
-    if (metrics != null) {
-      stats.remove(topic, metrics)
+    val metrics = stats.remove(topic)
+    if (metrics != null)
       metrics.close()
-    }
   }
 }
