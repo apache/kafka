@@ -672,6 +672,12 @@ project(':streams') {
     testCompile libs.junit
   }
 
+  configurations {
+    // manually exclude unnecessary zkclient transitive dependencies, remove this after KIP-4
+    compile.exclude module: 'jline'
+    compile.exclude module: 'netty'
+  }
+
   javadoc {
     include "**/org/apache/kafka/streams/**"
     exclude "**/internals/**"
