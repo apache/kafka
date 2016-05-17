@@ -663,19 +663,17 @@ project(':streams') {
     compile project(':connect:json')  // this dependency should be removed after we unify data API
     compile libs.slf4jlog4j
     compile libs.rocksDBJni
-    compile libs.zkclient // this dependency should be removed after KIP-4
+    // this dependency should be removed after KIP-4
+    compile (libs.zkclient) {
+      exclude module: 'jline'
+      exclude module: 'netty'
+    }
     compile libs.jacksonDatabind // this dependency should be removed after KIP-4
 
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
     testCompile libs.junit
-  }
-
-  configurations {
-    // manually exclude unnecessary zkclient transitive dependencies, remove this after KIP-4
-    compile.exclude module: 'jline'
-    compile.exclude module: 'netty'
   }
 
   javadoc {
