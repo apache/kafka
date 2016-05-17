@@ -420,7 +420,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *
      * @throws InterruptException If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
-     * @throws TimeoutException if the time taken for fetching metadata, serialization of (key,value), partitioning has surpassed <code>max.block.ms</code>.
+     * @throws TimeoutException if the time taken for fetching metadata or allocating memory for the record has surpassed <code>max.block.ms</code>.
      *
      */
     @Override
