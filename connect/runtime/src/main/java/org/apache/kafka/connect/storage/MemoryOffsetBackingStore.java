@@ -59,6 +59,16 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     public synchronized void stop() {
         if (executor != null) {
             executor.shutdown();
+            // Best effort wait for any get() and set() tasks (and caller's callbacks) to complete.
+            try {
+                executor.awaitTermination(30, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            if (!executor.shutdownNow().isEmpty()) {
+                throw new ConnectException("Failed to stop MemoryOffsetBackingStore. Exiting without cleanly " +
+                        "shutting down pending tasks and/or callbacks.");
+            }
             executor = null;
         }
     }
