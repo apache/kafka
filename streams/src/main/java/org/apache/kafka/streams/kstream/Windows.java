@@ -17,9 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The window specification interface that can be extended for windowing operation in joins and aggregations.
@@ -31,8 +29,6 @@ public abstract class Windows<W extends Window> {
     private static final int DEFAULT_NUM_SEGMENTS = 3;
 
     private static final long DEFAULT_MAINTAIN_DURATION = 24 * 60 * 60 * 1000L;   // one day
-
-    private static final AtomicInteger NAME_INDEX = new AtomicInteger(0);
 
     protected String name;
 
@@ -86,7 +82,7 @@ public abstract class Windows<W extends Window> {
     }
 
     /**
-     * Creates all windows that contain the provided timestamp.
+     * Creates all windows that contain the provided timestamp, indexed by non-negative window start timestamps.
      *
      * @param timestamp  the timestamp window should get created for
      * @return  a map of {@code windowStartTimestamp -> Window} entries
