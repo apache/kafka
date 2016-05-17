@@ -833,7 +833,10 @@ project(':connect:runtime') {
     compile libs.jettyServer
     compile libs.jettyServlet
     compile libs.jettyServlets
-    compile libs.reflections
+    compile(libs.reflections) {
+      // Exclude because of LGPL license
+      exclude group: 'com.google.code.findbugs', module: 'annotations'
+    }
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.easymock
