@@ -22,6 +22,9 @@ Follow instructions in http://kafka.apache.org/documentation.html#quickstart
 ### Building source jar ###
     ./gradlew srcJar
 
+### Building aggregated javadocs ###
+    ./gradlew aggregatedJavadoc
+
 ### Building javadocs and scaladocs ###
     ./gradlew javadoc
     ./gradlew javadocJar # builds a jar from the javadocs

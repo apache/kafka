@@ -911,7 +911,7 @@ project(':connect:file') {
   }
 }
 
-task javadocAll(type: Javadoc) {
+task aggregatedJavadoc(type: Javadoc) {
   def projectsWithJavadoc = subprojects.findAll { it.javadoc.enabled }
   source = projectsWithJavadoc.collect { it.sourceSets.main.allJava }
   classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
