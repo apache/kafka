@@ -32,6 +32,9 @@ class ConnectDistributedTest(Test):
     another, validating the total output is identical to the input.
     """
 
+    FILE_SOURCE_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSourceConnector'
+    FILE_SINK_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSinkConnector'
+
     INPUT_FILE = "/mnt/connect.input"
     OUTPUT_FILE = "/mnt/connect.output"
 

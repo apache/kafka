@@ -20,6 +20,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.ArrayDeque;
@@ -83,6 +84,10 @@ public class RecordQueue {
                                                                          rawRecord.serializedKeySize(),
                                                                          rawRecord.serializedValueSize(), key, value);
             long timestamp = timestampExtractor.extract(record);
+
+            // validate that timestamp must be non-negative
+            if (timestamp < 0)
+                throw new StreamsException("Extracted timestamp value is negative, which is not allowed.");
 
             StampedRecord stampedRecord = new StampedRecord(record, timestamp);
 

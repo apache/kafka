@@ -663,7 +663,11 @@ project(':streams') {
     compile project(':connect:json')  // this dependency should be removed after we unify data API
     compile libs.slf4jlog4j
     compile libs.rocksDBJni
-    compile libs.zkclient // this dependency should be removed after KIP-4
+    // this dependency should be removed after KIP-4
+    compile (libs.zkclient) {
+      exclude module: 'jline'
+      exclude module: 'netty'
+    }
     compile libs.jacksonDatabind // this dependency should be removed after KIP-4
 
     testCompile project(':clients').sourceSets.test.output
@@ -829,7 +833,10 @@ project(':connect:runtime') {
     compile libs.jettyServer
     compile libs.jettyServlet
     compile libs.jettyServlets
-    compile libs.reflections
+    compile(libs.reflections) {
+      // Exclude because of LGPL license
+      exclude group: 'com.google.code.findbugs', module: 'annotations'
+    }
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.easymock

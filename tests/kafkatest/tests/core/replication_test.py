@@ -65,15 +65,12 @@ def hard_bounce(test, broker_type):
         test.kafka.signal_node(prev_broker_node, sig=signal.SIGKILL)
 
         # Since this is a hard kill, we need to make sure the process is down and that
-        # zookeeper and the broker cluster have registered the loss of the leader/controller.
-        # Waiting for a new leader for the topic-partition/controller to be elected is a reasonable heuristic for this.
+        # zookeeper has registered the loss by expiring the broker's session timeout.
 
-        def role_reassigned():
-            current_elected_broker = broker_node(test, broker_type)
-            return current_elected_broker is not None and current_elected_broker != prev_broker_node
+        wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0 and not test.kafka.is_registered(prev_broker_node),
+                   timeout_sec=test.kafka.zk_session_timeout + 5,
+                   err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(prev_broker_node.account))
 
-        wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0, timeout_sec=5)
-        wait_until(role_reassigned, timeout_sec=10, backoff_sec=.5)
         test.kafka.start_node(prev_broker_node)
 
 failures = {
