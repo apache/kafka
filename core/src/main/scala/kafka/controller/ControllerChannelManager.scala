@@ -386,7 +386,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
           topicPartition -> partitionState
         }
 
-        val version = if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV0) 2: Short
+        val version = if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV1) 2: Short
                       else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1: Short
                       else 0: Short
 

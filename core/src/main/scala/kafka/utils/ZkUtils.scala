@@ -20,7 +20,7 @@ package kafka.utils
 import java.util.concurrent.CountDownLatch
 
 import kafka.admin._
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster._
 import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndPartition}
 import kafka.consumer.{ConsumerThreadId, TopicCount}
@@ -277,7 +277,7 @@ class ZkUtils(val zkClient: ZkClient,
     val brokerIdPath = BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
 
-    val version = if (apiVersion >= KAFKA_0_10_0_IV0) 3 else 2
+    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 3 else 2
     var jsonMap = Map("version" -> version,
                       "host" -> host,
                       "port" -> port,
