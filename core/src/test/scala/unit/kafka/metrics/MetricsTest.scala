@@ -15,10 +15,9 @@
  * limitations under the License.
  */
 
-package kafka.consumer
+package kafka.metrics
 
 import java.util.Properties
-
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.MetricPredicate
 import org.junit.{After, Test}
@@ -32,6 +31,7 @@ import kafka.utils.TestUtils._
 import scala.collection._
 import scala.collection.JavaConversions._
 import scala.util.matching.Regex
+import kafka.consumer.{ConsumerConfig, ZookeeperConsumerConnector}
 
 class MetricsTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
@@ -74,6 +74,17 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   def testMetricsReporterAfterDeletingTopic() {
     val topic = "test-topic-metric"
     AdminUtils.createTopic(zkUtils, topic, 1, 1)
+    AdminUtils.deleteTopic(zkUtils, topic)
+    TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
+    assertFalse("Topic metrics exists after deleteTopic", checkTopicMetricsExists(topic))
+  }
+
+  @Test
+  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic() {
+    val topic = "test-broker-topic-metric"
+    AdminUtils.createTopic(zkUtils, topic, 2, 1)
+    createAndShutdownStep("group0", "consumer0", "producer0")
+    assertNotNull(BrokerTopicStats.getBrokerTopicStats(topic))
     AdminUtils.deleteTopic(zkUtils, topic)
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
     assertFalse("Topic metrics exists after deleteTopic", checkTopicMetricsExists(topic))

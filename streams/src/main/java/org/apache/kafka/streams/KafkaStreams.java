@@ -91,6 +91,7 @@ public class KafkaStreams {
     private int state = CREATED;
 
     private final StreamThread[] threads;
+    private final Metrics metrics;
 
     // processId is expected to be unique across JVMs and to be used
     // in userData of the subscription request to allow assignor be aware
@@ -147,7 +148,7 @@ public class KafkaStreams {
             .timeWindow(config.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                 TimeUnit.MILLISECONDS);
 
-        Metrics metrics = new Metrics(metricConfig, reporters, time);
+        this.metrics = new Metrics(metricConfig, reporters, time);
 
         this.threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
@@ -169,8 +170,10 @@ public class KafkaStreams {
             state = RUNNING;
 
             log.info("Started Kafka Stream process");
-        } else {
+        } else if (state == RUNNING) {
             throw new IllegalStateException("This process was already started.");
+        } else {
+            throw new IllegalStateException("Cannot restart after closing.");
         }
     }
 
@@ -194,13 +197,14 @@ public class KafkaStreams {
                     Thread.interrupted();
                 }
             }
-
-            state = STOPPED;
-
-            log.info("Stopped Kafka Stream process");
-        } else {
-            throw new IllegalStateException("This process has not started yet.");
         }
+
+        if (state != STOPPED) {
+            metrics.close();
+            state = STOPPED;
+            log.info("Stopped Kafka Stream process");
+        }
+
     }
 
     /**

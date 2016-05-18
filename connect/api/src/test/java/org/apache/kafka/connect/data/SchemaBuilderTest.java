@@ -252,7 +252,14 @@ public class SchemaBuilderTest {
 
     @Test
     public void testMapBuilder() {
-        Schema schema = SchemaBuilder.map(Schema.INT8_SCHEMA, Schema.INT8_SCHEMA).build();
+        // SchemaBuilder should also pass the check
+        Schema schema = SchemaBuilder.map(Schema.INT8_SCHEMA, Schema.INT8_SCHEMA);
+        assertTypeAndDefault(schema, Schema.Type.MAP, false, null);
+        assertEquals(schema.keySchema(), Schema.INT8_SCHEMA);
+        assertEquals(schema.valueSchema(), Schema.INT8_SCHEMA);
+        assertNoMetadata(schema);
+
+        schema = SchemaBuilder.map(Schema.INT8_SCHEMA, Schema.INT8_SCHEMA).build();
         assertTypeAndDefault(schema, Schema.Type.MAP, false, null);
         assertEquals(schema.keySchema(), Schema.INT8_SCHEMA);
         assertEquals(schema.valueSchema(), Schema.INT8_SCHEMA);
