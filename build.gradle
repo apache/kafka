@@ -56,6 +56,15 @@ allprojects {
       }
     }
   }
+
+  if (JavaVersion.current().isJava8Compatible()) {
+    tasks.withType(Javadoc) {
+      // disable the crazy super-strict doclint tool in Java 8
+      // noinspection SpellCheckingInspection
+      options.addStringOption('Xdoclint:none', '-quiet')
+    }
+  }
+
 }
 
 ext {
@@ -110,14 +119,6 @@ subprojects {
     options.encoding = 'UTF-8'
     // Add unchecked once we drop support for Java 7 as @SuppressWarnings("unchecked") is too buggy in Java 7
     options.compilerArgs << "-Xlint:deprecation"
-  }
-
-  if (JavaVersion.current().isJava8Compatible()) {
-    tasks.withType(Javadoc) {
-        // disable the crazy super-strict doclint tool in Java 8
-        //noinspection SpellCheckingInspection
-        options.addStringOption('Xdoclint:none', '-quiet')
-      }
   }
 
   uploadArchives {
