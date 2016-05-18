@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.slf4j.Logger;
@@ -30,6 +31,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Implementation of OffsetBackingStore that doesn't actually persist any data. To ensure this
@@ -51,12 +53,12 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     }
 
     @Override
-    public synchronized void start() {
+    public void start() {
         executor = Executors.newSingleThreadExecutor();
     }
 
     @Override
-    public synchronized void stop() {
+    public void stop() {
         if (executor != null) {
             executor.shutdown();
             // Best effort wait for any get() and set() tasks (and caller's callbacks) to complete.
