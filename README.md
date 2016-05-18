@@ -22,15 +22,15 @@ Follow instructions in http://kafka.apache.org/documentation.html#quickstart
 ### Building source jar ###
     ./gradlew srcJar
 
-### Building aggregated javadocs ###
+### Building aggregated javadoc ###
     ./gradlew aggregatedJavadoc
 
-### Building javadocs and scaladocs ###
+### Building javadoc and scaladoc ###
     ./gradlew javadoc
-    ./gradlew javadocJar # builds a jar from the javadocs
+    ./gradlew javadocJar # builds a javadoc jar for each module
     ./gradlew scaladoc
-    ./gradlew scaladocJar # builds a jar from the scaladocs
-    ./gradlew docsJar # builds both javadoc and scaladoc jar
+    ./gradlew scaladocJar # builds a scaladoc jar for each module
+    ./gradlew docsJar # builds both (if applicable) javadoc and scaladoc jars for each module
 
 ### Running unit tests ###
     ./gradlew test
