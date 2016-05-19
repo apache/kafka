@@ -62,6 +62,10 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val consumerCount = 2
   override val serverCount = 3
   override val setClusterAcl = Some { () =>
+    AclCommand.main(topicBrokerReadAclArgs)
+    servers.foreach( s =>
+      TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*"))
+    )
     AclCommand.main(clusterAclArgs)
     servers.foreach(s =>
       TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, clusterResource)
@@ -133,7 +137,8 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
   // Some needed configuration for brokers, producers, and consumers
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
+  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3")
+  this.serverConfig.setProperty(KafkaConfig.OffsetCommitRequiredAcksProp, "1")
   this.serverConfig.setProperty(KafkaConfig.MinInSyncReplicasProp, "3")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
 
@@ -149,10 +154,6 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
         startSasl(Both, List(kafkaClientSaslMechanism), kafkaServerSaslMechanisms)
     }
     super.setUp
-    AclCommand.main(topicBrokerReadAclArgs)
-    servers.foreach( s =>
-      TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*"))
-    )
     // create the test topic with all the brokers as replicas
     TestUtils.createTopic(zkUtils, topic, 1, 3, this.servers)
   }
@@ -170,7 +171,22 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     * Tests the ability of producing and consuming with the appropriate ACLs set.
     */
   @Test
-  def testProduceConsume {
+  def testProduceConsumeViaAssign {
+    produceProlog()
+    consumers.head.assign(List(tp).asJava)
+    consumeRecords(this.consumers.head, numRecords)
+    debug("Finished consuming")
+  }
+
+  @Test
+  def testProduceConsumeViaSubscribe {
+    produceProlog()
+    consumers.head.subscribe(List(topic).asJava)
+    consumeRecords(this.consumers.head, numRecords)
+    debug("Finished consuming")
+  }
+
+  private def produceProlog() {
     AclCommand.main(produceAclArgs)
     AclCommand.main(consumeAclArgs)
     servers.foreach(s => {
@@ -182,9 +198,6 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     sendRecords(numRecords, tp)
     //Consume records
     debug("Finished sending and starting to consume records")
-    consumers.head.assign(List(tp).asJava)
-    consumeRecords(this.consumers.head, numRecords)
-    debug("Finished consuming")
   }
 
   /**
