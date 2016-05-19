@@ -88,6 +88,7 @@ libs += [
   joptSimple: "net.sf.jopt-simple:jopt-simple:$versions.jopt",
   lz4: "net.jpountz.lz4:lz4:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
+  metricsServlet: "com.yammer.metrics:metrics-servlet:$versions.metrics",
   powermock: "org.powermock:powermock-module-junit4:$versions.powermock",
   powermockEasymock: "org.powermock:powermock-api-easymock:$versions.powermock",
   reflections: "org.reflections:reflections:$versions.reflections",
