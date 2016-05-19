@@ -15,6 +15,7 @@ package org.apache.kafka.common.network;
 import java.nio.channels.SelectionKey;
 import java.util.Map;
 
+import org.apache.kafka.common.security.auth.DefaultPrincipalBuilder;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.KafkaException;
 
@@ -29,7 +30,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
-            principalBuilder = ChannelBuilders.createPrincipalBuilder(configs);
+            principalBuilder = new DefaultPrincipalBuilder();
         } catch (Exception e) {
             throw new KafkaException(e);
         }
