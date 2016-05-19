@@ -28,6 +28,7 @@ import java.io._
 import joptsimple._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.clients.CommonClientConfigs
 
 object ConsoleProducer {
 
@@ -125,6 +126,7 @@ object ConsoleProducer {
     props.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, config.securityProtocol)
 
     props
   }
@@ -245,7 +247,11 @@ object ConsoleProducer {
       .describedAs("config file")
       .ofType(classOf[String])
     val useOldProducerOpt = parser.accepts("old-producer", "Use the old producer implementation.")
-
+    val securityProtocolOpt = parser.accepts("security-protocol", "Protocol used to communicate with brokers. Valid values are: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL")
+      .withRequiredArg
+      .describedAs("security-protocol")
+      .ofType(classOf[String])
+      .defaultsTo("PLAINTEXT")
     val options = parser.parse(args : _*)
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "Read data from standard input and publish it to Kafka.")
@@ -282,6 +288,7 @@ object ConsoleProducer {
     val maxPartitionMemoryBytes = options.valueOf(maxPartitionMemoryBytesOpt)
     val metadataExpiryMs = options.valueOf(metadataExpiryMsOpt)
     val maxBlockMs = options.valueOf(maxBlockMsOpt)
+    val securityProtocol = options.valueOf(securityProtocolOpt)
   }
 
   class LineMessageReader extends MessageReader {
