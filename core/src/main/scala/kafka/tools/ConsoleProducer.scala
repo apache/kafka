@@ -126,7 +126,8 @@ object ConsoleProducer {
     props.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, config.securityProtocol)
+    if(props.getProperty(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG)==null)
+      props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, config.securityProtocol)
 
     props
   }
