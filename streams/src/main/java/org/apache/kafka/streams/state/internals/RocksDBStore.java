@@ -431,6 +431,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         wOptions.dispose();
         fOptions.dispose();
         db.close();
+        db = null;
     }
 
     private static class RocksDbIterator<K, V> implements KeyValueIterator<K, V> {
