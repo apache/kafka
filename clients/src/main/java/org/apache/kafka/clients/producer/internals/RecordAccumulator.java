@@ -136,10 +136,6 @@ public final class RecordAccumulator {
             }
         };
         metrics.addMetric(metricName, availableBytes);
-
-        Sensor bufferExhaustedRecordSensor = metrics.sensor("buffer-exhausted-records");
-        metricName = metrics.metricName("buffer-exhausted-rate", metricGrpName, "The average per-second number of record sends that are dropped due to buffer exhaustion");
-        bufferExhaustedRecordSensor.add(metricName, new Rate());
     }
 
     /**
