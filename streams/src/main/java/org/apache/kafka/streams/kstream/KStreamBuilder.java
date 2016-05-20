@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
 
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 
 /**
  * {@link KStreamBuilder} is a subclass of {@link TopologyBuilder} that provides the Kafka Streams DSL
@@ -55,6 +56,21 @@ public class KStreamBuilder extends TopologyBuilder {
         return stream(null, null, topics);
     }
 
+
+    /**
+     * Create a {@link KStream} instance from the specified Pattern.
+     * The default deserializers specified in the config are used.
+     * <p>
+     * If multiple topics are specified there are nor ordering guaranteed for records from different topics.
+     *
+     * @param topicPattern    the Pattern to match for topic names
+     * @return a {@link KStream} for topics matching the regex pattern.
+     */
+    public <K, V> KStream<K, V> stream(Pattern topicPattern) {
+        return stream(null, null, topicPattern);
+    }
+
+
     /**
      * Create a {@link KStream} instance from the specified topics.
      * <p>
@@ -71,6 +87,27 @@ public class KStreamBuilder extends TopologyBuilder {
         String name = newName(KStreamImpl.SOURCE_NAME);
 
         addSource(name, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topics);
+
+        return new KStreamImpl<>(this, name, Collections.singleton(name));
+    }
+
+
+    /**
+     * Create a {@link KStream} instance from the specified Pattern.
+     * <p>
+     * If multiple topics match the Pattern there are nor ordering guaranteed for records from different topics.
+     *
+     * @param keySerde  key serde used to read this source {@link KStream},
+     *                  if not specified the default serde defined in the configs will be used
+     * @param valSerde  value serde used to read this source {@link KStream},
+     *                  if not specified the default serde defined in the configs will be used
+     * @param topicPattern    the Pattern to match for topic names
+     * @return a {@link KStream} for the specified topics
+     */
+    public <K, V> KStream<K, V> stream(Serde<K> keySerde, Serde<V> valSerde, Pattern topicPattern) {
+        String name = newName(KStreamImpl.SOURCE_NAME);
+
+        addSource(name, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topicPattern);
 
         return new KStreamImpl<>(this, name, Collections.singleton(name));
     }

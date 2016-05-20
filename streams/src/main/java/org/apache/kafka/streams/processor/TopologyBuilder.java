@@ -39,6 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * A component that is used to build a {@link ProcessorTopology}. A topology contains an acyclic graph of sources, processors,
@@ -64,6 +65,12 @@ public class TopologyBuilder {
     private final HashMap<String, String[]> nodeToSourceTopics = new HashMap<>();
     private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
     private Map<Integer, Set<String>> nodeGroups = null;
+    private Pattern topicPattern;
+    private String patternNodeName;
+    private Deserializer regexKeyDeserializer;
+    private Deserializer regexValDeserializer;
+
+
 
     private static class StateStoreFactory {
         public final Set<String> users;
@@ -112,12 +119,14 @@ public class TopologyBuilder {
 
     private static class SourceNodeFactory extends NodeFactory {
         public final String[] topics;
+        public final Pattern pattern;
         private Deserializer keyDeserializer;
         private Deserializer valDeserializer;
 
-        private SourceNodeFactory(String name, String[] topics, Deserializer keyDeserializer, Deserializer valDeserializer) {
+        private SourceNodeFactory(String name, String[] topics, Pattern pattern, Deserializer keyDeserializer, Deserializer valDeserializer) {
             super(name);
-            this.topics = topics.clone();
+            this.topics = topics != null ? topics.clone() : null;
+            this.pattern = pattern;
             this.keyDeserializer = keyDeserializer;
             this.valDeserializer = valDeserializer;
         }
@@ -207,6 +216,23 @@ public class TopologyBuilder {
         return addSource(name, (Deserializer) null, (Deserializer) null, topics);
     }
 
+
+    /**
+     * Add a new source that consumes from topics matching the given pattern
+     * and forwards the records to child processor and/or sink nodes.
+     * The source will use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} and
+     * {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
+     *
+     * @param name the unique name of the source used to reference this node when
+     * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
+     * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public final TopologyBuilder addSource(String name, Pattern topicPattern) {
+        return addSource(name, (Deserializer) null, (Deserializer) null, topicPattern);
+    }
+
     /**
      * Add a new source that consumes the named topics and forwards the records to child processor and/or sink nodes.
      * The source will use the specified key and value deserializers.
@@ -227,6 +253,10 @@ public class TopologyBuilder {
         if (nodeFactories.containsKey(name))
             throw new TopologyBuilderException("Processor " + name + " is already added.");
 
+        if (topicPattern != null) {
+            throw new TopologyBuilderException("Subscription to topics, partitions and pattern are mutually exclusive");
+        }
+
         for (String topic : topics) {
             if (sourceTopicNames.contains(topic))
                 throw new TopologyBuilderException("Topic " + topic + " has already been registered by another source.");
@@ -234,8 +264,55 @@ public class TopologyBuilder {
             sourceTopicNames.add(topic);
         }
 
-        nodeFactories.put(name, new SourceNodeFactory(name, topics, keyDeserializer, valDeserializer));
+        nodeFactories.put(name, new SourceNodeFactory(name, topics, null, keyDeserializer, valDeserializer));
         nodeToSourceTopics.put(name, topics.clone());
+        nodeGrouper.add(name);
+
+        return this;
+    }
+
+    /**
+     * Add a new source that consumes from topics matching the given pattern
+     * and forwards the records to child processor and/or sink nodes.
+     * The source will use the specified key and value deserializers.
+     *
+     * @param name the unique name of the source used to reference this node when
+     * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
+     * @param keyDeserializer the {@link Deserializer key deserializer} used when consuming records; may be null if the source
+     * should use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
+     * @param valDeserializer the {@link Deserializer value deserializer} used when consuming records; may be null if the source
+     * should use the {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
+     * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume
+     * @return this builder instance so methods can be chained together; never null
+     * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
+     */
+
+    public final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, Pattern topicPattern) {
+
+        if (topicPattern == null) {
+            throw new TopologyBuilderException("Pattern can't be null");
+        }
+
+        if (nodeFactories.containsKey(name)) {
+            throw new TopologyBuilderException("Processor " + name + " is already added.");
+        }
+
+        if (!sourceTopicNames.isEmpty()) {
+            throw new TopologyBuilderException("Subscription to topics, partitions and pattern are mutually exclusive");
+        }
+
+        if (this.topicPattern != null) {
+            throw new TopologyBuilderException("Pattern source already defined");
+        }
+
+        this.topicPattern = topicPattern;
+        this.patternNodeName = name;
+        this.regexKeyDeserializer = keyDeserializer;
+        this.regexValDeserializer = valDeserializer;
+        nodeToSourceTopics.put(name, new String[]{});
+        nodeFactories.put(name, new SourceNodeFactory(name, null, topicPattern, keyDeserializer, valDeserializer));
         nodeGrouper.add(name);
 
         return this;
@@ -471,6 +548,21 @@ public class TopologyBuilder {
         this.internalTopicNames.add(topicName);
 
         return this;
+    }
+
+    /**
+     * Updates the source node containing the Pattern for subscribing
+     * to matching topics with the topic names discovered during partition
+     * assignment.
+     *
+     * @param topics  the topics subscribed to from matching the Pattern given
+     */
+    public synchronized void updatePatternNodeTopics(String[] topics) {
+        String[] patternTopics = nodeToSourceTopics.get(patternNodeName);
+        if (patternTopics.length == 0) {
+            nodeToSourceTopics.put(patternNodeName, topics.clone());
+            nodeFactories.put(patternNodeName, new SourceNodeFactory(patternNodeName, topics.clone(), topicPattern, regexKeyDeserializer, regexValDeserializer));
+        }
     }
 
     private void connectProcessorAndStateStore(String processorName, String stateStoreName) {
@@ -712,5 +804,9 @@ public class TopologyBuilder {
             }
         }
         return Collections.unmodifiableSet(topics);
+    }
+
+    public Pattern sourceTopicPattern() {
+        return this.topicPattern;
     }
 }

@@ -228,11 +228,15 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // 2. within each client, tasks are assigned to consumer clients in round-robin manner.
         Map<UUID, Set<String>> consumersByClient = new HashMap<>();
         Map<UUID, ClientState<TaskId>> states = new HashMap<>();
-
+        Set<String> regexSubscribedTopics = new HashSet<>();
         // decode subscription info
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             String consumerId = entry.getKey();
             Subscription subscription = entry.getValue();
+
+            if (streamThread.builder.sourceTopicPattern() != null) {
+                regexSubscribedTopics.addAll(subscription.topics());
+            }
 
             SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
 
@@ -253,6 +257,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             state.prevAssignedTasks.addAll(info.prevTasks);
             state.prevAssignedTasks.addAll(info.standbyTasks);
             state.capacity = state.capacity + 1d;
+        }
+
+        // Source nodes are build ahead of time, but it's at this
+        // point we see the topics subscribed to
+        if (streamThread.builder.sourceTopicPattern() != null) {
+            String[] regexTopics = regexSubscribedTopics.toArray(new String[]{});
+            streamThread.builder.updatePatternNodeTopics(regexTopics);
+            this.topicGroups = streamThread.builder.topicGroups(streamThread.applicationId);
         }
 
         // ensure the co-partitioning topics within the group have the same number of partitions,
