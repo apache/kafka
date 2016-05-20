@@ -77,16 +77,17 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private final String name;
     private final String parentDir;
 
-    private final Options options;
-    private final WriteOptions wOptions;
-    private final FlushOptions fOptions;
-
+    protected File dbDir;
+    private StateSerdes<K, V> serdes;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
 
-    private StateSerdes<K, V> serdes;
-    protected File dbDir;
     private RocksDB db;
+
+    // the following option objects will be created at constructor and disposed at close()
+    private Options options;
+    private WriteOptions wOptions;
+    private FlushOptions fOptions;
 
     private boolean loggingEnabled = false;
     private int cacheSize = DEFAULT_UNENCODED_CACHE_SIZE;
@@ -313,14 +314,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private void putAllInternal(List<KeyValue<byte[], byte[]>> entries) {
         WriteBatch batch = new WriteBatch();
 
-        for (KeyValue<byte[], byte[]> entry : entries) {
-            batch.put(entry.key, entry.value);
-        }
-
         try {
+            for (KeyValue<byte[], byte[]> entry : entries) {
+                batch.put(entry.key, entry.value);
+            }
+
             db.write(wOptions, batch);
         } catch (RocksDBException e) {
             throw new ProcessorStateException("Error while batch writing to store " + this.name, e);
+        } finally {
+            batch.dispose();
         }
     }
 
@@ -425,7 +428,15 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public void close() {
         flush();
+        options.dispose();
+        wOptions.dispose();
+        fOptions.dispose();
         db.close();
+
+        options = null;
+        wOptions = null;
+        fOptions = null;
+        db = null;
     }
 
     private static class RocksDbIterator<K, V> implements KeyValueIterator<K, V> {
