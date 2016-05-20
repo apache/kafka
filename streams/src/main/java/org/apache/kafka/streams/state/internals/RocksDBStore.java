@@ -77,16 +77,17 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private final String name;
     private final String parentDir;
 
-    private final Options options;
-    private final WriteOptions wOptions;
-    private final FlushOptions fOptions;
-
+    protected File dbDir;
+    private StateSerdes<K, V> serdes;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
 
-    private StateSerdes<K, V> serdes;
-    protected File dbDir;
     private RocksDB db;
+
+    // the following option objects will be created at constructor and disposed at close()
+    private Options options;
+    private WriteOptions wOptions;
+    private FlushOptions fOptions;
 
     private boolean loggingEnabled = false;
     private int cacheSize = DEFAULT_UNENCODED_CACHE_SIZE;
@@ -431,6 +432,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         wOptions.dispose();
         fOptions.dispose();
         db.close();
+
+        options = null;
+        wOptions = null;
+        fOptions = null;
         db = null;
     }
 
