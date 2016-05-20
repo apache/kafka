@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.Iterator;
 import java.util.Map;
 
 public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, T> {
@@ -90,37 +89,36 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                 timeTo = windowStartMs > timeTo ? windowStartMs : timeTo;
             }
 
-            WindowStoreIterator<T> iter = windowStore.fetch(key, timeFrom, timeTo);
+            try (WindowStoreIterator<T> iter = windowStore.fetch(key, timeFrom, timeTo)) {
 
-            // for each matching window, try to update the corresponding key and send to the downstream
-            while (iter.hasNext()) {
-                KeyValue<Long, T> entry = iter.next();
-                W window = matchedWindows.get(entry.key);
+                // for each matching window, try to update the corresponding key and send to the downstream
+                while (iter.hasNext()) {
+                    KeyValue<Long, T> entry = iter.next();
+                    W window = matchedWindows.get(entry.key);
 
-                if (window != null) {
+                    if (window != null) {
 
-                    T oldAgg = entry.value;
+                        T oldAgg = entry.value;
 
-                    if (oldAgg == null)
-                        oldAgg = initializer.apply();
+                        if (oldAgg == null)
+                            oldAgg = initializer.apply();
 
-                    // try to add the new new value (there will never be old value)
-                    T newAgg = aggregator.apply(key, value, oldAgg);
+                        // try to add the new new value (there will never be old value)
+                        T newAgg = aggregator.apply(key, value, oldAgg);
 
-                    // update the store with the new value
-                    windowStore.put(key, newAgg, window.start());
+                        // update the store with the new value
+                        windowStore.put(key, newAgg, window.start());
 
-                    // forward the aggregated change pair
-                    if (sendOldValues)
-                        context().forward(new Windowed<>(key, window), new Change<>(newAgg, oldAgg));
-                    else
-                        context().forward(new Windowed<>(key, window), new Change<>(newAgg, null));
+                        // forward the aggregated change pair
+                        if (sendOldValues)
+                            context().forward(new Windowed<>(key, window), new Change<>(newAgg, oldAgg));
+                        else
+                            context().forward(new Windowed<>(key, window), new Change<>(newAgg, null));
 
-                    matchedWindows.remove(entry.key);
+                        matchedWindows.remove(entry.key);
+                    }
                 }
             }
-
-            iter.close();
 
             // create the new window for the rest of unmatched window that do not exist yet
             for (long windowStartMs : matchedWindows.keySet()) {
@@ -167,10 +165,9 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             W window = (W) windowedKey.window();
 
             // this iterator should contain at most one element
-            Iterator<KeyValue<Long, T>> iter = windowStore.fetch(key, window.start(), window.start());
-
-            return iter.hasNext() ? iter.next().value : null;
+            try (WindowStoreIterator<T> iter = windowStore.fetch(key, window.start(), window.start())) {
+                return iter.hasNext() ? iter.next().value : null;
+            }
         }
-
     }
 }

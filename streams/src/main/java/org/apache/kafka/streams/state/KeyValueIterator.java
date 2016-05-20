@@ -27,6 +27,8 @@ import java.util.Iterator;
 /**
  * Iterator interface of {@link KeyValue}.
  *
+ * Users need to call its {@code close} method explicitly upon completeness to release resources.
+ *
  * @param <K> Type of keys
  * @param <V> Type of values
  */

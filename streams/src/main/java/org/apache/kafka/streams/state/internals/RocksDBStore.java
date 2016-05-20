@@ -313,14 +313,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private void putAllInternal(List<KeyValue<byte[], byte[]>> entries) {
         WriteBatch batch = new WriteBatch();
 
-        for (KeyValue<byte[], byte[]> entry : entries) {
-            batch.put(entry.key, entry.value);
-        }
-
         try {
+            for (KeyValue<byte[], byte[]> entry : entries) {
+                batch.put(entry.key, entry.value);
+            }
+
             db.write(wOptions, batch);
         } catch (RocksDBException e) {
             throw new ProcessorStateException("Error while batch writing to store " + this.name, e);
+        } finally {
+            batch.dispose();
         }
     }
 
@@ -425,6 +427,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public void close() {
         flush();
+        options.dispose();
+        wOptions.dispose();
+        fOptions.dispose();
         db.close();
     }
 
