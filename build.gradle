@@ -182,6 +182,11 @@ subprojects {
 
   task docsJar(dependsOn: javadocJar)
 
+  javadoc {
+    options.charSet = 'UTF-8'
+    options.encoding = 'UTF-8'
+  }
+
   task systemTestLibs(dependsOn: jar)
 
   artifacts {
