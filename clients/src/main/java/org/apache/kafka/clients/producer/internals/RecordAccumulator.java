@@ -74,7 +74,6 @@ public final class RecordAccumulator {
     private final Set<TopicPartition> muted;
     private int drainIndex;
 
-
     /**
      * Create a new record accumulator
      * 
@@ -104,11 +103,11 @@ public final class RecordAccumulator {
         this.compression = compression;
         this.lingerMs = lingerMs;
         this.retryBackoffMs = retryBackoffMs;
-        this.batches = new CopyOnWriteMap<TopicPartition, Deque<RecordBatch>>();
+        this.batches = new CopyOnWriteMap<>();
         String metricGrpName = "producer-metrics";
         this.free = new BufferPool(totalSize, batchSize, metrics, time, metricGrpName);
         this.incomplete = new IncompleteRecordBatches();
-        this.muted = new HashSet<TopicPartition>();
+        this.muted = new HashSet<>();
         this.time = time;
         registerMetrics(metrics, metricGrpName);
     }
@@ -225,7 +224,7 @@ public final class RecordAccumulator {
      * due to metadata being unavailable
      */
     public List<RecordBatch> abortExpiredBatches(int requestTimeout, long now) {
-        List<RecordBatch> expiredBatches = new ArrayList<RecordBatch>();
+        List<RecordBatch> expiredBatches = new ArrayList<>();
         int count = 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
             Deque<RecordBatch> dq = entry.getValue();
@@ -256,7 +255,7 @@ public final class RecordAccumulator {
                 }
             }
         }
-        if (expiredBatches.size() > 0)
+        if (!expiredBatches.isEmpty())
             log.trace("Expired {} batches in accumulator", count);
 
         return expiredBatches;
@@ -298,7 +297,7 @@ public final class RecordAccumulator {
      * </ol>
      */
     public ReadyCheckResult ready(Cluster cluster, long nowMs) {
-        Set<Node> readyNodes = new HashSet<Node>();
+        Set<Node> readyNodes = new HashSet<>();
         long nextReadyCheckDelayMs = Long.MAX_VALUE;
         boolean unknownLeadersExist = false;
 
@@ -344,7 +343,7 @@ public final class RecordAccumulator {
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
             Deque<RecordBatch> deque = entry.getValue();
             synchronized (deque) {
-                if (deque.size() > 0)
+                if (!deque.isEmpty())
                     return true;
             }
         }
@@ -368,11 +367,11 @@ public final class RecordAccumulator {
         if (nodes.isEmpty())
             return Collections.emptyMap();
 
-        Map<Integer, List<RecordBatch>> batches = new HashMap<Integer, List<RecordBatch>>();
+        Map<Integer, List<RecordBatch>> batches = new HashMap<>();
         for (Node node : nodes) {
             int size = 0;
             List<PartitionInfo> parts = cluster.partitionsForNode(node.id());
-            List<RecordBatch> ready = new ArrayList<RecordBatch>();
+            List<RecordBatch> ready = new ArrayList<>();
             /* to make starvation less likely this loop doesn't start at 0 */
             int start = drainIndex = drainIndex % parts.size();
             do {
@@ -585,7 +584,7 @@ public final class RecordAccumulator {
         
         public Iterable<RecordBatch> all() {
             synchronized (incomplete) {
-                return new ArrayList<RecordBatch>(this.incomplete);
+                return new ArrayList<>(this.incomplete);
             }
         }
     }
