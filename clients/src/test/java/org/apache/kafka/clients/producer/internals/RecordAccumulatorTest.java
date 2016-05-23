@@ -22,6 +22,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -75,14 +76,27 @@ public class RecordAccumulatorTest {
     @Test
     public void testFull() throws Exception {
         long now = time.milliseconds();
-        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, 10L, 100L, metrics, time);
-        int appends = 1024 / msgSize;
+        int batchSize = 1024;
+        RecordAccumulator accum = new RecordAccumulator(batchSize, 10 * batchSize, CompressionType.NONE, 10L, 100L, metrics, time);
+        int appends = batchSize / msgSize;
         for (int i = 0; i < appends; i++) {
+            // append to the first batch
             accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
+            Deque<RecordBatch> partitionBatches = accum.batches().get(tp1);
+            assertEquals(1, partitionBatches.size());
+            assertTrue(partitionBatches.peekFirst().records.isWritable());
             assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).readyNodes.size());
         }
+
+        // this append doesn't fit in the first batch, so a new batch is created and the first batch is closed
         accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
+        Deque<RecordBatch> partitionBatches = accum.batches().get(tp1);
+        assertEquals(2, partitionBatches.size());
+        Iterator<RecordBatch> partitionBatchesIterator = partitionBatches.iterator();
+        assertFalse(partitionBatchesIterator.next().records.isWritable());
+        assertTrue(partitionBatchesIterator.next().records.isWritable());
         assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).readyNodes);
+
         List<RecordBatch> batches = accum.drain(cluster, Collections.singleton(node1), Integer.MAX_VALUE, 0).get(node1.id());
         assertEquals(1, batches.size());
         RecordBatch batch = batches.get(0);

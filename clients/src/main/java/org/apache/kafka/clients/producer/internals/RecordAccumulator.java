@@ -171,12 +171,9 @@ public final class RecordAccumulator {
             synchronized (dq) {
                 if (closed)
                     throw new IllegalStateException("Cannot send after the producer is closed.");
-                RecordBatch last = dq.peekLast();
-                if (last != null) {
-                    FutureRecordMetadata future = last.tryAppend(timestamp, key, value, callback, time.milliseconds());
-                    if (future != null)
-                        return new RecordAppendResult(future, dq.size() > 1 || last.records.isFull(), false);
-                }
+                RecordAppendResult appendResult = tryAppend(timestamp, key, value, callback, dq);
+                if (appendResult != null)
+                    return appendResult;
             }
 
             // we don't have an in-progress record batch try to allocate a new batch
@@ -187,14 +184,12 @@ public final class RecordAccumulator {
                 // Need to check if producer is closed again after grabbing the dequeue lock.
                 if (closed)
                     throw new IllegalStateException("Cannot send after the producer is closed.");
-                RecordBatch last = dq.peekLast();
-                if (last != null) {
-                    FutureRecordMetadata future = last.tryAppend(timestamp, key, value, callback, time.milliseconds());
-                    if (future != null) {
-                        // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
-                        free.deallocate(buffer);
-                        return new RecordAppendResult(future, dq.size() > 1 || last.records.isFull(), false);
-                    }
+
+                RecordAppendResult appendResult = tryAppend(timestamp, key, value, callback, dq);
+                if (appendResult != null) {
+                    // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
+                    free.deallocate(buffer);
+                    return appendResult;
                 }
                 MemoryRecords records = MemoryRecords.emptyRecords(buffer, compression, this.batchSize);
                 RecordBatch batch = new RecordBatch(tp, records, time.milliseconds());
@@ -207,6 +202,22 @@ public final class RecordAccumulator {
         } finally {
             appendsInProgress.decrementAndGet();
         }
+    }
+
+    /**
+     * If `RecordBatch.tryAppend` fails (i.e. the record batch is full), close its memory records to release temporary
+     * resources (like compression streams buffers).
+     */
+    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, Deque<RecordBatch> deque) {
+        RecordBatch last = deque.peekLast();
+        if (last != null) {
+            FutureRecordMetadata future = last.tryAppend(timestamp, key, value, callback, time.milliseconds());
+            if (future == null)
+                last.records.close();
+            else
+                return new RecordAppendResult(future, deque.size() > 1 || last.records.isFull(), false);
+        }
+        return null;
     }
 
     /**
@@ -435,6 +446,11 @@ public final class RecordAccumulator {
      */
     boolean flushInProgress() {
         return flushesInProgress.get() > 0;
+    }
+
+    /* Visible for testing */
+    Map<TopicPartition, Deque<RecordBatch>> batches() {
+        return Collections.unmodifiableMap(batches);
     }
     
     /**
