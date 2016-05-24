@@ -31,12 +31,6 @@ import java.util.Map;
 @InterfaceStability.Unstable
 public class WorkerConfig extends AbstractConfig {
 
-    public static final String CLUSTER_CONFIG = "cluster";
-    private static final String CLUSTER_CONFIG_DOC =
-            "ID for this cluster, which is used to provide a namespace so multiple Kafka Connect clusters "
-                    + "or instances may co-exist while sharing a single Kafka cluster.";
-    public static final String CLUSTER_DEFAULT = "connect";
-
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
     public static final String BOOTSTRAP_SERVERS_DOC
             = "A list of host/port pairs to use for establishing the initial connection to the Kafka "
@@ -122,7 +116,6 @@ public class WorkerConfig extends AbstractConfig {
      */
     protected static ConfigDef baseConfigDef() {
         return new ConfigDef()
-                .define(CLUSTER_CONFIG, Type.STRING, CLUSTER_DEFAULT, Importance.HIGH, CLUSTER_CONFIG_DOC)
                 .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
                 .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,

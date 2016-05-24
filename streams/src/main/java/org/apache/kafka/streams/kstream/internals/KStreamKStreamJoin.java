@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -25,8 +24,8 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.Iterator;
 
 class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
@@ -76,15 +75,15 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             long timeFrom = Math.max(0L, context().timestamp() - joinBeforeMs);
             long timeTo = Math.max(0L, context().timestamp() + joinAfterMs);
 
-            Iterator<KeyValue<Long, V2>> iter = otherWindow.fetch(key, timeFrom, timeTo);
-            while (iter.hasNext()) {
-                needOuterJoin = false;
-                context().forward(key, joiner.apply(value, iter.next().value));
-            }
+            try (WindowStoreIterator<V2> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
+                while (iter.hasNext()) {
+                    needOuterJoin = false;
+                    context().forward(key, joiner.apply(value, iter.next().value));
+                }
 
-            if (needOuterJoin)
-                context().forward(key, joiner.apply(value, null));
+                if (needOuterJoin)
+                    context().forward(key, joiner.apply(value, null));
+            }
         }
     }
-
 }

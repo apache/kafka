@@ -362,9 +362,11 @@ public class KeyValueStoreTestDriver<K, V> {
      */
     public int sizeOf(KeyValueStore<K, V> store) {
         int size = 0;
-        for (KeyValueIterator<K, V> iterator = store.all(); iterator.hasNext();) {
-            iterator.next();
-            ++size;
+        try (KeyValueIterator<K, V> iterator = store.all()) {
+            while (iterator.hasNext()) {
+                iterator.next();
+                ++size;
+            }
         }
         return size;
     }
