@@ -213,6 +213,11 @@ public class MemoryRecords implements Records {
         return builder.toString();
     }
 
+    /** Visible for testing */
+    public boolean isWritable() {
+        return writable;
+    }
+
     public static class RecordsIterator extends AbstractIterator<LogEntry> {
         private final ByteBuffer buffer;
         private final DataInputStream stream;
