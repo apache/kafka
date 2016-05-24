@@ -134,10 +134,6 @@ public class FanoutIntegrationTest {
         producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         IntegrationTestUtils.produceValuesSynchronously(INPUT_TOPIC_A, inputValues, producerConfig);
 
-        // Give the stream processing application some time to do its work.
-        Thread.sleep(10000);
-        streams.close();
-
         //
         // Step 3: Verify the application's output data.
         //
@@ -149,7 +145,9 @@ public class FanoutIntegrationTest {
         consumerConfigB.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerConfigB.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerConfigB.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        List<String> actualValuesForB = IntegrationTestUtils.readValues(OUTPUT_TOPIC_B, consumerConfigB, inputValues.size());
+        List<String> actualValuesForB =
+            IntegrationTestUtils.waitUntilValuesMatch(consumerConfigB, OUTPUT_TOPIC_B, inputValues.size(),
+                inputValues.size(), IntegrationTestUtils.DEFAULT_TIMEOUT);
         assertThat(actualValuesForB, equalTo(expectedValuesForB));
 
         // Verify output topic C
@@ -159,7 +157,11 @@ public class FanoutIntegrationTest {
         consumerConfigC.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerConfigC.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerConfigC.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        List<String> actualValuesForC = IntegrationTestUtils.readValues(OUTPUT_TOPIC_C, consumerConfigC, inputValues.size());
+
+        List<String> actualValuesForC =
+            IntegrationTestUtils.waitUntilValuesMatch(consumerConfigC, OUTPUT_TOPIC_C, inputValues.size(),
+                inputValues.size(), IntegrationTestUtils.DEFAULT_TIMEOUT);
+        streams.close();
         assertThat(actualValuesForC, equalTo(expectedValuesForC));
     }
 

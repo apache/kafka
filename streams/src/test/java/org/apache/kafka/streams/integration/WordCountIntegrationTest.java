@@ -134,15 +134,16 @@ public class WordCountIntegrationTest {
         //
         // Step 3: Verify the application's output data.
         //
-        Thread.sleep(10000);
-        streams.close();
         Properties consumerConfig = new Properties();
         consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "wordcount-integration-test-standard-consumer");
         consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
-        List<KeyValue<String, Long>> actualWordCounts = IntegrationTestUtils.readKeyValues(DEFAULT_OUTPUT_TOPIC, consumerConfig);
+        List<KeyValue<String, Long>> actualWordCounts =
+            IntegrationTestUtils.waitUntilKeyValuesMatch(consumerConfig, DEFAULT_OUTPUT_TOPIC,
+                expectedWordCounts.size(), IntegrationTestUtils.DEFAULT_TIMEOUT);
+        streams.close();
         assertThat(actualWordCounts, equalTo(expectedWordCounts));
     }
 

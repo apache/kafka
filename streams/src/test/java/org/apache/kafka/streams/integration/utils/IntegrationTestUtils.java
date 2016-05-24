@@ -44,7 +44,8 @@ import java.util.concurrent.Future;
  */
 public class IntegrationTestUtils {
 
-    private static final int UNLIMITED_MESSAGES = -1;
+    public static final int UNLIMITED_MESSAGES = -1;
+    public static final long DEFAULT_TIMEOUT = 30 * 1000L;
 
     /**
      * Returns up to `maxMessages` message-values from the topic.
@@ -154,4 +155,51 @@ public class IntegrationTestUtils {
         produceKeyValuesSynchronously(topic, keyedRecords, producerConfig);
     }
 
+    /**
+     * Wait until enough data (key-value records) has been consumed
+     * @param consumerConfig Kafka Consumer configuration
+     * @param topic          Topic to consume grom
+     * @param expectedNumRecords Number of expected records
+     * @param waitTime       Upper bound in waiting time
+     * @return All the records consumed, or null if no records are consumed
+     * @throws InterruptedException
+     */
+    public static List waitUntilKeyValuesMatch(Properties consumerConfig, String topic,
+                                               int expectedNumRecords,
+                                               long waitTime) throws InterruptedException {
+        List readData;
+        long startTime = System.currentTimeMillis();
+        while (true) {
+            readData = readKeyValues(topic, consumerConfig);
+            if (readData.size() == expectedNumRecords)
+                return readData;
+            if (System.currentTimeMillis() > startTime + waitTime)
+                return null;
+            Thread.sleep(Math.min(waitTime, 100L));
+        }
+    }
+
+    /**
+     * Wait until enough data (value records) has been consumed
+     * @param consumerConfig Kafka Consumer configuration
+     * @param topic          Topic to consume grom
+     * @param expectedNumRecords Number of expected records
+     * @param waitTime       Upper bound in waiting time
+     * @return All the records consumed, or null if no records are consumed
+     * @throws InterruptedException
+     */
+    public static List waitUntilValuesMatch(Properties consumerConfig, String topic,
+                                            int expectedNumRecords, int maxMessages,
+                                            long waitTime) throws InterruptedException {
+        List readData;
+        long startTime = System.currentTimeMillis();
+        while (true) {
+            readData = readValues(topic, consumerConfig, maxMessages);
+            if (readData.size() == expectedNumRecords)
+                return readData;
+            if (System.currentTimeMillis() > startTime + waitTime)
+                return null;
+            Thread.sleep(Math.min(waitTime, 100L));
+        }
+    }
 }
