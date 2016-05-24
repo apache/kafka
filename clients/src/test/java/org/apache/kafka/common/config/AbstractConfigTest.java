@@ -16,10 +16,13 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.metrics.FakeMetricsReporter;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -96,6 +99,121 @@ public class AbstractConfigTest {
         }
     }
 
+    @Test
+    public void testClassConfigs() {
+        class RestrictedClassLoader extends ClassLoader {
+            public RestrictedClassLoader() {
+                super(null);
+            }
+            @Override
+            protected Class<?> findClass(String name) throws ClassNotFoundException {
+                if (name.equals(ClassTestConfig.DEFAULT_CLASS.getName()) || name.equals(ClassTestConfig.RESTRICTED_CLASS.getName()))
+                    return null;
+                else
+                    return ClassTestConfig.class.getClassLoader().loadClass(name);
+            }
+        }
+
+        ClassTestConfig testConfig;
+        ClassLoader restrictedClassLoader = new RestrictedClassLoader();
+        ClassLoader defaultClassLoader = AbstractConfig.class.getClassLoader();
+
+        // Test default classloading where all classes are visible to thread context classloader
+        Thread.currentThread().setContextClassLoader(defaultClassLoader);
+        testConfig = new ClassTestConfig();
+        testConfig.checkInstances(ClassTestConfig.DEFAULT_CLASS, ClassTestConfig.DEFAULT_CLASS);
+
+        // Test default classloading where default classes are not visible to thread context classloader
+        // Static classloading is used for default classes, so instance creation should succeed.
+        Thread.currentThread().setContextClassLoader(restrictedClassLoader);
+        testConfig = new ClassTestConfig();
+        testConfig.checkInstances(ClassTestConfig.DEFAULT_CLASS, ClassTestConfig.DEFAULT_CLASS);
+
+        // Test class overrides with names or classes where all classes are visible to thread context classloader
+        Thread.currentThread().setContextClassLoader(defaultClassLoader);
+        ClassTestConfig.testOverrides();
+
+        // Test class overrides with names or classes where all classes are visible to Kafka classloader, context classloader is null
+        Thread.currentThread().setContextClassLoader(null);
+        ClassTestConfig.testOverrides();
+
+        // Test class overrides where some classes are not visible to thread context classloader
+        Thread.currentThread().setContextClassLoader(restrictedClassLoader);
+        // Properties specified as classes should succeed
+        testConfig = new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS, Arrays.asList(ClassTestConfig.RESTRICTED_CLASS));
+        testConfig.checkInstances(ClassTestConfig.RESTRICTED_CLASS, ClassTestConfig.RESTRICTED_CLASS);
+        testConfig = new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS, Arrays.asList(ClassTestConfig.VISIBLE_CLASS, ClassTestConfig.RESTRICTED_CLASS));
+        testConfig.checkInstances(ClassTestConfig.RESTRICTED_CLASS, ClassTestConfig.VISIBLE_CLASS, ClassTestConfig.RESTRICTED_CLASS);
+        // Properties specified as classNames should fail to load classes
+        try {
+            new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS.getName(), null);
+            fail("Config created with class property that cannot be loaded");
+        } catch (ConfigException e) {
+            // Expected Exception
+        }
+        try {
+            testConfig = new ClassTestConfig(null, Arrays.asList(ClassTestConfig.VISIBLE_CLASS.getName(), ClassTestConfig.RESTRICTED_CLASS.getName()));
+            testConfig.getConfiguredInstances("list.prop", MetricsReporter.class);
+            fail("Should have failed to load class");
+        } catch (KafkaException e) {
+            // Expected Exception
+        }
+        try {
+            testConfig = new ClassTestConfig(null, ClassTestConfig.VISIBLE_CLASS.getName() + "," + ClassTestConfig.RESTRICTED_CLASS.getName());
+            testConfig.getConfiguredInstances("list.prop", MetricsReporter.class);
+            fail("Should have failed to load class");
+        } catch (KafkaException e) {
+            // Expected Exception
+        }
+    }
+
+    private static class ClassTestConfig extends AbstractConfig {
+        static final Class<?> DEFAULT_CLASS = FakeMetricsReporter.class;
+        static final Class<?> VISIBLE_CLASS = JmxReporter.class;
+        static final Class<?> RESTRICTED_CLASS = ConfiguredFakeMetricsReporter.class;
+
+        private static final ConfigDef CONFIG;
+        static {
+            CONFIG = new ConfigDef().define("class.prop", Type.CLASS, DEFAULT_CLASS, Importance.HIGH, "docs")
+                                    .define("list.prop", Type.LIST, Arrays.asList(DEFAULT_CLASS), Importance.HIGH, "docs");
+        }
+
+        public ClassTestConfig() {
+            super(CONFIG, new Properties());
+        }
+
+        public ClassTestConfig(Object classPropOverride, Object listPropOverride) {
+            super(CONFIG, overrideProps(classPropOverride, listPropOverride));
+        }
+
+        void checkInstances(Class<?> expectedClassPropClass, Class<?>... expectedListPropClasses) {
+            assertEquals(expectedClassPropClass, getConfiguredInstance("class.prop", MetricsReporter.class).getClass());
+            List<?> list = getConfiguredInstances("list.prop", MetricsReporter.class);
+            for (int i = 0; i < list.size(); i++)
+                assertEquals(expectedListPropClasses[i], list.get(i).getClass());
+        }
+
+        static void testOverrides() {
+            ClassTestConfig testConfig1 = new ClassTestConfig(RESTRICTED_CLASS, Arrays.asList(VISIBLE_CLASS, RESTRICTED_CLASS));
+            testConfig1.checkInstances(RESTRICTED_CLASS, VISIBLE_CLASS, RESTRICTED_CLASS);
+
+            ClassTestConfig testConfig2 = new ClassTestConfig(RESTRICTED_CLASS.getName(), Arrays.asList(VISIBLE_CLASS.getName(), RESTRICTED_CLASS.getName()));
+            testConfig2.checkInstances(RESTRICTED_CLASS, VISIBLE_CLASS, RESTRICTED_CLASS);
+
+            ClassTestConfig testConfig3 = new ClassTestConfig(RESTRICTED_CLASS.getName(), VISIBLE_CLASS.getName() + "," + RESTRICTED_CLASS.getName());
+            testConfig3.checkInstances(RESTRICTED_CLASS, VISIBLE_CLASS, RESTRICTED_CLASS);
+        }
+
+        private static Map<String, Object> overrideProps(Object classProp, Object listProp) {
+            Map<String, Object> props = new HashMap<>();
+            if (classProp != null)
+                props.put("class.prop", classProp);
+            if (listProp != null)
+                props.put("list.prop", listProp);
+            return props;
+        }
+    }
+
     private static class TestConfig extends AbstractConfig {
 
         private static final ConfigDef CONFIG;
@@ -142,5 +260,4 @@ public class AbstractConfigTest {
             super(CONFIG, props);
         }
     }
-
 }
