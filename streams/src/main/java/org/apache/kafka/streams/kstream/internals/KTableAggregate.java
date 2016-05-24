@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -28,15 +27,13 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T> {
 
     private final String storeName;
-    private final Initializer<T> initializer;
     private final Aggregator<K, V, T> add;
     private final Aggregator<K, V, T> remove;
 
     private boolean sendOldValues = false;
 
-    public KTableAggregate(String storeName, Initializer<T> initializer, Aggregator<K, V, T> add, Aggregator<K, V, T> remove) {
+    public KTableAggregate(String storeName, Aggregator<K, V, T> add, Aggregator<K, V, T> remove) {
         this.storeName = storeName;
-        this.initializer = initializer;
         this.add = add;
         this.remove = remove;
     }
@@ -75,7 +72,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             T oldAgg = store.get(key);
 
             if (oldAgg == null)
-                oldAgg = initializer.apply();
+                oldAgg = add.init();
 
             T newAgg = oldAgg;
 

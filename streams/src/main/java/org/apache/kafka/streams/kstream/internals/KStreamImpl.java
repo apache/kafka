@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -39,6 +38,7 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.aggregates.CountLong;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -545,15 +545,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
-                                                                       Aggregator<K, V, T> aggregator,
+    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Aggregator<K, V, T> aggregator,
                                                                        Windows<W> windows,
                                                                        Serde<K> keySerde,
                                                                        Serde<T> aggValueSerde) {
 
         String aggregateName = topology.newName(AGGREGATE_NAME);
 
-        KStreamAggProcessorSupplier<K, Windowed<K>, V, T> aggregateSupplier = new KStreamWindowAggregate<>(windows, windows.name(), initializer, aggregator);
+        KStreamAggProcessorSupplier<K, Windowed<K>, V, T> aggregateSupplier = new KStreamWindowAggregate<>(windows, windows.name(), aggregator);
 
         StateStoreSupplier aggregateStore = Stores.create(windows.name())
                 .withKeys(keySerde)
@@ -571,23 +570,21 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
-                                                                       Aggregator<K, V, T> aggregator,
+    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Aggregator<K, V, T> aggregator,
                                                                        Windows<W> windows) {
 
-        return aggregateByKey(initializer, aggregator, windows, null, null);
+        return aggregateByKey(aggregator, windows, null, null);
     }
 
     @Override
-    public <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
-                                           Aggregator<K, V, T> aggregator,
+    public <T> KTable<K, T> aggregateByKey(Aggregator<K, V, T> aggregator,
                                            Serde<K> keySerde,
                                            Serde<T> aggValueSerde,
                                            String name) {
 
         String aggregateName = topology.newName(AGGREGATE_NAME);
 
-        KStreamAggProcessorSupplier<K, K, V, T> aggregateSupplier = new KStreamAggregate<>(name, initializer, aggregator);
+        KStreamAggProcessorSupplier<K, K, V, T> aggregateSupplier = new KStreamAggregate<>(name, aggregator);
 
         StateStoreSupplier aggregateStore = Stores.create(name)
                 .withKeys(keySerde)
@@ -604,29 +601,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
-                                           Aggregator<K, V, T> aggregator,
+    public <T> KTable<K, T> aggregateByKey(Aggregator<K, V, T> aggregator,
                                            String name) {
 
-        return aggregateByKey(initializer, aggregator, null, null, name);
+        return aggregateByKey(aggregator, null, null, name);
     }
 
     @Override
     public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
                                                                    Serde<K> keySerde) {
-        return this.aggregateByKey(
-                new Initializer<Long>() {
-                    @Override
-                    public Long apply() {
-                        return 0L;
-                    }
-                },
-                new Aggregator<K, V, Long>() {
-                    @Override
-                    public Long apply(K aggKey, V value, Long aggregate) {
-                        return aggregate + 1L;
-                    }
-                }, windows, keySerde, Serdes.Long());
+        return this.aggregateByKey(new CountLong<K, V>(), windows, keySerde, Serdes.Long());
     }
 
     @Override
@@ -636,19 +620,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public KTable<K, Long> countByKey(Serde<K> keySerde, String name) {
-        return this.aggregateByKey(
-                new Initializer<Long>() {
-                    @Override
-                    public Long apply() {
-                        return 0L;
-                    }
-                },
-                new Aggregator<K, V, Long>() {
-                    @Override
-                    public Long apply(K aggKey, V value, Long aggregate) {
-                        return aggregate + 1L;
-                    }
-                }, keySerde, Serdes.Long(), name);
+        return this.aggregateByKey(new CountLong<K, V>(), keySerde, Serdes.Long(), name);
     }
 
     @Override

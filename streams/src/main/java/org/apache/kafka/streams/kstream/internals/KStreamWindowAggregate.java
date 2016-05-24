@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
@@ -35,15 +34,13 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
     private final String storeName;
     private final Windows<W> windows;
-    private final Initializer<T> initializer;
     private final Aggregator<K, V, T> aggregator;
 
     private boolean sendOldValues = false;
 
-    public KStreamWindowAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<K, V, T> aggregator) {
+    public KStreamWindowAggregate(Windows<W> windows, String storeName, Aggregator<K, V, T> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
-        this.initializer = initializer;
         this.aggregator = aggregator;
     }
 
@@ -101,7 +98,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                         T oldAgg = entry.value;
 
                         if (oldAgg == null)
-                            oldAgg = initializer.apply();
+                            oldAgg = aggregator.init();
 
                         // try to add the new new value (there will never be old value)
                         T newAgg = aggregator.apply(key, value, oldAgg);
@@ -122,7 +119,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
             // create the new window for the rest of unmatched window that do not exist yet
             for (long windowStartMs : matchedWindows.keySet()) {
-                T oldAgg = initializer.apply();
+                T oldAgg = aggregator.init();
                 T newAgg = aggregator.apply(key, value, oldAgg);
 
                 windowStore.put(key, newAgg, windowStartMs);

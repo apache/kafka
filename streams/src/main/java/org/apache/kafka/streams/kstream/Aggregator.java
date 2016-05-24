@@ -35,4 +35,11 @@ public interface Aggregator<K, V, T> {
      * @return           the new aggregate value
      */
     T apply(K aggKey, V value, T aggregate);
+
+    /**
+     * Return the initial value for an aggregation.
+     *
+     * @return  the initial value for an aggregation
+     */
+    T init();
 }

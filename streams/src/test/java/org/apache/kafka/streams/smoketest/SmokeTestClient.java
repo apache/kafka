@@ -22,7 +22,6 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -107,15 +106,14 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // min
         data.aggregateByKey(
-                new Initializer<Integer>() {
-                    public Integer apply() {
-                        return Integer.MAX_VALUE;
-                    }
-                },
                 new Aggregator<String, Integer, Integer>() {
                     @Override
                     public Integer apply(String aggKey, Integer value, Integer aggregate) {
                         return (value < aggregate) ? value : aggregate;
+                    }
+                    @Override
+                    public Integer init() {
+                        return Integer.MAX_VALUE;
                     }
                 },
                 UnlimitedWindows.of("uwin-min"),
@@ -130,15 +128,14 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // max
         data.aggregateByKey(
-                new Initializer<Integer>() {
-                    public Integer apply() {
-                        return Integer.MIN_VALUE;
-                    }
-                },
                 new Aggregator<String, Integer, Integer>() {
                     @Override
                     public Integer apply(String aggKey, Integer value, Integer aggregate) {
                         return (value > aggregate) ? value : aggregate;
+                    }
+                    @Override
+                    public Integer init() {
+                        return Integer.MIN_VALUE;
                     }
                 },
                 UnlimitedWindows.of("uwin-max"),
@@ -153,15 +150,14 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // sum
         data.aggregateByKey(
-                new Initializer<Long>() {
-                    public Long apply() {
-                        return 0L;
-                    }
-                },
-                new Aggregator<String, Integer, Long>() {
+               new Aggregator<String, Integer, Long>() {
                     @Override
                     public Long apply(String aggKey, Integer value, Long aggregate) {
                         return (long) value + aggregate;
+                    }
+                    @Override
+                    public Long init() {
+                        return 0L;
                     }
                 },
                 UnlimitedWindows.of("win-sum"),
@@ -223,8 +219,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         cntTable.groupBy(agg.selector(),
                          stringSerde,
                          longSerde
-        ).aggregate(agg.init(),
-                    agg.adder(),
+        ).aggregate(agg.adder(),
                     agg.remover(),
                     longSerde,
                     "cntByCnt"

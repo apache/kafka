@@ -519,7 +519,6 @@ public interface KStream<K, V> {
     /**
      * Aggregate values of this stream by key on a window basis into a new instance of windowed {@link KTable}.
      *
-     * @param initializer   the instance of {@link Initializer}
      * @param aggregator    the instance of {@link Aggregator}
      * @param windows       the specification of the aggregation {@link Windows}
      * @param keySerde      key serdes for materializing the aggregated table,
@@ -532,8 +531,7 @@ public interface KStream<K, V> {
      *         where each table contains records with unmodified keys and values with type {@code T}
      *         that represent the latest (rolling) aggregate for each key within that window
      */
-    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
-                                                                Aggregator<K, V, T> aggregator,
+    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Aggregator<K, V, T> aggregator,
                                                                 Windows<W> windows,
                                                                 Serde<K> keySerde,
                                                                 Serde<T> aggValueSerde);
@@ -542,7 +540,6 @@ public interface KStream<K, V> {
      * Aggregate values of this stream by key on a window basis into a new instance of windowed {@link KTable}
      * with default serializers and deserializers.
      *
-     * @param initializer   the instance of {@link Initializer}
      * @param aggregator    the instance of {@link Aggregator}
      * @param windows       the specification of the aggregation {@link Windows}
      * @param <T>           the value type of the resulted {@link KTable}
@@ -551,14 +548,12 @@ public interface KStream<K, V> {
      *         where each table contains records with unmodified keys and values with type {@code T}
      *         that represent the latest (rolling) aggregate for each key within that window
      */
-    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
-                                                                Aggregator<K, V, T> aggregator,
+    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Aggregator<K, V, T> aggregator,
                                                                 Windows<W> windows);
 
     /**
      * Aggregate values of this stream by key into a new instance of ever-updating {@link KTable}.
      *
-     * @param initializer   the class of {@link Initializer}
      * @param aggregator    the class of {@link Aggregator}
      * @param keySerde      key serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
@@ -569,8 +564,7 @@ public interface KStream<K, V> {
      *
      * @return a {@link KTable} that contains records with unmodified keys and values (of different type) that represent the latest (rolling) aggregate for each key
      */
-    <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
-                                    Aggregator<K, V, T> aggregator,
+    <T> KTable<K, T> aggregateByKey(Aggregator<K, V, T> aggregator,
                                     Serde<K> keySerde,
                                     Serde<T> aggValueSerde,
                                     String name);
@@ -579,15 +573,13 @@ public interface KStream<K, V> {
      * Aggregate values of this stream by key into a new instance of ever-updating {@link KTable}
      * with default serializers and deserializers.
      *
-     * @param initializer   the class of {@link Initializer}
      * @param aggregator    the class of {@link Aggregator}
      * @param name          the name of the resulted {@link KTable}
      * @param <T>           the value type of the resulted {@link KTable}
      *
      * @return a {@link KTable} that contains records with unmodified keys and values (of different type) that represent the latest (rolling) aggregate for each key
      */
-    <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
-                                    Aggregator<K, V, T> aggregator,
+    <T> KTable<K, T> aggregateByKey(Aggregator<K, V, T> aggregator,
                                     String name);
 
     /**

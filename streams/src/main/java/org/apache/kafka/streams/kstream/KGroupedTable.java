@@ -49,7 +49,6 @@ public interface KGroupedTable<K, V> {
     /**
      * Aggregate updating values of this stream by the selected key into a new instance of {@link KTable}.
      *
-     * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
      * @param substractor   the instance of {@link Aggregator} for subtraction
      * @param aggValueSerde value serdes for materializing the aggregated table,
@@ -59,8 +58,7 @@ public interface KGroupedTable<K, V> {
      * @return a {@link KTable} with same key and aggregated value type {@code T},
      *         containing aggregated values for each key
      */
-    <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                               Aggregator<K, V, T> adder,
+    <T> KTable<K, T> aggregate(Aggregator<K, V, T> adder,
                                Aggregator<K, V, T> substractor,
                                Serde<T> aggValueSerde,
                                String name);
@@ -69,7 +67,6 @@ public interface KGroupedTable<K, V> {
      * Aggregate updating values of this stream by the selected key into a new instance of {@link KTable}
      * using default serializers and deserializers.
      *
-     * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
      * @param substractor   the instance of {@link Aggregator} for subtraction
      * @param name          the name of the resulted {@link KTable}
@@ -77,8 +74,7 @@ public interface KGroupedTable<K, V> {
      * @return a {@link KTable} with same key and aggregated value type {@code T},
      *         containing aggregated values for each key
      */
-    <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                               Aggregator<K, V, T> adder,
+    <T> KTable<K, T> aggregate(Aggregator<K, V, T> adder,
                                Aggregator<K, V, T> substractor,
                                String name);
 

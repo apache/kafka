@@ -28,7 +28,6 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
-import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -71,7 +70,7 @@ public class KStreamWindowAggregateTest {
 
             KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
             KTable<Windowed<String>, String> table2 =
-                stream1.aggregateByKey(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER,
+                stream1.aggregateByKey(MockAggregator.STRING_ADDER,
                     TimeWindows.of("topic1-Canonized", 10).advanceBy(5),
                     strSerde,
                     strSerde);
@@ -149,7 +148,7 @@ public class KStreamWindowAggregateTest {
 
             KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
             KTable<Windowed<String>, String> table1 =
-                stream1.aggregateByKey(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER,
+                stream1.aggregateByKey(MockAggregator.STRING_ADDER,
                     TimeWindows.of("topic1-Canonized", 10).advanceBy(5),
                     strSerde,
                     strSerde);
@@ -159,7 +158,7 @@ public class KStreamWindowAggregateTest {
 
             KStream<String, String> stream2 = builder.stream(strSerde, strSerde, topic2);
             KTable<Windowed<String>, String> table2 =
-                stream2.aggregateByKey(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER,
+                stream2.aggregateByKey(MockAggregator.STRING_ADDER,
                     TimeWindows.of("topic2-Canonized", 10).advanceBy(5),
                     strSerde,
                     strSerde);
