@@ -313,12 +313,14 @@ object ConsumerGroupCommand {
 
     protected def describeGroup(group: String) {
       val consumerSummaries = adminClient.describeConsumerGroup(group)
-      if (consumerSummaries.isEmpty)
-        println(s"Consumer group `${group}` does not exist or is rebalancing.")
+      if (consumerSummaries == None)
+        println(s"Consumer group `${group}` does not exist.")
+      else if (consumerSummaries.get.isEmpty)
+        println(s"Consumer group `${group}` is rebalancing.")
       else {
         val consumer = getConsumer()
         printDescribeHeader()
-        consumerSummaries.foreach { consumerSummary =>
+        consumerSummaries.get.foreach { consumerSummary =>
           val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
           val partitionOffsets = topicPartitions.flatMap { topicPartition =>
             Option(consumer.committed(new TopicPartition(topicPartition.topic, topicPartition.partition))).map { offsetAndMetadata =>

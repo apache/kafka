@@ -106,7 +106,7 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
 
     val consumerSummaries = client.describeConsumerGroup(groupId)
     assertEquals(1, consumerSummaries.size)
-    assertEquals(Set(tp, tp2), consumerSummaries.head.assignment.toSet)
+    assertEquals(Set(tp, tp2), consumerSummaries.get.head.assignment.toSet)
   }
 
   @Test
