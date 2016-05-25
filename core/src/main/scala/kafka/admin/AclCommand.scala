@@ -242,7 +242,7 @@ object AclCommand {
   }
 
   private def confirmAction(opts: AclCommandOptions, msg: String): Boolean = {
-    if (opts.options.has(opts.yesOpt))
+    if (opts.options.has(opts.forceOpt))
         return true
     println(msg)
     Console.readLine().equalsIgnoreCase("y")
@@ -331,7 +331,7 @@ object AclCommand {
 
     val helpOpt = parser.accepts("help", "Print usage information.")
 
-    val yesOpt = parser.accepts("force", "Assume Yes to all queries and do not prompt.")
+    val forceOpt = parser.accepts("force", "Assume Yes to all queries and do not prompt.")
 
     val options = parser.parse(args: _*)
 
