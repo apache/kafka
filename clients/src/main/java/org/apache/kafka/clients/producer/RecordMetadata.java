@@ -40,6 +40,7 @@ public final class RecordMetadata {
 
     /**
      * The offset of the record in the topic/partition.
+     * @return offset the long offset value
      */
     public long offset() {
         return this.offset;
@@ -47,6 +48,7 @@ public final class RecordMetadata {
 
     /**
      * The topic the record was appended to
+     * @return topic The string topic the record was appended to
      */
     public String topic() {
         return this.topicPartition.topic();
@@ -54,6 +56,7 @@ public final class RecordMetadata {
 
     /**
      * The partition the record was sent to
+     * @return partition The partition for this topic partition
      */
     public int partition() {
         return this.topicPartition.partition();

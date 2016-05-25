@@ -89,6 +89,13 @@ public class KafkaETLContext {
     
     /**
      * construct using input string
+     * @param job Job Configuration
+     * @param props Properties object
+     * @param reporter Set Reporter for the Kafka ETL context
+     * @param mos MultipleOutputs To writing output data to multiple outputs mos
+     * @param index read topic from index
+     * @param input read from input
+     * @throws Exception on any error
      */
     @SuppressWarnings("unchecked")
     public KafkaETLContext(JobConf job, Props props, Reporter reporter, 
@@ -214,6 +221,8 @@ public class KafkaETLContext {
     
     /**
      * Get offset ranges
+     * @return long array A long array of offset range
+     * @throws IOException When start or end offset is not 1
      */
     protected long[] getOffsetRange() throws IOException {
 

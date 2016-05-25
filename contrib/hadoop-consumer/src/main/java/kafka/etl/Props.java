@@ -51,7 +51,7 @@ public class Props extends Properties {
 
 	/**
 	 * copy constructor 
-	 * @param props
+	 * @param props The properties props to initialize object with
 	 */
 	public Props(Props props) {
 		if (props != null) {
@@ -62,8 +62,8 @@ public class Props extends Properties {
 	/**
 	 * construct props from a list of files
 	 * @param files		paths of files
-	 * @throws FileNotFoundException
-	 * @throws IOException
+	 * @throws FileNotFoundException If file is not found
+	 * @throws IOException If there is an IO issue with files
 	 */
 	public Props(String... files) throws FileNotFoundException, IOException {
 		this(Arrays.asList(files));
@@ -72,8 +72,8 @@ public class Props extends Properties {
 	/**
 	 * construct props from a list of files
 	 * @param files		paths of files
-	 * @throws FileNotFoundException
-	 * @throws IOException
+	 * @throws FileNotFoundException If file is not found
+	 * @throws IOException If there is an IO issue loading files into properties
 	 */
 	public Props(List<String> files) throws FileNotFoundException, IOException {
 
@@ -87,8 +87,8 @@ public class Props extends Properties {
 
 	/**
 	 * construct props from a list of input streams
-	 * @param inputStreams
-	 * @throws IOException
+	 * @param inputStreams The List of inputstreams to create properties from
+	 * @throws IOException If there is an loading input streams into properties
 	 */
 	public Props(InputStream... inputStreams) throws IOException {
 		for (InputStream stream : inputStreams)
@@ -97,7 +97,7 @@ public class Props extends Properties {
 
 	/**
 	 * construct props from a list of maps
-	 * @param props
+	 * @param props Map of Properties
 	 */
 	public Props(Map<String, String>... props) {
 		for (int i = props.length - 1; i >= 0; i--)
@@ -106,7 +106,7 @@ public class Props extends Properties {
 
 	/**
 	 * construct props from a list of Properties
-	 * @param properties
+	 * @param properties The list of properties
 	 */
 	public Props(Properties... properties) {
 		for (int i = properties.length - 1; i >= 0; i--){
@@ -118,7 +118,7 @@ public class Props extends Properties {
 	 * build props from a list of strings and interpret them as
 	 * key, value, key, value,....
 	 * 
-	 * @param args
+	 * @param args The string arguments to create Properties from
 	 * @return props
 	 */
 	@SuppressWarnings("unchecked")
@@ -135,8 +135,7 @@ public class Props extends Properties {
 	/**
 	 * Put the given Properties into the Props. 
 	 * 
-	 * @param properties
-	 *            The properties to put
+	 * @param properties The properties to put
 	 * 
 	 */
 	public void put(Properties properties) {
@@ -147,7 +146,7 @@ public class Props extends Properties {
 
 	/**
 	 * get property of "key" and split the value by " ," 
-	 * @param key		
+	 * @param key The key for property
 	 * @return list of values
 	 */
 	public List<String> getStringList(String key) {
@@ -156,8 +155,8 @@ public class Props extends Properties {
 
 	/**
 	 * get property of "key" and split the value by "sep"
-	 * @param key
-	 * @param sep
+	 * @param key The key for property
+	 * @param sep The separator string to split value of property key with
 	 * @return string list of values
 	 */
 	public List<String> getStringList(String key, String sep) {
@@ -174,8 +173,8 @@ public class Props extends Properties {
 
 	/**
 	 * get string list with default value. default delimiter is ","
-	 * @param key
-	 * @param defaultValue
+	 * @param key The key for property
+	 * @param defaultValue Default value to be returned in case no value found for name key
 	 * @return string list of values
 	 */
 	public List<String> getStringList(String key, List<String> defaultValue) {
@@ -187,8 +186,8 @@ public class Props extends Properties {
 
 	/**
 	 * get string list with default value
-	 * @param key
-	 * @param defaultValue
+	 * @param key The key for property
+	 * @param defaultValue Default value to be returned in case no value found for name key
 	 * @return string list of values
 	 */
 	public List<String> getStringList(String key, List<String> defaultValue,
@@ -252,9 +251,9 @@ public class Props extends Properties {
 
 	/**
 	 * get boolean value with default value
-	 * @param key
-	 * @param defaultValue
-	 * @return boolean value
+	 * @param key The key for property
+	 * @param defaultValue Default value to be returned in case no value found for name key
+	 * @return boolean value The boolean value for name key property
 	 * @throws Exception 	if value is not of type boolean or string
 	 */
 	public Boolean getBoolean(String key, Boolean defaultValue) 
@@ -264,8 +263,8 @@ public class Props extends Properties {
 
 	/**
 	 * get boolean value
-	 * @param key
-	 * @return boolean value
+	 * @param key The key for property
+	 * @return boolean value The boolean value for name key property
 	 * @throws Exception 	if value is not of type boolean or string or 
 	 * 										if value doesn't exist
 	 */
@@ -275,9 +274,9 @@ public class Props extends Properties {
 
 	/**
 	 * get long value with default value
-	 * @param name
-	 * @param defaultValue
-	 * @return long value
+	 * @param name The name key for property
+	 * @param defaultValue Default value to be returned in case no value found for name key
+	 * @return long value The long value for name key property
 	 * @throws Exception 	if value is not of type long or string
 	 */
 	public Long getLong(String name, Long defaultValue) 
@@ -287,8 +286,8 @@ public class Props extends Properties {
 
 	/**
 	 * get long value
-	 * @param name
-	 * @return long value
+	 * @param name The name key for property
+	 * @return long value The long value for name key property
 	 * @throws Exception 	if value is not of type long or string or 
 	 * 										if value doesn't exist
 	 */
@@ -298,9 +297,9 @@ public class Props extends Properties {
 
 	/**
 	 * get integer value with default value
-	 * @param name
-	 * @param defaultValue
-	 * @return integer value
+	 * @param name The name key for property
+	 * @param defaultValue Default value to be returned in case no value found for name key
+	 * @return integer value The integer value for name key property
 	 * @throws Exception 	if value is not of type integer or string
 	 */
 	public Integer getInt(String name, Integer defaultValue) 
@@ -310,8 +309,8 @@ public class Props extends Properties {
 
 	/**
 	 * get integer value
-	 * @param name
-	 * @return integer value
+	 * @param name The name key for property
+	 * @return integer value The integer value for name key property
 	 * @throws Exception 	if value is not of type integer or string or 
 	 * 										if value doesn't exist
 	 */
@@ -321,9 +320,9 @@ public class Props extends Properties {
 
 	/**
 	 * get double value with default value
-	 * @param name
-	 * @param defaultValue
-	 * @return double value
+	 * @param name The name key for property
+	 * @param defaultValue Default value to be returned in case no value found for name key
+	 * @return double value The double value for name key property
 	 * @throws Exception 	if value is not of type double or string
 	 */
 	public Double getDouble(String name, double defaultValue) 
@@ -333,8 +332,8 @@ public class Props extends Properties {
 
 	/**
 	 * get double value
-	 * @param name
-	 * @return double value
+	 * @param name The name key for property
+	 * @return double value The double primitive value for name key property
 	 * @throws Exception 	if value is not of type double or string or 
 	 * 										if value doesn't exist
 	 */
@@ -344,8 +343,8 @@ public class Props extends Properties {
 
 	/**
 	 * get URI value with default value
-	 * @param name
-	 * @param defaultValue
+	 * @param name The name key for URI
+	 * @param defaultValue Default value for URI
 	 * @return URI value
 	 * @throws Exception 	if value is not of type URI or string 
 	 */
@@ -355,7 +354,7 @@ public class Props extends Properties {
 
 	/**
 	 * get URI value
-	 * @param name
+	 * @param name The name key for URI
 	 * @param defaultValue
 	 * @return URI value
 	 * @throws Exception 	if value is not of type URI or string 
@@ -368,7 +367,7 @@ public class Props extends Properties {
 
 	/**
 	 * get URI value
-	 * @param name
+	 * @param name The name of key for URI
 	 * @return URI value
 	 * @throws Exception 	if value is not of type URI or string or 
 	 * 										if value doesn't exist
@@ -379,7 +378,7 @@ public class Props extends Properties {
 
 	/**
 	 * compare two props 
-	 * @param p
+	 * @param p The properties object to comapre with
 	 * @return true or false
 	 */
 	public boolean equalsProps(Props p) {
@@ -401,8 +400,8 @@ public class Props extends Properties {
 	/**
 	 * Get a map of all properties by string prefix
 	 * 
-	 * @param prefix
-	 *            The string prefix
+	 * @param prefix The string prefix
+	 * @return values Map of property prefix and properties
 	 */
 	public Map<String, String> getMapByPrefix(String prefix) {
 		Map<String, String> values = new HashMap<String, String>();
@@ -435,7 +434,7 @@ public class Props extends Properties {
 
 	/**
 	 * log properties
-	 * @param comment
+	 * @param comment  Log with comment String
 	 */
 	public void logProperties(String comment) {
 		logger.info(comment);
@@ -447,7 +446,7 @@ public class Props extends Properties {
 
 	/**
 	 * clone a Props
-	 * @param p
+	 * @param p Properties to clone from
 	 * @return props
 	 */
 	public static Props clone(Props p) {

@@ -25,6 +25,7 @@ public interface Configurable {
 
     /**
      * Configure this class with the given key-value pairs
+     * @param configs The key value map configuration pair
      */
     public void configure(Map<String, ?> configs);
 
