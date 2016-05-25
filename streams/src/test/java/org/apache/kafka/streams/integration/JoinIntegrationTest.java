@@ -219,7 +219,7 @@ public class JoinIntegrationTest {
 
         // Wait briefly for the topology to be fully up and running (otherwise it might miss some or all
         // of the input data we produce below).
-        Thread.sleep(5000);
+        Thread.sleep(10000);
 
         //
         // Step 2: Publish user-region information.
@@ -246,10 +246,6 @@ public class JoinIntegrationTest {
         userClicksProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
         IntegrationTestUtils.produceKeyValuesSynchronously(USER_CLICKS_TOPIC, userClicks, userClicksProducerConfig);
 
-        // Give the stream processing application some time to do its work.
-        Thread.sleep(10000);
-        streams.close();
-
         //
         // Step 4: Verify the application's output data.
         //
@@ -259,7 +255,9 @@ public class JoinIntegrationTest {
         consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
-        List<KeyValue<String, Long>> actualClicksPerRegion = IntegrationTestUtils.readKeyValues(OUTPUT_TOPIC, consumerConfig);
+        List<KeyValue<String, Long>> actualClicksPerRegion = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig,
+            OUTPUT_TOPIC, expectedClicksPerRegion.size());
+        streams.close();
         assertThat(actualClicksPerRegion, equalTo(expectedClicksPerRegion));
     }
 

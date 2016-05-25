@@ -149,6 +149,10 @@ public class InternalTopicIntegrationTest {
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
 
+        // Wait briefly for the topology to be fully up and running (otherwise it might miss some or all
+        // of the input data we produce below).
+        Thread.sleep(5000);
+
         //
         // Step 2: Produce some input data to the input topic.
         //
