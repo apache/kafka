@@ -17,11 +17,9 @@
 
 package kafka.server
 
-import kafka.utils.ZkUtils
-import kafka.utils.CoreUtils
-import kafka.utils.TestUtils
-
+import kafka.utils._
 import kafka.zk.ZooKeeperTestHarness
+import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
 
@@ -79,6 +77,32 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     assertEquals(1, server.metadataCache.getAliveBrokers.size)
     assertEquals(brokerId, server.metadataCache.getAliveBrokers.head.id)
 
+    server.shutdown()
+    CoreUtils.delete(server.config.logDirs)
+  }
+
+  @Test
+  def testBrokerStateRunningAfterZK {
+    val brokerId = 0
+    val mockBrokerState = EasyMock.niceMock(classOf[kafka.server.BrokerState])
+
+    class BrokerStateInterceptor() extends BrokerState {
+      override def newState(newState: BrokerStates): Unit = {
+        val brokers = zkUtils.getAllBrokersInCluster()
+        assertEquals(1, brokers.size)
+        assertEquals(brokerId, brokers.head.id)
+      }
+    }
+
+    class MockKafkaServer(override val config: KafkaConfig, override val brokerState: BrokerState = mockBrokerState) extends KafkaServer(config) {}
+
+    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
+    val server = new MockKafkaServer(KafkaConfig.fromProps(props))
+
+    EasyMock.expect(mockBrokerState.newState(RunningAsBroker)).andDelegateTo(new BrokerStateInterceptor).once()
+    EasyMock.replay(mockBrokerState)
+
+    server.startup()
     server.shutdown()
     CoreUtils.delete(server.config.logDirs)
   }
