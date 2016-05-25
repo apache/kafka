@@ -19,10 +19,10 @@ package org.apache.kafka.streams.kstream.aggregates;
 
 import org.apache.kafka.streams.kstream.Aggregator;
 
-public class SumLong<K, V> implements Aggregator<K, V, Long> {
+public class SumLong<K> implements Aggregator<K, Long, Long> {
     @Override
-    public Long apply(K aggKey, V value, Long aggregate) {
-        return aggregate + 1L;
+    public Long apply(K aggKey, Long value, Long aggregate) {
+        return aggregate + value;
     }
     @Override
     public Long init() {
