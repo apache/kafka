@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -61,23 +60,21 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     }
 
     @Override
-    public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                                      Aggregator<K, V, T> adder,
+    public <T> KTable<K, T> aggregate(Aggregator<K, V, T> adder,
                                       Aggregator<K, V, T> subtractor,
                                       Serde<T> aggValueSerde,
                                       String name) {
 
-        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(name, initializer, adder, subtractor);
+        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(name, adder, subtractor);
         return doAggregate(aggregateSupplier, aggValueSerde, AGGREGATE_NAME, name);
     }
 
     @Override
-    public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                            Aggregator<K, V, T> adder,
+    public <T> KTable<K, T> aggregate(Aggregator<K, V, T> adder,
                             Aggregator<K, V, T> substractor,
                             String name) {
 
-        return aggregate(initializer, adder, substractor, null, name);
+        return aggregate(adder, substractor, null, name);
     }
 
     private <T> KTable<K, T> doAggregate(ProcessorSupplier<K, Change<V>> aggregateSupplier,
@@ -130,24 +127,26 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     @Override
     public KTable<K, Long> count(String name) {
         return this.aggregate(
-                new Initializer<Long>() {
-                    @Override
-                    public Long apply() {
-                        return 0L;
-                    }
-                },
-                new Aggregator<K, V, Long>() {
-                    @Override
-                    public Long apply(K aggKey, V value, Long aggregate) {
-                        return aggregate + 1L;
-                    }
-                }, new Aggregator<K, V, Long>() {
-                    @Override
-                    public Long apply(K aggKey, V value, Long aggregate) {
-                        return aggregate - 1L;
-                    }
-                },
-                Serdes.Long(), name);
+            new Aggregator<K, V, Long>() {
+                @Override
+                public Long apply(K aggKey, V value, Long aggregate) {
+                    return aggregate + 1L;
+                }
+                @Override
+                public Long init() {
+                    return 0L;
+                }
+            }, new Aggregator<K, V, Long>() {
+                @Override
+                public Long apply(K aggKey, V value, Long aggregate) {
+                    return aggregate - 1L;
+                }
+                @Override
+                public Long init() {
+                    return 0L;
+                }
+            },
+            Serdes.Long(), name);
     }
 
 }

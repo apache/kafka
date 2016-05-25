@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.Processor;
@@ -92,20 +91,15 @@ public class SmokeTestUtil {
             };
         }
 
-        public Initializer<Long> init() {
-            return new Initializer<Long>() {
-                @Override
-                public Long apply() {
-                    return 0L;
-                }
-            };
-        }
-
         public Aggregator<String, Long, Long> adder() {
             return new Aggregator<String, Long, Long>() {
                 @Override
                 public Long apply(String aggKey, Long value, Long aggregate) {
                     return aggregate + value;
+                }
+                @Override
+                public Long init() {
+                    return 0L;
                 }
             };
         }
@@ -115,6 +109,10 @@ public class SmokeTestUtil {
                 @Override
                 public Long apply(String aggKey, Long value, Long aggregate) {
                     return aggregate - value;
+                }
+                @Override
+                public Long init() {
+                    return 0L;
                 }
             };
         }

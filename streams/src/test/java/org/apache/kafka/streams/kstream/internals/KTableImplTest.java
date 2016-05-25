@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
-import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
@@ -323,7 +322,7 @@ public class KTableImplTest {
 
         KTableImpl<String, String, String> table1Aggregated = (KTableImpl<String, String, String>) table1
                 .groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
-                .aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, MockAggregator.STRING_REMOVER, "mock-result1");
+                .aggregate(MockAggregator.STRING_ADDER, MockAggregator.STRING_REMOVER, "mock-result1");
 
 
         KTableImpl<String, String, String> table1Reduced = (KTableImpl<String, String, String>) table1

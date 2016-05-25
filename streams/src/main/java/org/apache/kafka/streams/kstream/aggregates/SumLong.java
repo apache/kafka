@@ -15,19 +15,17 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.streams.kstream.aggregates;
 
-/**
- * The {@link Initializer} interface for creating an initial value in aggregations.
- *
- * @param <T>   aggregate value type
- */
-public interface Initializer<T> {
+import org.apache.kafka.streams.kstream.Aggregator;
 
-    /**
-     * Return the initial value for an aggregation.
-     *
-     * @return  the initial value for an aggregation
-     */
-    T apply();
+public class SumLong<K> implements Aggregator<K, Long, Long> {
+    @Override
+    public Long apply(K aggKey, Long value, Long aggregate) {
+        return aggregate + value;
+    }
+    @Override
+    public Long init() {
+        return 0L;
+    }
 }

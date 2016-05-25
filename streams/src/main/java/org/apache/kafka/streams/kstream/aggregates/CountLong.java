@@ -15,19 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streams.kstream.aggregates;
 
-import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.Aggregator;
 
-public class MockInitializer {
 
-    private static class StringInit implements Initializer<String> {
-
-        @Override
-        public String apply() {
-            return "0";
-        }
+public class CountLong<K, V> implements Aggregator<K, V, Long> {
+    @Override
+    public Long apply(K aggKey, V value, Long aggregate) {
+        return aggregate + 1L;
     }
-
-    public final static Initializer<String> STRING_INIT = new StringInit();
+    @Override
+    public Long init() {
+        return 0L;
+    }
 }

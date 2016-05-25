@@ -27,6 +27,11 @@ public class MockAggregator {
         public String apply(String aggKey, String value, String aggregate) {
             return aggregate + "+" + value;
         }
+
+        @Override
+        public String init() {
+            return "0";
+        }
     }
 
     private static class StringRemove implements Aggregator<String, String, String> {
@@ -35,9 +40,15 @@ public class MockAggregator {
         public String apply(String aggKey, String value, String aggregate) {
             return aggregate + "-" + value;
         }
+
+        @Override
+        public String init() {
+            return "0";
+        }
     }
 
     public final static Aggregator<String, String, String> STRING_ADDER = new StringAdd();
 
     public final static Aggregator<String, String, String> STRING_REMOVER = new StringRemove();
+
 }
