@@ -17,7 +17,9 @@
 
 package kafka.server
 
-import kafka.utils._
+import kafka.utils.ZkUtils
+import kafka.utils.CoreUtils
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.easymock.EasyMock
 import org.junit.Assert._
