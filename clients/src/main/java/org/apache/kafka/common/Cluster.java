@@ -25,6 +25,7 @@ public final class Cluster {
     private final List<Node> nodes;
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
+    private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
     private final Map<Integer, List<PartitionInfo>> partitionsByNode;
 
     /**
@@ -63,8 +64,18 @@ public final class Cluster {
             }
         }
         this.partitionsByTopic = new HashMap<String, List<PartitionInfo>>(partsForTopic.size());
-        for (Map.Entry<String, List<PartitionInfo>> entry : partsForTopic.entrySet())
-            this.partitionsByTopic.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
+        this.availablePartitionsByTopic = new HashMap<String, List<PartitionInfo>>(partsForTopic.size());
+        for (Map.Entry<String, List<PartitionInfo>> entry : partsForTopic.entrySet()) {
+            String topic = entry.getKey();
+            List<PartitionInfo> partitionList = entry.getValue();
+            this.partitionsByTopic.put(topic, Collections.unmodifiableList(partitionList));
+            List<PartitionInfo> availablePartitions = new ArrayList<PartitionInfo>();
+            for (PartitionInfo part : partitionList) {
+                if (part.leader() != null)
+                    availablePartitions.add(part);
+            }
+            this.availablePartitionsByTopic.put(topic, Collections.unmodifiableList(availablePartitions));
+        }
         this.partitionsByNode = new HashMap<Integer, List<PartitionInfo>>(partsForNode.size());
         for (Map.Entry<Integer, List<PartitionInfo>> entry : partsForNode.entrySet())
             this.partitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
@@ -127,6 +138,15 @@ public final class Cluster {
      */
     public List<PartitionInfo> partitionsForTopic(String topic) {
         return this.partitionsByTopic.get(topic);
+    }
+
+    /**
+     * Get the list of available partitions for this topic
+     * @param topic The topic name
+     * @return A list of partitions
+     */
+    public List<PartitionInfo> availablePartitionsForTopic(String topic) {
+        return this.availablePartitionsByTopic.get(topic);
     }
 
     /**

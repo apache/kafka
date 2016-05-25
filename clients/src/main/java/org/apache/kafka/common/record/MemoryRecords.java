@@ -116,9 +116,11 @@ public class MemoryRecords implements Records {
      * Close this batch for no more appends
      */
     public void close() {
-        compressor.close();
-        writable = false;
-        buffer = compressor.buffer();
+        if (writable) {
+            compressor.close();
+            writable = false;
+            buffer = compressor.buffer();
+        }
     }
 
     /** Write the records in this set to the given channel */
