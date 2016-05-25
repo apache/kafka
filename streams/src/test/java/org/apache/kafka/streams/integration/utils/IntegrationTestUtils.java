@@ -55,10 +55,10 @@ public class IntegrationTestUtils {
      * @param maxMessages    Maximum number of messages to read via the consumer.
      * @return The values retrieved via the consumer.
      */
-    public static <K, V> List<V> readValues(String topic, Properties consumerConfig, int maxMessages) {
+    public static <V> List<V> readValues(String topic, Properties consumerConfig, int maxMessages) {
         List<V> returnList = new ArrayList<>();
-        List<KeyValue<K, V>> kvs = readKeyValues(topic, consumerConfig, maxMessages);
-        for (KeyValue<K, V> kv : kvs) {
+        List<KeyValue<Object, V>> kvs = readKeyValues(topic, consumerConfig, maxMessages);
+        for (KeyValue<?, V> kv : kvs) {
             returnList.add(kv.value);
         }
         return returnList;
@@ -176,10 +176,9 @@ public class IntegrationTestUtils {
                                                                                   int expectedNumRecords,
                                                                                   long waitTime) throws InterruptedException {
         List<KeyValue<K, V>> accumData = new ArrayList<>();
-        List<KeyValue<K, V>> readData;
         long startTime = System.currentTimeMillis();
         while (true) {
-            readData = readKeyValues(topic, consumerConfig);
+            List<KeyValue<K, V>> readData = readKeyValues(topic, consumerConfig);
             accumData.addAll(readData);
             if (accumData.size() >= expectedNumRecords)
                 return accumData;
@@ -210,10 +209,9 @@ public class IntegrationTestUtils {
                                                                 int expectedNumRecords,
                                                                 long waitTime) throws InterruptedException {
         List<V> accumData = new ArrayList<>();
-        List<V> readData;
         long startTime = System.currentTimeMillis();
         while (true) {
-            readData = readValues(topic, consumerConfig, expectedNumRecords);
+            List<V> readData = readValues(topic, consumerConfig, expectedNumRecords);
             accumData.addAll(readData);
             if (accumData.size() >= expectedNumRecords)
                 return accumData;

@@ -116,7 +116,8 @@ public class MapFunctionIntegrationTest {
         consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        List<String> actualValues = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, inputValues.size());
+        List<String> actualValues = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfig,
+            DEFAULT_OUTPUT_TOPIC, inputValues.size());
         streams.close();
         assertThat(actualValues, equalTo(expectedValues));
     }
