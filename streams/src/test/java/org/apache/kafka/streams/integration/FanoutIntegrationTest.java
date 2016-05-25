@@ -145,9 +145,7 @@ public class FanoutIntegrationTest {
         consumerConfigB.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerConfigB.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerConfigB.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        List<String> actualValuesForB =
-            IntegrationTestUtils.waitUntilValuesMatch(consumerConfigB, OUTPUT_TOPIC_B, inputValues.size(),
-                inputValues.size(), IntegrationTestUtils.DEFAULT_TIMEOUT);
+        List<String> actualValuesForB = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfigB, OUTPUT_TOPIC_B, inputValues.size());
         assertThat(actualValuesForB, equalTo(expectedValuesForB));
 
         // Verify output topic C
@@ -157,10 +155,7 @@ public class FanoutIntegrationTest {
         consumerConfigC.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerConfigC.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerConfigC.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-
-        List<String> actualValuesForC =
-            IntegrationTestUtils.waitUntilValuesMatch(consumerConfigC, OUTPUT_TOPIC_C, inputValues.size(),
-                inputValues.size(), IntegrationTestUtils.DEFAULT_TIMEOUT);
+        List<String> actualValuesForC = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfigC, OUTPUT_TOPIC_C, inputValues.size());
         streams.close();
         assertThat(actualValuesForC, equalTo(expectedValuesForC));
     }

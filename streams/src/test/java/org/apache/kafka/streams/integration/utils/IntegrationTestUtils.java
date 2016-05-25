@@ -155,48 +155,68 @@ public class IntegrationTestUtils {
         produceKeyValuesSynchronously(topic, keyedRecords, producerConfig);
     }
 
+    public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(Properties consumerConfig,
+                                                                                  String topic,
+                                                                                  int expectedNumRecords) throws InterruptedException {
+
+        return waitUntilMinKeyValueRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
+    }
+
     /**
-     * Wait until enough data (key-value records) has been consumed
+     * Wait until enough data (key-value records) has been consumed.
      * @param consumerConfig Kafka Consumer configuration
-     * @param topic          Topic to consume grom
+     * @param topic          Topic to consume from
      * @param expectedNumRecords Minimum number of expected records
      * @param waitTime       Upper bound in waiting time
      * @return All the records consumed, or null if no records are consumed
      * @throws InterruptedException
      */
-    public static <K, V> List<KeyValue<K, V>> waitUntilKeyValuesMatch(Properties consumerConfig, String topic,
-                                                                     int expectedNumRecords,
-                                                                     long waitTime) throws InterruptedException {
+    public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(Properties consumerConfig,
+                                                                                  String topic,
+                                                                                  int expectedNumRecords,
+                                                                                  long waitTime) throws InterruptedException {
+        List<KeyValue<K, V>> accumData = new ArrayList<>();
         List<KeyValue<K, V>> readData;
         long startTime = System.currentTimeMillis();
         while (true) {
             readData = readKeyValues(topic, consumerConfig);
-            if (readData.size() >= expectedNumRecords)
-                return readData;
+            accumData.addAll(readData);
+            if (accumData.size() >= expectedNumRecords)
+                return accumData;
             if (System.currentTimeMillis() > startTime + waitTime)
                 return null;
             Thread.sleep(Math.min(waitTime, 100L));
         }
     }
 
+    public static <V> List<V> waitUntilMinValuesRecordsReceived(Properties consumerConfig,
+                                                                String topic,
+                                                                int expectedNumRecords) throws InterruptedException {
+
+        return waitUntilMinValuesRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
+    }
+
     /**
-     * Wait until enough data (value records) has been consumed
+     * Wait until enough data (value records) has been consumed.
      * @param consumerConfig Kafka Consumer configuration
-     * @param topic          Topic to consume grom
+     * @param topic          Topic to consume from
      * @param expectedNumRecords Minimum number of expected records
      * @param waitTime       Upper bound in waiting time
      * @return All the records consumed, or null if no records are consumed
      * @throws InterruptedException
      */
-    public static <V> List<V> waitUntilValuesMatch(Properties consumerConfig, String topic,
-                                                   int expectedNumRecords, int maxMessages,
-                                                   long waitTime) throws InterruptedException {
+    public static <V> List<V> waitUntilMinValuesRecordsReceived(Properties consumerConfig,
+                                                                String topic,
+                                                                int expectedNumRecords,
+                                                                long waitTime) throws InterruptedException {
+        List<V> accumData = new ArrayList<>();
         List<V> readData;
         long startTime = System.currentTimeMillis();
         while (true) {
-            readData = readValues(topic, consumerConfig, maxMessages);
-            if (readData.size() >= expectedNumRecords)
-                return readData;
+            readData = readValues(topic, consumerConfig, expectedNumRecords);
+            accumData.addAll(readData);
+            if (accumData.size() >= expectedNumRecords)
+                return accumData;
             if (System.currentTimeMillis() > startTime + waitTime)
                 return null;
             Thread.sleep(Math.min(waitTime, 100L));
