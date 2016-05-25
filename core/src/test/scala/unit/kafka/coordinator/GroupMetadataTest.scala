@@ -53,6 +53,7 @@ class GroupMetadataTest extends JUnitSuite {
   @Test
   def testCannotRebalanceWhenDead() {
     group.transitionTo(PreparingRebalance)
+    group.transitionTo(Empty)
     group.transitionTo(Dead)
     assertFalse(group.canRebalance)
   }
@@ -61,6 +62,12 @@ class GroupMetadataTest extends JUnitSuite {
   def testStableToPreparingRebalanceTransition() {
     group.transitionTo(PreparingRebalance)
     assertState(group, PreparingRebalance)
+  }
+
+  @Test
+  def testStableToDeadTransition() {
+    group.transitionTo(Dead)
+    assertState(group, Dead)
   }
 
   @Test
@@ -74,6 +81,21 @@ class GroupMetadataTest extends JUnitSuite {
   @Test
   def testPreparingRebalanceToDeadTransition() {
     group.transitionTo(PreparingRebalance)
+    group.transitionTo(Dead)
+    assertState(group, Dead)
+  }
+
+  @Test
+  def testPreparingRebalanceToEmptyTransition() {
+    group.transitionTo(PreparingRebalance)
+    group.transitionTo(Empty)
+    assertState(group, Empty)
+  }
+
+  @Test
+  def testEmptyToDeadTransition() {
+    group.transitionTo(PreparingRebalance)
+    group.transitionTo(Empty)
     group.transitionTo(Dead)
     assertState(group, Dead)
   }
@@ -115,11 +137,11 @@ class GroupMetadataTest extends JUnitSuite {
     group.transitionTo(AwaitingSync)
   }
 
-  @Test(expected = classOf[IllegalStateException])
   def testDeadToDeadIllegalTransition() {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
     group.transitionTo(Dead)
+    assertState(group, Dead)
   }
 
   @Test(expected = classOf[IllegalStateException])
@@ -227,6 +249,43 @@ class GroupMetadataTest extends JUnitSuite {
 
     assertTrue(group.supportsProtocols(Set("roundrobin", "foo")))
     assertFalse(group.supportsProtocols(Set("range", "foo")))
+  }
+
+  @Test
+  def testInitNextGeneration() {
+    val groupId = "groupId"
+    val clientId = "clientId"
+    val clientHost = "clientHost"
+    val sessionTimeoutMs = 10000
+    val memberId = "memberId"
+
+    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeoutMs,
+      List(("roundrobin", Array.empty[Byte])))
+
+    group.transitionTo(PreparingRebalance)
+    member.awaitingJoinCallback = (result) => {}
+    group.add(memberId, member)
+
+    assertEquals(0, group.generationId)
+    assertNull(group.protocol)
+
+    group.initNextGeneration()
+
+    assertEquals(1, group.generationId)
+    assertEquals("roundrobin", group.protocol)
+  }
+
+  @Test
+  def testInitNextGenerationEmptyGroup() {
+    assertEquals(Empty, group.currentState)
+    assertEquals(0, group.generationId)
+    assertNull(group.protocol)
+
+    group.transitionTo(PreparingRebalance)
+    group.initNextGeneration()
+
+    assertEquals(1, group.generationId)
+    assertNull(group.protocol)
   }
 
   private def assertState(group: GroupMetadata, targetState: GroupState) {

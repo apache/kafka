@@ -71,7 +71,7 @@ private[coordinator] case object AwaitingSync extends GroupState { val state: By
 private[coordinator] case object Stable extends GroupState { val state: Byte = 3 }
 
 /**
- * Group has no more members
+ * Group has no more members and its metadata is being removed
  *
  * action: respond to join group with UNKNOWN_MEMBER_ID
  *         respond to sync group with UNKNOWN_MEMBER_ID
@@ -83,13 +83,28 @@ private[coordinator] case object Stable extends GroupState { val state: Byte = 3
  */
 private[coordinator] case object Dead extends GroupState { val state: Byte = 4 }
 
+/**
+  * Group has no more members, but lingers until all offsets have expired
+  *
+  * action: respond normally to join group from new members
+  *         respond to sync group with UNKNOWN_MEMBER_ID
+  *         respond to heartbeat with UNKNOWN_MEMBER_ID
+  *         respond to leave group with UNKNOWN_MEMBER_ID
+  *         respond to offset commit with UNKNOWN_MEMBER_ID
+  *         allow offset fetch requests
+  * transition: last offsets removed in periodic expiration task => Dead
+  *             join group from a new member => PreparingRebalance
+  */
+private[coordinator] case object Empty extends GroupState { val state: Byte = 5 }
+
 
 private object GroupMetadata {
   private val validPreviousStates: Map[GroupState, Set[GroupState]] =
-    Map(Dead -> Set(Stable, PreparingRebalance, AwaitingSync),
+    Map(Dead -> Set(Stable, PreparingRebalance, AwaitingSync, Empty, Dead),
       AwaitingSync -> Set(PreparingRebalance),
       Stable -> Set(AwaitingSync),
-      PreparingRebalance -> Set(Stable, AwaitingSync))
+      PreparingRebalance -> Set(Stable, AwaitingSync, Empty),
+      Empty -> Set(PreparingRebalance))
 }
 
 /**
@@ -123,7 +138,7 @@ case class GroupSummary(state: String,
 private[coordinator] class GroupMetadata(val groupId: String, val protocolType: String) {
 
   private val members = new mutable.HashMap[String, MemberMetadata]
-  private var state: GroupState = Stable
+  private var state: GroupState = Empty
   var generationId = 0
   var leaderId: String = null
   var protocol: String = null
@@ -169,7 +184,7 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
   // TODO: decide if ids should be predictable or random
   def generateMemberIdSuffix = UUID.randomUUID().toString
 
-  def canRebalance = state == Stable || state == AwaitingSync
+  def canRebalance = state == Stable || state == AwaitingSync || state == Empty
 
   def transitionTo(groupState: GroupState) {
     assertValidTransition(groupState)
@@ -206,9 +221,15 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
 
   def initNextGeneration() = {
     assert(notYetRejoinedMembers == List.empty[MemberMetadata])
-    generationId += 1
-    protocol = selectProtocol
-    transitionTo(AwaitingSync)
+    if (!isEmpty) {
+      generationId += 1
+      protocol = selectProtocol
+      transitionTo(AwaitingSync)
+    } else {
+      generationId += 1
+      protocol = null
+      transitionTo(Empty)
+    }
   }
 
   def currentMemberMetadata: Map[String, Array[Byte]] = {
@@ -219,9 +240,9 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
 
   def summary: GroupSummary = {
     if (is(Stable)) {
-      val members = this.members.values.map{ member => member.summary(protocol) }.toList
+      val members = this.members.values.map { member => member.summary(protocol) }.toList
       GroupSummary(state.toString, protocolType, protocol, members)
-    } else {
+    }else {
       val members = this.members.values.map{ member => member.summaryNoMetadata() }.toList
       GroupSummary(state.toString, protocolType, GroupCoordinator.NoProtocol, members)
     }

@@ -31,15 +31,6 @@ import org.apache.kafka.common.requests.{OffsetFetchResponse, JoinGroupRequest}
 
 import scala.collection.{Map, Seq, immutable}
 
-case class GroupConfig(groupMinSessionTimeoutMs: Int,
-                       groupMaxSessionTimeoutMs: Int)
-
-case class JoinGroupResult(members: Map[String, Array[Byte]],
-                           memberId: String,
-                           generationId: Int,
-                           subProtocol: String,
-                           leaderId: String,
-                           errorCode: Short)
 
 /**
  * GroupCoordinator handles general group membership and offset management.
@@ -192,7 +183,7 @@ class GroupCoordinator(val brokerId: Int,
               }
             }
 
-          case Stable =>
+          case Empty | Stable =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
               // if the member id is unknown, register the member to the group
               addMemberAndRebalance(sessionTimeoutMs, clientId, clientHost, protocols, group, responseCallback)
@@ -255,7 +246,7 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(Array.empty, Errors.ILLEGAL_GENERATION.code)
       } else {
         group.currentState match {
-          case Dead =>
+          case Empty | Dead =>
             responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID.code)
 
           case PreparingRebalance =>
@@ -301,8 +292,9 @@ class GroupCoordinator(val brokerId: Int,
     }
 
     // store the group metadata without holding the group lock to avoid the potential
-    // for deadlock when the callback is invoked
-    delayedGroupStore.foreach(groupManager.store)
+    // for deadlock if the callback is invoked holding other locks (e.g. the replica
+    // state change lock)
+    delayedGroupStore.map(groupManager.store)
   }
 
   def handleLeaveGroup(groupId: String, consumerId: String, responseCallback: Short => Unit) {
@@ -322,9 +314,7 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
       } else {
         group synchronized {
-          if (group.is(Dead)) {
-            responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
-          } else if (!group.has(consumerId)) {
+          if (group.is(Dead) || !group.has(consumerId)) {
             responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
           } else {
             val member = group.get(consumerId)
@@ -354,7 +344,9 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
       } else {
         group synchronized {
-          if (group.is(Dead)) {
+          if (group.is(Empty)) {
+            responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
+          } else if (group.is(Dead)) {
             // if the group is marked as dead, it means some other thread has just removed the group
             // from the coordinator metadata; this is likely that the group has migrated to some other
             // coordinator OR the group is in a transient unstable phase. Let the member retry
@@ -397,12 +389,11 @@ class GroupCoordinator(val brokerId: Int,
           delayedOffsetStore = Some(groupManager.prepareStoreOffsets(groupId, memberId, generationId, offsetMetadata,
             responseCallback))
         else
-          // the group has failed over to this coordinator (which will be handled in KAFKA-2017),
           // or this is a request coming from an older generation. either way, reject the commit
           responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION.code))
       } else {
         group synchronized {
-          if (group.is(Dead)) {
+          if (group.is(Dead) || group.is(Empty)) {
             responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID.code))
           } else if (group.is(AwaitingSync)) {
             responseCallback(offsetMetadata.mapValues(_ => Errors.REBALANCE_IN_PROGRESS.code))
@@ -421,7 +412,7 @@ class GroupCoordinator(val brokerId: Int,
     }
 
     // store the offsets without holding the group lock
-    delayedOffsetStore.foreach(groupManager.store)
+    delayedOffsetStore.map(groupManager.store)
   }
 
   def handleFetchOffsets(groupId: String,
@@ -477,7 +468,7 @@ class GroupCoordinator(val brokerId: Int,
       group.transitionTo(Dead)
 
       previousState match {
-        case Dead =>
+        case Empty | Dead =>
         case PreparingRebalance =>
           for (member <- group.allMemberMetadata) {
             if (member.awaitingJoinCallback != null) {
@@ -502,7 +493,7 @@ class GroupCoordinator(val brokerId: Int,
   private def onGroupLoaded(group: GroupMetadata) {
     group synchronized {
       info(s"Loading group metadata for ${group.groupId} with generation ${group.generationId}")
-      assert(group.is(Stable))
+      assert(group.is(Stable) || group.is(Empty))
       group.allMemberMetadata.foreach(completeAndScheduleNextHeartbeatExpiration(group, _))
     }
   }
@@ -626,7 +617,7 @@ class GroupCoordinator(val brokerId: Int,
     trace("Member %s in group %s has failed".format(member.memberId, group.groupId))
     group.remove(member.memberId)
     group.currentState match {
-      case Dead =>
+      case Dead | Empty =>
       case Stable | AwaitingSync => maybePrepareRebalance(group)
       case PreparingRebalance => joinPurgatory.checkAndComplete(GroupKey(group.groupId))
     }
@@ -645,42 +636,49 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def onCompleteJoin(group: GroupMetadata) {
+    var delayedStore: Option[DelayedStore] = None
     group synchronized {
-      val failedMembers = group.notYetRejoinedMembers
-      if (group.isEmpty || failedMembers.nonEmpty) {
-        failedMembers.foreach { failedMember =>
-          group.remove(failedMember.memberId)
-          // TODO: cut the socket connection to the client
-        }
-
-        // TODO KAFKA-2720: only remove group in the background thread
-        if (group.isEmpty) {
-          group.transitionTo(Dead)
-          groupManager.removeGroup(group)
-          info("Group %s generation %s is dead and removed".format(group.groupId, group.generationId))
-        }
+      // remove any members who haven't joined the group yet
+      group.notYetRejoinedMembers.foreach { failedMember =>
+        group.remove(failedMember.memberId)
+        // TODO: cut the socket connection to the client
       }
+
       if (!group.is(Dead)) {
         group.initNextGeneration()
-        info("Stabilized group %s generation %s".format(group.groupId, group.generationId))
+        if (group.is(Empty)) {
+          info(s"Group ${group.groupId} with generation ${group.generationId} is now empty")
+          delayedStore = Some(groupManager.prepareStoreGroup(group, Map.empty, errorCode => {
+            if (errorCode != Errors.NONE.code) {
+              // we failed to persist the empty group. if we don't retry (which is how
+              // we handle the situation when a normal rebalance fails, then a coordinator
+              // change will cause the old generation to come back to life.
+            }
+          }))
+        } else {
+          info(s"Stabilized group ${group.groupId} generation ${group.generationId}")
 
-        // trigger the awaiting join group response callback for all the members after rebalancing
-        for (member <- group.allMemberMetadata) {
-          assert(member.awaitingJoinCallback != null)
-          val joinResult = JoinGroupResult(
-            members=if (member.memberId == group.leaderId) { group.currentMemberMetadata } else { Map.empty },
-            memberId=member.memberId,
-            generationId=group.generationId,
-            subProtocol=group.protocol,
-            leaderId=group.leaderId,
-            errorCode=Errors.NONE.code)
+          // trigger the awaiting join group response callback for all the members after rebalancing
+          for (member <- group.allMemberMetadata) {
+            assert(member.awaitingJoinCallback != null)
+            val joinResult = JoinGroupResult(
+              members=if (member.memberId == group.leaderId) { group.currentMemberMetadata } else { Map.empty },
+              memberId=member.memberId,
+              generationId=group.generationId,
+              subProtocol=group.protocol,
+              leaderId=group.leaderId,
+              errorCode=Errors.NONE.code)
 
-          member.awaitingJoinCallback(joinResult)
-          member.awaitingJoinCallback = null
-          completeAndScheduleNextHeartbeatExpiration(group, member)
+            member.awaitingJoinCallback(joinResult)
+            member.awaitingJoinCallback = null
+            completeAndScheduleNextHeartbeatExpiration(group, member)
+          }
         }
       }
     }
+
+    // call without holding the group lock
+    delayedStore.map(groupManager.store)
   }
 
   def tryCompleteHeartbeat(group: GroupMetadata, member: MemberMetadata, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
@@ -757,3 +755,13 @@ object GroupCoordinator {
   }
 
 }
+
+case class GroupConfig(groupMinSessionTimeoutMs: Int,
+                       groupMaxSessionTimeoutMs: Int)
+
+case class JoinGroupResult(members: Map[String, Array[Byte]],
+                           memberId: String,
+                           generationId: Int,
+                           subProtocol: String,
+                           leaderId: String,
+                           errorCode: Short)
