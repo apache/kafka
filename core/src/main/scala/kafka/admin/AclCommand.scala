@@ -331,7 +331,7 @@ object AclCommand {
 
     val helpOpt = parser.accepts("help", "Print usage information.")
 
-    val yesOpt = parser.accepts("yes", "Assume Yes to all queries and do not prompt.")
+    val yesOpt = parser.accepts("force", "Assume Yes to all queries and do not prompt.")
 
     val options = parser.parse(args: _*)
 
