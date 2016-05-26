@@ -146,7 +146,6 @@ public class FileStreamSourceTask extends SourceTask {
                                 records = new ArrayList<>();
                             records.add(new SourceRecord(offsetKey(filename), offsetValue(streamOffset), topic, VALUE_SCHEMA, line));
                         }
-                        new ArrayList<SourceRecord>();
                     } while (line != null);
                 }
             }
