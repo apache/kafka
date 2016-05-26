@@ -20,11 +20,12 @@ package kafka.server
 import scala.collection.mutable
 import scala.collection.Set
 import scala.collection.Map
-import kafka.utils.{Utils, Logging}
-import kafka.cluster.Broker
+import kafka.utils.Logging
+import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
 import kafka.common.TopicAndPartition
 import com.yammer.metrics.core.Gauge
+import org.apache.kafka.common.utils.Utils
 
 abstract class AbstractFetcherManager(protected val name: String, clientId: String, numFetchers: Int = 1)
   extends Logging with KafkaMetricsGroup {
@@ -68,7 +69,7 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   }
 
   // to be defined in subclass to create a specific fetcher
-  def createFetcherThread(fetcherId: Int, sourceBroker: Broker): AbstractFetcherThread
+  def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread
 
   def addFetcherForPartitions(partitionAndOffsets: Map[TopicAndPartition, BrokerAndInitialOffset]) {
     mapLock synchronized {
@@ -126,6 +127,6 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   }
 }
 
-case class BrokerAndFetcherId(broker: Broker, fetcherId: Int)
+case class BrokerAndFetcherId(broker: BrokerEndPoint, fetcherId: Int)
 
-case class BrokerAndInitialOffset(broker: Broker, initOffset: Long)
+case class BrokerAndInitialOffset(broker: BrokerEndPoint, initOffset: Long)

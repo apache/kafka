@@ -21,7 +21,7 @@ import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
 import kafka.utils.Logging
 import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
-import kafka.server.KafkaConfig
+import kafka.server.{ConfigType, KafkaConfig}
 
 trait PartitionLeaderSelector {
 
@@ -61,8 +61,8 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
           case true =>
             // Prior to electing an unclean (i.e. non-ISR) leader, ensure that doing so is not disallowed by the configuration
             // for unclean leader election.
-            if (!LogConfig.fromProps(config.props.props, AdminUtils.fetchTopicConfig(controllerContext.zkClient,
-              topicAndPartition.topic)).uncleanLeaderElectionEnable) {
+            if (!LogConfig.fromProps(config.originals, AdminUtils.fetchEntityConfig(controllerContext.zkUtils,
+              ConfigType.Topic, topicAndPartition.topic)).uncleanLeaderElectionEnable) {
               throw new NoReplicaOnlineException(("No broker in ISR for partition " +
                 "%s is alive. Live brokers are: [%s],".format(topicAndPartition, controllerContext.liveBrokerIds)) +
                 " ISR brokers are: [%s]".format(currentLeaderAndIsr.isr.mkString(",")))
@@ -185,13 +185,10 @@ class ControlledShutdownLeaderSelector(controllerContext: ControllerContext)
     val liveAssignedReplicas = assignedReplicas.filter(r => liveOrShuttingDownBrokerIds.contains(r))
 
     val newIsr = currentLeaderAndIsr.isr.filter(brokerId => !controllerContext.shuttingDownBrokerIds.contains(brokerId))
-    val newLeaderOpt = newIsr.headOption
-    newLeaderOpt match {
+    liveAssignedReplicas.filter(newIsr.contains).headOption match {
       case Some(newLeader) =>
-        debug("Partition %s : current leader = %d, new leader = %d"
-              .format(topicAndPartition, currentLeader, newLeader))
-        (LeaderAndIsr(newLeader, currentLeaderEpoch + 1, newIsr, currentLeaderIsrZkPathVersion + 1),
-         liveAssignedReplicas)
+        debug("Partition %s : current leader = %d, new leader = %d".format(topicAndPartition, currentLeader, newLeader))
+        (LeaderAndIsr(newLeader, currentLeaderEpoch + 1, newIsr, currentLeaderIsrZkPathVersion + 1), liveAssignedReplicas)
       case None =>
         throw new StateChangeFailedException(("No other replicas in ISR %s for %s besides" +
           " shutting down brokers %s").format(currentLeaderAndIsr.isr.mkString(","), topicAndPartition, controllerContext.shuttingDownBrokerIds.mkString(",")))

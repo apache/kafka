@@ -19,16 +19,18 @@ package kafka.consumer
 
 import org.I0Itec.zkclient.ZkClient
 import kafka.common.TopicAndPartition
-import kafka.utils.{Utils, ZkUtils, Logging}
+import kafka.utils.{Pool, CoreUtils, ZkUtils, Logging}
+
+import scala.collection.mutable
 
 trait PartitionAssignor {
 
   /**
    * Assigns partitions to consumer instances in a group.
-   * @return An assignment map of partition to consumer thread. This only includes assignments for threads that belong
-   *         to the given assignment-context's consumer.
+   * @return An assignment map of partition to this consumer group. This includes assignments for threads that belong
+   *         to the same consumer group.
    */
-  def assign(ctx: AssignmentContext): scala.collection.Map[TopicAndPartition, ConsumerThreadId]
+  def assign(ctx: AssignmentContext): Pool[String, mutable.Map[TopicAndPartition, ConsumerThreadId]]
 
 }
 
@@ -39,19 +41,19 @@ object PartitionAssignor {
   }
 }
 
-class AssignmentContext(group: String, val consumerId: String, excludeInternalTopics: Boolean, zkClient: ZkClient) {
+class AssignmentContext(group: String, val consumerId: String, excludeInternalTopics: Boolean, zkUtils: ZkUtils) {
   val myTopicThreadIds: collection.Map[String, collection.Set[ConsumerThreadId]] = {
-    val myTopicCount = TopicCount.constructTopicCount(group, consumerId, zkClient, excludeInternalTopics)
+    val myTopicCount = TopicCount.constructTopicCount(group, consumerId, zkUtils, excludeInternalTopics)
     myTopicCount.getConsumerThreadIdsPerTopic
   }
 
   val partitionsForTopic: collection.Map[String, Seq[Int]] =
-    ZkUtils.getPartitionsForTopics(zkClient, myTopicThreadIds.keySet.toSeq)
+    zkUtils.getPartitionsForTopics(myTopicThreadIds.keySet.toSeq)
 
   val consumersForTopic: collection.Map[String, List[ConsumerThreadId]] =
-    ZkUtils.getConsumersPerTopic(zkClient, group, excludeInternalTopics)
+    zkUtils.getConsumersPerTopic(group, excludeInternalTopics)
 
-  val consumers: Seq[String] = ZkUtils.getConsumersInGroup(zkClient, group).sorted
+  val consumers: Seq[String] = zkUtils.getConsumersInGroup(group).sorted
 }
 
 /**
@@ -69,7 +71,10 @@ class AssignmentContext(group: String, val consumerId: String, excludeInternalTo
 class RoundRobinAssignor() extends PartitionAssignor with Logging {
 
   def assign(ctx: AssignmentContext) = {
-    val partitionOwnershipDecision = collection.mutable.Map[TopicAndPartition, ConsumerThreadId]()
+
+    val valueFactory = (topic: String) => new mutable.HashMap[TopicAndPartition, ConsumerThreadId]
+    val partitionAssignment =
+      new Pool[String, mutable.Map[TopicAndPartition, ConsumerThreadId]](Some(valueFactory))
 
     if (ctx.consumersForTopic.size > 0) {
       // check conditions (a) and (b)
@@ -83,7 +88,7 @@ class RoundRobinAssignor() extends PartitionAssignor with Logging {
             "Topic %s has the following available consumer streams: %s\n".format(headTopic, headThreadIdSet))
       }
 
-      val threadAssignor = Utils.circularIterator(headThreadIdSet.toSeq.sorted)
+      val threadAssignor = CoreUtils.circularIterator(headThreadIdSet.toSeq.sorted)
 
       info("Starting round-robin assignment with consumers " + ctx.consumers)
       val allTopicPartitions = ctx.partitionsForTopic.flatMap { case (topic, partitions) =>
@@ -102,12 +107,15 @@ class RoundRobinAssignor() extends PartitionAssignor with Logging {
 
       allTopicPartitions.foreach(topicPartition => {
         val threadId = threadAssignor.next()
-        if (threadId.consumer == ctx.consumerId)
-          partitionOwnershipDecision += (topicPartition -> threadId)
+        // record the partition ownership decision
+        val assignmentForConsumer = partitionAssignment.getAndMaybePut(threadId.consumer)
+        assignmentForConsumer += (topicPartition -> threadId)
       })
     }
 
-    partitionOwnershipDecision
+    // assign Map.empty for the consumers which are not associated with topic partitions
+    ctx.consumers.foreach(consumerId => partitionAssignment.getAndMaybePut(consumerId))
+    partitionAssignment
   }
 }
 
@@ -123,9 +131,10 @@ class RoundRobinAssignor() extends PartitionAssignor with Logging {
 class RangeAssignor() extends PartitionAssignor with Logging {
 
   def assign(ctx: AssignmentContext) = {
-    val partitionOwnershipDecision = collection.mutable.Map[TopicAndPartition, ConsumerThreadId]()
-
-    for ((topic, consumerThreadIdSet) <- ctx.myTopicThreadIds) {
+    val valueFactory = (topic: String) => new mutable.HashMap[TopicAndPartition, ConsumerThreadId]
+    val partitionAssignment =
+      new Pool[String, mutable.Map[TopicAndPartition, ConsumerThreadId]](Some(valueFactory))
+    for (topic <- ctx.myTopicThreadIds.keySet) {
       val curConsumers = ctx.consumersForTopic(topic)
       val curPartitions: Seq[Int] = ctx.partitionsForTopic(topic)
 
@@ -135,7 +144,7 @@ class RangeAssignor() extends PartitionAssignor with Logging {
       info("Consumer " + ctx.consumerId + " rebalancing the following partitions: " + curPartitions +
         " for topic " + topic + " with consumers: " + curConsumers)
 
-      for (consumerThreadId <- consumerThreadIdSet) {
+      for (consumerThreadId <- curConsumers) {
         val myConsumerPosition = curConsumers.indexOf(consumerThreadId)
         assert(myConsumerPosition >= 0)
         val startPart = nPartsPerConsumer * myConsumerPosition + myConsumerPosition.min(nConsumersWithExtraPart)
@@ -152,12 +161,15 @@ class RangeAssignor() extends PartitionAssignor with Logging {
             val partition = curPartitions(i)
             info(consumerThreadId + " attempting to claim partition " + partition)
             // record the partition ownership decision
-            partitionOwnershipDecision += (TopicAndPartition(topic, partition) -> consumerThreadId)
+            val assignmentForConsumer = partitionAssignment.getAndMaybePut(consumerThreadId.consumer)
+            assignmentForConsumer += (TopicAndPartition(topic, partition) -> consumerThreadId)
           }
         }
       }
     }
 
-    partitionOwnershipDecision
+    // assign Map.empty for the consumers which are not associated with topic partitions
+    ctx.consumers.foreach(consumerId => partitionAssignment.getAndMaybePut(consumerId))
+    partitionAssignment
   }
 }

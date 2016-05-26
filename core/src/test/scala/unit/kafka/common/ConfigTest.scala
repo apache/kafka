@@ -15,18 +15,18 @@
  * limitations under the License.
  */
 
-package unit.kafka.common
+package kafka.common
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import collection.mutable.ArrayBuffer
 import org.junit.Test
-import kafka.common.InvalidConfigException
 import kafka.producer.ProducerConfig
 import kafka.consumer.ConsumerConfig
 
 class ConfigTest {
 
   @Test
+  @deprecated("This test is deprecated and it will be removed in a future release.", "0.10.0.0")
   def testInvalidClientIds() {
     val invalidClientIds = new ArrayBuffer[String]()
     val badChars = Array('/', '\\', ',', '\u0000', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')

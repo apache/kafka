@@ -21,28 +21,35 @@ import kafka.utils._
 import kafka.cluster.Replica
 import kafka.common.TopicAndPartition
 import kafka.log.Log
-import kafka.message.{ByteBufferMessageSet, Message}
+import kafka.message.{MessageSet, ByteBufferMessageSet, Message}
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.utils.{MockTime => JMockTime}
+import org.junit.{Test, After, Before}
 
-import scala.Some
-import java.util.Collections
+import java.util.{Properties, Collections}
 import java.util.concurrent.atomic.AtomicBoolean
 import collection.JavaConversions._
 
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
-import org.scalatest.junit.JUnit3Suite
-import junit.framework.Assert._
+import org.junit.Assert._
 
-class SimpleFetchTest extends JUnit3Suite {
+class SimpleFetchTest {
 
-  val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_) {
-    override val replicaLagTimeMaxMs = 100L
-    override val replicaFetchWaitMaxMs = 100
-    override val replicaLagMaxMessages = 10L
-  })
+  val replicaLagTimeMaxMs = 100L
+  val replicaFetchWaitMaxMs = 100
+  val replicaLagMaxMessages = 10L
+
+  val overridingProps = new Properties()
+  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
+  overridingProps.put(KafkaConfig.ReplicaFetchWaitMaxMsProp, replicaFetchWaitMaxMs.toString)
+
+  val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps(_, overridingProps))
 
   // set the replica manager with the partition
   val time = new MockTime
+  val jTime = new JMockTime
+  val metrics = new Metrics
   val leaderLEO = 20L
   val followerLEO = 15L
   val partitionHW = 5
@@ -59,12 +66,11 @@ class SimpleFetchTest extends JUnit3Suite {
 
   var replicaManager: ReplicaManager = null
 
-  override def setUp() {
-    super.setUp()
-
+  @Before
+  def setUp() {
     // create nice mock since we don't particularly care about zkclient calls
-    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
-    EasyMock.replay(zkClient)
+    val zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
+    EasyMock.replay(zkUtils)
 
     // create nice mock since we don't particularly care about scheduler calls
     val scheduler = EasyMock.createNiceMock(classOf[KafkaScheduler])
@@ -73,6 +79,7 @@ class SimpleFetchTest extends JUnit3Suite {
     // create the log which takes read with either HW max offset or none max offset
     val log = EasyMock.createMock(classOf[Log])
     EasyMock.expect(log.logEndOffset).andReturn(leaderLEO).anyTimes()
+    EasyMock.expect(log.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(leaderLEO)).anyTimes()
     EasyMock.expect(log.read(0, fetchSize, Some(partitionHW))).andReturn(
       new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
@@ -91,7 +98,8 @@ class SimpleFetchTest extends JUnit3Suite {
     EasyMock.replay(logManager)
 
     // create the replica manager
-    replicaManager = new ReplicaManager(configs.head, time, zkClient, scheduler, logManager, new AtomicBoolean(false))
+    replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, zkUtils, scheduler, logManager,
+      new AtomicBoolean(false))
 
     // add the partition with two replicas, both in ISR
     val partition = replicaManager.getOrCreatePartition(topic, partitionId)
@@ -103,7 +111,8 @@ class SimpleFetchTest extends JUnit3Suite {
 
     // create the follower replica with defined log end offset
     val followerReplica= new Replica(configs(1).brokerId, partition, time)
-    followerReplica.logEndOffset = new LogOffsetMetadata(followerLEO, 0L, followerLEO.toInt)
+    val leo = new LogOffsetMetadata(followerLEO, 0L, followerLEO.toInt)
+    followerReplica.updateLogReadResult(new LogReadResult(FetchDataInfo(leo, MessageSet.Empty), -1L, -1, true))
 
     // add both of them to ISR
     val allReplicas = List(leaderReplica, followerReplica)
@@ -111,9 +120,10 @@ class SimpleFetchTest extends JUnit3Suite {
     partition.inSyncReplicas = allReplicas.toSet
   }
 
-  override def tearDown() {
+  @After
+  def tearDown() {
     replicaManager.shutdown(false)
-    super.tearDown()
+    metrics.close()
   }
 
   /**
@@ -132,6 +142,7 @@ class SimpleFetchTest extends JUnit3Suite {
    *
    * This test also verifies counts of fetch requests recorded by the ReplicaManager
    */
+  @Test
   def testReadFromLog() {
     val initialTopicCount = BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.count();
     val initialAllTopicsCount = BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count();

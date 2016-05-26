@@ -16,17 +16,18 @@
 */
 package kafka.javaapi.message
 
-import java.util.concurrent.atomic.AtomicLong
 import java.nio.ByteBuffer
+
+import kafka.common.LongRef
 import kafka.message._
-import kafka.javaapi.Implicits.javaListToScalaBuffer
+
+import scala.collection.JavaConverters._
 
 class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet {
   private val underlying: kafka.message.ByteBufferMessageSet = new kafka.message.ByteBufferMessageSet(buffer)
   
   def this(compressionCodec: CompressionCodec, messages: java.util.List[Message]) {
-    // due to SI-4141 which affects Scala 2.8.1, implicits are not visible in constructors and must be used explicitly
-    this(new kafka.message.ByteBufferMessageSet(compressionCodec, new AtomicLong(0), javaListToScalaBuffer(messages).toSeq : _*).buffer)
+    this(new kafka.message.ByteBufferMessageSet(compressionCodec, new LongRef(0), messages.asScala: _*).buffer)
   }
 
   def this(messages: java.util.List[Message]) {

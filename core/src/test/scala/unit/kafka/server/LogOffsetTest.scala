@@ -18,47 +18,50 @@
 package kafka.server
 
 import java.io.File
-import kafka.utils._
-import junit.framework.Assert._
-import java.util.{Random, Properties}
-import kafka.consumer.SimpleConsumer
-import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
-import kafka.zk.ZooKeeperTestHarness
-import org.scalatest.junit.JUnit3Suite
-import kafka.admin.AdminUtils
-import kafka.api.{PartitionOffsetRequestInfo, FetchRequestBuilder, OffsetRequest}
-import kafka.utils.TestUtils._
-import kafka.common.{ErrorMapping, TopicAndPartition}
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
+import java.util.concurrent.atomic.AtomicLong
+import java.util.{Properties, Random}
 
-class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
-  val random = new Random() 
+import kafka.admin.AdminUtils
+import kafka.api.{FetchRequestBuilder, OffsetRequest, PartitionOffsetRequestInfo}
+import kafka.common.TopicAndPartition
+import kafka.consumer.SimpleConsumer
+import kafka.log.{Log, LogSegment}
+import kafka.message.{ByteBufferMessageSet, Message, NoCompressionCodec}
+import kafka.utils.TestUtils._
+import kafka.utils._
+import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.Utils
+import org.easymock.{EasyMock, IAnswer}
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
+
+class LogOffsetTest extends ZooKeeperTestHarness {
+  val random = new Random()
   var logDir: File = null
   var topicLogDir: File = null
   var server: KafkaServer = null
   var logSize: Int = 100
-  val brokerPort: Int = 9099
   var simpleConsumer: SimpleConsumer = null
   var time: Time = new MockTime()
 
   @Before
   override def setUp() {
     super.setUp()
-    val config: Properties = createBrokerConfig(1, brokerPort)
+    val config: Properties = createBrokerConfig(1)
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
     time = new MockTime()
-    server = TestUtils.createServer(new KafkaConfig(config), time)
-    simpleConsumer = new SimpleConsumer("localhost", brokerPort, 1000000, 64*1024, "")
+    server = TestUtils.createServer(KafkaConfig.fromProps(config), time)
+    simpleConsumer = new SimpleConsumer("localhost", server.boundPort(), 1000000, 64*1024, "")
   }
 
   @After
   override def tearDown() {
     simpleConsumer.close
     server.shutdown
-    Utils.rm(logDir)
+    Utils.delete(logDir)
     super.tearDown()
   }
 
@@ -68,7 +71,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val request = OffsetRequest(
       Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 10)))
     val offsetResponse = simpleConsumer.getOffsetsBefore(request)
-    assertEquals(ErrorMapping.UnknownTopicOrPartitionCode,
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
                  offsetResponse.partitionErrorAndOffsets(topicAndPartition).error)
   }
 
@@ -79,7 +82,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
     // setup brokers in zookeeper as owners of partitions for this test
-    AdminUtils.createTopic(zkClient, topic, 1, 1)
+    AdminUtils.createTopic(zkUtils, topic, 1, 1)
 
     val logManager = server.getLogManager
     waitUntilTrue(() => logManager.getLog(TopicAndPartition(topic, part)).isDefined,
@@ -91,17 +94,17 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
-    val offsets = server.apis.fetchOffsets(logManager, TopicAndPartition(topic, part), OffsetRequest.LatestTime, 10)
-    assertEquals(Seq(20L, 18L, 15L, 12L, 9L, 6L, 3L, 0), offsets)
+    val offsets = server.apis.fetchOffsets(logManager, new TopicPartition(topic, part), OffsetRequest.LatestTime, 15)
+    assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), offsets)
 
     waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), "Leader should be elected")
     val topicAndPartition = TopicAndPartition(topic, part)
     val offsetRequest = OffsetRequest(
-      Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 10)),
+      Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 15)),
       replicaId = 0)
     val consumerOffsets =
       simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
-    assertEquals(Seq(20L, 18L, 15L, 12L, 9L, 6L, 3L, 0), consumerOffsets)
+    assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), consumerOffsets)
 
     // try to fetch using latest offset
     val fetchResponse = simpleConsumer.fetch(
@@ -119,7 +122,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val topic = topicPartition.split("-").head
 
     // setup brokers in zookeeper as owners of partitions for this test
-    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
+    createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
 
     var offsetChanged = false
     for(i <- 1 to 14) {
@@ -143,7 +146,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
     // setup brokers in zookeeper as owners of partitions for this test
-    AdminUtils.createTopic(zkClient, topic, 3, 1)
+    AdminUtils.createTopic(zkUtils, topic, 3, 1)
 
     val logManager = server.getLogManager
     val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
@@ -154,15 +157,15 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     val now = time.milliseconds + 30000 // pretend it is the future to avoid race conditions with the fs
 
-    val offsets = server.apis.fetchOffsets(logManager, TopicAndPartition(topic, part), now, 10)
-    assertEquals(Seq(20L, 18L, 15L, 12L, 9L, 6L, 3L, 0L), offsets)
+    val offsets = server.apis.fetchOffsets(logManager, new TopicPartition(topic, part), now, 15)
+    assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), offsets)
 
     waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), "Leader should be elected")
     val topicAndPartition = TopicAndPartition(topic, part)
-    val offsetRequest = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(now, 10)), replicaId = 0)
+    val offsetRequest = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(now, 15)), replicaId = 0)
     val consumerOffsets =
       simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
-    assertEquals(Seq(20L, 18L, 15L, 12L, 9L, 6L, 3L, 0L), consumerOffsets)
+    assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), consumerOffsets)
   }
 
   @Test
@@ -172,7 +175,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
     // setup brokers in zookeeper as owners of partitions for this test
-    AdminUtils.createTopic(zkClient, topic, 3, 1)
+    AdminUtils.createTopic(zkUtils, topic, 3, 1)
 
     val logManager = server.getLogManager
     val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
@@ -181,7 +184,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
-    val offsets = server.apis.fetchOffsets(logManager, TopicAndPartition(topic, part), OffsetRequest.EarliestTime, 10)
+    val offsets = server.apis.fetchOffsets(logManager, new TopicPartition(topic, part), OffsetRequest.EarliestTime, 10)
 
     assertEquals(Seq(0L), offsets)
 
@@ -194,10 +197,27 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(Seq(0L), consumerOffsets)
   }
 
-  private def createBrokerConfig(nodeId: Int, port: Int): Properties = {
+  /* We test that `fetchOffsetsBefore` works correctly if `LogSegment.size` changes after each invocation (simulating
+   * a race condition) */
+  @Test
+  def testFetchOffsetsBeforeWithChangingSegmentSize() {
+    val log = EasyMock.niceMock(classOf[Log])
+    val logSegment = EasyMock.niceMock(classOf[LogSegment])
+    EasyMock.expect(logSegment.size).andStubAnswer(new IAnswer[Long] {
+      private val value = new AtomicLong(0)
+      def answer: Long = value.getAndIncrement()
+    })
+    EasyMock.replay(logSegment)
+    val logSegments = Seq(logSegment)
+    EasyMock.expect(log.logSegments).andStubReturn(logSegments)
+    EasyMock.replay(log)
+    server.apis.fetchOffsetsBefore(log, System.currentTimeMillis, 100)
+  }
+
+  private def createBrokerConfig(nodeId: Int): Properties = {
     val props = new Properties
     props.put("broker.id", nodeId.toString)
-    props.put("port", port.toString)
+    props.put("port", TestUtils.RandomPort.toString())
     props.put("log.dir", getLogDir.getAbsolutePath)
     props.put("log.flush.interval.messages", "1")
     props.put("enable.zookeeper", "false")

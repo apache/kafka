@@ -23,7 +23,7 @@ import java.nio.ByteBuffer;
  */
 public class NetworkSend extends ByteBufferSend {
 
-    public NetworkSend(int destination, ByteBuffer... buffers) {
+    public NetworkSend(String destination, ByteBuffer... buffers) {
         super(destination, sizeDelimit(buffers));
     }
 

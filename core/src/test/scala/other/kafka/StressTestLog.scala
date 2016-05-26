@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,26 +17,32 @@
 
 package kafka
 
+import java.util.Properties
 import java.util.concurrent.atomic._
-import kafka.common._
+
 import kafka.message._
 import kafka.log._
 import kafka.utils._
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
+import org.apache.kafka.common.utils.Utils
 
 /**
- * A stress test that instantiates a log and then runs continual appends against it from one thread and continual reads against it 
+ * A stress test that instantiates a log and then runs continual appends against it from one thread and continual reads against it
  * from another thread and checks a few basic assertions until the user kills the process.
  */
 object StressTestLog {
   val running = new AtomicBoolean(true)
-  
+
   def main(args: Array[String]) {
-    val dir = TestUtils.tempDir()
+    val dir = TestUtils.randomPartitionLogDir(TestUtils.tempDir())
     val time = new MockTime
+    val logProprties = new Properties()
+    logProprties.put(LogConfig.SegmentBytesProp, 64*1024*1024: java.lang.Integer)
+    logProprties.put(LogConfig.MaxMessageBytesProp, Int.MaxValue: java.lang.Integer)
+    logProprties.put(LogConfig.SegmentIndexBytesProp, 1024*1024: java.lang.Integer)
+
     val log = new Log(dir = dir,
-                      config = LogConfig(segmentSize = 64*1024*1024,
-                                         maxMessageSize = Int.MaxValue,
-                                         maxIndexSize = 1024*1024),
+                      config = LogConfig(logProprties),
                       recoveryPoint = 0L,
                       scheduler = time.scheduler,
                       time = time)
@@ -44,22 +50,22 @@ object StressTestLog {
     writer.start()
     val reader = new ReaderThread(log)
     reader.start()
-    
+
     Runtime.getRuntime().addShutdownHook(new Thread() {
       override def run() = {
         running.set(false)
         writer.join()
         reader.join()
-        Utils.rm(dir)
+        Utils.delete(dir)
       }
     })
-    
+
     while(running.get) {
       println("Reader offset = %d, writer offset = %d".format(reader.offset, writer.offset))
       Thread.sleep(1000)
     }
   }
-  
+
   abstract class WorkerThread extends Thread {
     override def run() {
       try {
@@ -67,7 +73,7 @@ object StressTestLog {
         while(running.get)
           work()
       } catch {
-        case e: Exception => 
+        case e: Exception =>
           e.printStackTrace()
           running.set(false)
       }
@@ -75,7 +81,7 @@ object StressTestLog {
     }
     def work()
   }
-  
+
   class WriterThread(val log: Log) extends WorkerThread {
     @volatile var offset = 0
     override def work() {
@@ -86,7 +92,7 @@ object StressTestLog {
         Thread.sleep(500)
     }
   }
-  
+
   class ReaderThread(val log: Log) extends WorkerThread {
     @volatile var offset = 0
     override def work() {

@@ -12,15 +12,18 @@
  */
 package org.apache.kafka.common.config;
 
-import static org.junit.Assert.fail;
-
-import java.util.Map;
-import java.util.Properties;
-
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.junit.Test;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+
+import static org.junit.Assert.fail;
+import static org.junit.Assert.assertEquals;
 
 public class AbstractConfigTest {
 
@@ -33,6 +36,17 @@ public class AbstractConfigTest {
         testInvalidInputs("org.apache.kafka.clients.producer.unknown-metrics-reporter");
         testInvalidInputs("test1,test2");
         testInvalidInputs("org.apache.kafka.common.metrics.FakeMetricsReporter,");
+    }
+
+    @Test
+    public void testOriginalsWithPrefix() {
+        Properties props = new Properties();
+        props.put("foo.bar", "abc");
+        props.put("setting", "def");
+        TestConfig config = new TestConfig(props);
+        Map<String, Object> expected = new HashMap<>();
+        expected.put("bar", "abc");
+        assertEquals(expected, config.originalsWithPrefix("foo."));
     }
 
     private void testValidInputs(String configValue) {
@@ -53,7 +67,7 @@ public class AbstractConfigTest {
         try {
             config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
             fail("Expected a config exception due to invalid props :" + props);
-        } catch (ConfigException e) {
+        } catch (KafkaException e) {
             // this is good
         }
     }
@@ -73,7 +87,7 @@ public class AbstractConfigTest {
                                             METRIC_REPORTER_CLASSES_DOC);
         }
 
-        public TestConfig(Map<? extends Object, ? extends Object> props) {
+        public TestConfig(Map<?, ?> props) {
             super(CONFIG, props);
         }
     }

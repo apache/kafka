@@ -17,42 +17,75 @@
 
 package kafka.integration
 
+import java.io.File
 import java.util.Arrays
-import scala.collection.mutable.Buffer
-import kafka.server._
-import kafka.utils.{Utils, TestUtils}
-import org.scalatest.junit.JUnit3Suite
-import kafka.zk.ZooKeeperTestHarness
 import kafka.common.KafkaException
-import kafka.utils.TestUtils
+import kafka.server._
+import kafka.utils.{CoreUtils, TestUtils}
+import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.junit.{After, Before}
+import scala.collection.mutable.Buffer
+import java.util.Properties
 
 /**
  * A test harness that brings up some number of broker nodes
  */
-trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
-
-  val configs: List[KafkaConfig]
+trait KafkaServerTestHarness extends ZooKeeperTestHarness {
+  var instanceConfigs: Seq[KafkaConfig] = null
   var servers: Buffer[KafkaServer] = null
   var brokerList: String = null
   var alive: Array[Boolean] = null
-  
-  def serverForId(id: Int) = servers.find(s => s.config.brokerId == id)
-  
-  def bootstrapUrl = configs.map(c => c.hostName + ":" + c.port).mkString(",")
-  
-  override def setUp() {
-    super.setUp
-    if(configs.size <= 0)
-      throw new KafkaException("Must suply at least one server config.")
-    brokerList = TestUtils.getBrokerListStrFromConfigs(configs)
-    servers = configs.map(TestUtils.createServer(_)).toBuffer
-    alive = new Array[Boolean](servers.length)
-    Arrays.fill(alive, true)
+  val kafkaPrincipalType = KafkaPrincipal.USER_TYPE
+  val setClusterAcl: Option[() => Unit] = None
+
+  /**
+   * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
+   * test and should not reuse previous configurations unless they select their ports randomly when servers are started.
+   */
+  def generateConfigs(): Seq[KafkaConfig]
+
+  def configs: Seq[KafkaConfig] = {
+    if (instanceConfigs == null)
+      instanceConfigs = generateConfigs()
+    instanceConfigs
   }
 
+  def serverForId(id: Int) = servers.find(s => s.config.brokerId == id)
+
+  protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
+  protected def trustStoreFile: Option[File] = None
+  protected def saslProperties: Option[Properties] = None
+
+  @Before
+  override def setUp() {
+    super.setUp
+    if (configs.size <= 0)
+      throw new KafkaException("Must supply at least one server config.")
+    servers = configs.map(TestUtils.createServer(_)).toBuffer
+    brokerList = TestUtils.getBrokerListStrFromServers(servers, securityProtocol)
+    alive = new Array[Boolean](servers.length)
+    Arrays.fill(alive, true)
+    // We need to set a cluster ACL in some cases here
+    // because of the topic creation in the setup of
+    // IntegrationTestHarness. If we don't, then tests
+    // fail with a cluster action authorization exception
+    // when processing an update metadata request
+    // (controller -> broker).
+    //
+    // The following method does nothing by default, but
+    // if the test case requires setting up a cluster ACL,
+    // then it needs to be implemented.
+    setClusterAcl.foreach(_.apply)
+  }
+
+  @After
   override def tearDown() {
-    servers.map(server => server.shutdown())
-    servers.map(server => server.config.logDirs.map(Utils.rm(_)))
+    if (servers != null) {
+      servers.foreach(_.shutdown())
+      servers.foreach(server => CoreUtils.delete(server.config.logDirs))
+    }
     super.tearDown
   }
   
@@ -75,7 +108,7 @@ trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
    */
   def restartDeadBrokers() {
     for(i <- 0 until servers.length if !alive(i)) {
-      servers(i) = TestUtils.createServer(configs(i))
+      servers(i).startup()
       alive(i) = true
     }
   }

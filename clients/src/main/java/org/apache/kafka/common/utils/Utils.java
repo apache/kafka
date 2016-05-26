@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -14,26 +14,64 @@ package org.apache.kafka.common.utils;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Closeable;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
+import java.io.FileNotFoundException;
+import java.io.StringWriter;
+import java.io.PrintWriter;
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Properties;
+import java.nio.channels.FileChannel;
+import java.nio.charset.Charset;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.kafka.common.KafkaException;
 
 public class Utils {
 
-    private static final Pattern HOST_PORT_PATTERN = Pattern.compile("\\[?(.+?)\\]?:(\\d+)");
+    // This matches URIs of formats: host:port and protocol:\\host:port
+    // IPv6 is supported with [ip] pattern
+    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%.:]*)\\]?:([0-9]+)");
 
     public static final String NL = System.getProperty("line.separator");
 
+    private static final Logger log = LoggerFactory.getLogger(Utils.class);
+
+    /**
+     * Get a sorted list representation of a collection.
+     * @param collection The collection to sort
+     * @param <T> The class of objects in the collection
+     * @return An unmodifiable sorted list with the contents of the collection
+     */
+    public static <T extends Comparable<? super T>> List<T> sorted(Collection<T> collection) {
+        List<T> res = new ArrayList<>(collection);
+        Collections.sort(res);
+        return Collections.unmodifiableList(res);
+    }
+
     /**
      * Turn the given UTF8 byte array into a string
-     * 
+     *
      * @param bytes The byte array
      * @return The string
      */
@@ -47,7 +85,7 @@ public class Utils {
 
     /**
      * Turn a string into a utf8 byte[]
-     * 
+     *
      * @param string The string
      * @return The byte[]
      */
@@ -61,7 +99,7 @@ public class Utils {
 
     /**
      * Read an unsigned integer from the current position in the buffer, incrementing the position by 4 bytes
-     * 
+     *
      * @param buffer The buffer to read from
      * @return The integer read, as a long to avoid signedness
      */
@@ -71,7 +109,7 @@ public class Utils {
 
     /**
      * Read an unsigned integer from the given position without modifying the buffers position
-     * 
+     *
      * @param buffer the buffer to read from
      * @param index the index from which to read the integer
      * @return The integer read, as a long to avoid signedness
@@ -82,21 +120,36 @@ public class Utils {
 
     /**
      * Read an unsigned integer stored in little-endian format from the {@link InputStream}.
-     * 
+     *
      * @param in The stream to read from
      * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
      */
     public static int readUnsignedIntLE(InputStream in) throws IOException {
-        return (in.read() << 8 * 0) 
+        return (in.read() << 8 * 0)
              | (in.read() << 8 * 1)
              | (in.read() << 8 * 2)
              | (in.read() << 8 * 3);
     }
 
     /**
+     * Get the little-endian value of an integer as a byte array.
+     * @param val The value to convert to a little-endian array
+     * @return The little-endian encoded array of bytes for the value
+     */
+    public static byte[] toArrayLE(int val) {
+        return new byte[] {
+            (byte) (val >> 8 * 0),
+            (byte) (val >> 8 * 1),
+            (byte) (val >> 8 * 2),
+            (byte) (val >> 8 * 3)
+        };
+    }
+
+
+    /**
      * Read an unsigned integer stored in little-endian format from a byte array
      * at a given offset.
-     * 
+     *
      * @param buffer The byte array to read from
      * @param offset The position in buffer to read from
      * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
@@ -110,17 +163,17 @@ public class Utils {
 
     /**
      * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
-     * 
+     *
      * @param buffer The buffer to write to
      * @param value The value to write
      */
-    public static void writetUnsignedInt(ByteBuffer buffer, long value) {
+    public static void writeUnsignedInt(ByteBuffer buffer, long value) {
         buffer.putInt((int) (value & 0xffffffffL));
     }
 
     /**
      * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
-     * 
+     *
      * @param buffer The buffer to write to
      * @param index The position in the buffer at which to begin writing
      * @param value The value to write
@@ -131,7 +184,7 @@ public class Utils {
 
     /**
      * Write an unsigned integer in little-endian format to the {@link OutputStream}.
-     * 
+     *
      * @param out The stream to write to
      * @param value The value to write
      */
@@ -145,7 +198,7 @@ public class Utils {
     /**
      * Write an unsigned integer in little-endian format to a byte array
      * at a given offset.
-     * 
+     *
      * @param buffer The byte array to write to
      * @param offset The position in buffer to write to
      * @param value The value to write
@@ -163,12 +216,27 @@ public class Utils {
      * java.lang.Math.abs or scala.math.abs in that they return Int.MinValue (!).
      */
     public static int abs(int n) {
-        return n & 0x7fffffff;
+        return (n == Integer.MIN_VALUE) ? 0 : Math.abs(n);
+    }
+
+    /**
+     * Get the minimum of some long values.
+     * @param first Used to ensure at least one value
+     * @param rest The rest of longs to compare
+     * @return The minimum of all passed argument.
+     */
+    public static long min(long first, long ... rest) {
+        long min = first;
+        for (int i = 0; i < rest.length; i++) {
+            if (rest[i] < min)
+                min = rest[i];
+        }
+        return min;
     }
 
     /**
      * Get the length for UTF8-encoding a string without encoding it first
-     * 
+     *
      * @param s The string to calculate the length for
      * @return The length when serialized
      */
@@ -214,7 +282,7 @@ public class Utils {
 
     /**
      * Check that the parameter t is not null
-     * 
+     *
      * @param t The object to check
      * @return t if it isn't null
      * @throws NullPointerException if t is null.
@@ -241,14 +309,27 @@ public class Utils {
     /**
      * Instantiate the class
      */
-    public static Object newInstance(Class<?> c) {
+    public static <T> T newInstance(Class<T> c) {
         try {
             return c.newInstance();
         } catch (IllegalAccessException e) {
             throw new KafkaException("Could not instantiate class " + c.getName(), e);
         } catch (InstantiationException e) {
             throw new KafkaException("Could not instantiate class " + c.getName() + " Does it have a public no-argument constructor?", e);
+        } catch (NullPointerException e) {
+            throw new KafkaException("Requested class was null", e);
         }
+    }
+
+    /**
+     * Look up the class by name and instantiate it.
+     * @param klass class name
+     * @param base super class of the class to be instantiated
+     * @param <T>
+     * @return the new instance
+     */
+    public static <T> T newInstance(String klass, Class<T> base) throws ClassNotFoundException {
+        return Utils.newInstance(Class.forName(klass, true, Utils.getContextOrKafkaClassLoader()).asSubclass(base));
     }
 
     /**
@@ -328,7 +409,7 @@ public class Utils {
                 ? "[" + host + "]:" + port // IPv6
                 : host + ":" + port;
     }
-    
+
     /**
      * Create a string representation of an array joined by the given separator
      * @param strs The array of items
@@ -338,7 +419,7 @@ public class Utils {
     public static <T> String join(T[] strs, String seperator) {
         return join(Arrays.asList(strs), seperator);
     }
-    
+
     /**
      * Create a string representation of a list joined by the given separator
      * @param list The list of items
@@ -351,8 +432,271 @@ public class Utils {
         while (iter.hasNext()) {
             sb.append(iter.next());
             if (iter.hasNext())
-                sb.append(seperator);  
+                sb.append(seperator);
         }
         return sb.toString();
     }
+
+    /**
+     * Read a properties file from the given path
+     * @param filename The path of the file to read
+     */
+    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
+        Properties props = new Properties();
+        try (InputStream propStream = new FileInputStream(filename)) {
+            props.load(propStream);
+        }
+        return props;
+    }
+
+    /**
+     * Converts a Properties object to a Map<String, String>, calling {@link #toString} to ensure all keys and values
+     * are Strings.
+     */
+    public static Map<String, String> propsToStringMap(Properties props) {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<Object, Object> entry : props.entrySet())
+            result.put(entry.getKey().toString(), entry.getValue().toString());
+        return result;
+    }
+
+    /**
+     * Get the stack trace from an exception as a string
+     */
+    public static String stackTrace(Throwable e) {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        e.printStackTrace(pw);
+        return sw.toString();
+    }
+
+    /**
+     * Create a new thread
+     * @param name The name of the thread
+     * @param runnable The work for the thread to do
+     * @param daemon Should the thread block JVM shutdown?
+     * @return The unstarted thread
+     */
+    public static Thread newThread(String name, Runnable runnable, boolean daemon) {
+        Thread thread = new Thread(runnable, name);
+        thread.setDaemon(daemon);
+        thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            public void uncaughtException(Thread t, Throwable e) {
+                log.error("Uncaught exception in thread '" + t.getName() + "':", e);
+            }
+        });
+        return thread;
+    }
+
+    /**
+     * Create a daemon thread
+     * @param name The name of the thread
+     * @param runnable The runnable to execute in the background
+     * @return The unstarted thread
+     */
+    public static Thread daemonThread(String name, Runnable runnable) {
+        return newThread(name, runnable, true);
+    }
+
+    /**
+     * Print an error message and shutdown the JVM
+     * @param message The error message
+     */
+    public static void croak(String message) {
+        System.err.println(message);
+        System.exit(1);
+    }
+
+    /**
+     * Read a buffer into a Byte array for the given offset and length
+     */
+    public static byte[] readBytes(ByteBuffer buffer, int offset, int length) {
+        byte[] dest = new byte[length];
+        if (buffer.hasArray()) {
+            System.arraycopy(buffer.array(), buffer.arrayOffset() + offset, dest, 0, length);
+        } else {
+            buffer.mark();
+            buffer.position(offset);
+            buffer.get(dest, 0, length);
+            buffer.reset();
+        }
+        return dest;
+    }
+
+    /**
+     * Read the given byte buffer into a Byte array
+     */
+    public static byte[] readBytes(ByteBuffer buffer) {
+        return Utils.readBytes(buffer, 0, buffer.limit());
+    }
+
+    /**
+     * Attempt to read a file as a string
+     * @throws IOException
+     */
+    public static String readFileAsString(String path, Charset charset) throws IOException {
+        if (charset == null) charset = Charset.defaultCharset();
+
+        try (FileInputStream stream = new FileInputStream(new File(path))) {
+            FileChannel fc = stream.getChannel();
+            MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
+            return charset.decode(bb).toString();
+        }
+
+    }
+
+    public static String readFileAsString(String path) throws IOException {
+        return Utils.readFileAsString(path, Charset.defaultCharset());
+    }
+
+    /**
+     * Check if the given ByteBuffer capacity
+     * @param existingBuffer ByteBuffer capacity to check
+     * @param newLength new length for the ByteBuffer.
+     * returns ByteBuffer
+     */
+    public static ByteBuffer ensureCapacity(ByteBuffer existingBuffer, int newLength) {
+        if (newLength > existingBuffer.capacity()) {
+            ByteBuffer newBuffer = ByteBuffer.allocate(newLength);
+            existingBuffer.flip();
+            newBuffer.put(existingBuffer);
+            return newBuffer;
+        }
+        return existingBuffer;
+    }
+
+    /*
+     * Creates a set
+     * @param elems the elements
+     * @param <T> the type of element
+     * @return Set
+     */
+    @SafeVarargs
+    public static <T> Set<T> mkSet(T... elems) {
+        return new HashSet<>(Arrays.asList(elems));
+    }
+
+    /*
+     * Creates a list
+     * @param elems the elements
+     * @param <T> the type of element
+     * @return List
+     */
+    @SafeVarargs
+    public static <T> List<T> mkList(T... elems) {
+        return Arrays.asList(elems);
+    }
+
+
+    /*
+     * Create a string from a collection
+     * @param coll the collection
+     * @param separator the separator
+     */
+    public static <T> CharSequence mkString(Collection<T> coll, String separator) {
+        StringBuilder sb = new StringBuilder();
+        Iterator<T> iter = coll.iterator();
+        if (iter.hasNext()) {
+            sb.append(iter.next().toString());
+
+            while (iter.hasNext()) {
+                sb.append(separator);
+                sb.append(iter.next().toString());
+            }
+        }
+        return sb;
+    }
+
+    /**
+     * Recursively delete the given file/directory and any subfiles (if any exist)
+     *
+     * @param file The root file at which to begin deleting
+     */
+    public static void delete(File file) {
+        if (file == null) {
+            return;
+        } else if (file.isDirectory()) {
+            File[] files = file.listFiles();
+            if (files != null) {
+                for (File f : files)
+                    delete(f);
+            }
+            file.delete();
+        } else {
+            file.delete();
+        }
+    }
+
+    /**
+     * Returns an empty collection if this list is null
+     * @param other
+     * @return
+     */
+    public static <T> List<T> safe(List<T> other) {
+        return other == null ? Collections.<T>emptyList() : other;
+    }
+
+   /**
+    * Get the ClassLoader which loaded Kafka.
+    */
+    public static ClassLoader getKafkaClassLoader() {
+        return Utils.class.getClassLoader();
+    }
+
+    /**
+     * Get the Context ClassLoader on this thread or, if not present, the ClassLoader that
+     * loaded Kafka.
+     *
+     * This should be used whenever passing a ClassLoader to Class.forName
+     */
+    public static ClassLoader getContextOrKafkaClassLoader() {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null)
+            return getKafkaClassLoader();
+        else
+            return cl;
+    }
+
+    /**
+     * Attempts to move source to target atomically and falls back to a non-atomic move if it fails.
+     *
+     * @throws IOException if both atomic and non-atomic moves fail
+     */
+    public static void atomicMoveWithFallback(Path source, Path target) throws IOException {
+        try {
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException outer) {
+            try {
+                Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+                log.debug("Non-atomic move of " + source + " to " + target + " succeeded after atomic move failed due to "
+                        + outer.getMessage());
+            } catch (IOException inner) {
+                inner.addSuppressed(outer);
+                throw inner;
+            }
+        }
+    }
+
+    /**
+     * Closes all the provided closeables.
+     * @throws IOException if any of the close methods throws an IOException.
+     *         The first IOException is thrown with subsequent exceptions
+     *         added as suppressed exceptions.
+     */
+    public static void closeAll(Closeable... closeables) throws IOException {
+        IOException exception = null;
+        for (Closeable closeable : closeables) {
+            try {
+                closeable.close();
+            } catch (IOException e) {
+                if (exception != null)
+                    exception.addSuppressed(e);
+                else
+                    exception = e;
+            }
+        }
+        if (exception != null)
+            throw exception;
+    }
+
 }

@@ -18,24 +18,29 @@
 package kafka.server
 
 
-import kafka.api.ProducerResponseStatus
-import kafka.common.ErrorMapping
-import kafka.common.TopicAndPartition
+import java.util.concurrent.TimeUnit
+
+import com.yammer.metrics.core.Meter
+import kafka.metrics.KafkaMetricsGroup
+import kafka.utils.Pool
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 
 import scala.collection._
 
-case class ProducePartitionStatus(requiredOffset: Long, responseStatus: ProducerResponseStatus) {
+case class ProducePartitionStatus(requiredOffset: Long, responseStatus: PartitionResponse) {
   @volatile var acksPending = false
 
   override def toString = "[acksPending: %b, error: %d, startOffset: %d, requiredOffset: %d]"
-    .format(acksPending, responseStatus.error, responseStatus.offset, requiredOffset)
+    .format(acksPending, responseStatus.errorCode, responseStatus.baseOffset, requiredOffset)
 }
 
 /**
  * The produce metadata maintained by the delayed produce operation
  */
 case class ProduceMetadata(produceRequiredAcks: Short,
-                           produceStatus: Map[TopicAndPartition, ProducePartitionStatus]) {
+                           produceStatus: Map[TopicPartition, ProducePartitionStatus]) {
 
   override def toString = "[requiredAcks: %d, partitionStatus: %s]"
     .format(produceRequiredAcks, produceStatus)
@@ -48,20 +53,20 @@ case class ProduceMetadata(produceRequiredAcks: Short,
 class DelayedProduce(delayMs: Long,
                      produceMetadata: ProduceMetadata,
                      replicaManager: ReplicaManager,
-                     responseCallback: Map[TopicAndPartition, ProducerResponseStatus] => Unit)
+                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit)
   extends DelayedOperation(delayMs) {
 
   // first update the acks pending variable according to the error code
-  produceMetadata.produceStatus.foreach { case (topicAndPartition, status) =>
-    if (status.responseStatus.error == ErrorMapping.NoError) {
+  produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
+    if (status.responseStatus.errorCode == Errors.NONE.code) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
-      status.responseStatus.error = ErrorMapping.RequestTimedOutCode
+      status.responseStatus.errorCode = Errors.REQUEST_TIMED_OUT.code
     } else {
       status.acksPending = false
     }
 
-    trace("Initial partition status for %s is %s".format(topicAndPartition, status))
+    trace("Initial partition status for %s is %s".format(topicPartition, status))
   }
 
   /**
@@ -84,21 +89,19 @@ class DelayedProduce(delayMs: Long,
         val partitionOpt = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
         val (hasEnough, errorCode) = partitionOpt match {
           case Some(partition) =>
-            partition.checkEnoughReplicasReachOffset(
-              status.requiredOffset,
-              produceMetadata.produceRequiredAcks)
+            partition.checkEnoughReplicasReachOffset(status.requiredOffset)
           case None =>
             // Case A
-            (false, ErrorMapping.UnknownTopicOrPartitionCode)
+            (false, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
         }
-        if (errorCode != ErrorMapping.NoError) {
+        if (errorCode != Errors.NONE.code) {
           // Case B.1
           status.acksPending = false
-          status.responseStatus.error = errorCode
+          status.responseStatus.errorCode = errorCode
         } else if (hasEnough) {
           // Case B.2
           status.acksPending = false
-          status.responseStatus.error = ErrorMapping.NoError
+          status.responseStatus.errorCode = Errors.NONE.code
         }
       }
     }
@@ -110,6 +113,14 @@ class DelayedProduce(delayMs: Long,
       false
   }
 
+  override def onExpiration() {
+    produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
+      if (status.acksPending) {
+        DelayedProduceMetrics.recordExpiration(topicPartition)
+      }
+    }
+  }
+
   /**
    * Upon completion, return the current response status along with the error code per partition
    */
@@ -118,3 +129,21 @@ class DelayedProduce(delayMs: Long,
     responseCallback(responseStatus)
   }
 }
+
+object DelayedProduceMetrics extends KafkaMetricsGroup {
+
+  private val aggregateExpirationMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
+
+  private val partitionExpirationMeterFactory = (key: TopicPartition) =>
+    newMeter("ExpiresPerSec",
+             "requests",
+             TimeUnit.SECONDS,
+             tags = Map("topic" -> key.topic, "partition" -> key.partition.toString))
+  private val partitionExpirationMeters = new Pool[TopicPartition, Meter](valueFactory = Some(partitionExpirationMeterFactory))
+
+  def recordExpiration(partition: TopicPartition) {
+    aggregateExpirationMeter.mark()
+    partitionExpirationMeters.getAndMaybePut(partition).mark()
+  }
+}
+

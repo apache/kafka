@@ -36,7 +36,7 @@ private[kafka] abstract class GenericRequestAndHeader(val versionId: Short,
     2 /* version id */ +
     4 /* correlation id */ +
     (2 + clientId.length) /* client id */ +
-    body.sizeOf();
+    body.sizeOf()
   }
 
   override def toString(): String = {

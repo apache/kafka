@@ -17,10 +17,15 @@
 
 package kafka.consumer
 
+
+import java.nio.channels.{AsynchronousCloseException, ClosedByInterruptException}
+import java.util.concurrent.TimeUnit
+
 import kafka.api._
 import kafka.network._
 import kafka.utils._
 import kafka.common.{ErrorMapping, TopicAndPartition}
+import org.apache.kafka.common.network.{NetworkReceive, Receive}
 import org.apache.kafka.common.utils.Utils._
 
 /**
@@ -55,6 +60,16 @@ class SimpleConsumer(val host: String,
     connect()
   }
 
+  /**
+   * Unblock thread by closing channel and triggering AsynchronousCloseException if a read operation is in progress.
+   *
+   * This handles a bug found in Java 1.7 and below, where interrupting a thread can not correctly unblock
+   * the thread from waiting on ReadableByteChannel.read().
+   */
+  def disconnectToHandleJavaIOBug() = {
+    disconnect()
+  }
+
   def close() {
     lock synchronized {
       disconnect()
@@ -62,16 +77,21 @@ class SimpleConsumer(val host: String,
     }
   }
   
-  private def sendRequest(request: RequestOrResponse): Receive = {
+  private def sendRequest(request: RequestOrResponse): NetworkReceive = {
     lock synchronized {
-      var response: Receive = null
+      var response: NetworkReceive = null
       try {
         getOrMakeConnection()
         blockingChannel.send(request)
         response = blockingChannel.receive()
       } catch {
+        case e : ClosedByInterruptException =>
+          throw e
+        // Should not observe this exception when running Kafka with Java 1.8
+        case e: AsynchronousCloseException =>
+          throw e
         case e : Throwable =>
-          info("Reconnect due to socket error: %s".format(e.toString))
+          info("Reconnect due to error:", e)
           // retry once
           try {
             reconnect()
@@ -89,12 +109,12 @@ class SimpleConsumer(val host: String,
 
   def send(request: TopicMetadataRequest): TopicMetadataResponse = {
     val response = sendRequest(request)
-    TopicMetadataResponse.readFrom(response.buffer)
+    TopicMetadataResponse.readFrom(response.payload())
   }
 
-  def send(request: ConsumerMetadataRequest): ConsumerMetadataResponse = {
+  def send(request: GroupCoordinatorRequest): GroupCoordinatorResponse = {
     val response = sendRequest(request)
-    ConsumerMetadataResponse.readFrom(response.buffer)
+    GroupCoordinatorResponse.readFrom(response.payload())
   }
 
   /**
@@ -104,7 +124,7 @@ class SimpleConsumer(val host: String,
    *  @return a set of fetched messages
    */
   def fetch(request: FetchRequest): FetchResponse = {
-    var response: Receive = null
+    var response: NetworkReceive = null
     val specificTimer = fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).requestTimer
     val aggregateTimer = fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.requestTimer
     aggregateTimer.time {
@@ -112,10 +132,12 @@ class SimpleConsumer(val host: String,
         response = sendRequest(request)
       }
     }
-    val fetchResponse = FetchResponse.readFrom(response.buffer)
+    val fetchResponse = FetchResponse.readFrom(response.payload(), request.versionId)
     val fetchedSize = fetchResponse.sizeInBytes
     fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).requestSizeHist.update(fetchedSize)
     fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.requestSizeHist.update(fetchedSize)
+    fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).throttleTimeStats.update(fetchResponse.throttleTimeMs, TimeUnit.MILLISECONDS)
+    fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.throttleTimeStats.update(fetchResponse.throttleTimeMs, TimeUnit.MILLISECONDS)
     fetchResponse
   }
 
@@ -124,7 +146,7 @@ class SimpleConsumer(val host: String,
    *  @param request a [[kafka.api.OffsetRequest]] object.
    *  @return a [[kafka.api.OffsetResponse]] object.
    */
-  def getOffsetsBefore(request: OffsetRequest) = OffsetResponse.readFrom(sendRequest(request).buffer)
+  def getOffsetsBefore(request: OffsetRequest) = OffsetResponse.readFrom(sendRequest(request).payload())
 
   /**
    * Commit offsets for a topic
@@ -135,7 +157,7 @@ class SimpleConsumer(val host: String,
   def commitOffsets(request: OffsetCommitRequest) = {
     // TODO: With KAFKA-1012, we have to first issue a ConsumerMetadataRequest and connect to the coordinator before
     // we can commit offsets.
-    OffsetCommitResponse.readFrom(sendRequest(request).buffer)
+    OffsetCommitResponse.readFrom(sendRequest(request).payload())
   }
 
   /**
@@ -144,7 +166,7 @@ class SimpleConsumer(val host: String,
    * @param request a [[kafka.api.OffsetFetchRequest]] object.
    * @return a [[kafka.api.OffsetFetchResponse]] object.
    */
-  def fetchOffsets(request: OffsetFetchRequest) = OffsetFetchResponse.readFrom(sendRequest(request).buffer)
+  def fetchOffsets(request: OffsetFetchRequest) = OffsetFetchResponse.readFrom(sendRequest(request).payload())
 
   private def getOrMakeConnection() {
     if(!isClosed && !blockingChannel.isConnected) {

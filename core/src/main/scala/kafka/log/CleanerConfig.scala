@@ -29,13 +29,13 @@ package kafka.log
  * @param enableCleaner Allows completely disabling the log cleaner
  * @param hashAlgorithm The hash algorithm to use in key comparison.
  */
-case class CleanerConfig(val numThreads: Int = 1, 
-                         val dedupeBufferSize: Long = 4*1024*1024L,
-                         val dedupeBufferLoadFactor: Double = 0.9d,
-                         val ioBufferSize: Int = 1024*1024,
-                         val maxMessageSize: Int = 32*1024*1024,
-                         val maxIoBytesPerSecond: Double = Double.MaxValue,
-                         val backOffMs: Long = 15 * 1000,
-                         val enableCleaner: Boolean = true,
-                         val hashAlgorithm: String = "MD5") {
+case class CleanerConfig(numThreads: Int = 1,
+                         dedupeBufferSize: Long = 4*1024*1024L,
+                         dedupeBufferLoadFactor: Double = 0.9d,
+                         ioBufferSize: Int = 1024*1024,
+                         maxMessageSize: Int = 32*1024*1024,
+                         maxIoBytesPerSecond: Double = Double.MaxValue,
+                         backOffMs: Long = 15 * 1000,
+                         enableCleaner: Boolean = true,
+                         hashAlgorithm: String = "MD5") {
 }

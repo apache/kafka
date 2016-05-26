@@ -13,6 +13,7 @@
 
 package org.apache.kafka.common.serialization;
 
+import java.io.Closeable;
 import java.util.Map;
 
 /**
@@ -21,7 +22,7 @@ import java.util.Map;
  *
  * A class that implements this interface is expected to have a constructor with no parameter.
  */
-public interface Deserializer<T> {
+public interface Deserializer<T> extends Closeable {
 
     /**
      * Configure this class.
@@ -38,8 +39,6 @@ public interface Deserializer<T> {
      */
     public T deserialize(String topic, byte[] data);
 
-    /**
-     * Close this deserializer
-     */
+    @Override
     public void close();
 }

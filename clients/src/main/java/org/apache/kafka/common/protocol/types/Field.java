@@ -30,6 +30,11 @@ public class Field {
     public final String doc;
     final Schema schema;
 
+    /**
+     * Create the field.
+     *
+     * @throws SchemaException If the default value is not primitive and the validation fails
+     */
     public Field(int index, String name, Type type, String doc, Object defaultValue, Schema schema) {
         this.index = index;
         this.name = name;
@@ -59,6 +64,10 @@ public class Field {
 
     public Type type() {
         return type;
+    }
+
+    public Schema schema() {
+        return schema;
     }
 
 }

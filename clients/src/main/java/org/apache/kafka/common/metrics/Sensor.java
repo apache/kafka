@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
@@ -37,16 +38,20 @@ public final class Sensor {
     private final List<KafkaMetric> metrics;
     private final MetricConfig config;
     private final Time time;
+    private volatile long lastRecordTime;
+    private final long inactiveSensorExpirationTimeMs;
 
-    Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time) {
+    Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time, long inactiveSensorExpirationTimeSeconds) {
         super();
         this.registry = registry;
         this.name = Utils.notNull(name);
         this.parents = parents == null ? new Sensor[0] : parents;
-        this.metrics = new ArrayList<KafkaMetric>();
-        this.stats = new ArrayList<Stat>();
+        this.metrics = new ArrayList<>();
+        this.stats = new ArrayList<>();
         this.config = config;
         this.time = time;
+        this.inactiveSensorExpirationTimeMs = TimeUnit.MILLISECONDS.convert(inactiveSensorExpirationTimeSeconds, TimeUnit.SECONDS);
+        this.lastRecordTime = time.milliseconds();
         checkForest(new HashSet<Sensor>());
     }
 
@@ -91,6 +96,7 @@ public final class Sensor {
      *         bound
      */
     public void record(double value, long timeMs) {
+        this.lastRecordTime = timeMs;
         synchronized (this) {
             // increment all the stats
             for (int i = 0; i < this.stats.size(); i++)
@@ -112,8 +118,14 @@ public final class Sensor {
             if (config != null) {
                 Quota quota = config.quota();
                 if (quota != null) {
-                    if (!quota.acceptable(metric.value(timeMs)))
-                        throw new QuotaViolationException(metric.metricName() + " is in violation of its quota of " + quota.bound());
+                    double value = metric.value(timeMs);
+                    if (!quota.acceptable(value)) {
+                        throw new QuotaViolationException(String.format(
+                            "(%s) violated quota. Actual: (%f), Threshold: (%f)",
+                            metric.metricName(),
+                            quota.bound(),
+                            value));
+                    }
                 }
             }
         }
@@ -167,8 +179,15 @@ public final class Sensor {
         this.stats.add(stat);
     }
 
+    /**
+     * Return true if the Sensor is eligible for removal due to inactivity.
+     *        false otherwise
+     */
+    public boolean hasExpired() {
+        return (time.milliseconds() - this.lastRecordTime) > this.inactiveSensorExpirationTimeMs;
+    }
+
     synchronized List<KafkaMetric> metrics() {
         return Collections.unmodifiableList(this.metrics);
     }
-
 }

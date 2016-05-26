@@ -17,40 +17,65 @@
 
 package kafka.common
 
-case class OffsetAndMetadata(offset: Long,
-                             metadata: String = OffsetAndMetadata.NoMetadata,
-                             timestamp: Long = -1L) {
-  override def toString = "OffsetAndMetadata[%d,%s%s]"
-                          .format(offset,
-                                  if (metadata != null && metadata.length > 0) metadata else "NO_METADATA",
-                                  if (timestamp == -1) "" else "," + timestamp.toString)
+import org.apache.kafka.common.protocol.Errors
+
+case class OffsetMetadata(offset: Long, metadata: String = OffsetMetadata.NoMetadata) {
+  override def toString = "OffsetMetadata[%d,%s]"
+    .format(offset,
+    if (metadata != null && metadata.length > 0) metadata else "NO_METADATA")
+}
+
+object OffsetMetadata {
+  val InvalidOffset: Long = -1L
+  val NoMetadata: String = ""
+
+  val InvalidOffsetMetadata = OffsetMetadata(OffsetMetadata.InvalidOffset, OffsetMetadata.NoMetadata)
+}
+
+case class OffsetAndMetadata(offsetMetadata: OffsetMetadata,
+                             commitTimestamp: Long = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP,
+                             expireTimestamp: Long = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP) {
+
+  def offset = offsetMetadata.offset
+
+  def metadata = offsetMetadata.metadata
+
+  override def toString = "[%s,CommitTime %d,ExpirationTime %d]".format(offsetMetadata, commitTimestamp, expireTimestamp)
 }
 
 object OffsetAndMetadata {
-  val InvalidOffset: Long = -1L
-  val NoMetadata: String = ""
-  val InvalidTime: Long = -1L
+  def apply(offset: Long, metadata: String, commitTimestamp: Long, expireTimestamp: Long) = new OffsetAndMetadata(OffsetMetadata(offset, metadata), commitTimestamp, expireTimestamp)
+
+  def apply(offset: Long, metadata: String, timestamp: Long) = new OffsetAndMetadata(OffsetMetadata(offset, metadata), timestamp)
+
+  def apply(offset: Long, metadata: String) = new OffsetAndMetadata(OffsetMetadata(offset, metadata))
+
+  def apply(offset: Long) = new OffsetAndMetadata(OffsetMetadata(offset, OffsetMetadata.NoMetadata))
 }
 
-case class OffsetMetadataAndError(offset: Long,
-                                  metadata: String = OffsetAndMetadata.NoMetadata,
-                                  error: Short = ErrorMapping.NoError) {
+case class OffsetMetadataAndError(offsetMetadata: OffsetMetadata, error: Short = Errors.NONE.code) {
+  def offset = offsetMetadata.offset
 
-  def this(offsetMetadata: OffsetAndMetadata, error: Short) =
-    this(offsetMetadata.offset, offsetMetadata.metadata, error)
+  def metadata = offsetMetadata.metadata
 
-  def this(error: Short) =
-    this(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, error)
-
-  def asTuple = (offset, metadata, error)
-
-  override def toString = "OffsetMetadataAndError[%d,%s,%d]".format(offset, metadata, error)
+  override def toString = "[%s,ErrorCode %d]".format(offsetMetadata, error)
 }
 
 object OffsetMetadataAndError {
-  val NoOffset = OffsetMetadataAndError(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, ErrorMapping.NoError)
-  val OffsetsLoading = OffsetMetadataAndError(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, ErrorMapping.OffsetsLoadInProgressCode)
-  val NotOffsetManagerForGroup = OffsetMetadataAndError(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, ErrorMapping.NotCoordinatorForConsumerCode)
-  val UnknownTopicOrPartition = OffsetMetadataAndError(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, ErrorMapping.UnknownTopicOrPartitionCode)
+  val NoOffset = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, Errors.NONE.code)
+  val GroupLoading = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, Errors.GROUP_LOAD_IN_PROGRESS.code)
+  val UnknownMember = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, Errors.UNKNOWN_MEMBER_ID.code)
+  val NotCoordinatorForGroup = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, Errors.NOT_COORDINATOR_FOR_GROUP.code)
+  val GroupCoordinatorNotAvailable = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code)
+  val UnknownTopicOrPartition = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+  val IllegalGroupGenerationId = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, Errors.ILLEGAL_GENERATION.code)
+
+  def apply(offset: Long) = new OffsetMetadataAndError(OffsetMetadata(offset, OffsetMetadata.NoMetadata), Errors.NONE.code)
+
+  def apply(error: Short) = new OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, error)
+
+  def apply(offset: Long, metadata: String, error: Short) = new OffsetMetadataAndError(OffsetMetadata(offset, metadata), error)
 }
+
+
 

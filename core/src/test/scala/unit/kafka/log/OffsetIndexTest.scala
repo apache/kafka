@@ -18,7 +18,7 @@
 package kafka.log
 
 import java.io._
-import junit.framework.Assert._
+import org.junit.Assert._
 import java.util.{Collections, Arrays}
 import org.junit._
 import org.scalatest.junit.JUnitSuite
@@ -34,7 +34,7 @@ class OffsetIndexTest extends JUnitSuite {
   
   @Before
   def setup() {
-    this.idx = new OffsetIndex(file = nonExistantTempFile(), baseOffset = 45L, maxIndexSize = 30 * 8)
+    this.idx = new OffsetIndex(nonExistantTempFile(), baseOffset = 45L, maxIndexSize = 30 * 8)
   }
   
   @After
@@ -103,7 +103,7 @@ class OffsetIndexTest extends JUnitSuite {
     idx.append(first.offset, first.position)
     idx.append(sec.offset, sec.position)
     idx.close()
-    val idxRo = new OffsetIndex(file = idx.file, baseOffset = idx.baseOffset)
+    val idxRo = new OffsetIndex(idx.file, baseOffset = idx.baseOffset)
     assertEquals(first, idxRo.lookup(first.offset))
     assertEquals(sec, idxRo.lookup(sec.offset))
     assertEquals(sec.offset, idxRo.lastOffset)
@@ -113,7 +113,7 @@ class OffsetIndexTest extends JUnitSuite {
   
   @Test
   def truncate() {
-	val idx = new OffsetIndex(file = nonExistantTempFile(), baseOffset = 0L, maxIndexSize = 10 * 8)
+	val idx = new OffsetIndex(nonExistantTempFile(), baseOffset = 0L, maxIndexSize = 10 * 8)
 	idx.truncate()
     for(i <- 1 until 10)
       idx.append(i, i)
@@ -140,7 +140,7 @@ class OffsetIndexTest extends JUnitSuite {
     idx.append(5, 5)
     
     idx.truncate()
-    assertEquals("Full truncation should leave no entries", 0, idx.entries())
+    assertEquals("Full truncation should leave no entries", 0, idx.entries)
     idx.append(0, 0)
   }
   

@@ -41,6 +41,21 @@ public class OffsetFetchResponse extends AbstractRequestResponse {
     private static final String METADATA_KEY_NAME = "metadata";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
+    public static final long INVALID_OFFSET = -1L;
+    public static final String NO_METADATA = "";
+
+    /**
+     * Possible error codeS:
+     *
+     *  UNKNOWN_TOPIC_OR_PARTITION (3)  <- only for request v0
+     *  GROUP_LOAD_IN_PROGRESS (14)
+     *  NOT_COORDINATOR_FOR_GROUP (16)
+     *  ILLEGAL_GENERATION (22)
+     *  UNKNOWN_MEMBER_ID (25)
+     *  TOPIC_AUTHORIZATION_FAILED (29)
+     *  GROUP_AUTHORIZATION_FAILED (30)
+     */
+
     private final Map<TopicPartition, PartitionData> responseData;
 
     public static final class PartitionData {
@@ -108,6 +123,6 @@ public class OffsetFetchResponse extends AbstractRequestResponse {
     }
 
     public static OffsetFetchResponse parse(ByteBuffer buffer) {
-        return new OffsetFetchResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new OffsetFetchResponse(CURRENT_SCHEMA.read(buffer));
     }
 }

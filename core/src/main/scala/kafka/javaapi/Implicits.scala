@@ -47,9 +47,4 @@ private[javaapi] object Implicits extends Logging {
     }
   }
 
-  // used explicitly by ByteBufferMessageSet constructor as due to SI-4141 which affects Scala 2.8.1, implicits are not visible in constructors
-  implicit def javaListToScalaBuffer[A](l: java.util.List[A]) = {
-    import scala.collection.JavaConversions._
-    l: collection.mutable.Buffer[A]
-  }
 }

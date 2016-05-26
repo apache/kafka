@@ -6,7 +6,6 @@ Using Vagrant to get up and running.
 2) Install Vagrant >= 1.6.4 [http://www.vagrantup.com/](http://www.vagrantup.com/)
 3) Install Vagrant Plugins:
 
-    # Required
     $ vagrant plugin install vagrant-hostmanager
     # Optional
     $ vagrant plugin install vagrant-cachier # Caches & shares package downloads across VMs
@@ -28,11 +27,15 @@ clusters concurrently.
 
 Now bring up the cluster:
 
-    $ vagrant up --no-provision && vagrant provision
+    $ vagrant/vagrant-up.sh     
+    $ # If on aws, run: vagrant/vagrant-up.sh --aws
 
-We separate out the two steps (bringing up the base VMs and configuring them)
+(This essentially runs vagrant up --no-provision && vagrant hostmanager && vagrant provision)
+
+We separate out the steps (bringing up the base VMs, mapping hostnames, and configuring the VMs)
 due to current limitations in ZooKeeper (ZOOKEEPER-1506) that require us to
-collect IPs for all nodes before starting ZooKeeper nodes.
+collect IPs for all nodes before starting ZooKeeper nodes. Breaking into multiple steps
+also allows us to bring machies up in parallel on AWS.
 
 Once this completes:
 
@@ -67,7 +70,7 @@ the cluster to your most recent development version.
 
 Finally, you can clean up the cluster by destroying all the VMs:
 
-    vagrant destroy
+    vagrant destroy -f
 
 ## Configuration ##
 
@@ -76,12 +79,17 @@ You can override some default settings by specifying the values in
 only ever need to change a few simple configuration variables. Some values you
 might want to override:
 
+* `enable_hostmanager` - true by default; override to false if on AWS to allow parallel cluster bringup.
 * `enable_dns` - Register each VM with a hostname in /etc/hosts on the
   hosts. Hostnames are always set in the /etc/hosts in the VMs, so this is only
   necessary if you want to address them conveniently from the host for tasks
   that aren't provided by Vagrant.
+* `enable_jmx` - Whether to enable JMX ports on 800x and 900x for Zookeeper and the Brokers respectively where `x` is the nodes of each respectively. For example, the zk1 machine would have JMX exposed on 8001, ZK2 would be on 8002, etc. 
+* `num_workers` - Generic workers that get the code (from this project), but don't start any services (no brokers, no zookeepers, etc). Useful for starting clients. Each worker will have an IP address of `192.168.50.10x` where `x` starts at `1` and increments for each worker. 
 * `num_zookeepers` - Size of zookeeper cluster
 * `num_brokers` - Number of broker instances to run
+* `ram_megabytes` - The size of each virtual machine's RAM; default to `1200MB`
+
 
 
 ## Using Other Providers ##
@@ -93,7 +101,7 @@ Install the `vagrant-aws` plugin to provide EC2 support:
     $ vagrant plugin install vagrant-aws
 
 Next, configure parameters in `Vagrantfile.local`. A few are *required*:
-`enable_dns`, `ec2_access_key`, `ec2_secret_key`, `ec2_keypair_name`, `ec2_keypair_file`, and
+`enable_hostmanager`, `enable_dns`, `ec2_access_key`, `ec2_secret_key`, `ec2_keypair_name`, `ec2_keypair_file`, and
 `ec2_security_groups`. A couple of important notes:
 
 1. You definitely want to use `enable_dns` if you plan to run clients outside of
@@ -119,7 +127,7 @@ Next, configure parameters in `Vagrantfile.local`. A few are *required*:
 
 Now start things up, but specify the aws provider:
 
-    $ vagrant up --provider=aws --no-parallel --no-provision && vagrant provision
+    $ vagrant/vagrant-up.sh
 
 Your instances should get tagged with a name including your hostname to make
 them identifiable and make it easier to track instances in the AWS management

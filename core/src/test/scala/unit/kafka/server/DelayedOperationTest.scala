@@ -17,23 +17,21 @@
 
 package kafka.server
 
-import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
-import junit.framework.Assert._
-import kafka.utils.TestUtils
+import org.junit.{After, Before, Test}
+import org.junit.Assert._
 
-class DelayedOperationTest extends JUnit3Suite {
+class DelayedOperationTest {
 
   var purgatory: DelayedOperationPurgatory[MockDelayedOperation] = null
-  
-  override def setUp() {
-    super.setUp()
-    purgatory = new DelayedOperationPurgatory[MockDelayedOperation](0, 5)
+
+  @Before
+  def setUp() {
+    purgatory = DelayedOperationPurgatory[MockDelayedOperation](purgatoryName = "mock")
   }
-  
-  override def tearDown() {
+
+  @After
+  def tearDown() {
     purgatory.shutdown()
-    super.tearDown()
   }
 
   @Test
@@ -56,9 +54,9 @@ class DelayedOperationTest extends JUnit3Suite {
   @Test
   def testRequestExpiry() {
     val expiration = 20L
+    val start = System.currentTimeMillis
     val r1 = new MockDelayedOperation(expiration)
     val r2 = new MockDelayedOperation(200000L)
-    val start = System.currentTimeMillis
     assertFalse("r1 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r1, Array("test1")))
     assertFalse("r2 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r2, Array("test2")))
     r1.awaitExpiration()
@@ -72,32 +70,34 @@ class DelayedOperationTest extends JUnit3Suite {
   def testRequestPurge() {
     val r1 = new MockDelayedOperation(100000L)
     val r2 = new MockDelayedOperation(100000L)
+    val r3 = new MockDelayedOperation(100000L)
     purgatory.tryCompleteElseWatch(r1, Array("test1"))
     purgatory.tryCompleteElseWatch(r2, Array("test1", "test2"))
-    purgatory.tryCompleteElseWatch(r1, Array("test2", "test3"))
+    purgatory.tryCompleteElseWatch(r3, Array("test1", "test2", "test3"))
 
-    assertEquals("Purgatory should have 5 watched elements", 5, purgatory.watched())
     assertEquals("Purgatory should have 3 total delayed operations", 3, purgatory.delayed())
+    assertEquals("Purgatory should have 6 watched elements", 6, purgatory.watched())
 
-    // complete one of the operations, it should
-    // eventually be purged from the watch list with purge interval 5
+    // complete the operations, it should immediately be purged from the delayed operation
     r2.completable = true
     r2.tryComplete()
-    TestUtils.waitUntilTrue(() => purgatory.watched() == 3,
-      "Purgatory should have 3 watched elements instead of " + purgatory.watched(), 1000L)
-    TestUtils.waitUntilTrue(() => purgatory.delayed() == 3,
-      "Purgatory should still have 3 total delayed operations instead of " + purgatory.delayed(), 1000L)
+    assertEquals("Purgatory should have 2 total delayed operations instead of " + purgatory.delayed(), 2, purgatory.delayed())
 
-    // add two more requests, then the satisfied request should be purged from the delayed queue with purge interval 5
-    purgatory.tryCompleteElseWatch(r1, Array("test1"))
-    purgatory.tryCompleteElseWatch(r1, Array("test1"))
+    r3.completable = true
+    r3.tryComplete()
+    assertEquals("Purgatory should have 1 total delayed operations instead of " + purgatory.delayed(), 1, purgatory.delayed())
 
-    TestUtils.waitUntilTrue(() => purgatory.watched() == 5,
-      "Purgatory should have 5 watched elements instead of " + purgatory.watched(), 1000L)
-    TestUtils.waitUntilTrue(() => purgatory.delayed() == 4,
-      "Purgatory should have 4 total delayed operations instead of " + purgatory.delayed(), 1000L)
+    // checking a watch should purge the watch list
+    purgatory.checkAndComplete("test1")
+    assertEquals("Purgatory should have 4 watched elements instead of " + purgatory.watched(), 4, purgatory.watched())
+
+    purgatory.checkAndComplete("test2")
+    assertEquals("Purgatory should have 2 watched elements instead of " + purgatory.watched(), 2, purgatory.watched())
+
+    purgatory.checkAndComplete("test3")
+    assertEquals("Purgatory should have 1 watched elements instead of " + purgatory.watched(), 1, purgatory.watched())
   }
-  
+
   class MockDelayedOperation(delayMs: Long) extends DelayedOperation(delayMs) {
     var completable = false
 
@@ -114,11 +114,15 @@ class DelayedOperationTest extends JUnit3Suite {
         false
     }
 
+    override def onExpiration() {
+
+    }
+
     override def onComplete() {
       synchronized {
         notify()
       }
     }
   }
-  
+
 }

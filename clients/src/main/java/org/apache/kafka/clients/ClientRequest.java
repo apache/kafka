@@ -19,28 +19,50 @@ import org.apache.kafka.common.requests.RequestSend;
  */
 public final class ClientRequest {
 
-    private final long createdMs;
+    private final long createdTimeMs;
     private final boolean expectResponse;
     private final RequestSend request;
     private final RequestCompletionHandler callback;
+    private final boolean isInitiatedByNetworkClient;
+    private long sendTimeMs;
 
     /**
-     * @param createdMs The unix timestamp in milliseconds for the time at which this request was created.
+     * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
      * @param expectResponse Should we expect a response message or is this request complete once it is sent?
      * @param request The request
      * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
      */
-    public ClientRequest(long createdMs, boolean expectResponse, RequestSend request, RequestCompletionHandler callback) {
-        this.createdMs = createdMs;
+    public ClientRequest(long createdTimeMs, boolean expectResponse, RequestSend request,
+                         RequestCompletionHandler callback) {
+        this(createdTimeMs, expectResponse, request, callback, false);
+    }
+
+    /**
+     * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
+     * @param expectResponse Should we expect a response message or is this request complete once it is sent?
+     * @param request The request
+     * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
+     * @param isInitiatedByNetworkClient Is request initiated by network client, if yes, its
+     *                                   response will be consumed by network client
+     */
+    public ClientRequest(long createdTimeMs, boolean expectResponse, RequestSend request,
+                         RequestCompletionHandler callback, boolean isInitiatedByNetworkClient) {
+        this.createdTimeMs = createdTimeMs;
         this.callback = callback;
         this.request = request;
         this.expectResponse = expectResponse;
+        this.isInitiatedByNetworkClient = isInitiatedByNetworkClient;
     }
 
     @Override
     public String toString() {
-        return "ClientRequest(expectResponse=" + expectResponse + ", callback=" + callback + ", request=" + request
-                + ")";
+        return "ClientRequest(expectResponse=" + expectResponse +
+            ", callback=" + callback +
+            ", request=" + request +
+            (isInitiatedByNetworkClient ? ", isInitiatedByNetworkClient" : "") +
+            ", createdTimeMs=" + createdTimeMs +
+            ", sendTimeMs=" + sendTimeMs +
+            ")";
     }
 
     public boolean expectResponse() {
@@ -59,8 +81,19 @@ public final class ClientRequest {
         return callback;
     }
 
-    public long createdTime() {
-        return createdMs;
+    public long createdTimeMs() {
+        return createdTimeMs;
     }
 
+    public boolean isInitiatedByNetworkClient() {
+        return isInitiatedByNetworkClient;
+    }
+
+    public long sendTimeMs() {
+        return sendTimeMs;
+    }
+
+    public void setSendTimeMs(long sendTimeMs) {
+        this.sendTimeMs = sendTimeMs;
+    }
 }

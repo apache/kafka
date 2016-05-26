@@ -183,7 +183,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    */
   def getMap(name: String, valid: String => Boolean = s => true): Map[String, String] = {
     try {
-      val m = Utils.parseCsvMap(getString(name, ""))
+      val m = CoreUtils.parseCsvMap(getString(name, ""))
       m.foreach {
         case(key, value) => 
           if(!valid(value))

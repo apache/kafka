@@ -16,7 +16,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.slf4j.Logger;
@@ -39,8 +41,11 @@ public final class RecordBatch {
     public long lastAttemptMs;
     public final MemoryRecords records;
     public final TopicPartition topicPartition;
-    private final ProduceRequestResult produceFuture;
+    public final ProduceRequestResult produceFuture;
+    public long lastAppendTime;
     private final List<Thunk> thunks;
+    private long offsetCounter = 0L;
+    private boolean retry;
 
     public RecordBatch(TopicPartition tp, MemoryRecords records, long now) {
         this.createdMs = now;
@@ -49,6 +54,8 @@ public final class RecordBatch {
         this.topicPartition = tp;
         this.produceFuture = new ProduceRequestResult();
         this.thunks = new ArrayList<Thunk>();
+        this.lastAppendTime = createdMs;
+        this.retry = false;
     }
 
     /**
@@ -56,13 +63,17 @@ public final class RecordBatch {
      * 
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
-    public FutureRecordMetadata tryAppend(byte[] key, byte[] value, Callback callback) {
+    public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, long now) {
         if (!this.records.hasRoomFor(key, value)) {
             return null;
         } else {
-            this.records.append(0L, key, value);
+            long checksum = this.records.append(offsetCounter++, timestamp, key, value);
             this.maxRecordSize = Math.max(this.maxRecordSize, Record.recordSize(key, value));
-            FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount);
+            this.lastAppendTime = now;
+            FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
+                                                                   timestamp, checksum,
+                                                                   key == null ? -1 : key.length,
+                                                                   value == null ? -1 : value.length);
             if (callback != null)
                 thunks.add(new Thunk(callback, future));
             this.recordCount++;
@@ -74,10 +85,10 @@ public final class RecordBatch {
      * Complete the request
      * 
      * @param baseOffset The base offset of the messages assigned by the server
+     * @param timestamp The timestamp returned by the broker.
      * @param exception The exception that occurred (or null if the request was successful)
      */
-    public void done(long baseOffset, RuntimeException exception) {
-        this.produceFuture.done(topicPartition, baseOffset, exception);
+    public void done(long baseOffset, long timestamp, RuntimeException exception) {
         log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
                   topicPartition,
                   baseOffset,
@@ -86,14 +97,22 @@ public final class RecordBatch {
         for (int i = 0; i < this.thunks.size(); i++) {
             try {
                 Thunk thunk = this.thunks.get(i);
-                if (exception == null)
-                    thunk.callback.onCompletion(thunk.future.get(), null);
-                else
+                if (exception == null) {
+                    // If the timestamp returned by server is NoTimestamp, that means CreateTime is used. Otherwise LogAppendTime is used.
+                    RecordMetadata metadata = new RecordMetadata(this.topicPartition,  baseOffset, thunk.future.relativeOffset(),
+                                                                 timestamp == Record.NO_TIMESTAMP ? thunk.future.timestamp() : timestamp,
+                                                                 thunk.future.checksum(),
+                                                                 thunk.future.serializedKeySize(),
+                                                                 thunk.future.serializedValueSize());
+                    thunk.callback.onCompletion(metadata, null);
+                } else {
                     thunk.callback.onCompletion(null, exception);
+                }
             } catch (Exception e) {
                 log.error("Error executing user-provided callback on message for topic-partition {}:", topicPartition, e);
             }
         }
+        this.produceFuture.done(topicPartition, baseOffset, exception);
     }
 
     /**
@@ -112,5 +131,44 @@ public final class RecordBatch {
     @Override
     public String toString() {
         return "RecordBatch(topicPartition=" + topicPartition + ", recordCount=" + recordCount + ")";
+    }
+
+    /**
+     * A batch whose metadata is not available should be expired if one of the following is true:
+     * <ol>
+     *     <li> the batch is not in retry AND request timeout has elapsed after it is ready (full or linger.ms has reached).
+     *     <li> the batch is in retry AND request timeout has elapsed after the backoff period ended.
+     * </ol>
+     */
+    public boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
+        boolean expire = false;
+
+        if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime))
+            expire = true;
+        else if (!this.inRetry() && requestTimeoutMs < (now - (this.createdMs + lingerMs)))
+            expire = true;
+        else if (this.inRetry() && requestTimeoutMs < (now - (this.lastAttemptMs + retryBackoffMs)))
+            expire = true;
+
+        if (expire) {
+            this.records.close();
+            this.done(-1L, Record.NO_TIMESTAMP, new TimeoutException("Batch containing " + recordCount + " record(s) expired due to timeout while requesting metadata from brokers for " + topicPartition));
+        }
+
+        return expire;
+    }
+
+    /**
+     * Returns if the batch is been retried for sending to kafka
+     */
+    public boolean inRetry() {
+        return this.retry;
+    }
+
+    /**
+     * Set retry to true if the batch is being retried (for send)
+     */
+    public void setRetry() {
+        this.retry = true;
     }
 }

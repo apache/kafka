@@ -12,10 +12,15 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
-
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,9 +41,12 @@ public final class Metadata {
     private final long metadataExpireMs;
     private int version;
     private long lastRefreshMs;
+    private long lastSuccessfulRefreshMs;
     private Cluster cluster;
     private boolean needUpdate;
     private final Set<String> topics;
+    private final List<Listener> listeners;
+    private boolean needMetadataForAllTopics;
 
     /**
      * Create a metadata instance with reasonable defaults
@@ -57,10 +65,13 @@ public final class Metadata {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
         this.lastRefreshMs = 0L;
+        this.lastSuccessfulRefreshMs = 0L;
         this.version = 0;
         this.cluster = Cluster.empty();
         this.needUpdate = false;
         this.topics = new HashSet<String>();
+        this.listeners = new ArrayList<>();
+        this.needMetadataForAllTopics = false;
     }
 
     /**
@@ -83,7 +94,7 @@ public final class Metadata {
      * is now
      */
     public synchronized long timeToNextUpdate(long nowMs) {
-        long timeToExpire = needUpdate ? 0 : Math.max(this.lastRefreshMs + this.metadataExpireMs - nowMs, 0);
+        long timeToExpire = needUpdate ? 0 : Math.max(this.lastSuccessfulRefreshMs + this.metadataExpireMs - nowMs, 0);
         long timeToAllowUpdate = this.lastRefreshMs + this.refreshBackoffMs - nowMs;
         return Math.max(timeToExpire, timeToAllowUpdate);
     }
@@ -97,21 +108,25 @@ public final class Metadata {
     }
 
     /**
+     * Check whether an update has been explicitly requested.
+     * @return true if an update was requested, false otherwise
+     */
+    public synchronized boolean updateRequested() {
+        return this.needUpdate;
+    }
+
+    /**
      * Wait for metadata update until the current version is larger than the last version we know of
      */
-    public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) {
+    public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
         if (maxWaitMs < 0) {
             throw new IllegalArgumentException("Max time to wait for metadata updates should not be < 0 milli seconds");
         }
         long begin = System.currentTimeMillis();
         long remainingWaitMs = maxWaitMs;
         while (this.version <= lastVersion) {
-            try {
-                if (remainingWaitMs != 0) {
-                    wait(remainingWaitMs);
-                }
-            } catch (InterruptedException e) { /* this is fine */
-            }
+            if (remainingWaitMs != 0)
+                wait(remainingWaitMs);
             long elapsed = System.currentTimeMillis() - begin;
             if (elapsed >= maxWaitMs)
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
@@ -120,12 +135,14 @@ public final class Metadata {
     }
 
     /**
-     * Add one or more topics to maintain metadata for
+     * Replace the current set of topics maintained to the one provided
+     * @param topics
      */
-    public synchronized void addTopics(String... topics) {
-        for (String topic : topics)
-            this.topics.add(topic);
-        requestUpdate();
+    public synchronized void setTopics(Collection<String> topics) {
+        if (!this.topics.containsAll(topics))
+            requestUpdate();
+        this.topics.clear();
+        this.topics.addAll(topics);
     }
 
     /**
@@ -136,17 +153,33 @@ public final class Metadata {
     }
 
     /**
+     * Check if a topic is already in the topic set.
+     * @param topic topic to check
+     * @return true if the topic exists, false otherwise
+     */
+    public synchronized boolean containsTopic(String topic) {
+        return this.topics.contains(topic);
+    }
+
+    /**
      * Update the cluster metadata
      */
     public synchronized void update(Cluster cluster, long now) {
         this.needUpdate = false;
         this.lastRefreshMs = now;
+        this.lastSuccessfulRefreshMs = now;
         this.version += 1;
-        this.cluster = cluster;
+
+        for (Listener listener: listeners)
+            listener.onMetadataUpdate(cluster);
+
+        // Do this after notifying listeners as subscribed topics' list can be changed by listeners
+        this.cluster = this.needMetadataForAllTopics ? getClusterForCurrentTopics(cluster) : cluster;
+
         notifyAll();
         log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
     }
-    
+
     /**
      * Record an attempt to update the metadata that failed. We need to keep track of this
      * to avoid retrying immediately.
@@ -163,10 +196,10 @@ public final class Metadata {
     }
 
     /**
-     * The last time metadata was updated.
+     * The last time metadata was successfully updated.
      */
-    public synchronized long lastUpdate() {
-        return this.lastRefreshMs;
+    public synchronized long lastSuccessfulUpdate() {
+        return this.lastSuccessfulRefreshMs;
     }
 
     /**
@@ -174,5 +207,57 @@ public final class Metadata {
      */
     public long refreshBackoff() {
         return refreshBackoffMs;
+    }
+
+    /**
+     * Set state to indicate if metadata for all topics in Kafka cluster is required or not.
+     * @param needMetadataForAllTopics boolean indicating need for metadata of all topics in cluster.
+     */
+    public synchronized void needMetadataForAllTopics(boolean needMetadataForAllTopics) {
+        this.needMetadataForAllTopics = needMetadataForAllTopics;
+    }
+
+    /**
+     * Get whether metadata for all topics is needed or not
+     */
+    public synchronized boolean needMetadataForAllTopics() {
+        return this.needMetadataForAllTopics;
+    }
+
+    /**
+     * Add a Metadata listener that gets notified of metadata updates
+     */
+    public synchronized void addListener(Listener listener) {
+        this.listeners.add(listener);
+    }
+
+    /**
+     * Stop notifying the listener of metadata updates
+     */
+    public synchronized void removeListener(Listener listener) {
+        this.listeners.remove(listener);
+    }
+
+    /**
+     * MetadataUpdate Listener
+     */
+    public interface Listener {
+        void onMetadataUpdate(Cluster cluster);
+    }
+
+    private Cluster getClusterForCurrentTopics(Cluster cluster) {
+        Set<String> unauthorizedTopics = new HashSet<>();
+        Collection<PartitionInfo> partitionInfos = new ArrayList<>();
+        List<Node> nodes = Collections.emptyList();
+        if (cluster != null) {
+            unauthorizedTopics.addAll(cluster.unauthorizedTopics());
+            unauthorizedTopics.retainAll(this.topics);
+
+            for (String topic : this.topics) {
+                partitionInfos.addAll(cluster.partitionsForTopic(topic));
+            }
+            nodes = cluster.nodes();
+        }
+        return new Cluster(nodes, partitionInfos, unauthorizedTopics);
     }
 }

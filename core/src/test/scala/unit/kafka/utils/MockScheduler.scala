@@ -43,6 +43,7 @@ class MockScheduler(val time: Time) extends Scheduler {
   
   def shutdown() {
     this synchronized {
+      tasks.foreach(_.fun())
       tasks.clear()
     }
   }
@@ -81,10 +82,10 @@ case class MockTask(val name: String, val fun: () => Unit, var nextExecution: Lo
   def periodic = period >= 0
   def compare(t: MockTask): Int = {
     if(t.nextExecution == nextExecution)
-      return 0
+      0
     else if (t.nextExecution < nextExecution)
-      return -1
+      -1
     else
-      return 1
+      1
   }
 }

@@ -7,9 +7,12 @@ lib_managed/
 src_managed/
 project/boot/
 project/plugins/project/
+patch-process/*
 .idea
 .svn
 .classpath
+/.metadata
+/.recommenders
 *~
 *#
 .#*
@@ -23,8 +26,17 @@ kafka.ipr
 kafka.iws
 .vagrant
 Vagrantfile.local
+/logs
 
 config/server-*
 config/zookeeper-*
 core/data/*
 gradle/wrapper/*
+
+results
+tests/results
+.ducktape
+tests/.ducktape
+.cache
+
+docs/generated/

@@ -18,7 +18,7 @@
 package kafka.tools
 
 import joptsimple.OptionParser
-import kafka.cluster.Broker
+import kafka.cluster.BrokerEndPoint
 import kafka.message.{MessageSet, MessageAndOffset, ByteBufferMessageSet}
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
@@ -27,9 +27,10 @@ import java.util.regex.{PatternSyntaxException, Pattern}
 import kafka.api._
 import java.text.SimpleDateFormat
 import java.util.Date
-import kafka.common.{ErrorMapping, TopicAndPartition}
+import kafka.common.TopicAndPartition
 import kafka.utils._
 import kafka.consumer.{ConsumerConfig, Whitelist, SimpleConsumer}
+import org.apache.kafka.common.protocol.Errors
 
 /**
  *  For verifying the consistency among replicas.
@@ -92,7 +93,7 @@ object ReplicaVerificationTool extends Logging {
                          .describedAs("ms")
                          .ofType(classOf[java.lang.Long])
                          .defaultsTo(30 * 1000L)
-                         
+
    if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "Validate that all replicas for a set of topics have the same data.")
 
@@ -127,6 +128,12 @@ object ReplicaVerificationTool extends Logging {
         else
           false
     )
+
+    if (filteredTopicMetadata.isEmpty) {
+      error("No topics found. " + topicWhiteListOpt + ", if specified, is either filtering out all topics or there is no topic.")
+      System.exit(1)
+    }
+
     val topicPartitionReplicaList: Seq[TopicPartitionReplica] = filteredTopicMetadata.flatMap(
       topicMetadataResponse =>
         topicMetadataResponse.partitionsMetadata.flatMap(
@@ -197,7 +204,7 @@ private case class MessageInfo(replicaId: Int, offset: Long, nextOffset: Long, c
 private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPartition, Int],
                             leadersPerBroker: Map[Int, Seq[TopicAndPartition]],
                             expectedNumFetchers: Int,
-                            brokerMap: Map[Int, Broker],
+                            brokerMap: Map[Int, BrokerEndPoint],
                             initialOffsetTime: Long,
                             reportInterval: Long) extends Logging {
   private val fetchOffsetMap = new Pool[TopicAndPartition, Long]
@@ -230,7 +237,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
 
   private def offsetResponseStringWithError(offsetResponse: OffsetResponse): String = {
     offsetResponse.partitionErrorAndOffsets.filter {
-      case (topicAndPartition, partitionOffsetsResponse) => partitionOffsetsResponse.error != ErrorMapping.NoError
+      case (topicAndPartition, partitionOffsetsResponse) => partitionOffsetsResponse.error != Errors.NONE.code
     }.mkString
   }
 
@@ -329,13 +336,13 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
     if (currentTimeMs - lastReportTime > reportInterval) {
       println(ReplicaVerificationTool.dateFormat.format(new Date(currentTimeMs)) + ": max lag is "
         + maxLag + " for partition " + maxLagTopicAndPartition + " at offset " + offsetWithMaxLag
-        + " among " + messageSetCache.size + " paritions")
+        + " among " + messageSetCache.size + " partitions")
       lastReportTime = currentTimeMs
     }
   }
 }
 
-private class ReplicaFetcher(name: String, sourceBroker: Broker, topicAndPartitions: Iterable[TopicAndPartition],
+private class ReplicaFetcher(name: String, sourceBroker: BrokerEndPoint, topicAndPartitions: Iterable[TopicAndPartition],
                              replicaBuffer: ReplicaBuffer, socketTimeout: Int, socketBufferSize: Int,
                              fetchSize: Int, maxWait: Int, minBytes: Int, doVerification: Boolean)
   extends ShutdownableThread(name) {

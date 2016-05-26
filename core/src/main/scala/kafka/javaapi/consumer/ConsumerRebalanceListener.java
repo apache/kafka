@@ -17,6 +17,8 @@
 
 package kafka.javaapi.consumer;
 
+
+import kafka.consumer.ConsumerThreadId;
 import java.util.Map;
 import java.util.Set;
 
@@ -33,7 +35,17 @@ public interface ConsumerRebalanceListener {
      * This listener is initially added to prevent duplicate messages on consumer rebalance
      * in mirror maker, where offset auto commit is disabled to prevent data loss. It could
      * also be used in more general cases.
+     * @param partitionOwnership The partition this consumer currently owns.
      */
     public void beforeReleasingPartitions(Map<String, Set<Integer>> partitionOwnership);
+
+    /**
+     * This method is called after the new partition assignment is finished but before fetcher
+     * threads start. A map of new global partition assignment is passed in as parameter.
+     * @param consumerId The consumer Id string of the consumer invoking this callback.
+     * @param globalPartitionAssignment A Map[topic, Map[Partition, ConsumerThreadId]]. It is the global partition
+     *                                  assignment of this consumer group.
+     */
+    public void beforeStartingFetchers(String consumerId, Map<String, Map<Integer, ConsumerThreadId>> globalPartitionAssignment);
 
 }

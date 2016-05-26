@@ -41,6 +41,15 @@ public class ListOffsetResponse extends AbstractRequestResponse {
     // partition level field names
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
+
+    /**
+     * Possible error code:
+     *
+     *  UNKNOWN_TOPIC_OR_PARTITION (3)
+     *  NOT_LEADER_FOR_PARTITION (6)
+     *  UNKNOWN (-1)
+     */
+
     private static final String OFFSETS_KEY_NAME = "offsets";
 
     private final Map<TopicPartition, PartitionData> responseData;
@@ -104,6 +113,6 @@ public class ListOffsetResponse extends AbstractRequestResponse {
     }
 
     public static ListOffsetResponse parse(ByteBuffer buffer) {
-        return new ListOffsetResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new ListOffsetResponse(CURRENT_SCHEMA.read(buffer));
     }
 }

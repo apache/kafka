@@ -19,14 +19,14 @@ package kafka.consumer
 
 import org.I0Itec.zkclient.ZkClient
 import kafka.server.{BrokerAndInitialOffset, AbstractFetcherThread, AbstractFetcherManager}
-import kafka.cluster.{Cluster, Broker}
+import kafka.cluster.{BrokerEndPoint, Cluster}
+import org.apache.kafka.common.protocol.SecurityProtocol
 import scala.collection.immutable
-import scala.collection.Map
 import collection.mutable.HashMap
 import scala.collection.mutable
 import java.util.concurrent.locks.ReentrantLock
-import kafka.utils.Utils.inLock
-import kafka.utils.ZkUtils._
+import kafka.utils.CoreUtils.inLock
+import kafka.utils.ZkUtils
 import kafka.utils.{ShutdownableThread, SystemTime}
 import kafka.common.TopicAndPartition
 import kafka.client.ClientUtils
@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class ConsumerFetcherManager(private val consumerIdString: String,
                              private val config: ConsumerConfig,
-                             private val zkClient : ZkClient)
+                             private val zkUtils : ZkUtils)
         extends AbstractFetcherManager("ConsumerFetcherManager-%d".format(SystemTime.milliseconds),
                                        config.clientId, config.numConsumerFetchers) {
   private var partitionMap: immutable.Map[TopicAndPartition, PartitionTopicInfo] = null
@@ -53,7 +53,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   private class LeaderFinderThread(name: String) extends ShutdownableThread(name) {
     // thread responsible for adding the fetcher to the right broker when leader is available
     override def doWork() {
-      val leaderForPartitionsMap = new HashMap[TopicAndPartition, Broker]
+      val leaderForPartitionsMap = new HashMap[TopicAndPartition, BrokerEndPoint]
       lock.lock()
       try {
         while (noLeaderPartitionSet.isEmpty) {
@@ -62,7 +62,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
         }
 
         trace("Partitions without leader %s".format(noLeaderPartitionSet))
-        val brokers = getAllBrokersInCluster(zkClient)
+        val brokers = zkUtils.getAllBrokerEndPointsForChannel(SecurityProtocol.PLAINTEXT)
         val topicsMetadata = ClientUtils.fetchTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSet,
                                                             brokers,
                                                             config.clientId,
@@ -114,7 +114,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     }
   }
 
-  override def createFetcherThread(fetcherId: Int, sourceBroker: Broker): AbstractFetcherThread = {
+  override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
     new ConsumerFetcherThread(
       "ConsumerFetcherThread-%s-%d-%d".format(consumerIdString, fetcherId, sourceBroker.id),
       config, sourceBroker, partitionMap, this)

@@ -19,80 +19,65 @@ package kafka.integration
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
+import org.junit.{Test, After, Before}
+
 import scala.collection._
-import junit.framework.Assert._
+import org.junit.Assert._
 
 import kafka.cluster._
 import kafka.server._
-import org.scalatest.junit.JUnit3Suite
 import kafka.consumer._
-import kafka.serializer._
-import kafka.producer.{KeyedMessage, Producer}
-import kafka.utils.TestUtils._
 import kafka.utils.TestUtils
 
-class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
-
+class FetcherTest extends KafkaServerTestHarness {
   val numNodes = 1
-  val configs =
-    for(props <- TestUtils.createBrokerConfigs(numNodes))
-    yield new KafkaConfig(props)
+  def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
+
   val messages = new mutable.HashMap[Int, Seq[Array[Byte]]]
   val topic = "topic"
-  val cluster = new Cluster(configs.map(c => new Broker(c.brokerId, "localhost", c.port)))
-  val shutdown = ZookeeperConsumerConnector.shutdownCommand
   val queue = new LinkedBlockingQueue[FetchedDataChunk]
-  val topicInfos = configs.map(c => new PartitionTopicInfo(topic,
-                                                           0,
-                                                           queue,
-                                                           new AtomicLong(0),
-                                                           new AtomicLong(0),
-                                                           new AtomicInteger(0),
-                                                           ""))
 
   var fetcher: ConsumerFetcherManager = null
 
+  @Before
   override def setUp() {
     super.setUp
-    createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
+    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
 
-    fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkClient)
+    val cluster = new Cluster(servers.map(s => new Broker(s.config.brokerId, "localhost", s.boundPort())))
+
+    fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkUtils)
     fetcher.stopConnections()
+    val topicInfos = configs.map(c =>
+      new PartitionTopicInfo(topic,
+        0,
+        queue,
+        new AtomicLong(0),
+        new AtomicLong(0),
+        new AtomicInteger(0),
+        ""))
     fetcher.startConnections(topicInfos, cluster)
   }
 
+  @After
   override def tearDown() {
     fetcher.stopConnections()
     super.tearDown
   }
 
+  @Test
   def testFetcher() {
     val perNode = 2
-    var count = sendMessages(perNode)
+    var count = TestUtils.produceMessages(servers, topic, perNode).size
 
     fetch(count)
     assertQueueEmpty()
-    count = sendMessages(perNode)
+    count = TestUtils.produceMessages(servers, topic, perNode).size
     fetch(count)
     assertQueueEmpty()
   }
 
   def assertQueueEmpty(): Unit = assertEquals(0, queue.size)
-
-  def sendMessages(messagesPerNode: Int): Int = {
-    var count = 0
-    for(conf <- configs) {
-      val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(
-        TestUtils.getBrokerListStrFromConfigs(configs),
-        keyEncoder = classOf[StringEncoder].getName)
-      val ms = 0.until(messagesPerNode).map(x => (conf.brokerId * 5 + x).toString.getBytes).toArray
-      messages += conf.brokerId -> ms
-      producer.send(ms.map(m => new KeyedMessage[String, Array[Byte]](topic, topic, m)):_*)
-      producer.close()
-      count += ms.size
-    }
-    count
-  }
 
   def fetch(expected: Int) {
     var count = 0

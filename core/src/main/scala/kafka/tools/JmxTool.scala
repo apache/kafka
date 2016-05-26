@@ -90,20 +90,18 @@ object JmxTool extends Logging {
         List(null)
 
     val names = queries.map((name: ObjectName) => mbsc.queryNames(name, null): mutable.Set[ObjectName]).flatten
-    val allAttributes: Iterable[(ObjectName, Array[String])] =
-      names.map((name: ObjectName) => (name, mbsc.getMBeanInfo(name).getAttributes().map(_.getName)))
-
 
     val numExpectedAttributes: Map[ObjectName, Int] =
       attributesWhitelistExists match {
         case true => queries.map((_, attributesWhitelist.get.size)).toMap
-        case false => names.map((name: ObjectName) =>
-          (name, mbsc.getMBeanInfo(name).getAttributes().map(_.getName).size)).toMap
+        case false => names.map{(name: ObjectName) =>
+          val mbean = mbsc.getMBeanInfo(name)
+          (name, mbsc.getAttributes(name, mbean.getAttributes.map(_.getName)).size)}.toMap
       }
 
     // print csv header
     val keys = List("time") ++ queryAttributes(mbsc, names, attributesWhitelist).keys.toArray.sorted
-    if(keys.size == numExpectedAttributes.map(_._2).foldLeft(0)(_ + _) + 1)
+    if(keys.size == numExpectedAttributes.map(_._2).sum + 1)
       println(keys.map("\"" + _ + "\"").mkString(","))
 
     while(true) {
@@ -113,7 +111,7 @@ object JmxTool extends Logging {
         case Some(dFormat) => dFormat.format(new Date)
         case None => System.currentTimeMillis().toString
       }
-      if(attributes.keySet.size == numExpectedAttributes.map(_._2).foldLeft(0)(_ + _) + 1)
+      if(attributes.keySet.size == numExpectedAttributes.map(_._2).sum + 1)
         println(keys.map(attributes(_)).mkString(","))
       val sleep = max(0, interval - (System.currentTimeMillis - start))
       Thread.sleep(sleep)

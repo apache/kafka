@@ -12,12 +12,17 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.TopicPartition;
+
+import java.util.Map;
+
 /**
  * This record is larger than the maximum allowable size
  */
 public class RecordTooLargeException extends ApiException {
 
     private static final long serialVersionUID = 1L;
+    private Map<TopicPartition, Long> recordTooLargePartitions = null;
 
     public RecordTooLargeException() {
         super();
@@ -35,4 +40,12 @@ public class RecordTooLargeException extends ApiException {
         super(cause);
     }
 
+    public RecordTooLargeException(String message, Map<TopicPartition, Long> recordTooLargePartitions) {
+        super(message);
+        this.recordTooLargePartitions = recordTooLargePartitions;
+    }
+
+    public Map<TopicPartition, Long> recordTooLargePartitions() {
+        return recordTooLargePartitions;
+    }
 }

@@ -17,7 +17,7 @@
 
 package kafka.api
 
-import kafka.cluster.Broker
+import kafka.cluster.BrokerEndPoint
 import java.nio.ByteBuffer
 
 object TopicMetadataResponse {
@@ -25,7 +25,7 @@ object TopicMetadataResponse {
   def readFrom(buffer: ByteBuffer): TopicMetadataResponse = {
     val correlationId = buffer.getInt
     val brokerCount = buffer.getInt
-    val brokers = (0 until brokerCount).map(_ => Broker.readFrom(buffer))
+    val brokers = (0 until brokerCount).map(_ => BrokerEndPoint.readFrom(buffer))
     val brokerMap = brokers.map(b => (b.id, b)).toMap
     val topicCount = buffer.getInt
     val topicsMetadata = (0 until topicCount).map(_ => TopicMetadata.readFrom(buffer, brokerMap))
@@ -33,7 +33,7 @@ object TopicMetadataResponse {
   }
 }
 
-case class TopicMetadataResponse(brokers: Seq[Broker],
+case class TopicMetadataResponse(brokers: Seq[BrokerEndPoint],
                                  topicsMetadata: Seq[TopicMetadata],
                                  correlationId: Int)
     extends RequestOrResponse() {

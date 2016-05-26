@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients;
 
+import java.io.Closeable;
 import java.util.List;
 
 import org.apache.kafka.common.Node;
@@ -21,7 +22,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 /**
  * The interface for {@link NetworkClient}
  */
-public interface KafkaClient {
+public interface KafkaClient extends Closeable {
 
     /**
      * Check if we are currently ready to send another request to the given node but don't attempt to connect if we
@@ -54,38 +55,40 @@ public interface KafkaClient {
     public long connectionDelay(Node node, long now);
 
     /**
+     * Check if the connection of the node has failed, based on the connection state. Such connection failure are
+     * usually transient and can be resumed in the next {@link #ready(org.apache.kafka.common.Node, long)} }
+     * call, but there are cases where transient failures needs to be caught and re-acted upon.
+     *
+     * @param node the node to check
+     * @return true iff the connection has failed and the node is disconnected
+     */
+    public boolean connectionFailed(Node node);
+
+    /**
      * Queue up the given request for sending. Requests can only be sent on ready connections.
      * 
      * @param request The request
-     * @param now The current time
+     * @param now The current timestamp
      */
-    public void send(ClientRequest request);
+    public void send(ClientRequest request, long now);
 
     /**
      * Do actual reads and writes from sockets.
      * 
-     * @param timeout The maximum amount of time to wait for responses in ms
+     * @param timeout The maximum amount of time to wait for responses in ms, must be non-negative. The implementation
+     *                is free to use a lower value if appropriate (common reasons for this are a lower request or
+     *                metadata update timeout)
      * @param now The current time in ms
      * @throws IllegalStateException If a request is sent to an unready node
      */
     public List<ClientResponse> poll(long timeout, long now);
 
     /**
-     * Complete all in-flight requests for a given node
-     * 
-     * @param node The node to complete requests for
-     * @param now The current time in ms
-     * @return All requests that complete during this time period.
+     * Closes the connection to a particular node (if there is one).
+     *
+     * @param nodeId The id of the node
      */
-    public List<ClientResponse> completeAll(int node, long now);
-
-    /**
-     * Complete all in-flight requests
-     * 
-     * @param now The current time in ms
-     * @return All requests that complete during this time period.
-     */
-    public List<ClientResponse> completeAll(long now);
+    public void close(String nodeId);
 
     /**
      * Choose the node with the fewest outstanding requests. This method will prefer a node with an existing connection,
@@ -107,7 +110,7 @@ public interface KafkaClient {
      * 
      * @param nodeId The id of the node
      */
-    public int inFlightRequestCount(int nodeId);
+    public int inFlightRequestCount(String nodeId);
 
     /**
      * Generate a request header for the next request
@@ -117,13 +120,17 @@ public interface KafkaClient {
     public RequestHeader nextRequestHeader(ApiKeys key);
 
     /**
+     * Generate a request header for the given API key
+     *
+     * @param key The api key
+     * @param version The api version
+     * @return A request header with the appropriate client id and correlation id
+     */
+    public RequestHeader nextRequestHeader(ApiKeys key, short version);
+
+    /**
      * Wake up the client if it is currently blocked waiting for I/O
      */
     public void wakeup();
-
-    /**
-     * Close the client and disconnect from all nodes
-     */
-    public void close();
 
 }

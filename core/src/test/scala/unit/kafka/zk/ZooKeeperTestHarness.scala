@@ -17,27 +17,49 @@
 
 package kafka.zk
 
-import org.scalatest.junit.JUnit3Suite
-import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{ZKStringSerializer, TestZKUtils, Utils}
+import javax.security.auth.login.Configuration
+import kafka.utils.{ZkUtils, Logging, CoreUtils}
+import org.junit.{After, Before}
+import org.scalatest.junit.JUnitSuite
+import org.apache.kafka.common.security.JaasUtils
 
-trait ZooKeeperTestHarness extends JUnit3Suite {
-  val zkConnect: String = TestZKUtils.zookeeperConnect
-  var zookeeper: EmbeddedZookeeper = null
-  var zkClient: ZkClient = null
+trait ZooKeeperTestHarness extends JUnitSuite with Logging {
+
   val zkConnectionTimeout = 6000
   val zkSessionTimeout = 6000
 
-  override def setUp() {
-    super.setUp
-    zookeeper = new EmbeddedZookeeper(zkConnect)
-    zkClient = new ZkClient(zookeeper.connectString, zkSessionTimeout, zkConnectionTimeout, ZKStringSerializer)
+  var zkUtils: ZkUtils = null
+  var zookeeper: EmbeddedZookeeper = null
+
+  def zkPort: Int = zookeeper.port
+  def zkConnect: String = s"127.0.0.1:$zkPort"
+  
+  @Before
+  def setUp() {
+    zookeeper = new EmbeddedZookeeper()
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, JaasUtils.isZkSecurityEnabled())
   }
 
-  override def tearDown() {
-    Utils.swallow(zkClient.close())
-    Utils.swallow(zookeeper.shutdown())
-    super.tearDown
+  @After
+  def tearDown() {
+    if (zkUtils != null)
+     CoreUtils.swallow(zkUtils.close())
+    if (zookeeper != null)
+      CoreUtils.swallow(zookeeper.shutdown())
+
+    def isDown(): Boolean = {
+      try {
+        ZkFourLetterWords.sendStat("127.0.0.1", zkPort, 3000)
+        false
+      } catch { case _: Throwable =>
+        debug("Server is down")
+        true
+      }
+    }
+
+    Iterator.continually(isDown()).exists(identity)
+
+    Configuration.setConfiguration(null)
   }
 
 }

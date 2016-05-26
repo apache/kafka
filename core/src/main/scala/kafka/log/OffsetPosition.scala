@@ -22,4 +22,4 @@ package kafka.log
  * in some log file of the beginning of the message set entry with the
  * given offset.
  */
-case class OffsetPosition(val offset: Long, val position: Int)
+case class OffsetPosition(offset: Long, position: Int)

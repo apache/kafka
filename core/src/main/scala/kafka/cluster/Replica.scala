@@ -19,7 +19,7 @@ package kafka.cluster
 
 import kafka.log.Log
 import kafka.utils.{SystemTime, Time, Logging}
-import kafka.server.LogOffsetMetadata
+import kafka.server.{LogReadResult, LogOffsetMetadata}
 import kafka.common.KafkaException
 
 import java.util.concurrent.atomic.AtomicLong
@@ -34,8 +34,6 @@ class Replica(val brokerId: Int,
   // the log end offset value, kept in all replicas;
   // for local replica it is the log's end offset, for remote replicas its value is only updated by follower fetch
   @volatile private[this] var logEndOffsetMetadata: LogOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
-  // the time when log offset is updated
-  private[this] val logEndOffsetUpdateTimeMsValue = new AtomicLong(time.milliseconds)
 
   val topic = partition.topic
   val partitionId = partition.partitionId
@@ -47,12 +45,27 @@ class Replica(val brokerId: Int,
     }
   }
 
-  def logEndOffset_=(newLogEndOffset: LogOffsetMetadata) {
+  private[this] val lastCaughtUpTimeMsUnderlying = new AtomicLong(time.milliseconds)
+
+  def lastCaughtUpTimeMs = lastCaughtUpTimeMsUnderlying.get()
+
+  def updateLogReadResult(logReadResult : LogReadResult) {
+    logEndOffset = logReadResult.info.fetchOffsetMetadata
+
+    /* If the request read up to the log end offset snapshot when the read was initiated,
+     * set the lastCaughtUpTimeMsUnderlying to the current time.
+     * This means that the replica is fully caught up.
+     */
+    if(logReadResult.isReadFromLogEnd) {
+      lastCaughtUpTimeMsUnderlying.set(time.milliseconds)
+    }
+  }
+
+  private def logEndOffset_=(newLogEndOffset: LogOffsetMetadata) {
     if (isLocal) {
       throw new KafkaException("Should not set log end offset on partition [%s,%d]'s local replica %d".format(topic, partitionId, brokerId))
     } else {
       logEndOffsetMetadata = newLogEndOffset
-      logEndOffsetUpdateTimeMsValue.set(time.milliseconds)
       trace("Setting log end offset for replica %d for partition [%s,%d] to [%s]"
         .format(brokerId, topic, partitionId, logEndOffsetMetadata))
     }
@@ -63,8 +76,6 @@ class Replica(val brokerId: Int,
       log.get.logEndOffsetMetadata
     else
       logEndOffsetMetadata
-
-  def logEndOffsetUpdateTimeMs = logEndOffsetUpdateTimeMsValue.get()
 
   def highWatermark_=(newHighWatermark: LogOffsetMetadata) {
     if (isLocal) {

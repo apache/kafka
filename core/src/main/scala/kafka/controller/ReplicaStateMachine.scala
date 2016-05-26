@@ -24,7 +24,7 @@ import kafka.utils.{ZkUtils, ReplicationUtils, Logging}
 import org.I0Itec.zkclient.IZkChildListener
 import org.apache.log4j.Logger
 import kafka.controller.Callbacks._
-import kafka.utils.Utils._
+import kafka.utils.CoreUtils._
 
 /**
  * This class represents the state machine for replicas. It defines the states that a replica can be in, and
@@ -47,7 +47,7 @@ import kafka.utils.Utils._
 class ReplicaStateMachine(controller: KafkaController) extends Logging {
   private val controllerContext = controller.controllerContext
   private val controllerId = controller.config.brokerId
-  private val zkClient = controllerContext.zkClient
+  private val zkUtils = controllerContext.zkUtils
   private val replicaState: mutable.Map[PartitionAndReplica, ReplicaState] = mutable.Map.empty
   private val brokerChangeListener = new BrokerChangeListener()
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
@@ -112,7 +112,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
       try {
         brokerRequestBatch.newBatch()
         replicas.foreach(r => handleStateChange(r, targetState, callbacks))
-        brokerRequestBatch.sendRequestsToBrokers(controller.epoch, controllerContext.correlationId.getAndIncrement)
+        brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
       }catch {
         case e: Throwable => error("Error while moving some replicas to %s state".format(targetState), e)
       }
@@ -171,7 +171,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
         case NewReplica =>
           assertValidPreviousStates(partitionAndReplica, List(NonExistentReplica), targetState)
           // start replica as a follower to the current leader for its partition
-          val leaderIsrAndControllerEpochOpt = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkClient, topic, partition)
+          val leaderIsrAndControllerEpochOpt = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkUtils, topic, partition)
           leaderIsrAndControllerEpochOpt match {
             case Some(leaderIsrAndControllerEpoch) =>
               if(leaderIsrAndControllerEpoch.leaderAndIsr.leader == replicaId)
@@ -265,7 +265,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               case None =>
                 true
             }
-          if (leaderAndIsrIsEmpty)
+          if (leaderAndIsrIsEmpty && !controller.deleteTopicManager.isPartitionToBeDeleted(topicAndPartition))
             throw new StateChangeFailedException(
               "Failed to change state of replica %d for partition %s since the leader and isr path in zookeeper is empty"
               .format(replicaId, topicAndPartition))
@@ -282,7 +282,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     val replicasForTopic = controller.controllerContext.replicasForTopic(topic)
     val replicaStatesForTopic = replicasForTopic.map(r => (r, replicaState(r))).toMap
     debug("Are all replicas for topic %s deleted %s".format(topic, replicaStatesForTopic))
-    replicaStatesForTopic.foldLeft(true)((deletionState, r) => deletionState && r._2 == ReplicaDeletionSuccessful)
+    replicaStatesForTopic.forall(_._2 == ReplicaDeletionSuccessful)
   }
 
   def isAtLeastOneReplicaInDeletionStartedState(topic: String): Boolean = {
@@ -313,11 +313,11 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   }
 
   private def registerBrokerChangeListener() = {
-    zkClient.subscribeChildChanges(ZkUtils.BrokerIdsPath, brokerChangeListener)
+    zkUtils.zkClient.subscribeChildChanges(ZkUtils.BrokerIdsPath, brokerChangeListener)
   }
 
   private def deregisterBrokerChangeListener() = {
-    zkClient.unsubscribeChildChanges(ZkUtils.BrokerIdsPath, brokerChangeListener)
+    zkUtils.zkClient.unsubscribeChildChanges(ZkUtils.BrokerIdsPath, brokerChangeListener)
   }
 
   /**
@@ -352,25 +352,29 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   class BrokerChangeListener() extends IZkChildListener with Logging {
     this.logIdent = "[BrokerChangeListener on Controller " + controller.config.brokerId + "]: "
     def handleChildChange(parentPath : String, currentBrokerList : java.util.List[String]) {
-      info("Broker change listener fired for path %s with children %s".format(parentPath, currentBrokerList.mkString(",")))
+      info("Broker change listener fired for path %s with children %s".format(parentPath, currentBrokerList.sorted.mkString(",")))
       inLock(controllerContext.controllerLock) {
         if (hasStarted.get) {
           ControllerStats.leaderElectionTimer.time {
             try {
-              val curBrokerIds = currentBrokerList.map(_.toInt).toSet
-              val newBrokerIds = curBrokerIds -- controllerContext.liveOrShuttingDownBrokerIds
-              val newBrokerInfo = newBrokerIds.map(ZkUtils.getBrokerInfo(zkClient, _))
-              val newBrokers = newBrokerInfo.filter(_.isDefined).map(_.get)
-              val deadBrokerIds = controllerContext.liveOrShuttingDownBrokerIds -- curBrokerIds
-              controllerContext.liveBrokers = curBrokerIds.map(ZkUtils.getBrokerInfo(zkClient, _)).filter(_.isDefined).map(_.get)
+              val curBrokers = currentBrokerList.map(_.toInt).toSet.flatMap(zkUtils.getBrokerInfo)
+              val curBrokerIds = curBrokers.map(_.id)
+              val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
+              val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
+              val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
+              val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
+              controllerContext.liveBrokers = curBrokers
+              val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
+              val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
+              val liveBrokerIdsSorted = curBrokerIds.toSeq.sorted
               info("Newly added brokers: %s, deleted brokers: %s, all live brokers: %s"
-                .format(newBrokerIds.mkString(","), deadBrokerIds.mkString(","), controllerContext.liveBrokerIds.mkString(",")))
-              newBrokers.foreach(controllerContext.controllerChannelManager.addBroker(_))
-              deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker(_))
+                .format(newBrokerIdsSorted.mkString(","), deadBrokerIdsSorted.mkString(","), liveBrokerIdsSorted.mkString(",")))
+              newBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
+              deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
               if(newBrokerIds.size > 0)
-                controller.onBrokerStartup(newBrokerIds.toSeq)
+                controller.onBrokerStartup(newBrokerIdsSorted)
               if(deadBrokerIds.size > 0)
-                controller.onBrokerFailure(deadBrokerIds.toSeq)
+                controller.onBrokerFailure(deadBrokerIdsSorted)
             } catch {
               case e: Throwable => error("Error while handling broker changes", e)
             }

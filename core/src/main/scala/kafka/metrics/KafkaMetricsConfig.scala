@@ -20,7 +20,7 @@
 
 package kafka.metrics
 
-import kafka.utils.{VerifiableProperties, Utils}
+import kafka.utils.{VerifiableProperties, CoreUtils}
 
 class KafkaMetricsConfig(props: VerifiableProperties) {
 
@@ -28,7 +28,7 @@ class KafkaMetricsConfig(props: VerifiableProperties) {
    * Comma-separated list of reporter types. These classes should be on the
    * classpath and will be instantiated at run-time.
    */
-  val reporters = Utils.parseCsvList(props.getString("kafka.metrics.reporters", ""))
+  val reporters = CoreUtils.parseCsvList(props.getString("kafka.metrics.reporters", ""))
 
   /**
    * The metrics polling interval (in seconds).

@@ -18,7 +18,8 @@ package kafka.log
 
 import java.util.Random
 import kafka.message._
-import kafka.utils.{TestUtils, Utils}
+import kafka.utils.TestUtils
+import org.apache.kafka.common.utils.Utils
 
 object TestCrcPerformance {
 

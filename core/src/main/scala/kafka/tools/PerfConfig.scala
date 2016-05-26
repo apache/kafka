@@ -22,11 +22,10 @@ import joptsimple.OptionParser
 
 class PerfConfig(args: Array[String]) {
   val parser = new OptionParser
-  val numMessagesOpt = parser.accepts("messages", "The number of messages to send or consume")
+  val numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to send or consume")
     .withRequiredArg
     .describedAs("count")
     .ofType(classOf[java.lang.Long])
-    .defaultsTo(Long.MaxValue)
   val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval at which to print progress info.")
     .withRequiredArg
     .describedAs("size")

@@ -13,6 +13,7 @@
 
 package org.apache.kafka.common.serialization;
 
+import java.io.Closeable;
 import java.util.Map;
 
 /**
@@ -21,7 +22,7 @@ import java.util.Map;
  *
  * A class that implements this interface is expected to have a constructor with no parameter.
  */
-public interface Serializer<T> {
+public interface Serializer<T> extends Closeable {
 
     /**
      * Configure this class.
@@ -37,8 +38,12 @@ public interface Serializer<T> {
      */
     public byte[] serialize(String topic, T data);
 
+
     /**
-     * Close this serializer
+     * Close this serializer.
+     * This method has to be idempotent if the serializer is used in KafkaProducer because it might be called
+     * multiple times.
      */
+    @Override
     public void close();
 }

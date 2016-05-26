@@ -18,8 +18,9 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.common.{TopicAndPartition, ErrorMapping}
+import kafka.common.TopicAndPartition
 import kafka.api.ApiUtils._
+import org.apache.kafka.common.protocol.Errors
 import collection.Set
 
 object ControlledShutdownResponse {
@@ -39,9 +40,9 @@ object ControlledShutdownResponse {
 }
 
 
-case class ControlledShutdownResponse(val correlationId: Int,
-                                      val errorCode: Short = ErrorMapping.NoError,
-                                      val partitionsRemaining: Set[TopicAndPartition])
+case class ControlledShutdownResponse(correlationId: Int,
+                                      errorCode: Short = Errors.NONE.code,
+                                      partitionsRemaining: Set[TopicAndPartition])
   extends RequestOrResponse() {
   def sizeInBytes(): Int ={
     var size =

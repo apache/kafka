@@ -17,11 +17,13 @@
 
 package kafka.server
 
+import java.util.concurrent.TimeUnit
+
 import kafka.api.FetchResponsePartitionData
 import kafka.api.PartitionFetchInfo
-import kafka.common.UnknownTopicOrPartitionException
-import kafka.common.NotLeaderForPartitionException
 import kafka.common.TopicAndPartition
+import kafka.metrics.KafkaMetricsGroup
+import org.apache.kafka.common.errors.{NotLeaderForPartitionException, UnknownTopicOrPartitionException}
 
 import scala.collection._
 
@@ -37,6 +39,7 @@ case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInf
 case class FetchMetadata(fetchMinBytes: Int,
                          fetchOnlyLeader: Boolean,
                          fetchOnlyCommitted: Boolean,
+                         isFromFollower: Boolean,
                          fetchPartitionStatus: Map[TopicAndPartition, FetchPartitionStatus]) {
 
   override def toString = "[minBytes: " + fetchMinBytes + ", " +
@@ -78,18 +81,23 @@ class DelayedFetch(delayMs: Long,
               else
                 replica.logEndOffset
 
-            if (endOffset.offsetOnOlderSegment(fetchOffset)) {
-              // Case C, this can happen when the new fetch operation is on a truncated leader
-              debug("Satisfying fetch %s since it is fetching later segments of partition %s.".format(fetchMetadata, topicAndPartition))
-              return forceComplete()
-            } else if (fetchOffset.offsetOnOlderSegment(endOffset)) {
-              // Case C, this can happen when the fetch operation is falling behind the current segment
-              // or the partition has just rolled a new segment
-              debug("Satisfying fetch %s immediately since it is fetching older segments.".format(fetchMetadata))
-              return forceComplete()
-            } else if (fetchOffset.precedes(endOffset)) {
-              // we need take the partition fetch size as upper bound when accumulating the bytes
-              accumulatedSize += math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
+            // Go directly to the check for Case D if the message offsets are the same. If the log segment
+            // has just rolled, then the high watermark offset will remain the same but be on the old segment,
+            // which would incorrectly be seen as an instance of Case C.
+            if (endOffset.messageOffset != fetchOffset.messageOffset) {
+              if (endOffset.onOlderSegment(fetchOffset)) {
+                // Case C, this can happen when the new fetch operation is on a truncated leader
+                debug("Satisfying fetch %s since it is fetching later segments of partition %s.".format(fetchMetadata, topicAndPartition))
+                return forceComplete()
+              } else if (fetchOffset.onOlderSegment(endOffset)) {
+                // Case C, this can happen when the fetch operation is falling behind the current segment
+                // or the partition has just rolled a new segment
+                debug("Satisfying fetch %s immediately since it is fetching older segments.".format(fetchMetadata))
+                return forceComplete()
+              } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
+                // we need take the partition fetch size as upper bound when accumulating the bytes
+                accumulatedSize += math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
+              }
             }
           }
         } catch {
@@ -109,6 +117,13 @@ class DelayedFetch(delayMs: Long,
       false
   }
 
+  override def onExpiration() {
+    if (fetchMetadata.isFromFollower)
+      DelayedFetchMetrics.followerExpiredRequestMeter.mark()
+    else
+      DelayedFetchMetrics.consumerExpiredRequestMeter.mark()
+  }
+
   /**
    * Upon completion, read whatever data is available and pass to the complete callback
    */
@@ -123,3 +138,10 @@ class DelayedFetch(delayMs: Long,
     responseCallback(fetchPartitionData)
   }
 }
+
+object DelayedFetchMetrics extends KafkaMetricsGroup {
+  private val FetcherTypeKey = "fetcherType"
+  val followerExpiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "follower"))
+  val consumerExpiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "consumer"))
+}
+
