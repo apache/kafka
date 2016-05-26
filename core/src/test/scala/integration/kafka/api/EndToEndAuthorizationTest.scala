@@ -107,6 +107,26 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                           s"--topic=$topic",
                                           s"--producer",
                                           s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
+  def describeAclArgs: Array[String] = Array("--authorizer-properties",
+                                          s"zookeeper.connect=$zkConnect",
+                                          s"--add",
+                                          s"--topic=$topic",
+                                          s"--operation=Describe",
+                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
+  def deleteDescribeAclArgs: Array[String] = Array("--authorizer-properties",
+                                          s"zookeeper.connect=$zkConnect",
+                                          s"--remove",
+                                          s"--force",
+                                          s"--topic=$topic",
+                                          s"--operation=Describe",
+                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
+  def deleteWriteAclArgs: Array[String] = Array("--authorizer-properties",
+                                          s"zookeeper.connect=$zkConnect",
+                                          s"--remove",
+                                          s"--force",
+                                          s"--topic=$topic",
+                                          s"--operation=Write",
+                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
   def consumeAclArgs: Array[String] = Array("--authorizer-properties",
                                                s"zookeeper.connect=$zkConnect",
                                                s"--add",
@@ -135,6 +155,8 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3")
   this.serverConfig.setProperty(KafkaConfig.MinInSyncReplicasProp, "3")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
+  //to have testNoProduceAclWithoutDescribeAcl terminate quicker
+  this.producerConfig.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, "5000")
 
   /**
     * Starts MiniKDC and only then sets up the parent trait.
@@ -203,23 +225,68 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     * isn't set.
     */
   @Test
-  def testNoProduceAcl {
+  def testNoProduceAclWithoutDescribeAcl {
     //Produce records
     debug("Starting to send records")
     try{
       sendRecords(numRecords, tp)
-      fail("Topic authorization exception expected")
+      fail("exception expected")
+    } catch {
+      case e: org.apache.kafka.common.errors.TimeoutException => //expected
+    }
+  }
+
+  @Test
+  def testNoProduceAclWithDescribeAcl {
+    AclCommand.main(describeAclArgs)
+    servers.foreach(s => {
+      TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.apis.authorizer.get, topicResource)
+    })
+    //Produce records
+    debug("Starting to send records")
+    try{
+      sendRecords(numRecords, tp)
+      fail("exception expected")
     } catch {
       case e: TopicAuthorizationException => //expected
     }
   }
-
-  /**
+  
+   /**
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
     */
   @Test
-  def testNoConsumeAcl {
+  def testNoConsumeWithoutDescribeAclViaAssign {
+    noConsumeWithoutDescribeAclProlog
+    consumers.head.assign(List(tp).asJava)
+
+    try {
+      consumeRecords(this.consumers.head)
+      fail("exception expected")
+    } catch {
+       case e: TestTimeoutException => //expected from consumeRecords()
+    } finally {
+      //to avoid a ConcurrentModificationException in tearDown()
+      //as the consumer is stuck in poll()
+      consumers.foreach(_.wakeup())
+    }
+  }
+  
+  @Test
+  def testNoConsumeWithoutDescribeAclViaSubscribe {
+    noConsumeWithoutDescribeAclProlog
+    consumers.head.subscribe(List(topic).asJava)
+
+    try {
+      consumeRecords(this.consumers.head)
+      fail("exception expected")
+    } catch {
+      case e: TestTimeoutException => //expected from consumeRecords()
+    }
+  } 
+  
+  private def noConsumeWithoutDescribeAclProlog {
     AclCommand.main(produceAclArgs)
     AclCommand.main(groupAclArgs)
     servers.foreach(s => {
@@ -229,15 +296,59 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
-    //Consume records
+
+    //Deleting topic ACL without asking for console confirmation
+    AclCommand.main(deleteDescribeAclArgs)
+    AclCommand.main(deleteWriteAclArgs)
+    servers.foreach(s => {
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
+    })
+    
     debug("Finished sending and starting to consume records")
+  }
+ 
+  /**
+    * Tests that a consumer fails to consume messages without the appropriate
+    * ACL set.
+    */
+  @Test
+  def testNoConsumeAclWithDescribeAclViaAssign {
+    noConsumeAclWithDescribeAclProlog
     consumers.head.assign(List(tp).asJava)
+
     try {
       consumeRecords(this.consumers.head)
       fail("Topic authorization exception expected")
     } catch {
       case e: TopicAuthorizationException => //expected
     }
+  }
+  
+  @Test
+  def testNoConsumeAclWithDescribeAclViaSubscribe {
+    noConsumeAclWithDescribeAclProlog
+    consumers.head.subscribe(List(topic).asJava)
+
+    try {
+      consumeRecords(this.consumers.head)
+      fail("Topic authorization exception expected")
+    } catch {
+      case e: TopicAuthorizationException => //expected
+    }
+  }
+  
+  private def noConsumeAclWithDescribeAclProlog {
+    AclCommand.main(produceAclArgs) 
+    AclCommand.main(groupAclArgs)
+    servers.foreach(s => {
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
+    })
+    //Produce records
+    debug("Starting to send records")
+    sendRecords(numRecords, tp)
+    //Consume records
+    debug("Finished sending and starting to consume records")
   }
 
   /**
@@ -284,15 +395,35 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                              part: Int = part) {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
     val maxIters = numRecords * 50
-    var iters = 0
-    while (records.size < numRecords) {
-      for (record <- consumer.poll(50).asScala) {
-        records.add(record)
+    
+    var caughtExc : Exception = null
+
+    val t = new java.lang.Thread() {
+      override def run () {
+        try {
+          var iters = 0
+            while (records.size < numRecords) {
+                for (record <- consumer.poll(50).asScala) {
+                    records.add(record)
+                }
+                if (iters > maxIters)
+                    throw new TestTimeoutException("Failed to consume the expected records after " + iters + " iterations.")
+                    iters += 1
+            }
+        } catch {
+          case e : Exception => caughtExc = e
+        }
       }
-      if (iters > maxIters)
-        throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
-      iters += 1
     }
+    t.start()
+    t.join(10000L)
+    
+    if (caughtExc != null)
+      throw caughtExc
+    
+    if (records.isEmpty()) 
+        throw new TestTimeoutException("Failed to consume the expected records after 10000 millis.")
+
     for (i <- 0 until numRecords) {
       val record = records.get(i)
       val offset = startingOffset + i
@@ -302,3 +433,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     } 
   }
 }
+
+class TestTimeoutException (msg:String)
+  extends java.lang.RuntimeException (msg) {}
+

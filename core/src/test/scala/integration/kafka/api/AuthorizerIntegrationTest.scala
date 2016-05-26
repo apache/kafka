@@ -24,6 +24,7 @@ import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests._
@@ -36,6 +37,8 @@ import org.junit.{After, Assert, Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
+
+
 
 class AuthorizerIntegrationTest extends BaseRequestTest {
 
@@ -282,8 +285,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       sendRecords(numRecords, tp)
       fail("sendRecords should have thrown")
     } catch {
-      case e: TopicAuthorizationException =>
-        assertEquals(Collections.singleton(topic), e.unauthorizedTopics())
+      case e: org.apache.kafka.common.errors.TimeoutException => //expected
     }
   }
 
@@ -386,7 +388,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       consumeRecords(this.consumers.head)
       Assert.fail("should have thrown exception")
     } catch {
-      case e: TopicAuthorizationException => assertEquals(Collections.singleton(topic), e.unauthorizedTopics());
+      case e: TestTimeoutException => //expected
+    } finally {
+      this.consumers.foreach(_.wakeup())
     }
   }
 
@@ -466,7 +470,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
-  @Test(expected = classOf[TopicAuthorizationException])
+  @Test(expected = classOf[KafkaException])
   def testCommitWithNoTopicAccess() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
@@ -512,11 +516,35 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     this.consumers.head.position(tp)
   }
 
-  @Test(expected = classOf[TopicAuthorizationException])
+  @Test(expected = classOf[TestTimeoutException])
   def testOffsetFetchWithNoTopicAccess() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     this.consumers.head.assign(List(tp).asJava)
-    this.consumers.head.position(tp)
+
+    try {
+      var caughtExc : Exception = null
+      var positionSucceeded = false
+      val t = new java.lang.Thread() {
+        override def run () {
+          try {
+              AuthorizerIntegrationTest.this.consumers.head.position(tp) // consumer is stuck in org.apache.kafka.clients.consumer.internals.Fetcher.listOffset(TopicPartition, long)
+              positionSucceeded = true
+          } catch {
+            case e : Exception => caughtExc = e
+          }
+        }
+      }
+      t.start()
+      t.join(10000L)
+      
+      if (caughtExc != null)
+        throw caughtExc
+      
+      if (!positionSucceeded) 
+          throw new TestTimeoutException("Failed to position in 10000 millis.")
+    } finally {
+      this.consumers.foreach(_.wakeup())
+    }
   }
 
   @Test
@@ -537,10 +565,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   @Test
   def testListOffsetsWithNoTopicAccess() {
-    val e = intercept[TopicAuthorizationException] {
-      this.consumers.head.partitionsFor(topic)
-    }
-    assertEquals(Set(topic), e.unauthorizedTopics().asScala)
+    val partitionInfos = this.consumers.head.partitionsFor(topic);
+    assertNull(partitionInfos)
   }
 
   @Test
@@ -635,21 +661,42 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                              part: Int = part) {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
     val maxIters = numRecords * 50
-    var iters = 0
-    while (records.size < numRecords) {
-      for (record <- consumer.poll(50).asScala) {
-        records.add(record)
+    
+    var caughtExc : Exception = null
+
+    val t = new java.lang.Thread() {
+      override def run () {
+        println("in consumeRecords.Thread.run")
+        try {
+          var iters = 0
+            while (records.size < numRecords) {
+                for (record <- consumer.poll(50).asScala) {
+                    records.add(record)
+                }
+                if (iters > maxIters)
+                    throw new TestTimeoutException("Failed to consume the expected records after " + iters + " iterations.")
+                    iters += 1
+            }
+        } catch {
+          case e : Exception => caughtExc = e
+        }
       }
-      if (iters > maxIters)
-        throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
-      iters += 1
     }
+    t.start()
+    t.join(10000L)
+    
+    if (caughtExc != null)
+      throw caughtExc
+    
+    if (records.isEmpty()) 
+        throw new TestTimeoutException("Failed to consume the expected records after 10000 millis.")
+
     for (i <- 0 until numRecords) {
       val record = records.get(i)
       val offset = startingOffset + i
       assertEquals(topic, record.topic())
       assertEquals(part, record.partition())
       assertEquals(offset.toLong, record.offset())
-    }
+    } 
   }
 }
