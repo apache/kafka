@@ -116,7 +116,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
   private def testRemove(resources: Set[Resource], resourceCmd: Array[String], args: Array[String], brokerProps: Properties) {
     for (resource <- resources) {
-        AclCommand.main(args ++ resourceCmd :+ "--remove" :+ "--yes")
+        AclCommand.main(args ++ resourceCmd :+ "--remove" :+ "--force")
         withAuthorizer(brokerProps) { authorizer =>
           TestUtils.waitAndVerifyAcls(Set.empty[Acl], authorizer, resource)
         }
