@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.common.{OffsetAndMetadata, OffsetMetadataAndError, TopicAndPartition}
 import kafka.log.LogConfig
-import kafka.message.UncompressedCodec
+import kafka.message.ProducerCompressionCodec
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -65,7 +65,7 @@ class GroupCoordinator(val brokerId: Int,
     val props = new Properties
     props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
     props.put(LogConfig.SegmentBytesProp, offsetConfig.offsetsTopicSegmentBytes.toString)
-    props.put(LogConfig.CompressionTypeProp, UncompressedCodec.name)
+    props.put(LogConfig.CompressionTypeProp, ProducerCompressionCodec.name)
     props
   }
 
@@ -744,14 +744,16 @@ object GroupCoordinator {
       offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
       offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
       offsetsTopicNumPartitions = config.offsetsTopicPartitions,
+      offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
       offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
+      offsetsTopicCompressionCodec = config.offsetsTopicCompressionCodec,
       offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
       offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 
-    val groupManager = new GroupMetadataManager(config.brokerId, offsetConfig, replicaManager, zkUtils, time)
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupManager, heartbeatPurgatory, joinPurgatory, time)
+    val groupMetadataManager = new GroupMetadataManager(config.brokerId, offsetConfig, replicaManager, zkUtils, time)
+    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time)
   }
 
 }
