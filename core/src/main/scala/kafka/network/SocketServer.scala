@@ -446,6 +446,8 @@ private[kafka] class Processor(val id: Int,
           val remoteHost = ConnectionId.fromString(connectionId).getOrElse {
             throw new IllegalStateException(s"connectionId has unexpected format: $connectionId")
           }.remoteHost
+
+          inflightResponses.remove(connectionId).foreach(_.request.updateRequestMetrics())
           // the channel has been closed by the selector but the quotas still need to be updated
           connectionQuotas.dec(InetAddress.getByName(remoteHost))
         }
