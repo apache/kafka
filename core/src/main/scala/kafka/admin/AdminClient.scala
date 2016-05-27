@@ -182,7 +182,7 @@ object AdminClient {
         CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
         Type.LIST,
         Importance.HIGH,
-        CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
+        CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
       .define(
         CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
         ConfigDef.Type.STRING,
