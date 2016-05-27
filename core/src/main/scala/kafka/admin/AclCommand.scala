@@ -99,10 +99,10 @@ object AclCommand {
 
       for ((resource, acls) <- resourceToAcl) {
         if (acls.isEmpty) {
-          if (confirmAction(s"Are you sure you want to delete all ACLs for resource `${resource}`? (y/n)"))
+          if (confirmAction(opts, s"Are you sure you want to delete all ACLs for resource `${resource}`? (y/n)"))
             authorizer.removeAcls(resource)
         } else {
-          if (confirmAction(s"Are you sure you want to remove ACLs: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline from resource `${resource}`? (y/n)"))
+          if (confirmAction(opts, s"Are you sure you want to remove ACLs: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline from resource `${resource}`? (y/n)"))
             authorizer.removeAcls(acls, resource)
         }
       }
@@ -241,7 +241,9 @@ object AclCommand {
     resources
   }
 
-  private def confirmAction(msg: String): Boolean = {
+  private def confirmAction(opts: AclCommandOptions, msg: String): Boolean = {
+    if (opts.options.has(opts.forceOpt))
+        return true
     println(msg)
     Console.readLine().equalsIgnoreCase("y")
   }
@@ -328,6 +330,8 @@ object AclCommand {
       "This will generate ACLs that allows READ,DESCRIBE on topic and READ on group.")
 
     val helpOpt = parser.accepts("help", "Print usage information.")
+
+    val forceOpt = parser.accepts("force", "Assume Yes to all queries and do not prompt.")
 
     val options = parser.parse(args: _*)
 

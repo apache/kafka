@@ -468,13 +468,12 @@ Kafka should run well on any unix system and has been tested on Linux and Solari
 <p>
 We have seen a few issues running on Windows and Windows is not currently a well supported platform though we would be happy to change that.
 <p>
-You likely don't need to do much OS-level tuning though there are a few things that will help performance.
-<p>
-Two configurations that may be important:
+It is unlikely to require much OS-level tuning, but there are two potentially important OS-level configurations:
 <ul>
-    <li>We upped the number of file descriptors since we have lots of topics and lots of connections.
-    <li>We upped the max socket buffer size to enable high-performance data transfer between data centers <a href="http://www.psc.edu/index.php/networking/641-tcp-tune">described here</a>.
+    <li>File descriptor limits: Kafka uses file descriptors for log segments and open connections.  If a broker hosts many partitions, consider that the broker needs at least (number_of_partitions)*(partition_size/segment_size) to track all log segments in addition to the number of connections the broker makes.  We recommend at least 100000 allowed file descriptors for the broker processes as a starting point.
+    <li>Max socket buffer size: can be increased to enable high-performance data transfer between data centers as <a href="http://www.psc.edu/index.php/networking/641-tcp-tune">described here</a>.
 </ul>
+<p>
 
 <h4><a id="diskandfs" href="#diskandfs">Disks and Filesystem</a></h4>
 We recommend using multiple drives to get good throughput and not sharing the same drives used for Kafka data with application logs or other OS filesystem activity to ensure good latency. You can either RAID these drives together into a single volume or format and mount each drive as its own directory. Since Kafka has replication the redundancy provided by RAID can also be provided at the application level. This choice has several tradeoffs.
