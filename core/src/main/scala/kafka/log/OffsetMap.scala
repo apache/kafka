@@ -118,7 +118,12 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     // search for the hash of this key by repeated probing until we find the hash we are looking for or we find an empty slot
     var attempt = 0
     var pos = 0
+    //we need to guard against attempt integer overflow if the map is full
+    //limit attempt to number of slots once positionOf(..) enters linear search mode
+    val maxAttempts = slots + hashSize - 4
     do {
+     if(attempt >= maxAttempts)
+        return -1L
       pos = positionOf(hash1, attempt)
       bytes.position(pos)
       if(isEmpty(pos))
