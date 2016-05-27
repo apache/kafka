@@ -83,6 +83,7 @@ public class WordCountIntegrationTest {
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         // Explicitly place the state directory under /tmp so that we can remove it via
         // `purgeLocalStreamsState` below.  Once Streams is updated to expose the effective
         // StreamsConfig configuration (so we can retrieve whatever state directory Streams came up
@@ -118,7 +119,7 @@ public class WordCountIntegrationTest {
 
         // Wait briefly for the topology to be fully up and running (otherwise it might miss some or all
         // of the input data we produce below).
-        Thread.sleep(5000);
+        //Thread.sleep(5000);
 
         //
         // Step 2: Produce some input data to the input topic.
