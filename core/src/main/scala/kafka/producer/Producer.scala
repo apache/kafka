@@ -67,17 +67,18 @@ class Producer[K,V](val config: ProducerConfig,
   /**
    * Sends the data, partitioned by key to the topic using either the
    * synchronous or the asynchronous producer
-   * @param messages the producer data object that encapsulates the topic, key and message data
+    *
+    * @param messages the producer data object that encapsulates the topic, key and message data
    */
   def send(messages: KeyedMessage[K,V]*) {
     lock synchronized {
       if (hasShutdown.get)
         throw new ProducerClosedException
       recordStats(messages)
-      sync match {
-        case true => eventHandler.handle(messages)
-        case false => asyncSend(messages)
-      }
+      if(sync)
+        eventHandler.handle(messages)
+      else
+        asyncSend(messages)
     }
   }
 
@@ -95,15 +96,13 @@ class Producer[K,V](val config: ProducerConfig,
           queue.offer(message)
         case _  =>
           try {
-            config.queueEnqueueTimeoutMs < 0 match {
-            case true =>
+            if (config.queueEnqueueTimeoutMs < 0) {
               queue.put(message)
               true
-            case _ =>
+            } else {
               queue.offer(message, config.queueEnqueueTimeoutMs, TimeUnit.MILLISECONDS)
             }
-          }
-          catch {
+          }catch {
             case e: InterruptedException =>
               false
           }
