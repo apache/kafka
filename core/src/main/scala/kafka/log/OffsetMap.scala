@@ -20,7 +20,6 @@ package kafka.log
 import java.util.Arrays
 import java.security.MessageDigest
 import java.nio.ByteBuffer
-
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
 

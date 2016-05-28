@@ -149,7 +149,7 @@ class AdminClient(val time: Time,
       return List.empty[ConsumerSummary]
 
     if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"Group $groupId with protocol type '$group.protocolType' is not a valid consumer group")
+      throw new IllegalArgumentException(s"Group $groupId with protocol type '${group.protocolType}' is not a valid consumer group")
 
     if (group.state == "Stable") {
       group.members.map { member =>

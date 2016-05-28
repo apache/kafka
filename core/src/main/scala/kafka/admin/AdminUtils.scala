@@ -293,9 +293,9 @@ object AdminUtils extends Logging {
     partitionList = partitionList.takeRight(partitionList.length - partitionId)
     for (i <- partitionList.indices) {
       val brokerList = partitionList(i).split(":").map(s => s.trim().toInt)
-      if (brokerList.length <= 0)
+      if (brokerList.isEmpty)
         throw new AdminOperationException("replication factor must be larger than 0")
-      if (brokerList.length != brokerList.toSet.size)
+      if (brokerList.size != brokerList.toSet.size)
         throw new AdminOperationException("duplicate brokers in replica assignment: " + brokerList)
       if (checkBrokerAvailable && !brokerList.toSet.subsetOf(availableBrokerList))
         throw new AdminOperationException("some specified brokers not available. specified brokers: " + brokerList.toString +
