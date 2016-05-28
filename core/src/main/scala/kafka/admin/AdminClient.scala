@@ -143,21 +143,21 @@ class AdminClient(val time: Time,
                              clientHost: String,
                              assignment: List[TopicPartition])
 
-  def describeConsumerGroup(groupId: String): List[ConsumerSummary] = {
+  def describeConsumerGroup(groupId: String): Option[List[ConsumerSummary]] = {
     val group = describeGroup(groupId)
     if (group.state == "Dead")
-      return List.empty[ConsumerSummary]
+      return None
 
     if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
       throw new IllegalArgumentException(s"Group ${groupId} with protocol type '${group.protocolType}' is not a valid consumer group")
 
     if (group.state == "Stable") {
-      group.members.map { member =>
+      Some(group.members.map { member =>
         val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
         new ConsumerSummary(member.memberId, member.clientId, member.clientHost, assignment.partitions().asScala.toList)
-      }
+      })
     } else {
-      List.empty
+      Some(List.empty)
     }
   }
 
