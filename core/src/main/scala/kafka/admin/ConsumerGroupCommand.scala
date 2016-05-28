@@ -314,7 +314,7 @@ object ConsumerGroupCommand {
     protected def describeGroup(group: String) {
       val consumerSummaries = adminClient.describeConsumerGroup(group)
       if (consumerSummaries.isEmpty)
-        println(s"Consumer group `${group}` does not exist or is rebalancing.")
+        println(s"Consumer group `$group` does not exist or is rebalancing.")
       else {
         val consumer = getConsumer()
         printDescribeHeader()

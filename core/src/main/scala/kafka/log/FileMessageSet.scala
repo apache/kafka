@@ -83,7 +83,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
       this(file,
         channel = FileMessageSet.openChannel(file, mutable = true, fileAlreadyExists, initFileSize, preallocate),
         start = 0,
-        end = ( if ( !fileAlreadyExists && preallocate ) 0 else Int.MaxValue),
+        end = if (!fileAlreadyExists && preallocate) 0 else Int.MaxValue,
         isSlice = false)
 
   /**

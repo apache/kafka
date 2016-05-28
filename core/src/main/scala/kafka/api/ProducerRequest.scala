@@ -134,7 +134,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
     }
     else {
       val producerResponseStatus = data.map {
-        case (topicAndPartition, data) =>
+        case (topicAndPartition, data: ByteBufferMessageSet) =>
           (topicAndPartition, ProducerResponseStatus(Errors.forException(e).code, -1l, Message.NoTimestamp))
       }
       val errorResponse = ProducerResponse(correlationId, producerResponseStatus)

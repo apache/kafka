@@ -85,7 +85,7 @@ object AclCommand {
 
       for ((resource, acls) <- resourceToAcl) {
         val acls = resourceToAcl(resource)
-        println(s"Adding ACLs for resource `${resource}`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+        println(s"Adding ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
         authorizer.addAcls(acls, resource)
       }
 
@@ -99,7 +99,7 @@ object AclCommand {
 
       for ((resource, acls) <- resourceToAcl) {
         if (acls.isEmpty) {
-          if (confirmAction(opts, s"Are you sure you want to delete all ACLs for resource `${resource}`? (y/n)"))
+          if (confirmAction(opts, s"Are you sure you want to delete all ACLs for resource `$resource`? (y/n)"))
             authorizer.removeAcls(resource)
         } else {
           if (confirmAction(opts, s"Are you sure you want to remove ACLs: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline from resource `${resource}`? (y/n)"))
@@ -117,10 +117,10 @@ object AclCommand {
 
       val resourceToAcls: Iterable[(Resource, Set[Acl])] =
         if (resources.isEmpty) authorizer.getAcls()
-        else resources.map(resource => (resource -> authorizer.getAcls(resource)))
+        else resources.map(resource => resource -> authorizer.getAcls(resource))
 
       for ((resource, acls) <- resourceToAcls)
-        println(s"Current ACLs for resource `${resource}`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+        println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
     }
   }
 

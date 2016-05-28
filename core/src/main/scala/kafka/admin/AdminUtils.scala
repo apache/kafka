@@ -274,7 +274,7 @@ object AdminUtils extends Logging {
           existingPartitionsReplicaList.size, checkBrokerAvailable)
 
     // check if manual assignment has the right replication factor
-    val unmatchedRepFactorList = newPartitionReplicaList.values.filter(p => (p.size != existingReplicaListForPartitionZero.size))
+    val unmatchedRepFactorList = newPartitionReplicaList.values.filter(p => p.size != existingReplicaListForPartitionZero.size)
     if (unmatchedRepFactorList.size != 0)
       throw new AdminOperationException("The replication factor in manual replication assignment " +
         " is not equal to the existing replication factor for the topic " + existingReplicaListForPartitionZero.size)
@@ -443,7 +443,7 @@ object AdminUtils extends Logging {
   private def writeTopicPartitionAssignment(zkUtils: ZkUtils, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
     try {
       val zkPath = getTopicPath(topic)
-      val jsonPartitionData = zkUtils.replicaAssignmentZkData(replicaAssignment.map(e => (e._1.toString -> e._2)))
+      val jsonPartitionData = zkUtils.replicaAssignmentZkData(replicaAssignment.map(e => e._1.toString -> e._2))
 
       if (!update) {
         info("Topic creation " + jsonPartitionData.toString)
