@@ -290,7 +290,7 @@ object AdminUtils extends Logging {
     var partitionList = replicaAssignmentList.split(",")
     val ret = new mutable.HashMap[Int, List[Int]]()
     var partitionId = startPartitionId
-    partitionList = partitionList.takeRight(partitionList.length - partitionId)
+    partitionList = partitionList.takeRight(partitionList.size - partitionId)
     for (i <- partitionList.indices) {
       val brokerList = partitionList(i).split(":").map(s => s.trim().toInt)
       if (brokerList.isEmpty)

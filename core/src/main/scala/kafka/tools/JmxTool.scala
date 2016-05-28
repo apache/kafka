@@ -93,7 +93,7 @@ object JmxTool extends Logging {
 
     val numExpectedAttributes: Map[ObjectName, Int] =
       attributesWhitelistExists match {
-        case true => queries.map((_, attributesWhitelist.get.length)).toMap
+        case true => queries.map((_, attributesWhitelist.get.size)).toMap
         case false => names.map{(name: ObjectName) =>
           val mbean = mbsc.getMBeanInfo(name)
           (name, mbsc.getAttributes(name, mbean.getAttributes.map(_.getName)).size)}.toMap

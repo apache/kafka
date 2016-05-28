@@ -402,7 +402,7 @@ class LogManager(val logDirs: Array[File],
    * data directory with the fewest partitions.
    */
   private def nextLogDir(): File = {
-    if(logDirs.length == 1) {
+    if(logDirs.size == 1) {
       logDirs(0)
     } else {
       // count the number of logs in each parent directory (including 0 for empty directories
