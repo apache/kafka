@@ -224,7 +224,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
       }
     }
 
-    if (sizeInBytes > 0 && newMessages.size == 0) {
+    if (sizeInBytes > 0 && newMessages.isEmpty) {
       // This indicates that the message is too large. We just return all the bytes in the file message set.
       this
     } else {
