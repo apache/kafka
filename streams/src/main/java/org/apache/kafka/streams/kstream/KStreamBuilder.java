@@ -61,7 +61,8 @@ public class KStreamBuilder extends TopologyBuilder {
      * Create a {@link KStream} instance from the specified Pattern.
      * The default deserializers specified in the config are used.
      * <p>
-     * If multiple topics are specified there are nor ordering guaranteed for records from different topics.
+     * If multiple topics are matched by the specified pattern, the created stream will read data from all of them,
+     * and there is no ordering guarantee between records from different topics
      *
      * @param topicPattern    the Pattern to match for topic names
      * @return a {@link KStream} for topics matching the regex pattern.
@@ -95,7 +96,8 @@ public class KStreamBuilder extends TopologyBuilder {
     /**
      * Create a {@link KStream} instance from the specified Pattern.
      * <p>
-     * If multiple topics match the Pattern there are nor ordering guaranteed for records from different topics.
+     * If multiple topics are matched by the specified pattern, the created stream will read data from all of them,
+     * and there is no ordering guarantee between records from different topics.
      *
      * @param keySerde  key serde used to read this source {@link KStream},
      *                  if not specified the default serde defined in the configs will be used

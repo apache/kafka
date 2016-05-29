@@ -158,21 +158,39 @@ public class TopologyBuilderTest {
         final TopologyBuilder builder = new TopologyBuilder();
         Pattern expectedPattern = Pattern.compile("topic-\\d");
         builder.addSource("source-1", expectedPattern);
-        assertEquals(expectedPattern, builder.sourceTopicPattern());
+        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void testAddMoreThanOnePatternSourceNode() {
         final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("source-1", Pattern.compile("topics*"));
+        Pattern expectedPattern = Pattern.compile("topics[A-Z]|.*-\\d");
+        builder.addSource("source-1", Pattern.compile("topics[A-Z]"));
         builder.addSource("source-2", Pattern.compile(".*-\\d"));
+        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+    }
+
+    @Test
+    public void testSubscribeTopicNameAndPattern() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        Pattern expectedPattern = Pattern.compile(".*-\\d|topic-foo|topic-bar");
+        builder.addSource("source-1", "topic-foo", "topic-bar");
+        builder.addSource("source-2", Pattern.compile(".*-\\d"));
+        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
     }
 
     @Test(expected = TopologyBuilderException.class)
-    public void testSubscribeTopicNameAndPattern() {
+    public void testPatternMatchesAlreadyProvidedTopicSource() {
         final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("source-1", "topic-foo");
-        builder.addSource("source-2", Pattern.compile(".*-\\d"));
+        builder.addSource("source-1", "foo");
+        builder.addSource("source-2", Pattern.compile("foo"));
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void testNamedTopicMatchesAlreadyProvidedPattern() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source-1", Pattern.compile("foo"));
+        builder.addSource("source-2", "foo");
     }
 
     @Test(expected = TopologyBuilderException.class)

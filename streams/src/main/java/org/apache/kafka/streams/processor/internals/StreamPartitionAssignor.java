@@ -262,8 +262,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // Source nodes are build ahead of time, but it's at this
         // point we see the topics subscribed to
         if (streamThread.builder.sourceTopicPattern() != null) {
-            String[] regexTopics = regexSubscribedTopics.toArray(new String[]{});
-            streamThread.builder.updatePatternNodeTopics(regexTopics);
+            SubscriptionUpdates subscriptionUpdates = streamThread.builder.getSubscriptionUpdates();
+            subscriptionUpdates.addTopicUpdates(regexSubscribedTopics);
             this.topicGroups = streamThread.builder.topicGroups(streamThread.applicationId);
         }
 
@@ -498,4 +498,34 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     public void setInternalTopicManager(InternalTopicManager internalTopicManager) {
         this.internalTopicManager = internalTopicManager;
     }
+
+    /**
+     * Used to capture subscribed topic via Patterns discovered during the
+     * partition assignment process.
+     */
+    public static  class SubscriptionUpdates {
+
+        private final Set<String> updatedTopicSubscriptions = new HashSet<>();
+
+
+        private void addTopicUpdate(String topicName) {
+            updatedTopicSubscriptions.add(topicName);
+        }
+
+        private  void addTopicUpdates(Collection<String> topicNames) {
+            for (String topicName : topicNames) {
+                addTopicUpdate(topicName);
+            }
+        }
+
+        public Collection<String> getUpdates() {
+            return Collections.unmodifiableSet(new HashSet<>(updatedTopicSubscriptions));
+        }
+
+        public boolean hasUpdates() {
+            return !updatedTopicSubscriptions.isEmpty();
+        }
+
+    }
+
 }

@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.QuickUnion;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
+import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -63,12 +64,11 @@ public class TopologyBuilder {
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
     private final List<Set<String>> copartitionSourceGroups = new ArrayList<>();
     private final HashMap<String, String[]> nodeToSourceTopics = new HashMap<>();
+    private final HashMap<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
     private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
+    private final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
     private Map<Integer, Set<String>> nodeGroups = null;
     private Pattern topicPattern;
-    private String patternNodeName;
-    private Deserializer regexKeyDeserializer;
-    private Deserializer regexValDeserializer;
 
 
 
@@ -118,17 +118,34 @@ public class TopologyBuilder {
     }
 
     private static class SourceNodeFactory extends NodeFactory {
-        public final String[] topics;
+        private final String[] topics;
         public final Pattern pattern;
         private Deserializer keyDeserializer;
         private Deserializer valDeserializer;
+        private final SubscriptionUpdates subscriptionUpdates;
 
-        private SourceNodeFactory(String name, String[] topics, Pattern pattern, Deserializer keyDeserializer, Deserializer valDeserializer) {
+        private SourceNodeFactory(String name, String[] topics, Pattern pattern, Deserializer keyDeserializer, Deserializer valDeserializer, SubscriptionUpdates subscriptionUpdates) {
             super(name);
             this.topics = topics != null ? topics.clone() : null;
             this.pattern = pattern;
             this.keyDeserializer = keyDeserializer;
             this.valDeserializer = valDeserializer;
+            this.subscriptionUpdates = subscriptionUpdates;
+        }
+
+
+        public String[] getTopics() {
+            if (pattern == null) {
+                return topics;
+            }
+            List<String> matchedTopics = new ArrayList<>();
+            for (String update : this.subscriptionUpdates.getUpdates()) {
+                if (this.pattern.matcher(update).matches()) {
+                    matchedTopics.add(update);
+                }
+            }
+
+            return matchedTopics.toArray(new String[matchedTopics.size()]);
         }
 
         @SuppressWarnings("unchecked")
@@ -253,18 +270,20 @@ public class TopologyBuilder {
         if (nodeFactories.containsKey(name))
             throw new TopologyBuilderException("Processor " + name + " is already added.");
 
-        if (topicPattern != null) {
-            throw new TopologyBuilderException("Subscription to topics, partitions and pattern are mutually exclusive");
-        }
-
         for (String topic : topics) {
             if (sourceTopicNames.contains(topic))
                 throw new TopologyBuilderException("Topic " + topic + " has already been registered by another source.");
 
+            for (Pattern pattern : nodeToSourcePatterns.values()) {
+                if (pattern.matcher(topic).matches()) {
+                    throw new TopologyBuilderException("Topic " + topic + " matches a Pattern already registered by another source.");
+                }
+            }
+
             sourceTopicNames.add(topic);
         }
 
-        nodeFactories.put(name, new SourceNodeFactory(name, topics, null, keyDeserializer, valDeserializer));
+        nodeFactories.put(name, new SourceNodeFactory(name, topics, null, keyDeserializer, valDeserializer, subscriptionUpdates));
         nodeToSourceTopics.put(name, topics.clone());
         nodeGrouper.add(name);
 
@@ -299,20 +318,15 @@ public class TopologyBuilder {
             throw new TopologyBuilderException("Processor " + name + " is already added.");
         }
 
-        if (!sourceTopicNames.isEmpty()) {
-            throw new TopologyBuilderException("Subscription to topics, partitions and pattern are mutually exclusive");
+        for (String sourceTopicName : sourceTopicNames) {
+            if (topicPattern.matcher(sourceTopicName).matches()) {
+                throw new TopologyBuilderException("Pattern  " + topicPattern + " will match a topic that has already been registered by another source.");
+            }
         }
 
-        if (this.topicPattern != null) {
-            throw new TopologyBuilderException("Pattern source already defined");
-        }
-
-        this.topicPattern = topicPattern;
-        this.patternNodeName = name;
-        this.regexKeyDeserializer = keyDeserializer;
-        this.regexValDeserializer = valDeserializer;
+        nodeToSourcePatterns.put(name, topicPattern);
         nodeToSourceTopics.put(name, new String[]{});
-        nodeFactories.put(name, new SourceNodeFactory(name, null, topicPattern, keyDeserializer, valDeserializer));
+        nodeFactories.put(name, new SourceNodeFactory(name, null, topicPattern, keyDeserializer, valDeserializer, subscriptionUpdates));
         nodeGrouper.add(name);
 
         return this;
@@ -550,21 +564,6 @@ public class TopologyBuilder {
         return this;
     }
 
-    /**
-     * Updates the source node containing the Pattern for subscribing
-     * to matching topics with the topic names discovered during partition
-     * assignment.
-     *
-     * @param topics  the topics subscribed to from matching the Pattern given
-     */
-    public synchronized void updatePatternNodeTopics(String[] topics) {
-        String[] patternTopics = nodeToSourceTopics.get(patternNodeName);
-        if (patternTopics.length == 0) {
-            nodeToSourceTopics.put(patternNodeName, topics.clone());
-            nodeFactories.put(patternNodeName, new SourceNodeFactory(patternNodeName, topics.clone(), topicPattern, regexKeyDeserializer, regexValDeserializer));
-        }
-    }
-
     private void connectProcessorAndStateStore(String processorName, String stateStoreName) {
         if (!stateFactories.containsKey(stateStoreName))
             throw new TopologyBuilderException("StateStore " + stateStoreName + " is not added yet.");
@@ -598,6 +597,13 @@ public class TopologyBuilder {
 
         if (nodeGroups == null)
             nodeGroups = makeNodeGroups();
+
+        if (subscriptionUpdates.hasUpdates()) {
+            for (Map.Entry<String, Pattern> stringPatternEntry : nodeToSourcePatterns.entrySet()) {
+                SourceNodeFactory sourceNode = (SourceNodeFactory) nodeFactories.get(stringPatternEntry.getKey());
+                nodeToSourceTopics.put(stringPatternEntry.getKey(), sourceNode.getTopics());
+            }
+        }
 
         for (Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
             Set<String> sinkTopics = new HashSet<>();
@@ -769,7 +775,7 @@ public class TopologyBuilder {
                         }
                     }
                 } else if (factory instanceof SourceNodeFactory) {
-                    for (String topic : ((SourceNodeFactory) factory).topics) {
+                    for (String topic : ((SourceNodeFactory) factory).getTopics()) {
                         if (internalTopicNames.contains(topic)) {
                             // prefix the internal topic name with the application id
                             topicSourceMap.put(applicationId + "-" + topic, (SourceNode) node);
@@ -807,6 +813,26 @@ public class TopologyBuilder {
     }
 
     public Pattern sourceTopicPattern() {
+        if (this.topicPattern == null && !nodeToSourceTopics.isEmpty()) {
+            StringBuilder builder = new StringBuilder();
+            for (Pattern pattern : nodeToSourcePatterns.values()) {
+                builder.append(pattern.pattern()).append("|");
+            }
+            if (!nodeToSourceTopics.isEmpty()) {
+                for (String[] topics : nodeToSourceTopics.values()) {
+                    for (String topic : topics) {
+                        builder.append(topic).append("|");
+                    }
+                }
+            }
+
+            builder.setLength(builder.length() - 1);
+            this.topicPattern = Pattern.compile(builder.toString());
+        }
         return this.topicPattern;
+    }
+
+    public SubscriptionUpdates getSubscriptionUpdates() {
+        return subscriptionUpdates;
     }
 }
