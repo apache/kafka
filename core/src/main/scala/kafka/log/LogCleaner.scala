@@ -578,12 +578,12 @@ private[log] class Cleaner(val id: Int,
   private[log] def groupSegmentsBySize(segments: Iterable[LogSegment], maxSize: Int, maxIndexSize: Int): List[Seq[LogSegment]] = {
     var grouped = List[List[LogSegment]]()
     var segs = segments.toList
-    while(!segs.isEmpty) {
+    while(segs.nonEmpty) {
       var group = List(segs.head)
       var logSize = segs.head.size
       var indexSize = segs.head.index.sizeInBytes
       segs = segs.tail
-      while(!segs.isEmpty &&
+      while(segs.nonEmpty &&
             logSize + segs.head.size <= maxSize &&
             indexSize + segs.head.index.sizeInBytes <= maxIndexSize &&
             segs.head.index.lastOffset - group.last.index.baseOffset <= Int.MaxValue) {
