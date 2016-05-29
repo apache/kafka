@@ -57,37 +57,34 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
         val liveBrokersInIsr = currentLeaderAndIsr.isr.filter(r => controllerContext.liveBrokerIds.contains(r))
         val currentLeaderEpoch = currentLeaderAndIsr.leaderEpoch
         val currentLeaderIsrZkPathVersion = currentLeaderAndIsr.zkVersion
-        val newLeaderAndIsr = liveBrokersInIsr.isEmpty match {
-          case true =>
-            // Prior to electing an unclean (i.e. non-ISR) leader, ensure that doing so is not disallowed by the configuration
-            // for unclean leader election.
-            if (!LogConfig.fromProps(config.originals, AdminUtils.fetchEntityConfig(controllerContext.zkUtils,
-              ConfigType.Topic, topicAndPartition.topic)).uncleanLeaderElectionEnable) {
-              throw new NoReplicaOnlineException(("No broker in ISR for partition " +
-                "%s is alive. Live brokers are: [%s],".format(topicAndPartition, controllerContext.liveBrokerIds)) +
-                " ISR brokers are: [%s]".format(currentLeaderAndIsr.isr.mkString(",")))
-            }
-
-            debug("No broker in ISR is alive for %s. Pick the leader from the alive assigned replicas: %s"
-              .format(topicAndPartition, liveAssignedReplicas.mkString(",")))
-            liveAssignedReplicas.isEmpty match {
-              case true =>
-                throw new NoReplicaOnlineException(("No replica for partition " +
-                  "%s is alive. Live brokers are: [%s],".format(topicAndPartition, controllerContext.liveBrokerIds)) +
-                  " Assigned replicas are: [%s]".format(assignedReplicas))
-              case false =>
-                ControllerStats.uncleanLeaderElectionRate.mark()
-                val newLeader = liveAssignedReplicas.head
-                warn("No broker in ISR is alive for %s. Elect leader %d from live brokers %s. There's potential data loss."
-                     .format(topicAndPartition, newLeader, liveAssignedReplicas.mkString(",")))
-                new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, List(newLeader), currentLeaderIsrZkPathVersion + 1)
-            }
-          case false =>
-            val liveReplicasInIsr = liveAssignedReplicas.filter(r => liveBrokersInIsr.contains(r))
-            val newLeader = liveReplicasInIsr.head
-            debug("Some broker in ISR is alive for %s. Select %d from ISR %s to be the leader."
-                  .format(topicAndPartition, newLeader, liveBrokersInIsr.mkString(",")))
-            new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, liveBrokersInIsr.toList, currentLeaderIsrZkPathVersion + 1)
+        val newLeaderAndIsr = if (liveBrokersInIsr.isEmpty) {
+          // Prior to electing an unclean (i.e. non-ISR) leader, ensure that doing so is not disallowed by the configuration
+          // for unclean leader election.
+          if (!LogConfig.fromProps(config.originals, AdminUtils.fetchEntityConfig(controllerContext.zkUtils,
+            ConfigType.Topic, topicAndPartition.topic)).uncleanLeaderElectionEnable) {
+            throw new NoReplicaOnlineException(("No broker in ISR for partition " +
+              "%s is alive. Live brokers are: [%s],".format(topicAndPartition, controllerContext.liveBrokerIds)) +
+              " ISR brokers are: [%s]".format(currentLeaderAndIsr.isr.mkString(",")))
+          }
+          debug("No broker in ISR is alive for %s. Pick the leader from the alive assigned replicas: %s"
+            .format(topicAndPartition, liveAssignedReplicas.mkString(",")))
+          if (liveAssignedReplicas.isEmpty) {
+            throw new NoReplicaOnlineException(("No replica for partition " +
+              "%s is alive. Live brokers are: [%s],".format(topicAndPartition, controllerContext.liveBrokerIds)) +
+              " Assigned replicas are: [%s]".format(assignedReplicas))
+          } else {
+            ControllerStats.uncleanLeaderElectionRate.mark()
+            val newLeader = liveAssignedReplicas.head
+            warn("No broker in ISR is alive for %s. Elect leader %d from live brokers %s. There's potential data loss."
+              .format(topicAndPartition, newLeader, liveAssignedReplicas.mkString(",")))
+            new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, List(newLeader), currentLeaderIsrZkPathVersion + 1)
+          }
+        } else {
+          val liveReplicasInIsr = liveAssignedReplicas.filter(r => liveBrokersInIsr.contains(r))
+          val newLeader = liveReplicasInIsr.head
+          debug("Some broker in ISR is alive for %s. Select %d from ISR %s to be the leader."
+            .format(topicAndPartition, newLeader, liveBrokersInIsr.mkString(",")))
+          new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, liveBrokersInIsr.toList, currentLeaderIsrZkPathVersion + 1)
         }
         info("Selected new leader and ISR %s for offline partition %s".format(newLeaderAndIsr.toString(), topicAndPartition))
         (newLeaderAndIsr, liveAssignedReplicas)
