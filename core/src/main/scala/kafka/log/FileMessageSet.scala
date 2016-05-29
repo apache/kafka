@@ -83,7 +83,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
       this(file,
         channel = FileMessageSet.openChannel(file, mutable = true, fileAlreadyExists, initFileSize, preallocate),
         start = 0,
-        end = ( if ( !fileAlreadyExists && preallocate ) 0 else Int.MaxValue),
+        end = if (!fileAlreadyExists && preallocate) 0 else Int.MaxValue,
         isSlice = false)
 
   /**
@@ -224,7 +224,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
       }
     }
 
-    if (sizeInBytes > 0 && newMessages.size == 0) {
+    if (sizeInBytes > 0 && newMessages.isEmpty) {
       // This indicates that the message is too large. We just return all the bytes in the file message set.
       this
     } else {

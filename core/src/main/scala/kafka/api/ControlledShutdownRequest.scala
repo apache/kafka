@@ -19,7 +19,7 @@ package kafka.api
 
 import java.nio.ByteBuffer
 
-import kafka.common.{TopicAndPartition}
+import kafka.common.TopicAndPartition
 import kafka.api.ApiUtils._
 import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
