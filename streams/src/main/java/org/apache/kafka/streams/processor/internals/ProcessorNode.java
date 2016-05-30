@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,6 +17,11 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Sensor;
@@ -30,7 +35,6 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-import java.util.*;
 
 public class ProcessorNode<K, V> {
 
@@ -51,7 +55,7 @@ public class ProcessorNode<K, V> {
     public ProcessorNode(String name, Processor<K, V> processor, Set<String> stateStores) {
         this.name = name;
         this.processor = processor;
-        this.children = new ArrayList<>();
+        this.children = new ArrayList();
         this.stateStores = stateStores;
     }
 
@@ -104,10 +108,10 @@ public class ProcessorNode<K, V> {
 
 
         public NodeMetricsImpl(StreamsMetrics metrics, String
-                name) {
+            name) {
             this.metrics = metrics;
             this.metricGrpName = "node-metrics-" + name;
-            this.metricTags = new LinkedHashMap<>();
+            this.metricTags = new LinkedHashMap();
             this.metricTags.put("node-id", "-" + name);
 
             this.nodeCommitTimeSensor = metrics.sensor("node-commit-time-" + name);
@@ -120,37 +124,37 @@ public class ProcessorNode<K, V> {
             this.nodePollTimeSensor.add(new MetricName("node-poll-time-max", metricGrpName, "The maximum poll time in ms", metricTags), new Max());
             this.nodePollTimeSensor.add(new MetricName("node-poll-calls-rate", metricGrpName, "The average per-second number of record-poll calls", metricTags), new Rate(new Count()));
 
-            this.nodeProcessTimeSensor = metrics.sensor("node-process-time"+name);
+            this.nodeProcessTimeSensor = metrics.sensor("node-process-time" + name);
             this.nodeProcessTimeSensor.add(new MetricName("node-process-time-avg-ms", metricGrpName, "The average process time in ms", metricTags), new Avg());
             this.nodeProcessTimeSensor.add(new MetricName("node-process-time-max-ms", metricGrpName, "The maximum process time in ms", metricTags), new Max());
             this.nodeProcessTimeSensor.add(new MetricName("node-process-calls-rate", metricGrpName, "The average per-second number of process calls", metricTags), new Rate(new Count()));
 
-            this.nodePunctuateTimeSensor = metrics.sensor("node-punctuate-time"+name);
+            this.nodePunctuateTimeSensor = metrics.sensor("node-punctuate-time" + name);
             this.nodePunctuateTimeSensor.add(new MetricName("node-punctuate-time-avg", metricGrpName, "The average punctuate time in ms", metricTags), new Avg());
             this.nodePunctuateTimeSensor.add(new MetricName("node-punctuate-time-max", metricGrpName, "The maximum punctuate time in ms", metricTags), new Max());
             this.nodePunctuateTimeSensor.add(new MetricName("node-punctuate-calls-rate", metricGrpName, "The average per-second number of punctuate calls", metricTags), new Rate(new Count()));
 
-            this.contextForwardSensor = metrics.sensor("node-forward-time"+name);
+            this.contextForwardSensor = metrics.sensor("node-forward-time" + name);
             this.contextForwardSensor.add(new MetricName("node-forward-creation-rate", metricGrpName, "The average per-second number of newly created tasks", metricTags), new Rate(new Count()));
 
-            this.nodeTaskCreationSensor = metrics.sensor("node-task-create-time"+ name);
+            this.nodeTaskCreationSensor = metrics.sensor("node-task-create-time" + name);
             this.nodeTaskCreationSensor.add(new MetricName("node-task-create-time-avg", metricGrpName, "The average commit time in ms", metricTags), new Avg());
             this.nodeTaskCreationSensor.add(new MetricName("node-task-create-time-max", metricGrpName, "The maximum commit time in ms", metricTags), new Max());
             this.nodeTaskCreationSensor.add(new MetricName("node-task-create-rate", metricGrpName, "The average per-second number of commit calls", metricTags), new Rate(new Count()));
 
-            this.nodeTaskDestructionSensor = metrics.sensor("node-task-destruction"+name);
+            this.nodeTaskDestructionSensor = metrics.sensor("node-task-destruction" + name);
             this.nodeTaskDestructionSensor.add(new MetricName("node-task-destruction-rate", metricGrpName, "The average per-second number of destructed tasks", metricTags), new Rate(new Count()));
         }
 
 
         @Override
         public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
-            return metrics.addLatencySensor(scopeName, entityName,operationName, tags);
+            return metrics.addLatencySensor(scopeName, entityName, operationName, tags);
         }
 
         @Override
         public void recordLatency(Sensor sensor, long startNs, long endNs) {
-             metrics.recordLatency(sensor,startNs, endNs);
+            metrics.recordLatency(sensor, startNs, endNs);
         }
 
         @Override
@@ -160,7 +164,7 @@ public class ProcessorNode<K, V> {
 
         @Override
         public Sensor addSensor(String name, Sensor... parents) {
-            return metrics.addSensor(name,parents);
+            return metrics.addSensor(name, parents);
         }
 
         @Override

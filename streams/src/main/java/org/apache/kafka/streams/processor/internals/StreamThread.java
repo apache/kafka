@@ -172,10 +172,10 @@ public class StreamThread extends Thread {
         this.producer = clientSupplier.getProducer(config.getProducerConfigs(threadClientId));
         log.info("Creating consumer client for stream thread [{}]", threadName);
         this.consumer = clientSupplier.getConsumer(
-                config.getConsumerConfigs(this, applicationId, threadClientId));
+            config.getConsumerConfigs(this, applicationId, threadClientId));
         log.info("Creating restore consumer client for stream thread [{}]", threadName);
         this.restoreConsumer = clientSupplier.getRestoreConsumer(
-                config.getRestoreConsumerConfigs(threadClientId));
+            config.getRestoreConsumerConfigs(threadClientId));
 
         // initialize the task list
         this.activeTasks = new HashMap<>();
@@ -208,8 +208,9 @@ public class StreamThread extends Thread {
 
     /**
      * Execute the stream processors
+     *
      * @throws KafkaException for any Kafka-related exceptions
-     * @throws Exception for any other non-Kafka exceptions
+     * @throws Exception      for any other non-Kafka exceptions
      */
     @Override
     public void run() {
@@ -407,7 +408,7 @@ public class StreamThread extends Thread {
             // which are essentially based on record timestamp.
             if (task.maybePunctuate())
                 sensors.punctuateTimeSensor.record(time.milliseconds() - now);
-                task.node().nodeMetrics.nodePunctuateTimeSensor.record();
+            task.node().nodeMetrics.nodePunctuateTimeSensor.record();
 
         } catch (KafkaException e) {
             log.error("Failed to punctuate active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
@@ -456,7 +457,6 @@ public class StreamThread extends Thread {
             throw e;
         }
         sensors.commitTimeSensor.record(time.milliseconds() - now);
-
 
 
     }
@@ -744,7 +744,7 @@ public class StreamThread extends Thread {
 
         @Override
         public Sensor addSensor(String name, Sensor... parents) {
-           return metrics.sensor(name,parents);
+            return metrics.sensor(name, parents);
         }
 
         @Override
