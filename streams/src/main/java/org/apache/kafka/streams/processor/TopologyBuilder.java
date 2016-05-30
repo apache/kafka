@@ -293,7 +293,9 @@ public class TopologyBuilder {
     /**
      * Add a new source that consumes from topics matching the given pattern
      * and forwards the records to child processor and/or sink nodes.
-     * The source will use the specified key and value deserializers.
+     * The source will use the specified key and value deserializers. The provided
+     * de-/serializers will be used for all matched topics, so care should be taken to specify patterns for
+     * topics that share the same key-value data format.
      *
      * @param name the unique name of the source used to reference this node when
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
