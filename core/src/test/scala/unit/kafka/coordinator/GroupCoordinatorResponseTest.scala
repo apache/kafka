@@ -802,7 +802,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val (error, groups) = groupCoordinator.handleListGroups()
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    assertEquals(GroupOverview("groupId", "consumer"), groups.head
+    assertEquals(GroupOverview("groupId", "consumer"), groups.head)
   }
 
   @Test
