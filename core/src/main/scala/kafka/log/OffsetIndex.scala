@@ -24,9 +24,11 @@ import java.io._
 import java.nio._
 import java.nio.channels._
 import java.util.concurrent.locks._
+
 import kafka.utils._
 import kafka.utils.CoreUtils.inLock
 import kafka.common.InvalidOffsetException
+import sun.nio.ch.DirectBuffer
 
 /**
  * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
@@ -306,8 +308,10 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
    */
   private def forceUnmap(m: MappedByteBuffer) {
     try {
-      if(m.isInstanceOf[sun.nio.ch.DirectBuffer])
-        (m.asInstanceOf[sun.nio.ch.DirectBuffer]).cleaner().clean()
+      m match {
+        case buffer: DirectBuffer => buffer.cleaner().clean()
+        case _ =>
+      }
     } catch {
       case t: Throwable => warn("Error when freeing index buffer", t)
     }

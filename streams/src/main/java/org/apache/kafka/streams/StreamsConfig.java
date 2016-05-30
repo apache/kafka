@@ -122,7 +122,7 @@ public class StreamsConfig extends AbstractConfig {
                                 .define(BOOTSTRAP_SERVERS_CONFIG,       // required with no default value
                                         Type.LIST,
                                         Importance.HIGH,
-                                        CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
+                                        CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_ID_CONFIG,
                                         Type.STRING,
                                         "",

@@ -494,7 +494,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       // Creating one stream per each connector instance
       val streams = connector.createMessageStreamsByFilter(filterSpec, 1, new DefaultDecoder(), new DefaultDecoder())
       require(streams.size == 1)
-      val stream = streams(0)
+      val stream = streams.head
       iter = stream.iterator()
     }
 

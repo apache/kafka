@@ -97,6 +97,7 @@ public class FanoutIntegrationTest {
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStream<byte[], String> stream1 = builder.stream(INPUT_TOPIC_A);
         KStream<byte[], String> stream2 = stream1.mapValues(
@@ -118,10 +119,6 @@ public class FanoutIntegrationTest {
 
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
-
-        // Wait briefly for the topology to be fully up and running (otherwise it might miss some or all
-        // of the input data we produce below).
-        Thread.sleep(5000);
 
         //
         // Step 2: Produce some input data to the input topic.
