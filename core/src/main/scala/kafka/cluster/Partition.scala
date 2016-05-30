@@ -296,12 +296,14 @@ class Partition(val topic: String,
   }
 
   /*
-   * Note that this method will only be called if requiredAcks = -1
-   * and we are waiting for all replicas in ISR to be fully caught up to
-   * the (local) leader's offset corresponding to this produce request
-   * before we acknowledge the produce request.
+   * Returns a tuple where the first element is a boolean indicating whether enough replicas reached `requiredOffset`
+   * and the second element is an error (which would be `Errors.NONE` for no error).
+   *
+   * Note that this method will only be called if requiredAcks = -1 and we are waiting for all replicas in ISR to be
+   * fully caught up to the (local) leader's offset corresponding to this produce request before we acknowledge the
+   * produce request.
    */
-  def checkEnoughReplicasReachOffset(requiredOffset: Long): (Boolean, Short) = {
+  def checkEnoughReplicasReachOffset(requiredOffset: Long): (Boolean, Errors) = {
     leaderReplicaIfLocal() match {
       case Some(leaderReplica) =>
         // keep the current immutable replica list reference
@@ -319,24 +321,23 @@ class Partition(val topic: String,
             true /* also count the local (leader) replica */
         }
 
-        trace("%d acks satisfied for %s-%d with acks = -1".format(numAcks, topic, partitionId))
+        trace(s"$numAcks acks satisfied for ${topic}-${partitionId} with acks = -1")
 
         val minIsr = leaderReplica.log.get.config.minInSyncReplicas
 
-        if (leaderReplica.highWatermark.messageOffset >= requiredOffset ) {
+        if (leaderReplica.highWatermark.messageOffset >= requiredOffset) {
           /*
-          * The topic may be configured not to accept messages if there are not enough replicas in ISR
-          * in this scenario the request was already appended locally and then added to the purgatory before the ISR was shrunk
-          */
-          if (minIsr <= curInSyncReplicas.size) {
-            (true, Errors.NONE.code)
-          } else {
-            (true, Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND.code)
-          }
+           * The topic may be configured not to accept messages if there are not enough replicas in ISR
+           * in this scenario the request was already appended locally and then added to the purgatory before the ISR was shrunk
+           */
+          if (minIsr <= curInSyncReplicas.size)
+            (true, Errors.NONE)
+          else
+            (true, Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND)
         } else
-          (false, Errors.NONE.code)
+          (false, Errors.NONE)
       case None =>
-        (false, Errors.NOT_LEADER_FOR_PARTITION.code)
+        (false, Errors.NOT_LEADER_FOR_PARTITION)
     }
   }
 
