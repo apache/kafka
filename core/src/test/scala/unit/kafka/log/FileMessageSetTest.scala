@@ -145,7 +145,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
    */
   @Test
   def testTruncate() {
-    val message = messageSet.toList(0)
+    val message = messageSet.toList.head
     val end = messageSet.searchFor(1, 0).position
     messageSet.truncateTo(end)
     assertEquals(List(message), messageSet.toList)

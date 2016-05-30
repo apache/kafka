@@ -90,7 +90,7 @@ private[coordinator] class MemberMetadata(val memberId: String,
       if (p1._1 != p2._1 || !util.Arrays.equals(p1._2, p2._2))
         return false
     }
-    return true
+    true
   }
 
   def summary(protocol: String): MemberSummary = {

@@ -44,7 +44,7 @@ class TopicMetadataRequest(val versionId: Short,
 
   def sizeInBytes: Int = underlying.sizeInBytes()
 
-  override def toString(): String = {
+  override def toString: String = {
     describe(true)
   }
 

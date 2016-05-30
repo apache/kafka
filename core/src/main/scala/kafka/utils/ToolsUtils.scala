@@ -29,7 +29,7 @@ object ToolsUtils {
       hostPortData =>
         org.apache.kafka.common.utils.Utils.getPort(hostPortData) != null
     }
-    val isValid = !(validHostPort.isEmpty) && validHostPort.size == hostPorts.length
+    val isValid = !validHostPort.isEmpty && validHostPort.size == hostPorts.length
     if(!isValid)
       CommandLineUtils.printUsageAndDie(parser, "Please provide valid host:port like host1:9091,host2:9092\n ")
   }

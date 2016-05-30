@@ -250,14 +250,13 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     val topicThreadIds = topicCount.getConsumerThreadIdsPerTopic
 
     // make a list of (queue,stream) pairs, one pair for each threadId
-    val queuesAndStreams = topicThreadIds.values.map(threadIdSet =>
+    val queuesAndStreams = topicThreadIds.values.flatMap(threadIdSet =>
       threadIdSet.map(_ => {
-        val queue =  new LinkedBlockingQueue[FetchedDataChunk](config.queuedMaxMessages)
-        val stream = new KafkaStream[K,V](
+        val queue = new LinkedBlockingQueue[FetchedDataChunk](config.queuedMaxMessages)
+        val stream = new KafkaStream[K, V](
           queue, config.consumerTimeoutMs, keyDecoder, valueDecoder, config.clientId)
         (queue, stream)
-      })
-    ).flatten.toList
+      })).toList
 
     val dirs = new ZKGroupDirs(config.groupId)
     registerConsumerInZK(dirs, consumerIdString, topicCount)
@@ -339,7 +338,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     while (!done) {
       val committed = offsetsChannelLock synchronized {
         // committed when we receive either no error codes or only MetadataTooLarge errors
-        if (offsetsToCommit.size > 0) {
+        if (offsetsToCommit.nonEmpty) {
           if (config.offsetsStorage == "zookeeper") {
             offsetsToCommit.foreach { case (topicAndPartition, offsetAndMetadata) =>
               commitOffsetToZooKeeper(topicAndPartition, offsetAndMetadata.offset)
@@ -433,7 +432,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val offsetFetchRequest = OffsetFetchRequest(groupId = config.groupId, requestInfo = partitions, clientId = config.clientId)
 
       var offsetFetchResponseOpt: Option[OffsetFetchResponse] = None
-      while (!isShuttingDown.get && !offsetFetchResponseOpt.isDefined) {
+      while (!isShuttingDown.get && offsetFetchResponseOpt.isEmpty) {
         offsetFetchResponseOpt = offsetsChannelLock synchronized {
           ensureOffsetManagerConnected()
           try {
@@ -674,7 +673,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val myTopicThreadIdsMap = TopicCount.constructTopicCount(
         group, consumerIdString, zkUtils, config.excludeInternalTopics).getConsumerThreadIdsPerTopic
       val brokers = zkUtils.getAllBrokersInCluster()
-      if (brokers.size == 0) {
+      if (brokers.isEmpty) {
         // This can happen in a rare case when there are no brokers available in the cluster when the consumer is started.
         // We log an warning and register for child changes on brokers/id so that rebalance can be triggered when the brokers
         // are up.
@@ -713,7 +712,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
         val offsetFetchResponseOpt = fetchOffsets(topicPartitions)
 
-        if (isShuttingDown.get || !offsetFetchResponseOpt.isDefined)
+        if (isShuttingDown.get || offsetFetchResponseOpt.isEmpty)
           false
         else {
           val offsetFetchResponse = offsetFetchResponseOpt.get
@@ -777,7 +776,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     private def closeFetchersForQueues(cluster: Cluster,
                                        messageStreams: Map[String,List[KafkaStream[_,_]]],
                                        queuesToBeCleared: Iterable[BlockingQueue[FetchedDataChunk]]) {
-      val allPartitionInfos = topicRegistry.values.map(p => p.values).flatten
+      val allPartitionInfos = topicRegistry.values.flatMap(p => p.values)
       fetcher match {
         case Some(f) =>
           f.stopConnections
@@ -928,10 +927,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         queuesAndStreams
     }
 
-    val topicThreadIds = consumerThreadIdsPerTopic.map {
-      case(topic, threadIds) =>
+    val topicThreadIds = consumerThreadIdsPerTopic.flatMap {
+      case (topic, threadIds) =>
         threadIds.map((topic, _))
-    }.flatten
+    }
 
     require(topicThreadIds.size == allQueuesAndStreams.size,
       "Mismatch between thread ID count (%d) and queue count (%d)"

@@ -149,7 +149,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
 
       controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, None, leaderAndIsrRequest,
         staleControllerEpochCallback)
-      TestUtils.waitUntilTrue(() => staleControllerEpochDetected == true,
+      TestUtils.waitUntilTrue(() => staleControllerEpochDetected,
         "Controller epoch should be stale")
       assertTrue("Stale controller epoch not detected by the broker", staleControllerEpochDetected)
     } finally {
