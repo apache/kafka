@@ -306,17 +306,18 @@ class Partition(val topic: String,
       case Some(leaderReplica) =>
         // keep the current immutable replica list reference
         val curInSyncReplicas = inSyncReplicas
-        val numAcks = curInSyncReplicas.count(r => {
+
+        def numAcks = curInSyncReplicas.count { r =>
           if (!r.isLocal)
             if (r.logEndOffset.messageOffset >= requiredOffset) {
-              trace("Replica %d of %s-%d received offset %d".format(r.brokerId, topic, partitionId, requiredOffset))
+              trace(s"Replica ${r.brokerId} of ${topic}-${partitionId} received offset $requiredOffset")
               true
             }
             else
               false
           else
             true /* also count the local (leader) replica */
-        })
+        }
 
         trace("%d acks satisfied for %s-%d with acks = -1".format(numAcks, topic, partitionId))
 
