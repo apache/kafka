@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -51,7 +52,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(ProcessorContext context) {
+    public void init(ProcessorContext context, StreamsMetrics metrics) {
         this.context = context;
 
         // if serializers are null, get the default ones from the context
@@ -68,6 +69,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void process(K key, V value) {
         // send to all the registered topics
+        nodeMetrics.nodeProcessTimeSensor.record();
         RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
         collector.send(new ProducerRecord<>(topic, null, context.timestamp(), key, value), keySerializer, valSerializer, partitioner);
     }

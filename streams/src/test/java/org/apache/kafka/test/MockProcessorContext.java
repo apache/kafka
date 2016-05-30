@@ -17,6 +17,7 @@
 
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
@@ -126,6 +127,31 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             }
             @Override
             public void recordLatency(Sensor sensor, long startNs, long endNs) {
+            }
+
+            @Override
+            public Sensor sensor(String name) {
+                return null;
+            }
+
+            @Override
+            public Sensor addSensor(String name, Sensor... parents) {
+                return null;
+            }
+
+            @Override
+            public void removeSensor(String name) {
+
+            }
+
+            @Override
+            public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
+                return null;
+            }
+
+            @Override
+            public Sensor getSensor(String name) {
+                return null;
             }
         };
     }

@@ -118,7 +118,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         for (ProcessorNode node : this.topology.processors()) {
             this.currNode = node;
             try {
-                node.init(this.processorContext);
+                node.init(this.processorContext, processorContext.metrics());
             } finally {
                 this.currNode = null;
             }

@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.internals.ChangedDeserializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
@@ -29,7 +30,6 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
     public SourceNode(String name, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
         super(name);
-
         this.keyDeserializer = keyDeserializer;
         this.valDeserializer = valDeserializer;
     }
@@ -44,7 +44,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(ProcessorContext context) {
+    public void init(ProcessorContext context, StreamsMetrics metrics) {
         this.context = context;
 
         // if deserializers are null, get the default ones from the context
@@ -62,6 +62,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void process(K key, V value) {
         context.forward(key, value);
+        nodeMetrics.contextForwardSensor.record();
     }
 
     @Override

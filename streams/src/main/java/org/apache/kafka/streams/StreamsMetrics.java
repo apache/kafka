@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Sensor;
 
 /**
@@ -27,4 +28,17 @@ public interface StreamsMetrics {
     Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags);
 
     void recordLatency(Sensor sensor, long startNs, long endNs);
+
+    Sensor sensor(String name);
+
+    Sensor addSensor(String name, Sensor... parents);
+
+    void removeSensor(String name);
+
+    Sensor sensor(String name, MetricConfig config, Sensor... parents);
+
+    public Sensor getSensor(String name);
+
 }
+
+

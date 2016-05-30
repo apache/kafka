@@ -27,6 +27,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.MeasurableStat;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -406,6 +407,7 @@ public class StreamThread extends Thread {
             // which are essentially based on record timestamp.
             if (task.maybePunctuate())
                 sensors.punctuateTimeSensor.record(time.milliseconds() - now);
+                task.node().nodeMetrics.nodePunctuateTimeSensor.record();
 
         } catch (KafkaException e) {
             log.error("Failed to punctuate active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
@@ -432,6 +434,7 @@ public class StreamThread extends Thread {
     private void commitAll() {
         for (StreamTask task : activeTasks.values()) {
             commitOne(task, time.milliseconds());
+            task.node().nodeMetrics.nodeCommitTimeSensor.record();
         }
         for (StandbyTask task : standbyTasks.values()) {
             commitOne(task, time.milliseconds());
@@ -452,8 +455,10 @@ public class StreamThread extends Thread {
             log.error("Failed to commit " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
             throw e;
         }
-
         sensors.commitTimeSensor.record(time.milliseconds() - now);
+
+
+
     }
 
     /**
@@ -576,7 +581,7 @@ public class StreamThread extends Thread {
             try {
                 StreamTask task = createStreamTask(taskId, partitions);
                 activeTasks.put(taskId, task);
-
+                task.node().nodeMetrics.nodeTaskCreationSensor.record();
                 for (TopicPartition partition : partitions)
                     activeTasksByPartition.put(partition, task);
             } catch (StreamsException e) {
@@ -590,6 +595,7 @@ public class StreamThread extends Thread {
         try {
             for (StreamTask task : activeTasks.values()) {
                 closeOne(task);
+                task.node().nodeMetrics.nodeTaskDestructionSensor.record();
             }
             prevTasks.clear();
             prevTasks.addAll(activeTasks.keySet());
@@ -680,7 +686,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    private class StreamsMetricsImpl implements StreamsMetrics {
+    protected class StreamsMetricsImpl implements StreamsMetrics {
         final Metrics metrics;
         final String metricGrpName;
         final Map<String, String> metricTags;
@@ -731,6 +737,31 @@ public class StreamThread extends Thread {
             sensor.record((endNs - startNs) / 1000000, endNs);
         }
 
+        @Override
+        public Sensor sensor(String name) {
+            return sensor(name);
+        }
+
+        @Override
+        public Sensor addSensor(String name, Sensor... parents) {
+           return metrics.sensor(name,parents);
+        }
+
+        @Override
+        public void removeSensor(String name) {
+            metrics.removeSensor(name);
+        }
+
+        @Override
+        public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
+            return metrics.sensor(name, config, parents);
+        }
+
+        @Override
+        public Sensor getSensor(String name) {
+            return metrics.getSensor(name);
+        }
+
         /**
          * @throws IllegalArgumentException if tags is not constructed in key-value pairs
          */
@@ -771,4 +802,6 @@ public class StreamThread extends Thread {
                 sensor.add(name, stat);
         }
     }
+
+
 }

@@ -23,6 +23,7 @@ import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -184,6 +185,31 @@ public class ProcessorTopologyTestDriver {
                 @Override
                 public void recordLatency(Sensor sensor, long startNs, long endNs) {
                     // do nothing
+                }
+
+                @Override
+                public Sensor sensor(String name) {
+                    return null;
+                }
+
+                @Override
+                public Sensor addSensor(String name, Sensor... parents) {
+                    return null;
+                }
+
+                @Override
+                public void removeSensor(String name) {
+
+                }
+
+                @Override
+                public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
+                    return null;
+                }
+
+                @Override
+                public Sensor getSensor(String name) {
+                    return null;
                 }
             });
     }
