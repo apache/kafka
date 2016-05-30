@@ -18,6 +18,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.junit.Before;
 import org.junit.Test;
@@ -29,36 +30,61 @@ import static org.junit.Assert.assertNull;
 
 public class StreamsConfigTest {
 
-    private Properties props = new Properties();
-    private StreamsConfig streamsConfig;
+    private Properties customProps = new Properties();
+    private StreamsConfig customStreamsConfig;
+
+    private Properties baseProps = new Properties();
+    private StreamsConfig defaultStreamsConfig;
+
     private StreamThread streamThreadPlaceHolder;
 
 
     @Before
     public void setUp() {
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        streamsConfig = new StreamsConfig(props);
+        baseProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
+        baseProps.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+
+        customProps.putAll(baseProps);
+        customProps.put(ProducerConfig.LINGER_MS_CONFIG, "50");
+        customProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+
+        defaultStreamsConfig = new StreamsConfig(baseProps);
+        customStreamsConfig = new StreamsConfig(customProps);
     }
 
     @Test
     public void testGetProducerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamsConfig.getProducerConfigs("client");
+        Map<String, Object> returnedProps = customStreamsConfig.getProducerConfigs("client");
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-producer");
+        assertEquals(returnedProps.get(ProducerConfig.LINGER_MS_CONFIG), "50");
+    }
+
+    @Test
+    public void testGetDefaultProducerConfigs() throws Exception {
+        Map<String, Object> returnedProps = defaultStreamsConfig.getProducerConfigs("client");
+        assertEquals(returnedProps.get(ProducerConfig.LINGER_MS_CONFIG), "100");
     }
 
     @Test
     public void testGetConsumerConfigs() throws Exception {
         Map<String, Object> returnedProps =
-            streamsConfig.getConsumerConfigs(streamThreadPlaceHolder, "example-application", "client");
+            customStreamsConfig.getConsumerConfigs(streamThreadPlaceHolder, "example-application", "client");
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-consumer");
         assertEquals(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), "example-application");
+        assertEquals(returnedProps.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), "true");
+    }
 
+    @Test
+    public void testGetDefaultConsumerConfigs() throws Exception {
+        Map<String, Object> returnedProps =
+                defaultStreamsConfig.getConsumerConfigs(streamThreadPlaceHolder, "example-application", "client");
+
+        assertEquals(returnedProps.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), "false");
     }
 
     @Test
     public void testGetRestoreConsumerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs("client");
+        Map<String, Object> returnedProps = customStreamsConfig.getRestoreConsumerConfigs("client");
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-restore-consumer");
         assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
     }

@@ -257,8 +257,13 @@ public class StreamsConfig extends AbstractConfig {
         // remove streams properties
         removeStreamsSpecificConfigs(props);
 
+        // remove producer properties
+        removeProducerSpecificConfigs(props);
+
         // set consumer default property values
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        if (!props.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
+            props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        }
 
         return props;
     }
@@ -273,12 +278,18 @@ public class StreamsConfig extends AbstractConfig {
         removeStreamsSpecificConfigs(props);
 
         // set producer default property values
-        props.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+        if (!props.containsKey(ProducerConfig.LINGER_MS_CONFIG)) {
+            props.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+        }
 
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
 
         return props;
+    }
+
+    private void removeProducerSpecificConfigs(Map<String, Object> props) {
+        props.remove(ProducerConfig.LINGER_MS_CONFIG);
     }
 
     private void removeStreamsSpecificConfigs(Map<String, Object> props) {
