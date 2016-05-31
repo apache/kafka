@@ -774,7 +774,7 @@ public class Fetcher<K, V> {
             String name = "topic." + topic + ".bytes-fetched";
             Sensor bytesFetched = this.metrics.getSensor(name);
             if (bytesFetched == null) {
-                HashMap<String, String> metricTags = new HashMap<>();
+                Map<String, String> metricTags = new HashMap<>(1);
                 metricTags.put("topic", topic.replace('.', '_'));
 
                 bytesFetched = this.metrics.sensor(name);
@@ -797,7 +797,7 @@ public class Fetcher<K, V> {
             name = "topic." + topic + ".records-fetched";
             Sensor recordsFetched = this.metrics.getSensor(name);
             if (recordsFetched == null) {
-                HashMap<String, String> metricTags = new HashMap<>();
+                Map<String, String> metricTags = new HashMap<>(1);
                 metricTags.put("topic", topic.replace('.', '_'));
 
                 recordsFetched = this.metrics.sensor(name);
