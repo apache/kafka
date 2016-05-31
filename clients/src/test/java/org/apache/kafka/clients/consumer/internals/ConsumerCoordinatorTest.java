@@ -1114,7 +1114,7 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testMetadataTopicExpiry() {
+    public void testMetadataTopicsExpiryDisabled() {
         final String consumerId = "consumer";
 
         subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
@@ -1132,7 +1132,7 @@ public class ConsumerCoordinatorTest {
 
         metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds());
         assertTrue("Topic not found in metadata", metadata.containsTopic(topicName));
-        time.sleep(Metadata.TOPIC_EXPIRY_MILLIS * 2);
+        time.sleep(Metadata.TOPIC_EXPIRY_MS * 2);
         metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds());
         assertTrue("Topic expired", metadata.containsTopic(topicName));
         metadata.handleUnknownTopic(topicName);

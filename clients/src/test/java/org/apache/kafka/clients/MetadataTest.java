@@ -212,7 +212,7 @@ public class MetadataTest {
         long time = 0;
         metadata.add("topic1");
         metadata.update(Cluster.empty(), time);
-        time += Metadata.TOPIC_EXPIRY_MILLIS;
+        time += Metadata.TOPIC_EXPIRY_MS;
         metadata.update(Cluster.empty(), time);
         assertFalse("Unused topic not expired", metadata.containsTopic("topic1"));
 
@@ -220,7 +220,7 @@ public class MetadataTest {
         metadata.add("topic2");
         metadata.update(Cluster.empty(), time);
         for (int i = 0; i < 3; i++) {
-            time += Metadata.TOPIC_EXPIRY_MILLIS / 2;
+            time += Metadata.TOPIC_EXPIRY_MS / 2;
             metadata.update(Cluster.empty(), time);
             assertTrue("Topic expired even though in use", metadata.containsTopic("topic2"));
             metadata.add("topic2");
@@ -238,7 +238,7 @@ public class MetadataTest {
         topics.add("topic4");
         metadata.setTopics(topics);
         metadata.update(Cluster.empty(), time);
-        time += Metadata.TOPIC_EXPIRY_MILLIS;
+        time += Metadata.TOPIC_EXPIRY_MS;
         metadata.update(Cluster.empty(), time);
         assertFalse("Unused topic not expired", metadata.containsTopic("topic4"));
     }
@@ -251,7 +251,7 @@ public class MetadataTest {
         long time = 0;
         metadata.add("topic1");
         metadata.update(Cluster.empty(), time);
-        time += Metadata.TOPIC_EXPIRY_MILLIS;
+        time += Metadata.TOPIC_EXPIRY_MS;
         metadata.update(Cluster.empty(), time);
         assertTrue("Unused topic expired when expiry disabled", metadata.containsTopic("topic1"));
 
@@ -259,7 +259,7 @@ public class MetadataTest {
         metadata.add("topic2");
         metadata.update(Cluster.empty(), time);
         for (int i = 0; i < 3; i++) {
-            time += Metadata.TOPIC_EXPIRY_MILLIS / 2;
+            time += Metadata.TOPIC_EXPIRY_MS / 2;
             metadata.update(Cluster.empty(), time);
             assertTrue("Topic expired even though in use", metadata.containsTopic("topic2"));
             metadata.add("topic2");
@@ -272,7 +272,7 @@ public class MetadataTest {
         metadata.handleUnknownTopic("topic3");
         assertTrue("Unknown topic deleted when expiry disabled", metadata.containsTopic("topic3"));
 
-        // Test that topics added using setTopics dont expire
+        // Test that topics added using setTopics don't expire
         HashSet<String> topics = new HashSet<>();
         topics.add("topic4");
         metadata.setTopics(topics);

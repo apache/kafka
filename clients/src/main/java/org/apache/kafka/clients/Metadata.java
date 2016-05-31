@@ -45,8 +45,8 @@ public final class Metadata {
 
     private static final Logger log = LoggerFactory.getLogger(Metadata.class);
 
-    public static final long TOPIC_EXPIRY_MILLIS = 5 * 60 * 1000;
-    private static final Long TOPIC_EXPIRY_NEEDS_UPDATE = -1L;
+    public static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
+    private static final long TOPIC_EXPIRY_NEEDS_UPDATE = -1L;
 
     private final long refreshBackoffMs;
     private final long metadataExpireMs;
@@ -59,7 +59,7 @@ public final class Metadata {
     private final Map<String, Long> topics;
     private final List<Listener> listeners;
     private boolean needMetadataForAllTopics;
-    private boolean topicExpiryEnabled;
+    private final boolean topicExpiryEnabled;
 
     /**
      * Create a metadata instance with reasonable defaults
@@ -182,7 +182,9 @@ public final class Metadata {
     }
 
     /**
-     * Update the cluster metadata
+     * Updates the cluster metadata. If topic expiry is enabled, expiry time
+     * is set for topics if required and topics that have expired are removed
+     * from the metadata.
      */
     public synchronized void update(Cluster cluster, long now) {
         this.needUpdate = false;
@@ -194,12 +196,12 @@ public final class Metadata {
             // Handle expiry of topics from the metadata refresh set.
             for (Iterator<Map.Entry<String, Long>> it = topics.entrySet().iterator(); it.hasNext(); ) {
                 Map.Entry<String, Long> entry = it.next();
-                Long expireMs = entry.getValue();
+                long expireMs = entry.getValue();
                 if (expireMs == TOPIC_EXPIRY_NEEDS_UPDATE)
-                    entry.setValue(now + TOPIC_EXPIRY_MILLIS);
+                    entry.setValue(now + TOPIC_EXPIRY_MS);
                 else if (expireMs <= now) {
                     it.remove();
-                    log.debug("Removing unused topic from the metadata list: " + entry.getKey());
+                    log.debug("Removing unused topic {} from the metadata list, expiryMs {} now {}", entry.getKey(), expireMs, now);
                 }
             }
         }

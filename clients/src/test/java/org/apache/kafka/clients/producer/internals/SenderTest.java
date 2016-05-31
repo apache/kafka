@@ -244,12 +244,12 @@ public class SenderTest {
         sender.run(time.milliseconds());  // send produce request
         client.respond(produceResponse(tp, offset++, Errors.NONE.code(), 0));
         sender.run(time.milliseconds());
-        assertEquals("Request completed.", 0, (long) client.inFlightRequestCount());
+        assertEquals("Request completed.", 0, client.inFlightRequestCount());
         sender.run(time.milliseconds());
         assertTrue("Request should be completed", future.isDone());
 
         assertTrue("Topic not retained in metadata list", metadata.containsTopic(tp.topic()));
-        time.sleep(Metadata.TOPIC_EXPIRY_MILLIS);
+        time.sleep(Metadata.TOPIC_EXPIRY_MS);
         metadata.update(Cluster.empty(), time.milliseconds());
         assertFalse("Unused topic has not been expired", metadata.containsTopic(tp.topic()));
         future = accumulator.append(tp, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
@@ -259,7 +259,7 @@ public class SenderTest {
         sender.run(time.milliseconds());  // send produce request
         client.respond(produceResponse(tp, offset++, Errors.NONE.code(), 0));
         sender.run(time.milliseconds());
-        assertEquals("Request completed.", 0, (long) client.inFlightRequestCount());
+        assertEquals("Request completed.", 0, client.inFlightRequestCount());
         sender.run(time.milliseconds());
         assertTrue("Request should be completed", future.isDone());
     }

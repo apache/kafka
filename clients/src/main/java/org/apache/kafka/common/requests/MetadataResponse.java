@@ -252,7 +252,6 @@ public class MetadataResponse extends AbstractRequestResponse {
      * @return the cluster snapshot
      */
     public Cluster cluster() {
-        Set<String> unauthorizedTopics = new HashSet<>();
         List<PartitionInfo> partitions = new ArrayList<>();
         for (TopicMetadata metadata : topicMetadata) {
             if (metadata.error == Errors.NONE) {
@@ -263,8 +262,6 @@ public class MetadataResponse extends AbstractRequestResponse {
                             partitionMetadata.leader,
                             partitionMetadata.replicas.toArray(new Node[0]),
                             partitionMetadata.isr.toArray(new Node[0])));
-            } else if (metadata.error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                unauthorizedTopics.add(metadata.topic);
             }
         }
 
