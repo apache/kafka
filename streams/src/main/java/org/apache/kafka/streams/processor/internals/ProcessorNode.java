@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * <p/>
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -35,7 +35,6 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-
 public class ProcessorNode<K, V> {
 
     private final List<ProcessorNode<?, ?>> children;
@@ -55,7 +54,7 @@ public class ProcessorNode<K, V> {
     public ProcessorNode(String name, Processor<K, V> processor, Set<String> stateStores) {
         this.name = name;
         this.processor = processor;
-        this.children = new ArrayList();
+        this.children = new ArrayList<>();
         this.stateStores = stateStores;
     }
 
@@ -111,7 +110,7 @@ public class ProcessorNode<K, V> {
             name) {
             this.metrics = metrics;
             this.metricGrpName = "node-metrics-" + name;
-            this.metricTags = new LinkedHashMap();
+            this.metricTags = new LinkedHashMap<>();
             this.metricTags.put("node-id", "-" + name);
 
             this.nodeCommitTimeSensor = metrics.sensor("node-commit-time-" + name);

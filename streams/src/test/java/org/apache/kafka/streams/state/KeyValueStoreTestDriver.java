@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,15 +16,29 @@
  */
 package org.apache.kafka.streams.state;
 
+import java.io.File;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.Set;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -36,16 +50,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockTimestampExtractor;
-
-import java.io.File;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Properties;
-import java.util.Set;
 
 /**
  * A component that provides a {@link #context() ProcessingContext} that can be supplied to a {@link KeyValueStore} so that
@@ -166,8 +170,8 @@ public class KeyValueStoreTestDriver<K, V> {
                                                               Serializer<V> valueSerializer,
                                                               Deserializer<V> valueDeserializer) {
         StateSerdes<K, V> serdes = new StateSerdes<K, V>("unexpected",
-                Serdes.serdeFrom(keySerializer, keyDeserializer),
-                Serdes.serdeFrom(valueSerializer, valueDeserializer));
+            Serdes.serdeFrom(keySerializer, keyDeserializer),
+            Serdes.serdeFrom(valueSerializer, valueDeserializer));
         return new KeyValueStoreTestDriver<K, V>(serdes);
     }
 
@@ -176,7 +180,11 @@ public class KeyValueStoreTestDriver<K, V> {
     private final List<KeyValue<K, V>> restorableEntries = new LinkedList<>();
     private final MockProcessorContext context;
     private final Map<String, StateStore> storeMap = new HashMap<>();
-    private final StreamsMetrics metrics = new StreamsMetrics() {
+    private MockTime time = new MockTime();
+    private MetricConfig config = new MetricConfig();
+    private Metrics metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
+
+    private final StreamsMetrics streamsMetrics = new StreamsMetrics() {
         @Override
         public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
             return null;
@@ -188,27 +196,27 @@ public class KeyValueStoreTestDriver<K, V> {
 
         @Override
         public Sensor sensor(String name) {
-            return null;
+            return metrics.sensor(name);
         }
 
         @Override
         public Sensor addSensor(String name, Sensor... parents) {
-            return null;
+            return metrics.sensor(name, parents);
         }
 
         @Override
         public void removeSensor(String name) {
-
+            metrics.removeSensor(name);
         }
 
         @Override
         public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
-            return null;
+            return metrics.sensor(name, config, parents);
         }
 
         @Override
         public Sensor getSensor(String name) {
-            return null;
+            return metrics.getSensor(name);
         }
     };
     private final RecordCollector recordCollector;
@@ -229,9 +237,10 @@ public class KeyValueStoreTestDriver<K, V> {
 
                 recordFlushed(key, value);
             }
+
             @Override
             public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer,
-                                    StreamPartitioner<K1, V1> partitioner) {
+                                      StreamPartitioner<K1, V1> partitioner) {
                 // ignore partitioner
                 send(record, keySerializer, valueSerializer);
             }
@@ -269,7 +278,7 @@ public class KeyValueStoreTestDriver<K, V> {
 
             @Override
             public StreamsMetrics metrics() {
-                return metrics;
+                return streamsMetrics;
             }
 
             @Override

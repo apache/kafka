@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,9 +17,19 @@
 
 package org.apache.kafka.test;
 
+import java.io.File;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -29,12 +39,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.StateSerdes;
 
-import java.io.File;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
 
     private final KStreamTestDriver driver;
@@ -42,6 +46,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     private final Serde<?> valSerde;
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final File stateDir;
+    private MockTime time = new MockTime();
+    private MetricConfig config = new MetricConfig();
+    private Metrics metrics;
+
 
     private Map<String, StateStore> storeMap = new HashMap<>();
     private Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
@@ -57,12 +65,12 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
                                 Serde<?> valSerde,
                                 final RecordCollector collector) {
         this(driver, stateDir, keySerde, valSerde,
-                new RecordCollector.Supplier() {
-                    @Override
-                    public RecordCollector recordCollector() {
-                        return collector;
-                    }
-                });
+            new RecordCollector.Supplier() {
+                @Override
+                public RecordCollector recordCollector() {
+                    return collector;
+                }
+            });
     }
 
     public MockProcessorContext(KStreamTestDriver driver, File stateDir,
@@ -74,6 +82,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.recordCollectorSupplier = collectorSupplier;
+        this.metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
     }
 
     @Override
@@ -125,33 +134,34 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
                 return null;
             }
+
             @Override
             public void recordLatency(Sensor sensor, long startNs, long endNs) {
             }
 
             @Override
             public Sensor sensor(String name) {
-                return null;
+                return metrics.sensor(name);
             }
 
             @Override
             public Sensor addSensor(String name, Sensor... parents) {
-                return null;
+                return metrics.sensor(name, parents);
             }
 
             @Override
             public void removeSensor(String name) {
-
+                metrics.removeSensor(name);
             }
 
             @Override
             public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
-                return null;
+                return metrics.sensor(name, config, parents);
             }
 
             @Override
             public Sensor getSensor(String name) {
-                return null;
+                return metrics.getSensor(name);
             }
         };
     }
