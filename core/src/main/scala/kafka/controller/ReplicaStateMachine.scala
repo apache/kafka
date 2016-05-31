@@ -101,7 +101,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
 
   /**
    * This API is invoked by the broker change controller callbacks and the startup API of the state machine
-   * @param replicas     The list of replicas (brokers) that need to be transitioned to the target state
+    *
+    * @param replicas     The list of replicas (brokers) that need to be transitioned to the target state
    * @param targetState  The state that the replicas should be moved to
    * The controller's allLeaders cache should have been updated before this
    */
@@ -149,9 +150,9 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    *
    * ReplicaDeletionSuccessful -> NonExistentReplica
    * -- remove the replica from the in memory partition replica assignment cache
+    *
 
-
-   * @param partitionAndReplica The replica for which the state transition is invoked
+    * @param partitionAndReplica The replica for which the state transition is invoked
    * @param targetState The end state that the replica should be moved to
    */
   def handleStateChange(partitionAndReplica: PartitionAndReplica, targetState: ReplicaState,
@@ -330,13 +331,13 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
       val partition = topicPartition.partition
       assignedReplicas.foreach { replicaId =>
         val partitionAndReplica = PartitionAndReplica(topic, partition, replicaId)
-        controllerContext.liveBrokerIds.contains(replicaId) match {
-          case true => replicaState.put(partitionAndReplica, OnlineReplica)
-          case false =>
-            // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
-            // This is required during controller failover since during controller failover a broker can go down,
-            // so the replicas on that broker should be moved to ReplicaDeletionIneligible to be on the safer side.
-            replicaState.put(partitionAndReplica, ReplicaDeletionIneligible)
+        if(controllerContext.liveBrokerIds.contains(replicaId)) {
+          replicaState.put(partitionAndReplica, OnlineReplica)
+        }else{
+          // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
+          // This is required during controller failover since during controller failover a broker can go down,
+          // so the replicas on that broker should be moved to ReplicaDeletionIneligible to be on the safer side.
+          replicaState.put(partitionAndReplica, ReplicaDeletionIneligible)
         }
       }
     }

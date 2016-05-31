@@ -133,7 +133,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
   /**
    * This API is invoked by the partition change zookeeper listener
-   * @param partitions   The list of partitions that need to be transitioned to the target state
+    *
+    * @param partitions   The list of partitions that need to be transitioned to the target state
    * @param targetState  The state that the partitions should be moved to
    */
   def handleStateChanges(partitions: Set[TopicAndPartition], targetState: PartitionState,
@@ -171,7 +172,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    *
    * OfflinePartition -> NonExistentPartition
    * --nothing other than marking the partition state as NonExistentPartition
-   * @param topic       The topic of the partition for which the state transition is invoked
+    *
+    * @param topic       The topic of the partition for which the state transition is invoked
    * @param partition   The partition for which the state transition is invoked
    * @param targetState The end state that the partition should be moved to
    */
@@ -245,11 +247,11 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       controllerContext.partitionLeadershipInfo.get(topicPartition) match {
         case Some(currentLeaderIsrAndEpoch) =>
           // else, check if the leader for partition is alive. If yes, it is in Online state, else it is in Offline state
-          controllerContext.liveBrokerIds.contains(currentLeaderIsrAndEpoch.leaderAndIsr.leader) match {
-            case true => // leader is alive
-              partitionState.put(topicPartition, OnlinePartition)
-            case false =>
-              partitionState.put(topicPartition, OfflinePartition)
+          if(controllerContext.liveBrokerIds.contains(currentLeaderIsrAndEpoch.leaderAndIsr.leader)) {
+            // leader is alive
+            partitionState.put(topicPartition, OnlinePartition)
+          }else{
+            partitionState.put(topicPartition, OfflinePartition)
           }
         case None =>
           partitionState.put(topicPartition, NewPartition)
@@ -270,7 +272,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * a leader and isr path in zookeeper. Once the partition moves to the OnlinePartition state, its leader and isr
    * path gets initialized and it never goes back to the NewPartition state. From here, it can only go to the
    * OfflinePartition state.
-   * @param topicAndPartition   The topic/partition whose leader and isr path is to be initialized
+    *
+    * @param topicAndPartition   The topic/partition whose leader and isr path is to be initialized
    */
   private def initializeLeaderAndIsrForPartition(topicAndPartition: TopicAndPartition) {
     val replicaAssignment = controllerContext.partitionReplicaAssignment(topicAndPartition)
@@ -316,7 +319,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   /**
    * Invoked on the OfflinePartition,OnlinePartition->OnlinePartition state change.
    * It invokes the leader election API to elect a leader for the input offline partition
-   * @param topic               The topic of the offline partition
+    *
+    * @param topic               The topic of the offline partition
    * @param partition           The offline partition
    * @param leaderSelector      Specific leader selector (e.g., offline/reassigned/etc.)
    */
@@ -454,7 +458,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
     /**
      * Invoked when a topic is being deleted
-     * @throws Exception On any error.
+      *
+      * @throws Exception On any error.
      */
     @throws(classOf[Exception])
     def handleChildChange(parentPath : String, children : java.util.List[String]) {
