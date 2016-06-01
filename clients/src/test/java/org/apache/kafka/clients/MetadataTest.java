@@ -111,7 +111,7 @@ public class MetadataTest {
         metadata.update(Cluster.empty(), time);
 
         assertEquals(100, metadata.timeToNextUpdate(1000));
-        metadata.handleFailedUpdate(1100, Collections.<String>emptyList());
+        metadata.failedUpdate(1100, Collections.<String>emptyList());
 
         assertEquals(100, metadata.timeToNextUpdate(1100));
         assertEquals(100, metadata.lastSuccessfulUpdate());

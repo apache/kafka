@@ -182,7 +182,9 @@ public final class Metadata {
     }
 
     /**
-     * Updates cluster metadata and handles topic expiry.
+     * Updates cluster metadata and handles topic expiry. This can
+     * be used for initializing the metadata cluster.
+     * See {@link #update(Cluster, long, Collection)} for details.
      */
     public synchronized void update(Cluster cluster, long now) {
         update(cluster, now, Collections.<String>emptyList());
@@ -228,7 +230,7 @@ public final class Metadata {
      * Record an attempt to update the metadata that failed. We need to keep track of this
      * to avoid retrying immediately. Removes unknown topics from metadata if expiry is enabled.
      */
-    public synchronized void handleFailedUpdate(long now, Collection<String> unknownTopics) {
+    public synchronized void failedUpdate(long now, Collection<String> unknownTopics) {
         this.lastRefreshMs = now;
         if (topicExpiryEnabled)
             topics.keySet().removeAll(unknownTopics);
