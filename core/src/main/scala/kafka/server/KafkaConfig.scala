@@ -151,6 +151,7 @@ object Defaults {
   val ConsumerQuotaBytesPerSecondDefault = ClientQuotaManagerConfig.QuotaBytesPerSecondDefault
   val NumQuotaSamples: Int = ClientQuotaManagerConfig.DefaultNumQuotaSamples
   val QuotaWindowSizeSeconds: Int = ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds
+  val QuotaType = ClientQuotaManagerConfig.ClientId
 
   val DeleteTopicEnable = false
 
@@ -311,6 +312,7 @@ object KafkaConfig {
   val ConsumerQuotaBytesPerSecondDefaultProp = "quota.consumer.default"
   val NumQuotaSamplesProp = "quota.window.num"
   val QuotaWindowSizeSecondsProp = "quota.window.size.seconds"
+  val QuotaTypeProp = "quota.type"
 
   val DeleteTopicEnableProp = "delete.topic.enable"
   val CompressionTypeProp = "compression.type"
@@ -507,6 +509,7 @@ object KafkaConfig {
   val ConsumerQuotaBytesPerSecondDefaultDoc = "Any consumer distinguished by clientId/consumer group will get throttled if it fetches more bytes than this value per-second"
   val NumQuotaSamplesDoc = "The number of samples to retain in memory"
   val QuotaWindowSizeSecondsDoc = "The time span of each sample"
+  val QuotaTypeDoc = "Selects the entity to which quotas are applied. Valid values are 'client-id' and 'user'"
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +
@@ -689,6 +692,7 @@ object KafkaConfig {
       .define(ConsumerQuotaBytesPerSecondDefaultProp, LONG, Defaults.ConsumerQuotaBytesPerSecondDefault, atLeast(1), HIGH, ConsumerQuotaBytesPerSecondDefaultDoc)
       .define(NumQuotaSamplesProp, INT, Defaults.NumQuotaSamples, atLeast(1), LOW, NumQuotaSamplesDoc)
       .define(QuotaWindowSizeSecondsProp, INT, Defaults.QuotaWindowSizeSeconds, atLeast(1), LOW, QuotaWindowSizeSecondsDoc)
+      .define(QuotaTypeProp, STRING, Defaults.QuotaType, in(ClientQuotaManagerConfig.ClientId, ClientQuotaManagerConfig.User), LOW, QuotaTypeDoc)
 
 
       /** ********* SSL Configuration ****************/
@@ -919,6 +923,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val consumerQuotaBytesPerSecondDefault = getLong(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp)
   val numQuotaSamples = getInt(KafkaConfig.NumQuotaSamplesProp)
   val quotaWindowSizeSeconds = getInt(KafkaConfig.QuotaWindowSizeSecondsProp)
+  val quotaType = getString(KafkaConfig.QuotaTypeProp)
 
   val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
   val compressionType = getString(KafkaConfig.CompressionTypeProp)

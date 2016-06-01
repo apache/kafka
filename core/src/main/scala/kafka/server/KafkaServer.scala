@@ -218,14 +218,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         Mx4jLoader.maybeLoad()
 
         /* start dynamic config manager */
-        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config),
-                                                           ConfigType.Client -> new ClientIdConfigHandler(apis.quotaManagers))
-
-        // Apply all existing client configs to the ClientIdConfigHandler to bootstrap the overrides
-        // TODO: Move this logic to DynamicConfigManager
-        AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Client).foreach {
-          case (clientId, properties) => dynamicConfigHandlers(ConfigType.Client).processConfigChanges(clientId, properties)
+        val quotaConfigType = config.quotaType match {
+          case ClientQuotaManagerConfig.ClientId => ConfigType.Client
+          case ClientQuotaManagerConfig.User => ConfigType.User
+          case quotaType => throw new IllegalArgumentException(s"Invalid quota type $quotaType")
         }
+        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config),
+                                                           quotaConfigType -> new QuotaConfigHandler(config.quotaType, apis.quotaManagers))
 
         // Create the config manager. start listening to notifications
         dynamicConfigManager = new DynamicConfigManager(zkUtils, dynamicConfigHandlers)
