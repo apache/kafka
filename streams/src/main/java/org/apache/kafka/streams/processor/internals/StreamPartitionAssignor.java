@@ -264,7 +264,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             sourceTopicGroups.put(entry.getKey(), entry.getValue().sourceTopics);
             internalSourceTopicGroups.put(entry.getKey(), entry.getValue().interSourceTopics);
         }
-        Collection<Set<String>> copartitionTopicGroups = streamThread.builder.copartitionGroups();
+        Collection<Set<String>> copartitionTopicGroups = streamThread.builder.copartitionGroups(streamThread.applicationId);
 
         ensureCopartitioning(copartitionTopicGroups, internalSourceTopicGroups, metadata);
 
