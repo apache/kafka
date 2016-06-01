@@ -182,11 +182,18 @@ public final class Metadata {
     }
 
     /**
-     * Updates the cluster metadata. If topic expiry is enabled, expiry time
-     * is set for topics if required and topics that have expired are removed
-     * from the metadata.
+     * Updates cluster metadata and handles topic expiry.
      */
     public synchronized void update(Cluster cluster, long now) {
+        update(cluster, now, Collections.<String>emptyList());
+    }
+
+    /**
+     * Updates the cluster metadata. If topic expiry is enabled, expiry time
+     * is set for topics if required and expired and unknown topics are
+     * removed from the metadata.
+     */
+    public synchronized void update(Cluster cluster, long now, Collection<String> unknownTopics) {
         this.needUpdate = false;
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
@@ -204,6 +211,7 @@ public final class Metadata {
                     log.debug("Removing unused topic {} from the metadata list, expiryMs {} now {}", entry.getKey(), expireMs, now);
                 }
             }
+            topics.keySet().removeAll(unknownTopics);
         }
 
         for (Listener listener: listeners)
@@ -217,20 +225,13 @@ public final class Metadata {
     }
 
     /**
-     * If expiry is enabled, remove the unknown topic from the metadata refresh set to
-     * avoid further metadata requests for deleted topics which are not in use.
-     */
-    public synchronized void handleUnknownTopic(String topic) {
-        if (topicExpiryEnabled)
-            topics.remove(topic);
-    }
-
-    /**
      * Record an attempt to update the metadata that failed. We need to keep track of this
-     * to avoid retrying immediately.
+     * to avoid retrying immediately. Removes unknown topics from metadata if expiry is enabled.
      */
-    public synchronized void failedUpdate(long now) {
+    public synchronized void handleFailedUpdate(long now, Collection<String> unknownTopics) {
         this.lastRefreshMs = now;
+        if (topicExpiryEnabled)
+            topics.keySet().removeAll(unknownTopics);
     }
     
     /**

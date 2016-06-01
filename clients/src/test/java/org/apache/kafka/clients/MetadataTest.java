@@ -111,7 +111,7 @@ public class MetadataTest {
         metadata.update(Cluster.empty(), time);
 
         assertEquals(100, metadata.timeToNextUpdate(1000));
-        metadata.failedUpdate(1100);
+        metadata.handleFailedUpdate(1100, Collections.<String>emptyList());
 
         assertEquals(100, metadata.timeToNextUpdate(1100));
         assertEquals(100, metadata.lastSuccessfulUpdate());
@@ -230,7 +230,7 @@ public class MetadataTest {
         metadata.add("topic3");
         metadata.update(TestUtils.singletonCluster("topic3", 1), time);
         assertTrue("Topic expired even though in use", metadata.containsTopic("topic3"));
-        metadata.handleUnknownTopic("topic3");
+        metadata.update(TestUtils.singletonCluster("topic3", 1), time, Collections.singleton("topic3"));
         assertFalse("Unknown topic not deleted", metadata.containsTopic("topic3"));
 
         // Test that topics added using setTopics expire
@@ -269,7 +269,7 @@ public class MetadataTest {
         metadata.add("topic3");
         metadata.update(TestUtils.singletonCluster("topic3", 1), time);
         assertTrue("Topic expired even though in use", metadata.containsTopic("topic3"));
-        metadata.handleUnknownTopic("topic3");
+        metadata.update(TestUtils.singletonCluster("topic3", 1), time, Collections.singleton("topic3"));
         assertTrue("Unknown topic deleted when expiry disabled", metadata.containsTopic("topic3"));
 
         // Test that topics added using setTopics don't expire
