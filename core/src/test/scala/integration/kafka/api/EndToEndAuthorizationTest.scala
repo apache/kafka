@@ -61,12 +61,11 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1
   override val consumerCount = 2
   override val serverCount = 3
-  override val setClusterAcl = Some { () =>
+
+  override def setAclsBeforeServersStart() {
     AclCommand.main(clusterAclArgs)
-    servers.foreach(s =>
-      TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, clusterResource)
-    )
   }
+
   val numRecords = 1
   val group = "group"
   val topic = "e2etopic"
