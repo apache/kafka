@@ -84,6 +84,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private StreamThread streamThread;
 
     private int numStandbyReplicas;
+    private int maxNumTasksPerProcessId;
     private Map<Integer, TopologyBuilder.TopicsInfo> topicGroups;
     private Map<TopicPartition, Set<TaskId>> partitionToTaskIds;
     private Map<String, Set<TaskId>> stateChangelogTopicToTaskIds;
@@ -101,6 +102,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     @Override
     public void configure(Map<String, ?> configs) {
         numStandbyReplicas = (Integer) configs.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+        maxNumTasksPerProcessId = (Integer) configs.get(StreamsConfig.MAX_TASKS_ASSIGNED);
 
         Object o = configs.get(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE);
         if (o == null) {
@@ -331,7 +333,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         // assign tasks to clients
-        states = TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas);
+        states = TaskAssignor.assign(states, partitionsForTask.keySet(), maxNumTasksPerProcessId, numStandbyReplicas);
         Map<String, Assignment> assignment = new HashMap<>();
 
         for (Map.Entry<UUID, Set<String>> entry : consumersByClient.entrySet()) {

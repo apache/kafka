@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+
 import org.junit.Test;
 
 import java.util.Collections;
@@ -286,4 +287,22 @@ public class TaskAssignorTest {
         }
     }
 
+    @Test
+    public void testAssignWithLimitedMaxPartitions() {
+        final int numProcessors = 2;
+        final int maxNumTasksPerState = 2;
+
+        HashMap<Integer, ClientState<Integer>> states = new HashMap<>();
+        for (int i = 0; i < numProcessors; i++) {
+            states.put(i, new ClientState<Integer>(1));
+        }
+
+        Set<Integer> tasks = mkSet(0, 1, 2, 3, 4);
+        Map<Integer, ClientState<Integer>> assignments = TaskAssignor.assign(states, tasks, maxNumTasksPerState, 0);
+
+        assertEquals(numProcessors, assignments.size());
+        for (ClientState<Integer> state : assignments.values()) {
+            assertEquals(maxNumTasksPerState, state.assignedTasks.size());
+        }
+    }
 }

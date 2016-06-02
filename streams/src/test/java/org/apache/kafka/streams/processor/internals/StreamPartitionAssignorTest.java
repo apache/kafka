@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
+import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Assignment;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -84,6 +85,8 @@ public class StreamPartitionAssignorTest {
     private final TaskId task1 = new TaskId(0, 1);
     private final TaskId task2 = new TaskId(0, 2);
     private final TaskId task3 = new TaskId(0, 3);
+
+    private static final Set<TaskId> EMPTY_TASK_IDS = Collections.emptySet();
 
     private Properties configProps() {
         return new Properties() {
@@ -503,6 +506,64 @@ public class StreamPartitionAssignorTest {
         // check prepared internal topics
         assertEquals(1, internalTopicManager.readyTopics.size());
         assertEquals(allTasks.size(), (long) internalTopicManager.readyTopics.get("test-topicX"));
+    }
+
+    @Test
+    public void testAssignWithLimitedMaxTasksAssigned() throws Exception {
+        final int maxTasksAssigned = 1;
+
+        Properties props = configProps();
+        props.setProperty(StreamsConfig.MAX_TASKS_ASSIGNED, String.valueOf(maxTasksAssigned));
+        StreamsConfig config = new StreamsConfig(props);
+
+        TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source1", "topic1");
+        builder.addSource("source2", "topic2");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
+        List<String> topics = Utils.mkList("topic1", "topic2");
+
+        final Set<TaskId> prevTasks10 = Utils.mkSet(task0);
+        final Set<TaskId> prevTasks11 = Utils.mkSet(task1);
+
+        UUID uuid1 = UUID.randomUUID();
+        System.err.println("uuid1 = " + uuid1);
+        String client1 = "client1";
+
+        StreamThread thread10 = new StreamThread(builder, config, new MockClientSupplier(), "test", client1, uuid1, new Metrics(), new SystemTime());
+
+        StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+        partitionAssignor.configure(config.getConsumerConfigs(thread10, "test", client1));
+
+        Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
+
+        // Step 1. Here comes the first KafkaStreams instance joined into a group, but it's not enough to distribute all tasks because of max.partitions.assigned=2
+        subscriptions.put("consumer10",
+                          new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, prevTasks10, EMPTY_TASK_IDS).encode()));
+        subscriptions.put("consumer11",
+                          new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, EMPTY_TASK_IDS, EMPTY_TASK_IDS).encode()));
+
+        Map<String, Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
+        assertEquals(2, assignment.size());
+        assertEquals(2, assignment.get("consumer10").partitions().size() + assignment.get("consumer11").partitions().size());
+
+        // Step 2. Now a new consumer on different KafkaStreams instance joined the group, but still not enough to distribute all partitions.
+        subscriptions.put("consumer20",
+                          new PartitionAssignor.Subscription(topics, new SubscriptionInfo(UUID.randomUUID(), prevTasks11, EMPTY_TASK_IDS).encode()));
+
+        assignment = partitionAssignor.assign(metadata, subscriptions);
+        assertEquals(3, assignment.size());
+        assertEquals(2, assignment.get("consumer10").partitions().size() + assignment.get("consumer11").partitions().size());
+        assertEquals(2, assignment.get("consumer20").partitions().size());
+
+        // Step 3. Now one more new consumer joined the group. It should be enough to complete assignment.
+        subscriptions.put("consumer30",
+                          new PartitionAssignor.Subscription(topics, new SubscriptionInfo(UUID.randomUUID(), EMPTY_TASK_IDS, EMPTY_TASK_IDS).encode()));
+
+        assignment = partitionAssignor.assign(metadata, subscriptions);
+        assertEquals(4, assignment.size());
+        assertEquals(2, assignment.get("consumer10").partitions().size() + assignment.get("consumer11").partitions().size());
+        assertEquals(2, assignment.get("consumer20").partitions().size());
+        assertEquals(2, assignment.get("consumer30").partitions().size());
     }
 
     private class MockInternalTopicManager extends InternalTopicManager {
