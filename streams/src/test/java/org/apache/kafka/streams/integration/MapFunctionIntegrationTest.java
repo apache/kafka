@@ -79,6 +79,7 @@ public class MapFunctionIntegrationTest {
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStream<byte[], String> input = builder.stream(DEFAULT_INPUT_TOPIC);
         KStream<byte[], String> uppercased = input.mapValues(new ValueMapper<String, String>() {
@@ -92,10 +93,6 @@ public class MapFunctionIntegrationTest {
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
 
-        // Wait briefly for the topology to be fully up and running (otherwise it might miss some or all
-        // of the input data we produce below).
-        Thread.sleep(5000);
-
         //
         // Step 2: Produce some input data to the input topic.
         //
@@ -107,10 +104,6 @@ public class MapFunctionIntegrationTest {
         producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         IntegrationTestUtils.produceValuesSynchronously(DEFAULT_INPUT_TOPIC, inputValues, producerConfig);
 
-        // Give the stream processing application some time to do its work.
-        Thread.sleep(10000);
-        streams.close();
-
         //
         // Step 3: Verify the application's output data.
         //
@@ -120,7 +113,9 @@ public class MapFunctionIntegrationTest {
         consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        List<String> actualValues = IntegrationTestUtils.readValues(DEFAULT_OUTPUT_TOPIC, consumerConfig, inputValues.size());
+        List<String> actualValues = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfig,
+            DEFAULT_OUTPUT_TOPIC, inputValues.size());
+        streams.close();
         assertThat(actualValues, equalTo(expectedValues));
     }
 

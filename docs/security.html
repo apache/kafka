@@ -93,7 +93,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
             <pre>
         #!/bin/bash
         #Step 1
-        keytool -keystore server.keystore.jks -alias localhost -validity 365 -genkey
+        keytool -keystore server.keystore.jks -alias localhost -validity 365 -keyalg RSA -genkey
         #Step 2
         openssl req -new -x509 -keyout ca-key -out ca-cert -days 365
         keytool -keystore server.truststore.jks -alias CARoot -import -file ca-cert
@@ -573,6 +573,12 @@ Kafka Authorization management CLI can be found under bin directory with all the
         <td>--consumer</td>
         <td> Convenience option to add/remove acls for consumer role. This will generate acls that allows READ,
             DESCRIBE on topic and READ on consumer-group.</td>
+        <td></td>
+        <td>Convenience</td>
+    </tr>
+    <tr>
+        <td>--force</td>
+        <td> Convenience option to assume yes to all queries and do not prompt.</td>
         <td></td>
         <td>Convenience</td>
     </tr>

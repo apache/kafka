@@ -122,29 +122,26 @@ public class TopologyBuilder {
         public final Pattern pattern;
         private Deserializer keyDeserializer;
         private Deserializer valDeserializer;
-        private final SubscriptionUpdates subscriptionUpdates;
 
-        private SourceNodeFactory(String name, String[] topics, Pattern pattern, Deserializer keyDeserializer, Deserializer valDeserializer, SubscriptionUpdates subscriptionUpdates) {
+        private SourceNodeFactory(String name, String[] topics, Pattern pattern, Deserializer keyDeserializer, Deserializer valDeserializer) {
             super(name);
             this.topics = topics != null ? topics.clone() : null;
             this.pattern = pattern;
             this.keyDeserializer = keyDeserializer;
             this.valDeserializer = valDeserializer;
-            this.subscriptionUpdates = subscriptionUpdates;
         }
 
-
         public String[] getTopics() {
-            if (pattern == null) {
-                return topics;
-            }
+            return topics;
+        }
+
+        public String[] getTopics(Collection<String> subscribedTopics) {
             List<String> matchedTopics = new ArrayList<>();
-            for (String update : this.subscriptionUpdates.getUpdates()) {
+            for (String update : subscribedTopics) {
                 if (this.pattern.matcher(update).matches()) {
                     matchedTopics.add(update);
                 }
             }
-
             return matchedTopics.toArray(new String[matchedTopics.size()]);
         }
 
@@ -283,7 +280,7 @@ public class TopologyBuilder {
             sourceTopicNames.add(topic);
         }
 
-        nodeFactories.put(name, new SourceNodeFactory(name, topics, null, keyDeserializer, valDeserializer, subscriptionUpdates));
+        nodeFactories.put(name, new SourceNodeFactory(name, topics, null, keyDeserializer, valDeserializer));
         nodeToSourceTopics.put(name, topics.clone());
         nodeGrouper.add(name);
 
@@ -327,8 +324,7 @@ public class TopologyBuilder {
         }
 
         nodeToSourcePatterns.put(name, topicPattern);
-        nodeToSourceTopics.put(name, new String[]{});
-        nodeFactories.put(name, new SourceNodeFactory(name, null, topicPattern, keyDeserializer, valDeserializer, subscriptionUpdates));
+        nodeFactories.put(name, new SourceNodeFactory(name, null, topicPattern, keyDeserializer, valDeserializer));
         nodeGrouper.add(name);
 
         return this;
@@ -597,15 +593,17 @@ public class TopologyBuilder {
     public Map<Integer, TopicsInfo> topicGroups(String applicationId) {
         Map<Integer, TopicsInfo> topicGroups = new HashMap<>();
 
-        if (nodeGroups == null)
-            nodeGroups = makeNodeGroups();
 
         if (subscriptionUpdates.hasUpdates()) {
             for (Map.Entry<String, Pattern> stringPatternEntry : nodeToSourcePatterns.entrySet()) {
                 SourceNodeFactory sourceNode = (SourceNodeFactory) nodeFactories.get(stringPatternEntry.getKey());
-                nodeToSourceTopics.put(stringPatternEntry.getKey(), sourceNode.getTopics());
+                nodeToSourceTopics.put(stringPatternEntry.getKey(), sourceNode.getTopics(subscriptionUpdates.getUpdates()));
             }
         }
+
+        if (nodeGroups == null)
+            nodeGroups = makeNodeGroups();
+
 
         for (Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
             Set<String> sinkTopics = new HashSet<>();
@@ -777,7 +775,9 @@ public class TopologyBuilder {
                         }
                     }
                 } else if (factory instanceof SourceNodeFactory) {
-                    for (String topic : ((SourceNodeFactory) factory).getTopics()) {
+                    SourceNodeFactory sourceNodeFactory = (SourceNodeFactory) factory;
+                    String[] topics = (sourceNodeFactory.pattern != null) ? sourceNodeFactory.getTopics(subscriptionUpdates.getUpdates()) : sourceNodeFactory.getTopics();
+                    for (String topic : topics) {
                         if (internalTopicNames.contains(topic)) {
                             // prefix the internal topic name with the application id
                             topicSourceMap.put(applicationId + "-" + topic, (SourceNode) node);
@@ -815,7 +815,7 @@ public class TopologyBuilder {
     }
 
     public Pattern sourceTopicPattern() {
-        if (this.topicPattern == null && !nodeToSourceTopics.isEmpty()) {
+        if (this.topicPattern == null && !nodeToSourcePatterns.isEmpty()) {
             StringBuilder builder = new StringBuilder();
             for (Pattern pattern : nodeToSourcePatterns.values()) {
                 builder.append(pattern.pattern()).append("|");

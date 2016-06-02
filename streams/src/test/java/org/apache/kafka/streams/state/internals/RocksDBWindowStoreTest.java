@@ -785,9 +785,10 @@ public class RocksDBWindowStoreTest {
                         segmentDirs(baseDir)
                 );
 
-                WindowStoreIterator iter = store.fetch(0, 0L, 1000000L);
-                while (iter.hasNext()) {
-                    iter.next();
+                try (WindowStoreIterator iter = store.fetch(0, 0L, 1000000L)) {
+                    while (iter.hasNext()) {
+                        iter.next();
+                    }
                 }
 
                 assertEquals(

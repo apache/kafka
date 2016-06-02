@@ -259,11 +259,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             state.capacity = state.capacity + 1d;
         }
 
-        // Source nodes are build ahead of time, but it's at this
-        // point we see the topics subscribed to
+        // update the topic groups with the returned subscription list for regex pattern subscriptions
         if (streamThread.builder.sourceTopicPattern() != null) {
             SubscriptionUpdates subscriptionUpdates = streamThread.builder.getSubscriptionUpdates();
-            subscriptionUpdates.addTopicUpdates(regexSubscribedTopics);
+            subscriptionUpdates.updateTopics(regexSubscribedTopics);
             this.topicGroups = streamThread.builder.topicGroups(streamThread.applicationId);
         }
 
@@ -508,14 +507,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         private final Set<String> updatedTopicSubscriptions = new HashSet<>();
 
 
-        private void addTopicUpdate(String topicName) {
-            updatedTopicSubscriptions.add(topicName);
-        }
-
-        private  void addTopicUpdates(Collection<String> topicNames) {
-            for (String topicName : topicNames) {
-                addTopicUpdate(topicName);
-            }
+        private  void updateTopics(Collection<String> topicNames) {
+            updatedTopicSubscriptions.clear();
+            updatedTopicSubscriptions.addAll(topicNames);
         }
 
         public Collection<String> getUpdates() {

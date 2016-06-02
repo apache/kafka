@@ -27,7 +27,7 @@ import org.apache.kafka.common.record.TimestampType
 
 /**
  * A base consumer used to abstract both old and new consumer
- * this class should be removed (along with BaseProducer) be removed
+ * this class should be removed (along with BaseProducer)
  * once we deprecate old consumer
  */
 trait BaseConsumer {

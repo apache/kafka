@@ -304,7 +304,7 @@ public class JsonConverter implements Converter {
 
         Object cacheSizeVal = configs.get(SCHEMAS_CACHE_SIZE_CONFIG);
         if (cacheSizeVal != null)
-            cacheSize = (int) cacheSizeVal;
+            cacheSize = Integer.parseInt((String) cacheSizeVal);
         fromConnectSchemaCache = new SynchronizedCache<>(new LRUCache<Schema, ObjectNode>(cacheSize));
         toConnectSchemaCache = new SynchronizedCache<>(new LRUCache<JsonNode, Schema>(cacheSize));
     }
