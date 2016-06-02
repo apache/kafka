@@ -29,13 +29,12 @@ class ByteBufferBackedInputStream(buffer:ByteBuffer) extends InputStream {
   }
 
   override def read(bytes:Array[Byte], off:Int, len:Int):Int = {
-    if(buffer.hasRemaining) {
+    if (buffer.hasRemaining) {
       // Read only what's left
       val realLen = math.min(len, buffer.remaining())
       buffer.get(bytes, off, realLen)
       realLen
-    }else {
+    } else
       -1
-    }
   }
 }

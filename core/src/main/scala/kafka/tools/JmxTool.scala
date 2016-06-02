@@ -92,11 +92,12 @@ object JmxTool extends Logging {
     val names = queries.flatMap((name: ObjectName) => mbsc.queryNames(name, null): mutable.Set[ObjectName])
 
     val numExpectedAttributes: Map[ObjectName, Int] =
-      if (attributesWhitelistExists) {
+      if (attributesWhitelistExists)
         queries.map((_, attributesWhitelist.get.size)).toMap
-      } else { names.map{(name: ObjectName) =>
-        val mbean = mbsc.getMBeanInfo(name)
-        (name, mbsc.getAttributes(name, mbean.getAttributes.map(_.getName)).size)}.toMap
+      else {
+        names.map{(name: ObjectName) =>
+          val mbean = mbsc.getMBeanInfo(name)
+          (name, mbsc.getAttributes(name, mbean.getAttributes.map(_.getName)).size)}.toMap
       }
 
     // print csv header

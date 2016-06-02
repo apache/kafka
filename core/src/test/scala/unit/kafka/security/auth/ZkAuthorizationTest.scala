@@ -196,13 +196,14 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     // Additionally, we create the consumers znode (not in
     // securePersistentZkPaths) to make sure that we don't
     // add ACLs to it.
-    val secureOpt: String  = if (secondZk.isSecure) {
-      firstZk.createPersistentPath(ZkUtils.ConsumersPath)
-      "secure"
-    }else {
-      secondZk.createPersistentPath(ZkUtils.ConsumersPath)
-      "unsecure"
-    }
+    val secureOpt: String =
+      if (secondZk.isSecure) {
+        firstZk.createPersistentPath(ZkUtils.ConsumersPath)
+        "secure"
+      } else {
+        secondZk.createPersistentPath(ZkUtils.ConsumersPath)
+        "unsecure"
+      }
     ZkSecurityMigrator.run(Array(s"--zookeeper.acl=$secureOpt", s"--zookeeper.connect=$zkUrl"))
     info("Done with migration")
     for (path <- secondZk.securePersistentZkPaths) {
@@ -230,14 +231,13 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    * Verifies ACL.
    */
   private def isAclCorrect(list: java.util.List[ACL], secure: Boolean): Boolean = {
-    val isListSizeCorrect = {
+    val isListSizeCorrect =
       if (secure)
         list.size == 2
       else
         list.size == 1
-    }
     isListSizeCorrect && list.asScala.forall(
-      if(secure)
+      if (secure)
         isAclSecure
       else
         isAclUnsecure
