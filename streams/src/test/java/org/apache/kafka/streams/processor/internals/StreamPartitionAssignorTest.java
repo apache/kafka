@@ -201,9 +201,6 @@ public class StreamPartitionAssignorTest {
         allActiveTasks.addAll(info20.activeTasks);
 
         assertEquals(3, allActiveTasks.size());
-        assertEquals(allTasks, new HashSet<>(allActiveTasks));
-
-        assertEquals(3, allActiveTasks.size());
         assertEquals(allTasks, allActiveTasks);
     }
 
