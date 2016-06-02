@@ -522,7 +522,7 @@ class ZkUtils(val zkClient: ZkClient,
       zkClient.delete(path, expectedVersion)
       true
     } catch {
-      case e: KeeperException.BadVersionException => false
+      case e: ZkBadVersionException => false
     }
   }
 
