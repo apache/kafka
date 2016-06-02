@@ -770,13 +770,14 @@ public class Fetcher<K, V> {
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {
-            Map<String, String> metricTags = new HashMap<>();
-            metricTags.put("topic", topic.replace(".", "_"));
-
             // record bytes fetched
-            String name = "topic." + topic + ".bytes-fetched";
+            String name = String.format("topic.%s.bytes-fetched", topic);
             Sensor bytesFetched = this.metrics.getSensor(name);
+
             if (bytesFetched == null) {
+                Map<String, String> metricTags = new HashMap<>();
+                metricTags.put("topic", topic.replace(".", "_"));
+
                 bytesFetched = this.metrics.sensor(name);
                 bytesFetched.add(this.metrics.metricName("fetch-size-avg",
                         this.metricGrpName,
@@ -794,9 +795,12 @@ public class Fetcher<K, V> {
             bytesFetched.record(bytes);
 
             // record records fetched
-            name = "topic." + topic + ".records-fetched";
+            name = String.format("topic.%s.records-fetched", topic);
             Sensor recordsFetched = this.metrics.getSensor(name);
             if (recordsFetched == null) {
+                Map<String, String> metricTags = new HashMap<>();
+                metricTags.put("topic", topic.replace(".", "_"));
+
                 recordsFetched = this.metrics.sensor(name);
                 recordsFetched.add(this.metrics.metricName("records-per-request-avg",
                         this.metricGrpName,

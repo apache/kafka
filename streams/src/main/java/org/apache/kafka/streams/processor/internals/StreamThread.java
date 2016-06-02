@@ -314,19 +314,23 @@ public class StreamThread extends Thread {
             // try to process one fetch record from each task via the topology, and also trigger punctuate
             // functions if necessary, which may result in more records going through the topology in this loop
             if (!activeTasks.isEmpty()) {
+                long totalProcessTime = 0L;
+
                 for (StreamTask task : activeTasks.values()) {
                     long startProcess = time.milliseconds();
 
                     totalNumBuffered += task.process();
                     requiresPoll = requiresPoll || task.requiresPoll();
 
-                    sensors.processTimeSensor.record(time.milliseconds() - startProcess);
+                    totalProcessTime += (time.milliseconds() - startProcess);
 
                     maybePunctuate(task);
 
                     if (task.commitNeeded())
                         commitOne(task, time.milliseconds());
                 }
+
+                sensors.processTimeSensor.record(totalProcessTime);
 
                 // if pollTimeMs has passed since the last poll, we poll to respond to a possible rebalance
                 // even when we paused all partitions.
