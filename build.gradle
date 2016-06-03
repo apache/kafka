@@ -82,6 +82,8 @@ ext {
 
   userShowStandardStreams = project.hasProperty("showStandardStreams") ? showStandardStreams : null
 
+  userTestLoggingEvents = project.hasProperty("testLoggingEvents") ? Arrays.asList(testLoggingEvents.split(",")) : null
+
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
 }
 
@@ -156,7 +158,7 @@ subprojects {
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
     testLogging {
-      events "passed", "skipped", "failed"
+      events = userTestLoggingEvents ?: ["passed", "skipped", "failed"]
       showStandardStreams = userShowStandardStreams ?: false
       exceptionFormat = 'full'
     }
