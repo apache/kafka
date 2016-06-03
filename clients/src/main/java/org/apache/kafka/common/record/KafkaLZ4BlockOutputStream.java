@@ -29,10 +29,9 @@ import net.jpountz.xxhash.XXHash32;
 import net.jpountz.xxhash.XXHashFactory;
 
 /**
- * A partial implementation of the v1.4.1 LZ4 Frame format.
+ * A partial implementation of the v1.5.1 LZ4 Frame format.
  *
- * @see <a href="https://docs.google.com/document/d/1Tdxmn5_2e5p1y4PtXkatLndWVb0R8QARJFe6JI4Keuo/edit">LZ4 Framing
- *      Format Spec</a>
+ * @see <a href="http://cyan4973.github.io/lz4/lz4_Frame_format.html">LZ4 Frame Format</a>
  */
 public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
 
@@ -49,6 +48,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
 
     private final LZ4Compressor compressor;
     private final XXHash32 checksum;
+    private final boolean useBrokenFlagDescriptorChecksum;
     private final FLG flg;
     private final BD bd;
     private final byte[] buffer;
@@ -65,12 +65,15 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
      *            values will generate an exception
      * @param blockChecksum Default: false. When true, a XXHash32 checksum is computed and appended to the stream for
      *            every block of data
+     * @param useBrokenFlagDescriptorChecksum Default: false. When true, writes an incorrect FrameDescriptor checksum
+     *            compatible with older kafka clients.
      * @throws IOException
      */
-    public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize, boolean blockChecksum) throws IOException {
+    public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize, boolean blockChecksum, boolean useBrokenFlagDescriptorChecksum) throws IOException {
         super(out);
         compressor = LZ4Factory.fastestInstance().fastCompressor();
         checksum = XXHashFactory.fastestInstance().hash32();
+        this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
         bd = new BD(blockSize);
         flg = new FLG(blockChecksum);
         bufferOffset = 0;
@@ -84,13 +87,27 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
     /**
      * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm.
      *
+     * @param out The output stream to compress
+     * @param blockSize Default: 4. The block size used during compression. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other
+     *            values will generate an exception
+     * @param blockChecksum Default: false. When true, a XXHash32 checksum is computed and appended to the stream for
+     *            every block of data
+     * @throws IOException
+     */
+    public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize, boolean blockChecksum) throws IOException {
+        this(out, blockSize, blockChecksum, false);
+    }
+
+    /**
+     * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm.
+     *
      * @param out The stream to compress
      * @param blockSize Default: 4. The block size used during compression. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other
      *            values will generate an exception
      * @throws IOException
      */
     public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize) throws IOException {
-        this(out, blockSize, false);
+        this(out, blockSize, false, false);
     }
 
     /**
@@ -101,6 +118,19 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
      */
     public KafkaLZ4BlockOutputStream(OutputStream out) throws IOException {
         this(out, BLOCKSIZE_64KB);
+    }
+
+    public KafkaLZ4BlockOutputStream(OutputStream out, boolean useBrokenHC) throws IOException {
+        this(out, BLOCKSIZE_64KB, false, useBrokenHC);
+    }
+
+    /**
+     * Check whether KafkaLZ4BlockInputStream is configured to write an
+     * incorrect Frame Descriptor checksum, which is useful for
+     * compatibility with old client implementations.
+     */
+    public boolean useBrokenFlagDescriptorChecksum() {
+        return this.useBrokenFlagDescriptorChecksum;
     }
 
     /**
@@ -114,10 +144,17 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
         buffer[bufferOffset++] = flg.toByte();
         buffer[bufferOffset++] = bd.toByte();
         // TODO write uncompressed content size, update flg.validate()
-        // TODO write dictionary id, update flg.validate()
+
         // compute checksum on all descriptor fields
-        int hash = (checksum.hash(buffer, 0, bufferOffset, 0) >> 8) & 0xFF;
-        buffer[bufferOffset++] = (byte) hash;
+        int offset = 4;
+        int len = bufferOffset - offset;
+        if (this.useBrokenFlagDescriptorChecksum) {
+            len += offset;
+            offset = 0;
+        }
+        byte hash = (byte) ((checksum.hash(buffer, offset, len, 0) >> 8) & 0xFF);
+        buffer[bufferOffset++] = hash;
+
         // write out frame descriptor
         out.write(buffer, 0, bufferOffset);
         bufferOffset = 0;
@@ -236,8 +273,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
 
         private static final int VERSION = 1;
 
-        private final int presetDictionary;
-        private final int reserved1;
+        private final int reserved;
         private final int contentChecksum;
         private final int contentSize;
         private final int blockChecksum;
@@ -249,18 +285,16 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
         }
 
         public FLG(boolean blockChecksum) {
-            this(0, 0, 0, 0, blockChecksum ? 1 : 0, 1, VERSION);
+            this(0, 0, 0, blockChecksum ? 1 : 0, 1, VERSION);
         }
 
-        private FLG(int presetDictionary,
-                    int reserved1,
+        private FLG(int reserved,
                     int contentChecksum,
                     int contentSize,
                     int blockChecksum,
                     int blockIndependence,
                     int version) {
-            this.presetDictionary = presetDictionary;
-            this.reserved1 = reserved1;
+            this.reserved = reserved;
             this.contentChecksum = contentChecksum;
             this.contentSize = contentSize;
             this.blockChecksum = blockChecksum;
@@ -270,16 +304,14 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
         }
 
         public static FLG fromByte(byte flg) {
-            int presetDictionary = (flg >>> 0) & 1;
-            int reserved1 = (flg >>> 1) & 1;
+            int reserved = (flg >>> 0) & 3;
             int contentChecksum = (flg >>> 2) & 1;
             int contentSize = (flg >>> 3) & 1;
             int blockChecksum = (flg >>> 4) & 1;
             int blockIndependence = (flg >>> 5) & 1;
             int version = (flg >>> 6) & 3;
 
-            return new FLG(presetDictionary,
-                           reserved1,
+            return new FLG(reserved,
                            contentChecksum,
                            contentSize,
                            blockChecksum,
@@ -288,22 +320,13 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
         }
 
         public byte toByte() {
-            return (byte) (((presetDictionary & 1) << 0) | ((reserved1 & 1) << 1) | ((contentChecksum & 1) << 2)
+            return (byte) (((reserved & 3) << 0) | ((contentChecksum & 1) << 2)
                     | ((contentSize & 1) << 3) | ((blockChecksum & 1) << 4) | ((blockIndependence & 1) << 5) | ((version & 3) << 6));
         }
 
         private void validate() {
-            if (presetDictionary != 0) {
-                throw new RuntimeException("Preset dictionary is unsupported");
-            }
-            if (reserved1 != 0) {
-                throw new RuntimeException("Reserved1 field must be 0");
-            }
-            if (contentChecksum != 0) {
-                throw new RuntimeException("Content checksum is unsupported");
-            }
-            if (contentSize != 0) {
-                throw new RuntimeException("Content size is unsupported");
+            if (reserved != 0) {
+                throw new RuntimeException("Reserved bits must be 0");
             }
             if (blockIndependence != 1) {
                 throw new RuntimeException("Dependent block stream is unsupported");
@@ -311,10 +334,6 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
             if (version != VERSION) {
                 throw new RuntimeException(String.format("Version %d is unsupported", version));
             }
-        }
-
-        public boolean isPresetDictionarySet() {
-            return presetDictionary == 1;
         }
 
         public boolean isContentChecksumSet() {

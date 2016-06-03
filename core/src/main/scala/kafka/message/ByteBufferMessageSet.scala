@@ -23,9 +23,6 @@ import java.nio.ByteBuffer
 import java.nio.channels._
 import java.io._
 import java.util.ArrayDeque
-import java.util.concurrent.atomic.AtomicLong
-
-import scala.collection.JavaConverters._
 
 import org.apache.kafka.common.errors.InvalidTimestampException
 import org.apache.kafka.common.record.TimestampType
@@ -55,7 +52,7 @@ object ByteBufferMessageSet {
       var offset = -1L
       val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
       messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = magicAndTimestamp.magic) { outputStream =>
-        val output = new DataOutputStream(CompressionFactory(compressionCodec, outputStream))
+        val output = new DataOutputStream(CompressionFactory(compressionCodec, magicAndTimestamp.magic, outputStream))
         try {
           for (message <- messages) {
             offset = offsetAssigner.nextAbsoluteOffset()
@@ -95,7 +92,12 @@ object ByteBufferMessageSet {
       if (wrapperMessage.payload == null)
         throw new KafkaException(s"Message payload is null: $wrapperMessage")
       val inputStream = new ByteBufferBackedInputStream(wrapperMessage.payload)
-      val compressed = new DataInputStream(CompressionFactory(wrapperMessage.compressionCodec, inputStream))
+      val compressed = try {
+        new DataInputStream(CompressionFactory(wrapperMessage.compressionCodec, wrapperMessage.magic, inputStream))
+      } catch {
+        case ioe: IOException =>
+          throw new InvalidMessageException(s"Failed to instantiate input stream compressed with ${wrapperMessage.compressionCodec}", ioe)
+      }
       var lastInnerOffset = -1L
 
       val messageAndOffsets = if (wrapperMessageAndOffset.message.magic > MagicValue_V0) {
@@ -107,7 +109,7 @@ object ByteBufferMessageSet {
           case eofe: EOFException =>
             compressed.close()
           case ioe: IOException =>
-            throw new KafkaException(ioe)
+            throw new InvalidMessageException(s"Error while reading message from stream compressed with ${wrapperMessage.compressionCodec}", ioe)
         }
         Some(innerMessageAndOffsets)
       } else None

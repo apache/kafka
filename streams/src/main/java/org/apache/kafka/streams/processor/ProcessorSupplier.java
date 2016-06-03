@@ -29,5 +29,10 @@ package org.apache.kafka.streams.processor;
  */
 public interface ProcessorSupplier<K, V> {
 
+    /**
+     * Return a new {@link Processor} instance.
+     *
+     * @return  a new {@link Processor} instance
+     */
     Processor<K, V> get();
 }

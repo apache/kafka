@@ -35,6 +35,10 @@ import java.util.TreeMap;
 /**
  * An in-memory key-value store based on a TreeMap.
  *
+ * Note that the use of array-typed keys is discouraged because they result in incorrect ordering behavior.
+ * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
+ * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
+ *
  * @param <K> The key type
  * @param <V> The value type
  *
@@ -63,7 +67,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        return new MeteredKeyValueStore<>(new MemoryStore<K, V>(name, keySerde, valueSerde).enableLogging(), "in-memory-state", time);
+        return new MeteredKeyValueStore<>(new MemoryStore<>(name, keySerde, valueSerde).enableLogging(), "in-memory-state", time);
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
@@ -76,6 +80,9 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
             this.name = name;
             this.keySerde = keySerde;
             this.valueSerde = valueSerde;
+
+            // TODO: when we have serde associated with class types, we can
+            // improve this situation by passing the comparator here.
             this.map = new TreeMap<>();
         }
 
@@ -131,12 +138,12 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
         @Override
         public KeyValueIterator<K, V> range(K from, K to) {
-            return new MemoryStoreIterator<K, V>(this.map.subMap(from, true, to, false).entrySet().iterator());
+            return new MemoryStoreIterator<>(this.map.subMap(from, true, to, false).entrySet().iterator());
         }
 
         @Override
         public KeyValueIterator<K, V> all() {
-            return new MemoryStoreIterator<K, V>(this.map.entrySet().iterator());
+            return new MemoryStoreIterator<>(this.map.entrySet().iterator());
         }
 
         @Override

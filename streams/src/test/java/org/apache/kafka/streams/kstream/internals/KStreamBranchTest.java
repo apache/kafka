@@ -23,6 +23,7 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.junit.After;
 import org.junit.Test;
 
 import java.lang.reflect.Array;
@@ -32,6 +33,16 @@ import static org.junit.Assert.assertEquals;
 public class KStreamBranchTest {
 
     private String topicName = "topic";
+
+    private KStreamTestDriver driver = null;
+
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
+    }
 
     @SuppressWarnings("unchecked")
     @Test
@@ -74,7 +85,7 @@ public class KStreamBranchTest {
             branches[i].process(processors[i]);
         }
 
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
         }

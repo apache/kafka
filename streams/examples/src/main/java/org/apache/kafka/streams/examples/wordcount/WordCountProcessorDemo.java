@@ -81,19 +81,17 @@ public class WordCountProcessorDemo {
 
                 @Override
                 public void punctuate(long timestamp) {
-                    KeyValueIterator<String, Integer> iter = this.kvStore.all();
+                    try (KeyValueIterator<String, Integer> iter = this.kvStore.all()) {
+                        System.out.println("----------- " + timestamp + " ----------- ");
 
-                    System.out.println("----------- " + timestamp + " ----------- ");
+                        while (iter.hasNext()) {
+                            KeyValue<String, Integer> entry = iter.next();
 
-                    while (iter.hasNext()) {
-                        KeyValue<String, Integer> entry = iter.next();
+                            System.out.println("[" + entry.key + ", " + entry.value + "]");
 
-                        System.out.println("[" + entry.key + ", " + entry.value + "]");
-
-                        context.forward(entry.key, entry.value.toString());
+                            context.forward(entry.key, entry.value.toString());
+                        }
                     }
-
-                    iter.close();
                 }
 
                 @Override

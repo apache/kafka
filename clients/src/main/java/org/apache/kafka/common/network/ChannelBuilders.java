@@ -31,10 +31,18 @@ public class ChannelBuilders {
      *             it is ignored otherwise
      * @param loginType the loginType, it must be non-null if `securityProtocol` is SASL_*; it is ignored otherwise
      * @param configs client/server configs
+     * @param clientSaslMechanism SASL mechanism if mode is CLIENT, ignored otherwise
+     * @param saslHandshakeRequestEnable flag to enable Sasl handshake requests; disabled only for SASL
+     *             inter-broker connections with inter-broker protocol version < 0.10
      * @return the configured `ChannelBuilder`
      * @throws IllegalArgumentException if `mode` invariants described above is not maintained
      */
-    public static ChannelBuilder create(SecurityProtocol securityProtocol, Mode mode, LoginType loginType, Map<String, ?> configs) {
+    public static ChannelBuilder create(SecurityProtocol securityProtocol,
+                                        Mode mode,
+                                        LoginType loginType,
+                                        Map<String, ?> configs,
+                                        String clientSaslMechanism,
+                                        boolean saslHandshakeRequestEnable) {
         ChannelBuilder channelBuilder;
 
         switch (securityProtocol) {
@@ -47,7 +55,9 @@ public class ChannelBuilders {
                 requireNonNullMode(mode, securityProtocol);
                 if (loginType == null)
                     throw new IllegalArgumentException("`loginType` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
-                channelBuilder = new SaslChannelBuilder(mode, loginType, securityProtocol);
+                if (mode == Mode.CLIENT && clientSaslMechanism == null)
+                    throw new IllegalArgumentException("`clientSaslMechanism` must be non-null in client mode if `securityProtocol` is `" + securityProtocol + "`");
+                channelBuilder = new SaslChannelBuilder(mode, loginType, securityProtocol, clientSaslMechanism, saslHandshakeRequestEnable);
                 break;
             case PLAINTEXT:
             case TRACE:

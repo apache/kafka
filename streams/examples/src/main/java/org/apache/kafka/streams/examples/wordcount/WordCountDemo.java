@@ -69,7 +69,7 @@ public class WordCountDemo {
                 }).map(new KeyValueMapper<String, String, KeyValue<String, String>>() {
                     @Override
                     public KeyValue<String, String> apply(String key, String value) {
-                        return new KeyValue<String, String>(value, value);
+                        return new KeyValue<>(value, value);
                     }
                 })
                 .countByKey("Counts");

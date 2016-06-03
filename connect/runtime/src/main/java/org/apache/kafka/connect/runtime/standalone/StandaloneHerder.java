@@ -23,6 +23,8 @@ import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
+import org.apache.kafka.connect.runtime.SinkConnectorConfig;
+import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.Worker;
@@ -40,7 +42,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -250,20 +251,22 @@ public class StandaloneHerder extends AbstractHerder {
         return connName;
     }
 
-    private Map<ConnectorTaskId, Map<String, String>> recomputeTaskConfigs(String connName) {
+    private List<Map<String, String>> recomputeTaskConfigs(String connName) {
         Map<String, String> config = configState.connectorConfig(connName);
-        ConnectorConfig connConfig = new ConnectorConfig(config);
 
-        List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(connName,
-                connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG),
-                connConfig.getList(ConnectorConfig.TOPICS_CONFIG));
+        ConnectorConfig connConfig;
+        if (worker.isSinkConnector(connName)) {
+            connConfig = new SinkConnectorConfig(config);
+            return worker.connectorTaskConfigs(connName,
+                                               connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG),
+                                               connConfig.getList(SinkConnectorConfig.TOPICS_CONFIG));
+        } else {
+            connConfig = new SourceConnectorConfig(config);
+            return worker.connectorTaskConfigs(connName,
+                                               connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG),
+                                               null);
+        }
 
-        int i = 0;
-        Map<ConnectorTaskId, Map<String, String>> taskConfigMap = new HashMap<>();
-        for (Map<String, String> taskConfig : taskConfigs)
-            taskConfigMap.put(new ConnectorTaskId(connName, i++), taskConfig);
-
-        return taskConfigMap;
     }
 
     private void createConnectorTasks(String connName, TargetState initialState) {
@@ -296,8 +299,8 @@ public class StandaloneHerder extends AbstractHerder {
             return;
         }
 
-        Map<ConnectorTaskId, Map<String, String>> newTaskConfigs = recomputeTaskConfigs(connName);
-        Map<ConnectorTaskId, Map<String, String>> oldTaskConfigs = configState.allTaskConfigs(connName);
+        List<Map<String, String>> newTaskConfigs = recomputeTaskConfigs(connName);
+        List<Map<String, String>> oldTaskConfigs = configState.allTaskConfigs(connName);
 
         if (!newTaskConfigs.equals(oldTaskConfigs)) {
             removeConnectorTasks(connName);

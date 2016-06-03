@@ -61,12 +61,11 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1
   override val consumerCount = 2
   override val serverCount = 3
-  override val setClusterAcl = Some { () =>
+
+  override def setAclsBeforeServersStart() {
     AclCommand.main(clusterAclArgs)
-    servers.foreach(s =>
-      TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, clusterResource)
-    )
   }
+
   val numRecords = 1
   val group = "group"
   val topic = "e2etopic"
@@ -78,6 +77,9 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   val kafkaPrincipal: String
 
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  protected def kafkaClientSaslMechanism = "GSSAPI"
+  protected def kafkaServerSaslMechanisms = List("GSSAPI")
+  override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, Some(kafkaServerSaslMechanisms)))
 
   val topicResource = new Resource(Topic, topic)
   val groupResource = new Resource(Group, group)
@@ -141,9 +143,9 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override def setUp {
     securityProtocol match {
       case SecurityProtocol.SSL =>
-        startSasl(ZkSasl)
+        startSasl(ZkSasl, null, null)
       case _ =>
-        startSasl(Both)
+        startSasl(Both, List(kafkaClientSaslMechanism), kafkaServerSaslMechanisms)
     }
     super.setUp
     AclCommand.main(topicBrokerReadAclArgs)

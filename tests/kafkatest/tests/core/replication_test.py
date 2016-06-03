@@ -65,15 +65,12 @@ def hard_bounce(test, broker_type):
         test.kafka.signal_node(prev_broker_node, sig=signal.SIGKILL)
 
         # Since this is a hard kill, we need to make sure the process is down and that
-        # zookeeper and the broker cluster have registered the loss of the leader/controller.
-        # Waiting for a new leader for the topic-partition/controller to be elected is a reasonable heuristic for this.
+        # zookeeper has registered the loss by expiring the broker's session timeout.
 
-        def role_reassigned():
-            current_elected_broker = broker_node(test, broker_type)
-            return current_elected_broker is not None and current_elected_broker != prev_broker_node
+        wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0 and not test.kafka.is_registered(prev_broker_node),
+                   timeout_sec=test.kafka.zk_session_timeout + 5,
+                   err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(prev_broker_node.account))
 
-        wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0, timeout_sec=5)
-        wait_until(role_reassigned, timeout_sec=10, backoff_sec=.5)
         test.kafka.start_node(prev_broker_node)
 
 failures = {
@@ -128,7 +125,10 @@ class ReplicationTest(ProduceConsumeValidateTest):
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             broker_type=["controller"],
             security_protocol=["PLAINTEXT", "SASL_SSL"])
-    def test_replication_with_broker_failure(self, failure_mode, security_protocol, broker_type):
+    @matrix(failure_mode=["hard_bounce"],
+            broker_type=["leader"],
+            security_protocol=["SASL_SSL"], client_sasl_mechanism=["PLAIN"], interbroker_sasl_mechanism=["PLAIN", "GSSAPI"])
+    def test_replication_with_broker_failure(self, failure_mode, security_protocol, broker_type, client_sasl_mechanism="GSSAPI", interbroker_sasl_mechanism="GSSAPI"):
         """Replication tests.
         These tests verify that replication provides simple durability guarantees by checking that data acked by
         brokers is still available for consumption in the face of various failure scenarios.
@@ -144,6 +144,8 @@ class ReplicationTest(ProduceConsumeValidateTest):
 
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol
+        self.kafka.client_sasl_mechanism = client_sasl_mechanism
+        self.kafka.interbroker_sasl_mechanism = interbroker_sasl_mechanism
         new_consumer = False if  self.kafka.security_protocol == "PLAINTEXT" else True
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, throughput=self.producer_throughput)
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, new_consumer=new_consumer, consumer_timeout_ms=60000, message_validator=is_int)

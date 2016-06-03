@@ -141,7 +141,7 @@ public class SslTransportLayer implements TransportLayer {
     * Sends a SSL close message and closes socketChannel.
     */
     @Override
-    public void close() {
+    public void close() throws IOException {
         if (closing) return;
         closing = true;
         sslEngine.closeOutbound();
@@ -168,12 +168,11 @@ public class SslTransportLayer implements TransportLayer {
             try {
                 socketChannel.socket().close();
                 socketChannel.close();
-            } catch (IOException e) {
-                log.warn("Failed to close SSL socket channel: " + e);
+            } finally {
+                key.attach(null);
+                key.cancel();
             }
         }
-        key.attach(null);
-        key.cancel();
     }
 
     /**

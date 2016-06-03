@@ -41,7 +41,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val numServers = 2
     overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
     TestUtils.createBrokerConfigs(numServers, zkConnect, false, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile).map(KafkaConfig.fromProps(_, overridingProps))
+      trustStoreFile = trustStoreFile, saslProperties = saslProperties).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
   private var consumer1: SimpleConsumer = null
@@ -72,7 +72,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
   private def createProducer(brokerList: String, retries: Int = 0, lingerMs: Long = 0, props: Option[Properties] = None): KafkaProducer[Array[Byte],Array[Byte]] = {
     val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
-      retries = retries, lingerMs = lingerMs, props = props)
+      saslProperties = saslProperties, retries = retries, lingerMs = lingerMs, props = props)
     producers += producer
     producer
   }
@@ -220,7 +220,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, baseTimestamp + i, "key".getBytes, "value".getBytes)
         producer.send(record, callback)
       }
-      producer.close(5000L, TimeUnit.MILLISECONDS)
+      producer.close(10000L, TimeUnit.MILLISECONDS)
       assertEquals(s"Should have offset $numRecords but only successfully sent ${callback.offset}", numRecords, callback.offset)
     } finally {
       producer.close()

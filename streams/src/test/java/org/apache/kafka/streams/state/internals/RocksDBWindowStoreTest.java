@@ -31,7 +31,6 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.state.WindowStoreUtils;
 import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Test;
 
@@ -786,9 +785,10 @@ public class RocksDBWindowStoreTest {
                         segmentDirs(baseDir)
                 );
 
-                WindowStoreIterator iter = store.fetch(0, 0L, 1000000L);
-                while (iter.hasNext()) {
-                    iter.next();
+                try (WindowStoreIterator iter = store.fetch(0, 0L, 1000000L)) {
+                    while (iter.hasNext()) {
+                        iter.next();
+                    }
                 }
 
                 assertEquals(

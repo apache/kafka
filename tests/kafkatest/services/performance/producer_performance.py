@@ -13,16 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import subprocess
+
 from ducktape.utils.util import wait_until
 
+from kafkatest.directory_layout.kafka_path import  TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
-from kafkatest.services.kafka.version import TRUNK, V_0_9_0_0
-
-import os
-import subprocess
+from kafkatest.version import TRUNK, V_0_9_0_0
 
 
 class ProducerPerformanceService(JmxMixin, PerformanceService):
@@ -36,6 +36,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
 
     def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, version=TRUNK, settings={},
                  intermediate_stats=False, client_id="producer-performance", jmx_object_names=None, jmx_attributes=[]):
+
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
         PerformanceService.__init__(self, context, num_nodes)
 
@@ -83,7 +84,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'jmx_port': self.jmx_port,
             'client_id': self.client_id,
-            'kafka_directory': kafka_dir(node)
+            'kafka_run_class': self.path.script("kafka-run-class.sh", node)
             })
 
         cmd = ""
@@ -91,12 +92,15 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
         if node.version < TRUNK:
             # In order to ensure more consistent configuration between versions, always use the ProducerPerformance
             # tool from trunk
-            cmd += "for file in /opt/%s/tools/build/libs/kafka-tools*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % KAFKA_TRUNK
-            cmd += "for file in /opt/%s/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % KAFKA_TRUNK
+            tools_jar = self.path.jar(TOOLS_JAR_NAME, TRUNK)
+            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, TRUNK)
+
+            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_jar
+            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_dependant_libs_jar
             cmd += "export CLASSPATH; "
 
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ProducerPerformanceService.LOG4J_CONFIG
-        cmd += "JMX_PORT=%(jmx_port)d KAFKA_OPTS=%(kafka_opts)s /opt/%(kafka_directory)s/bin/kafka-run-class.sh org.apache.kafka.tools.ProducerPerformance " \
+        cmd += "JMX_PORT=%(jmx_port)d KAFKA_OPTS=%(kafka_opts)s KAFKA_HEAP_OPTS=\"-XX:+HeapDumpOnOutOfMemoryError\" %(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
               "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
 
         self.security_config.setup_node(node)

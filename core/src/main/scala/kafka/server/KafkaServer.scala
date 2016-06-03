@@ -96,7 +96,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   private var shutdownLatch = new CountDownLatch(1)
 
   private val jmxPrefix: String = "kafka.server"
-  private val reporters: java.util.List[MetricsReporter] =  config.metricReporterClasses
+  private val reporters: java.util.List[MetricsReporter] = config.metricReporterClasses
   reporters.add(new JmxReporter(jmxPrefix))
 
   // This exists because the Metrics package from clients has its own Time implementation.
@@ -123,7 +123,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   var dynamicConfigHandlers: Map[String, ConfigHandler] = null
   var dynamicConfigManager: DynamicConfigManager = null
 
-  var consumerCoordinator: GroupCoordinator = null
+  var groupCoordinator: GroupCoordinator = null
 
   var kafkaController: KafkaController = null
 
@@ -199,9 +199,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         kafkaController = new KafkaController(config, zkUtils, brokerState, kafkaMetricsTime, metrics, threadNamePrefix)
         kafkaController.startup()
 
-        /* start kafka coordinator */
-        consumerCoordinator = GroupCoordinator(config, zkUtils, replicaManager, kafkaMetricsTime)
-        consumerCoordinator.startup()
+        /* start group coordinator */
+        groupCoordinator = GroupCoordinator(config, zkUtils, replicaManager, kafkaMetricsTime)
+        groupCoordinator.startup()
 
         /* Get the authorizer and initialize it if one is specified.*/
         authorizer = Option(config.authorizerClassName).filter(_.nonEmpty).map { authorizerClassName =>
@@ -211,10 +211,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         }
 
         /* start processing requests */
-        apis = new KafkaApis(socketServer.requestChannel, replicaManager, consumerCoordinator,
+        apis = new KafkaApis(socketServer.requestChannel, replicaManager, groupCoordinator,
           kafkaController, zkUtils, config.brokerId, config, metadataCache, metrics, authorizer)
         requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
-        brokerState.newState(RunningAsBroker)
 
         Mx4jLoader.maybeLoad()
 
@@ -239,7 +238,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           else
             (protocol, endpoint)
         }
-        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack, config.interBrokerProtocolVersion)
+        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack,
+          config.interBrokerProtocolVersion)
         kafkaHealthcheck.startup()
 
         // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
@@ -248,6 +248,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         /* register broker metrics */
         registerStats()
 
+        brokerState.newState(RunningAsBroker)
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
         isStartingUp.set(false)
@@ -323,6 +324,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     def networkClientControlledShutdown(retries: Int): Boolean = {
       val metadataUpdater = new ManualMetadataUpdater()
       val networkClient = {
+        val channelBuilder = ChannelBuilders.create(
+          config.interBrokerSecurityProtocol,
+          Mode.CLIENT,
+          LoginType.SERVER,
+          config.values,
+          config.saslMechanismInterBrokerProtocol,
+          config.saslInterBrokerHandshakeRequestEnable)
         val selector = new Selector(
           NetworkReceive.UNLIMITED,
           config.connectionsMaxIdleMs,
@@ -331,7 +339,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           "kafka-server-controlled-shutdown",
           Map.empty.asJava,
           false,
-          ChannelBuilders.create(config.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, config.values)
+          channelBuilder
         )
         new NetworkClient(
           selector,
@@ -547,8 +555,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           CoreUtils.swallow(replicaManager.shutdown())
         if(logManager != null)
           CoreUtils.swallow(logManager.shutdown())
-        if(consumerCoordinator != null)
-          CoreUtils.swallow(consumerCoordinator.shutdown())
+        if(groupCoordinator != null)
+          CoreUtils.swallow(groupCoordinator.shutdown())
         if(kafkaController != null)
           CoreUtils.swallow(kafkaController.shutdown())
         if(zkUtils != null)

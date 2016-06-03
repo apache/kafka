@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.api.{FetchResponsePartitionData, PartitionFetchInfo}
 import kafka.cluster.Broker
 import kafka.common.TopicAndPartition
-import kafka.message.{ByteBufferMessageSet, Message}
+import kafka.message.{MessageSet, ByteBufferMessageSet, Message}
 import kafka.utils.{MockScheduler, MockTime, TestUtils, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
@@ -35,7 +35,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
-import org.junit.Assert.{assertEquals, assertTrue, assertFalse}
+import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{Test, Before, After}
 
 import scala.collection.JavaConverters._
@@ -58,7 +58,7 @@ class ReplicaManagerTest {
   
   @After
   def tearDown() {
-    metrics.close();
+    metrics.close()
   }
 
   @Test
@@ -189,7 +189,7 @@ class ReplicaManagerTest {
   }
   
   @Test
-  def testFetchBeyondHighWatermarkNotAllowedForConsumer() {
+  def testFetchBeyondHighWatermarkReturnEmptyResponse() {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     props.put("broker.id", Int.box(0))
@@ -218,7 +218,7 @@ class ReplicaManagerTest {
 
       def produceCallback(responseStatus: Map[TopicPartition, PartitionResponse]) = {}
       
-      // Append a message.
+      // Append a couple of messages.
       for(i <- 1 to 2)
         rm.appendMessages(
           timeout = 1000,
@@ -229,8 +229,10 @@ class ReplicaManagerTest {
       
       var fetchCallbackFired = false
       var fetchError = 0
+      var fetchedMessages: MessageSet = null
       def fetchCallback(responseStatus: Map[TopicAndPartition, FetchResponsePartitionData]) = {
         fetchError = responseStatus.values.head.error
+        fetchedMessages = responseStatus.values.head.messages
         fetchCallbackFired = true
       }
       
@@ -238,25 +240,27 @@ class ReplicaManagerTest {
       rm.fetchMessages(
         timeout = 1000,
         replicaId = 1,
-        fetchMinBytes = 1,
+        fetchMinBytes = 0,
         fetchInfo = collection.immutable.Map(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
         responseCallback = fetchCallback)
         
       
       assertTrue(fetchCallbackFired)
       assertEquals("Should not give an exception", Errors.NONE.code, fetchError)
+      assertTrue("Should return some data", fetchedMessages.iterator.hasNext)
       fetchCallbackFired = false
       
       // Fetch a message above the high watermark as a consumer
       rm.fetchMessages(
         timeout = 1000,
         replicaId = -1,
-        fetchMinBytes = 1,
+        fetchMinBytes = 0,
         fetchInfo = collection.immutable.Map(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
         responseCallback = fetchCallback)
           
         assertTrue(fetchCallbackFired)
-        assertEquals("Should give OffsetOutOfRangeException", Errors.OFFSET_OUT_OF_RANGE.code, fetchError)
+        assertEquals("Should not give an exception", Errors.NONE.code, fetchError)
+        assertEquals("Should return empty response", MessageSet.Empty, fetchedMessages)
     } finally {
       rm.shutdown(checkpointHW = false)
     }

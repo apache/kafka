@@ -56,10 +56,19 @@ allprojects {
       }
     }
   }
+
+  if (JavaVersion.current().isJava8Compatible()) {
+    tasks.withType(Javadoc) {
+      // disable the crazy super-strict doclint tool in Java 8
+      // noinspection SpellCheckingInspection
+      options.addStringOption('Xdoclint:none', '-quiet')
+    }
+  }
+
 }
 
 ext {
-  gradleVersion = "2.11"
+  gradleVersion = "2.13"
   buildVersionFileName = "kafka-version.properties"
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
@@ -110,14 +119,6 @@ subprojects {
     options.encoding = 'UTF-8'
     // Add unchecked once we drop support for Java 7 as @SuppressWarnings("unchecked") is too buggy in Java 7
     options.compilerArgs << "-Xlint:deprecation"
-  }
-
-  if (JavaVersion.current().isJava8Compatible()) {
-    tasks.withType(Javadoc) {
-        // disable the crazy super-strict doclint tool in Java 8
-        //noinspection SpellCheckingInspection
-        options.addStringOption('Xdoclint:none', '-quiet')
-      }
   }
 
   uploadArchives {
@@ -437,10 +438,6 @@ project(':core') {
     duplicatesStrategy 'exclude'
   }
 
-  systemTestLibs {
-    dependsOn testJar
-  }
-
   task genProtocolErrorDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.common.protocol.Errors'
@@ -521,7 +518,7 @@ project(':core') {
   }
 
   jar {
-    dependsOn('copyDependantLibs', 'copyDependantTestLibs')
+    dependsOn('copyDependantLibs')
   }
 
   jar.manifest {
@@ -538,6 +535,8 @@ project(':core') {
     duplicatesStrategy 'exclude'
   }
 
+  systemTestLibs.dependsOn('jar', 'testJar', 'copyDependantTestLibs')
+
   checkstyle {
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
   }
@@ -548,6 +547,10 @@ project(':examples') {
 
   dependencies {
     compile project(':core')
+  }
+
+  javadoc {
+    enabled = false
   }
 
   checkstyle {
@@ -638,7 +641,7 @@ project(':tools') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/tools/*"
+    enabled = false
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -665,10 +668,16 @@ project(':streams') {
     compile project(':connect:json')  // this dependency should be removed after we unify data API
     compile libs.slf4jlog4j
     compile libs.rocksDBJni
-    compile libs.zkclient // this dependency should be removed after KIP-4
+    // this dependency should be removed after KIP-4
+    compile (libs.zkclient) {
+      exclude module: 'jline'
+      exclude module: 'netty'
+    }
     compile libs.jacksonDatabind // this dependency should be removed after KIP-4
 
     testCompile project(':clients').sourceSets.test.output
+    testCompile project(':core')
+    testCompile project(':core').sourceSets.test.output
     testCompile libs.junit
   }
 
@@ -741,8 +750,9 @@ project(':log4j-appender') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/log4jappender/*"
+    enabled = false
   }
+
 }
 
 project(':connect:api') {
@@ -758,6 +768,7 @@ project(':connect:api') {
   }
 
   javadoc {
+    include "**/org/apache/kafka/connect/**" // needed for the `javadocAll` task
     options.links "http://docs.oracle.com/javase/7/docs/api/"
   }
 
@@ -829,7 +840,10 @@ project(':connect:runtime') {
     compile libs.jettyServer
     compile libs.jettyServlet
     compile libs.jettyServlets
-    compile libs.reflections
+    compile(libs.reflections) {
+      // Exclude because of LGPL license
+      exclude group: 'com.google.code.findbugs', module: 'annotations'
+    }
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.easymock
@@ -903,4 +917,13 @@ project(':connect:file') {
   jar {
     dependsOn copyDependantLibs
   }
+}
+
+task aggregatedJavadoc(type: Javadoc) {
+  def projectsWithJavadoc = subprojects.findAll { it.javadoc.enabled }
+  source = projectsWithJavadoc.collect { it.sourceSets.main.allJava }
+  classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
+  includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
+  excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
+  options.links "http://docs.oracle.com/javase/7/docs/api/"
 }

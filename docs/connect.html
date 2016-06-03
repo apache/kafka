@@ -53,15 +53,17 @@ Distributed mode handles automatic balancing of work, allows you to scale up (or
 &gt; bin/connect-distributed.sh config/connect-distributed.properties
 </pre>
 
-The difference is in the class which is started and the configuration parameters which change how the Kafka Connect process decides where to store configurations, how to assign work, and where to store offsets. In particular, the following configuration parameters are critical to set before starting your cluster:
+The difference is in the class which is started and the configuration parameters which change how the Kafka Connect process decides where to store configurations, how to assign work, and where to store offsets and task statues. In the distributed mode, Kafka Connect stores the offsets, configs and task statuses in Kafka topics. It is recommended to manually create the topics for offset, configs and statuses in order to achieve the desired the number of partitions and replication factors. If the topics are not yet created when starting Kafka Connect, the topics will be auto created with default number of partitions and replication factor, which may not be best suited for its usage.
 
+In particular, the following configuration parameters are critical to set before starting your cluster:
 <ul>
     <li><code>group.id</code> (default <code>connect-cluster</code>) - unique name for the cluster, used in forming the Connect cluster group; note that this <b>must not conflict</b> with consumer group IDs</li>
-    <li><code>config.storage.topic</code> (default <code>connect-configs</code>) - topic to use for storing connector and task configurations; note that this should be a single partition, highly replicated topic</li>
-    <li><code>offset.storage.topic</code> (default <code>connect-offsets</code>) - topic to use for ; this topic should have many partitions and be replicated</li>
+    <li><code>config.storage.topic</code> (default <code>connect-configs</code>) - topic to use for storing connector and task configurations; note that this should be a single partition, highly replicated topic. You may need to manually create the topic to ensure single partition for the config topic as auto created topics may have multiple partitions.</li>
+    <li><code>offset.storage.topic</code> (default <code>connect-offsets</code>) - topic to use for storing offsets; this topic should have many partitions and be replicated</li>
+    <li><code>status.storage.topic</code> (default <code>connect-status</code>) - topic to use for storing statuses; this topic can have multiple partitions and should be replicated</li>
 </ul>
 
-Note that in distributed mode the connector configurations are not passed on the command line. Instead, use the REST API described below to create, modify, and destroy connectors.
+Note that in distributed mode the connector configurations are not passed on the command line. Instead, use the REST API described below to create, modify, and destroy connectors. 
 
 
 <h4><a id="connect_configuring" href="#connect_configuring">Configuring Connectors</a></h4>
@@ -95,7 +97,13 @@ Since Kafka Connect is intended to be run as a service, it also provides a REST 
     <li><code>GET /connectors/{name}</code> - get information about a specific connector</li>
     <li><code>GET /connectors/{name}/config</code> - get the configuration parameters for a specific connector</li>
     <li><code>PUT /connectors/{name}/config</code> - update the configuration parameters for a specific connector</li>
+    <li><code>GET /connectors/{name}/status</code> - get current status of the connector, including if it is running, failed, paused, etc., which worker it is assigned to, error information if it has failed, and the state of all its tasks</li>
     <li><code>GET /connectors/{name}/tasks</code> - get a list of tasks currently running for a connector</li>
+    <li><code>GET /connectors/{name}/tasks/{taskid}/status</code> - get current status of the task, including if it is running, failed, paused, etc., which worker it is assigned to, and error information if it has failed</li>
+    <li><code>PUT /connectors/{name}/pause</code> - pause the connector and its tasks, which stops message processing until the connector is resumed</li>
+    <li><code>PUT /connectors/{name}/resume</code> - resume a paused connector (or do nothing if the connector is not paused)</li>
+    <li><code>POST /connectors/{name}/restart</code> - restart a connector (typically because it has failed)</li>
+    <li><code>POST /connectors/{name}/tasks/{taskId}/restart</code> - restart an individual task (typically because it has failed)</li>
     <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
 </ul>
 
@@ -152,7 +160,7 @@ The easiest method to fill in is <code>getTaskClass()</code>, which defines the 
 
 <pre>
 @Override
-public Class<? extends Task> getTaskClass() {
+public Class&lt;? extends Task&gt; getTaskClass() {
     return FileStreamSourceTask.class;
 }
 </pre>
@@ -173,7 +181,7 @@ public void stop() {
 }
 </pre>
 
-Finally, the real core of the implementation is in <code>getTaskConfigs()</code>. In this case we're only
+Finally, the real core of the implementation is in <code>getTaskConfigs()</code>. In this case we are only
 handling a single file, so even though we may be permitted to generate more tasks as per the
 <code>maxTasks</code> argument, we return a list with only one entry:
 
@@ -191,8 +199,8 @@ public List&lt;Map&lt;String, String&gt;&gt; getTaskConfigs(int maxTasks) {
 }
 </pre>
 
-Although not used in the example, <code>SourceTask</code> also provides two APIs to commit offsets in the source system: <code>commit</code> and <code>commitSourceRecord</code>. The APIs are provided for source systems which have an acknowledgement mechanism for messages. Overriding these methods allows the source connector to acknowledge messages in the source system, either in bulk or individually, once they have been written to Kafka.
-The <code>commit<code> API stores the offsets in the source system, up to the offsets that have been returned by <code>poll</code>. The implementation of this API should block until the commit is complete. The <code>commitSourceRecord</code> API saves the offset in the source system for each <code>SourceRecord</code> after it is written to Kafka. As Kafka Connect will record offsets automatically, <code>SourceTask<code>s are not required to implement them. In cases where a connector does need to acknowledge messages in the source system, only one of the APIs is typically required.
+Although not used in the example, <code>SourceTask</code> also provides two APIs to commit offsets in the source system: <code>commit</code> and <code>commitRecord</code>. The APIs are provided for source systems which have an acknowledgement mechanism for messages. Overriding these methods allows the source connector to acknowledge messages in the source system, either in bulk or individually, once they have been written to Kafka.
+The <code>commit</code> API stores the offsets in the source system, up to the offsets that have been returned by <code>poll</code>. The implementation of this API should block until the commit is complete. The <code>commitRecord</code> API saves the offset in the source system for each <code>SourceRecord</code> after it is written to Kafka. As Kafka Connect will record offsets automatically, <code>SourceTask</code>s are not required to implement them. In cases where a connector does need to acknowledge messages in the source system, only one of the APIs is typically required.
 
 Even with multiple tasks, this method implementation is usually pretty simple. It just has to determine the number of input tasks, which may require contacting the remote service it is pulling data from, and then divvy them up. Because some patterns for splitting work among tasks are so common, some utilities are provided in <code>ConnectorUtils</code> to simplify these cases.
 
@@ -219,7 +227,7 @@ public class FileStreamSourceTask extends SourceTask&lt;Object, Object&gt; {
 
     @Override
     public synchronized void stop() {
-        stream.close()
+        stream.close();
     }
 </pre>
 
@@ -232,11 +240,11 @@ Next, we implement the main functionality of the task, the <code>poll()</code> m
 public List&lt;SourceRecord&gt; poll() throws InterruptedException {
     try {
         ArrayList&lt;SourceRecord&gt; records = new ArrayList&lt;&gt;();
-        while (streamValid(stream) && records.isEmpty()) {
+        while (streamValid(stream) &amp;&amp; records.isEmpty()) {
             LineAndOffset line = readToNextLine(stream);
             if (line != null) {
-                Map<String, Object> sourcePartition = Collections.singletonMap("filename", filename);
-                Map<String, Object> sourceOffset = Collections.singletonMap("position", streamOffset);
+                Map&lt;String, Object&gt; sourcePartition = Collections.singletonMap("filename", filename);
+                Map&lt;String, Object&gt; sourceOffset = Collections.singletonMap("position", streamOffset);
                 records.add(new SourceRecord(sourcePartition, sourceOffset, topic, Schema.STRING_SCHEMA, line));
             } else {
                 Thread.sleep(1);
@@ -261,11 +269,13 @@ The previous section described how to implement a simple <code>SourceTask</code>
 
 <pre>
 public abstract class SinkTask implements Task {
-public void initialize(SinkTaskContext context) { ... }
+    public void initialize(SinkTaskContext context) {
+        this.context = context;
+    }
 
-public abstract void put(Collection&lt;SinkRecord&gt; records);
-
-public abstract void flush(Map&lt;TopicPartition, Long&gt; offsets);
+    public abstract void put(Collection&lt;SinkRecord&gt; records);
+     
+    public abstract void flush(Map&lt;TopicPartition, Long&gt; offsets);
 </pre>
 
 The <code>SinkTask</code> documentation contains full details, but this interface is nearly as simple as the <code>SourceTask</code>. The <code>put()</code> method should contain most of the implementation, accepting sets of <code>SinkRecords</code>, performing any required translation, and storing them in the destination system. This method does not need to ensure the data has been fully written to the destination system before returning. In fact, in many cases internal buffering will be useful so an entire batch of records can be sent at once, reducing the overhead of inserting events into the downstream data store. The <code>SinkRecords</code> contain essentially the same information as <code>SourceRecords</code>: Kafka topic, partition, offset and the event key and value.
@@ -299,8 +309,8 @@ Kafka Connect is intended to define bulk data copying jobs, such as copying an e
 Source connectors need to monitor the source system for changes, e.g. table additions/deletions in a database. When they pick up changes, they should notify the framework via the <code>ConnectorContext</code> object that reconfiguration is necessary. For example, in a <code>SourceConnector</code>:
 
 <pre>
-if (inputsChanged())
-    this.context.requestTaskReconfiguration();
+    if (inputsChanged())
+        this.context.requestTaskReconfiguration();
 </pre>
 
 The framework will promptly request new configuration information and update the tasks, allowing them to gracefully commit their progress before reconfiguring them. Note that in the <code>SourceConnector</code> this monitoring is currently left up to the connector implementation. If an extra thread is required to perform this monitoring, the connector must allocate it itself.
@@ -308,6 +318,26 @@ The framework will promptly request new configuration information and update the
 Ideally this code for monitoring changes would be isolated to the <code>Connector</code> and tasks would not need to worry about them. However, changes can also affect tasks, most commonly when one of their input streams is destroyed in the input system, e.g. if a table is dropped from a database. If the <code>Task</code> encounters the issue before the <code>Connector</code>, which will be common if the <code>Connector</code> needs to poll for changes, the <code>Task</code> will need to handle the subsequent error. Thankfully, this can usually be handled simply by catching and handling the appropriate exception.
 
 <code>SinkConnectors</code> usually only have to handle the addition of streams, which may translate to new entries in their outputs (e.g., a new database table). The framework manages any changes to the Kafka input, such as when the set of input topics changes because of a regex subscription. <code>SinkTasks</code> should expect new input streams, which may require creating new resources in the downstream system, such as a new table in a database. The trickiest situation to handle in these cases may be conflicts between multiple <code>SinkTasks</code> seeing a new input stream for the first time and simultaneously trying to create the new resource. <code>SinkConnectors</code>, on the other hand, will generally require no special code for handling a dynamic set of streams.
+
+<h4><a id="connect_configs" href="#connect_configs">Connect Configuration Validation</a></h4>
+
+Kafka Connect allows you to validate connector configurations before submitting a connector to be executed and can provide feedback about errors and recommended values. To take advantage of this, connector developers need to provide an implementation of <code>config()</code> to expose the configuration definition to the framework.
+
+The following code in <code>FileStreamSourceConnector</code> defines the configuration and exposes it to the framework.
+
+<pre>
+    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+        .define(FILE_CONFIG, Type.STRING, Importance.HIGH, "Source filename.")
+        .define(TOPIC_CONFIG, Type.STRING, Importance.HIGH, "The topic to publish data to");
+
+    public ConfigDef config() {
+        return CONFIG_DEF;
+    }
+</pre>
+
+<code>ConfigDef</code> class is used for specifying the set of expected configurations. For each configuration, you can specify the name, the type, the default value, the documentation, the group information, the order in the group, the width of the configuration value and the name suitable for display in the UI. Plus, you can provide special validation logic used for single configuration validation by overriding the <code>Validator</code> class. Moreover, as there may be dependencies between configurations, for example, the valid values and visibility of a configuration may change according to the values of other configurations. To handle this, <code>ConfigDef</code> allows you to specify the dependents of a configuration and to provide an implementation of <code>Recommender</code> to get valid values and set visibility of a configuration given the current configuration values.
+
+Also, the <code>validate()</code> method in <code>Connector</code> provides a default validation implementation which returns a list of allowed configurations together with configuration errors and recommended values for each configuration. However, it does not use the recommended values for configuration validation. You may provide an override of the default implementation for customized configuration validation, which may use the recommended values.
 
 <h4><a id="connect_schemas" href="#connect_schemas">Working with Schemas</a></h4>
 
@@ -336,3 +366,48 @@ However, many connectors will have dynamic schemas. One simple example of this i
 
 Sink connectors are usually simpler because they are consuming data and therefore do not need to create schemas. However, they should take just as much care to validate that the schemas they receive have the expected format. When the schema does not match -- usually indicating the upstream producer is generating invalid data that cannot be correctly translated to the destination system -- sink connectors should throw an exception to indicate this error to the system.
 
+<h4><a id="connect_administration" href="#connect_administration">Kafka Connect Administration</a></h4>
+
+<p>
+Kafka Connect's <a href="#connect_rest">REST layer</a> provides a set of APIs to enable administration of the cluster. This includes APIs to view the configuration of connectors and the status of their tasks, as well as to alter their current behavior (e.g. changing configuration and restarting tasks).
+</p>
+
+<p>
+When a connector is first submitted to the cluster, the workers rebalance the full set of connectors in the cluster and their tasks so that each worker has approximately the same amount of work. This same rebalancing procedure is also used when connectors increase or decrease the number of tasks they require, or when a connector's configuration is changed. You can use the REST API to view the current status of a connector and its tasks, including the id of the worker to which each was assigned. For example, querying the status of a file source (using <code>GET /connectors/file-source/status</code>) might produce output like the following:
+</p>
+
+<pre>
+{
+  "name": "file-source",
+  "connector": {
+    "state": "RUNNING",
+    "worker_id": "192.168.1.208:8083"
+  },
+  "tasks": [
+    {
+      "id": 0,
+      "state": "RUNNING",
+      "worker_id": "192.168.1.209:8083"
+    }
+  ]
+}
+</pre>
+
+<p>
+Connectors and their tasks publish status updates to a shared topic (configured with <code>status.storage.topic</code>) which all workers in the cluster monitor. Because the workers consume this topic asynchronously, there is typically a (short) delay before a state change is visible through the status API. The following states are possible for a connector or one of its tasks:
+</p>
+
+<ul>
+  <li><b>UNASSIGNED:</b> The connector/task has not yet been assigned to a worker.</li>
+  <li><b>RUNNING:</b> The connector/task is running.</li>
+  <li><b>PAUSED:</b> The connector/task has been administratively paused.</li>
+  <li><b>FAILED:</b> The connector/task has failed (usually by raising an exception, which is reported in the status output).</li>
+</ul>
+
+<p>
+In most cases, connector and task states will match, though they may be different for short periods of time when changes are occurring or if tasks have failed. For example, when a connector is first started, there may be a noticeable delay before the connector and its tasks have all transitioned to the RUNNING state. States will also diverge when tasks fail since Connect does not automatically restart failed tasks. To restart a connector/task manually, you can use the restart APIs listed above. Note that if you try to restart a task while a rebalance is taking place, Connect will return a 409 (Conflict) status code. You can retry after the rebalance completes, but it might not be necessary since rebalances effectively restart all the connectors and tasks in the cluster.
+</p>
+
+<p>
+It's sometimes useful to temporarily stop the message processing of a connector. For example, if the remote system is undergoing maintenance, it would be preferable for source connectors to stop polling it for new data instead of filling logs with exception spam. For this use case, Connect offers a pause/resume API. While a source connector is paused, Connect will stop polling it for additional records. While a sink connector is paused, Connect will stop pushing new messages to it. The pause state is persistent, so even if you restart the cluster, the connector will not begin message processing again until the task has been resumed. Note that there may be a delay before all of a connector's tasks have transitioned to the PAUSED state since it may take time for them to finish whatever processing they were in the middle of when being paused. Additionally, failed tasks will not transition to the PAUSED state until they have been restarted.
+</p>

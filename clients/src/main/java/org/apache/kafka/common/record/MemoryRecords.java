@@ -187,10 +187,10 @@ public class MemoryRecords implements Records {
     public Iterator<LogEntry> iterator() {
         if (writable) {
             // flip on a duplicate buffer for reading
-            return new RecordsIterator((ByteBuffer) this.buffer.duplicate().flip(), CompressionType.NONE, false);
+            return new RecordsIterator((ByteBuffer) this.buffer.duplicate().flip(), false);
         } else {
             // do not need to flip for non-writable buffer
-            return new RecordsIterator(this.buffer.duplicate(), CompressionType.NONE, false);
+            return new RecordsIterator(this.buffer.duplicate(), false);
         }
     }
     
@@ -213,6 +213,11 @@ public class MemoryRecords implements Records {
         return builder.toString();
     }
 
+    /** Visible for testing */
+    public boolean isWritable() {
+        return writable;
+    }
+
     public static class RecordsIterator extends AbstractIterator<LogEntry> {
         private final ByteBuffer buffer;
         private final DataInputStream stream;
@@ -224,11 +229,11 @@ public class MemoryRecords implements Records {
         private final ArrayDeque<LogEntry> logEntries;
         private final long absoluteBaseOffset;
 
-        public RecordsIterator(ByteBuffer buffer, CompressionType type, boolean shallow) {
-            this.type = type;
+        public RecordsIterator(ByteBuffer buffer, boolean shallow) {
+            this.type = CompressionType.NONE;
             this.buffer = buffer;
             this.shallow = shallow;
-            this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type);
+            this.stream = new DataInputStream(new ByteBufferInputStream(buffer));
             this.logEntries = null;
             this.absoluteBaseOffset = -1;
         }
@@ -238,7 +243,7 @@ public class MemoryRecords implements Records {
             this.type = entry.record().compressionType();
             this.buffer = entry.record().value();
             this.shallow = true;
-            this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type);
+            this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type, entry.record().magic());
             long wrapperRecordOffset = entry.offset();
             // If relative offset is used, we need to decompress the entire message first to compute
             // the absolute offset.

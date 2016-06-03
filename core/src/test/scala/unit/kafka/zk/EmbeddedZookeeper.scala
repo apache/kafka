@@ -39,6 +39,16 @@ class EmbeddedZookeeper() {
   def shutdown() {
     CoreUtils.swallow(zookeeper.shutdown())
     CoreUtils.swallow(factory.shutdown())
+
+    def isDown(): Boolean = {
+      try {
+        ZkFourLetterWords.sendStat("127.0.0.1", port, 3000)
+        false
+      } catch { case _: Throwable => true }
+    }
+
+    Iterator.continually(isDown()).exists(identity)
+
     Utils.delete(logDir)
     Utils.delete(snapshotDir)
   }

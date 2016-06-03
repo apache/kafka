@@ -73,7 +73,7 @@ import org.slf4j.LoggerFactory;
  * <pre>
  * {@code
  * Properties props = new Properties();
- * props.put("bootstrap.servers", "localhost:4242");
+ * props.put("bootstrap.servers", "localhost:9092");
  * props.put("acks", "all");
  * props.put("retries", 0);
  * props.put("batch.size", 16384);
@@ -119,8 +119,8 @@ import org.slf4j.LoggerFactory;
  * <p>
  * The <code>buffer.memory</code> controls the total amount of memory available to the producer for buffering. If records
  * are sent faster than they can be transmitted to the server then this buffer space will be exhausted. When the buffer space is
- * exhausted additional send calls will block. For uses where you want to avoid any blocking you can set <code>block.on.buffer.full=false</code> which
- * will cause the send call to result in an exception.
+ * exhausted additional send calls will block. The threshold for time to block is determined by <code>max.block.ms</code> after which it throws
+ * a TimeoutException.
  * <p>
  * The <code>key.serializer</code> and <code>value.serializer</code> instruct how to turn the key and value objects the user provides with
  * their <code>ProducerRecord</code> into bytes. You can use the included {@link org.apache.kafka.common.serialization.ByteArraySerializer} or
@@ -420,7 +420,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *
      * @throws InterruptException If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
-     * @throws BufferExhaustedException If <code>block.on.buffer.full=false</code> and the buffer is full.
+     * @throws TimeoutException if the time taken for fetching metadata or allocating memory for the record has surpassed <code>max.block.ms</code>.
      *
      */
     @Override
@@ -431,8 +431,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Implementation of asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>.
-     * See {@link #send(ProducerRecord, Callback)} for details.
+     * Implementation of asynchronously send a record to a topic.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
         TopicPartition tp = null;

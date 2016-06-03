@@ -27,6 +27,16 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * Store change log collector that batches updates before sending to Kafka.
+ *
+ * Note that the use of array-typed keys is discouraged because they result in incorrect caching behavior.
+ * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
+ * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
+ *
+ * @param <K>
+ * @param <V>
+ */
 public class StoreChangeLogger<K, V> {
 
     public interface ValueGetter<K, V> {

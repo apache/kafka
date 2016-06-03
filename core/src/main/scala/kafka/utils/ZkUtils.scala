@@ -20,7 +20,7 @@ package kafka.utils
 import java.util.concurrent.CountDownLatch
 
 import kafka.admin._
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster._
 import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndPartition}
 import kafka.consumer.{ConsumerThreadId, TopicCount}
@@ -277,7 +277,7 @@ class ZkUtils(val zkClient: ZkClient,
     val brokerIdPath = BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
 
-    val version = if (apiVersion >= KAFKA_0_10_0_IV0) 3 else 2
+    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 3 else 2
     var jsonMap = Map("version" -> version,
                       "host" -> host,
                       "port" -> port,
@@ -710,7 +710,7 @@ class ZkUtils(val zkClient: ZkClient,
     topics
   }
 
-  def getPartitionReassignmentZkData(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
+  def formatAsReassignmentJson(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
     Json.encode(Map("version" -> 1, "partitions" -> partitionsToBeReassigned.map(e => Map("topic" -> e._1.topic, "partition" -> e._1.partition,
                                                                                           "replicas" -> e._2))))
   }
@@ -722,7 +722,7 @@ class ZkUtils(val zkClient: ZkClient,
         deletePath(zkPath)
         info("No more partitions need to be reassigned. Deleting zk path %s".format(zkPath))
       case _ =>
-        val jsonData = getPartitionReassignmentZkData(partitionsToBeReassigned)
+        val jsonData = formatAsReassignmentJson(partitionsToBeReassigned)
         try {
           updatePersistentPath(zkPath, jsonData)
           debug("Updated partition reassignment path with %s".format(jsonData))
@@ -792,24 +792,16 @@ class ZkUtils(val zkClient: ZkClient,
   /**
     * This API produces a sequence number by creating / updating given path in zookeeper
     * It uses the stat returned by the zookeeper and return the version. Every time
-    * client updates the path stat.version gets incremented
+    * client updates the path stat.version gets incremented. Starting value of sequence number is 1.
     */
   def getSequenceId(path: String, acls: java.util.List[ACL] = DefaultAcls): Int = {
+    def writeToZk: Int = zkClient.writeDataReturnStat(path, "", -1).getVersion
     try {
-      val stat = zkClient.writeDataReturnStat(path, "", -1)
-      stat.getVersion
+      writeToZk
     } catch {
-      case e: ZkNoNodeException => {
-        createParentPath(BrokerSequenceIdPath, acls)
-        try {
-          zkClient.createPersistent(BrokerSequenceIdPath, "", acls)
-          0
-        } catch {
-          case e: ZkNodeExistsException =>
-            val stat = zkClient.writeDataReturnStat(BrokerSequenceIdPath, "", -1)
-            stat.getVersion
-        }
-      }
+      case e1: ZkNoNodeException =>
+        makeSurePersistentPathExists(path)
+        writeToZk
     }
   }
 
@@ -924,7 +916,7 @@ object ZkPath {
     isNamespacePresent = true
   }
 
-  def resetNamespaceCheckedState {
+  def resetNamespaceCheckedState() {
     isNamespacePresent = false
   }
 

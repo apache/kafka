@@ -312,22 +312,25 @@ object ConsumerGroupCommand {
     }
 
     protected def describeGroup(group: String) {
-      val consumerSummaries = adminClient.describeConsumerGroup(group)
-      if (consumerSummaries.isEmpty)
-        println(s"Consumer group `${group}` does not exist or is rebalancing.")
-      else {
-        val consumer = getConsumer()
-        printDescribeHeader()
-        consumerSummaries.foreach { consumerSummary =>
-          val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
-          val partitionOffsets = topicPartitions.flatMap { topicPartition =>
-            Option(consumer.committed(new TopicPartition(topicPartition.topic, topicPartition.partition))).map { offsetAndMetadata =>
-              topicPartition -> offsetAndMetadata.offset
+      adminClient.describeConsumerGroup(group) match {
+        case None => println(s"Consumer group `${group}` does not exist.")
+        case Some(consumerSummaries) =>
+          if (consumerSummaries.isEmpty)
+            println(s"Consumer group `${group}` is rebalancing.")
+          else {
+            val consumer = getConsumer()
+            printDescribeHeader()
+            consumerSummaries.foreach { consumerSummary =>
+              val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
+              val partitionOffsets = topicPartitions.flatMap { topicPartition =>
+                Option(consumer.committed(new TopicPartition(topicPartition.topic, topicPartition.partition))).map { offsetAndMetadata =>
+                  topicPartition -> offsetAndMetadata.offset
+                }
+              }.toMap
+              describeTopicPartition(group, topicPartitions, partitionOffsets.get,
+                _ => Some(s"${consumerSummary.clientId}_${consumerSummary.clientHost}"))
             }
-          }.toMap
-          describeTopicPartition(group, topicPartitions, partitionOffsets.get,
-            _ => Some(s"${consumerSummary.clientId}_${consumerSummary.clientHost}"))
-        }
+          }
       }
     }
 
@@ -389,7 +392,7 @@ object ConsumerGroupCommand {
     val GroupDoc = "The consumer group we wish to act on."
     val TopicDoc = "The topic whose consumer group information should be deleted."
     val ListDoc = "List all consumer groups."
-    val DescribeDoc = "Describe consumer group and list offset lag related to given group."
+    val DescribeDoc = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group."
     val nl = System.getProperty("line.separator")
     val DeleteDoc = "Pass in groups to delete topic partition offsets and ownership information " +
       "over the entire consumer group. For instance --group g1 --group g2" + nl +

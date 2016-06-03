@@ -40,7 +40,7 @@ public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
 
     @Override
     public byte[] serialize(String topic, Windowed<T> data) {
-        byte[] serializedKey = inner.serialize(topic, data.value());
+        byte[] serializedKey = inner.serialize(topic, data.key());
 
         ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + TIMESTAMP_SIZE);
         buf.put(serializedKey);
@@ -55,7 +55,7 @@ public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
     }
 
     public byte[] serializeBaseKey(String topic, Windowed<T> data) {
-        return inner.serialize(topic, data.value());
+        return inner.serialize(topic, data.key());
     }
 
 }

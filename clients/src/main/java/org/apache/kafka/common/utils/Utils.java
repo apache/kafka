@@ -14,6 +14,7 @@ package org.apache.kafka.common.utils;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Closeable;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.OutputStream;
@@ -50,7 +51,7 @@ public class Utils {
 
     // This matches URIs of formats: host:port and protocol:\\host:port
     // IPv6 is supported with [ip] pattern
-    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-.:]*)\\]?:([0-9]+)");
+    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%.:]*)\\]?:([0-9]+)");
 
     public static final String NL = System.getProperty("line.separator");
 
@@ -674,6 +675,28 @@ public class Utils {
                 throw inner;
             }
         }
+    }
+
+    /**
+     * Closes all the provided closeables.
+     * @throws IOException if any of the close methods throws an IOException.
+     *         The first IOException is thrown with subsequent exceptions
+     *         added as suppressed exceptions.
+     */
+    public static void closeAll(Closeable... closeables) throws IOException {
+        IOException exception = null;
+        for (Closeable closeable : closeables) {
+            try {
+                closeable.close();
+            } catch (IOException e) {
+                if (exception != null)
+                    exception.addSuppressed(e);
+                else
+                    exception = e;
+            }
+        }
+        if (exception != null)
+            throw exception;
     }
 
 }

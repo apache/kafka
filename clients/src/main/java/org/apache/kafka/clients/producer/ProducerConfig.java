@@ -139,23 +139,21 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>block.on.buffer.full</code> */
     /**
-     * @deprecated This config will be removed in a future release. Also, the {@link #METADATA_FETCH_TIMEOUT_CONFIG} is no longer honored when this property is set to true.
+     * @deprecated This config will be removed in a future release. Please use {@link #MAX_BLOCK_MS_CONFIG}.
      */
     @Deprecated
     public static final String BLOCK_ON_BUFFER_FULL_CONFIG = "block.on.buffer.full";
     private static final String BLOCK_ON_BUFFER_FULL_DOC = "When our memory buffer is exhausted we must either stop accepting new records (block) or throw errors. "
-                                                           + "By default this setting is false and the producer will throw a BufferExhaustedException if a record is sent and the buffer space is full. "
-                                                           + "However in some scenarios getting an error is not desirable and it is better to block. Setting this to <code>true</code> will accomplish that."
-                                                           + "<em>If this property is set to true, parameter <code>" + METADATA_FETCH_TIMEOUT_CONFIG + "</code> is not longer honored.</em>"
-                                                           + "<p>"
-                                                           + "This parameter is deprecated and will be removed in a future release. "
+                                                           + "By default this setting is false and the producer will no longer throw a BufferExhaustException but instead will use the <code>" + MAX_BLOCK_MS_CONFIG + "</code> "
+                                                           + "value to block, after which it will throw a TimeoutException. Setting this property to true will set the <code>" + MAX_BLOCK_MS_CONFIG + "</code> to Long.MAX_VALUE. "
+                                                           + "<em>Also if this property is set to true, parameter <code>" + METADATA_FETCH_TIMEOUT_CONFIG + "</code> is not longer honored.</em>"
+                                                           + "<p>This parameter is deprecated and will be removed in a future release. "
                                                            + "Parameter <code>" + MAX_BLOCK_MS_CONFIG + "</code> should be used instead.";
 
     /** <code>buffer.memory</code> */
     public static final String BUFFER_MEMORY_CONFIG = "buffer.memory";
     private static final String BUFFER_MEMORY_DOC = "The total bytes of memory the producer can use to buffer records waiting to be sent to the server. If records are "
-                                                    + "sent faster than they can be delivered to the server the producer will either block or throw an exception based "
-                                                    + "on the preference specified by <code>" + BLOCK_ON_BUFFER_FULL_CONFIG + "</code>. "
+                                                    + "sent faster than they can be delivered to the server the producer will block for <code>" + MAX_BLOCK_MS_CONFIG + "</code> after which it will throw an exception."
                                                     + "<p>"
                                                     + "This setting should correspond roughly to the total memory the producer will use, but is not a hard bound since "
                                                     + "not all memory the producer uses is used for buffering. Some additional memory will be used for compression (if "
@@ -219,7 +217,7 @@ public class ProducerConfig extends AbstractConfig {
                                                         + "received by the producer before they are published to the Kafka cluster. By default, there are no interceptors.";
 
     static {
-        CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
+        CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
                                 .define(RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
                                 .define(ACKS_CONFIG,

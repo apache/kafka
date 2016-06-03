@@ -181,7 +181,7 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public Map<String, String> parameters() {
-        return Collections.unmodifiableMap(parameters);
+        return parameters == null ? null : Collections.unmodifiableMap(parameters);
     }
 
     /**

@@ -84,7 +84,7 @@ public class VerifiableProducer {
         this.topic = topic;
         this.throughput = throughput;
         this.maxMessages = maxMessages;
-        this.producer = new KafkaProducer<String, String>(producerProps);
+        this.producer = new KafkaProducer<>(producerProps);
         this.valuePrefix = valuePrefix;
     }
 
@@ -247,6 +247,13 @@ public class VerifiableProducer {
     /** Close the producer to flush any remaining messages. */
     public void close() {
         producer.close();
+        System.out.println(shutdownString());
+    }
+
+    String shutdownString() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("name", "shutdown_complete");
+        return toJsonString(data);
     }
 
     /**
@@ -257,7 +264,6 @@ public class VerifiableProducer {
         assert e != null : "Expected non-null exception.";
 
         Map<String, Object> errorData = new HashMap<>();
-        errorData.put("class", this.getClass().toString());
         errorData.put("name", "producer_send_error");
 
         errorData.put("time_ms", nowMs);
@@ -274,7 +280,6 @@ public class VerifiableProducer {
         assert recordMetadata != null : "Expected non-null recordMetadata object.";
 
         Map<String, Object> successData = new HashMap<>();
-        successData.put("class", this.getClass().toString());
         successData.put("name", "producer_send_success");
 
         successData.put("time_ms", nowMs);
@@ -341,7 +346,6 @@ public class VerifiableProducer {
                 double avgThroughput = 1000 * ((producer.numAcked) / (double) (stopMs - startMs));
 
                 Map<String, Object> data = new HashMap<>();
-                data.put("class", producer.getClass().toString());
                 data.put("name", "tool_data");
                 data.put("sent", producer.numSent);
                 data.put("acked", producer.numAcked);

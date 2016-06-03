@@ -351,9 +351,11 @@ public class ProcessorTopologyTest {
         @Override
         public void punctuate(long streamTime) {
             int count = 0;
-            for (KeyValueIterator<String, String> iter = store.all(); iter.hasNext();) {
-                iter.next();
-                ++count;
+            try (KeyValueIterator<String, String> iter = store.all()) {
+                while (iter.hasNext()) {
+                    iter.next();
+                    ++count;
+                }
             }
             context().forward(Long.toString(streamTime), count);
         }

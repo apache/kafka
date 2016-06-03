@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <?xml-stylesheet type="text/xsl"?>
 <rdf:RDF xml:lang="en"
-         xmlns="http://usefulinc.com/ns/doap#" 
-         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" 
+         xmlns="http://usefulinc.com/ns/doap#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
          xmlns:asfext="http://projects.apache.org/ns/asfext#"
          xmlns:foaf="http://xmlns.com/foaf/0.1/">
 <!--
@@ -12,9 +12,9 @@
     The ASF licenses this file to You under the Apache License, Version 2.0
     (the "License"); you may not use this file except in compliance with
     the License.  You may obtain a copy of the License at
-   
+
          http://www.apache.org/licenses/LICENSE-2.0
-   
+
     Unless required by applicable law or agreed to in writing, software
     distributed under the License is distributed on an "AS IS" BASIS,
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,13 +34,6 @@
     <download-page rdf:resource="http://kafka.apache.org/downloads.html" />
     <programming-language>Scala</programming-language>
     <category rdf:resource="http://projects.apache.org/category/big-data" />
-    <release>
-      <Version>
-        <name>Kafka 0.8.1</name>
-        <created>2014-03-12</created>
-        <revision>0.8.1</revision>
-      </Version>
-    </release>
     <repository>
       <SVNRepository>
         <location rdf:resource="http://git-wip-us.apache.org/repos/asf/kafka.git"/>

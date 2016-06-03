@@ -146,8 +146,12 @@ public final class Record {
     public static void write(ByteBuffer buffer, long timestamp, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
         // construct the compressor with compression type none since this function will not do any
         //compression according to the input type, it will just write the record's payload as is
-        Compressor compressor = new Compressor(buffer, CompressionType.NONE, buffer.capacity());
-        compressor.putRecord(timestamp, key, value, type, valueOffset, valueSize);
+        Compressor compressor = new Compressor(buffer, CompressionType.NONE);
+        try {
+            compressor.putRecord(timestamp, key, value, type, valueOffset, valueSize);
+        } finally {
+            compressor.close();
+        }
     }
 
     public static void write(Compressor compressor, long crc, byte attributes, long timestamp, byte[] key, byte[] value, int valueOffset, int valueSize) {

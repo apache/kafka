@@ -100,17 +100,37 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     case Some(topic) => Map("topic" -> topic)
   }
 
-  val messagesInRate = newMeter("MessagesInPerSec", "messages", TimeUnit.SECONDS, tags)
-  val bytesInRate = newMeter("BytesInPerSec", "bytes", TimeUnit.SECONDS, tags)
-  val bytesOutRate = newMeter("BytesOutPerSec", "bytes", TimeUnit.SECONDS, tags)
-  val bytesRejectedRate = newMeter("BytesRejectedPerSec", "bytes", TimeUnit.SECONDS, tags)
-  val failedProduceRequestRate = newMeter("FailedProduceRequestsPerSec", "requests", TimeUnit.SECONDS, tags)
-  val failedFetchRequestRate = newMeter("FailedFetchRequestsPerSec", "requests", TimeUnit.SECONDS, tags)
-  val totalProduceRequestRate = newMeter("TotalProduceRequestsPerSec", "requests", TimeUnit.SECONDS, tags)
-  val totalFetchRequestRate = newMeter("TotalFetchRequestsPerSec", "requests", TimeUnit.SECONDS, tags)
+  val messagesInRate = newMeter(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags)
+  val bytesInRate = newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags)
+  val bytesOutRate = newMeter(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags)
+  val bytesRejectedRate = newMeter(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags)
+  val failedProduceRequestRate = newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val failedFetchRequestRate = newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val totalProduceRequestRate = newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val totalFetchRequestRate = newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+
+  def close() {
+    removeMetric(BrokerTopicStats.MessagesInPerSec, tags)
+    removeMetric(BrokerTopicStats.BytesInPerSec, tags)
+    removeMetric(BrokerTopicStats.BytesOutPerSec, tags)
+    removeMetric(BrokerTopicStats.BytesRejectedPerSec, tags)
+    removeMetric(BrokerTopicStats.FailedProduceRequestsPerSec, tags)
+    removeMetric(BrokerTopicStats.FailedFetchRequestsPerSec, tags)
+    removeMetric(BrokerTopicStats.TotalProduceRequestsPerSec, tags)
+    removeMetric(BrokerTopicStats.TotalFetchRequestsPerSec, tags)
+  }
 }
 
 object BrokerTopicStats extends Logging {
+  val MessagesInPerSec = "MessagesInPerSec"
+  val BytesInPerSec = "BytesInPerSec"
+  val BytesOutPerSec = "BytesOutPerSec"
+  val BytesRejectedPerSec = "BytesRejectedPerSec"
+  val FailedProduceRequestsPerSec = "FailedProduceRequestsPerSec"
+  val FailedFetchRequestsPerSec = "FailedFetchRequestsPerSec"
+  val TotalProduceRequestsPerSec = "TotalProduceRequestsPerSec"
+  val TotalFetchRequestsPerSec = "TotalFetchRequestsPerSec"
+
   private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k))
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
   private val allTopicsStats = new BrokerTopicMetrics(None)
@@ -119,5 +139,11 @@ object BrokerTopicStats extends Logging {
 
   def getBrokerTopicStats(topic: String): BrokerTopicMetrics = {
     stats.getAndMaybePut(topic)
+  }
+
+  def removeMetrics(topic: String) {
+    val metrics = stats.remove(topic)
+    if (metrics != null)
+      metrics.close()
   }
 }

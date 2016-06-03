@@ -187,4 +187,12 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     }
     true
   }
+
+  @Test
+  def testGetSequenceIdMethod() {
+    val path = "/test/seqid"
+    (1 to 10).foreach { seqid =>
+      assertEquals(seqid, zkUtils.getSequenceId(path))
+    }
+  }
 }

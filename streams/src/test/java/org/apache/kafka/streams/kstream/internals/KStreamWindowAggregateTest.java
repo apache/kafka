@@ -20,41 +20,45 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.HoppingWindows;
-import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockAggregator;
+import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.TestUtils;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 
 import static org.junit.Assert.assertEquals;
 
 public class KStreamWindowAggregateTest {
 
-    final private Serde<String> strSerde = new Serdes.StringSerde();
+    final private Serde<String> strSerde = Serdes.String();
 
-    private class StringAdd implements Aggregator<String, String, String> {
+    private KStreamTestDriver driver = null;
+    private File stateDir = null;
 
-        @Override
-        public String apply(String aggKey, String value, String aggregate) {
-            return aggregate + "+" + value;
+    @After
+    public void tearDown() {
+        if (driver != null) {
+            driver.close();
         }
+        driver = null;
     }
 
-    private class StringInit implements Initializer<String> {
-
-        @Override
-        public String apply() {
-            return "0";
-        }
+    @Before
+    public void setUp() throws IOException {
+        stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
     @Test
@@ -66,8 +70,9 @@ public class KStreamWindowAggregateTest {
             String topic1 = "topic1";
 
             KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
-            KTable<Windowed<String>, String> table2 = stream1.aggregateByKey(new StringInit(), new StringAdd(),
-                    HoppingWindows.of("topic1-Canonized").with(10L).every(5L),
+            KTable<Windowed<String>, String> table2 =
+                stream1.aggregateByKey(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER,
+                    TimeWindows.of("topic1-Canonized", 10).advanceBy(5),
                     strSerde,
                     strSerde);
 
@@ -143,8 +148,9 @@ public class KStreamWindowAggregateTest {
             String topic2 = "topic2";
 
             KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
-            KTable<Windowed<String>, String> table1 = stream1.aggregateByKey(new StringInit(), new StringAdd(),
-                    HoppingWindows.of("topic1-Canonized").with(10L).every(5L),
+            KTable<Windowed<String>, String> table1 =
+                stream1.aggregateByKey(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER,
+                    TimeWindows.of("topic1-Canonized", 10).advanceBy(5),
                     strSerde,
                     strSerde);
 
@@ -152,8 +158,9 @@ public class KStreamWindowAggregateTest {
             table1.toStream().process(proc1);
 
             KStream<String, String> stream2 = builder.stream(strSerde, strSerde, topic2);
-            KTable<Windowed<String>, String> table2 = stream2.aggregateByKey(new StringInit(), new StringAdd(),
-                    HoppingWindows.of("topic2-Canonized").with(10L).every(5L),
+            KTable<Windowed<String>, String> table2 =
+                stream2.aggregateByKey(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER,
+                    TimeWindows.of("topic2-Canonized", 10).advanceBy(5),
                     strSerde,
                     strSerde);
 
@@ -277,7 +284,6 @@ public class KStreamWindowAggregateTest {
                     "[B@0]:0+2+2+2%0+b+b+b", "[B@5]:0+2+2%0+b+b",
                     "[C@0]:0+3+3%0+c+c", "[C@5]:0+3%0+c"
             );
-
         } finally {
             Utils.delete(baseDir);
         }

@@ -133,4 +133,11 @@ public class KStreamImplTest {
             1, // process
             builder.build("X", null).processors().size());
     }
+
+    @Test
+    public void testToWithNullValueSerdeDoesntNPE() {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KStream<String, String> inputStream = builder.stream(stringSerde, stringSerde, "input");
+        inputStream.to(stringSerde, null, "output");
+    }
 }
