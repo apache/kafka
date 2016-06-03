@@ -105,7 +105,9 @@ public class TimeWindows extends Windows<TimeWindow> {
         Map<Long, TimeWindow> windows = new HashMap<>();
         while (windowStart <= timestamp) {
             TimeWindow window = new TimeWindow(windowStart, windowStart + this.size);
-            windows.put(windowStart, window);
+            if (window.end() > timestamp) {
+                windows.put(windowStart, window);
+            }
             windowStart += this.advance;
         }
         return windows;

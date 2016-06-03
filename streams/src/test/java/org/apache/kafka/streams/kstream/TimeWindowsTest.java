@@ -113,6 +113,14 @@ public class TimeWindowsTest {
     }
 
     @Test
+    public void windowsForBarelyOverlappingHoppingWindows() {
+        TimeWindows windows = TimeWindows.of(anyName, 6L).advanceBy(5L);
+        Map<Long, TimeWindow> matched = windows.windowsFor(7L);
+        assertEquals(1, matched.size());
+        assertEquals(new TimeWindow(5L, 11L), matched.get(5L));
+    }
+
+    @Test
     public void windowsForTumblingWindows() {
         TimeWindows windows = TimeWindows.of(anyName, 12L);
         Map<Long, TimeWindow> matched = windows.windowsFor(21L);
