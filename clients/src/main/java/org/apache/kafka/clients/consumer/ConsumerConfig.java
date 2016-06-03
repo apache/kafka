@@ -376,6 +376,10 @@ public class ConsumerConfig extends AbstractConfig {
         super(CONFIG, props);
     }
 
+    public static Map<String, Object> filter(Map<String, Object> props) {
+        return CONFIG.filter(props);
+    }
+
     public static void main(String[] args) {
         System.out.println(CONFIG.toHtmlTable());
     }

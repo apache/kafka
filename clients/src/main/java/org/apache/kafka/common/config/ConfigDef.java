@@ -432,6 +432,24 @@ public class ConfigDef {
     }
 
     /**
+     * Filter configs that are not defined in this configuration definition.
+     *
+     * @param props The configs to be filtered.
+     * @return Filtered configs.
+     */
+    public Map<String, Object> filter(Map<String, Object> props) {
+        // parse all known keys
+        Map<String, Object> filtered = new HashMap<>();
+        for (ConfigKey key : configKeys.values()) {
+            // props map contains setting - assign ConfigKey value
+            if (props.containsKey(key.name)) {
+                filtered.put(key.name, props.get(key.name));
+            }
+        }
+        return filtered;
+    }
+
+    /**
      * Validate the current configuration values with the configuration definition.
      * @param props the current configuration values
      * @return List of Config, each Config contains the updated configuration information given

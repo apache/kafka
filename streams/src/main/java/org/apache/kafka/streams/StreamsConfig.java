@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -212,6 +213,23 @@ public class StreamsConfig extends AbstractConfig {
                                         CommonClientConfigs.METRICS_NUM_SAMPLES_DOC);
     }
 
+    // this is the list of configs for underlying clients
+    // that streams prefer different default values
+    private static final Map<String, Object> PRODUCER_OVERRIDES;
+    static
+    {
+        PRODUCER_OVERRIDES = new HashMap<>();
+        PRODUCER_OVERRIDES.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+    }
+
+    private static final Map<String, Object> CONSUMER_OVERRIDES;
+    static
+    {
+        CONSUMER_OVERRIDES = new HashMap<>();
+        CONSUMER_OVERRIDES.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000");
+        CONSUMER_OVERRIDES.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+    }
+
     public static class InternalConfig {
         public static final String STREAM_THREAD_INSTANCE = "__stream.thread.instance__";
     }
@@ -221,7 +239,18 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public Map<String, Object> getConsumerConfigs(StreamThread streamThread, String groupId, String clientId) {
-        Map<String, Object> props = getBaseConsumerConfigs();
+        // filter out non-consumer configs
+        Map<String, Object> props = ConsumerConfig.filter(this.originals());
+
+        // enforce streams overrides if not specified by user
+        for (String keyName : CONSUMER_OVERRIDES.keySet()) {
+            if (!props.containsKey(keyName))
+                props.put(keyName, CONSUMER_OVERRIDES.get(keyName));
+        }
+
+        // disable auto commit ignoring any user overridden values,
+        // this is necessary for streams commit semantics
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         // add client id with stream client id prefix, and group id
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
@@ -232,7 +261,6 @@ public class StreamsConfig extends AbstractConfig {
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
-
         if (!getString(ZOOKEEPER_CONNECT_CONFIG).equals(""))
             props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, getString(ZOOKEEPER_CONNECT_CONFIG));
 
@@ -240,7 +268,12 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public Map<String, Object> getRestoreConsumerConfigs(String clientId) {
-        Map<String, Object> props = getBaseConsumerConfigs();
+        // filter out non-consumer configs
+        Map<String, Object> props = ConsumerConfig.filter(this.originals());
+
+        // disable auto commit ignoring any user overridden values,
+        // this is necessary for streams commit semantics
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         // no need to set group id for a restore consumer
         props.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -251,52 +284,23 @@ public class StreamsConfig extends AbstractConfig {
         return props;
     }
 
-    private Map<String, Object> getBaseConsumerConfigs() {
-        Map<String, Object> props = this.originals();
-
-        // remove streams properties
-        removeStreamsSpecificConfigs(props);
-
-        // set consumer default property values
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-
-        return props;
-    }
-
     public Map<String, Object> getProducerConfigs(String clientId) {
-        Map<String, Object> props = this.originals();
+        // filter out non-producer configs
+        Map<String, Object> props = ProducerConfig.filter(this.originals());
 
-        // remove consumer properties that are not required for producers
-        props.remove(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
-
-        // remove streams properties
-        removeStreamsSpecificConfigs(props);
-
-        // set producer default property values
-        props.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+        // enforce streams overrides if not specified by user
+        for (String keyName : PRODUCER_OVERRIDES.keySet()) {
+            if (!props.containsKey(keyName))
+                props.put(keyName, PRODUCER_OVERRIDES.get(keyName));
+        }
 
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
 
-        return props;
-    }
+        // set producer default property values
+        props.put(ProducerConfig.LINGER_MS_CONFIG, "100");
 
-    private void removeStreamsSpecificConfigs(Map<String, Object> props) {
-        props.remove(StreamsConfig.POLL_MS_CONFIG);
-        props.remove(StreamsConfig.STATE_DIR_CONFIG);
-        props.remove(StreamsConfig.APPLICATION_ID_CONFIG);
-        props.remove(StreamsConfig.KEY_SERDE_CLASS_CONFIG);
-        props.remove(StreamsConfig.VALUE_SERDE_CLASS_CONFIG);
-        props.remove(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
-        props.remove(StreamsConfig.REPLICATION_FACTOR_CONFIG);
-        props.remove(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
-        props.remove(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
-        props.remove(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
-        props.remove(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
-        props.remove(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG);
-        props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
-        props.remove(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-        props.remove(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE);
+        return props;
     }
 
     public Serde keySerde() {
