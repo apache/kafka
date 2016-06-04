@@ -46,19 +46,6 @@ trait ZooKeeperTestHarness extends JUnitSuite with Logging {
      CoreUtils.swallow(zkUtils.close())
     if (zookeeper != null)
       CoreUtils.swallow(zookeeper.shutdown())
-
-    def isDown(): Boolean = {
-      try {
-        ZkFourLetterWords.sendStat("127.0.0.1", zkPort, 3000)
-        false
-      } catch { case _: Throwable =>
-        debug("Server is down")
-        true
-      }
-    }
-
-    Iterator.continually(isDown()).exists(identity)
-
     Configuration.setConfiguration(null)
   }
 

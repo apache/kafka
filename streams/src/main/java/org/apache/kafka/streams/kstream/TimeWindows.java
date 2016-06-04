@@ -99,9 +99,7 @@ public class TimeWindows extends Windows<TimeWindow> {
 
     @Override
     public Map<Long, TimeWindow> windowsFor(long timestamp) {
-        long enclosed = (size - 1) / advance;
-        long windowStart = Math.max(0, timestamp - timestamp % advance - enclosed * advance);
-
+        long windowStart = (Math.max(0, timestamp - this.size + this.advance) / this.advance) * this.advance;
         Map<Long, TimeWindow> windows = new HashMap<>();
         while (windowStart <= timestamp) {
             TimeWindow window = new TimeWindow(windowStart, windowStart + this.size);
