@@ -117,7 +117,7 @@ public class TopologyBuilder {
         }
     }
 
-    private static class SourceNodeFactory extends NodeFactory {
+    private class SourceNodeFactory extends NodeFactory {
         private final String[] topics;
         public final Pattern pattern;
         private Deserializer keyDeserializer;
@@ -138,7 +138,7 @@ public class TopologyBuilder {
         public String[] getTopics(Collection<String> subscribedTopics) {
             List<String> matchedTopics = new ArrayList<>();
             for (String update : subscribedTopics) {
-                if (this.pattern.matcher(update).matches()) {
+                if (this.pattern.matcher(update).matches() && !sourceTopicNames.contains(update)) {
                     matchedTopics.add(update);
                 }
             }
@@ -216,7 +216,7 @@ public class TopologyBuilder {
     public TopologyBuilder() {}
 
     /**
-     * Add a new source that consumes the named topics and forwards the records to child processor and/or sink nodes.
+     * Add a new source that consumes the named topics and forward the records to child processor and/or sink nodes.
      * The source will use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} and
      * {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
@@ -233,7 +233,7 @@ public class TopologyBuilder {
 
     /**
      * Add a new source that consumes from topics matching the given pattern
-     * and forwards the records to child processor and/or sink nodes.
+     * and forward the records to child processor and/or sink nodes.
      * The source will use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} and
      * {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
@@ -597,6 +597,7 @@ public class TopologyBuilder {
         if (subscriptionUpdates.hasUpdates()) {
             for (Map.Entry<String, Pattern> stringPatternEntry : nodeToSourcePatterns.entrySet()) {
                 SourceNodeFactory sourceNode = (SourceNodeFactory) nodeFactories.get(stringPatternEntry.getKey());
+                //need to update nodeToSourceTopics with topics matched from given regex
                 nodeToSourceTopics.put(stringPatternEntry.getKey(), sourceNode.getTopics(subscriptionUpdates.getUpdates()));
             }
         }
