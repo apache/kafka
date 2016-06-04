@@ -673,7 +673,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]]
   }
 
-  private object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
+  object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
     override def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
       Collections.singletonList(new ProducerRecord[Array[Byte], Array[Byte]](record.topic, null, record.timestamp, record.key, record.value))
     }
