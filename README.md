@@ -137,6 +137,7 @@ The following options should be set with a `-D` switch, for example `./gradlew -
 * `org.gradle.project.maxParallelForks`: limits the maximum number of processes for each task.
 * `org.gradle.project.showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
 * `org.gradle.project.skipSigning`: skips signing of artifacts.
+* `org.gradle.project.testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -Dorg.gradle.project.testLoggingEvents=started,passed,skipped,failed test`
 
 ### Running in Vagrant ###
 
