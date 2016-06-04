@@ -333,9 +333,9 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
         if (controllerContext.liveBrokerIds.contains(replicaId))
           replicaState.put(partitionAndReplica, OnlineReplica)
         else
-        // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
-        // This is required during controller failover since during controller failover a broker can go down,
-        // so the replicas on that broker should be moved to ReplicaDeletionIneligible to be on the safer side.
+          // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
+          // This is required during controller failover since during controller failover a broker can go down,
+          // so the replicas on that broker should be moved to ReplicaDeletionIneligible to be on the safer side.
           replicaState.put(partitionAndReplica, ReplicaDeletionIneligible)
       }
     }

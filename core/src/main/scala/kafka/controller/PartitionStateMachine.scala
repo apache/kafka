@@ -246,7 +246,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         case Some(currentLeaderIsrAndEpoch) =>
           // else, check if the leader for partition is alive. If yes, it is in Online state, else it is in Offline state
           if (controllerContext.liveBrokerIds.contains(currentLeaderIsrAndEpoch.leaderAndIsr.leader))
-          // leader is alive
+            // leader is alive
             partitionState.put(topicPartition, OnlinePartition)
           else
             partitionState.put(topicPartition, OfflinePartition)
