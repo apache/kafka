@@ -228,7 +228,7 @@ public class TopologyBuilderTest {
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
 
-        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+        Collection<Set<String>> copartitionGroups = builder.copartitionGroups("applicationId");
 
         assertEquals(mkSet(mkSet("topic-1", "topic-1x", "topic-2")), new HashSet<>(copartitionGroups));
     }

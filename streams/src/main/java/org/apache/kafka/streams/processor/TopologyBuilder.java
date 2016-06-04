@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -190,7 +190,8 @@ public class TopologyBuilder {
     /**
      * Create a new builder.
      */
-    public TopologyBuilder() {}
+    public TopologyBuilder() {
+    }
 
     /**
      * Add a new source that consumes the named topics and forwards the records to child processor and/or sink nodes.
@@ -620,20 +621,33 @@ public class TopologyBuilder {
      * Returns the copartition groups.
      * A copartition group is a group of source topics that are required to be copartitioned.
      *
+     * @param applicationId
      * @return groups of topic names
      */
-    public Collection<Set<String>> copartitionGroups() {
+    public Collection<Set<String>> copartitionGroups(final String applicationId) {
         List<Set<String>> list = new ArrayList<>(copartitionSourceGroups.size());
         for (Set<String> nodeNames : copartitionSourceGroups) {
             Set<String> copartitionGroup = new HashSet<>();
             for (String node : nodeNames) {
                 String[] topics = nodeToSourceTopics.get(node);
                 if (topics != null)
-                    copartitionGroup.addAll(Arrays.asList(topics));
+                    copartitionGroup.addAll(convertInternalTopicNames(topics, applicationId));
             }
             list.add(Collections.unmodifiableSet(copartitionGroup));
         }
         return Collections.unmodifiableList(list);
+    }
+
+    private List<String> convertInternalTopicNames(String[] topics, String applicationId) {
+        final List<String> topicNames = new ArrayList<>();
+        for (String topic : topics) {
+            if (internalTopicNames.contains(topic)) {
+                topicNames.add(applicationId + "-" + topic);
+            } else {
+                topicNames.add(topic);
+            }
+        }
+        return topicNames;
     }
 
     /**

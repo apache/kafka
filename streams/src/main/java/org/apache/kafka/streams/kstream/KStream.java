@@ -80,6 +80,11 @@ public interface KStream<K, V> {
      */
     <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, KeyValue<K1, V1>> mapper);
 
+    <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, KeyValue<K1, V1>> mapper,
+                                 Serde<K1> keySerde,
+                                 Serde<V1> valueSerde,
+                                 String topic);
+
     /**
      * Create a new instance of {@link KStream} by transforming the value of each element in this stream into a new value in the new stream.
      *
