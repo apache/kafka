@@ -74,12 +74,13 @@ class Producer[K,V](val config: ProducerConfig,
       if (hasShutdown.get)
         throw new ProducerClosedException
       recordStats(messages)
-      sync match {
-        case true => eventHandler.handle(messages)
-        case false => asyncSend(messages)
-      }
+      if (sync)
+        eventHandler.handle(messages)
+      else
+        asyncSend(messages)
     }
   }
+
 
   private def recordStats(messages: Seq[KeyedMessage[K,V]]) {
     for (message <- messages) {
@@ -95,11 +96,10 @@ class Producer[K,V](val config: ProducerConfig,
           queue.offer(message)
         case _  =>
           try {
-            config.queueEnqueueTimeoutMs < 0 match {
-            case true =>
+            if (config.queueEnqueueTimeoutMs < 0) {
               queue.put(message)
               true
-            case _ =>
+            } else {
               queue.offer(message, config.queueEnqueueTimeoutMs, TimeUnit.MILLISECONDS)
             }
           }
