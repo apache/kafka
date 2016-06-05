@@ -1021,8 +1021,8 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
   /**
    * Send the leader information for selected partitions to selected brokers so that they can correctly respond to
    * metadata requests
-    *
-    * @param brokers The brokers that the update metadata request should be sent to
+   *
+   * @param brokers The brokers that the update metadata request should be sent to
    */
   def sendUpdateMetadataRequest(brokers: Seq[Int], partitions: Set[TopicAndPartition] = Set.empty[TopicAndPartition]) {
     try {
@@ -1044,8 +1044,8 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
   /**
    * Removes a given partition replica from the ISR; if it is not the current
    * leader and there are sufficient remaining replicas in ISR.
-    *
-    * @param topic topic
+   *
+   * @param topic topic
    * @param partition partition
    * @param replicaId replica Id
    * @return the new leaderAndIsr (with the replica removed if it was present),
@@ -1111,8 +1111,8 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
 
   /**
    * Does not change leader or isr, but just increments the leader epoch
-    *
-    * @param topic topic
+   *
+   * @param topic topic
    * @param partition partition
    * @return the new leaderAndIsr with an incremented leader epoch, or None if leaderAndIsr is empty.
    */
@@ -1165,8 +1165,7 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
      * Called after the zookeeper session has expired and a new session has been created. You would have to re-create
      * any ephemeral nodes here.
      *
-     * @throws Exception
-     *             On any error.
+     * @throws Exception On any error.
      */
     @throws(classOf[Exception])
     def handleNewSession() {
@@ -1253,8 +1252,8 @@ class PartitionsReassignedListener(controller: KafkaController) extends IZkDataL
 
   /**
    * Invoked when some partitions are reassigned by the admin command
-    *
-    * @throws Exception On any error.
+   *
+   * @throws Exception On any error.
    */
   @throws(classOf[Exception])
   def handleDataChange(dataPath: String, data: Object) {
@@ -1280,9 +1279,8 @@ class PartitionsReassignedListener(controller: KafkaController) extends IZkDataL
 
   /**
    * Called when the leader information stored in zookeeper has been delete. Try to elect as the leader
-    *
-    * @throws Exception
-   *             On any error.
+   *
+   * @throws Exception On any error.
    */
   @throws(classOf[Exception])
   def handleDataDeleted(dataPath: String) {
@@ -1298,8 +1296,8 @@ class ReassignedPartitionsIsrChangeListener(controller: KafkaController, topic: 
 
   /**
    * Invoked when some partitions need to move leader to preferred replica
-    *
-    * @throws Exception On any error.
+   *
+   * @throws Exception On any error.
    */
   @throws(classOf[Exception])
   def handleDataChange(dataPath: String, data: Object) {
@@ -1349,8 +1347,8 @@ class ReassignedPartitionsIsrChangeListener(controller: KafkaController, topic: 
 
 /**
  * Called when leader intimates of isr change
-  *
-  * @param controller
+ *
+ * @param controller
  */
 class IsrChangeNotificationListener(controller: KafkaController) extends IZkChildListener with Logging {
 
@@ -1424,8 +1422,8 @@ class PreferredReplicaElectionListener(controller: KafkaController) extends IZkD
 
   /**
    * Invoked when some partitions are reassigned by the admin command
-    *
-    * @throws Exception On any error.
+   *
+   * @throws Exception On any error.
    */
   @throws(classOf[Exception])
   def handleDataChange(dataPath: String, data: Object) {
@@ -1447,8 +1445,7 @@ class PreferredReplicaElectionListener(controller: KafkaController) extends IZkD
   }
 
   /**
-   * @throws Exception
-   *             On any error.
+   * @throws Exception On any error.
    */
   @throws(classOf[Exception])
   def handleDataDeleted(dataPath: String) {
