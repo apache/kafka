@@ -15,20 +15,18 @@
  * limitations under the License.
  */
 
-package unit.kafka.tools
+package kafka.tools
 
 import kafka.consumer.BaseConsumerRecord
-import kafka.tools.MirrorMaker
 import org.apache.kafka.common.record.TimestampType
 import org.junit.Assert._
 import org.junit.Test
-
 
 class MirrorMakerTest {
 
   @Test
   def testDefaultMirrorMakerMessageHandler() {
-    val now = System.currentTimeMillis()
+    val now = 12345L
     val consumerRecord = BaseConsumerRecord("topic", 0, 1L, now, TimestampType.CREATE_TIME, "key".getBytes, "value".getBytes)
 
     val result = MirrorMaker.defaultMirrorMakerMessageHandler.handle(consumerRecord)
