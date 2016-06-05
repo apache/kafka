@@ -76,7 +76,6 @@ public class KafkaEmbedded {
         KafkaConfig kafkaConfig = new KafkaConfig(effectiveConfig, loggingEnabled);
         log.debug("Starting embedded Kafka broker (with log.dirs={} and ZK ensemble at {}) ...",
             logDir, zookeeperConnect());
-        System.out.println(logDir);
         kafka = TestUtils.createServer(kafkaConfig, SystemTime$.MODULE$);
         log.debug("Startup of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
             brokerList(), zookeeperConnect());

@@ -190,8 +190,7 @@ public class TopologyBuilder {
     /**
      * Create a new builder.
      */
-    public TopologyBuilder() {
-    }
+    public TopologyBuilder() {}
 
     /**
      * Add a new source that consumes the named topics and forwards the records to child processor and/or sink nodes.
