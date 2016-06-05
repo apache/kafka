@@ -37,8 +37,8 @@ import org.slf4j.LoggerFactory;
  * Metadata is maintained for only a subset of topics, which can be added to over time. When we request metadata for a
  * topic we don't have any metadata for it will trigger a metadata update.
  * <p>
- * If topic expiry is enabled for the metadata, any topic that is unknown or has not been used within the expiry
- * period is removed from the metadata refresh set after an update. Consumers disable topic expiry since they explicitly
+ * If topic expiry is enabled for the metadata, any topic that has not been used within the expiry interval
+ * is removed from the metadata refresh set after an update. Consumers disable topic expiry since they explicitly
  * manage topics while producers rely on topic expiry to limit the refresh set.
  */
 public final class Metadata {
@@ -101,7 +101,8 @@ public final class Metadata {
     }
 
     /**
-     * Add the topic to maintain in the metadata.
+     * Add the topic to maintain in the metadata. If topic expiry is enabled, expiry will
+     * time be reset on the next update.
      */
     public synchronized void add(String topic) {
         topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE);
@@ -155,6 +156,8 @@ public final class Metadata {
 
     /**
      * Replace the current set of topics maintained to the one provided.
+     * If topic expiry is enabled, expiry time of the topics will be
+     * reset on the next update.
      * @param topics
      */
     public synchronized void setTopics(Collection<String> topics) {
@@ -182,20 +185,10 @@ public final class Metadata {
     }
 
     /**
-     * Updates cluster metadata and handles topic expiry. This can
-     * be used for initializing the metadata cluster.
-     * See {@link #update(Cluster, long, Collection)} for details.
+     * Updates the cluster metadata. If topic expiry is enabled, expiry time
+     * is set for topics if required and expired topics are removed from the metadata.
      */
     public synchronized void update(Cluster cluster, long now) {
-        update(cluster, now, Collections.<String>emptyList());
-    }
-
-    /**
-     * Updates the cluster metadata. If topic expiry is enabled, expiry time
-     * is set for topics if required and expired and unknown topics are
-     * removed from the metadata.
-     */
-    public synchronized void update(Cluster cluster, long now, Collection<String> unknownTopics) {
         this.needUpdate = false;
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
@@ -213,7 +206,6 @@ public final class Metadata {
                     log.debug("Removing unused topic {} from the metadata list, expiryMs {} now {}", entry.getKey(), expireMs, now);
                 }
             }
-            topics.keySet().removeAll(unknownTopics);
         }
 
         for (Listener listener: listeners)
@@ -228,12 +220,10 @@ public final class Metadata {
 
     /**
      * Record an attempt to update the metadata that failed. We need to keep track of this
-     * to avoid retrying immediately. Removes unknown topics from metadata if expiry is enabled.
+     * to avoid retrying immediately.
      */
-    public synchronized void failedUpdate(long now, Collection<String> unknownTopics) {
+    public synchronized void failedUpdate(long now) {
         this.lastRefreshMs = now;
-        if (topicExpiryEnabled)
-            topics.keySet().removeAll(unknownTopics);
     }
     
     /**

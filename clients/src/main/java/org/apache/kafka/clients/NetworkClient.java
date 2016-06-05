@@ -35,7 +35,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -599,15 +598,14 @@ public class NetworkClient implements KafkaClient {
             Map<String, Errors> errors = response.errors();
             if (!errors.isEmpty())
                 log.warn("Error while fetching metadata with correlation id {} : {}", header.correlationId(), errors);
-            Collection<String> unknownTopics = response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION);
 
             // don't update the cluster if there are no valid nodes...the topic we want may still be in the process of being
             // created which means we will get errors and no nodes until it exists
             if (cluster.nodes().size() > 0) {
-                this.metadata.update(cluster, now, unknownTopics);
+                this.metadata.update(cluster, now);
             } else {
                 log.trace("Ignoring empty metadata response with correlation id {}.", header.correlationId());
-                this.metadata.failedUpdate(now, unknownTopics);
+                this.metadata.failedUpdate(now);
             }
         }
 

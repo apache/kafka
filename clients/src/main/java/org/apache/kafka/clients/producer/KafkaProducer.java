@@ -520,9 +520,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long remainingWaitMs = maxWaitMs;
         while (metadata.fetch().partitionsForTopic(topic) == null) {
             log.trace("Requesting metadata update for topic {}.", topic);
-            // Add the topic to metadata before requesting update to ensure that the topic is included
-            // in the metadata topic list since unknown topics are removed from the metadata
-            this.metadata.add(topic);
             int version = metadata.requestUpdate();
             sender.wakeup();
             metadata.awaitUpdate(version, remainingWaitMs);

@@ -1130,17 +1130,17 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
         coordinator.ensurePartitionAssignment();
 
-        metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds(), Collections.<String>emptyList());
+        metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds());
         assertTrue("Topic not found in metadata", metadata.containsTopic(topicName));
         time.sleep(Metadata.TOPIC_EXPIRY_MS * 2);
-        metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds(), Collections.<String>emptyList());
+        metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds());
         assertTrue("Topic expired", metadata.containsTopic(topicName));
-        metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds(), Collections.singleton(topicName));
+        metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds());
         metadata.update(Cluster.empty(), time.milliseconds());
         assertTrue("Topic expired", metadata.containsTopic(topicName));
 
         assertTrue(subscriptions.partitionAssignmentNeeded());
-        metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds(), Collections.<String>emptyList());
+        metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds());
         assertTrue(subscriptions.partitionAssignmentNeeded());
     }
 
