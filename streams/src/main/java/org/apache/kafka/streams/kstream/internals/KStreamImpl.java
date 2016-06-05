@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -148,28 +147,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return new KStreamImpl<>(topology, name, sourceNodes);
     }
 
-    @Override
-    public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, KeyValue<K1, V1>> mapper,
-                                        Serde<K1> keySerde,
-                                        Serde<V1> valueSerde,
-                                        String topic) {
-        String mapName = topology.newName(MAP_NAME);
-        String topicName = topic + REPARTITION_TOPIC_SUFFIX;
-        String sinkName = topology.newName(SINK_NAME);
-        String sourceName = topology.newName(SOURCE_NAME);
-
-        Serializer<K1> keySerializer = keySerde == null ? null : keySerde.serializer();
-        Serializer<V1> valSerializer = valueSerde == null ? null : valueSerde.serializer();
-        Deserializer<K1> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
-        Deserializer<V1> valDeserializer = valueSerde == null ? null : valueSerde.deserializer();
-
-        topology.addInternalTopic(topicName);
-        topology.addProcessor(mapName, new KStreamMap<>(mapper), this.name);
-        topology.addSink(sinkName, topicName, keySerializer, valSerializer, mapName);
-        topology.addSource(sourceName, keyDeserializer, valDeserializer, topicName);
-
-        return new KStreamImpl<>(topology, sourceName, Collections.singleton(sourceName));
-    }
 
     @Override
     public <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper) {
