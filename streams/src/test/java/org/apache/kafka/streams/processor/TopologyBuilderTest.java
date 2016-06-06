@@ -18,10 +18,10 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.processor.TopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
-import org.apache.kafka.streams.processor.TopologyBuilder.TopicsInfo;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.junit.Test;
@@ -33,6 +33,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -150,6 +151,46 @@ public class TopologyBuilderTest {
         expected.add("X-topic-3");
 
         assertEquals(expected, builder.sourceTopics("X"));
+    }
+
+    @Test
+    public void testPatternSourceTopic() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        Pattern expectedPattern = Pattern.compile("topic-\\d");
+        builder.addSource("source-1", expectedPattern);
+        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+    }
+
+    @Test
+    public void testAddMoreThanOnePatternSourceNode() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        Pattern expectedPattern = Pattern.compile("topics[A-Z]|.*-\\d");
+        builder.addSource("source-1", Pattern.compile("topics[A-Z]"));
+        builder.addSource("source-2", Pattern.compile(".*-\\d"));
+        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+    }
+
+    @Test
+    public void testSubscribeTopicNameAndPattern() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        Pattern expectedPattern = Pattern.compile(".*-\\d|topic-foo|topic-bar");
+        builder.addSource("source-1", "topic-foo", "topic-bar");
+        builder.addSource("source-2", Pattern.compile(".*-\\d"));
+        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void testPatternMatchesAlreadyProvidedTopicSource() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source-1", "foo");
+        builder.addSource("source-2", Pattern.compile("foo"));
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void testNamedTopicMatchesAlreadyProvidedPattern() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source-1", Pattern.compile("foo"));
+        builder.addSource("source-2", "foo");
     }
 
     @Test(expected = TopologyBuilderException.class)

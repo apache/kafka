@@ -118,8 +118,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         streamThread = (StreamThread) o;
         streamThread.partitionAssignor(this);
 
-        this.topicGroups = streamThread.builder.topicGroups(streamThread.applicationId);
-
         if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
             internalTopicManager = new InternalTopicManager(
                     (String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG),
@@ -228,11 +226,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // 2. within each client, tasks are assigned to consumer clients in round-robin manner.
         Map<UUID, Set<String>> consumersByClient = new HashMap<>();
         Map<UUID, ClientState<TaskId>> states = new HashMap<>();
-
+        SubscriptionUpdates subscriptionUpdates = streamThread.builder.getSubscriptionUpdates();
         // decode subscription info
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             String consumerId = entry.getKey();
             Subscription subscription = entry.getValue();
+
+            if (streamThread.builder.sourceTopicPattern() != null) {
+               // update the topic groups with the returned subscription list for regex pattern subscriptions
+                subscriptionUpdates.updateTopics(subscription.topics());
+            }
 
             SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
 
@@ -254,6 +257,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             state.prevAssignedTasks.addAll(info.standbyTasks);
             state.capacity = state.capacity + 1d;
         }
+
+        this.topicGroups = streamThread.builder.topicGroups(streamThread.applicationId);
 
         // ensure the co-partitioning topics within the group have the same number of partitions,
         // and enforce the number of partitions for those internal topics.
@@ -486,4 +491,29 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     public void setInternalTopicManager(InternalTopicManager internalTopicManager) {
         this.internalTopicManager = internalTopicManager;
     }
+
+    /**
+     * Used to capture subscribed topic via Patterns discovered during the
+     * partition assignment process.
+     */
+    public static  class SubscriptionUpdates {
+
+        private final Set<String> updatedTopicSubscriptions = new HashSet<>();
+
+
+        private  void updateTopics(Collection<String> topicNames) {
+            updatedTopicSubscriptions.clear();
+            updatedTopicSubscriptions.addAll(topicNames);
+        }
+
+        public Collection<String> getUpdates() {
+            return Collections.unmodifiableSet(new HashSet<>(updatedTopicSubscriptions));
+        }
+
+        public boolean hasUpdates() {
+            return !updatedTopicSubscriptions.isEmpty();
+        }
+
+    }
+
 }
