@@ -25,8 +25,8 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 /**
- * The roundrobin assignor lays out all the available partitions and all the available consumers. It
- * then proceeds to do a roundrobin assignment from partition to consumer. If the subscriptions of all consumer
+ * The round robin assignor lays out all the available partitions and all the available consumers. It
+ * then proceeds to do a round robin assignment from partition to consumer. If the subscriptions of all consumer
  * instances are identical, then the partitions will be uniformly distributed. (i.e., the partition ownership counts
  * will be within a delta of exactly one across all consumers.)
  *
@@ -36,6 +36,18 @@ import java.util.TreeSet;
  * The assignment will be:
  * C0: [t0p0, t0p2, t1p1]
  * C1: [t0p1, t1p0, t1p2]
+ *
+ * In case that the subscriptions are different across consumer instances, each consumer only gets
+ * assignment for its subscribed partitions. The assignment of topic partitions will be assigned to
+ * consumers that subscribed to the topics in a round robin fashion. For example, we have three
+ * consumers C0, C1, C2, and three topics t0, t1, t2, with 1, 2, and 3 partitions, respectively.
+ * Therefore, the partitions are t0p0, t1p0, t1p1, t2p0, t2p1, t2p2. C0 is subscribed to t0; C1 is
+ * subscribed to t0, t1; and C2 is subscribed to t0, t1, t2.
+ *
+ * Tha assignment will be:
+ * C0: [t0p0]
+ * C1: [t1p0]
+ * C2: [t1p1, t2p0, t2p1, t2p2]
  */
 public class RoundRobinAssignor extends AbstractPartitionAssignor {
 
