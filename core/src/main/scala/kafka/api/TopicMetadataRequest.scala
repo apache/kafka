@@ -57,7 +57,7 @@ case class TopicMetadataRequest(versionId: Short,
     topics.foldLeft(0)(_ + shortStringLength(_)) /* topics */
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     describe(true)
   }
 

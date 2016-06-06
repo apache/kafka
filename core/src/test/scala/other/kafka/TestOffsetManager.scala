@@ -255,7 +255,7 @@ object TestOffsetManager {
     var statsThread: StatsThread = null
     try {
       zkUtils = ZkUtils(zookeeper, 6000, 2000, false)
-      commitThreads = (0 to (threadCount-1)).map { threadId =>
+      commitThreads = (0 until threadCount).map { threadId =>
         new CommitThread(threadId, partitionCount, commitIntervalMs, zkUtils)
       }
 

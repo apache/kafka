@@ -227,6 +227,6 @@ class VerifiableProperties(val props: Properties) extends Logging {
     }
   }
   
-  override def toString(): String = props.toString
+  override def toString: String = props.toString
  
 }

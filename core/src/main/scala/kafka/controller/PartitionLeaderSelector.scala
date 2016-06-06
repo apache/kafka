@@ -183,7 +183,7 @@ class ControlledShutdownLeaderSelector(controllerContext: ControllerContext)
     val liveAssignedReplicas = assignedReplicas.filter(r => liveOrShuttingDownBrokerIds.contains(r))
 
     val newIsr = currentLeaderAndIsr.isr.filter(brokerId => !controllerContext.shuttingDownBrokerIds.contains(brokerId))
-    liveAssignedReplicas.filter(newIsr.contains).headOption match {
+    liveAssignedReplicas.find(newIsr.contains) match {
       case Some(newLeader) =>
         debug("Partition %s : current leader = %d, new leader = %d".format(topicAndPartition, currentLeader, newLeader))
         (LeaderAndIsr(newLeader, currentLeaderEpoch + 1, newIsr, currentLeaderIsrZkPathVersion + 1), liveAssignedReplicas)
