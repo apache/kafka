@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -522,11 +523,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String repartitionTopic = topicName + REPARTITION_TOPIC_SUFFIX;
         String sinkName = topology.newName(SINK_NAME);
         String sourceName = topology.newName(SOURCE_NAME);
+
+        Serializer<K> keySerializer = keySerde != null ? keySerde.serializer() : null;
+        Serializer<V> valSerializer = valSerde != null ? valSerde.serializer() : null;
+        Deserializer<K> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
+        Deserializer<V> valDeserializer = valSerde != null ? valSerde.deserializer() : null;
         topology.addInternalTopic(repartitionTopic);
-        topology.addSink(sinkName, repartitionTopic, keySerde.serializer(),
-                                valSerde.serializer(), name);
-        topology.addSource(sourceName, keySerde.deserializer(), valSerde
-                                    .deserializer(),
+        topology.addSink(sinkName, repartitionTopic, keySerializer,
+                                valSerializer, name);
+        topology.addSource(sourceName, keyDeserializer, valDeserializer,
                                   repartitionTopic);
 
         if (copartition) {

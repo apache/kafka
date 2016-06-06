@@ -228,6 +228,14 @@ public class KStreamRepartitionJoinTest {
         verifyCorrectOutput(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"));
     }
 
+    @Test
+    public void shouldLeftJoinTwoStreamsPartitionedTheSame() throws Exception {
+        produceMessages();
+        doLeftJoin(streamThree, streamTwo);
+        startStreams();
+        verifyCorrectOutput(Arrays.asList("10:A", "20:B", "30:C", "40:D", "50:E"));
+    }
+
     private void produceMessages()
         throws ExecutionException, InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(
@@ -328,6 +336,16 @@ public class KStreamRepartitionJoinTest {
                  valueJoiner,
                  JoinWindows.of("the-join").within(60 * 1000),
                  Serdes.Integer(),
+                 Serdes.Integer(),
+                 Serdes.String())
+            .to(Serdes.Integer(), Serdes.String(), outputTopic);
+    }
+
+    private void doLeftJoin(KStream<Integer, Integer> lhs,
+                        KStream<Integer, String> rhs) {
+        lhs.leftJoin(rhs,
+                 valueJoiner,
+                 JoinWindows.of("the-join").within(60 * 1000),
                  Serdes.Integer(),
                  Serdes.String())
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
