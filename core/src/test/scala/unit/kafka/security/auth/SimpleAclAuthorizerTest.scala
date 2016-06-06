@@ -336,7 +336,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
       aclId % 10 != 0
     }.toSet
 
-    TestUtils.assertConcurrent("Should support many concurrent calls", concurrentFuctions, 15000)
+    TestUtils.assertConcurrent("Should support many concurrent calls", concurrentFuctions, 30 * 1000)
 
     TestUtils.waitAndVerifyAcls(expectedAcls, simpleAclAuthorizer, commonResource)
     TestUtils.waitAndVerifyAcls(expectedAcls, simpleAclAuthorizer2, commonResource)
@@ -354,7 +354,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
       }
     }
 
-    TestUtils.assertConcurrent("Should support many concurrent calls", concurrentFuctions, 15000)
+    TestUtils.assertConcurrent("Should support many concurrent calls", concurrentFuctions, 30 * 1000)
 
     TestUtils.waitAndVerifyAcls(Set.empty[Acl], simpleAclAuthorizer, resource)
     TestUtils.waitAndVerifyAcls(Set.empty[Acl], simpleAclAuthorizer2, resource)
