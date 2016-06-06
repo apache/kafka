@@ -596,7 +596,7 @@ public class NetworkClient implements KafkaClient {
             Cluster cluster = response.cluster();
             // check if any topics metadata failed to get updated
             Map<String, Errors> errors = response.errors();
-            if (!errors.isEmpty())
+            if (metadata.getAndSetWarnStatus(response))
                 log.warn("Error while fetching metadata with correlation id {} : {}", header.correlationId(), errors);
 
             // don't update the cluster if there are no valid nodes...the topic we want may still be in the process of being

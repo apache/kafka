@@ -462,7 +462,9 @@ public class Fetcher<K, V> {
         partitions.put(topicPartition, new ListOffsetRequest.PartitionData(timestamp, 1));
         PartitionInfo info = metadata.fetch().partition(topicPartition);
         if (info == null) {
-            metadata.add(topicPartition.topic());
+            // FIXME: Will there ever be a ListOffset request for a partition that has not already
+            //        been added to the metadata during assign/subscribe?
+            // metadata.add(topicPartition.topic());
             log.debug("Partition {} is unknown for fetching offset, wait for metadata refresh", topicPartition);
             return RequestFuture.staleMetadata();
         } else if (info.leader() == null) {

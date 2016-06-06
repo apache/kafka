@@ -26,6 +26,8 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,6 +62,7 @@ public final class Metadata {
     private final List<Listener> listeners;
     private boolean needMetadataForAllTopics;
     private final boolean topicExpiryEnabled;
+    private final Set<String> unknownTopicsWarnSuppressed;
 
     /**
      * Create a metadata instance with reasonable defaults
@@ -91,6 +94,7 @@ public final class Metadata {
         this.topics = new HashMap<>();
         this.listeners = new ArrayList<>();
         this.needMetadataForAllTopics = false;
+        this.unknownTopicsWarnSuppressed = new HashSet<>();
     }
 
     /**
@@ -106,6 +110,7 @@ public final class Metadata {
      */
     public synchronized void add(String topic) {
         topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE);
+        unknownTopicsWarnSuppressed.remove(topic);
     }
 
     /**
@@ -166,6 +171,7 @@ public final class Metadata {
         this.topics.clear();
         for (String topic : topics)
             this.topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE);
+        unknownTopicsWarnSuppressed.removeAll(topics);
     }
 
     /**
@@ -281,6 +287,20 @@ public final class Metadata {
      */
     public interface Listener {
         void onMetadataUpdate(Cluster cluster);
+    }
+
+    protected synchronized boolean getAndSetWarnStatus(MetadataResponse response) {
+        boolean warn = false;
+        Map<String, Errors> errors = response.errors();
+        for (Map.Entry<String, Errors> entry : errors.entrySet()) {
+            if (entry.getValue() != Errors.UNKNOWN_TOPIC_OR_PARTITION || !unknownTopicsWarnSuppressed.contains(entry.getKey())) {
+                warn = true;
+                break;
+            }
+        }
+        unknownTopicsWarnSuppressed.clear();
+        unknownTopicsWarnSuppressed.addAll(response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION));
+        return warn;
     }
 
     private Cluster getClusterForCurrentTopics(Cluster cluster) {
