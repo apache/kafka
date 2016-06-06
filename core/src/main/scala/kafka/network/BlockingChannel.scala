@@ -22,7 +22,7 @@ import java.nio.channels._
 
 import kafka.api.RequestOrResponse
 import kafka.utils.{Logging, nonthreadsafe}
-import org.apache.kafka.common.network.{NetworkReceive, Selectable}
+import org.apache.kafka.common.network.NetworkReceive
 
 
 object BlockingChannel{
@@ -51,9 +51,9 @@ class BlockingChannel( val host: String,
     if(!connected) {
       try {
         channel = SocketChannel.open()
-        if(readBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
+        if(readBufferSize > 0)
           channel.socket.setReceiveBufferSize(readBufferSize)
-        if(writeBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
+        if(writeBufferSize > 0)
           channel.socket.setSendBufferSize(writeBufferSize)
         channel.configureBlocking(true)
         channel.socket.setSoTimeout(readTimeoutMs)
