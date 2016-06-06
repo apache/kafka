@@ -515,7 +515,7 @@ class ZkUtils(val zkClient: ZkClient,
 
   /**
     * Conditional delete the persistent path data, return true if it succeeds,
-    * otherwise (the current version is not the expected version)
+    * false otherwise (the current version is not the expected version)
     */
    def conditionalDeletePath(path: String, expectedVersion: Int): Boolean = {
     try {

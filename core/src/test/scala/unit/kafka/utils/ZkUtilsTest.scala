@@ -15,9 +15,7 @@
  * limitations under the License.
  */
 
-package unit.kafka.utils
-
-import java.util.UUID
+package kafka.utils
 
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert._
@@ -25,33 +23,33 @@ import org.junit.Test
 
 class ZkUtilsTest extends ZooKeeperTestHarness {
 
+  val path = "/path"
+
   @Test
   def testSuccessfulConditionalDeletePath() {
     // Given an existing path
-    val randomPath = "/" + UUID.randomUUID()
-    zkUtils.createPersistentPath(randomPath)
-    val (_, statAfterCreation) = zkUtils.readData(randomPath)
+    zkUtils.createPersistentPath(path)
+    val (_, statAfterCreation) = zkUtils.readData(path)
 
     // Deletion is successful when the version number matches
-    assertTrue("Deletion should be successful", zkUtils.conditionalDeletePath(randomPath, statAfterCreation.getVersion()))
-    val (optionalData, _) = zkUtils.readDataMaybeNull(randomPath)
+    assertTrue("Deletion should be successful", zkUtils.conditionalDeletePath(path, statAfterCreation.getVersion))
+    val (optionalData, _) = zkUtils.readDataMaybeNull(path)
     assertTrue("Node should be deleted", optionalData.isEmpty)
 
     // Deletion is successful when the node does not exist too
-    assertTrue("Deletion should be successful", zkUtils.conditionalDeletePath(randomPath, 0))
+    assertTrue("Deletion should be successful", zkUtils.conditionalDeletePath(path, 0))
   }
 
   @Test
   def testAbortedConditionalDeletePath() {
     // Given an existing path that gets updated
-    val randomPath = "/" + UUID.randomUUID()
-    zkUtils.createPersistentPath(randomPath)
-    val (_, statAfterCreation) = zkUtils.readData(randomPath)
-    zkUtils.updatePersistentPath(randomPath, "data")
+    zkUtils.createPersistentPath(path)
+    val (_, statAfterCreation) = zkUtils.readData(path)
+    zkUtils.updatePersistentPath(path, "data")
 
     // Deletion is aborted when the version number does not match
-    assertFalse("Deletion should be aborted", zkUtils.conditionalDeletePath(randomPath, statAfterCreation.getVersion))
-    val (optionalData, _) = zkUtils.readDataMaybeNull(randomPath)
+    assertFalse("Deletion should be aborted", zkUtils.conditionalDeletePath(path, statAfterCreation.getVersion))
+    val (optionalData, _) = zkUtils.readDataMaybeNull(path)
     assertTrue("Node should still be there", optionalData.isDefined)
   }
 }
