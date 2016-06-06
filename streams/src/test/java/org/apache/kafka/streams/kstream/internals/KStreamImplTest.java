@@ -127,7 +127,7 @@ public class KStreamImplTest {
             1 + // stream3
             1 + 2 + // streams2
             1 + 2 + // streams3
-            5 * 2 + 8 + // stream2-stream3 joins
+            5 * 2 + // stream2-stream3 joins
             1 + // to
             2 + // through
             1, // process

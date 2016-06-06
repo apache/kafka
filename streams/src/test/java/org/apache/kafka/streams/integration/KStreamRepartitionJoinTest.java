@@ -63,11 +63,14 @@ public class KStreamRepartitionJoinTest {
     private KeyValueMapper<Long, Integer, KeyValue<Integer, Integer>>
         keyMapper;
 
-    private final List<String> expected = Arrays.asList("1:A", "2:B", "3:C", "4:D", "5:E");
+    private final List<String>
+        expectedStreamOneTwoJoin = Arrays.asList("1:A", "2:B", "3:C", "4:D", "5:E");
     private KafkaStreams kafkaStreams;
     private String streamOneInput;
     private String streamTwoInput;
     private String outputTopic;
+    private String streamThreeInput;
+    private KStream<Integer, Integer> streamThree;
 
 
     @Before
@@ -83,6 +86,7 @@ public class KStreamRepartitionJoinTest {
 
         streamOne = builder.stream(Serdes.Long(), Serdes.Integer(), streamOneInput);
         streamTwo = builder.stream(Serdes.Integer(), Serdes.String(), streamTwoInput);
+        streamThree = builder.stream(Serdes.Integer(), Serdes.Integer(), streamThreeInput);
 
         valueJoiner = new ValueJoiner<Integer, String, String>() {
             @Override
@@ -108,12 +112,11 @@ public class KStreamRepartitionJoinTest {
     }
 
     @Test
-    public void shouldMapToDifferentKeyAndJoin() throws ExecutionException, InterruptedException {
-
+    public void shouldMapLhsAndJoin() throws ExecutionException, InterruptedException {
         produceMessages();
         doJoin(streamOne.map(keyMapper), streamTwo);
         startStreams();
-        verifyCorrectOutput();
+        verifyCorrectOutput(expectedStreamOneTwoJoin);
     }
 
     @Test
@@ -135,7 +138,7 @@ public class KStreamRepartitionJoinTest {
 
         doJoin(map1, map2);
         startStreams();
-        verifyCorrectOutput();
+        verifyCorrectOutput(expectedStreamOneTwoJoin);
 
     }
 
@@ -153,7 +156,7 @@ public class KStreamRepartitionJoinTest {
 
         doJoin(mapMapStream, streamTwo);
         startStreams();
-        verifyCorrectOutput();
+        verifyCorrectOutput(expectedStreamOneTwoJoin);
     }
 
 
@@ -172,7 +175,7 @@ public class KStreamRepartitionJoinTest {
 
         doJoin(keySelected, streamTwo);
         startStreams();
-        verifyCorrectOutput();
+        verifyCorrectOutput(expectedStreamOneTwoJoin);
     }
 
 
@@ -191,7 +194,38 @@ public class KStreamRepartitionJoinTest {
 
         doJoin(flatMapped, streamTwo);
         startStreams();
-        verifyCorrectOutput();
+        verifyCorrectOutput(expectedStreamOneTwoJoin);
+    }
+
+    @Test
+    public void shouldJoinTwoStreamsPartitionedTheSame() throws Exception {
+        produceMessages();
+        doJoin(streamThree, streamTwo);
+        startStreams();
+        verifyCorrectOutput(Arrays.asList("10:A", "20:B", "30:C", "40:D", "50:E"));
+    }
+
+    @Test
+    public void shouldJoinWithRhsStreamMapped() throws Exception {
+        produceMessages();
+
+        ValueJoiner<String, Integer, String> joiner = new ValueJoiner<String, Integer, String>() {
+            @Override
+            public String apply(String value1, Integer value2) {
+                return value1 + ":" + value2;
+            }
+        };
+        streamTwo
+            .join(streamOne.map(keyMapper),
+                  joiner,
+                  JoinWindows.of("the-join").within(60 * 1000),
+                  Serdes.Integer(),
+                  Serdes.String(),
+                  Serdes.Integer())
+            .to(Serdes.Integer(), Serdes.String(), outputTopic);
+
+        startStreams();
+        verifyCorrectOutput(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"));
     }
 
     private void produceMessages()
@@ -223,14 +257,29 @@ public class KStreamRepartitionJoinTest {
                 IntegerSerializer.class,
                 StringSerializer.class,
                 new Properties()));
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            streamThreeInput,
+            Arrays.asList(
+                new KeyValue<>(1, 10),
+                new KeyValue<>(2, 20),
+                new KeyValue<>(3, 30),
+                new KeyValue<>(4, 40),
+                new KeyValue<>(5, 50)),
+            IntegrationTestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                IntegerSerializer.class,
+                IntegerSerializer.class,
+                new Properties()));
     }
 
     private void createTopics() {
         streamOneInput = "stream-one-" + testNo;
         streamTwoInput = "stream-two-" + testNo;
+        streamThreeInput = "stream-three-" + testNo;
         outputTopic = "output-" + testNo;
         CLUSTER.createTopic(streamOneInput, 5, 1);
         CLUSTER.createTopic(streamTwoInput, 5, 1);
+        CLUSTER.createTopic(streamThreeInput, 5, 1);
         CLUSTER.createTopic(outputTopic);
     }
 
@@ -255,7 +304,7 @@ public class KStreamRepartitionJoinTest {
 
         final List<String> received = new ArrayList<>();
         final long now = System.currentTimeMillis();
-        while (received.size() != numMessages
+        while (received.size() < numMessages
                && System.currentTimeMillis() - now < TimeUnit.MILLISECONDS
             .convert(1, TimeUnit.MINUTES)) {
             final ConsumerRecords<Integer, ?> records = consumer.poll(10);
@@ -268,8 +317,9 @@ public class KStreamRepartitionJoinTest {
         return received;
     }
 
-    private void verifyCorrectOutput() {
-        assertThat(receiveMessages(new StringDeserializer(), 5), is(expected));
+    private void verifyCorrectOutput(List<String> expectedOutput) {
+        assertThat(receiveMessages(new StringDeserializer(), expectedOutput.size()),
+                   is(expectedOutput));
     }
 
     private void doJoin(KStream<Integer, Integer> lhs,

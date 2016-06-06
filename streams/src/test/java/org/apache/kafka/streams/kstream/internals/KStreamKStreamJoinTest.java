@@ -82,7 +82,7 @@ public class KStreamKStreamJoinTest {
 
         Collection<Set<String>> copartitionGroups = builder.copartitionGroups("applicationId");
 
-        assertEquals(3, copartitionGroups.size());
+        assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         driver = new KStreamTestDriver(builder, stateDir);
@@ -180,7 +180,7 @@ public class KStreamKStreamJoinTest {
 
         Collection<Set<String>> copartitionGroups = builder.copartitionGroups("applicationId");
 
-        assertEquals(3, copartitionGroups.size());
+        assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         driver = new KStreamTestDriver(builder, stateDir);
@@ -280,7 +280,7 @@ public class KStreamKStreamJoinTest {
 
         Collection<Set<String>> copartitionGroups = builder.copartitionGroups("applicationId");
 
-        assertEquals(3, copartitionGroups.size());
+        assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         driver = new KStreamTestDriver(builder, stateDir);
