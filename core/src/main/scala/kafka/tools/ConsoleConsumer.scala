@@ -214,7 +214,7 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
-    val consumerPropertyOpt = parser.accepts("consumer-property", "A mechanism to pass user-defined properties in the form key=value to the consumer. ")
+    val consumerPropertyOpt = parser.accepts("consumer-property", "A mechanism to pass user-defined properties in the form key=value to the consumer.")
       .withRequiredArg
       .describedAs("consumer_prop")
       .ofType(classOf[String])
