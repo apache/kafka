@@ -402,7 +402,7 @@ class Message(val buffer: ByteBuffer,
       throw new IllegalArgumentException(s"Invalid timestamp $timestamp. Timestamp must be ${NoTimestamp} when magic = ${MagicValue_V0}")
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     if (magic == MagicValue_V0)
       s"Message(magic = $magic, attributes = $attributes, crc = $checksum, key = $key, payload = $payload)"
     else

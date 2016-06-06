@@ -186,11 +186,11 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     }
     assertEquals("Should have fetched 2 messages", 2, messageSet.size)
     // Message 1
-    assertTrue(ByteBuffer.wrap("test1".getBytes).equals(messageSet(0).message.payload))
-    assertTrue(ByteBuffer.wrap("test".getBytes).equals(messageSet(0).message.key))
-    assertTrue(messageSet(0).message.timestamp >= startTime && messageSet(0).message.timestamp < endTime)
-    assertEquals(TimestampType.CREATE_TIME, messageSet(0).message.timestampType)
-    assertEquals(Message.MagicValue_V1, messageSet(0).message.magic)
+    assertTrue(ByteBuffer.wrap("test1".getBytes).equals(messageSet.head.message.payload))
+    assertTrue(ByteBuffer.wrap("test".getBytes).equals(messageSet.head.message.key))
+    assertTrue(messageSet.head.message.timestamp >= startTime && messageSet.head.message.timestamp < endTime)
+    assertEquals(TimestampType.CREATE_TIME, messageSet.head.message.timestampType)
+    assertEquals(Message.MagicValue_V1, messageSet.head.message.magic)
 
     // Message 2
     assertTrue(ByteBuffer.wrap("test2".getBytes).equals(messageSet(1).message.payload))

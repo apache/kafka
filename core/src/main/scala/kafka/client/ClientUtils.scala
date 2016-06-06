@@ -142,11 +142,11 @@ object ClientUtils extends Logging{
 
      var offsetManagerChannelOpt: Option[BlockingChannel] = None
 
-     while (!offsetManagerChannelOpt.isDefined) {
+     while (offsetManagerChannelOpt.isEmpty) {
 
        var coordinatorOpt: Option[BrokerEndPoint] = None
 
-       while (!coordinatorOpt.isDefined) {
+       while (coordinatorOpt.isEmpty) {
          try {
            if (!queryChannel.isConnected)
              queryChannel = channelToAnyBroker(zkUtils)

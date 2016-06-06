@@ -67,7 +67,7 @@ class CleanerTest extends JUnitSuite {
     while(log.numberOfSegments < 4)
       log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
     val keysFound = keysInLog(log)
-    assertEquals((0L until log.logEndOffset), keysFound)
+    assertEquals(0L until log.logEndOffset, keysFound)
     
     // pretend we have the following keys
     val keys = immutable.ListSet(1, 3, 5, 7, 9)
@@ -211,7 +211,7 @@ class CleanerTest extends JUnitSuite {
     // grouping by very large values should result in a single group with all the segments in it
     var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue)
     assertEquals(1, groups.size)
-    assertEquals(log.numberOfSegments, groups(0).size)
+    assertEquals(log.numberOfSegments, groups.head.size)
     checkSegmentOrder(groups)
     
     // grouping by very small values should result in all groups having one entry

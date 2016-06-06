@@ -64,7 +64,7 @@ class Partition(val topic: String,
   private var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   this.logIdent = "Partition [%s,%d] on broker %d: ".format(topic, partitionId, localBrokerId)
 
-  private def isReplicaLocal(replicaId: Int) : Boolean = (replicaId == localBrokerId)
+  private def isReplicaLocal(replicaId: Int) : Boolean = replicaId == localBrokerId
   val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
 
   newGauge("UnderReplicated",
@@ -158,7 +158,7 @@ class Partition(val topic: String,
   }
 
   def getLeaderEpoch(): Int = {
-    return this.leaderEpoch
+    this.leaderEpoch
   }
 
   /**
@@ -381,9 +381,9 @@ class Partition(val topic: String,
       leaderReplicaIfLocal() match {
         case Some(leaderReplica) =>
           val outOfSyncReplicas = getOutOfSyncReplicas(leaderReplica, replicaMaxLagTimeMs)
-          if(outOfSyncReplicas.size > 0) {
+          if(outOfSyncReplicas.nonEmpty) {
             val newInSyncReplicas = inSyncReplicas -- outOfSyncReplicas
-            assert(newInSyncReplicas.size > 0)
+            assert(newInSyncReplicas.nonEmpty)
             info("Shrinking ISR for partition [%s,%d] from %s to %s".format(topic, partitionId,
               inSyncReplicas.map(_.brokerId).mkString(","), newInSyncReplicas.map(_.brokerId).mkString(",")))
             // update ISR in zk and in cache
@@ -421,7 +421,7 @@ class Partition(val topic: String,
     val candidateReplicas = inSyncReplicas - leaderReplica
 
     val laggingReplicas = candidateReplicas.filter(r => (time.milliseconds - r.lastCaughtUpTimeMs) > maxLagMs)
-    if(laggingReplicas.size > 0)
+    if(laggingReplicas.nonEmpty)
       debug("Lagging replicas for partition %s are %s".format(TopicAndPartition(topic, partitionId), laggingReplicas.map(_.brokerId).mkString(",")))
 
     laggingReplicas
@@ -484,7 +484,7 @@ class Partition(val topic: String,
   }
 
   override def equals(that: Any): Boolean = {
-    if(!(that.isInstanceOf[Partition]))
+    if(!that.isInstanceOf[Partition])
       return false
     val other = that.asInstanceOf[Partition]
     if(topic.equals(other.topic) && partitionId == other.partitionId)
@@ -496,7 +496,7 @@ class Partition(val topic: String,
     31 + topic.hashCode() + 17*partitionId
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     val partitionString = new StringBuilder
     partitionString.append("Topic: " + topic)
     partitionString.append("; Partition: " + partitionId)

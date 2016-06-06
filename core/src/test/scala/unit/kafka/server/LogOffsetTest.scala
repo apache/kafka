@@ -132,7 +132,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
       val consumerOffsets =
         simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
 
-      if(consumerOffsets(0) == 1) {
+      if(consumerOffsets.head == 1) {
         offsetChanged = true
       }
     }
