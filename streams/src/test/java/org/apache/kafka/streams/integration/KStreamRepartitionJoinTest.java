@@ -236,22 +236,99 @@ public class KStreamRepartitionJoinTest {
         verifyCorrectOutput(Arrays.asList("10:A", "20:B", "30:C", "40:D", "50:E"));
     }
 
+    @Test
+    public void shouldMapLhsAndLeftJoin() throws ExecutionException, InterruptedException {
+        produceMessages();
+        doLeftJoin(streamOne.map(keyMapper), streamTwo);
+        startStreams();
+        verifyCorrectOutput(expectedStreamOneTwoJoin);
+    }
+
+    @Test
+    public void shouldMapBothStreamsAndLeftJoin() throws Exception {
+        produceMessages();
+
+        final KStream<Integer, Integer>
+            map1 =
+            streamOne.map(keyMapper);
+
+        final KStream<Integer, String> map2 = streamTwo.map(
+            new KeyValueMapper<Integer, String, KeyValue<Integer, String>>() {
+                @Override
+                public KeyValue<Integer, String> apply(Integer key,
+                                                       String value) {
+                    return new KeyValue<>(key, value);
+                }
+            });
+
+        doLeftJoin(map1, map2);
+        startStreams();
+
+        List<String> received = receiveMessages(new StringDeserializer(), 5);
+
+        if (!received.equals(expectedStreamOneTwoJoin)) {
+            produceToStreamOne();
+            verifyCorrectOutput(expectedStreamOneTwoJoin);
+        }
+
+    }
+
+    @Test
+    public void shouldLeftJoinWithRhsStreamMapped() throws Exception {
+        produceMessages();
+
+        ValueJoiner<String, Integer, String> joiner = new ValueJoiner<String, Integer, String>() {
+            @Override
+            public String apply(String value1, Integer value2) {
+                return value1 + ":" + value2;
+            }
+        };
+        streamTwo
+            .leftJoin(streamOne.map(keyMapper),
+                  joiner,
+                  JoinWindows.of("the-join").within(60 * 1000),
+                  Serdes.Integer(),
+                  Serdes.String(),
+                  Serdes.Integer())
+            .to(Serdes.Integer(), Serdes.String(), outputTopic);
+
+        startStreams();
+        List<String> received = receiveMessages(new StringDeserializer(), 5);
+
+        List<String> expectedMessages = Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5");
+        if (!received.equals(expectedMessages)) {
+            produceToStreamTwo();
+            verifyCorrectOutput(expectedMessages);
+        }
+    }
+
+
     private void produceMessages()
         throws ExecutionException, InterruptedException {
+        produceToStreamOne();
+        produceToStreamTwo();
+        produceToStreamThree();
+    }
+
+    private void produceToStreamThree()
+        throws ExecutionException, InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(
-            streamOneInput,
+            streamThreeInput,
             Arrays.asList(
-                new KeyValue<>(10L, 1),
-                new KeyValue<>(5L, 2),
-                new KeyValue<>(12L, 3),
-                new KeyValue<>(15L, 4),
-                new KeyValue<>(20L, 5)),
+                new KeyValue<>(1, 10),
+                new KeyValue<>(2, 20),
+                new KeyValue<>(3, 30),
+                new KeyValue<>(4, 40),
+                new KeyValue<>(5, 50)),
             IntegrationTestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
-                LongSerializer.class,
+                IntegerSerializer.class,
                 IntegerSerializer.class,
                 new Properties()));
+    }
 
+    private void produceToStreamTwo()
+        throws ExecutionException, InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             streamTwoInput,
             Arrays.asList(
@@ -265,17 +342,21 @@ public class KStreamRepartitionJoinTest {
                 IntegerSerializer.class,
                 StringSerializer.class,
                 new Properties()));
+    }
+
+    private void produceToStreamOne()
+        throws ExecutionException, InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(
-            streamThreeInput,
+            streamOneInput,
             Arrays.asList(
-                new KeyValue<>(1, 10),
-                new KeyValue<>(2, 20),
-                new KeyValue<>(3, 30),
-                new KeyValue<>(4, 40),
-                new KeyValue<>(5, 50)),
+                new KeyValue<>(10L, 1),
+                new KeyValue<>(5L, 2),
+                new KeyValue<>(12L, 3),
+                new KeyValue<>(15L, 4),
+                new KeyValue<>(20L, 5)),
             IntegrationTestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
-                IntegerSerializer.class,
+                LongSerializer.class,
                 IntegerSerializer.class,
                 new Properties()));
     }
@@ -325,9 +406,9 @@ public class KStreamRepartitionJoinTest {
         return received;
     }
 
-    private void verifyCorrectOutput(List<String> expectedOutput) {
-        assertThat(receiveMessages(new StringDeserializer(), expectedOutput.size()),
-                   is(expectedOutput));
+    private void verifyCorrectOutput(List<String> expectedMessages) {
+        assertThat(receiveMessages(new StringDeserializer(), expectedMessages.size()),
+                   is(expectedMessages));
     }
 
     private void doJoin(KStream<Integer, Integer> lhs,
@@ -342,12 +423,13 @@ public class KStreamRepartitionJoinTest {
     }
 
     private void doLeftJoin(KStream<Integer, Integer> lhs,
-                        KStream<Integer, String> rhs) {
+                            KStream<Integer, String> rhs) {
         lhs.leftJoin(rhs,
-                 valueJoiner,
-                 JoinWindows.of("the-join").within(60 * 1000),
-                 Serdes.Integer(),
-                 Serdes.String())
+                     valueJoiner,
+                     JoinWindows.of("the-join").within(60 * 1000),
+                     Serdes.Integer(),
+                     Serdes.Integer(),
+                     Serdes.String())
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
     }
 

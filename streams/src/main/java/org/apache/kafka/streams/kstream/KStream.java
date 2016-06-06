@@ -411,6 +411,8 @@ public interface KStream<K, V> {
      * @param windows           the specification of the {@link JoinWindows}
      * @param keySerde          key serdes for materializing the other stream,
      *                          if not specified the default serdes defined in the configs will be used
+     * @param thisValueSerde    value serdes for materializing this stream,
+     *                          if not specified the default serdes defined in the configs will be used
      * @param otherValueSerde   value serdes for materializing the other stream,
      *                          if not specified the default serdes defined in the configs will be used
      * @param <V1>              the value type of the other stream
@@ -424,6 +426,7 @@ public interface KStream<K, V> {
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
             Serde<K> keySerde,
+            Serde<V> thisValSerde,
             Serde<V1> otherValueSerde);
 
     /**
