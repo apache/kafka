@@ -65,6 +65,7 @@ public class TopologyBuilder {
     private final List<Set<String>> copartitionSourceGroups = new ArrayList<>();
     private final HashMap<String, String[]> nodeToSourceTopics = new HashMap<>();
     private final HashMap<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
+    private final HashMap<String, Pattern> topicToPatterns = new HashMap<>();
     private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
     private final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
     private Map<Integer, Set<String>> nodeGroups = null;
@@ -117,7 +118,7 @@ public class TopologyBuilder {
         }
     }
 
-    private static class SourceNodeFactory extends NodeFactory {
+    private class SourceNodeFactory extends NodeFactory {
         private final String[] topics;
         public final Pattern pattern;
         private Deserializer keyDeserializer;
@@ -139,6 +140,13 @@ public class TopologyBuilder {
             List<String> matchedTopics = new ArrayList<>();
             for (String update : subscribedTopics) {
                 if (this.pattern.matcher(update).matches()) {
+                    if (topicToPatterns.containsKey(update)) {
+                        if (topicToPatterns.get(update) != this.pattern) {
+                            throw new TopologyBuilderException("Topic " + update + " already matched check for overlapping regex patterns");
+                        }
+                    } else {
+                        topicToPatterns.put(update, this.pattern);
+                    }
                     matchedTopics.add(update);
                 }
             }
