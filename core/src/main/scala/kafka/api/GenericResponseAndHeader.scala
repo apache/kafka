@@ -32,7 +32,7 @@ private[kafka] abstract class GenericResponseAndHeader(val correlationId: Int,
     body.sizeOf()
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     describe(true)
   }
 

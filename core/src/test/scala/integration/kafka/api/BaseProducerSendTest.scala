@@ -56,7 +56,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     super.setUp()
 
     // TODO: we need to migrate to new consumers when 0.9 is final
-    consumer1 = new SimpleConsumer("localhost", servers(0).boundPort(), 100, 1024 * 1024, "")
+    consumer1 = new SimpleConsumer("localhost", servers.head.boundPort(), 100, 1024 * 1024, "")
     consumer2 = new SimpleConsumer("localhost", servers(1).boundPort(), 100, 1024 * 1024, "")
   }
 
@@ -298,7 +298,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       }
 
       // make sure the fetched messages also respect the partitioning and ordering
-      val fetchResponse1 = if (leader1.get == configs(0).brokerId) {
+      val fetchResponse1 = if (leader1.get == configs.head.brokerId) {
         consumer1.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
       } else {
         consumer2.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
@@ -307,7 +307,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       assertEquals("Should have fetched " + numRecords + " messages", numRecords, messageSet1.size)
 
       // TODO: also check topic and partition after they are added in the return messageSet
-      for (i <- 0 to numRecords - 1) {
+      for (i <- 0 until numRecords) {
         assertEquals(new Message(bytes = ("value" + (i + 1)).getBytes, now, Message.MagicValue_V1), messageSet1(i).message)
         assertEquals(i.toLong, messageSet1(i).offset)
       }
@@ -386,7 +386,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
             assertEquals("java.lang.IllegalStateException: Producer is closed forcefully.", e.getMessage)
         }
       }
-      val fetchResponse = if (leader0.get == configs(0).brokerId) {
+      val fetchResponse = if (leader0.get == configs.head.brokerId) {
         consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
       } else {
         consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
@@ -423,13 +423,13 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       val producer = createProducer(brokerList, lingerMs = Long.MaxValue)
       try {
         // send message to partition 0
-        val responses = ((0 until numRecords) map (i => producer.send(record, new CloseCallback(producer))))
+        val responses = (0 until numRecords) map (i => producer.send(record, new CloseCallback(producer)))
         assertTrue("No request is complete.", responses.forall(!_.isDone()))
         // flush the messages.
         producer.flush()
         assertTrue("All request are complete.", responses.forall(_.isDone()))
         // Check the messages received by broker.
-        val fetchResponse = if (leader.get == configs(0).brokerId) {
+        val fetchResponse = if (leader.get == configs.head.brokerId) {
           consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
         } else {
           consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
@@ -446,7 +446,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   @Test
   def testSendWithInvalidCreateTime() {
     val topicProps = new Properties()
-    topicProps.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000");
+    topicProps.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000")
     TestUtils.createTopic(zkUtils, topic, 1, 2, servers, topicProps)
 
     val producer = createProducer(brokerList = brokerList)

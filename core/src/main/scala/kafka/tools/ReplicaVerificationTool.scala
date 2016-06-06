@@ -180,7 +180,7 @@ object ReplicaVerificationTool extends Logging {
                            fetchSize = fetchSize,
                            maxWait = maxWaitMs,
                            minBytes = 1,
-                           doVerification = (brokerId == verificationBrokerId))
+                           doVerification = brokerId == verificationBrokerId)
     }
 
     Runtime.getRuntime.addShutdownHook(new Thread() {

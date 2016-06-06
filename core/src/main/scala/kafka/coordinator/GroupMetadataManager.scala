@@ -108,7 +108,7 @@ class GroupMetadataManager(val brokerId: Int,
 
   def isGroupLoading(groupId: String): Boolean = loadingPartitions synchronized loadingPartitions.contains(partitionFor(groupId))
 
-  def isLoading(): Boolean = loadingPartitions synchronized !loadingPartitions.isEmpty
+  def isLoading(): Boolean = loadingPartitions synchronized loadingPartitions.nonEmpty
 
   /**
    * Get the group associated with the given groupId, or null if not found

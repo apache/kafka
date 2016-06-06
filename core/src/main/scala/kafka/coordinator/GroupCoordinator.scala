@@ -647,7 +647,7 @@ class GroupCoordinator(val brokerId: Int,
   def onCompleteJoin(group: GroupMetadata) {
     group synchronized {
       val failedMembers = group.notYetRejoinedMembers
-      if (group.isEmpty || !failedMembers.isEmpty) {
+      if (group.isEmpty || failedMembers.nonEmpty) {
         failedMembers.foreach { failedMember =>
           group.remove(failedMember.memberId)
           // TODO: cut the socket connection to the client

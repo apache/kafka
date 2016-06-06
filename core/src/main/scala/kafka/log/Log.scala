@@ -802,7 +802,7 @@ class Log(val dir: File,
     }
   }
 
-  override def toString() = "Log(" + dir + ")"
+  override def toString = "Log(" + dir + ")"
 
   /**
    * This method performs an asynchronous log segment delete by doing the following:
