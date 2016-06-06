@@ -20,9 +20,10 @@ package kafka.log
 import java.io.File
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
-import kafka.utils.{Logging, Pool}
+import kafka.utils.{Time, Logging, Pool}
 import kafka.server.OffsetCheckpoint
 import collection.mutable
+import collection.immutable
 import java.util.concurrent.locks.ReentrantLock
 import kafka.utils.CoreUtils._
 import java.util.concurrent.TimeUnit
@@ -72,11 +73,12 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
 
    /**
     * Choose the log to clean next and add it to the in-progress set. We recompute this
-    * every time off the full set of logs to allow logs to be dynamically added to the pool of logs
+    * each time from the full set of logs to allow logs to be dynamically added to the pool of logs
     * the log manager maintains.
     */
-  def grabFilthiestLog(): Option[LogToClean] = {
+  def grabFilthiestLog(time: Time): Option[LogToClean] = {
     inLock(lock) {
+      val now = time.milliseconds
       val lastClean = allCleanerCheckpoints()
       val dirtyLogs = logs.filter {
         case (topicAndPartition, log) => log.config.compact  // skip any logs marked for delete rather than dedupe
@@ -84,20 +86,9 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
         case (topicAndPartition, log) => inProgress.contains(topicAndPartition) // skip any logs already in-progress
       }.map {
         case (topicAndPartition, log) => // create a LogToClean instance for each
-          // if the log segments are abnormally truncated and hence the checkpointed offset
-          // is no longer valid, reset to the log starting offset and log the error event
-          val logStartOffset = log.logSegments.head.baseOffset
-          val firstDirtyOffset = {
-            val offset = lastClean.getOrElse(topicAndPartition, logStartOffset)
-            if (offset < logStartOffset) {
-              error("Resetting first dirty offset to log start offset %d since the checkpointed offset %d is invalid."
-                    .format(logStartOffset, offset))
-              logStartOffset
-            } else {
-              offset
-            }
-          }
-          LogToClean(topicAndPartition, log, firstDirtyOffset)
+          val (firstDirtyOffset, firstUncleanableDirtyOffset) = LogCleanerManager.cleanableOffsets(log, topicAndPartition,
+            lastClean, now)
+          LogToClean(topicAndPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset)
       }.filter(ltc => ltc.totalBytes > 0) // skip any empty logs
 
       this.dirtiestLogCleanableRatio = if (dirtyLogs.nonEmpty) dirtyLogs.max.cleanableRatio else 0
@@ -238,5 +229,94 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
           throw new IllegalStateException("In-progress partition %s cannot be in %s state.".format(topicAndPartition, s))
       }
     }
+  }
+}
+
+private[log] object LogCleanerManager extends Logging {
+
+  /**
+    * Returns the range of dirty offsets that can be cleaned.
+    *
+    * @param log the log
+    * @param lastClean the map of checkpointed offsets
+    * @param now the current time in milliseconds of the cleaning operation
+    * @return the lower (inclusive) and upper (exclusive) offsets
+    */
+  def cleanableOffsets(log: Log, topicAndPartition: TopicAndPartition, lastClean: immutable.Map[TopicAndPartition, Long], now: Long): (Long, Long) = {
+
+    // the checkpointed offset, ie., the first offset of the next dirty segment
+     val lastCleanOffset: Option[Long] = lastClean.get(topicAndPartition)
+
+    // If the log segments were truncated, the checkpointed offset is no longer valid;
+    // reset to the log starting offset and log the error
+    val logStartOffset = log.logSegments.head.baseOffset
+    val firstDirtyOffset = {
+      val offset = lastCleanOffset.getOrElse(logStartOffset)
+      if (offset < logStartOffset) {
+        error("Resetting first dirty offset to log start offset %d since the checkpointed offset %d is invalid."
+          .format(logStartOffset, offset))
+        logStartOffset
+      } else {
+        offset
+      }
+    }
+
+    // dirty log segments
+    val dirtySegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset).toArray :+ log.activeSegment
+
+    val compactionLagMs = math.max(log.config.compactionLagMs, 0L)
+    val compactionLagBytes = math.max(log.config.compactionLagBytes, 0L)
+    val compactionLagMessages = math.max(log.config.compactionLagMessages, 0L)
+
+    // computes the size in bytes of a segment
+    def segmentBytes(segment: LogSegment): Long = { segment.size }
+
+    // computes the number of messages in a segment
+    def segmentMessages(segment: LogSegment): Long = { segment.nextOffset() - segment.baseOffset }
+
+    // determines the highest offset for which the cumulative lag first exceeds the specified minimum lag
+    def offsetAtLag(segmentSize: (LogSegment) => Long, minLag: Long): Option[Long] = {
+
+      // helper class to represent the offset with a cumulative size (i.e. lag in bytes, message count, etc.)
+      case class OffsetLag(offset: Long, lag: Long)
+
+      dirtySegments
+        .reverseMap { seg => OffsetLag(seg.baseOffset, segmentSize(seg)) }
+        .scanLeft(OffsetLag(Long.MaxValue, 0L)) { (acc, e) => OffsetLag(e.offset, acc.lag + e.lag) }
+        .find { t => t.lag > minLag }
+        .map(_.offset)
+    }
+
+    // find first segment that cannot be cleaned
+    // neither the active segment, nor segments with messages closer to the end of the log than any of the compaction lag limits
+    // (time, bytes, or message count) may be cleaned
+    val firstUncleanableDirtyOffset = Seq (
+
+        // the active segment is always uncleanable
+        Option(log.activeSegment.baseOffset),
+
+        // the first segment whose last modified time is within a time lag of now
+        if (compactionLagMs > 0) {
+          dirtySegments.find {
+            case segment =>
+              debug(s"log=${log.name} segment.baseOffset=${segment.baseOffset} segment.lastModified=${segment.lastModified} now - lag=${now - compactionLagMs}")
+              segment.lastModified > now - compactionLagMs
+          } map(_.baseOffset)
+        } else None,
+
+        // the first segment without enough cumulative bytes after it
+        if (compactionLagBytes > 0) {
+          offsetAtLag(segmentBytes, compactionLagBytes)
+        } else None,
+
+        // the first segment without enough messages after it
+        if (compactionLagMessages > 0) {
+          offsetAtLag(segmentMessages, compactionLagMessages)
+        } else None
+      ).flatten.min
+
+    debug(s"log=${log.name} topicAndPartition=${topicAndPartition} lastClean=$lastCleanOffset now=$now => firstDirtyOffset=$firstDirtyOffset firstUncleanableOffset=$firstUncleanableDirtyOffset activeSegmentBaseOffset=${log.activeSegment.baseOffset}")
+
+    (firstDirtyOffset, firstUncleanableDirtyOffset)
   }
 }

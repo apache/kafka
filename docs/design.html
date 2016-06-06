@@ -345,13 +345,17 @@ This will start the pool of cleaner threads. To enable log cleaning on a particu
   <pre>  log.cleanup.policy=compact</pre>
 This can be done either at topic creation time or using the alter topic command.
 <p>
+The log cleaner can be configured retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting one or more of the compaction lags.
+  <pre>  log.cleaner.min.compaction.lag.ms</pre>
+  <pre>  log.cleaner.min.compaction.lag.bytes</pre>
+  <pre>  log.cleaner.min.compaction.lag.messages</pre>
+
+These can be used to set constraints on the minimum message age, aggregate size, and/or count respectively
+that may be compacted. If none are set, all log segments are eligible for compaction except for the last segment, i.e. the one currently being written to. The active segment will not be compacted even if all of the compaction lag constraints are satisfied.
+</p>
+<p>
 Further cleaner configurations are described <a href="/documentation.html#brokerconfigs">here</a>.
 
-<h4><a id="design_compactionlimitations" href="#design_compactionlimitations">Log Compaction Limitations</a></h4>
-
-<ol>
-  <li>You cannot configure yet how much log is retained without compaction (the "head" of the log).  Currently all segments are eligible except for the last segment, i.e. the one currently being written to.</li>
-</ol>
 <h3><a id="design_quotas" href="#design_quotas">4.9 Quotas</a></h3>
 <p>
     Starting in 0.9, the Kafka cluster has the ability to enforce quotas on produce and fetch requests. Quotas are basically byte-rate thresholds defined per client-id. A client-id logically identifies an application making a request. Hence a single client-id can span multiple producer and consumer instances and the quota will apply for all of them as a single entity i.e. if client-id="test-client" has a produce quota of 10MB/sec, this is shared across all instances with that same id.
