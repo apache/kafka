@@ -73,6 +73,7 @@ object ConsoleConsumer extends Logging {
       process(conf.maxMessages, conf.formatter, consumer, System.out, conf.skipMessageOnError)
     } finally {
       consumer.cleanup()
+      conf.formatter.close()
       reportRecordCount()
 
       // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
@@ -154,7 +155,6 @@ object ConsoleConsumer extends Logging {
     if (gotError) {
       // This means no one is listening to our output stream any more, time to shutdown
       System.err.println("Unable to write to standard out, closing consumer.")
-      formatter.close()
     }
     gotError
   }
