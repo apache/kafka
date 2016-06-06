@@ -18,10 +18,10 @@
 package kafka.coordinator
 
 import kafka.utils.nonthreadsafe
-
 import java.util.UUID
 
-import org.apache.kafka.common.protocol.Errors
+import kafka.common.OffsetAndMetadata
+import org.apache.kafka.common.TopicPartition
 
 import collection.mutable
 
@@ -135,10 +135,14 @@ case class GroupSummary(state: String,
  *  3. leader id
  */
 @nonthreadsafe
-private[coordinator] class GroupMetadata(val groupId: String, val protocolType: String) {
+private[coordinator] class GroupMetadata(val groupId: String) {
 
-  private val members = new mutable.HashMap[String, MemberMetadata]
   private var state: GroupState = Empty
+  private val members = new mutable.HashMap[String, MemberMetadata]
+  private val offsets = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
+  private val stagedOffsets = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
+
+  var protocolType: Option[String] = None
   var generationId = 0
   var leaderId: String = null
   var protocol: String = null
@@ -148,7 +152,11 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
   def has(memberId: String) = members.contains(memberId)
   def get(memberId: String) = members(memberId)
 
-  def add(memberId: String, member: MemberMetadata) {
+  def add(memberId: String, member: MemberMetadata, protocolType: String) {
+    if (isEmpty)
+      this.protocolType = Some(protocolType)
+
+    assert(this.protocolType.orNull == protocolType)
     assert(supportsProtocols(member.protocols))
 
     if (leaderId == null)
@@ -241,16 +249,44 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
   def summary: GroupSummary = {
     if (is(Stable)) {
       val members = this.members.values.map { member => member.summary(protocol) }.toList
-      GroupSummary(state.toString, protocolType, protocol, members)
-    }else {
+      GroupSummary(state.toString, protocolType.getOrElse(""), protocol, members)
+    } else {
       val members = this.members.values.map{ member => member.summaryNoMetadata() }.toList
-      GroupSummary(state.toString, protocolType, GroupCoordinator.NoProtocol, members)
+      GroupSummary(state.toString, protocolType.getOrElse(""), GroupCoordinator.NoProtocol, members)
     }
   }
 
   def overview: GroupOverview = {
-    GroupOverview(groupId, protocolType)
+    GroupOverview(groupId, protocolType.getOrElse(""))
   }
+
+  def writeOffset(topicPartition: TopicPartition, offset: OffsetAndMetadata) {
+    offsets.put(topicPartition, offset)
+    stagedOffsets.get(topicPartition) match {
+      case None =>
+      case Some(stagedOffset) if offset == stagedOffset => stagedOffsets.remove(topicPartition)
+    }
+  }
+
+  def prepareOffsetCommit(offsets: Map[TopicPartition, OffsetAndMetadata]) {
+    stagedOffsets ++= offsets
+  }
+
+  def removeExpiredOffsets(startMs: Long) = {
+    val expiredOffsets = offsets.filter {
+      case (topicPartition, offset) => offset.expireTimestamp < startMs && !stagedOffsets.contains(topicPartition)
+    }
+    offsets --= expiredOffsets.keySet
+    expiredOffsets
+  }
+
+  def allOffsets = offsets.toMap
+
+  def offset(topicPartition: TopicPartition) = offsets.get(topicPartition)
+
+  def numOffsets = offsets.size
+
+  def hasOffsets = offsets.nonEmpty || stagedOffsets.nonEmpty
 
   private def assertValidTransition(targetState: GroupState) {
     if (!GroupMetadata.validPreviousStates(targetState).contains(state))
@@ -262,3 +298,4 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
     "[%s,%s,%s,%s]".format(groupId, protocolType, currentState.toString, members)
   }
 }
+

@@ -96,7 +96,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
     groupCoordinator = GroupCoordinator(config, zkUtils, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time)
-    groupCoordinator.startup()
+    groupCoordinator.startup(false)
 
     // add the partition into the owned partition list
     groupPartitionId = groupCoordinator.partitionFor(groupId)
@@ -106,7 +106,8 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   @After
   def tearDown() {
     EasyMock.reset(replicaManager)
-    groupCoordinator.shutdown()
+    if (groupCoordinator != null)
+      groupCoordinator.shutdown()
   }
 
   @Test

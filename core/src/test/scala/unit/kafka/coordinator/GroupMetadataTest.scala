@@ -29,7 +29,7 @@ class GroupMetadataTest extends JUnitSuite {
 
   @Before
   def setUp() {
-    group = new GroupMetadata("groupId", "consumer")
+    group = new GroupMetadata("groupId")
   }
 
   @Test
@@ -167,6 +167,7 @@ class GroupMetadataTest extends JUnitSuite {
 
   @Test
   def testSelectProtocol() {
+    val protocolType = "consumer"
     val groupId = "groupId"
     val clientId = "clientId"
     val clientHost = "clientHost"
@@ -176,14 +177,14 @@ class GroupMetadataTest extends JUnitSuite {
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeoutMs,
       List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
 
-    group.add(memberId, member)
+    group.add(memberId, member, protocolType)
     assertEquals("range", group.selectProtocol)
 
     val otherMemberId = "otherMemberId"
     val otherMember = new MemberMetadata(otherMemberId, groupId, clientId, clientHost, sessionTimeoutMs,
       List(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte])))
 
-    group.add(otherMemberId, otherMember)
+    group.add(otherMemberId, otherMember, protocolType)
     // now could be either range or robin since there is no majority preference
     assertTrue(Set("range", "roundrobin")(group.selectProtocol))
 
@@ -191,7 +192,7 @@ class GroupMetadataTest extends JUnitSuite {
     val lastMember = new MemberMetadata(lastMemberId, groupId, clientId, clientHost, sessionTimeoutMs,
       List(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte])))
 
-    group.add(lastMemberId, lastMember)
+    group.add(lastMemberId, lastMember, protocolType)
     // now we should prefer 'roundrobin'
     assertEquals("roundrobin", group.selectProtocol)
   }
@@ -204,6 +205,7 @@ class GroupMetadataTest extends JUnitSuite {
 
   @Test
   def testSelectProtocolChoosesCompatibleProtocol() {
+    val protocolType = "consumer"
     val groupId = "groupId"
     val clientId = "clientId"
     val clientHost = "clientHost"
@@ -217,13 +219,14 @@ class GroupMetadataTest extends JUnitSuite {
     val otherMember = new MemberMetadata(otherMemberId, groupId, clientId, clientHost, sessionTimeoutMs,
       List(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte])))
 
-    group.add(memberId, member)
-    group.add(otherMemberId, otherMember)
+    group.add(memberId, member, protocolType)
+    group.add(otherMemberId, otherMember, protocolType)
     assertEquals("roundrobin", group.selectProtocol)
   }
 
   @Test
   def testSupportsProtocols() {
+    val protocolType = "consumer"
     val groupId = "groupId"
     val clientId = "clientId"
     val clientHost = "clientHost"
@@ -236,7 +239,7 @@ class GroupMetadataTest extends JUnitSuite {
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeoutMs,
       List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
 
-    group.add(memberId, member)
+    group.add(memberId, member, protocolType)
     assertTrue(group.supportsProtocols(Set("roundrobin", "foo")))
     assertTrue(group.supportsProtocols(Set("range", "foo")))
     assertFalse(group.supportsProtocols(Set("foo", "bar")))
@@ -245,7 +248,7 @@ class GroupMetadataTest extends JUnitSuite {
     val otherMember = new MemberMetadata(otherMemberId, groupId, clientId, clientHost, sessionTimeoutMs,
       List(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte])))
 
-    group.add(otherMemberId, otherMember)
+    group.add(otherMemberId, otherMember, protocolType)
 
     assertTrue(group.supportsProtocols(Set("roundrobin", "foo")))
     assertFalse(group.supportsProtocols(Set("range", "foo")))
@@ -253,6 +256,7 @@ class GroupMetadataTest extends JUnitSuite {
 
   @Test
   def testInitNextGeneration() {
+    val protocolType = "consumer"
     val groupId = "groupId"
     val clientId = "clientId"
     val clientHost = "clientHost"
@@ -264,7 +268,7 @@ class GroupMetadataTest extends JUnitSuite {
 
     group.transitionTo(PreparingRebalance)
     member.awaitingJoinCallback = (result) => {}
-    group.add(memberId, member)
+    group.add(memberId, member, protocolType)
 
     assertEquals(0, group.generationId)
     assertNull(group.protocol)
