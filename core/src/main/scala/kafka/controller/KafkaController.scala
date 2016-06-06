@@ -71,7 +71,7 @@ class ControllerContext(val zkUtils: ZkUtils,
 
   // getter
   def liveBrokers = liveBrokersUnderlying.filter(broker => !shuttingDownBrokerIds.contains(broker.id))
-  def liveBrokerIds = liveBrokerIdsUnderlying.diff(shuttingDownBrokerIds)
+  def liveBrokerIds = liveBrokerIdsUnderlying -- shuttingDownBrokerIds
 
   def liveOrShuttingDownBrokerIds = liveBrokerIdsUnderlying
   def liveOrShuttingDownBrokers = liveBrokersUnderlying
@@ -95,11 +95,12 @@ class ControllerContext(val zkUtils: ZkUtils,
 
   def replicasForTopic(topic: String): Set[PartitionAndReplica] = {
     partitionReplicaAssignment
-      .filter { case (topicAndPartition, replicas) => topicAndPartition.topic.equals(topic) }.flatMap { case (topicAndPartition, replicas) =>
-      replicas.map { r =>
-        new PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition, r)
-      }
-    }.toSet
+      .filter { case (topicAndPartition, replicas) => topicAndPartition.topic.equals(topic) }
+      .flatMap { case (topicAndPartition, replicas) =>
+        replicas.map { r =>
+          new PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition, r)
+        }
+      }.toSet
   }
 
   def partitionsForTopic(topic: String): collection.Set[TopicAndPartition] = {

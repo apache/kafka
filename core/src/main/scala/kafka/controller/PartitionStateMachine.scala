@@ -463,7 +463,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           (children: Buffer[String]).toSet
         }
         debug("Delete topics listener fired for topics %s to be deleted".format(topicsToBeDeleted.mkString(",")))
-        val nonExistentTopics = topicsToBeDeleted.diff(controllerContext.allTopics)
+        val nonExistentTopics = topicsToBeDeleted -- controllerContext.allTopics
         if(nonExistentTopics.nonEmpty) {
           warn("Ignoring request to delete non-existing topics " + nonExistentTopics.mkString(","))
           nonExistentTopics.foreach(topic => zkUtils.deletePathRecursive(getDeleteTopicPath(topic)))

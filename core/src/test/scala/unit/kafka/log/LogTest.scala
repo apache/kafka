@@ -66,7 +66,7 @@ class LogTest extends JUnitSuite {
     val set = TestUtils.singleMessageSet("test".getBytes)
 
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentMsProp, 1 * 60 * 60L: java.lang.Long)
+    logProps.put(LogConfig.SegmentMsProp, (1 * 60 * 60L): java.lang.Long)
 
     // create a log
     val log = new Log(logDir,

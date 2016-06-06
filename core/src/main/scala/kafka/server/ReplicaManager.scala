@@ -360,8 +360,7 @@ class ReplicaManager(val config: KafkaConfig,
       val responseStatus = messagesPerPartition.map {
         case (topicAndPartition, messageSet) =>
           topicAndPartition -> new PartitionResponse(Errors.INVALID_REQUIRED_ACKS.code,
-            LogAppendInfo.UnknownLogAppendInfo.firstOffset,
-            Message.NoTimestamp)
+            LogAppendInfo.UnknownLogAppendInfo.firstOffset, Message.NoTimestamp)
       }
       responseCallback(responseStatus)
     }
