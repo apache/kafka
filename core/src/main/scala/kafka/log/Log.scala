@@ -197,6 +197,7 @@ class Log(val dir: File,
               warn("Found a corrupted index file, %s, deleting and rebuilding index...".format(indexFile.getAbsolutePath))
               indexFile.delete()
               segment.recover(config.maxMessageSize)
+              error("Corrupted Index File", e)
           }
         }
         else {
