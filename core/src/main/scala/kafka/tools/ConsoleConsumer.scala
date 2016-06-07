@@ -70,9 +70,10 @@ object ConsoleConsumer extends Logging {
     addShutdownHook(consumer, conf)
 
     try {
-      process(conf.maxMessages, conf.formatter, consumer, conf.skipMessageOnError)
+      process(conf.maxMessages, conf.formatter, consumer, System.out, conf.skipMessageOnError)
     } finally {
       consumer.cleanup()
+      conf.formatter.close()
       reportRecordCount()
 
       // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
@@ -111,7 +112,7 @@ object ConsoleConsumer extends Logging {
     })
   }
 
-  def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, skipMessageOnError: Boolean) {
+  def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, output: PrintStream, skipMessageOnError: Boolean) {
     while (messageCount < maxMessages || maxMessages == -1) {
       val msg: BaseConsumerRecord = try {
         consumer.receive()
@@ -132,7 +133,7 @@ object ConsoleConsumer extends Logging {
       messageCount += 1
       try {
         formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
-                                             msg.timestampType, 0, 0, 0, msg.key, msg.value), System.out)
+                                             msg.timestampType, 0, 0, 0, msg.key, msg.value), output)
       } catch {
         case e: Throwable =>
           if (skipMessageOnError) {
@@ -142,7 +143,10 @@ object ConsoleConsumer extends Logging {
             throw e
           }
       }
-      checkErr(formatter)
+      if (checkErr(output, formatter)) {
+        // Consumer will be closed
+        return
+      }
     }
   }
 
@@ -150,13 +154,13 @@ object ConsoleConsumer extends Logging {
     System.err.println(s"Processed a total of $messageCount messages")
   }
 
-  def checkErr(formatter: MessageFormatter) {
-    if (System.out.checkError()) {
+  def checkErr(output: PrintStream, formatter: MessageFormatter): Boolean = {
+    val gotError = output.checkError()
+    if (gotError) {
       // This means no one is listening to our output stream any more, time to shutdown
       System.err.println("Unable to write to standard out, closing consumer.")
-      formatter.close()
-      System.exit(1)
     }
+    gotError
   }
 
   def getOldConsumerProps(config: ConsumerConfig): Properties = {
