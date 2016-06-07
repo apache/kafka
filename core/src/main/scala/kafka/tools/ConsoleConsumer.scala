@@ -70,9 +70,10 @@ object ConsoleConsumer extends Logging {
     addShutdownHook(consumer, conf)
 
     try {
-      process(conf.maxMessages, conf.formatter, consumer, conf.skipMessageOnError)
+      process(conf.maxMessages, conf.formatter, consumer, System.out, conf.skipMessageOnError)
     } finally {
       consumer.cleanup()
+      conf.formatter.close()
       reportRecordCount()
 
       // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
@@ -111,7 +112,7 @@ object ConsoleConsumer extends Logging {
     })
   }
 
-  def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, skipMessageOnError: Boolean) {
+  def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, output: PrintStream, skipMessageOnError: Boolean) {
     while (messageCount < maxMessages || maxMessages == -1) {
       val msg: BaseConsumerRecord = try {
         consumer.receive()
@@ -132,7 +133,7 @@ object ConsoleConsumer extends Logging {
       messageCount += 1
       try {
         formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
-                                             msg.timestampType, 0, 0, 0, msg.key, msg.value), System.out)
+                                             msg.timestampType, 0, 0, 0, msg.key, msg.value), output)
       } catch {
         case e: Throwable =>
           if (skipMessageOnError) {
@@ -142,7 +143,10 @@ object ConsoleConsumer extends Logging {
             throw e
           }
       }
-      checkErr(formatter)
+      if (checkErr(output, formatter)) {
+        // Consumer will be closed
+        return
+      }
     }
   }
 
@@ -150,19 +154,20 @@ object ConsoleConsumer extends Logging {
     System.err.println(s"Processed a total of $messageCount messages")
   }
 
-  def checkErr(formatter: MessageFormatter) {
-    if (System.out.checkError()) {
+  def checkErr(output: PrintStream, formatter: MessageFormatter): Boolean = {
+    val gotError = output.checkError()
+    if (gotError) {
       // This means no one is listening to our output stream any more, time to shutdown
       System.err.println("Unable to write to standard out, closing consumer.")
-      formatter.close()
-      System.exit(1)
     }
+    gotError
   }
 
   def getOldConsumerProps(config: ConsumerConfig): Properties = {
     val props = new Properties
 
     props.putAll(config.consumerProps)
+    props.putAll(config.extraConsumerProps)
     props.put("auto.offset.reset", if (config.fromBeginning) "smallest" else "largest")
     props.put("zookeeper.connect", config.zkConnectionStr)
 
@@ -185,6 +190,7 @@ object ConsoleConsumer extends Logging {
     val props = new Properties
 
     props.putAll(config.consumerProps)
+    props.putAll(config.extraConsumerProps)
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, if (config.options.has(config.resetBeginningOpt)) "earliest" else "latest")
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, if (config.keyDeserializer != null) config.keyDeserializer else "org.apache.kafka.common.serialization.ByteArrayDeserializer")
@@ -212,7 +218,11 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
-    val consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file.")
+    val consumerPropertyOpt = parser.accepts("consumer-property", "A mechanism to pass user-defined properties in the form key=value to the consumer.")
+      .withRequiredArg
+      .describedAs("consumer_prop")
+      .ofType(classOf[String])
+    val consumerConfigOpt = parser.accepts("consumer.config", s"Consumer config properties file. Note that ${consumerPropertyOpt} takes precedence over this config.")
       .withRequiredArg
       .describedAs("config file")
       .ofType(classOf[String])
@@ -287,6 +297,7 @@ object ConsoleConsumer extends Logging {
       topicArg = options.valueOf(topicOrFilterOpt.head)
       filterSpec = if (options.has(blacklistOpt)) new Blacklist(topicArg) else new Whitelist(topicArg)
     }
+    val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt).asScala)
     val consumerProps = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
     else
