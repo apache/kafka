@@ -437,7 +437,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         TopicPartition tp = null;
         try {
             // first make sure the metadata for the topic is available
-            long waitedOnMetadataMs = waitOnMetadata(record.topic(), this.maxBlockTimeMs);
+            long beginTimeMs = time.milliseconds();
+            Cluster cluster = waitOnMetadata(record.topic(), this.maxBlockTimeMs, beginTimeMs);
+            long waitedOnMetadataMs = time.milliseconds() - beginTimeMs;
             long remainingWaitMs = Math.max(0, this.maxBlockTimeMs - waitedOnMetadataMs);
             byte[] serializedKey;
             try {
@@ -455,7 +457,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in value.serializer");
             }
-            int partition = partition(record, serializedKey, serializedValue, metadata.fetch());
+
+            int partition = partition(record, serializedKey, serializedValue, cluster);
             int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(serializedKey, serializedValue);
             ensureValidRecordSize(serializedSize);
             tp = new TopicPartition(record.topic(), partition);
@@ -508,17 +511,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Wait for cluster metadata including partitions for the given topic to be available.
      * @param topic The topic we want metadata for
      * @param maxWaitMs The maximum time in ms for waiting on the metadata
-     * @return The amount of time we waited in ms
+     * @param beginTimeMs Start time from which maxWaitMs applies
+     * @return The cluster containing topic metadata
      */
-    private long waitOnMetadata(String topic, long maxWaitMs) throws InterruptedException {
+    private Cluster waitOnMetadata(String topic, long maxWaitMs, long beginTimeMs) throws InterruptedException {
         // add topic to metadata topic list if it is not there already and reset expiry
         this.metadata.add(topic);
-        if (metadata.fetch().partitionsForTopic(topic) != null)
-            return 0;
+        Cluster cluster = metadata.fetch();
 
-        long begin = time.milliseconds();
         long remainingWaitMs = maxWaitMs;
-        while (metadata.fetch().partitionsForTopic(topic) == null) {
+        while (cluster.partitionsForTopic(topic) == null) {
             log.trace("Requesting metadata update for topic {}.", topic);
             int version = metadata.requestUpdate();
             sender.wakeup();
@@ -528,14 +530,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
             }
-            long elapsed = time.milliseconds() - begin;
+            cluster = metadata.fetch();
+            long elapsed = time.milliseconds() - beginTimeMs;
             if (elapsed >= maxWaitMs)
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
-            if (metadata.fetch().unauthorizedTopics().contains(topic))
+            if (cluster.unauthorizedTopics().contains(topic))
                 throw new TopicAuthorizationException(topic);
             remainingWaitMs = maxWaitMs - elapsed;
         }
-        return time.milliseconds() - begin;
+        return cluster;
     }
 
     /**
@@ -600,12 +603,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
+        Cluster cluster;
         try {
-            waitOnMetadata(topic, this.maxBlockTimeMs);
+            cluster = waitOnMetadata(topic, this.maxBlockTimeMs, time.milliseconds());
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
-        return this.metadata.fetch().partitionsForTopic(topic);
+        return cluster.partitionsForTopic(topic);
     }
 
     /**
