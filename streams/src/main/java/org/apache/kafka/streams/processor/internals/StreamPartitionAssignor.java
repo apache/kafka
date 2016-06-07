@@ -118,7 +118,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         streamThread = (StreamThread) o;
         streamThread.partitionAssignor(this);
 
-        this.topicGroups = streamThread.builder.topicGroups(streamThread.applicationId);
 
         if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
             internalTopicManager = new InternalTopicManager(
@@ -228,14 +227,15 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // 2. within each client, tasks are assigned to consumer clients in round-robin manner.
         Map<UUID, Set<String>> consumersByClient = new HashMap<>();
         Map<UUID, ClientState<TaskId>> states = new HashMap<>();
-        Set<String> regexSubscribedTopics = new HashSet<>();
+        SubscriptionUpdates subscriptionUpdates = streamThread.builder.getSubscriptionUpdates();
         // decode subscription info
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             String consumerId = entry.getKey();
             Subscription subscription = entry.getValue();
 
             if (streamThread.builder.sourceTopicPattern() != null) {
-                regexSubscribedTopics.addAll(subscription.topics());
+                // update the topic groups with the returned subscription list for regex pattern subscriptions
+                subscriptionUpdates.updateTopics(subscription.topics());
             }
 
             SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
@@ -259,12 +259,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             state.capacity = state.capacity + 1d;
         }
 
-        // update the topic groups with the returned subscription list for regex pattern subscriptions
-        if (streamThread.builder.sourceTopicPattern() != null) {
-            SubscriptionUpdates subscriptionUpdates = streamThread.builder.getSubscriptionUpdates();
-            subscriptionUpdates.updateTopics(regexSubscribedTopics);
-            this.topicGroups = streamThread.builder.topicGroups(streamThread.applicationId);
-        }
+        this.topicGroups = streamThread.builder.topicGroups(streamThread.applicationId);
 
         // ensure the co-partitioning topics within the group have the same number of partitions,
         // and enforce the number of partitions for those internal topics.

@@ -224,7 +224,7 @@ public class TopologyBuilder {
     public TopologyBuilder() {}
 
     /**
-     * Add a new source that consumes the named topics and forwards the records to child processor and/or sink nodes.
+     * Add a new source that consumes the named topics and forward the records to child processor and/or sink nodes.
      * The source will use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} and
      * {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
@@ -256,7 +256,7 @@ public class TopologyBuilder {
     }
 
     /**
-     * Add a new source that consumes the named topics and forwards the records to child processor and/or sink nodes.
+     * Add a new source that consumes the named topics and forward the records to child processor and/or sink nodes.
      * The source will use the specified key and value deserializers.
      *
      * @param name the unique name of the source used to reference this node when
@@ -605,6 +605,7 @@ public class TopologyBuilder {
         if (subscriptionUpdates.hasUpdates()) {
             for (Map.Entry<String, Pattern> stringPatternEntry : nodeToSourcePatterns.entrySet()) {
                 SourceNodeFactory sourceNode = (SourceNodeFactory) nodeFactories.get(stringPatternEntry.getKey());
+                //need to update nodeToSourceTopics with topics matched from given regex
                 nodeToSourceTopics.put(stringPatternEntry.getKey(), sourceNode.getTopics(subscriptionUpdates.getUpdates()));
             }
         }
