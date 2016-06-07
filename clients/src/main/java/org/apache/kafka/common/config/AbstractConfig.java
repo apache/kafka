@@ -202,7 +202,7 @@ public class AbstractConfig {
         if (!t.isInstance(o))
             throw new KafkaException(c.getName() + " is not an instance of " + t.getName());
         if (o instanceof Configurable)
-            ((Configurable) o).configure(this.originals);
+            ((Configurable) o).configure(originals());
         return t.cast(o);
     }
 
@@ -229,7 +229,7 @@ public class AbstractConfig {
             if (!t.isInstance(o))
                 throw new KafkaException(klass + " is not an instance of " + t.getName());
             if (o instanceof Configurable)
-                ((Configurable) o).configure(this.originals);
+                ((Configurable) o).configure(originals());
             objects.add(t.cast(o));
         }
         return objects;
