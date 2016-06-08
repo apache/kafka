@@ -97,12 +97,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     public static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
 
-    private final boolean repartitionOnJoin;
+    private final boolean repartitionRequired;
 
     public KStreamImpl(KStreamBuilder topology, String name, Set<String> sourceNodes,
-                       boolean repartitionOnJoin) {
+                       boolean repartitionRequired) {
         super(topology, name, sourceNodes);
-        this.repartitionOnJoin = repartitionOnJoin;
+        this.repartitionRequired = repartitionRequired;
     }
 
     @Override
@@ -111,7 +111,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamFilter<>(predicate, false), this.name);
 
-        return new KStreamImpl<>(topology, name, sourceNodes, this.repartitionOnJoin);
+        return new KStreamImpl<>(topology, name, sourceNodes, this.repartitionRequired);
     }
 
     @Override
@@ -120,7 +120,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamFilter<>(predicate, true), this.name);
 
-        return new KStreamImpl<>(topology, name, sourceNodes, this.repartitionOnJoin);
+        return new KStreamImpl<>(topology, name, sourceNodes, this.repartitionRequired);
     }
 
     @Override
@@ -156,7 +156,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamMapValues<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name, sourceNodes, this.repartitionOnJoin);
+        return new KStreamImpl<>(topology, name, sourceNodes, this.repartitionRequired);
     }
 
     @Override
@@ -208,7 +208,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         topology.addProcessor(name, new KStreamFlatMapValues<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name, sourceNodes, this.repartitionOnJoin);
+        return new KStreamImpl<>(topology, name, sourceNodes, this.repartitionRequired);
     }
 
     @Override
@@ -224,7 +224,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
             topology.addProcessor(childName, new KStreamPassThrough<K, V>(), branchName);
 
-            branchChildren[i] = new KStreamImpl<>(topology, childName, sourceNodes, this.repartitionOnJoin);
+            branchChildren[i] = new KStreamImpl<>(topology, childName, sourceNodes, this.repartitionRequired);
         }
 
         return branchChildren;
@@ -410,10 +410,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                          Serde<V> thisValueSerde,
                                          Serde<V1> otherValueSerde,
                                          JoinOp joinOp) {
-        boolean otherRepartitionOnJoin = ((KStreamImpl) other).repartitionOnJoin;
+        boolean otherRepartitionOnJoin = ((KStreamImpl) other).repartitionRequired;
 
         // No repartitioning required so proceed with join
-        if (!otherRepartitionOnJoin && !this.repartitionOnJoin) {
+        if (!otherRepartitionOnJoin && !this.repartitionRequired) {
             ensureJoinableWith((KStreamImpl<K, V1>) other);
             return joinOp.join(this, other, joiner, windows, keySerde, thisValueSerde,
                                otherValueSerde);
@@ -421,7 +421,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         // Other stream requires repartitioning. Repartition it and join this with
         // the repartitioned stream
-        if (otherRepartitionOnJoin && !this.repartitionOnJoin) {
+        if (otherRepartitionOnJoin && !this.repartitionRequired) {
             KStreamImpl<K, V1>
                 otherStreamRepartitioned =
                 ((KStreamImpl<K, V1>) other).repartitionStream(keySerde,
@@ -538,6 +538,30 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KStream<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
+        return leftJoin(other, joiner, null, null);
+
+    }
+
+    public <V1, R> KStream<K, R> leftJoin(KTable<K, V1> other,
+                                          ValueJoiner<V, V1, R> joiner,
+                                          Serde<K> keySerde,
+                                          Serde<V> valueSerde) {
+
+        // TODO: need topic name
+        if (repartitionRequired) {
+            KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionStream(keySerde,
+                                                                               valueSerde,
+                                                                               "foo",
+                                                                               false);
+            return thisStreamRepartitioned.doLeftJoin(other, joiner);
+        } else {
+            return doLeftJoin(other, joiner);
+        }
+
+    }
+
+    private <V1, R> KStream<K, R> doLeftJoin(final KTable<K, V1> other,
+                                             final ValueJoiner<V, V1, R> joiner) {
         Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         String name = topology.newName(LEFTJOIN_NAME);
@@ -579,7 +603,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         sourceNodes,
                                         keySerde,
                                         valSerde,
-                                        this.repartitionOnJoin);
+                                        this.repartitionRequired);
     }
 
 

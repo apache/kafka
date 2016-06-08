@@ -460,6 +460,10 @@ public interface KStream<K, V> {
      */
     <V1, V2> KStream<K, V2> leftJoin(KTable<K, V1> table, ValueJoiner<V, V1, V2> joiner);
 
+    <V1, V2> KStream<K, V2> leftJoin(KTable<K, V1> table,
+                                     ValueJoiner<V, V1, V2> valueJoiner,
+                                     Serde<K> keySerde,
+                                     Serde<V> valSerde);
     /**
      * Group the records of this {@link KStream} using the provided {@link KeyValueMapper} and
      * default serializers and deserializers.
