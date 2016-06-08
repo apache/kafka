@@ -35,6 +35,18 @@ import org.slf4j.LoggerFactory;
  * topic we don't have any metadata for it will trigger a metadata update.
  */
 public final class Metadata {
+    /**
+     * Synchronization policy: all the fields except {@link #cluster} and {@link #topics} are accessed via synchronized methods.
+     *
+     * KAFKA-3428: To allow high concurrency on {@link #fetch()}, which returns the pointer to {@link #cluster}, 
+     * this method is not synchronized and safety is assured by {@link #cluster} being a volatile field 
+     * and {@link org.apache.kafka.common.Cluster} being safe for concurrent access.
+     *
+     * KAFKA-3428: {@link #topics} is updated only within the synchronized methods. The read queries to topics however
+     * are performed in {@link #containsTopic(String)} which is not synchronized. Safety is assured by
+     * i) {@link #topics} being a final field, and
+     * ii) {@link #topics} using an implementation that is safe for reads being performed concurrent with updates.
+     */
 
     private static final Logger log = LoggerFactory.getLogger(Metadata.class);
 
@@ -43,20 +55,15 @@ public final class Metadata {
     private int version;
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
-    /**
-     * KAFKA-3428: Cluster class is assumed to be safe for concurrent access. To allow high concurrency on fetch(), 
-     * which returns the pointer to cluster, this method is not synchronized and safety is assured by cluster being a volatile pointer.
-     */
-    private volatile Cluster cluster;
     private boolean needUpdate;
-    /**
-     * KAFKA-3428
-     * synchronization policy: topics is updated only within Metadata synchronized methods. The read queries to topics however
-     * are not protected by external locks and topics must use an implementation that is safe to do reads concurrent with updates.
-     */
-    private final Set<String> topics;
     private final List<Listener> listeners;
     private boolean needMetadataForAllTopics;
+
+    /**
+     * KAFKA-3428: these fields are not protected by synchronized methods. Refer to synchronization policy in {@link org.apache.kafka.clients.Metadata}
+     */
+    private volatile Cluster cluster;
+    private final Set<String> topics;
 
     /**
      * Create a metadata instance with reasonable defaults
@@ -79,7 +86,6 @@ public final class Metadata {
         this.version = 0;
         this.cluster = Cluster.empty();
         this.needUpdate = false;
-        // KAFKA-3428: using concurrent set since reads to topics can be concurrent with writes.
         this.topics = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
         this.listeners = new ArrayList<>();
         this.needMetadataForAllTopics = false;
@@ -87,8 +93,6 @@ public final class Metadata {
 
     /**
      * Get the current cluster info without blocking
-     * KAFKA-3428: fetch is not a syncrhonizaed method. Safe concurrent access is assured by cluster being a volatile field
-     * and the Cluster class being safe for concurrent acccess (KAFKA-3432)
      */
     public Cluster fetch() {
         return this.cluster;
@@ -159,10 +163,6 @@ public final class Metadata {
 
     /**
      * Check if a topic is already in the topic set.
-     *
-     * KAFKA-3428: this method is not synchronized to allow for high concurrency. Safety is assured by 
-     * i) topics being a final field, and
-     * ii) topics using an implementation that is safe for reads being performed conrrent with updates.
      *
      * @param topic topic to check
      * @return true if the topic exists, false otherwise
