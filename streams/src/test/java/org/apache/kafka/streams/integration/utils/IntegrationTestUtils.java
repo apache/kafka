@@ -135,10 +135,21 @@ public class IntegrationTestUtils {
     public static <K, V> void produceKeyValuesSynchronously(
         String topic, Collection<KeyValue<K, V>> records, Properties producerConfig)
         throws ExecutionException, InterruptedException {
+        produceKeyValuesSynchronouslyWithTimestamp(topic,
+                                                   records,
+                                                   producerConfig,
+                                                   null);
+    }
+
+    public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(String topic,
+                                                                         Collection<KeyValue<K, V>> records,
+                                                                         Properties producerConfig,
+                                                                         Long timestamp)
+        throws ExecutionException, InterruptedException {
         Producer<K, V> producer = new KafkaProducer<>(producerConfig);
         for (KeyValue<K, V> record : records) {
             Future<RecordMetadata> f = producer.send(
-                new ProducerRecord<>(topic, record.key, record.value));
+                new ProducerRecord<>(topic, null, timestamp, record.key, record.value));
             f.get();
         }
         producer.flush();

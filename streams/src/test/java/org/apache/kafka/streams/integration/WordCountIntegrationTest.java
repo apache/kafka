@@ -101,12 +101,12 @@ public class WordCountIntegrationTest {
                 public Iterable<String> apply(String value) {
                     return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                 }
-            }).map(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+            }).groupBy(new KeyValueMapper<String, String, String>() {
                 @Override
-                public KeyValue<String, String> apply(String key, String value) {
-                    return new KeyValue<String, String>(value, value);
+                public String apply(final String key, final String value) {
+                    return value;
                 }
-            }).countByKey("Counts")
+            }).count("Counts")
             .toStream();
 
         wordCounts.to(stringSerde, longSerde, DEFAULT_OUTPUT_TOPIC);

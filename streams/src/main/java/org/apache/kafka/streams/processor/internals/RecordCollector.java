@@ -81,7 +81,9 @@ public class RecordCollector {
             if (partitions != null)
                 partition = partitioner.partition(record.key(), record.value(), partitions.size());
         }
-        this.producer.send(new ProducerRecord<>(record.topic(), partition, keyBytes, valBytes), callback);
+        this.producer.send(new ProducerRecord<>(record.topic(), partition, record.timestamp(),
+                                                keyBytes,
+                                                valBytes), callback);
     }
 
     public void flush() {

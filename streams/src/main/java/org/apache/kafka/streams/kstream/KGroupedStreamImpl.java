@@ -16,13 +16,16 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.AbstractStream;
-import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.kstream.internals.KStreamAggProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.KStreamAggregate;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.kstream.internals.KStreamReduce;
+import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate;
+import org.apache.kafka.streams.kstream.internals.KStreamWindowReduce;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 
@@ -33,28 +36,45 @@ import java.util.Set;
 public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStream<K, V> {
 
     private static final String REDUCE_NAME = "KSTREAM-REDUCE-";
+    private static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
 
     private final Serde<K> keySerde;
     private final Serde<V> valSerde;
+    private final boolean repartitionRequired;
 
     public KGroupedStreamImpl(final KStreamBuilder topology,
                               final String name,
                               final Set<String> sourceNodes,
                               final Serde<K> keySerde,
-                              final Serde<V> valSerde) {
+                              final Serde<V> valSerde,
+                              final boolean repartitionRequired) {
         super(topology, name, sourceNodes);
         this.keySerde = keySerde;
         this.valSerde = valSerde;
+        this.repartitionRequired = repartitionRequired;
     }
 
     @Override
     public KTable<K, V> reduce(final Reducer<V> reducer,
                                final String name) {
         return doAggregate(
-            new KStreamReduce<K,V>(name, reducer),
-            valSerde,
+            new KStreamReduce<K, V>(name, reducer),
             REDUCE_NAME,
-            name);
+            name,
+            storeFactory(valSerde, name).build());
+    }
+
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer,
+                                                            Windows<W> windows) {
+        return (KTable<Windowed<K>, V>) doAggregate(
+            new KStreamWindowReduce<K, V, W>(windows, windows.name(), reducer),
+            REDUCE_NAME,
+            windows.name(),
+            windowedStore(valSerde, windows)
+        );
     }
 
     @Override
@@ -62,48 +82,121 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
                                       final Aggregator<K, V, T> aggregator,
                                       final Serde<T> aggValueSerde,
                                       final String name) {
-        return null;
+        return doAggregate(
+            new KStreamAggregate<>(name, initializer, aggregator),
+            AGGREGATE_NAME,
+            name,
+            storeFactory(aggValueSerde, name).build());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <W extends Window, T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
+                                                                  final Aggregator<K, V, T> aggregator,
+                                                                  final Windows<W> windows,
+                                                                  final Serde<T> aggValueSerde) {
+        return (KTable<Windowed<K>, T>) doAggregate(
+            new KStreamWindowAggregate<>(windows, windows.name(), initializer, aggregator),
+            AGGREGATE_NAME,
+            windows.name(),
+            windowedStore(aggValueSerde, windows)
+        );
     }
 
     @Override
     public KTable<K, Long> count(final String name) {
-        return null;
+        return aggregate(new Initializer<Long>() {
+            @Override
+            public Long apply() {
+                return 0L;
+            }
+        }, new Aggregator<K, V, Long>() {
+            @Override
+            public Long apply(K aggKey, V value, Long aggregate) {
+                return aggregate + 1;
+            }
+        }, Serdes.Long(), name);
     }
 
-    private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, T> aggregateSupplier,
-                                         final Serde<T> aggValueSerde,
-                                         final String functionName,
-                                         final String name) {
+    @Override
+    public <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows) {
+        return aggregate(new Initializer<Long>() {
+            @Override
+            public Long apply() {
+                return 0L;
+            }
+        }, new Aggregator<K, V, Long>() {
+            @Override
+            public Long apply(K aggKey, V value, Long aggregate) {
+                return aggregate + 1;
+            }
+        }, windows, Serdes.Long());
+    }
 
-        final String sinkName = topology.newName(KStreamImpl.SINK_NAME);
-        final String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
+
+    private <W extends Window, T> StateStoreSupplier windowedStore(final Serde<T> aggValSerde,
+                                                                   final Windows<W> windows) {
+        return storeFactory(aggValSerde, windows.name())
+            .windowed(windows.maintainMs(), windows.segments, false)
+            .build();
+
+    }
+
+    private <T> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<T> aggValueSerde,
+                                                                    final String name) {
+        return Stores.create(name)
+            .withKeys(keySerde)
+            .withValues(aggValueSerde)
+            .persistent();
+
+    }
+
+    private <T> KTable<K, T> doAggregate(
+        final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,
+        final String functionName,
+        final String name,
+        final StateStoreSupplier storeSupplier) {
+
         final String aggFunctionName = topology.newName(functionName);
-        final String topic = name + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
+
+        final String sourceName = repartitionIfRequired(name);
+
+        topology.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
+        topology.addStateStore(storeSupplier, aggFunctionName);
+
+        return new KTableImpl<>(topology,
+                                aggFunctionName,
+                                aggregateSupplier,
+                                sourceName.equals(this.name) ? sourceNodes
+                                                             : Collections.singleton(sourceName));
+    }
+
+    /**
+     * If repartitioning is required then add a new co-partitioned internal topic and configure the
+     * source & sink.
+     *
+     * @param topicName - name to be used as part of internal topic
+     * @return the new sourceName if repartitioned. Otherwise the name of this stream
+     */
+    private String repartitionIfRequired(final String topicName) {
+        if (!repartitionRequired) {
+            return this.name;
+        }
 
         final Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
         final Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
         final Serializer<V> valueSerializer = valSerde == null ? null : valSerde.serializer();
         final Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
 
-        final StateStoreSupplier store = Stores.create(name)
-            .withKeys(keySerde)
-            .withValues(aggValueSerde)
-            .persistent()
-            .build();
-
-        // create internal topic with new source and sink. Co-partition sources
+        final String sinkName = topology.newName(KStreamImpl.SINK_NAME);
+        final String topic = topicName + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
+        final Set<String> allSourceNodes = new HashSet<>(sourceNodes);
+        final String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
+        allSourceNodes.add(sourceName);
         topology.addInternalTopic(topic);
         topology.addSink(sinkName, topic, keySerializer, valueSerializer, this.name);
         topology.addSource(sourceName, keyDeserializer, valueDeserializer, topic);
-
-        final Set<String> allSourceNodes = new HashSet<>(sourceNodes);
-        allSourceNodes.add(sourceName);
         topology.copartitionSources(allSourceNodes);
-
-        topology.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
-        topology.addStateStore(store, aggFunctionName);
-
-        return new KTableImpl<>(topology, aggFunctionName, aggregateSupplier, Collections
-            .singleton(sourceName));
+        return sourceName;
     }
 }

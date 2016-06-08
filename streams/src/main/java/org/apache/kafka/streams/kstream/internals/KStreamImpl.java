@@ -19,17 +19,15 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
-import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.JoinWindows;
+import org.apache.kafka.streams.kstream.KGroupedStream;
+import org.apache.kafka.streams.kstream.KGroupedStreamImpl;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
@@ -37,9 +35,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -53,8 +48,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V> {
-
-    private static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
 
     private static final String BRANCH_NAME = "KSTREAM-BRANCH-";
 
@@ -86,8 +79,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     private static final String PRINTING_NAME = "KSTREAM-PRINTER-";
 
-    private static final String REDUCE_NAME = "KSTREAM-REDUCE-";
-
     private static final String KEY_SELECT_NAME = "KSTREAM-KEY-SELECT-";
 
     public static final String SINK_NAME = "KSTREAM-SINK-";
@@ -101,6 +92,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
 
     private static final String FOREACH_NAME = "KSTREAM-FOREACH-";
+
+    private static final String GROUP_BY_KEY_NAME = "KSTREAM-GROUP-BY-KEY-";
 
     public static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
 
@@ -133,14 +126,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     @SuppressWarnings("unchecked")
     public <K1> KStream<K1, V> selectKey(final KeyValueMapper<K, V, K1> mapper) {
+        return new KStreamImpl<>(topology, internalSelectKey(mapper), sourceNodes, true);
+    }
+
+    private <K1> String internalSelectKey(final KeyValueMapper<K, V, K1> mapper) {
         String name = topology.newName(KEY_SELECT_NAME);
         topology.addProcessor(name, new KStreamMap<>(new KeyValueMapper<K, V, KeyValue<K1, V>>() {
             @Override
             public KeyValue<K1, V> apply(K key, V value) {
-                return new KeyValue(mapper.apply(key, value), value);
+                return new KeyValue<>(mapper.apply(key, value), value);
             }
         }), this.name);
-        return new KStreamImpl<>(topology, name, sourceNodes, true);
+        return name;
     }
 
     @Override
@@ -552,177 +549,37 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
-                                                                 Windows<W> windows,
-                                                                 Serde<K> keySerde,
-                                                                 Serde<V> aggValueSerde) {
-
-        String reduceName = topology.newName(REDUCE_NAME);
-
-        KStreamWindowReduce<K, V, W> reduceSupplier = new KStreamWindowReduce<>(windows, windows.name(), reducer);
-
-        StateStoreSupplier reduceStore = Stores.create(windows.name())
-                .withKeys(keySerde)
-                .withValues(aggValueSerde)
-                .persistent()
-                .windowed(windows.maintainMs(), windows.segments, false)
-                .build();
-
-        // aggregate the values with the aggregator and local store
-        topology.addProcessor(reduceName, reduceSupplier, this.name);
-        topology.addStateStore(reduceStore, reduceName);
-
-        // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(topology, reduceName, reduceSupplier, sourceNodes);
+    public <K1, V1> KGroupedStream<K1, V1> groupBy(KeyValueMapper<K, V, K1> selector) {
+        return groupBy(selector, null, null);
     }
 
     @Override
-    public <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
-                                                                 Windows<W> windows) {
-
-        return reduceByKey(reducer, windows, null, null);
+    public <K1, V1> KGroupedStream<K1, V1> groupBy(KeyValueMapper<K, V, K1> selector,
+                                                   Serde<K1> keySerde,
+                                                   Serde<V1> valSerde) {
+        return new KGroupedStreamImpl<>(topology,
+                                        internalSelectKey(selector),
+                                        sourceNodes,
+                                        keySerde,
+                                        valSerde, true);
     }
 
     @Override
-    public KTable<K, V> reduceByKey(Reducer<V> reducer,
-                                    Serde<K> keySerde,
-                                    Serde<V> aggValueSerde,
-                                    String name) {
-
-        String reduceName = topology.newName(REDUCE_NAME);
-
-        KStreamReduce<K, V> reduceSupplier = new KStreamReduce<>(name, reducer);
-
-        StateStoreSupplier reduceStore = Stores.create(name)
-                .withKeys(keySerde)
-                .withValues(aggValueSerde)
-                .persistent()
-                .build();
-
-        // aggregate the values with the aggregator and local store
-        topology.addProcessor(reduceName, reduceSupplier, this.name);
-        topology.addStateStore(reduceStore, reduceName);
-
-        // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(topology, reduceName, reduceSupplier, sourceNodes);
+    public KGroupedStream<K, V> groupByKey() {
+        return groupByKey(null, null);
     }
 
     @Override
-    public KTable<K, V> reduceByKey(Reducer<V> reducer, String name) {
-
-        return reduceByKey(reducer, null, null, name);
-    }
-
-    @Override
-    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
-                                                                       Aggregator<K, V, T> aggregator,
-                                                                       Windows<W> windows,
-                                                                       Serde<K> keySerde,
-                                                                       Serde<T> aggValueSerde) {
-
-        String aggregateName = topology.newName(AGGREGATE_NAME);
-
-        KStreamAggProcessorSupplier<K, Windowed<K>, V, T> aggregateSupplier = new KStreamWindowAggregate<>(windows, windows.name(), initializer, aggregator);
-
-        StateStoreSupplier aggregateStore = Stores.create(windows.name())
-                .withKeys(keySerde)
-                .withValues(aggValueSerde)
-                .persistent()
-                .windowed(windows.maintainMs(), windows.segments, false)
-                .build();
-
-        // aggregate the values with the aggregator and local store
-        topology.addProcessor(aggregateName, aggregateSupplier, this.name);
-        topology.addStateStore(aggregateStore, aggregateName);
-
-        // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<Windowed<K>, T, T>(topology, aggregateName, aggregateSupplier, sourceNodes);
-    }
-
-    @Override
-    public <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
-                                                                       Aggregator<K, V, T> aggregator,
-                                                                       Windows<W> windows) {
-
-        return aggregateByKey(initializer, aggregator, windows, null, null);
-    }
-
-    @Override
-    public <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
-                                           Aggregator<K, V, T> aggregator,
-                                           Serde<K> keySerde,
-                                           Serde<T> aggValueSerde,
-                                           String name) {
-
-        String aggregateName = topology.newName(AGGREGATE_NAME);
-
-        KStreamAggProcessorSupplier<K, K, V, T> aggregateSupplier = new KStreamAggregate<>(name, initializer, aggregator);
-
-        StateStoreSupplier aggregateStore = Stores.create(name)
-                .withKeys(keySerde)
-                .withValues(aggValueSerde)
-                .persistent()
-                .build();
-
-        // aggregate the values with the aggregator and local store
-        topology.addProcessor(aggregateName, aggregateSupplier, this.name);
-        topology.addStateStore(aggregateStore, aggregateName);
-
-        // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(topology, aggregateName, aggregateSupplier, sourceNodes);
-    }
-
-    @Override
-    public <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
-                                           Aggregator<K, V, T> aggregator,
-                                           String name) {
-
-        return aggregateByKey(initializer, aggregator, null, null, name);
-    }
-
-    @Override
-    public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows,
-                                                                   Serde<K> keySerde) {
-        return this.aggregateByKey(
-                new Initializer<Long>() {
-                    @Override
-                    public Long apply() {
-                        return 0L;
-                    }
-                },
-                new Aggregator<K, V, Long>() {
-                    @Override
-                    public Long apply(K aggKey, V value, Long aggregate) {
-                        return aggregate + 1L;
-                    }
-                }, windows, keySerde, Serdes.Long());
-    }
-
-    @Override
-    public <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows) {
-        return countByKey(windows, null);
-    }
-
-    @Override
-    public KTable<K, Long> countByKey(Serde<K> keySerde, String name) {
-        return this.aggregateByKey(
-                new Initializer<Long>() {
-                    @Override
-                    public Long apply() {
-                        return 0L;
-                    }
-                },
-                new Aggregator<K, V, Long>() {
-                    @Override
-                    public Long apply(K aggKey, V value, Long aggregate) {
-                        return aggregate + 1L;
-                    }
-                }, keySerde, Serdes.Long(), name);
-    }
-
-    @Override
-    public KTable<K, Long> countByKey(String name) {
-        return countByKey(null, name);
+    public KGroupedStream<K, V> groupByKey(Serde<K> keySerde,
+                                           Serde<V> valSerde) {
+        String groupByName = topology.newName(GROUP_BY_KEY_NAME);
+        topology.addProcessor(groupByName, new KStreamPassThrough(), this.name);
+        return new KGroupedStreamImpl<>(topology,
+                                        groupByName,
+                                        sourceNodes,
+                                        keySerde,
+                                        valSerde,
+                                        this.repartitionOnJoin);
     }
 
 

@@ -205,12 +205,13 @@ public class JoinIntegrationTest {
                 }
             })
             // Compute the total per region by summing the individual click counts per region.
-            .reduceByKey(new Reducer<Long>() {
+            .groupByKey(stringSerde, longSerde)
+            .reduce(new Reducer<Long>() {
                 @Override
                 public Long apply(Long value1, Long value2) {
                     return value1 + value2;
                 }
-            }, stringSerde, longSerde, "ClicksPerRegionUnwindowed");
+            }, "ClicksPerRegionUnwindowed");
 
         // Write the (continuously updating) results to the output topic.
         clicksPerRegion.to(stringSerde, longSerde, OUTPUT_TOPIC);

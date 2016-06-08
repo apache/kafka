@@ -36,6 +36,7 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -83,6 +84,7 @@ public class KStreamRepartitionJoinTest {
             .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, "/tmp");
 
         streamOne = builder.stream(Serdes.Long(), Serdes.Integer(), streamOneInput);
         streamTwo = builder.stream(Serdes.Integer(), Serdes.String(), streamTwoInput);
@@ -104,11 +106,12 @@ public class KStreamRepartitionJoinTest {
     }
 
     @After
-    public void whenShuttingDown() {
+    public void whenShuttingDown() throws IOException {
         testNo++;
         if (kafkaStreams != null) {
             kafkaStreams.close();
         }
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
     @Test
@@ -366,9 +369,9 @@ public class KStreamRepartitionJoinTest {
         streamTwoInput = "stream-two-" + testNo;
         streamThreeInput = "stream-three-" + testNo;
         outputTopic = "output-" + testNo;
-        CLUSTER.createTopic(streamOneInput, 5, 1);
-        CLUSTER.createTopic(streamTwoInput, 5, 1);
-        CLUSTER.createTopic(streamThreeInput, 5, 1);
+        CLUSTER.createTopic(streamOneInput, 2, 1);
+        CLUSTER.createTopic(streamTwoInput, 2, 1);
+        CLUSTER.createTopic(streamThreeInput, 2, 1);
         CLUSTER.createTopic(outputTopic);
     }
 
