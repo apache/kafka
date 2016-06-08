@@ -50,6 +50,9 @@ object ConsumerPerformance {
     val totalBytesRead = new AtomicLong(0)
     val consumerTimeout = new AtomicBoolean(false)
 
+    if (config.useOldConsumer)
+      Console.err.println("Old consumer is deprecated and will be removed in a future release. Consider using the new consumer.")
+
     if (!config.hideHeader) {
       if (!config.showDetailedStats)
         println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
@@ -163,12 +166,12 @@ object ConsumerPerformance {
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val zkConnectOpt = parser.accepts("zookeeper", "The connection string for the zookeeper connection in the form host:port. " +
+    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED (only when using old consumer): The connection string for the zookeeper connection in the form host:port. " +
       "Multiple URLS can be given to allow fail-over. This option is only used with the old consumer.")
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
-    val bootstrapServersOpt = parser.accepts("broker-list", "A broker list to use for connecting if using the new consumer.")
+    val bootstrapServersOpt = parser.accepts("broker-list", "REQUIRED (unless old consumer is used): A broker list to use for connecting if using the new consumer.")
       .withRequiredArg()
       .describedAs("host")
       .ofType(classOf[String])
@@ -204,7 +207,6 @@ object ConsumerPerformance {
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1)
     val useNewConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation. This is the default.")
-    val useOldConsumerOpt = parser.accepts("old-consumer", "Use the old consumer implementation.")
     val consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file.")
       .withRequiredArg
       .describedAs("config file")
@@ -214,8 +216,8 @@ object ConsumerPerformance {
 
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt)
 
-    val useOldConsumer = options.has(useOldConsumerOpt)
-    
+    val useOldConsumer = options.has(zkConnectOpt)
+
     val props = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
     else

@@ -54,8 +54,12 @@ object ConsumerGroupCommand {
     opts.checkArgs()
 
     val consumerGroupService = {
-      if (opts.options.has(opts.oldConsumerOpt)) new ZkConsumerGroupService(opts)
-      else new KafkaConsumerGroupService(opts)
+      if (opts.useOldConsumer) {
+        Console.err.println("Old consumer is deprecated and will be removed in a future release. Consider using the new consumer.")
+        new ZkConsumerGroupService(opts)
+      } else {
+        new KafkaConsumerGroupService(opts)
+      }
     }
 
     try {
@@ -376,9 +380,9 @@ object ConsumerGroupCommand {
   }
 
   class ConsumerGroupCommandOptions(args: Array[String]) {
-    val ZkConnectDoc = "REQUIRED (only when using old-consumer): The connection string for the zookeeper connection in the form host:port. " +
+    val ZkConnectDoc = "REQUIRED (only when using old consumer): The connection string for the zookeeper connection in the form host:port. " +
       "Multiple URLS can be given to allow fail-over."
-    val BootstrapServerDoc = "REQUIRED (unless old-consumer is used): The server to connect to."
+    val BootstrapServerDoc = "REQUIRED (unless old consumer is used): The server to connect to."
     val GroupDoc = "The consumer group we wish to act on."
     val TopicDoc = "The topic whose consumer group information should be deleted."
     val ListDoc = "List all consumer groups."
@@ -392,7 +396,6 @@ object ConsumerGroupCommand {
       "for every consumer group. For instance --topic t1" + nl +
       "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
     val NewConsumerDoc = "Use new consumer. This is the default."
-    val OldConsumerDoc = "Use old consumer."
     val CommandConfigDoc = "Property file containing configs to be passed to Admin Client and Consumer."
     val parser = new OptionParser
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
@@ -415,31 +418,32 @@ object ConsumerGroupCommand {
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
     val newConsumerOpt = parser.accepts("new-consumer", NewConsumerDoc)
-    val oldConsumerOpt = parser.accepts("old-consumer", OldConsumerDoc)
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
                                   .withRequiredArg
                                   .describedAs("command config property file")
                                   .ofType(classOf[String])
     val options = parser.parse(args : _*)
 
+    val useOldConsumer = options.has(zkConnectOpt)
+
     val allConsumerGroupLevelOpts: Set[OptionSpec[_]] = Set(listOpt, describeOpt, deleteOpt)
 
     def checkArgs() {
       // check required args
-      if (options.has(oldConsumerOpt)) {
+      if (useOldConsumer) {
         CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
 
         if (options.has(bootstrapServerOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $oldConsumerOpt")
+          CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with old consumer.")
 
       } else {
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
         if (options.has(zkConnectOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $zkConnectOpt is only valid with $oldConsumerOpt.")
+          CommandLineUtils.printUsageAndDie(parser, s"Option $zkConnectOpt is only valid with old consumer.")
 
         if (options.has(deleteOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $deleteOpt is only valid with $oldConsumerOpt. Note that " +
+          CommandLineUtils.printUsageAndDie(parser, s"Option $deleteOpt is only valid with old consumer. Note that " +
             "there's no need to delete group metadata for the new consumer as it is automatically deleted when the last " +
             "member leaves")
       }

@@ -83,8 +83,7 @@ class ConsoleConsumerTest extends JUnitSuite {
     val args: Array[String] = Array(
       "--zookeeper", "localhost:2181",
       "--topic", "test",
-      "--from-beginning",
-      "--old-consumer") // old consumer
+      "--from-beginning")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)

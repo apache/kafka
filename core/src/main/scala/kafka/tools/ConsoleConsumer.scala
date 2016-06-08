@@ -224,7 +224,7 @@ object ConsoleConsumer extends Logging {
       .describedAs("consume offset")
       .ofType(classOf[String])
       .defaultsTo("latest")
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
+    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED (only when using old consumer): The connection string for the zookeeper connection in the form host:port. " +
       "Multiple URLS can be given to allow fail-over.")
       .withRequiredArg
       .describedAs("urls")
@@ -266,8 +266,7 @@ object ConsoleConsumer extends Logging {
       .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
     val useNewConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation. This is the default.")
-    val useOldConsumerOpt = parser.accepts("old-consumer", "Use the old consumer implementation.")
-    val bootstrapServerOpt = parser.accepts("bootstrap-server")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED (unless old consumer is used): The server to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
@@ -288,7 +287,7 @@ object ConsoleConsumer extends Logging {
 
     var groupIdPassed = true
     val options: OptionSet = tryParse(parser, args)
-    val useOldConsumer = options.has(useOldConsumerOpt)
+    val useOldConsumer = options.has(zkConnectOpt)
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
     // If using old consumer, exactly one of whitelist/blacklist/topic is required.
@@ -321,6 +320,7 @@ object ConsoleConsumer extends Logging {
         CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/blacklist/topic is required.")
       topicArg = options.valueOf(topicOrFilterOpt.head)
       filterSpec = if (options.has(blacklistOpt)) new Blacklist(topicArg) else new Whitelist(topicArg)
+      Console.err.println("Old consumer is deprecated and will be removed in a future release. Consider using the new consumer.")
     } else {
       val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
       if (topicOrFilterOpt.size != 1)
