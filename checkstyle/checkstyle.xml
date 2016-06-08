@@ -31,7 +31,9 @@
   <module name="TreeWalker">
 
     <!-- code cleanup -->
-    <module name="UnusedImports"/>
+    <module name="UnusedImports">
+      <property name="processJavadoc" value="true" />
+    </module>
     <module name="RedundantImport"/>
     <module name="IllegalImport" />
     <module name="EqualsHashCode"/>
@@ -84,5 +86,12 @@
     <module name="MethodParamPad"/>
     <module name="ParenPad"/>
     <module name="TypecastParenPad"/>
+
+    <!-- locale-sensitive methods should specify locale -->
+    <module name="Regexp">
+      <property name="format" value="\.to(Lower|Upper)Case\(\)"/>
+      <property name="illegalPattern" value="true"/>
+      <property name="ignoreComments" value="true"/>
+    </module>
   </module>
 </module>

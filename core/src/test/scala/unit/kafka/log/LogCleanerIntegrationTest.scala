@@ -25,6 +25,7 @@ import kafka.message._
 import kafka.server.OffsetCheckpoint
 import kafka.utils._
 import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit._
 import org.junit.runner.RunWith
@@ -74,7 +75,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     cleaner.awaitCleaned("log", 0, firstDirty2)
 
     val lastCleaned2 = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition("log", 0)).get
-    assertTrue(s"log cleaner should have processed up to offset $firstDirty2", lastCleaned2 >= firstDirty2);
+    assertTrue(s"log cleaner should have processed up to offset $firstDirty2", lastCleaned2 >= firstDirty2)
 
     val read2 = readFromLog(log)
     assertEquals("Contents of the map shouldn't change.", appends2.toMap, read2.toMap)
@@ -119,7 +120,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
   @After
   def teardown() {
     time.scheduler.shutdown()
-    CoreUtils.rm(logDir)
+    Utils.delete(logDir)
   }
   
   /* create a cleaner instance and logs with the given parameters */

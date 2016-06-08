@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.examples.wordcount;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -29,6 +30,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 
+import java.util.Locale;
 import java.util.Properties;
 
 /**
@@ -62,7 +64,7 @@ public class WordCountProcessorDemo {
 
                 @Override
                 public void process(String dummy, String line) {
-                    String[] words = line.toLowerCase().split(" ");
+                    String[] words = line.toLowerCase(Locale.getDefault()).split(" ");
 
                     for (String word : words) {
                         Integer oldValue = this.kvStore.get(word);
@@ -79,19 +81,17 @@ public class WordCountProcessorDemo {
 
                 @Override
                 public void punctuate(long timestamp) {
-                    KeyValueIterator<String, Integer> iter = this.kvStore.all();
+                    try (KeyValueIterator<String, Integer> iter = this.kvStore.all()) {
+                        System.out.println("----------- " + timestamp + " ----------- ");
 
-                    System.out.println("----------- " + timestamp + " ----------- ");
+                        while (iter.hasNext()) {
+                            KeyValue<String, Integer> entry = iter.next();
 
-                    while (iter.hasNext()) {
-                        KeyValue<String, Integer> entry = iter.next();
+                            System.out.println("[" + entry.key + ", " + entry.value + "]");
 
-                        System.out.println("[" + entry.key + ", " + entry.value + "]");
-
-                        context.forward(entry.key, entry.value.toString());
+                            context.forward(entry.key, entry.value.toString());
+                        }
                     }
-
-                    iter.close();
                 }
 
                 @Override
@@ -111,7 +111,7 @@ public class WordCountProcessorDemo {
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
-        props.put(StreamsConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         TopologyBuilder builder = new TopologyBuilder();
 

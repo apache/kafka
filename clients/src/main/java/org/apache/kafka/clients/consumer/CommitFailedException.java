@@ -31,5 +31,4 @@ public class CommitFailedException extends KafkaException {
     public CommitFailedException(String message) {
         super(message);
     }
-
 }

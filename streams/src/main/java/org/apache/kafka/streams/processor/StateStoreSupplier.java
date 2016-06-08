@@ -22,7 +22,17 @@ package org.apache.kafka.streams.processor;
  */
 public interface StateStoreSupplier {
 
+    /**
+     * Return the name of this state store supplier.
+     *
+     * @return the name of this state store supplier
+     */
     String name();
 
+    /**
+     * Return a new {@link StateStore} instance.
+     *
+     * @return  a new {@link StateStore} instance
+     */
     StateStore get();
 }

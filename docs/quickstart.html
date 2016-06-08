@@ -21,11 +21,11 @@ This tutorial assumes you are starting fresh and have no existing Kafka or ZooKe
 
 <h4><a id="quickstart_download" href="#quickstart_download">Step 1: Download the code</a></h4>
 
-<a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/0.9.0.0/kafka_2.11-0.9.0.0.tgz" title="Kafka downloads">Download</a> the 0.9.0.0 release and un-tar it.
+<a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/0.10.0.0/kafka_2.11-0.10.0.0.tgz" title="Kafka downloads">Download</a> the 0.10.0.0 release and un-tar it.
 
 <pre>
-&gt; <b>tar -xzf kafka_2.11-0.9.0.0.tgz</b>
-&gt; <b>cd kafka_2.11-0.9.0.0</b>
+&gt; <b>tar -xzf kafka_2.11-0.10.0.0.tgz</b>
+&gt; <b>cd kafka_2.11-0.10.0.0</b>
 </pre>
 
 <h4><a id="quickstart_startserver" href="#quickstart_startserver">Step 2: Start the server</a></h4>
@@ -168,7 +168,7 @@ my test message 2
 
 Now let's test out fault-tolerance. Broker 1 was acting as the leader so let's kill it:
 <pre>
-&gt; <b>ps | grep server-1.properties</b>
+&gt; <b>ps aux | grep server-1.properties</b>
 <i>7564</i> ttys002    0:15.91 /System/Library/Frameworks/JavaVM.framework/Versions/1.6/Home/bin/java...
 &gt; <b>kill -9 7564</b>
 </pre>
@@ -249,3 +249,112 @@ The connectors continue to process data, so we can add data to the file and see 
 </pre>
 
 You should see the line appear in the console consumer output and in the sink file.
+
+<h4><a id="quickstart_kafkastreams" href="#quickstart_kafkastreams">Step 8: Use Kafka Streams to process data</a></h4>
+
+<p>
+Kafka Streams is a client library of Kafka for real-time stream processing and analyzing data stored in Kafka brokers.
+This quickstart example will demonstrate how to run a streaming application coded in this library. Here is the gist
+of the <code>WordCountDemo</code> example code (converted to use Java 8 lambda expressions for easy reading).
+</p>
+<pre>
+KTable<String, Long> wordCounts = textLines
+    // Split each text line, by whitespace, into words.
+    .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
+
+    // Ensure the words are available as record keys for the next aggregate operation.
+    .map((key, value) -> new KeyValue<>(value, value))
+
+    // Count the occurrences of each word (record key) and store the results into a table named "Counts".
+    .countByKey("Counts")
+</pre>
+
+<p>
+It implements the WordCount
+algorithm, which computes a word occurrence histogram from the input text. However, unlike other WordCount examples
+you might have seen before that operate on bounded data, the WordCount demo application behaves slightly differently because it is
+designed to operate on an <b>infinite, unbounded stream</b> of data. Similar to the bounded variant, it is a stateful algorithm that
+tracks and updates the counts of words. However, since it must assume potentially
+unbounded input data, it will periodically output its current state and results while continuing to process more data
+because it cannot know when it has processed "all" the input data.
+</p>
+<p>
+We will now prepare input data to a Kafka topic, which will subsequently processed by a Kafka Streams application.
+</p>
+
+<!--
+<pre>
+&gt; <b>./bin/kafka-topics --create \</b>
+            <b>--zookeeper localhost:2181 \</b>
+            <b>--replication-factor 1 \</b>
+            <b>--partitions 1 \</b>
+            <b>--topic streams-file-input</b>
+
+</pre>
+
+-->
+
+<pre>
+&gt; <b>echo -e "all streams lead to kafka\nhello kafka streams\njoin kafka summit" > file-input.txt</b>
+</pre>
+
+<p>
+Next, we send this input data to the input topic named <b>streams-file-input</b> using the console producer (in practice,
+stream data will likely be flowing continuously into Kafka where the application will be up and running):
+</p>
+
+<pre>
+&gt; <b>cat /tmp/file-input.txt | ./bin/kafka-console-producer --broker-list localhost:9092 --topic streams-file-input</b>
+</pre>
+
+<p>
+We can now run the WordCount demo application to process the input data:
+</p>
+
+<pre>
+&gt; <b>./bin/kafka-run-class org.apache.kafka.streams.examples.wordcount.WordCountDemo</b>
+</pre>
+
+<p>
+There won't be any STDOUT output except log entries as the results are continuously written back into another topic named <b>streams-wordcount-output</b> in Kafka.
+The demo will run for a few seconds and then, unlike typical stream processing applications, terminate automatically.
+</p>
+<p>
+We can now inspect the output of the WordCount demo application by reading from its output topic:
+</p>
+
+<pre>
+&gt; <b>./bin/kafka-console-consumer --zookeeper localhost:2181 \</b>
+            <b>--topic streams-wordcount-output \</b>
+            <b>--from-beginning \</b>
+            <b>--formatter kafka.tools.DefaultMessageFormatter \</b>
+            <b>--property print.key=true \</b>
+            <b>--property print.key=true \</b>
+            <b>--property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \</b>
+            <b>--property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer</b>
+</pre>
+
+<p>
+with the following output data being printed to the console (You can stop the console consumer via <b>Ctrl-C</b>):
+</p>
+
+<pre>
+all     1
+streams 1
+lead    1
+to      1
+kafka   1
+hello   1
+kafka   2
+streams 2
+join    1
+kafka   3
+summit  1
+<b>^C</b>
+</pre>
+
+<p>
+Here, the first column is the Kafka message key, and the second column is the message value, both in in <code>java.lang.String</code> format.
+Note that the output is actually a continuous stream of updates, where each data record (i.e. each line in the original output above) is
+an updated count of a single word, aka record key such as "kafka". For multiple records with the same key, each later record is an update of the previous one.
+</p>

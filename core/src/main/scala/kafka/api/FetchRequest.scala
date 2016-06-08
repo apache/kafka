@@ -141,7 +141,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
 
   def numPartitions = requestInfo.size
 
-  override def toString(): String = {
+  override def toString: String = {
     describe(true)
   }
 

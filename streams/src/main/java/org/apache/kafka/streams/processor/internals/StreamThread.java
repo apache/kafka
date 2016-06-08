@@ -22,8 +22,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
@@ -35,10 +33,9 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -151,24 +148,12 @@ public class StreamThread extends Thread {
 
     public StreamThread(TopologyBuilder builder,
                         StreamsConfig config,
+                        KafkaClientSupplier clientSupplier,
                         String applicationId,
                         String clientId,
                         UUID processId,
                         Metrics metrics,
                         Time time) {
-        this(builder, config, null , null, null, applicationId, clientId, processId, metrics, time);
-    }
-
-    StreamThread(TopologyBuilder builder,
-                 StreamsConfig config,
-                 Producer<byte[], byte[]> producer,
-                 Consumer<byte[], byte[]> consumer,
-                 Consumer<byte[], byte[]> restoreConsumer,
-                 String applicationId,
-                 String clientId,
-                 UUID processId,
-                 Metrics metrics,
-                 Time time) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
 
         this.applicationId = applicationId;
@@ -180,9 +165,16 @@ public class StreamThread extends Thread {
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
 
         // set the producer and consumer clients
-        this.producer = (producer != null) ? producer : createProducer();
-        this.consumer = (consumer != null) ? consumer : createConsumer();
-        this.restoreConsumer = (restoreConsumer != null) ? restoreConsumer : createRestoreConsumer();
+        String threadName = getName();
+        String threadClientId = clientId + "-" + threadName;
+        log.info("Creating producer client for stream thread [{}]", threadName);
+        this.producer = clientSupplier.getProducer(config.getProducerConfigs(threadClientId));
+        log.info("Creating consumer client for stream thread [{}]", threadName);
+        this.consumer = clientSupplier.getConsumer(
+                config.getConsumerConfigs(this, applicationId, threadClientId));
+        log.info("Creating restore consumer client for stream thread [{}]", threadName);
+        this.restoreConsumer = clientSupplier.getRestoreConsumer(
+                config.getRestoreConsumerConfigs(threadClientId));
 
         // initialize the task list
         this.activeTasks = new HashMap<>();
@@ -213,32 +205,10 @@ public class StreamThread extends Thread {
         this.partitionAssignor = partitionAssignor;
     }
 
-    private Producer<byte[], byte[]> createProducer() {
-        String threadName = this.getName();
-        log.info("Creating producer client for stream thread [" + threadName + "]");
-        return new KafkaProducer<>(config.getProducerConfigs(this.clientId + "-" + threadName),
-                new ByteArraySerializer(),
-                new ByteArraySerializer());
-    }
-
-    private Consumer<byte[], byte[]> createConsumer() {
-        String threadName = this.getName();
-        log.info("Creating consumer client for stream thread [" + threadName + "]");
-        return new KafkaConsumer<>(config.getConsumerConfigs(this, this.applicationId, this.clientId + "-" + threadName),
-                new ByteArrayDeserializer(),
-                new ByteArrayDeserializer());
-    }
-
-    private Consumer<byte[], byte[]> createRestoreConsumer() {
-        String threadName = this.getName();
-        log.info("Creating restore consumer client for stream thread [" + threadName + "]");
-        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(this.clientId + "-" + threadName),
-                new ByteArrayDeserializer(),
-                new ByteArrayDeserializer());
-    }
-
     /**
      * Execute the stream processors
+     * @throws KafkaException for any Kafka-related exceptions
+     * @throws Exception for any other non-Kafka exceptions
      */
     @Override
     public void run() {
@@ -284,7 +254,7 @@ public class StreamThread extends Thread {
         removeStandbyTasks();
 
         // We need to first close the underlying clients before closing the state
-        // manager, for example we need to make sure producer's message sends
+        // manager, for example we need to make sure producer's record sends
         // have all been acked before the state manager records
         // changelog sent offsets
         try {
@@ -341,8 +311,9 @@ public class StreamThread extends Thread {
 
             totalNumBuffered = 0;
 
+            // try to process one fetch record from each task via the topology, and also trigger punctuate
+            // functions if necessary, which may result in more records going through the topology in this loop
             if (!activeTasks.isEmpty()) {
-                // try to process one record from each task
                 for (StreamTask task : activeTasks.values()) {
                     long startProcess = time.milliseconds();
 
@@ -350,9 +321,12 @@ public class StreamThread extends Thread {
                     requiresPoll = requiresPoll || task.requiresPoll();
 
                     sensors.processTimeSensor.record(time.milliseconds() - startProcess);
-                }
 
-                maybePunctuate();
+                    maybePunctuate(task);
+
+                    if (task.commitNeeded())
+                        commitOne(task, time.milliseconds());
+                }
 
                 // if pollTimeMs has passed since the last poll, we poll to respond to a possible rebalance
                 // even when we paused all partitions.
@@ -424,18 +398,18 @@ public class StreamThread extends Thread {
         return true;
     }
 
-    private void maybePunctuate() {
-        for (StreamTask task : activeTasks.values()) {
-            try {
-                long now = time.milliseconds();
+    private void maybePunctuate(StreamTask task) {
+        try {
+            long now = time.milliseconds();
 
-                if (task.maybePunctuate(now))
-                    sensors.punctuateTimeSensor.record(time.milliseconds() - now);
+            // check whether we should punctuate based on the task's partition group timestamp;
+            // which are essentially based on record timestamp.
+            if (task.maybePunctuate())
+                sensors.punctuateTimeSensor.record(time.milliseconds() - now);
 
-            } catch (KafkaException e) {
-                log.error("Failed to punctuate active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
-                throw e;
-            }
+        } catch (KafkaException e) {
+            log.error("Failed to punctuate active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+            throw e;
         }
     }
 
@@ -449,16 +423,6 @@ public class StreamThread extends Thread {
             lastCommit = now;
 
             processStandbyRecords = true;
-        } else {
-            for (StreamTask task : activeTasks.values()) {
-                try {
-                    if (task.commitNeeded())
-                        commitOne(task, time.milliseconds());
-                } catch (KafkaException e) {
-                    log.error("Failed to commit active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
-                    throw e;
-                }
-            }
         }
     }
 
@@ -523,6 +487,7 @@ public class StreamThread extends Thread {
                                 if (directoryLock != null) {
                                     try {
                                         directoryLock.release();
+                                        directoryLock.channel().close();
                                     } catch (IOException e) {
                                         log.error("Failed to release the state directory lock");
                                     }
@@ -766,6 +731,9 @@ public class StreamThread extends Thread {
             sensor.record((endNs - startNs) / 1000000, endNs);
         }
 
+        /**
+         * @throws IllegalArgumentException if tags is not constructed in key-value pairs
+         */
         @Override
         public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
             // extract the additional tags if there are any

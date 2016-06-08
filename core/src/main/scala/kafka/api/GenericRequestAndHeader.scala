@@ -39,7 +39,7 @@ private[kafka] abstract class GenericRequestAndHeader(val versionId: Short,
     body.sizeOf()
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     describe(true)
   }
 

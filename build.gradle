@@ -26,12 +26,15 @@ buildscript {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar:grgit:1.5.0"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.12.0'
+    classpath 'org.scoverage:gradle-scoverage:2.0.1'
   }
 }
 
 allprojects {
   apply plugin: 'idea'
   apply plugin: 'eclipse'
+  apply plugin: "jacoco"
+
   repositories {
     mavenCentral()
   }
@@ -53,10 +56,19 @@ allprojects {
       }
     }
   }
+
+  if (JavaVersion.current().isJava8Compatible()) {
+    tasks.withType(Javadoc) {
+      // disable the crazy super-strict doclint tool in Java 8
+      // noinspection SpellCheckingInspection
+      options.addStringOption('Xdoclint:none', '-quiet')
+    }
+  }
+
 }
 
 ext {
-  gradleVersion = "2.11"
+  gradleVersion = "2.13"
   buildVersionFileName = "kafka-version.properties"
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
@@ -69,6 +81,8 @@ ext {
   mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
 
   userShowStandardStreams = project.hasProperty("showStandardStreams") ? showStandardStreams : null
+
+  userTestLoggingEvents = project.hasProperty("testLoggingEvents") ? Arrays.asList(testLoggingEvents.split(",")) : null
 
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
 }
@@ -109,14 +123,6 @@ subprojects {
     options.compilerArgs << "-Xlint:deprecation"
   }
 
-  if (JavaVersion.current().isJava8Compatible()) {
-    tasks.withType(Javadoc) {
-        // disable the crazy super-strict doclint tool in Java 8
-        //noinspection SpellCheckingInspection
-        options.addStringOption('Xdoclint:none', '-quiet')
-      }
-  }
-
   uploadArchives {
     repositories {
       signing {
@@ -152,7 +158,7 @@ subprojects {
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
     testLogging {
-      events "passed", "skipped", "failed"
+      events = userTestLoggingEvents ?: ["passed", "skipped", "failed"]
       showStandardStreams = userShowStandardStreams ?: false
       exceptionFormat = 'full'
     }
@@ -178,6 +184,12 @@ subprojects {
   }
 
   task docsJar(dependsOn: javadocJar)
+
+  javadoc {
+    options.charSet = 'UTF-8'
+    options.docEncoding = 'UTF-8'
+    options.encoding = 'UTF-8'
+  }
 
   task systemTestLibs(dependsOn: jar)
 
@@ -249,7 +261,49 @@ subprojects {
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
+
+  // Ignore core since its a scala project
+  if (it.path != ':core') {
+    // NOTE: Gradles Jacoco plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
+    // may report 0 coverage, since the source was modified after initial instrumentation.
+    // See https://github.com/jacoco/jacoco/issues/51
+    jacocoTestReport {
+      dependsOn tasks.test
+      sourceSets sourceSets.main
+      reports {
+        html.enabled = true
+        xml.enabled = true
+        csv.enabled = false
+      }
+    }
+  }
 }
+
+// Aggregates all jacoco results into the root project directory
+task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
+  def javaProjects = subprojects.findAll { it.path != ':core' }
+
+  description = 'Generates an aggregate report from all subprojects'
+  dependsOn(javaProjects.test)
+
+  additionalSourceDirs = files(javaProjects.sourceSets.main.allSource.srcDirs)
+  sourceDirectories = files(javaProjects.sourceSets.main.allSource.srcDirs)
+  classDirectories =  files(javaProjects.sourceSets.main.output)
+  executionData = files(javaProjects.jacocoTestReport.executionData)
+
+  reports {
+    html.enabled = true
+    xml.enabled = true
+  }
+
+  // workaround to ignore projects that don't have any tests at all
+  onlyIf = { true }
+  doFirst {
+    executionData = files(executionData.findAll { it.exists() })
+  }
+}
+
+task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportScoverage'])
 
 for ( sv in ['2_10', '2_11'] ) {
   String svInDot = sv.replaceAll( "_", ".")
@@ -320,6 +374,7 @@ project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
   apply plugin: 'scala'
+  apply plugin: "org.scoverage"
   archivesBaseName = "kafka_${versions.baseScala}"
 
   dependencies {
@@ -338,10 +393,33 @@ project(':core') {
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix
     testCompile libs.easymock
-    testCompile libs.hadoopMiniKdc
+    testCompile(libs.apacheda) {
+      exclude group: 'xml-apis', module: 'xml-apis'
+    }
+    testCompile libs.apachedsCoreApi
+    testCompile libs.apachedsInterceptorKerberos
+    testCompile libs.apachedsProtocolShared
+    testCompile libs.apachedsProtocolKerberos
+    testCompile libs.apachedsProtocolLdap
+    testCompile libs.apachedsLdifPartition
+    testCompile libs.apachedsMavibotPartition
+    testCompile libs.apachedsJdbmPartition
     testCompile libs.junit
     testCompile libs.scalaTest
+
+    scoverage libs.scoveragePlugin
+    scoverage libs.scoverageRuntime
   }
+
+  jacocoTestReport.enabled = false
+  scoverage {
+    reportDir = file("${rootProject.buildDir}/scoverage")
+    highlighting = false
+  }
+  checkScoverage {
+    minimumRate = 0.0
+  }
+  checkScoverage.shouldRunAfter('test')
 
   configurations {
     // manually excludes some unnecessary dependencies
@@ -367,7 +445,6 @@ project(':core') {
     into "$buildDir/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
   }
-
 
   task genProtocolErrorDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
@@ -413,7 +490,7 @@ project(':core') {
 
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
                                'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
-                               ':connect:runtime:genConnectConfigDocs'], type: Tar) {
+                               ':connect:runtime:genConnectConfigDocs', ':streams:genStreamsConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("../docs")
@@ -449,7 +526,7 @@ project(':core') {
   }
 
   jar {
-    dependsOn('copyDependantLibs', 'copyDependantTestLibs')
+    dependsOn('copyDependantLibs')
   }
 
   jar.manifest {
@@ -466,6 +543,8 @@ project(':core') {
     duplicatesStrategy 'exclude'
   }
 
+  systemTestLibs.dependsOn('jar', 'testJar', 'copyDependantTestLibs')
+
   checkstyle {
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
   }
@@ -476,6 +555,10 @@ project(':examples') {
 
   dependencies {
     compile project(':core')
+  }
+
+  javadoc {
+    enabled = false
   }
 
   checkstyle {
@@ -552,77 +635,90 @@ project(':clients') {
 }
 
 project(':tools') {
-    archivesBaseName = "kafka-tools"
+  archivesBaseName = "kafka-tools"
 
-    dependencies {
-        compile project(':clients')
-        compile project(':log4j-appender')
-        compile libs.argparse4j
-        compile libs.jacksonDatabind
-        compile libs.slf4jlog4j
+  dependencies {
+    compile project(':clients')
+    compile project(':log4j-appender')
+    compile libs.argparse4j
+    compile libs.jacksonDatabind
+    compile libs.slf4jlog4j
 
-        testCompile project(':clients')
-        testCompile libs.junit
+    testCompile project(':clients')
+    testCompile libs.junit
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
     }
-
-    javadoc {
-        include "**/org/apache/kafka/tools/*"
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
     }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
 
-    tasks.create(name: "copyDependantLibs", type: Copy) {
-        from (configurations.testRuntime) {
-            include('slf4j-log4j12*')
-        }
-        from (configurations.runtime) {
-            exclude('kafka-clients*')
-        }
-        into "$buildDir/dependant-libs-${versions.scala}"
-        duplicatesStrategy 'exclude'
-    }
-
-    jar {
-        dependsOn 'copyDependantLibs'
-    }
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
 }
 
 project(':streams') {
-    archivesBaseName = "kafka-streams"
+  archivesBaseName = "kafka-streams"
 
-    dependencies {
-        compile project(':clients')
-        compile project(':connect:json')  // this dependency should be removed after we unify data API
-        compile libs.slf4jlog4j
-        compile libs.rocksDBJni
-        compile libs.zkclient // this dependency should be removed after KIP-4
-        compile libs.jacksonDatabind // this dependency should be removed after KIP-4
-
-        testCompile project(':clients').sourceSets.test.output
-        testCompile libs.junit
+  dependencies {
+    compile project(':clients')
+    compile project(':connect:json')  // this dependency should be removed after we unify data API
+    compile libs.slf4jlog4j
+    compile libs.rocksDBJni
+    // this dependency should be removed after KIP-4
+    compile (libs.zkclient) {
+      exclude module: 'jline'
+      exclude module: 'netty'
     }
+    compile libs.jacksonDatabind // this dependency should be removed after KIP-4
 
-    javadoc {
-        include "**/org/apache/kafka/streams/**"
-        exclude "**/internals/**"
-    }
+    testCompile project(':clients').sourceSets.test.output
+    testCompile project(':core')
+    testCompile project(':core').sourceSets.test.output
+    testCompile libs.junit
+  }
 
-    tasks.create(name: "copyDependantLibs", type: Copy) {
-        from (configurations.testRuntime) {
-            include('slf4j-log4j12*')
-        }
-        from (configurations.runtime) {
-            exclude('kafka-clients*')
-        }
-        into "$buildDir/dependant-libs-${versions.scala}"
-        duplicatesStrategy 'exclude'
-    }
+  javadoc {
+    include "**/org/apache/kafka/streams/**"
+    exclude "**/internals/**"
+  }
 
-    jar {
-        dependsOn 'copyDependantLibs'
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
     }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
 
-    systemTestLibs {
-        dependsOn testJar
-    }
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+
+  task genStreamsConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.streams.StreamsConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
+  }
 }
 
 project(':streams:examples') {
@@ -662,8 +758,9 @@ project(':log4j-appender') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/log4jappender/*"
+    enabled = false
   }
+
 }
 
 project(':connect:api') {
@@ -679,6 +776,7 @@ project(':connect:api') {
   }
 
   javadoc {
+    include "**/org/apache/kafka/connect/**" // needed for the `javadocAll` task
     options.links "http://docs.oracle.com/javase/7/docs/api/"
   }
 
@@ -750,7 +848,10 @@ project(':connect:runtime') {
     compile libs.jettyServer
     compile libs.jettyServlet
     compile libs.jettyServlets
-    compile libs.reflections
+    compile(libs.reflections) {
+      // Exclude because of LGPL license
+      exclude group: 'com.google.code.findbugs', module: 'annotations'
+    }
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.easymock
@@ -824,4 +925,13 @@ project(':connect:file') {
   jar {
     dependsOn copyDependantLibs
   }
+}
+
+task aggregatedJavadoc(type: Javadoc) {
+  def projectsWithJavadoc = subprojects.findAll { it.javadoc.enabled }
+  source = projectsWithJavadoc.collect { it.sourceSets.main.allJava }
+  classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
+  includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
+  excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
+  options.links "http://docs.oracle.com/javase/7/docs/api/"
 }

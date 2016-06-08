@@ -28,6 +28,7 @@ import kafka.log.{LogAppendInfo, LogManager}
 import kafka.message.{ByteBufferMessageSet, InvalidMessageException, Message, MessageSet}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
+import org.I0Itec.zkclient.IZkChildListener
 import org.apache.kafka.common.errors.{OffsetOutOfRangeException, RecordBatchTooLargeException, ReplicaNotAvailableException, RecordTooLargeException,
 InvalidTopicException, ControllerMovedException, NotLeaderForPartitionException, CorruptRecordException, UnknownTopicOrPartitionException,
 InvalidTimestampException}
@@ -39,7 +40,6 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time => JTime}
 import scala.collection._
 import scala.collection.JavaConverters._
-import org.apache.kafka.common.internals.TopicConstants
 
 /*
  * Result metadata of a log append operation on the log
@@ -110,7 +110,9 @@ class ReplicaManager(val config: KafkaConfig,
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   private val localBrokerId = config.brokerId
-  private val allPartitions = new Pool[(String, Int), Partition]
+  private val allPartitions = new Pool[(String, Int), Partition](valueFactory = Some { case (t, p) =>
+    new Partition(t, p, time, this)
+  })
   private val replicaStateChangeLock = new Object
   val replicaFetcherManager = new ReplicaFetcherManager(config, this, metrics, jTime, threadNamePrefix)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
@@ -122,9 +124,9 @@ class ReplicaManager(val config: KafkaConfig,
   private val lastIsrChangeMs = new AtomicLong(System.currentTimeMillis())
   private val lastIsrPropagationMs = new AtomicLong(System.currentTimeMillis())
 
-  val delayedProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
+  val delayedProducePurgatory = DelayedOperationPurgatory[DelayedProduce](
     purgatoryName = "Produce", config.brokerId, config.producerPurgatoryPurgeIntervalRequests)
-  val delayedFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](
+  val delayedFetchPurgatory = DelayedOperationPurgatory[DelayedFetch](
     purgatoryName = "Fetch", config.brokerId, config.fetchPurgatoryPurgeIntervalRequests)
 
   val leaderCount = newGauge(
@@ -223,8 +225,12 @@ class ReplicaManager(val config: KafkaConfig,
       case Some(partition) =>
         if(deletePartition) {
           val removedPartition = allPartitions.remove((topic, partitionId))
-          if (removedPartition != null)
+          if (removedPartition != null) {
             removedPartition.delete() // this will delete the local log
+            val topicHasPartitions = allPartitions.keys.exists { case (t, _) => topic == t }
+            if (!topicHasPartitions)
+                BrokerTopicStats.removeMetrics(topic)
+          }
         }
       case None =>
         // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
@@ -266,12 +272,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def getOrCreatePartition(topic: String, partitionId: Int): Partition = {
-    var partition = allPartitions.get((topic, partitionId))
-    if (partition == null) {
-      allPartitions.putIfNotExists((topic, partitionId), new Partition(topic, partitionId, time, this))
-      partition = allPartitions.get((topic, partitionId))
-    }
-    partition
+    allPartitions.getAndMaybePut((topic, partitionId))
   }
 
   def getPartition(topic: String, partitionId: Int): Option[Partition] = {
@@ -358,9 +359,8 @@ class ReplicaManager(val config: KafkaConfig,
       // Just return an error and don't handle the request at all
       val responseStatus = messagesPerPartition.map {
         case (topicAndPartition, messageSet) =>
-          (topicAndPartition -> new PartitionResponse(Errors.INVALID_REQUIRED_ACKS.code,
-                                                      LogAppendInfo.UnknownLogAppendInfo.firstOffset,
-                                                      Message.NoTimestamp))
+          topicAndPartition -> new PartitionResponse(Errors.INVALID_REQUIRED_ACKS.code,
+            LogAppendInfo.UnknownLogAppendInfo.firstOffset, Message.NoTimestamp)
       }
       responseCallback(responseStatus)
     }
@@ -374,7 +374,7 @@ class ReplicaManager(val config: KafkaConfig,
   private def delayedRequestRequired(requiredAcks: Short, messagesPerPartition: Map[TopicPartition, MessageSet],
                                        localProduceResults: Map[TopicPartition, LogAppendResult]): Boolean = {
     requiredAcks == -1 &&
-    messagesPerPartition.size > 0 &&
+    messagesPerPartition.nonEmpty &&
     localProduceResults.values.count(_.error.isDefined) < messagesPerPartition.size
   }
 
@@ -394,7 +394,7 @@ class ReplicaManager(val config: KafkaConfig,
       BrokerTopicStats.getBrokerAllTopicsStats().totalProduceRequestRate.mark()
 
       // reject appending to internal topics if it is not allowed
-      if (TopicConstants.INTERNAL_TOPICS.contains(topicPartition.topic) && !internalTopicsAllowed) {
+      if (Topic.isInternal(topicPartition.topic) && !internalTopicsAllowed) {
         (topicPartition, LogAppendResult(
           LogAppendInfo.UnknownLogAppendInfo,
           Some(new InvalidTopicException("Cannot append to internal topic %s".format(topicPartition.topic)))))
@@ -638,13 +638,13 @@ class ReplicaManager(val config: KafkaConfig,
         val partitionsTobeLeader = partitionState.filter { case (partition, stateInfo) =>
           stateInfo.leader == config.brokerId
         }
-        val partitionsToBeFollower = (partitionState -- partitionsTobeLeader.keys)
+        val partitionsToBeFollower = partitionState -- partitionsTobeLeader.keys
 
-        val partitionsBecomeLeader = if (!partitionsTobeLeader.isEmpty)
+        val partitionsBecomeLeader = if (partitionsTobeLeader.nonEmpty)
           makeLeaders(controllerId, controllerEpoch, partitionsTobeLeader, correlationId, responseMap)
         else
           Set.empty[Partition]
-        val partitionsBecomeFollower = if (!partitionsToBeFollower.isEmpty)
+        val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
           makeFollowers(controllerId, controllerEpoch, partitionsToBeFollower, correlationId, responseMap, metadataCache)
         else
           Set.empty[Partition]

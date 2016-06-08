@@ -77,7 +77,7 @@ public class SmokeTestUtil {
 
     public static final class Unwindow<K, V> implements KeyValueMapper<Windowed<K>, V, KeyValue<K, V>> {
         public KeyValue<K, V> apply(Windowed<K> winKey, V value) {
-            return new KeyValue<K, V>(winKey.value(), value);
+            return new KeyValue<K, V>(winKey.key(), value);
         }
     }
 

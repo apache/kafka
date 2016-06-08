@@ -13,7 +13,7 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.BrokerEndPoint;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -113,15 +113,15 @@ public class UpdateMetadataRequest extends AbstractRequest {
      * Constructor for version 0.
      */
     @Deprecated
-    public UpdateMetadataRequest(int controllerId, int controllerEpoch, Set<BrokerEndPoint> liveBrokers,
+    public UpdateMetadataRequest(int controllerId, int controllerEpoch, Set<Node> liveBrokers,
                                  Map<TopicPartition, PartitionState> partitionStates) {
         this(0, controllerId, controllerEpoch, partitionStates,
              brokerEndPointsToBrokers(liveBrokers));
     }
 
-    private static Set<Broker> brokerEndPointsToBrokers(Set<BrokerEndPoint> brokerEndPoints) {
+    private static Set<Broker> brokerEndPointsToBrokers(Set<Node> brokerEndPoints) {
         Set<Broker> brokers = new HashSet<>(brokerEndPoints.size());
-        for (BrokerEndPoint brokerEndPoint : brokerEndPoints) {
+        for (Node brokerEndPoint : brokerEndPoints) {
             Map<SecurityProtocol, EndPoint> endPoints = Collections.singletonMap(SecurityProtocol.PLAINTEXT,
                     new EndPoint(brokerEndPoint.host(), brokerEndPoint.port()));
             brokers.add(new Broker(brokerEndPoint.id(), endPoints, null));

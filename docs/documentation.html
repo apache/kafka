@@ -40,6 +40,7 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
                       <li><a href="#simpleconsumerapi">2.2.2 Old Simple Consumer API</a>
                       <li><a href="#newconsumerapi">2.2.3 New Consumer API</a>
                   </ul>
+              <li><a href="#streamsapi">2.3 Streams API</a>
           </ul>
     </li>
     <li><a href="#configuration">3. Configuration</a>
@@ -52,6 +53,7 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
                     <li><a href="#newconsumerconfigs">3.3.2 New Consumer Configs</a>
                 </ul>
             <li><a href="#connectconfigs">3.4 Kafka Connect Configs</a>
+            <li><a href="#streamsconfigs">3.5 Kafka Streams Configs</a>
         </ul>
     </li>
     <li><a href="#design">4. Design</a>
@@ -121,7 +123,8 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
             <li><a href="#security_ssl">7.2 Encryption and Authentication using SSL</a></li>
             <li><a href="#security_sasl">7.3 Authentication using SASL</a></li>
             <li><a href="#security_authz">7.4 Authorization and ACLs</a></li>
-            <li><a href="#zk_authz">7.5 ZooKeeper Authentication</a></li>
+            <li><a href="#security_rolling_upgrade">7.5 Incorporating Security Features in a Running Cluster</a></li>
+            <li><a href="#zk_authz">7.6 ZooKeeper Authentication</a></li>
             <ul>
                 <li><a href="#zk_authz_new">New Clusters</a></li>
                 <li><a href="#zk_authz_migration">Migrating Clusters</a></li>
@@ -134,6 +137,17 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
             <li><a href="#connect_overview">8.1 Overview</a></li>
             <li><a href="#connect_user">8.2 User Guide</a></li>
             <li><a href="#connect_development">8.3 Connector Development Guide</a></li>
+        </ul>
+    </li>
+    <li><a href="#streams">9. Kafka Streams</a>
+        <ul>
+            <li><a href="#streams_overview">9.1 Overview</a></li>
+            <li><a href="#streams_developer">9.2 Developer Guide</a></li>
+            <ul>
+                <li><a href="#streams_concepts">Core Concepts</a></li>
+                <li><a href="#streams_processor">Low-Level Processor API</a></li>
+                <li><a href="#streams_dsl">High-Level Streams DSL</a></li>
+            </ul>
         </ul>
     </li>
 </ul>
@@ -170,5 +184,8 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
 
 <h2><a id="connect" href="#connect">8. Kafka Connect</a></h2>
 <!--#include virtual="connect.html" -->
+
+<h2><a id="streams" href="#streams">9. Kafka Streams</a></h2>
+<!--#include virtual="streams.html" -->
 
 <!--#include virtual="../includes/footer.html" -->

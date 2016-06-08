@@ -26,6 +26,8 @@ import org.apache.kafka.common.config.ConfigDef.Width;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+
 /**
  * <p>
  * Configuration options for Connectors. These only include Kafka Connect system-level configuration
@@ -38,7 +40,7 @@ import java.util.Map;
  * </p>
  */
 public class ConnectorConfig extends AbstractConfig {
-    private static final String COMMON_GROUP = "Common";
+    protected static final String COMMON_GROUP = "Common";
 
     public static final String NAME_CONFIG = "name";
     private static final String NAME_DOC = "Globally unique name to use for this connector.";
@@ -54,25 +56,15 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String TASKS_MAX_CONFIG = "tasks.max";
     private static final String TASKS_MAX_DOC = "Maximum number of tasks to use for this connector.";
     public static final int TASKS_MAX_DEFAULT = 1;
+    private static final int TASKS_MIN_CONFIG = 1;
+
     private static final String TASK_MAX_DISPLAY = "Tasks max";
 
-    public static final String TOPICS_CONFIG = "topics";
-    private static final String TOPICS_DOC = "";
-    public static final String TOPICS_DEFAULT = "";
-    private static final String TOPICS_DISPLAY = "Topics";
-
-    private static ConfigDef config;
-
-    static {
-        config = new ConfigDef()
-                .define(NAME_CONFIG, Type.STRING, Importance.HIGH, NAME_DOC, COMMON_GROUP, 1, Width.MEDIUM, NAME_DISPLAY)
-                .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, 2, Width.LONG, CONNECTOR_CLASS_DISPLAY)
-                .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT, Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, 3, Width.SHORT, TASK_MAX_DISPLAY)
-                .define(TOPICS_CONFIG, Type.LIST, TOPICS_DEFAULT, Importance.HIGH, TOPICS_DOC, COMMON_GROUP, 4, Width.LONG, TOPICS_DISPLAY);
-    }
-
     public static ConfigDef configDef() {
-        return config;
+        return new ConfigDef()
+            .define(NAME_CONFIG, Type.STRING, Importance.HIGH, NAME_DOC, COMMON_GROUP, 1, Width.MEDIUM, NAME_DISPLAY)
+            .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, 2, Width.LONG, CONNECTOR_CLASS_DISPLAY)
+            .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT,  atLeast(TASKS_MIN_CONFIG), Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, 3, Width.SHORT, TASK_MAX_DISPLAY);
     }
 
     public ConnectorConfig() {
@@ -80,6 +72,10 @@ public class ConnectorConfig extends AbstractConfig {
     }
 
     public ConnectorConfig(Map<String, String> props) {
-        super(config, props);
+        super(configDef(), props);
+    }
+
+    public ConnectorConfig(ConfigDef subClassConfig, Map<String, String> props) {
+        super(subClassConfig, props);
     }
 }

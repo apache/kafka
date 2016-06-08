@@ -17,8 +17,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -33,6 +36,10 @@ import org.slf4j.LoggerFactory;
  * 
  * Metadata is maintained for only a subset of topics, which can be added to over time. When we request metadata for a
  * topic we don't have any metadata for it will trigger a metadata update.
+ * <p>
+ * If topic expiry is enabled for the metadata, any topic that has not been used within the expiry interval
+ * is removed from the metadata refresh set after an update. Consumers disable topic expiry since they explicitly
+ * manage topics while producers rely on topic expiry to limit the refresh set.
  */
 public final class Metadata {
     /**
@@ -50,6 +57,9 @@ public final class Metadata {
 
     private static final Logger log = LoggerFactory.getLogger(Metadata.class);
 
+    public static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
+    private static final long TOPIC_EXPIRY_NEEDS_UPDATE = -1L;
+
     private final long refreshBackoffMs;
     private final long metadataExpireMs;
     private int version;
@@ -58,12 +68,14 @@ public final class Metadata {
     private boolean needUpdate;
     private final List<Listener> listeners;
     private boolean needMetadataForAllTopics;
+    private final boolean topicExpiryEnabled;
 
     /**
      * KAFKA-3428: these fields are not protected by synchronized methods. Refer to synchronization policy in {@link org.apache.kafka.clients.Metadata}
      */
     private volatile Cluster cluster;
-    private final Set<String> topics;
+    /* Topics with expiry time */
+    private final Map<String, Long> topics;
 
     /**
      * Create a metadata instance with reasonable defaults
@@ -72,21 +84,27 @@ public final class Metadata {
         this(100L, 60 * 60 * 1000L);
     }
 
+    public Metadata(long refreshBackoffMs, long metadataExpireMs) {
+        this(refreshBackoffMs, metadataExpireMs, false);
+    }
+
     /**
      * Create a new Metadata instance
      * @param refreshBackoffMs The minimum amount of time that must expire between metadata refreshes to avoid busy
      *        polling
      * @param metadataExpireMs The maximum amount of time that metadata can be retained without refresh
+     * @param topicExpiryEnabled If true, enable expiry of unused topics
      */
-    public Metadata(long refreshBackoffMs, long metadataExpireMs) {
+    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled) {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
+        this.topicExpiryEnabled = topicExpiryEnabled;
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
         this.version = 0;
         this.cluster = Cluster.empty();
         this.needUpdate = false;
-        this.topics = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+        this.topics = new ConcurrentHashMap<String, Long>();
         this.listeners = new ArrayList<>();
         this.needMetadataForAllTopics = false;
     }
@@ -99,10 +117,11 @@ public final class Metadata {
     }
 
     /**
-     * Add the topic to maintain in the metadata
+     * Add the topic to maintain in the metadata. If topic expiry is enabled, expiry will
+     * time be reset on the next update.
      */
     public synchronized void add(String topic) {
-        topics.add(topic);
+        topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE);
     }
 
     /**
@@ -125,6 +144,14 @@ public final class Metadata {
     }
 
     /**
+     * Check whether an update has been explicitly requested.
+     * @return true if an update was requested, false otherwise
+     */
+    public synchronized boolean updateRequested() {
+        return this.needUpdate;
+    }
+
+    /**
      * Wait for metadata update until the current version is larger than the last version we know of
      */
     public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
@@ -144,21 +171,24 @@ public final class Metadata {
     }
 
     /**
-     * Replace the current set of topics maintained to the one provided
+     * Replace the current set of topics maintained to the one provided.
+     * If topic expiry is enabled, expiry time of the topics will be
+     * reset on the next update.
      * @param topics
      */
     public synchronized void setTopics(Collection<String> topics) {
-        if (!this.topics.containsAll(topics))
+        if (!this.topics.keySet().containsAll(topics))
             requestUpdate();
         this.topics.clear();
-        this.topics.addAll(topics);
+        for (String topic : topics)
+            this.topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE);
     }
 
     /**
      * Get the list of topics we are currently maintaining metadata for
      */
     public synchronized Set<String> topics() {
-        return new HashSet<String>(this.topics);
+        return new HashSet<>(this.topics.keySet());
     }
 
     /**
@@ -168,17 +198,32 @@ public final class Metadata {
      * @return true if the topic exists, false otherwise
      */
     public boolean containsTopic(String topic) {
-        return this.topics.contains(topic);
+        return this.topics.containsKey(topic);
     }
 
     /**
-     * Update the cluster metadata
+     * Updates the cluster metadata. If topic expiry is enabled, expiry time
+     * is set for topics if required and expired topics are removed from the metadata.
      */
     public synchronized void update(Cluster cluster, long now) {
         this.needUpdate = false;
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
         this.version += 1;
+
+        if (topicExpiryEnabled) {
+            // Handle expiry of topics from the metadata refresh set.
+            for (Iterator<Map.Entry<String, Long>> it = topics.entrySet().iterator(); it.hasNext(); ) {
+                Map.Entry<String, Long> entry = it.next();
+                long expireMs = entry.getValue();
+                if (expireMs == TOPIC_EXPIRY_NEEDS_UPDATE)
+                    entry.setValue(now + TOPIC_EXPIRY_MS);
+                else if (expireMs <= now) {
+                    it.remove();
+                    log.debug("Removing unused topic {} from the metadata list, expiryMs {} now {}", entry.getKey(), expireMs, now);
+                }
+            }
+        }
 
         for (Listener listener: listeners)
             listener.onMetadataUpdate(cluster);
@@ -221,10 +266,10 @@ public final class Metadata {
 
     /**
      * Set state to indicate if metadata for all topics in Kafka cluster is required or not.
-     * @param needMetadaForAllTopics boolean indicating need for metadata of all topics in cluster.
+     * @param needMetadataForAllTopics boolean indicating need for metadata of all topics in cluster.
      */
-    public synchronized void needMetadataForAllTopics(boolean needMetadaForAllTopics) {
-        this.needMetadataForAllTopics = needMetadaForAllTopics;
+    public synchronized void needMetadataForAllTopics(boolean needMetadataForAllTopics) {
+        this.needMetadataForAllTopics = needMetadataForAllTopics;
     }
 
     /**
@@ -261,9 +306,9 @@ public final class Metadata {
         List<Node> nodes = Collections.emptyList();
         if (cluster != null) {
             unauthorizedTopics.addAll(cluster.unauthorizedTopics());
-            unauthorizedTopics.retainAll(this.topics);
+            unauthorizedTopics.retainAll(this.topics.keySet());
 
-            for (String topic : this.topics) {
+            for (String topic : this.topics.keySet()) {
                 partitionInfos.addAll(cluster.partitionsForTopic(topic));
             }
             nodes = cluster.nodes();

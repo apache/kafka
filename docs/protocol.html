@@ -114,6 +114,21 @@
 
 <p>Currently all versions are baselined at 0, as we evolve these APIs we will indicate the format for each version individually.</p>
 
+<h5><a id="sasl_handshake" href="#sasl_handshake">SASL Authentication Sequence</a></h5>
+<p>The following sequence is used for SASL authentication:
+<ol>
+  <li>Kafka <code>ApiVersionsRequest</code> may be sent by the client to obtain the version ranges of requests supported by the broker. This is optional.</li>
+  <li>Kafka <code>SaslHandshakeRequest</code> containing the SASL mechanism for authentication is sent by the client. If the requested mechanism is not enabled
+    in the server, the server responds with the list of supported mechanisms and closes the client connection. If the mechanism is enabled
+    in the server, the server sends a successful response and continues with SASL authentication.
+  <li>The actual SASL authentication is now performed. A series of SASL client and server tokens corresponding to the mechanism are sent as opaque
+    packets. These packets contain a 32-bit size followed by the token as defined by the protocol for the SASL mechanism.
+  <li>If authentication succeeds, subsequent packets are handled as Kafka API requests. Otherwise, the client connection is closed.
+</ol>
+<p>For interoperability with 0.9.0.x clients, the first packet received by the server is handled as a SASL/GSSAPI client token if it is not a valid
+Kafka request. SASL/GSSAPI authentication is performed starting with this packet, skipping the first two steps above.</p>
+
+
 <h4><a id="protocol_details" href="#protocol_details">The Protocol</a></h4>
 
 <h5><a id="protocol_types" href="#protocol_types">Protocol Primitive Types</a></h5>

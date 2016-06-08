@@ -26,6 +26,7 @@ import java.io.File
 
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
+import org.apache.kafka.common.utils.Utils
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
@@ -54,8 +55,8 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   val message = "hello"
 
   var producer: KafkaProducer[Integer, String] = null
-  def hwFile1 = new OffsetCheckpoint(new File(configProps1.logDirs(0), ReplicaManager.HighWatermarkFilename))
-  def hwFile2 = new OffsetCheckpoint(new File(configProps2.logDirs(0), ReplicaManager.HighWatermarkFilename))
+  def hwFile1 = new OffsetCheckpoint(new File(configProps1.logDirs.head, ReplicaManager.HighWatermarkFilename))
+  def hwFile2 = new OffsetCheckpoint(new File(configProps2.logDirs.head, ReplicaManager.HighWatermarkFilename))
   var servers = Seq.empty[KafkaServer]
 
   // Some tests restart the brokers then produce more data. But since test brokers use random ports, we need
@@ -94,7 +95,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     producer.close()
     for (server <- servers) {
       server.shutdown()
-      CoreUtils.rm(server.config.logDirs(0))
+      Utils.delete(new File(server.config.logDirs.head))
     }
     super.tearDown()
   }

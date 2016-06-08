@@ -30,6 +30,8 @@ import java.io.File;
 
 public class ProcessorContextImpl implements ProcessorContext, RecordCollector.Supplier {
 
+    public static final String NONEXIST_TOPIC = "__null_topic__";
+
     private final TaskId id;
     private final StreamTask task;
     private final StreamsMetrics metrics;
@@ -103,6 +105,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return metrics;
     }
 
+    /**
+     * @throws IllegalStateException if this method is called before {@link #initialized()}
+     */
     @Override
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (initialized)
@@ -111,6 +116,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         stateMgr.register(store, loggingEnabled, stateRestoreCallback);
     }
 
+    /**
+     * @throws TopologyBuilderException if an attempt is made to access this state store from an unknown node
+     */
     @Override
     public StateStore getStateStore(String name) {
         ProcessorNode node = task.node();
@@ -118,21 +126,32 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         if (node == null)
             throw new TopologyBuilderException("Accessing from an unknown node");
 
-        // TODO: restore this once we fix the ValueGetter initialiation issue
+        // TODO: restore this once we fix the ValueGetter initialization issue
         //if (!node.stateStores.contains(name))
         //    throw new TopologyBuilderException("Processor " + node.name() + " has no access to StateStore " + name);
 
         return stateMgr.getStore(name);
     }
 
+    /**
+     * @throws IllegalStateException if the task's record is null
+     */
     @Override
     public String topic() {
         if (task.record() == null)
             throw new IllegalStateException("This should not happen as topic() should only be called while a record is processed");
 
-        return task.record().topic();
+        String topic = task.record().topic();
+
+        if (topic.equals(NONEXIST_TOPIC))
+            return null;
+        else
+            return topic;
     }
 
+    /**
+     * @throws IllegalStateException if the task's record is null
+     */
     @Override
     public int partition() {
         if (task.record() == null)
@@ -141,6 +160,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return task.record().partition();
     }
 
+    /**
+     * @throws IllegalStateException if the task's record is null
+     */
     @Override
     public long offset() {
         if (this.task.record() == null)
@@ -149,6 +171,9 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return this.task.record().offset();
     }
 
+    /**
+     * @throws IllegalStateException if the task's record is null
+     */
     @Override
     public long timestamp() {
         if (task.record() == null)
@@ -165,6 +190,11 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     @Override
     public <K, V> void forward(K key, V value, int childIndex) {
         task.forward(key, value, childIndex);
+    }
+
+    @Override
+    public <K, V> void forward(K key, V value, String childName) {
+        task.forward(key, value, childName);
     }
 
     @Override

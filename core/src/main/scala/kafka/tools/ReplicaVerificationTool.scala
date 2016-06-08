@@ -128,6 +128,12 @@ object ReplicaVerificationTool extends Logging {
         else
           false
     )
+
+    if (filteredTopicMetadata.isEmpty) {
+      error("No topics found. " + topicWhiteListOpt + ", if specified, is either filtering out all topics or there is no topic.")
+      System.exit(1)
+    }
+
     val topicPartitionReplicaList: Seq[TopicPartitionReplica] = filteredTopicMetadata.flatMap(
       topicMetadataResponse =>
         topicMetadataResponse.partitionsMetadata.flatMap(
@@ -174,7 +180,7 @@ object ReplicaVerificationTool extends Logging {
                            fetchSize = fetchSize,
                            maxWait = maxWaitMs,
                            minBytes = 1,
-                           doVerification = (brokerId == verificationBrokerId))
+                           doVerification = brokerId == verificationBrokerId)
     }
 
     Runtime.getRuntime.addShutdownHook(new Thread() {

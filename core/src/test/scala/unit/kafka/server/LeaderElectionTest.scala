@@ -17,22 +17,22 @@
 
 package kafka.server
 
-import org.apache.kafka.common.{BrokerEndPoint, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.LeaderAndIsrRequest.PartitionState
 
 import scala.collection.JavaConverters._
 import kafka.api.LeaderAndIsr
-import org.apache.kafka.common.requests.{LeaderAndIsrResponse, LeaderAndIsrRequest, AbstractRequestResponse}
+import org.apache.kafka.common.requests.{AbstractRequestResponse, LeaderAndIsrRequest, LeaderAndIsrResponse}
 import org.junit.Assert._
-import kafka.utils.{TestUtils, CoreUtils}
+import kafka.utils.{CoreUtils, TestUtils}
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{Errors, ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.utils.SystemTime
-import org.junit.{Test, After, Before}
+import org.junit.{After, Before, Test}
 
 class LeaderElectionTest extends ZooKeeperTestHarness {
   val brokerId1 = 0
@@ -58,7 +58,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     servers.foreach(_.shutdown())
-    servers.foreach(server => CoreUtils.rm(server.config.logDirs))
+    servers.foreach(server => CoreUtils.delete(server.config.logDirs))
     super.tearDown()
   }
 
@@ -130,10 +130,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
 
     val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
     val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", s.boundPort()))
-    val brokerEndPoints = brokers.map { b =>
-      val brokerEndPoint = b.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)
-      new BrokerEndPoint(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
-    }
+    val nodes = brokers.map(_.getNode(SecurityProtocol.PLAINTEXT))
 
     val controllerContext = new ControllerContext(zkUtils, 6000)
     controllerContext.liveBrokers = brokers.toSet
@@ -148,12 +145,11 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
           Set(0, 1).map(Integer.valueOf).asJava)
       )
       val leaderAndIsrRequest = new LeaderAndIsrRequest(controllerId, staleControllerEpoch, partitionStates.asJava,
-        brokerEndPoints.toSet.asJava)
+        nodes.toSet.asJava)
 
       controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, None, leaderAndIsrRequest,
         staleControllerEpochCallback)
-      TestUtils.waitUntilTrue(() => staleControllerEpochDetected == true,
-        "Controller epoch should be stale")
+      TestUtils.waitUntilTrue(() => staleControllerEpochDetected, "Controller epoch should be stale")
       assertTrue("Stale controller epoch not detected by the broker", staleControllerEpochDetected)
     } finally {
       controllerChannelManager.shutdown()

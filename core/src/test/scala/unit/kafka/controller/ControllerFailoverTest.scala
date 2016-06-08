@@ -65,7 +65,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   @Test
   def testMetadataUpdate() {
     log.setLevel(Level.INFO)
-    var controller: KafkaServer = this.servers.head;
+    var controller: KafkaServer = this.servers.head
     // Find the current controller
     val epochMap: mutable.Map[Int, Int] = mutable.Map.empty
     for (server <- this.servers) {
@@ -121,7 +121,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     var counter = 0
     while (!found && counter < 10) {
       for (server <- this.servers) {
-        val previousEpoch = (epochMap get server.config.brokerId) match {
+        val previousEpoch = epochMap get server.config.brokerId match {
           case Some(epoch) =>
             epoch
           case None =>
@@ -130,7 +130,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
         }
 
         if (server.kafkaController.isActive
-            && (previousEpoch) < server.kafkaController.epoch) {
+            && previousEpoch < server.kafkaController.epoch) {
           controller = server
           found = true
         }

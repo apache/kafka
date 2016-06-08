@@ -18,20 +18,18 @@
 package kafka.admin
 
 import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.TimeUnit
+
 import joptsimple.OptionParser
 import org.I0Itec.zkclient.exception.ZkException
-import kafka.utils.{Logging, ZkUtils, CommandLineUtils}
-import org.apache.log4j.Level
+import kafka.utils.{CommandLineUtils, Logging, ZkUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
 import org.apache.zookeeper.data.Stat
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
-import scala.collection._
 import scala.collection.mutable.Queue
 import scala.concurrent._
 import scala.concurrent.duration._
@@ -83,9 +81,9 @@ object ZkSecurityMigrator extends Logging {
     if (options.has(helpOpt))
       CommandLineUtils.printUsageAndDie(parser, usageMessage)
 
-    if ((jaasFile == null)) {
-     val errorMsg = ("No JAAS configuration file has been specified. Please make sure that you have set " +
-                    "the system property %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM))
+    if (jaasFile == null) {
+     val errorMsg = "No JAAS configuration file has been specified. Please make sure that you have set " +
+       "the system property %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
      System.out.println("ERROR: %s".format(errorMsg))
      throw new IllegalArgumentException("Incorrect configuration")
     }

@@ -13,19 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.services.background_thread import BackgroundThreadService
-
-from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
-from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
-from kafkatest.utils import is_int, is_int_with_prefix
-
 import json
 import os
 import signal
 import subprocess
 import time
 
-class VerifiableProducer(BackgroundThreadService):
+from ducktape.services.background_thread import BackgroundThreadService
+
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
+from kafkatest.utils import is_int, is_int_with_prefix
+from kafkatest.version import TRUNK, LATEST_0_8_2
+
+
+class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_producer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stdout")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
@@ -43,7 +44,8 @@ class VerifiableProducer(BackgroundThreadService):
         }
 
     def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
-                 message_validator=is_int, compression_types=None, version=TRUNK):
+                 message_validator=is_int, compression_types=None, version=TRUNK, acks=None,
+                 stop_timeout_sec=150):
         """
         :param max_messages is a number of messages to be produced per producer
         :param message_validator checks for an expected format of messages produced. There are
@@ -52,12 +54,8 @@ class VerifiableProducer(BackgroundThreadService):
                num_nodes = 1
                * is_int_with_prefix recommended if num_nodes > 1, because otherwise each producer
                will produce exactly same messages, and validation may miss missing messages.
-        :param compression_types: If None, all producers will not use compression; or a list of one or
-        more compression types (including "none"). Each producer will pick a compression type
-        from the list in round-robin fashion. Example: compression_types = ["none", "snappy"] and
-        num_nodes = 3, then producer 1 and 2 will not use compression, and producer 3 will use
-        compression type = snappy. If in this example, num_nodes is 1, then first (and only)
-        producer will not use compression.
+        :param compression_types: If None, all producers will not use compression; or a list of
+        compression types, one per producer (could be "none").
         """
         super(VerifiableProducer, self).__init__(context, num_nodes)
 
@@ -67,30 +65,44 @@ class VerifiableProducer(BackgroundThreadService):
         self.throughput = throughput
         self.message_validator = message_validator
         self.compression_types = compression_types
+        if self.compression_types is not None:
+            assert len(self.compression_types) == num_nodes, "Specify one compression type per node"
 
         for node in self.nodes:
             node.version = version
         self.acked_values = []
         self.not_acked_values = []
         self.produced_count = {}
-        self.prop_file = ""
+        self.clean_shutdown_nodes = set()
+        self.acks = acks
+        self.stop_timeout_sec = stop_timeout_sec
+
+    @property
+    def security_config(self):
+        return self.kafka.security_config.client_config()
+
+    def prop_file(self, node):
+        idx = self.idx(node)
+        prop_file = str(self.security_config)
+        if self.compression_types is not None:
+            compression_index = idx - 1
+            self.logger.info("VerifiableProducer (index = %d) will use compression type = %s", idx,
+                             self.compression_types[compression_index])
+            prop_file += "\ncompression.type=%s\n" % self.compression_types[compression_index]
+        return prop_file
 
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % VerifiableProducer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
-        self.security_config = self.kafka.security_config.client_config(self.prop_file)
-        producer_prop_file = str(self.security_config)
         log_config = self.render('tools_log4j.properties', log_file=VerifiableProducer.LOG_FILE)
         node.account.create_file(VerifiableProducer.LOG4J_CONFIG, log_config)
 
         # Create and upload config file
-        if self.compression_types is not None:
-            compression_index = (idx - 1) % len(self.compression_types)
-            self.logger.info("VerifiableProducer (index = %d) will use compression type = %s", idx,
-                             self.compression_types[compression_index])
-            producer_prop_file += "\ncompression.type=%s\n" % self.compression_types[compression_index]
-
+        producer_prop_file = self.prop_file(node)
+        if self.acks is not None:
+            self.logger.info("VerifiableProducer (index = %d) will use acks = %s", idx, self.acks)
+            producer_prop_file += "\nacks=%s\n" % self.acks
         self.logger.info("verifiable_producer.properties:")
         self.logger.info(producer_prop_file)
         node.account.create_file(VerifiableProducer.CONFIG_FILE, producer_prop_file)
@@ -98,7 +110,6 @@ class VerifiableProducer(BackgroundThreadService):
 
         cmd = self.start_cmd(node, idx)
         self.logger.debug("VerifiableProducer %d command: %s" % (idx, cmd))
-
 
         self.produced_count[idx] = 0
         last_produced_time = time.time()
@@ -130,27 +141,37 @@ class VerifiableProducer(BackgroundThreadService):
                         last_produced_time = t
                         prev_msg = data
 
-    def start_cmd(self, node, idx):
+                    elif data["name"] == "shutdown_complete":
+                        if node in self.clean_shutdown_nodes:
+                            raise Exception("Unexpected shutdown event from producer, already shutdown. Producer index: %d" % idx)
+                        self.clean_shutdown_nodes.add(node)
 
+    def start_cmd(self, node, idx):
         cmd = ""
         if node.version <= LATEST_0_8_2:
             # 0.8.2.X releases do not have VerifiableProducer.java, so cheat and add
             # the tools jar from trunk to the classpath
-            cmd += "for file in /opt/%s/tools/build/libs/kafka-tools*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % KAFKA_TRUNK
-            cmd += "for file in /opt/%s/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % KAFKA_TRUNK
+            tools_jar = self.path.jar(TOOLS_JAR_NAME, TRUNK)
+            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, TRUNK)
+
+            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_jar
+            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_dependant_libs_jar
             cmd += "export CLASSPATH; "
 
         cmd += "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
-        cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-run-class.sh org.apache.kafka.tools.VerifiableProducer" \
-              " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol))
+        cmd += " " + self.path.script("kafka-run-class.sh", node)
+        cmd += " org.apache.kafka.tools.VerifiableProducer"
+        cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol))
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
         if self.throughput > 0:
             cmd += " --throughput %s" % str(self.throughput)
         if self.message_validator == is_int_with_prefix:
             cmd += " --value-prefix %s" % str(idx)
+        if self.acks is not None:
+            cmd += " --acks %s\n" % str(self.acks)
 
         cmd += " --producer.config %s" % VerifiableProducer.CONFIG_FILE
         cmd += " 2>> %s | tee -a %s &" % (VerifiableProducer.STDOUT_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
@@ -197,20 +218,17 @@ class VerifiableProducer(BackgroundThreadService):
 
     def each_produced_at_least(self, count):
         with self.lock:
-            for idx in range(1, self.num_nodes):
+            for idx in range(1, self.num_nodes + 1):
                 if self.produced_count.get(idx) is None or self.produced_count[idx] < count:
                     return False
             return True
 
     def stop_node(self, node):
-        self.kill_node(node, clean_shutdown=False, allow_fail=False)
-        if self.worker_threads is None:
-            return
+        self.kill_node(node, clean_shutdown=True, allow_fail=False)
 
-        # block until the corresponding thread exits
-        if len(self.worker_threads) >= self.idx(node):
-            # Need to guard this because stop is preemptively called before the worker threads are added and started
-            self.worker_threads[self.idx(node) - 1].join()
+        stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
+        assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
+                        (str(node.account), str(self.stop_timeout_sec))
 
     def clean_node(self, node):
         self.kill_node(node, clean_shutdown=False, allow_fail=False)

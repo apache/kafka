@@ -204,6 +204,69 @@ public class MetadataTest {
             new HashSet<>(Arrays.asList("topic", "topic1")), topics);
     }
 
+    @Test
+    public void testTopicExpiry() throws Exception {
+        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true);
+
+        // Test that topic is expired if not used within the expiry interval
+        long time = 0;
+        metadata.add("topic1");
+        metadata.update(Cluster.empty(), time);
+        time += Metadata.TOPIC_EXPIRY_MS;
+        metadata.update(Cluster.empty(), time);
+        assertFalse("Unused topic not expired", metadata.containsTopic("topic1"));
+
+        // Test that topic is not expired if used within the expiry interval
+        metadata.add("topic2");
+        metadata.update(Cluster.empty(), time);
+        for (int i = 0; i < 3; i++) {
+            time += Metadata.TOPIC_EXPIRY_MS / 2;
+            metadata.update(Cluster.empty(), time);
+            assertTrue("Topic expired even though in use", metadata.containsTopic("topic2"));
+            metadata.add("topic2");
+        }
+
+        // Test that topics added using setTopics expire
+        HashSet<String> topics = new HashSet<>();
+        topics.add("topic4");
+        metadata.setTopics(topics);
+        metadata.update(Cluster.empty(), time);
+        time += Metadata.TOPIC_EXPIRY_MS;
+        metadata.update(Cluster.empty(), time);
+        assertFalse("Unused topic not expired", metadata.containsTopic("topic4"));
+    }
+
+    @Test
+    public void testNonExpiringMetadata() throws Exception {
+        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, false);
+
+        // Test that topic is not expired if not used within the expiry interval
+        long time = 0;
+        metadata.add("topic1");
+        metadata.update(Cluster.empty(), time);
+        time += Metadata.TOPIC_EXPIRY_MS;
+        metadata.update(Cluster.empty(), time);
+        assertTrue("Unused topic expired when expiry disabled", metadata.containsTopic("topic1"));
+
+        // Test that topic is not expired if used within the expiry interval
+        metadata.add("topic2");
+        metadata.update(Cluster.empty(), time);
+        for (int i = 0; i < 3; i++) {
+            time += Metadata.TOPIC_EXPIRY_MS / 2;
+            metadata.update(Cluster.empty(), time);
+            assertTrue("Topic expired even though in use", metadata.containsTopic("topic2"));
+            metadata.add("topic2");
+        }
+
+        // Test that topics added using setTopics don't expire
+        HashSet<String> topics = new HashSet<>();
+        topics.add("topic4");
+        metadata.setTopics(topics);
+        time += metadataExpireMs * 2;
+        metadata.update(Cluster.empty(), time);
+        assertTrue("Unused topic expired when expiry disabled", metadata.containsTopic("topic4"));
+    }
+
     private Thread asyncFetch(final String topic) {
         Thread thread = new Thread() {
             public void run() {

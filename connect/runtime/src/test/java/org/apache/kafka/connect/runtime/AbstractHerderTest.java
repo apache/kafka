@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
@@ -40,20 +41,21 @@ public class AbstractHerderTest extends EasyMockSupport {
         int generation = 5;
         ConnectorTaskId taskId = new ConnectorTaskId(connector, 0);
 
-        StatusBackingStore store = strictMock(StatusBackingStore.class);
+        ConfigBackingStore configStore = strictMock(ConfigBackingStore.class);
+        StatusBackingStore statusStore = strictMock(StatusBackingStore.class);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, StatusBackingStore.class, String.class)
-                .withArgs(worker, store, workerId)
+                .withConstructor(Worker.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
+                .withArgs(worker, workerId, statusStore, configStore)
                 .addMockedMethod("generation")
                 .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(generation);
 
-        EasyMock.expect(store.get(connector))
+        EasyMock.expect(statusStore.get(connector))
                 .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
 
-        EasyMock.expect(store.getAll(connector))
+        EasyMock.expect(statusStore.getAll(connector))
                 .andReturn(Collections.singletonList(
                         new TaskStatus(taskId, AbstractStatus.State.UNASSIGNED, workerId, generation)));
 
@@ -81,21 +83,22 @@ public class AbstractHerderTest extends EasyMockSupport {
         ConnectorTaskId taskId = new ConnectorTaskId("connector", 0);
         String workerId = "workerId";
 
-        StatusBackingStore store = strictMock(StatusBackingStore.class);
+        ConfigBackingStore configStore = strictMock(ConfigBackingStore.class);
+        StatusBackingStore statusStore = strictMock(StatusBackingStore.class);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, StatusBackingStore.class, String.class)
-                .withArgs(worker, store, workerId)
+                .withConstructor(Worker.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
+                .withArgs(worker, workerId, statusStore, configStore)
                 .addMockedMethod("generation")
                 .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(5);
 
         final Capture<TaskStatus> statusCapture = EasyMock.newCapture();
-        store.putSafe(EasyMock.capture(statusCapture));
+        statusStore.putSafe(EasyMock.capture(statusCapture));
         EasyMock.expectLastCall();
 
-        EasyMock.expect(store.get(taskId)).andAnswer(new IAnswer<TaskStatus>() {
+        EasyMock.expect(statusStore.get(taskId)).andAnswer(new IAnswer<TaskStatus>() {
             @Override
             public TaskStatus answer() throws Throwable {
                 return statusCapture.getValue();
@@ -114,5 +117,4 @@ public class AbstractHerderTest extends EasyMockSupport {
 
         verifyAll();
     }
-
 }

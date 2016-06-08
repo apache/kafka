@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -36,6 +37,16 @@ public class KStreamTransformTest {
     private String topicName = "topic";
 
     final private Serde<Integer> intSerde = Serdes.Integer();
+
+    private KStreamTestDriver driver;
+
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
+    }
 
     @Test
     public void testTransform() {
@@ -59,7 +70,8 @@ public class KStreamTransformTest {
                         }
 
                         @Override
-                        public void punctuate(long timestamp) {
+                        public KeyValue<Integer, Integer> punctuate(long timestamp) {
+                            return KeyValue.pair(-1, (int) timestamp);
                         }
 
                         @Override
@@ -75,14 +87,17 @@ public class KStreamTransformTest {
         KStream<Integer, Integer> stream = builder.stream(intSerde, intSerde, topicName);
         stream.transform(transformerSupplier).process(processor);
 
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topicName, expectedKeys[i], expectedKeys[i] * 10);
         }
 
-        assertEquals(4, processor.processed.size());
+        driver.punctuate(2);
+        driver.punctuate(3);
 
-        String[] expected = {"2:10", "20:110", "200:1110", "2000:11110"};
+        assertEquals(6, processor.processed.size());
+
+        String[] expected = {"2:10", "20:110", "200:1110", "2000:11110", "-1:2", "-1:3"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));

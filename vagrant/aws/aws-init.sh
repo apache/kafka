@@ -27,7 +27,7 @@ base_dir=`dirname $0`/../..
 
 if [ -z `which vagrant` ]; then
     echo "Installing vagrant..."
-    wget https://dl.bintray.com/mitchellh/vagrant/vagrant_1.7.2_x86_64.deb
+    wget https://releases.hashicorp.com/vagrant/1.7.2/vagrant_1.7.2_x86_64.deb
     sudo dpkg -i vagrant_1.7.2_x86_64.deb
     rm -f vagrant_1.7.2_x86_64.deb
 fi
@@ -46,7 +46,7 @@ done
 
 # Create Vagrantfile.local as a convenience
 if [ ! -e "$base_dir/Vagrantfile.local" ]; then
-    cp $base_dir/aws/aws-example-Vagrantfile.local $base_dir/Vagrantfile.local
+    cp $base_dir/vagrant/aws/aws-example-Vagrantfile.local $base_dir/Vagrantfile.local
 fi
 
 gradle="gradle-2.2.1"
@@ -70,4 +70,3 @@ if [[ ${LOCAL_HOSTNAME} =~ .*\.compute\.internal ]]; then
     source ~/.bashrc
   fi
 fi
-

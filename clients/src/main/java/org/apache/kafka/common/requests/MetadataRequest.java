@@ -25,24 +25,41 @@ import java.util.Collections;
 import java.util.List;
 
 public class MetadataRequest extends AbstractRequest {
-    
+
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.METADATA.id);
     private static final String TOPICS_KEY_NAME = "topics";
 
+    private static final MetadataRequest ALL_TOPICS_REQUEST = new MetadataRequest((List<String>) null); // Unusual cast to work around constructor ambiguity
+
     private final List<String> topics;
 
+    public static MetadataRequest allTopics() {
+        return ALL_TOPICS_REQUEST;
+    }
+
+    /**
+     * In v0 null is not allowed and and empty list indicates requesting all topics.
+     * In v1 null indicates requesting all topics, and an empty list indicates requesting no topics.
+     */
     public MetadataRequest(List<String> topics) {
         super(new Struct(CURRENT_SCHEMA));
-        struct.set(TOPICS_KEY_NAME, topics.toArray());
+        if (topics == null)
+            struct.set(TOPICS_KEY_NAME, null);
+        else
+            struct.set(TOPICS_KEY_NAME, topics.toArray());
         this.topics = topics;
     }
 
     public MetadataRequest(Struct struct) {
         super(struct);
         Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
-        topics = new ArrayList<>();
-        for (Object topicObj: topicArray) {
-            topics.add((String) topicObj);
+        if (topicArray != null) {
+            topics = new ArrayList<>();
+            for (Object topicObj: topicArray) {
+                topics.add((String) topicObj);
+            }
+        } else {
+            topics = null;
         }
     }
 
@@ -52,16 +69,23 @@ public class MetadataRequest extends AbstractRequest {
         Errors error = Errors.forException(e);
         List<MetadataResponse.PartitionMetadata> partitions = Collections.emptyList();
 
-        for (String topic : topics)
-            topicMetadatas.add(new MetadataResponse.TopicMetadata(error, topic, partitions));
+        if (topics != null) {
+            for (String topic : topics)
+                topicMetadatas.add(new MetadataResponse.TopicMetadata(error, topic, false, partitions));
+        }
 
         switch (versionId) {
             case 0:
-                return new MetadataResponse(Collections.<Node>emptyList(), topicMetadatas);
+            case 1:
+                return new MetadataResponse(Collections.<Node>emptyList(), MetadataResponse.NO_CONTROLLER_ID, topicMetadatas, versionId);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.METADATA.id)));
         }
+    }
+
+    public boolean isAllTopics() {
+        return topics == null;
     }
 
     public List<String> topics() {

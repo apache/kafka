@@ -28,7 +28,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -36,6 +35,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
+import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.SystemTime;
@@ -52,6 +52,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -75,7 +76,7 @@ import java.util.regex.Pattern;
  * <h3>Offsets and Consumer Position</h3>
  * Kafka maintains a numerical offset for each record in a partition. This offset acts as a kind of unique identifier of
  * a record within that partition, and also denotes the position of the consumer in the partition. That is, a consumer
- * which has position 5 has consumed records with offsets 0 through 4 and will next receive record with offset 5. There
+ * which has position 5 has consumed records with offsets 0 through 4 and will next receive the record with offset 5. There
  * are actually two notions of position relevant to the user of the consumer.
  * <p>
  * The {@link #position(TopicPartition) position} of the consumer gives the offset of the next record that will be given
@@ -94,22 +95,23 @@ import java.util.regex.Pattern;
  *
  * <h3>Consumer Groups and Topic Subscriptions</h3>
  *
- * Kafka uses the concept of <i>consumer groups</i> to allow a pool of processes to divide up the work of consuming and
+ * Kafka uses the concept of <i>consumer groups</i> to allow a pool of processes to divide the work of consuming and
  * processing records. These processes can either be running on the same machine or, as is more likely, they can be
- * distributed over many machines to provide additional scalability and fault tolerance for processing.
+ * distributed over many machines to provide scalability and fault tolerance for processing.
  * <p>
- * Each Kafka consumer is able to configure a consumer group that it belongs to, and can dynamically set the
- * list of topics it wants to subscribe to through {@link #subscribe(Collection, ConsumerRebalanceListener)},
- * or subscribe to all topics matching certain pattern through {@link #subscribe(Pattern, ConsumerRebalanceListener)}.
- * Kafka will deliver each message in the
- * subscribed topics to one process in each consumer group. This is achieved by balancing the partitions in the topic
- * over the consumer processes in each group. So if there is a topic with four partitions, and a consumer group with two
- * processes, each process would consume from two partitions. This group membership is maintained dynamically: if a
- * process fails the partitions assigned to it will be reassigned to other processes in the same group, and if a new
- * process joins the group, partitions will be moved from existing consumers to this new process.
+ * Each Kafka consumer is able to configure a consumer group that it belongs to, and can dynamically set the list
+ * of topics it wants to subscribe to through one of the {@link #subscribe(Collection, ConsumerRebalanceListener) subscribe}
+ * APIs. Kafka will deliver each message in the subscribed topics to one process in each consumer group.
+ * This is achieved by balancing the partitions between all members in the consumer group so that each partition is
+ * assigned to exactly one consumer in the group. So if there is a topic with four partitions, and a consumer group with two
+ * processes, each process would consume from two partitions.
  * <p>
- * So if two processes subscribe to a topic both specifying different groups they will each get all the records in that
- * topic; if they both specify the same group they will each get about half the records.
+ * Membership in a consumer group is maintained dynamically: if a process fails, the partitions assigned to it will
+ * be reassigned to other consumers in the same group. Similarly, if a new consumer joins the group, partitions will be moved
+ * from existing consumers to the new one. This is known as <i>rebalancing</i> the group and is discussed in more
+ * detail <a href="#failuredetection">below</a>. Note that the same process is also used when new partitions are added
+ * to one of the subscribed topics: the group automatically detects the new partitions and rebalances the group so
+ * that every new partition is assigned to one of the members.
  * <p>
  * Conceptually you can think of a consumer group as being a single logical subscriber that happens to be made up of
  * multiple processes. As a multi-subscriber system, Kafka naturally supports having any number of consumer groups for a
@@ -126,8 +128,51 @@ import java.util.regex.Pattern;
  * commits (note that offsets are always committed for a given consumer group), etc.
  * See <a href="#rebalancecallback">Storing Offsets Outside Kafka</a> for more details
  * <p>
- * It is also possible for the consumer to manually specify the partitions that are assigned to it through {@link #assign(Collection)},
- * which disables this dynamic partition assignment.
+ * It is also possible for the consumer to <a href="#manualassignment">manually assign</a> specific partitions
+ * (similar to the older "simple" consumer) using {@link #assign(Collection)}. In this case, dynamic partition
+ * assignment and consumer group coordination will be disabled.
+ *
+ * <h3><a name="failuredetection">Detecting Consumer Failures</a></h3>
+ *
+ * After subscribing to a set of topics, the consumer will automatically join the group when {@link #poll(long)} is
+ * invoked. The poll API is designed to ensure consumer liveness. As long as you continue to call poll, the consumer
+ * will stay in the group and continue to receive messages from the partitions it was assigned. Underneath the covers,
+ * the poll API sends periodic heartbeats to the server; when you stop calling poll (perhaps because an exception was thrown),
+ * then no heartbeats will be sent. If a period of the configured <i>session timeout</i> elapses before the server
+ * has received a heartbeat, then the consumer will be kicked out of the group and its partitions will be reassigned.
+ * This is designed to prevent situations where the consumer has failed, yet continues to hold onto the partitions
+ * it was assigned (thus preventing active consumers in the group from taking them). To stay in the group, you
+ * have to prove you are still alive by calling poll.
+ * <p>
+ * The implication of this design is that message processing time in the poll loop must be bounded so that
+ * heartbeats can be sent before expiration of the session timeout. What typically happens when processing time
+ * exceeds the session timeout is that the consumer won't be able to commit offsets for any of the processed records.
+ * For example, this is indicated by a {@link CommitFailedException} thrown from {@link #commitSync()}. This
+ * guarantees that only active members of the group are allowed to commit offsets. If the consumer
+ * has been kicked out of the group, then its partitions will have been assigned to another member, which will be
+ * committing its own offsets as it handles new records. This gives offset commits an isolation guarantee.
+ * <p>
+ * The consumer provides two configuration settings to control this behavior:
+ * <ol>
+ *     <li><code>session.timeout.ms</code>: By increasing the session timeout, you can give the consumer more
+ *     time to handle a batch of records returned from {@link #poll(long)}. The only drawback is that it
+ *     will take longer for the server to detect hard consumer failures, which can cause a delay before
+ *     a rebalance can be completed. However, clean shutdown with {@link #close()} is not impacted since
+ *     the consumer will send an explicit message to the server to leave the group and cause an immediate
+ *     rebalance.</li>
+ *     <li><code>max.poll.records</code>: Processing time in the poll loop is typically proportional to the number
+ *     of records processed, so it's natural to want to set a limit on the number of records handled at once.
+ *     This setting provides that. By default, there is essentially no limit.</li>
+ * </ol>
+ * <p>
+ * For use cases where message processing time varies unpredictably, neither of these options may be viable.
+ * The recommended way to handle these cases is to move message processing to another thread, which allows
+ * the consumer to continue sending heartbeats while the processor is still working. Some care must be taken
+ * to ensure that committed offsets do not get ahead of the actual position. Typically, you must disable automatic
+ * commits and manually commit processed offsets for records only after the thread has finished handling them
+ * (depending on the delivery semantics you need). Note also that you will generally need to {@link #pause(Collection)}
+ * the partition so that no new records are received from poll until after thread has finished handling those
+ * previously returned.
  *
  * <h3>Usage Examples</h3>
  * The consumer APIs offer flexibility to cover a variety of consumption use cases. Here are some examples to
@@ -150,7 +195,7 @@ import java.util.regex.Pattern;
  *     while (true) {
  *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(100);
  *         for (ConsumerRecord&lt;String, String&gt; record : records)
- *             System.out.printf(&quot;offset = %d, key = %s, value = %s&quot;, record.offset(), record.key(), record.value());
+ *             System.out.printf(&quot;offset = %d, key = %s, value = %s%n&quot;, record.offset(), record.key(), record.value());
  *     }
  * </pre>
  *
@@ -165,11 +210,11 @@ import java.util.regex.Pattern;
  * In this example the client is subscribing to the topics <i>foo</i> and <i>bar</i> as part of a group of consumers
  * called <i>test</i> as described above.
  * <p>
- * The broker will automatically detect failed processes in the <i>test</i> group by using a heartbeat mechanism. The 
- * consumer will automatically ping the cluster periodically, which lets the cluster know that it is alive. Note that 
- * the consumer is single-threaded, so periodic heartbeats can only be sent when {@link #poll(long)} is called. As long as 
- * the consumer is able to do this it is considered alive and retains the right to consume from the partitions assigned 
- * to it. If it stops heartbeating by failing to call {@link #poll(long)} for a period of time longer than <code>session.timeout.ms</code> 
+ * The broker will automatically detect failed processes in the <i>test</i> group by using a heartbeat mechanism. The
+ * consumer will automatically ping the cluster periodically, which lets the cluster know that it is alive. Note that
+ * the consumer is single-threaded, so periodic heartbeats can only be sent when {@link #poll(long)} is called. As long as
+ * the consumer is able to do this it is considered alive and retains the right to consume from the partitions assigned
+ * to it. If it stops heartbeating by failing to call {@link #poll(long)} for a period of time longer than <code>session.timeout.ms</code>
  * then it will be considered dead and its partitions will be assigned to another process.
  * <p>
  * The deserializer settings specify how to turn bytes into objects. For example, by specifying string deserializers, we
@@ -243,27 +288,23 @@ import java.util.regex.Pattern;
  * <b>Note: The committed offset should always be the offset of the next message that your application will read.</b>
  * Thus, when calling {@link #commitSync(Map) commitSync(offsets)} you should add one to the offset of the last message processed.
  *
- * <h4>Subscribing To Specific Partitions</h4>
+ * <h4><a name="manualassignment">Manual Partition Assignment</a></h4>
  *
- * In the previous examples we subscribed to the topics we were interested in and let Kafka give our particular process
- * a fair share of the partitions for those topics. This provides a simple load balancing mechanism so multiple
- * instances of our program can divided up the work of processing records.
+ * In the previous examples, we subscribed to the topics we were interested in and let Kafka dynamically assign a
+ * fair share of the partitions for those topics based on the active consumers in the group. However, in
+ * some cases you may need finer control over the specific partitions that are assigned. For example:
  * <p>
- * In this mode the consumer will just get the partitions it subscribes to and if the consumer instance fails no attempt
- * will be made to rebalance partitions to other instances.
- * <p>
- * There are several cases where this makes sense:
  * <ul>
- * <li>The first case is if the process is maintaining some kind of local state associated with that partition (like a
- * local on-disk key-value store) and hence it should only get records for the partition it is maintaining on disk.
- * <li>Another case is if the process itself is highly available and will be restarted if it fails (perhaps using a
+ * <li>If the process is maintaining some kind of local state associated with that partition (like a
+ * local on-disk key-value store), then it should only get records for the partition it is maintaining on disk.
+ * <li>If the process itself is highly available and will be restarted if it fails (perhaps using a
  * cluster management framework like YARN, Mesos, or AWS facilities, or as part of a stream processing framework). In
- * this case there is no need for Kafka to detect the failure and reassign the partition, rather the consuming process
+ * this case there is no need for Kafka to detect the failure and reassign the partition since the consuming process
  * will be restarted on another machine.
  * </ul>
  * <p>
- * This mode is easy to specify, rather than subscribing to the topic, the consumer just subscribes to particular
- * partitions:
+ * To use this mode, instead of subscribing to the topic using {@link #subscribe(Collection) subscribe}, you just call
+ * {@link #assign(Collection)} with the full list of partitions that you want to consume.
  *
  * <pre>
  *     String topic = &quot;foo&quot;;
@@ -272,11 +313,15 @@ import java.util.regex.Pattern;
  *     consumer.assign(Arrays.asList(partition0, partition1));
  * </pre>
  *
- * The group that the consumer specifies is still used for committing offsets, but now the set of partitions will only
- * be changed if the consumer specifies new partitions, and no attempt at failure detection will be made.
+ * Once assigned, you can call {@link #poll(long) poll} in a loop, just as in the preceding examples to consume
+ * records. The group that the consumer specifies is still used for committing offsets, but now the set of partitions
+ * will only change with another call to {@link #assign(Collection) assign}. Manual partition assignment does
+ * not use group coordination, so consumer failures will not cause assigned partitions to be rebalanced. Each consumer
+ * acts independently even if it shares a groupId with another consumer. To avoid offset commit conflicts, you should
+ * usually ensure that the groupId is unique for each consumer instance.
  * <p>
- * It isn't possible to mix both subscription to specific partitions (with no load balancing) and to topics (with load
- * balancing) using the same consumer instance.
+ * Note that it isn't possible to mix manual partition assignment (i.e. using {@link #assign(Collection) assign})
+ * with dynamic partition assignment through topic subscription (i.e. using {@link #subscribe(Collection) subscribe}).
  *
  * <h4><a name="rebalancecallback">Storing Offsets Outside Kafka</h4>
  *
@@ -452,7 +497,6 @@ import java.util.regex.Pattern;
  * commit.
  *
  */
-@InterfaceStability.Unstable
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumer.class);
@@ -460,7 +504,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.consumer";
 
-    private String clientId;
+    private final String clientId;
     private final ConsumerCoordinator coordinator;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
@@ -473,7 +517,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final SubscriptionState subscriptions;
     private final Metadata metadata;
     private final long retryBackoffMs;
-    private long requestTimeoutMs;
+    private final long requestTimeoutMs;
     private boolean closed = false;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
@@ -558,10 +602,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new ConfigException(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG + " should be greater than " + ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG + " and " + ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG);
             this.time = new SystemTime();
 
-            clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
+            String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0)
                 clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
-            Map<String, String> metricsTags = new LinkedHashMap<String, String>();
+            this.clientId = clientId;
+            Map<String, String> metricsTags = new LinkedHashMap<>();
             metricsTags.put("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
@@ -585,8 +630,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), time);
-            this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs);
-            OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase());
+            this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs,
+                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG));
+            OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
             this.subscriptions = new SubscriptionState(offsetResetStrategy);
             List<PartitionAssignor> assignors = config.getConfiguredInstances(
                     ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
@@ -655,6 +701,35 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
         }
+    }
+
+    // visible for testing
+    KafkaConsumer(String clientId,
+                  ConsumerCoordinator coordinator,
+                  Deserializer<K> keyDeserializer,
+                  Deserializer<V> valueDeserializer,
+                  Fetcher<K, V> fetcher,
+                  ConsumerInterceptors<K, V> interceptors,
+                  Time time,
+                  ConsumerNetworkClient client,
+                  Metrics metrics,
+                  SubscriptionState subscriptions,
+                  Metadata metadata,
+                  long retryBackoffMs,
+                  long requestTimeoutMs) {
+        this.clientId = clientId;
+        this.coordinator = coordinator;
+        this.keyDeserializer = keyDeserializer;
+        this.valueDeserializer = valueDeserializer;
+        this.fetcher = fetcher;
+        this.interceptors = interceptors;
+        this.time = time;
+        this.client = client;
+        this.metrics = metrics;
+        this.subscriptions = subscriptions;
+        this.metadata = metadata;
+        this.retryBackoffMs = retryBackoffMs;
+        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     /**
@@ -865,14 +940,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // and avoid block waiting for their responses to enable pipelining while the user
                     // is handling the fetched records.
                     //
-                    // NOTE that we use quickPoll() in this case which disables wakeups and delayed
-                    // task execution since the consumed positions has already been updated and we
-                    // must return these records to users to process before being interrupted or
-                    // auto-committing offsets
-                    fetcher.sendFetches(metadata.fetch());
-                    client.quickPoll();
-                    return this.interceptors == null
-                        ? new ConsumerRecords<>(records) : this.interceptors.onConsume(new ConsumerRecords<>(records));
+                    // NOTE: since the consumed position has already been updated, we must not allow
+                    // wakeups or any other errors to be triggered prior to returning the fetched records.
+                    // Additionally, pollNoWakeup does not allow automatic commits to get triggered.
+                    fetcher.sendFetches();
+                    client.pollNoWakeup();
+
+                    if (this.interceptors == null)
+                        return new ConsumerRecords<>(records);
+                    else
+                        return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
 
                 long elapsed = time.milliseconds() - start;
@@ -893,7 +970,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
         // TODO: Sub-requests should take into account the poll timeout (KAFKA-1894)
-        coordinator.ensureCoordinatorKnown();
+        coordinator.ensureCoordinatorReady();
 
         // ensure we have partitions assigned if we expect to
         if (subscriptions.partitionsAutoAssigned())
@@ -904,18 +981,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (!subscriptions.hasAllFetchPositions())
             updateFetchPositions(this.subscriptions.missingFetchPositions());
 
+        long now = time.milliseconds();
+
+        // execute delayed tasks (e.g. autocommits and heartbeats) prior to fetching records
+        client.executeDelayedTasks(now);
+
         // init any new fetches (won't resend pending fetches)
-        Cluster cluster = this.metadata.fetch();
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
 
         // if data is available already, e.g. from a previous network client poll() call to commit,
         // then just return it immediately
-        if (!records.isEmpty()) {
+        if (!records.isEmpty())
             return records;
-        }
 
-        fetcher.sendFetches(cluster);
-        client.poll(timeout);
+        fetcher.sendFetches();
+        client.poll(timeout, now);
         return fetcher.fetchedRecords();
     }
 
@@ -1189,7 +1269,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (parts != null)
                 return parts;
 
-            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(Collections.singletonList(topic), requestTimeoutMs);
+            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(new MetadataRequest(Collections.singletonList(topic)), requestTimeoutMs);
             return topicMetadata.get(topic);
         } finally {
             release();

@@ -157,6 +157,28 @@ public class ProcessorTopologyTest {
     }
 
     @Test
+    public void testDrivingMultiplexByNameTopology() {
+        driver = new ProcessorTopologyTestDriver(config, createMultiplexByNameTopology());
+        driver.process(INPUT_TOPIC, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1(1)");
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1(2)");
+
+        driver.process(INPUT_TOPIC, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2(1)");
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2(2)");
+
+        driver.process(INPUT_TOPIC, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC, "key4", "value4", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC, "key5", "value5", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3(1)");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key4", "value4(1)");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key5", "value5(1)");
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key3", "value3(2)");
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key4", "value4(2)");
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key5", "value5(2)");
+    }
+
+    @Test
     public void testDrivingStatefulTopology() {
         String storeName = "entries";
         driver = new ProcessorTopologyTestDriver(config, createStatefulTopology(storeName), storeName);
@@ -215,6 +237,13 @@ public class ProcessorTopologyTest {
                                     .addSink("sink2", OUTPUT_TOPIC_2, "processor");
     }
 
+    protected TopologyBuilder createMultiplexByNameTopology() {
+        return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC)
+            .addProcessor("processor", define(new MultiplexByNameProcessor(2)), "source")
+            .addSink("sink0", OUTPUT_TOPIC_1, "processor")
+            .addSink("sink1", OUTPUT_TOPIC_2, "processor");
+    }
+
     protected TopologyBuilder createStatefulTopology(String storeName) {
         return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC)
                                     .addProcessor("processor", define(new StatefulProcessor(storeName)), "source")
@@ -268,6 +297,33 @@ public class ProcessorTopologyTest {
     }
 
     /**
+     * A processor that forwards slightly-modified messages to each named child.
+     * Note: the children are assumed to be named "sink{child number}", e.g., sink1, or sink2, etc.
+     */
+    protected static class MultiplexByNameProcessor extends AbstractProcessor<String, String> {
+
+        private final int numChildren;
+
+        public MultiplexByNameProcessor(int numChildren) {
+            this.numChildren = numChildren;
+        }
+
+        @Override
+        public void process(String key, String value) {
+            for (int i = 0; i != numChildren; ++i) {
+                context().forward(key, value + "(" + (i + 1) + ")", "sink" + i);
+            }
+        }
+
+        @Override
+        public void punctuate(long streamTime) {
+            for (int i = 0; i != numChildren; ++i) {
+                context().forward(Long.toString(streamTime), "punctuate(" + (i + 1) + ")", "sink" + i);
+            }
+        }
+    }
+
+    /**
      * A processor that stores each key-value pair in an in-memory key-value store registered with the context. When
      * {@link #punctuate(long)} is called, it outputs the total number of entries in the store.
      */
@@ -295,9 +351,11 @@ public class ProcessorTopologyTest {
         @Override
         public void punctuate(long streamTime) {
             int count = 0;
-            for (KeyValueIterator<String, String> iter = store.all(); iter.hasNext();) {
-                iter.next();
-                ++count;
+            try (KeyValueIterator<String, String> iter = store.all()) {
+                while (iter.hasNext()) {
+                    iter.next();
+                    ++count;
+                }
             }
             context().forward(Long.toString(streamTime), count);
         }

@@ -57,13 +57,14 @@ object CoreUtils extends Logging {
     }
 
   /**
-   * Create a daemon thread
-   * @param name The name of the thread
-   * @param fun The function to execute in the thread
-   * @return The unstarted thread
-   */
-  def daemonThread(name: String, fun: => Unit): Thread =
-    Utils.daemonThread(name, runnable(fun))
+    * Create a thread
+    * @param name The name of the thread
+    * @param daemon Whether the thread should block JVM shutdown
+    * @param fun The function to execute in the thread
+    * @return The unstarted thread
+    */
+  def newThread(name: String, daemon: Boolean)(fun: => Unit): Thread =
+    Utils.newThread(name, runnable(fun), daemon)
 
   /**
    * Do the given action and log any exceptions thrown without rethrowing them
@@ -79,35 +80,10 @@ object CoreUtils extends Logging {
   }
 
   /**
-   * Recursively delete the given file/directory and any subfiles (if any exist)
-   * @param file The root file at which to begin deleting
-   */
-  def rm(file: String): Unit = rm(new File(file))
-
-  /**
    * Recursively delete the list of files/directories and any subfiles (if any exist)
    * @param files sequence of files to be deleted
    */
-  def rm(files: Seq[String]): Unit = files.foreach(f => rm(new File(f)))
-
-  /**
-   * Recursively delete the given file/directory and any subfiles (if any exist)
-   * @param file The root file at which to begin deleting
-   */
-  def rm(file: File) {
-	  if(file == null) {
-	    return
-	  } else if(file.isDirectory) {
-	    val files = file.listFiles()
-	    if(files != null) {
-	      for(f <- files)
-	        rm(f)
-	    }
-	    file.delete()
-	  } else {
-	    file.delete()
-	  }
-  }
+  def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
 
   /**
    * Register the given mbean with the platform mbean server,
@@ -282,7 +258,7 @@ object CoreUtils extends Logging {
        * Per RFC4627, section 2.5, we're not technically required to
        * encode the C1 codes, but we do to be safe.
        */
-      case c if ((c >= '\u0000' && c <= '\u001f') || (c >= '\u007f' && c <= '\u009f')) => "\\u%04x".format(c: Int)
+      case c if (c >= '\u0000' && c <= '\u001f') || (c >= '\u007f' && c <= '\u009f') => "\\u%04x".format(c: Int)
       case c => c
     }.mkString
   }
@@ -293,7 +269,7 @@ object CoreUtils extends Logging {
   def duplicates[T](s: Traversable[T]): Iterable[T] = {
     s.groupBy(identity)
       .map{ case (k,l) => (k,l.size)}
-      .filter{ case (k,l) => (l > 1) }
+      .filter{ case (k,l) => l > 1 }
       .keys
   }
 

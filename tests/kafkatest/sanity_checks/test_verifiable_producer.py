@@ -14,15 +14,15 @@
 # limitations under the License.
 
 
+from ducktape.mark import parametrize
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize
 
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.version import LATEST_0_8_2, LATEST_0_9, TRUNK, KafkaVersion
 from kafkatest.services.verifiable_producer import VerifiableProducer
+from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.utils import is_version
+from kafkatest.version import LATEST_0_8_2, LATEST_0_9, TRUNK, KafkaVersion
 
 
 class TestVerifiableProducer(Test):
@@ -35,7 +35,7 @@ class TestVerifiableProducer(Test):
         self.kafka = KafkaService(test_context, num_nodes=1, zk=self.zk,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}})
 
-        self.num_messages = 100
+        self.num_messages = 1000
         # This will produce to source kafka cluster
         self.producer = VerifiableProducer(test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
                                            max_messages=self.num_messages, throughput=1000)

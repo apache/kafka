@@ -69,6 +69,13 @@
       <allow pkg="org.apache.kafka.common.annotation" />
       <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.config" />
+      <subpackage name="authenticator">
+        <allow pkg="org.apache.kafka.common.protocol" />
+        <allow pkg="org.apache.kafka.common.protocol.types" />
+        <allow pkg="org.apache.kafka.common.requests" />
+        <allow pkg="org.apache.kafka.common.errors" />
+        <allow pkg="org.apache.kafka.clients" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="protocol">
@@ -130,6 +137,18 @@
     <subpackage name="examples">
       <allow pkg="com.fasterxml.jackson.databind" />
       <allow pkg="org.apache.kafka.connect.json" />
+    </subpackage>
+    
+    <subpackage name="integration">
+      <allow pkg="kafka.admin" />
+      <allow pkg="kafka.server" />
+      <allow pkg="kafka.utils" />
+      <allow pkg="kafka.zk" />
+      <allow pkg="kafka.log" />
+      <allow pkg="scala" />
+      <allow pkg="scala.collection" />
+      <allow pkg="org.I0Itec.zkclient" />
+      <allow pkg="org.hamcrest.CoreMatchers" />
     </subpackage>
 
     <subpackage name="state">
@@ -203,6 +222,7 @@
 
     <subpackage name="util">
       <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="org.reflections.vfs" />
       <!-- for annotations to avoid code duplication -->
       <allow pkg="com.fasterxml.jackson.annotation" />
     </subpackage>

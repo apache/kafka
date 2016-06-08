@@ -44,7 +44,19 @@ class OffsetMapTest extends JUnitSuite {
       assertEquals(map.get(key(i)), -1L)
   }
   
-  def key(key: Int) = ByteBuffer.wrap(key.toString.getBytes)
+  @Test
+  def testGetWhenFull() {
+    val map = new SkimpyOffsetMap(4096)
+    var i = 37L  //any value would do
+    while (map.size < map.slots) {
+      map.put(key(i), i)
+      i = i + 1L
+    }
+    assertEquals(map.get(key(i)), -1L)
+    assertEquals(map.get(key(i-1L)), i-1L)
+  }
+
+  def key(key: Long) = ByteBuffer.wrap(key.toString.getBytes)
   
   def validateMap(items: Int, loadFactor: Double = 0.5): SkimpyOffsetMap = {
     val map = new SkimpyOffsetMap((items/loadFactor * 24).toInt)

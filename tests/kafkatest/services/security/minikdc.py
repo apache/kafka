@@ -13,17 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.services.service import Service
-from kafkatest.services.kafka.directory import kafka_dir
-
 import os
-from tempfile import mkstemp
-from shutil import move
-from os import remove, close
-from io import open
 import uuid
+from io import open
+from os import remove, close
+from shutil import move
+from tempfile import mkstemp
 
-class MiniKdc(Service):
+from ducktape.services.service import Service
+
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, CORE_LIBS_JAR_NAME, CORE_DEPENDANT_TEST_LIBS_JAR_NAME
+from kafkatest.version import TRUNK
+
+
+class MiniKdc(KafkaPathResolverMixin, Service):
 
     logs = {
         "minikdc_log": {
@@ -39,7 +42,7 @@ class MiniKdc(Service):
     LOCAL_KEYTAB_FILE = "/tmp/" + str(uuid.uuid4().get_hex()) + "_keytab"
     LOCAL_KRB5CONF_FILE = "/tmp/" + str(uuid.uuid4().get_hex()) + "_krb5.conf"
 
-    def __init__(self, context, kafka_nodes, extra_principals = ""):
+    def __init__(self, context, kafka_nodes, extra_principals=""):
         super(MiniKdc, self).__init__(context, 1)
         self.kafka_nodes = kafka_nodes
         self.extra_principals = extra_principals
@@ -54,9 +57,7 @@ class MiniKdc(Service):
         remove(file_path)
         move(abs_path, file_path)
 
-
     def start_node(self, node):
-
         node.account.ssh("mkdir -p %s" % MiniKdc.WORK_DIR, allow_fail=False)
         props_file = self.render('minikdc.properties',  node=node)
         node.account.create_file(MiniKdc.PROPS_FILE, props_file)
@@ -67,10 +68,13 @@ class MiniKdc(Service):
         principals = 'client ' + kafka_principals + self.extra_principals
         self.logger.info("Starting MiniKdc with principals " + principals)
 
-        lib_dir = "/opt/%s/core/build/dependant-testlibs" % kafka_dir(node)
-        kdc_jars = node.account.ssh_capture("ls " + lib_dir)
-        classpath = ":".join([os.path.join(lib_dir, jar.strip()) for jar in kdc_jars])
-        cmd = "CLASSPATH=%s /opt/%s/bin/kafka-run-class.sh org.apache.hadoop.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (classpath, kafka_dir(node), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
+        core_libs_jar = self.path.jar(CORE_LIBS_JAR_NAME, TRUNK)
+        core_dependant_test_libs_jar = self.path.jar(CORE_DEPENDANT_TEST_LIBS_JAR_NAME, TRUNK)
+
+        cmd = "for file in %s; do CLASSPATH=$CLASSPATH:$file; done;" % core_libs_jar
+        cmd += " for file in %s; do CLASSPATH=$CLASSPATH:$file; done;" % core_dependant_test_libs_jar
+        cmd += " export CLASSPATH;"
+        cmd += " %s kafka.security.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (self.path.script("kafka-run-class.sh", node), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
         self.logger.debug("Attempting to start MiniKdc on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log(MiniKdc.LOG_FILE) as monitor:
             node.account.ssh(cmd)
@@ -79,7 +83,7 @@ class MiniKdc(Service):
         node.account.scp_from(MiniKdc.KEYTAB_FILE, MiniKdc.LOCAL_KEYTAB_FILE)
         node.account.scp_from(MiniKdc.KRB5CONF_FILE, MiniKdc.LOCAL_KRB5CONF_FILE)
 
-        #KDC is set to bind openly (via 0.0.0.0). Change krb5.conf to hold the specific KDC address
+        # KDC is set to bind openly (via 0.0.0.0). Change krb5.conf to hold the specific KDC address
         self.replace_in_file(MiniKdc.LOCAL_KRB5CONF_FILE, '0.0.0.0', node.account.hostname)
 
     def stop_node(self, node):

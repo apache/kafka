@@ -13,7 +13,6 @@
 package kafka.api
 
 import java.util
-import kafka.coordinator.GroupCoordinator
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
@@ -27,6 +26,7 @@ import org.junit.{Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
 import org.apache.kafka.common.internals.TopicConstants
+import org.apache.kafka.clients.producer.KafkaProducer
 
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
@@ -68,21 +68,17 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     val numRecords = 10000
     sendRecords(numRecords)
 
-    assertEquals(0, this.consumers(0).assignment.size)
-    this.consumers(0).assign(List(tp).asJava)
-    assertEquals(1, this.consumers(0).assignment.size)
+    assertEquals(0, this.consumers.head.assignment.size)
+    this.consumers.head.assign(List(tp).asJava)
+    assertEquals(1, this.consumers.head.assignment.size)
 
-    this.consumers(0).seek(tp, 0)
-    consumeAndVerifyRecords(consumer = this.consumers(0), numRecords = numRecords, startingOffset = 0)
+    this.consumers.head.seek(tp, 0)
+    consumeAndVerifyRecords(consumer = this.consumers.head, numRecords = numRecords, startingOffset = 0)
 
     // check async commit callbacks
     val commitCallback = new CountConsumerCommitCallback()
-    this.consumers(0).commitAsync(commitCallback)
-
-    // shouldn't make progress until poll is invoked
-    Thread.sleep(10)
-    assertEquals(0, commitCallback.count)
-    awaitCommitCallback(this.consumers(0), commitCallback)
+    this.consumers.head.commitAsync(commitCallback)
+    awaitCommitCallback(this.consumers.head, commitCallback)
   }
 
   @Test
@@ -92,6 +88,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
 
     val numRecords = 10000
     sendRecords(numRecords)
@@ -135,28 +132,28 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     sendRecords(5, tp)
     sendRecords(7, tp2)
 
-    this.consumers(0).assign(List(tp, tp2).asJava)
+    this.consumers.head.assign(List(tp, tp2).asJava)
 
     // Need to poll to join the group
-    this.consumers(0).poll(50)
-    val pos1 = this.consumers(0).position(tp)
-    val pos2 = this.consumers(0).position(tp2)
-    this.consumers(0).commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava)
-    assertEquals(3, this.consumers(0).committed(tp).offset)
-    assertNull(this.consumers(0).committed(tp2))
+    this.consumers.head.poll(50)
+    val pos1 = this.consumers.head.position(tp)
+    val pos2 = this.consumers.head.position(tp2)
+    this.consumers.head.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava)
+    assertEquals(3, this.consumers.head.committed(tp).offset)
+    assertNull(this.consumers.head.committed(tp2))
 
     // Positions should not change
-    assertEquals(pos1, this.consumers(0).position(tp))
-    assertEquals(pos2, this.consumers(0).position(tp2))
-    this.consumers(0).commitSync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(5L))).asJava)
-    assertEquals(3, this.consumers(0).committed(tp).offset)
-    assertEquals(5, this.consumers(0).committed(tp2).offset)
+    assertEquals(pos1, this.consumers.head.position(tp))
+    assertEquals(pos2, this.consumers.head.position(tp2))
+    this.consumers.head.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(5L))).asJava)
+    assertEquals(3, this.consumers.head.committed(tp).offset)
+    assertEquals(5, this.consumers.head.committed(tp2).offset)
 
     // Using async should pick up the committed changes after commit completes
     val commitCallback = new CountConsumerCommitCallback()
-    this.consumers(0).commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(7L))).asJava, commitCallback)
-    awaitCommitCallback(this.consumers(0), commitCallback)
-    assertEquals(7, this.consumers(0).committed(tp2).offset)
+    this.consumers.head.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(7L))).asJava, commitCallback)
+    awaitCommitCallback(this.consumers.head, commitCallback)
+    assertEquals(7, this.consumers.head.committed(tp2).offset)
   }
 
   @Test
@@ -184,6 +181,8 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
     consumer0.subscribe(List(topic).asJava, listener)
 
     // the initial subscription should cause a callback execution
@@ -195,10 +194,10 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     while (parts == null)
       parts = consumer0.partitionsFor(TopicConstants.GROUP_METADATA_TOPIC_NAME).asScala
     assertEquals(1, parts.size)
-    assertNotNull(parts(0).leader())
+    assertNotNull(parts.head.leader())
 
     // shutdown the coordinator
-    val coordinator = parts(0).leader().id()
+    val coordinator = parts.head.leader().id()
     this.servers(coordinator).shutdown()
 
     // this should cause another callback execution
@@ -209,8 +208,6 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
     // only expect one revocation since revoke is not invoked on initial membership
     assertEquals(2, listener.callsToRevoked)
-
-    consumer0.close()
   }
 
   @Test
@@ -219,20 +216,17 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
 
-    try {
-      val listener = new TestConsumerReassignmentListener()
-      consumer0.subscribe(List(topic).asJava, listener)
+    val listener = new TestConsumerReassignmentListener()
+    consumer0.subscribe(List(topic).asJava, listener)
 
-      // the initial subscription should cause a callback execution
-      while (listener.callsToAssigned == 0)
-        consumer0.poll(50)
+    // the initial subscription should cause a callback execution
+    while (listener.callsToAssigned == 0)
+      consumer0.poll(50)
 
-      consumer0.subscribe(List[String]().asJava)
-      assertEquals(0, consumer0.assignment.size())
-    } finally {
-      consumer0.close()
-    }
+    consumer0.subscribe(List[String]().asJava)
+    assertEquals(0, consumer0.assignment.size())
   }
 
   @Test
@@ -240,6 +234,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
 
     sendRecords(5)
     consumer0.subscribe(List(topic).asJava)
@@ -274,10 +269,14 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
   }
 
   protected def sendRecords(numRecords: Int, tp: TopicPartition) {
+    sendRecords(this.producers.head, numRecords, tp)
+  }
+
+  protected def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int, tp: TopicPartition) {
     (0 until numRecords).foreach { i =>
-      this.producers(0).send(new ProducerRecord(tp.topic(), tp.partition(), i.toLong, s"key $i".getBytes, s"value $i".getBytes))
+      producer.send(new ProducerRecord(tp.topic(), tp.partition(), i.toLong, s"key $i".getBytes, s"value $i".getBytes))
     }
-    this.producers(0).flush()
+    producer.flush()
   }
 
   protected def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]],
@@ -330,18 +329,25 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     records
   }
 
-  protected def awaitCommitCallback[K, V](consumer: Consumer[K, V], commitCallback: CountConsumerCommitCallback): Unit = {
-    val startCount = commitCallback.count
+  protected def awaitCommitCallback[K, V](consumer: Consumer[K, V],
+                                          commitCallback: CountConsumerCommitCallback,
+                                          count: Int = 1): Unit = {
     val started = System.currentTimeMillis()
-    while (commitCallback.count == startCount && System.currentTimeMillis() - started < 10000)
+    while (commitCallback.successCount < count && System.currentTimeMillis() - started < 10000)
       consumer.poll(50)
-    assertEquals(startCount + 1, commitCallback.count)
+    assertEquals(count, commitCallback.successCount)
   }
 
   protected class CountConsumerCommitCallback extends OffsetCommitCallback {
-    var count = 0
+    var successCount = 0
+    var failCount = 0
 
-    override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = count += 1
+    override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = {
+      if (exception == null)
+        successCount += 1
+      else
+        failCount += 1
+    }
   }
 
   protected class ConsumerAssignmentPoller(consumer: Consumer[Array[Byte], Array[Byte]],
@@ -410,7 +416,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
    */
   def isPartitionAssignmentValid(assignments: Buffer[Set[TopicPartition]],
                                  partitions: Set[TopicPartition]): Boolean = {
-    val allNonEmptyAssignments = assignments forall (assignment => assignment.size > 0)
+    val allNonEmptyAssignments = assignments forall (assignment => assignment.nonEmpty)
     if (!allNonEmptyAssignments) {
       // at least one consumer got empty assignment
       return false

@@ -25,6 +25,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,7 +50,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * A {@link KafkaStreams} instance can co-ordinate with any other instances with the same application ID (whether in this same process, on other processes
  * on this machine, or on remote machines) as a single (possibly distributed) stream processing client. These instances will divide up the work
  * based on the assignment of the input topic partitions so that all partitions are being
- * consumed. If instances are added or failed, all instances will rebelance the partition assignment among themselves
+ * consumed. If instances are added or failed, all instances will rebalance the partition assignment among themselves
  * to balance processing load.
  * <p>
  * Internally the {@link KafkaStreams} instance contains a normal {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}
@@ -61,14 +62,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  *    Map&lt;String, Object&gt; props = new HashMap&lt;&gt;();
  *    props.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-processing-application");
  *    props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
- *    props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
- *    props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
- *    props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
- *    props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+ *    props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+ *    props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
  *    StreamsConfig config = new StreamsConfig(props);
  *
  *    KStreamBuilder builder = new KStreamBuilder();
- *    builder.from("my-input-topic").mapValue(value -&gt; value.length().toString()).to("my-output-topic");
+ *    builder.stream("my-input-topic").mapValues(value -&gt; value.length().toString()).to("my-output-topic");
  *
  *    KafkaStreams streams = new KafkaStreams(builder, config);
  *    streams.start();
@@ -90,6 +89,7 @@ public class KafkaStreams {
     private int state = CREATED;
 
     private final StreamThread[] threads;
+    private final Metrics metrics;
 
     // processId is expected to be unique across JVMs and to be used
     // in userData of the subscription request to allow assignor be aware
@@ -97,17 +97,35 @@ public class KafkaStreams {
     // usage only and should not be exposed to users at all.
     private final UUID processId;
 
+    /**
+     * Construct the stream instance.
+     *
+     * @param builder  the processor topology builder specifying the computational logic
+     * @param props    properties for the {@link StreamsConfig}
+     */
     public KafkaStreams(TopologyBuilder builder, Properties props) {
-        this(builder, new StreamsConfig(props));
+        this(builder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
     }
 
     /**
      * Construct the stream instance.
      *
-     * @param builder The processor topology builder specifying the computational logic
-     * @param config The stream configs
+     * @param builder  the processor topology builder specifying the computational logic
+     * @param config   the stream configs
      */
     public KafkaStreams(TopologyBuilder builder, StreamsConfig config) {
+        this(builder, config, new DefaultKafkaClientSupplier());
+    }
+
+    /**
+     * Construct the stream instance.
+     *
+     * @param builder         the processor topology builder specifying the computational logic
+     * @param config          the stream configs
+     * @param clientSupplier  the kafka clients supplier which provides underlying producer and consumer clients
+     * for this {@link KafkaStreams} instance
+     */
+    public KafkaStreams(TopologyBuilder builder, StreamsConfig config, KafkaClientSupplier clientSupplier) {
         // create the metrics
         Time time = new SystemTime();
 
@@ -128,16 +146,17 @@ public class KafkaStreams {
             .timeWindow(config.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                 TimeUnit.MILLISECONDS);
 
-        Metrics metrics = new Metrics(metricConfig, reporters, time);
+        this.metrics = new Metrics(metricConfig, reporters, time);
 
         this.threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(builder, config, applicationId, clientId, processId, metrics, time);
+            this.threads[i] = new StreamThread(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
         }
     }
 
     /**
      * Start the stream instance by starting all its threads.
+     * @throws IllegalStateException if process was already started
      */
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
@@ -149,14 +168,17 @@ public class KafkaStreams {
             state = RUNNING;
 
             log.info("Started Kafka Stream process");
-        } else {
+        } else if (state == RUNNING) {
             throw new IllegalStateException("This process was already started.");
+        } else {
+            throw new IllegalStateException("Cannot restart after closing.");
         }
     }
 
     /**
      * Shutdown this stream instance by signaling all the threads to stop,
      * and then wait for them to join.
+     * @throws IllegalStateException if process has not started yet
      */
     public synchronized void close() {
         log.debug("Stopping Kafka Stream process");
@@ -173,13 +195,14 @@ public class KafkaStreams {
                     Thread.interrupted();
                 }
             }
-
-            state = STOPPED;
-
-            log.info("Stopped Kafka Stream process");
-        } else {
-            throw new IllegalStateException("This process has not started yet.");
         }
+
+        if (state != STOPPED) {
+            metrics.close();
+            state = STOPPED;
+            log.info("Stopped Kafka Stream process");
+        }
+
     }
 
     /**

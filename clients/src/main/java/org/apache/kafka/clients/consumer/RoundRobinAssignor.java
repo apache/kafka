@@ -65,10 +65,9 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
 
         List<TopicPartition> allPartitions = new ArrayList<>();
         for (String topic : topics) {
-            Integer partitions = partitionsPerTopic.get(topic);
-            for (int partition = 0; partition < partitions; partition++) {
-                allPartitions.add(new TopicPartition(topic, partition));
-            }
+            Integer numPartitionsForTopic = partitionsPerTopic.get(topic);
+            if (numPartitionsForTopic != null)
+                allPartitions.addAll(AbstractPartitionAssignor.partitions(topic, numPartitionsForTopic));
         }
         return allPartitions;
     }

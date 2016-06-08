@@ -19,6 +19,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -39,13 +40,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Higher level consumer access to the network layer with basic support for futures and
- * task scheduling. NOT thread-safe!
- *
- * TODO: The current implementation is simplistic in that it provides a facility for queueing requests
- * prior to delivery, but it makes no effort to retry requests which cannot be sent at the time
- * {@link #poll(long)} is called. This makes the behavior of the queue predictable and easy to
- * understand, but there are opportunities to provide timeout or retry capabilities in the future.
- * How we do this may depend on KAFKA-2120, so for now, we retain the simplistic behavior.
+ * task scheduling. This class is not thread-safe, except for wakeup().
  */
 public class ConsumerNetworkClient implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(ConsumerNetworkClient.class);
@@ -57,17 +52,22 @@ public class ConsumerNetworkClient implements Closeable {
     private final Metadata metadata;
     private final Time time;
     private final long retryBackoffMs;
-    // wakeup enabled flag need to be volatile since it is allowed to be accessed concurrently
-    volatile private boolean wakeupsEnabled = true;
+    private final long unsentExpiryMs;
+
+    // this count is only accessed from the consumer's main thread
+    private int wakeupDisabledCount = 0;
+
 
     public ConsumerNetworkClient(KafkaClient client,
                                  Metadata metadata,
                                  Time time,
-                                 long retryBackoffMs) {
+                                 long retryBackoffMs,
+                                 long requestTimeoutMs) {
         this.client = client;
         this.metadata = metadata;
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
+        this.unsentExpiryMs = requestTimeoutMs;
     }
 
     /**
@@ -140,7 +140,7 @@ public class ConsumerNetworkClient implements Closeable {
      * until it has completed).
      */
     public void ensureFreshMetadata() {
-        if (this.metadata.timeToNextUpdate(time.milliseconds()) == 0)
+        if (this.metadata.updateRequested() || this.metadata.timeToNextUpdate(time.milliseconds()) == 0)
             awaitMetadataUpdate();
     }
 
@@ -184,8 +184,7 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
-     * Poll for any network IO. All send requests will either be transmitted on the network
-     * or failed when this call completes.
+     * Poll for any network IO.
      * @param timeout The maximum time to wait for an IO event.
      * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
@@ -194,13 +193,25 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
+     * Poll for any network IO.
+     * @param timeout timeout in milliseconds
+     * @param now current time in milliseconds
+     */
+    public void poll(long timeout, long now) {
+        poll(timeout, now, true);
+    }
+
+    /**
      * Poll for network IO and return immediately. This will not trigger wakeups,
      * nor will it execute any delayed tasks.
      */
-    public void quickPoll() {
+    public void pollNoWakeup() {
         disableWakeups();
-        poll(0, time.milliseconds(), false);
-        enableWakeups();
+        try {
+            poll(0, time.milliseconds(), false);
+        } finally {
+            enableWakeups();
+        }
     }
 
     private void poll(long timeout, long now, boolean executeDelayedTasks) {
@@ -226,8 +237,18 @@ public class ConsumerNetworkClient implements Closeable {
         // cleared or a connect finished in the poll
         trySend(now);
 
-        // fail all requests that couldn't be sent
-        failUnsentRequests();
+        // fail requests that couldn't be sent if they have expired
+        failExpiredRequests(now);
+    }
+
+    /**
+     * Execute delayed tasks now.
+     * @param now current time in milliseconds
+     * @throws WakeupException if a wakeup has been requested
+     */
+    public void executeDelayedTasks(long now) {
+        delayedTasks.poll(now);
+        maybeTriggerWakeup();
     }
 
     /**
@@ -273,29 +294,48 @@ public class ConsumerNetworkClient implements Closeable {
             Map.Entry<Node, List<ClientRequest>> requestEntry = iterator.next();
             Node node = requestEntry.getKey();
             if (client.connectionFailed(node)) {
+                // Remove entry before invoking request callback to avoid callbacks handling
+                // coordinator failures traversing the unsent list again.
+                iterator.remove();
                 for (ClientRequest request : requestEntry.getValue()) {
                     RequestFutureCompletionHandler handler =
                             (RequestFutureCompletionHandler) request.callback();
                     handler.onComplete(new ClientResponse(request, now, true, null));
                 }
-                iterator.remove();
             }
         }
     }
 
-    private void failUnsentRequests() {
-        // clear all unsent requests and fail their corresponding futures
-        for (Map.Entry<Node, List<ClientRequest>> requestEntry: unsent.entrySet()) {
-            Iterator<ClientRequest> iterator = requestEntry.getValue().iterator();
-            while (iterator.hasNext()) {
-                ClientRequest request = iterator.next();
-                RequestFutureCompletionHandler handler =
-                        (RequestFutureCompletionHandler) request.callback();
-                handler.raise(SendFailedException.INSTANCE);
+    private void failExpiredRequests(long now) {
+        // clear all expired unsent requests and fail their corresponding futures
+        Iterator<Map.Entry<Node, List<ClientRequest>>> iterator = unsent.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<Node, List<ClientRequest>> requestEntry = iterator.next();
+            Iterator<ClientRequest> requestIterator = requestEntry.getValue().iterator();
+            while (requestIterator.hasNext()) {
+                ClientRequest request = requestIterator.next();
+                if (request.createdTimeMs() < now - unsentExpiryMs) {
+                    RequestFutureCompletionHandler handler =
+                            (RequestFutureCompletionHandler) request.callback();
+                    handler.raise(new TimeoutException("Failed to send request after " + unsentExpiryMs + " ms."));
+                    requestIterator.remove();
+                } else
+                    break;
+            }
+            if (requestEntry.getValue().isEmpty())
                 iterator.remove();
+        }
+    }
+
+    protected void failUnsentRequests(Node node, RuntimeException e) {
+        // clear unsent requests to node and fail their corresponding futures
+        List<ClientRequest> unsentRequests = unsent.remove(node);
+        if (unsentRequests != null) {
+            for (ClientRequest request : unsentRequests) {
+                RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
+                handler.raise(e);
             }
         }
-        unsent.clear();
     }
 
     private boolean trySend(long now) {
@@ -318,23 +358,29 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void clientPoll(long timeout, long now) {
         client.poll(timeout, now);
-        if (wakeupsEnabled && wakeup.get()) {
-            failUnsentRequests();
+        maybeTriggerWakeup();
+    }
+
+    private void maybeTriggerWakeup() {
+        if (wakeupDisabledCount == 0 && wakeup.get()) {
             wakeup.set(false);
             throw new WakeupException();
         }
     }
 
     public void disableWakeups() {
-        this.wakeupsEnabled = false;
+        wakeupDisabledCount++;
     }
 
     public void enableWakeups() {
-        this.wakeupsEnabled = true;
+        if (wakeupDisabledCount <= 0)
+            throw new IllegalStateException("Cannot enable wakeups since they were never disabled");
+
+        wakeupDisabledCount--;
 
         // re-wakeup the client if the flag was set since previous wake-up call
         // could be cleared by poll(0) while wakeups were disabled
-        if (wakeup.get())
+        if (wakeupDisabledCount == 0 && wakeup.get())
             this.client.wakeup();
     }
 

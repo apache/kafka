@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.examples.wordcount;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -28,6 +29,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapper;
 
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Properties;
 
 /**
@@ -52,7 +54,7 @@ public class WordCountDemo {
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
-        props.put(StreamsConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -62,12 +64,12 @@ public class WordCountDemo {
                 .flatMapValues(new ValueMapper<String, Iterable<String>>() {
                     @Override
                     public Iterable<String> apply(String value) {
-                        return Arrays.asList(value.toLowerCase().split(" "));
+                        return Arrays.asList(value.toLowerCase(Locale.getDefault()).split(" "));
                     }
                 }).map(new KeyValueMapper<String, String, KeyValue<String, String>>() {
                     @Override
                     public KeyValue<String, String> apply(String key, String value) {
-                        return new KeyValue<String, String>(value, value);
+                        return new KeyValue<>(value, value);
                     }
                 })
                 .countByKey("Counts");

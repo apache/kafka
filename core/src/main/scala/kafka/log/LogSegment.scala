@@ -55,7 +55,7 @@ class LogSegment(val log: FileMessageSet,
 
   def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int, rollJitterMs: Long, time: Time, fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false) =
     this(new FileMessageSet(file = Log.logFilename(dir, startOffset), fileAlreadyExists = fileAlreadyExists, initFileSize = initFileSize, preallocate = preallocate),
-         new OffsetIndex(file = Log.indexFilename(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
+         new OffsetIndex(Log.indexFilename(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
          startOffset,
          indexIntervalBytes,
          rollJitterMs,
@@ -113,7 +113,7 @@ class LogSegment(val log: FileMessageSet,
    * @param startOffset A lower bound on the first offset to include in the message set we read
    * @param maxSize The maximum number of bytes to include in the message set we read
    * @param maxOffset An optional maximum offset for the message set we read
-   * @param maxPosition An optional maximum position in the log segment that should be exposed for read.
+   * @param maxPosition The maximum position in the log segment that should be exposed for read
    *
    * @return The fetched data and the offset metadata of the first message whose offset is >= startOffset,
    *         or null if the startOffset is larger than the largest offset in this log
@@ -137,24 +137,26 @@ class LogSegment(val log: FileMessageSet,
       return FetchDataInfo(offsetMetadata, MessageSet.Empty)
 
     // calculate the length of the message set to read based on whether or not they gave us a maxOffset
-    val length =
-      maxOffset match {
-        case None =>
-          // no max offset, just read until the max position
-          min((maxPosition - startPosition.position).toInt, maxSize)
-        case Some(offset) => {
-          // there is a max offset, translate it to a file position and use that to calculate the max read size
-          if(offset < startOffset)
-            throw new IllegalArgumentException("Attempt to read with a maximum offset (%d) less than the start offset (%d).".format(offset, startOffset))
-          val mapping = translateOffset(offset, startPosition.position)
-          val endPosition =
-            if(mapping == null)
-              logSize // the max offset is off the end of the log, use the end of the file
-            else
-              mapping.position
-          min(min(maxPosition, endPosition) - startPosition.position, maxSize).toInt
-        }
-      }
+    val length = maxOffset match {
+      case None =>
+        // no max offset, just read until the max position
+        min((maxPosition - startPosition.position).toInt, maxSize)
+      case Some(offset) =>
+        // there is a max offset, translate it to a file position and use that to calculate the max read size;
+        // when the leader of a partition changes, it's possible for the new leader's high watermark to be less than the
+        // true high watermark in the previous leader for a short window. In this window, if a consumer fetches on an
+        // offset between new leader's high watermark and the log end offset, we want to return an empty response.
+        if(offset < startOffset)
+          return FetchDataInfo(offsetMetadata, MessageSet.Empty)
+        val mapping = translateOffset(offset, startPosition.position)
+        val endPosition =
+          if(mapping == null)
+            logSize // the max offset is off the end of the log, use the end of the file
+          else
+            mapping.position
+        min(min(maxPosition, endPosition) - startPosition.position, maxSize).toInt
+    }
+
     FetchDataInfo(offsetMetadata, log.read(startPosition.position, length))
   }
 
@@ -201,7 +203,7 @@ class LogSegment(val log: FileMessageSet,
     truncated
   }
 
-  override def toString() = "LogSegment(baseOffset=" + baseOffset + ", size=" + size + ")"
+  override def toString = "LogSegment(baseOffset=" + baseOffset + ", size=" + size + ")"
 
   /**
    * Truncate off all index and log entries with offsets >= the given offset.

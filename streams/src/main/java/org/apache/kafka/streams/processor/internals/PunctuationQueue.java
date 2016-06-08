@@ -43,7 +43,7 @@ public class PunctuationQueue {
                 PunctuationSchedule sched = top;
                 pq.poll();
                 punctuator.punctuate(sched.node(), timestamp);
-                pq.add(sched.next());
+                pq.add(sched.next(timestamp));
                 punctuated = true;
 
                 top = pq.peek();

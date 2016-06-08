@@ -28,7 +28,7 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.kstream.TumblingWindows;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -207,28 +207,27 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // windowed count
         data.countByKey(
-                TumblingWindows.of("tumbling-win-cnt").with(WINDOW_SIZE),
+                TimeWindows.of("tumbling-win-cnt", WINDOW_SIZE),
                 stringSerde
         ).toStream().map(
                 new KeyValueMapper<Windowed<String>, Long, KeyValue<String, Long>>() {
                     @Override
                     public KeyValue<String, Long> apply(Windowed<String> key, Long value) {
-                        return new KeyValue<>(key.value() + "@" + key.window().start(), value);
+                        return new KeyValue<>(key.key() + "@" + key.window().start(), value);
                     }
                 }
         ).to(stringSerde, longSerde, "wcnt");
 
         // test repartition
         Agg agg = new Agg();
-        cntTable.aggregate(
-                agg.init(),
-                agg.adder(),
-                agg.remover(),
-                agg.selector(),
-                stringSerde,
-                longSerde,
-                longSerde,
-                "cntByCnt"
+        cntTable.groupBy(agg.selector(),
+                         stringSerde,
+                         longSerde
+        ).aggregate(agg.init(),
+                    agg.adder(),
+                    agg.remover(),
+                    longSerde,
+                    "cntByCnt"
         ).to(stringSerde, longSerde, "tagg");
 
         return new KafkaStreams(builder, props);

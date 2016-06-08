@@ -32,9 +32,10 @@ import org.apache.kafka.common.record.TimestampType
 
 import scala.collection.JavaConversions
 import com.yammer.metrics.core.Gauge
+import org.apache.kafka.common.utils.Utils
 
 object LogAppendInfo {
-  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, Message.NoTimestamp, NoCompressionCodec, NoCompressionCodec, -1, -1, false)
+  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, Message.NoTimestamp, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
 }
 
 /**
@@ -214,7 +215,7 @@ class Log(val dir: File,
       val fileName = logFile.getName
       val startOffset = fileName.substring(0, fileName.length - LogFileSuffix.length).toLong
       val indexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, IndexFileSuffix) + SwapFileSuffix)
-      val index =  new OffsetIndex(file = indexFile, baseOffset = startOffset, maxIndexSize = config.maxIndexSize)
+      val index =  new OffsetIndex(indexFile, baseOffset = startOffset, maxIndexSize = config.maxIndexSize)
       val swapSegment = new LogSegment(new FileMessageSet(file = swapFile),
                                        index = index,
                                        baseOffset = startOffset,
@@ -227,7 +228,7 @@ class Log(val dir: File,
       replaceSegments(swapSegment, oldSegments.toSeq, isRecoveredSwapFile = true)
     }
 
-    if(logSegments.size == 0) {
+    if(logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at offset 0
       segments.put(0L, new LogSegment(dir = dir,
                                      startOffset = 0,
@@ -482,14 +483,14 @@ class Log(val dir: File,
   }
 
   /**
-   * Read messages from the log
+   * Read messages from the log.
    *
    * @param startOffset The offset to begin reading at
    * @param maxLength The maximum number of bytes to read
-   * @param maxOffset -The offset to read up to, exclusive. (i.e. the first offset NOT included in the resulting message set).
+   * @param maxOffset The offset to read up to, exclusive. (i.e. this offset NOT included in the resulting message set)
    *
    * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the base offset of the first segment.
-   * @return The fetch data information including fetch starting offset metadata and messages read
+   * @return The fetch data information including fetch starting offset metadata and messages read.
    */
   def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None): FetchDataInfo = {
     trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
@@ -562,21 +563,23 @@ class Log(val dir: File,
    * @return The number of segments deleted
    */
   def deleteOldSegments(predicate: LogSegment => Boolean): Int = {
-    // find any segments that match the user-supplied predicate UNLESS it is the final segment
-    // and it is empty (since we would just end up re-creating it
-    val lastSegment = activeSegment
-    val deletable = logSegments.takeWhile(s => predicate(s) && (s.baseOffset != lastSegment.baseOffset || s.size > 0))
-    val numToDelete = deletable.size
-    if(numToDelete > 0) {
-      lock synchronized {
+    lock synchronized {
+      //find any segments that match the user-supplied predicate UNLESS it is the final segment
+      //and it is empty (since we would just end up re-creating it)
+      val lastEntry = segments.lastEntry
+      val deletable =
+        if (lastEntry == null) Seq.empty
+        else logSegments.takeWhile(s => predicate(s) && (s.baseOffset != lastEntry.getValue.baseOffset || s.size > 0))
+      val numToDelete = deletable.size
+      if (numToDelete > 0) {
         // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
-        if(segments.size == numToDelete)
+        if (segments.size == numToDelete)
           roll()
         // remove the segments for lookups
         deletable.foreach(deleteSegment(_))
       }
+      numToDelete
     }
-    numToDelete
   }
 
   /**
@@ -714,7 +717,7 @@ class Log(val dir: File,
       removeLogMetrics()
       logSegments.foreach(_.delete())
       segments.clear()
-      CoreUtils.rm(dir)
+      Utils.delete(dir)
     }
   }
 
@@ -799,7 +802,7 @@ class Log(val dir: File,
     }
   }
 
-  override def toString() = "Log(" + dir + ")"
+  override def toString = "Log(" + dir + ")"
 
   /**
    * This method performs an asynchronous log segment delete by doing the following:

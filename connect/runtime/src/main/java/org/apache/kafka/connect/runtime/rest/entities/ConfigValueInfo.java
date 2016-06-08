@@ -25,16 +25,16 @@ import java.util.Objects;
 
 public class ConfigValueInfo {
     private String name;
-    private Object value;
-    private List<Object> recommendedValues;
+    private String value;
+    private List<String> recommendedValues;
     private List<String> errors;
     private boolean visible;
 
     @JsonCreator
     public ConfigValueInfo(
         @JsonProperty("name") String name,
-        @JsonProperty("value") Object value,
-        @JsonProperty("recommended_values") List<Object> recommendedValues,
+        @JsonProperty("value") String value,
+        @JsonProperty("recommended_values") List<String> recommendedValues,
         @JsonProperty("errors") List<String> errors,
         @JsonProperty("visible") boolean visible) {
         this.name = name;
@@ -50,12 +50,12 @@ public class ConfigValueInfo {
     }
 
     @JsonProperty
-    public Object value() {
+    public String value() {
         return value;
     }
 
     @JsonProperty("recommended_values")
-    public List<Object> recommendedValues() {
+    public List<String> recommendedValues() {
         return recommendedValues;
     }
 

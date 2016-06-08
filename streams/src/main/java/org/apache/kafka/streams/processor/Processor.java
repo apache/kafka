@@ -37,10 +37,10 @@ public interface Processor<K, V> {
     void init(ProcessorContext context);
 
     /**
-     * Process the message with the given key and value.
+     * Process the record with the given key and value.
      * 
-     * @param key the key for the message
-     * @param value the value for the message
+     * @param key the key for the record
+     * @param value the value for the record
      */
     void process(K key, V value);
 
@@ -53,7 +53,8 @@ public interface Processor<K, V> {
     void punctuate(long timestamp);
 
     /**
-     * Close this processor and clean up any resources.
+     * Close this processor and clean up any resources. Be aware that {@link #close()} is called after an internal cleanup.
+     * Thus, it is not possible to write anything to Kafka as underlying clients are already closed.
      */
     void close();
 }

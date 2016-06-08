@@ -43,6 +43,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private static final Logger log = LoggerFactory.getLogger(StreamTask.class);
 
+    private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
+
     private final int maxBufferedSize;
 
     private final PartitionGroup partitionGroup;
@@ -167,11 +169,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 this.currNode = recordInfo.node();
                 TopicPartition partition = recordInfo.partition();
 
-                log.debug("Start processing one record [" + currRecord + "]");
+                log.debug("Start processing one record [{}]", currRecord);
 
                 this.currNode.process(currRecord.key(), currRecord.value());
 
-                log.debug("Completed processing one record [" + currRecord + "]");
+                log.debug("Completed processing one record [{}]", currRecord);
 
                 // update the consumed offset map after processing is done
                 consumedOffsets.put(partition, currRecord.offset());
@@ -179,7 +181,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
                 // after processing this record, if its partition queue's buffered size has been
                 // decreased to the threshold, we can then resume the consumption on this partition
-                if (partitionGroup.numBuffered(partition) == this.maxBufferedSize) {
+                if (recordInfo.queue().size() == this.maxBufferedSize) {
                     consumer.resume(singleton(partition));
                     requiresPoll = true;
                 }
@@ -202,24 +204,35 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     /**
      * Possibly trigger registered punctuation functions if
-     * current time has reached the defined stamp
-     *
-     * @param timestamp
+     * current partition group timestamp has reached the defined stamp
      */
-    public boolean maybePunctuate(long timestamp) {
-        return punctuationQueue.mayPunctuate(timestamp, this);
+    public boolean maybePunctuate() {
+        long timestamp = partitionGroup.timestamp();
+
+        // if the timestamp is not known yet, meaning there is not enough data accumulated
+        // to reason stream partition time, then skip.
+        if (timestamp == TimestampTracker.NOT_KNOWN)
+            return false;
+        else
+            return punctuationQueue.mayPunctuate(timestamp, this);
     }
 
+    /**
+     * @throws IllegalStateException if the current node is not null
+     */
     @Override
     public void punctuate(ProcessorNode node, long timestamp) {
         if (currNode != null)
             throw new IllegalStateException("Current node is not null");
 
         currNode = node;
+        currRecord = new StampedRecord(DUMMY_RECORD, timestamp);
+
         try {
             node.processor().punctuate(timestamp);
         } finally {
             currNode = null;
+            currRecord = null;
         }
     }
 
@@ -275,6 +288,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * Schedules a punctuation for the processor
      *
      * @param interval  the interval in milliseconds
+     * @throws IllegalStateException if the current node is not null
      */
     public void schedule(long interval) {
         if (currNode == null)
@@ -283,6 +297,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         punctuationQueue.schedule(new PunctuationSchedule(currNode, interval));
     }
 
+    /**
+     * @throws RuntimeException if an error happens during closing of processor nodes
+     */
     @Override
     public void close() {
         this.partitionGroup.close();
@@ -320,13 +337,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
         ProcessorNode thisNode = currNode;
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            currNode = childNode;
-            try {
+        try {
+            for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+                currNode = childNode;
                 childNode.process(key, value);
-            } finally {
-                currNode = thisNode;
             }
+        } finally {
+            currNode = thisNode;
         }
     }
 
@@ -339,6 +356,22 @@ public class StreamTask extends AbstractTask implements Punctuator {
             childNode.process(key, value);
         } finally {
             currNode = thisNode;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <K, V> void forward(K key, V value, String childName) {
+        ProcessorNode thisNode = currNode;
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            if (childNode.name().equals(childName)) {
+                currNode = childNode;
+                try {
+                    childNode.process(key, value);
+                } finally {
+                    currNode = thisNode;
+                }
+                break;
+            }
         }
     }
 

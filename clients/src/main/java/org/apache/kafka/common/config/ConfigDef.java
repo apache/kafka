@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -538,19 +539,18 @@ public class ConfigDef {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void validate(String name, Map<String, Object> parsed, Map<String, ConfigValue> configs) {
         if (!configKeys.containsKey(name)) {
             return;
         }
         ConfigKey key = configKeys.get(name);
         ConfigValue config = configs.get(name);
-        Object value = parsed.get(name);
         List<Object> recommendedValues;
         if (key.recommender != null) {
             try {
                 recommendedValues = key.recommender.validValues(name, parsed);
                 List<Object> originalRecommendedValues = config.recommendedValues();
-
                 if (!originalRecommendedValues.isEmpty()) {
                     Set<Object> originalRecommendedValueSet = new HashSet<>(originalRecommendedValues);
                     Iterator<Object> it = recommendedValues.iterator();
@@ -562,9 +562,6 @@ public class ConfigDef {
                     }
                 }
                 config.recommendedValues(recommendedValues);
-                if (value != null && !recommendedValues.isEmpty() && !recommendedValues.contains(value)) {
-                    config.addErrorMessage("Invalid value for configuration " + key.name);
-                }
                 config.visible(key.recommender.visible(name, parsed));
             } catch (ConfigException e) {
                 config.addErrorMessage(e.getMessage());
@@ -676,6 +673,35 @@ public class ConfigDef {
         }
     }
 
+    public static String convertToString(Object parsedValue, Type type) {
+        if (parsedValue == null) {
+            return null;
+        }
+
+        if (type == null) {
+            return parsedValue.toString();
+        }
+
+        switch (type) {
+            case BOOLEAN:
+            case SHORT:
+            case INT:
+            case LONG:
+            case DOUBLE:
+            case STRING:
+            case PASSWORD:
+                return parsedValue.toString();
+            case LIST:
+                List<?> valueList = (List<?>) parsedValue;
+                return Utils.join(valueList, ",");
+            case CLASS:
+                Class<?> clazz = (Class<?>) parsedValue;
+                return clazz.getCanonicalName();
+            default:
+                throw new IllegalStateException("Unknown type.");
+        }
+    }
+
     /**
      * The config types
      */
@@ -764,6 +790,8 @@ public class ConfigDef {
         }
 
         public void ensureValid(String name, Object o) {
+            if (o == null)
+                throw new ConfigException(name, o, "Value must be non-null");
             Number n = (Number) o;
             if (min != null && n.doubleValue() < min.doubleValue())
                 throw new ConfigException(name, o, "Value must be at least " + min);
@@ -866,7 +894,7 @@ public class ConfigDef {
             b.append(def.documentation);
             b.append("</td>");
             b.append("<td>");
-            b.append(def.type.toString().toLowerCase());
+            b.append(def.type.toString().toLowerCase(Locale.ROOT));
             b.append("</td>");
             b.append("<td>");
             if (def.hasDefault()) {
@@ -883,7 +911,7 @@ public class ConfigDef {
             b.append(def.validator != null ? def.validator.toString() : "");
             b.append("</td>");
             b.append("<td>");
-            b.append(def.importance.toString().toLowerCase());
+            b.append(def.importance.toString().toLowerCase(Locale.ROOT));
             b.append("</td>");
             b.append("</tr>\n");
         }
@@ -912,7 +940,7 @@ public class ConfigDef {
                 b.append("\n\n");
             }
             b.append("  * Type: ");
-            b.append(def.type.toString().toLowerCase());
+            b.append(def.type.toString().toLowerCase(Locale.ROOT));
             b.append("\n");
             if (def.defaultValue != null) {
                 b.append("  * Default: ");
@@ -926,7 +954,7 @@ public class ConfigDef {
                 b.append("\n");
             }
             b.append("  * Importance: ");
-            b.append(def.importance.toString().toLowerCase());
+            b.append(def.importance.toString().toLowerCase(Locale.ROOT));
             b.append("\n\n");
         }
         return b.toString();

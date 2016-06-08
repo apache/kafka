@@ -16,12 +16,13 @@
  **/
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
 import org.junit.Test;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
@@ -32,7 +33,11 @@ import static org.easymock.EasyMock.verify;
 
 public class WorkerTaskTest {
 
-    private static final Map<String, String> EMPTY_TASK_PROPS = Collections.emptyMap();
+    private static final Map<String, String> TASK_PROPS = new HashMap<>();
+    static {
+        TASK_PROPS.put(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
+    }
+    private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
 
     @Test
     public void standardStartup() {
@@ -41,14 +46,14 @@ public class WorkerTaskTest {
         TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
 
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
-                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class)
-                .withArgs(taskId, statusListener)
+                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class, TargetState.class)
+                .withArgs(taskId, statusListener, TargetState.STARTED)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
                 .createStrictMock();
 
-        workerTask.initialize(EMPTY_TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         expectLastCall();
 
         workerTask.execute();
@@ -65,7 +70,7 @@ public class WorkerTaskTest {
 
         replay(workerTask);
 
-        workerTask.initialize(EMPTY_TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.run();
         workerTask.stop();
         workerTask.awaitStop(1000L);
@@ -80,14 +85,14 @@ public class WorkerTaskTest {
         TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
 
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
-                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class)
-                .withArgs(taskId, statusListener)
+                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class, TargetState.class)
+                .withArgs(taskId, statusListener, TargetState.STARTED)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
                 .createStrictMock();
 
-        workerTask.initialize(EMPTY_TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         EasyMock.expectLastCall();
 
         workerTask.close();
@@ -95,7 +100,7 @@ public class WorkerTaskTest {
 
         replay(workerTask);
 
-        workerTask.initialize(EMPTY_TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.stop();
         workerTask.awaitStop(1000L);
 
@@ -112,8 +117,8 @@ public class WorkerTaskTest {
         TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
 
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
-                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class)
-                .withArgs(taskId, statusListener)
+                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class, TargetState.class)
+                .withArgs(taskId, statusListener, TargetState.STARTED)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
@@ -130,7 +135,7 @@ public class WorkerTaskTest {
             }
         };
 
-        workerTask.initialize(EMPTY_TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         EasyMock.expectLastCall();
 
         workerTask.execute();
@@ -152,7 +157,7 @@ public class WorkerTaskTest {
 
         replay(workerTask);
 
-        workerTask.initialize(EMPTY_TASK_PROPS);
+        workerTask.initialize(TASK_CONFIG);
         workerTask.run();
 
         workerTask.stop();
@@ -161,6 +166,9 @@ public class WorkerTaskTest {
         thread.join();
 
         verify(workerTask);
+    }
+
+    private static abstract class TestSinkTask extends SinkTask {
     }
 
 }

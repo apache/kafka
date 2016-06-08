@@ -52,7 +52,7 @@ public class KStreamImplTest {
                 public boolean test(String key, String value) {
                     return true;
                 }
-            }).filterOut(new Predicate<String, String>() {
+            }).filterNot(new Predicate<String, String>() {
                 @Override
                 public boolean test(String key, String value) {
                     return false;
@@ -132,5 +132,12 @@ public class KStreamImplTest {
             2 + // through
             1, // process
             builder.build("X", null).processors().size());
+    }
+
+    @Test
+    public void testToWithNullValueSerdeDoesntNPE() {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KStream<String, String> inputStream = builder.stream(stringSerde, stringSerde, "input");
+        inputStream.to(stringSerde, null, "output");
     }
 }

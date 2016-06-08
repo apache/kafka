@@ -47,8 +47,11 @@ object ApiVersion {
     "0.8.1" -> KAFKA_0_8_1,
     "0.8.2" -> KAFKA_0_8_2,
     "0.9.0" -> KAFKA_0_9_0,
+    // 0.10.0-IV0 is introduced for KIP-31/32 which changes the message format.
     "0.10.0-IV0" -> KAFKA_0_10_0_IV0,
-    "0.10.0" -> KAFKA_0_10_0_IV0
+    // 0.10.0-IV1 is introduced for KIP-36(rack awareness) and KIP-43(SASL handshake).
+    "0.10.0-IV1" -> KAFKA_0_10_0_IV1,
+    "0.10.0" -> KAFKA_0_10_0_IV1
   )
 
   private val versionPattern = "\\.".r
@@ -69,7 +72,7 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
   override def compare(that: ApiVersion): Int =
     ApiVersion.orderingByVersion.compare(this, that)
 
-  override def toString(): String = version
+  override def toString: String = version
 }
 
 // Keep the IDs in order of versions
@@ -101,4 +104,10 @@ case object KAFKA_0_10_0_IV0 extends ApiVersion {
   val version: String = "0.10.0-IV0"
   val messageFormatVersion: Byte = Message.MagicValue_V1
   val id: Int = 4
+}
+
+case object KAFKA_0_10_0_IV1 extends ApiVersion {
+  val version: String = "0.10.0-IV1"
+  val messageFormatVersion: Byte = Message.MagicValue_V1
+  val id: Int = 5
 }

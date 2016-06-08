@@ -17,6 +17,7 @@ import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.concurrent.ExecutionException
 import java.util.{ArrayList, Collections, Properties}
+
 import kafka.cluster.EndPoint
 import kafka.common.TopicAndPartition
 import kafka.coordinator.GroupCoordinator
@@ -24,15 +25,16 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.security.auth._
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.{OffsetAndMetadata, Consumer, ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.{BrokerEndPoint, TopicPartition, requests}
+import org.apache.kafka.common.{Node, TopicPartition, requests}
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
@@ -146,7 +148,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
       1,
       1,
       servers,
-      servers.head.consumerCoordinator.offsetsTopicConfigs)
+      servers.head.groupCoordinator.offsetsTopicConfigs)
     // create the test topic with all the brokers as replicas
     TestUtils.createTopic(zkUtils, topic, 1, 1, this.servers)
   }
@@ -214,7 +216,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   private def createLeaderAndIsrRequest = {
     new requests.LeaderAndIsrRequest(brokerId, Int.MaxValue,
       Map(tp -> new requests.LeaderAndIsrRequest.PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Set(brokerId).asJava)).asJava,
-      Set(new BrokerEndPoint(brokerId,"localhost", 0)).asJava)
+      Set(new Node(brokerId, "localhost", 0)).asJava)
   }
 
   private def createStopReplicaRequest = {
@@ -411,8 +413,8 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     addAndVerifyAcls(GroupReadAcl(groupResource), groupResource)
     addAndVerifyAcls(ClusterAcl(Resource.ClusterResource), Resource.ClusterResource)
     try {
-      this.consumers(0).assign(List(topicPartition).asJava)
-      consumeRecords(this.consumers(0))
+      this.consumers.head.assign(List(topicPartition).asJava)
+      consumeRecords(this.consumers.head)
       Assert.fail("should have thrown exception")
     } catch {
       case e: TopicAuthorizationException =>
@@ -423,7 +425,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Create)), Resource.ClusterResource)
 
     sendRecords(numRecords, topicPartition)
-    consumeRecords(this.consumers(0), topic = newTopic, part = 0)
+    consumeRecords(this.consumers.head, topic = newTopic, part = 0)
   }
 
   @Test(expected = classOf[AuthorizationException])
@@ -503,7 +505,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   @Test
   def testListOffsetsWithNoTopicAccess() {
     val e = intercept[TopicAuthorizationException] {
-      this.consumers.head.partitionsFor(topic);
+      this.consumers.head.partitionsFor(topic)
     }
     assertEquals(Set(topic), e.unauthorizedTopics().asScala)
   }
@@ -511,7 +513,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   @Test
   def testListOfsetsWithTopicDescribe() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
-    this.consumers.head.partitionsFor(topic);
+    this.consumers.head.partitionsFor(topic)
   }
 
   def removeAllAcls() = {

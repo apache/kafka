@@ -13,23 +13,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.services.background_thread import BackgroundThreadService
-
-from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
-from kafkatest.services.kafka.version import TRUNK
-from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.services.kafka import TopicPartition
-
 import json
 import os
 import signal
 import subprocess
-import time
+
+from ducktape.services.background_thread import BackgroundThreadService
+
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.kafka import TopicPartition
+from kafkatest.version import TRUNK
+
 
 class ConsumerState:
     Dead = 1
     Rebalancing = 3
     Joined = 2
+
 
 class ConsumerEventHandler(object):
 
@@ -111,7 +111,8 @@ class ConsumerEventHandler(object):
         else:
             return None
 
-class VerifiableConsumer(BackgroundThreadService):
+
+class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_consumer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.stdout")
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.stderr")
@@ -135,7 +136,7 @@ class VerifiableConsumer(BackgroundThreadService):
     def __init__(self, context, num_nodes, kafka, topic, group_id,
                  max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor",
-                 version=TRUNK):
+                 version=TRUNK, stop_timeout_sec=30):
         super(VerifiableConsumer, self).__init__(context, num_nodes)
         self.log_level = "TRACE"
         
@@ -149,6 +150,7 @@ class VerifiableConsumer(BackgroundThreadService):
         self.prop_file = ""
         self.security_config = kafka.security_config.client_config(self.prop_file)
         self.prop_file += str(self.security_config)
+        self.stop_timeout_sec = stop_timeout_sec
 
         self.event_handlers = {}
         self.global_position = {}
@@ -224,9 +226,9 @@ class VerifiableConsumer(BackgroundThreadService):
         cmd += "export LOG_DIR=%s;" % VerifiableConsumer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableConsumer.LOG4J_CONFIG
-        cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-run-class.sh org.apache.kafka.tools.VerifiableConsumer" \
+        cmd += self.path.script("kafka-run-class.sh", node) + " org.apache.kafka.tools.VerifiableConsumer" \
               " --group-id %s --topic %s --broker-list %s --session-timeout %s --assignment-strategy %s %s" % \
-              (self.group_id, self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol),
+                                            (self.group_id, self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol),
                self.session_timeout_sec*1000, self.assignment_strategy, "--enable-autocommit" if self.enable_autocommit else "")
                
         if self.max_messages > 0:
@@ -268,14 +270,10 @@ class VerifiableConsumer(BackgroundThreadService):
 
     def stop_node(self, node, clean_shutdown=True):
         self.kill_node(node, clean_shutdown=clean_shutdown)
-        
-        if self.worker_threads is None:
-            return
 
-        # block until the corresponding thread exits
-        if len(self.worker_threads) >= self.idx(node):
-            # Need to guard this because stop is preemptively called before the worker threads are added and started
-            self.worker_threads[self.idx(node) - 1].join()
+        stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
+        assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
+                        (str(node.account), str(self.stop_timeout_sec))
 
     def clean_node(self, node):
         self.kill_node(node, clean_shutdown=False)

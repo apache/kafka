@@ -207,7 +207,7 @@ The essential old consumer configurations are the following:
     <tr>
       <td>fetch.message.max.bytes</td>
       <td nowrap>1024 * 1024</td>
-      <td>The number of byes of messages to attempt to fetch for each topic-partition in each fetch request. These bytes will be read into memory for each partition, so this helps control the memory used by the consumer. The fetch request size must be at least as large as the maximum message size the server allows or else it is possible for the producer to send messages larger than the consumer can fetch.</td>
+      <td>The number of bytes of messages to attempt to fetch for each topic-partition in each fetch request. These bytes will be read into memory for each partition, so this helps control the memory used by the consumer. The fetch request size must be at least as large as the maximum message size the server allows or else it is possible for the producer to send messages larger than the consumer can fetch.</td>
     </tr>
      <tr>
       <td>num.consumer.fetchers</td>
@@ -333,4 +333,9 @@ Since 0.9.0.0 we have been working on a replacement for our existing simple and 
 <!--#include virtual="generated/consumer_config.html" -->
 
 <h3><a id="connectconfigs" href="#connectconfigs">3.4 Kafka Connect Configs</a></h3>
+Below is the configuration of the Kafka Connect framework.
 <!--#include virtual="generated/connect_config.html" -->
+
+<h3><a id="streamsconfigs" href="#streamsconfigs">3.5 Kafka Streams Configs</a></h3>
+Below is the configuration of the Kafka Streams client library.
+<!--#include virtual="generated/streams_config.html" -->
