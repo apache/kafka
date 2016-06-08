@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assert.assertEquals;
@@ -46,9 +47,15 @@ public class AbstractConfigTest {
         props.put("foo.bar", "abc");
         props.put("setting", "def");
         TestConfig config = new TestConfig(props);
+        Map<String, Object> originalsWithPrefix = config.originalsWithPrefix("foo.");
+
+        assertTrue(config.unused().contains("foo.bar"));
+        originalsWithPrefix.get("bar");
+        assertFalse(config.unused().contains("foo.bar"));
+
         Map<String, Object> expected = new HashMap<>();
         expected.put("bar", "abc");
-        assertEquals(expected, config.originalsWithPrefix("foo."));
+        assertEquals(expected, originalsWithPrefix);
     }
 
     @Test
