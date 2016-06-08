@@ -23,9 +23,8 @@ import org.apache.kafka.common.serialization.Serde;
  * usually grouped on a different key than the original stream key
  *
  * <p>
- * It is an intermediate representation after a re-grouping of a {@link KStream} before an
- * aggregation is applied
- * to the new partitions resulting in a new {@link KTable}.
+ * It is an intermediate representation of a {@link KStream} before an
+ * aggregation is applied to the new partitions resulting in a new {@link KTable}.
  * @param <K> Type of keys
  * @param <V> Type of values
  *
@@ -68,9 +67,7 @@ public interface KGroupedStream<K, V> {
      *                      if not specified the default serdes defined in the configs will be used
      * @param <T>           the value type of the resulted {@link KTable}
      *
-     * @return a {@link KTable} which can be treated as a list of {@code KTable}s
-     *         where each table contains records with unmodified keys and values with type {@code T}
-     *         that represent the latest (rolling) aggregate for each key within that window
+     * @return a {@link KTable} that represents the latest (rolling) aggregate for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                Aggregator<K, V, T> aggregator,
