@@ -278,7 +278,12 @@ public class AbstractConfig {
         @Override
         public V get(Object key) {
             if (key instanceof String) {
-                String keyWithPrefix = prefix + key;
+                String keyWithPrefix;
+                if (prefix.isEmpty()) {
+                    keyWithPrefix = (String) key;
+                } else {
+                    keyWithPrefix = prefix + key;
+                }
                 ignore(keyWithPrefix);
             }
             return super.get(key);
