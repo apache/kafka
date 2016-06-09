@@ -59,7 +59,7 @@ public interface KGroupedStream<K, V> {
                                                      Windows<W> windows);
 
     /**
-     * Aggregate values of this stream by key new instance of a {@link KTable}.
+     * Aggregate values of this stream by key into a new instance of a {@link KTable}.
      *
      * @param initializer   the instance of {@link Initializer}
      * @param aggregator    the instance of {@link Aggregator}
@@ -97,7 +97,7 @@ public interface KGroupedStream<K, V> {
     /**
      * Count number of records of this stream by key into a new instance of a {@link KTable}
      *
-     * @param name          the name of the resulted {@link KTable}
+     * @param name  the name of the resulted {@link KTable}
      *
      * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) count (i.e., number of records) for each key
      */
@@ -107,7 +107,7 @@ public interface KGroupedStream<K, V> {
     /**
      * Count number of records of this stream by key on a window basis into a new instance of windowed {@link KTable}.
      *
-     * @param windows       the specification of the aggregation {@link Windows}
+     * @param windows   the specification of the aggregation {@link Windows}
      *
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
      *         where each table contains records with unmodified keys and values

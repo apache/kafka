@@ -11,9 +11,6 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -40,13 +37,11 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -443,33 +438,27 @@ public class KStreamRepartitionJoinTest {
 
 
     private List<String> receiveMessages(final Deserializer<?> valueDeserializer,
-                                         final int numMessages) {
-        final Properties consumerProperties = new Properties();
-        consumerProperties
-            .setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kstream-test-" + testNo);
-        consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        final KafkaConsumer<Integer, ?>
-            consumer =
-            new KafkaConsumer<>(consumerProperties, new IntegerDeserializer(), valueDeserializer);
-        consumer.subscribe(Collections.singleton(outputTopic));
+                                         final int numMessages) throws InterruptedException {
 
-        final List<String> received = new ArrayList<>();
-        final long now = System.currentTimeMillis();
-        while (received.size() < numMessages
-               && System.currentTimeMillis() - now < TimeUnit.MILLISECONDS
-            .convert(1, TimeUnit.MINUTES)) {
-            final ConsumerRecords<Integer, ?> records = consumer.poll(10);
-            for (final ConsumerRecord<Integer, ?> record : records) {
-                received.add(record.value().toString());
-            }
-        }
-        consumer.close();
+        final Properties config = new Properties();
+
+        config
+            .setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kstream-test-" + testNo);
+        config.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        config.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                                       IntegerDeserializer.class.getName());
+        config.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                                       valueDeserializer.getClass().getName());
+        List<String> received = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(config,
+                                                                                      outputTopic,
+                                                                                      numMessages,
+                                                                                      30 * 1000);
         Collections.sort(received);
         return received;
     }
 
-    private void verifyCorrectOutput(List<String> expectedMessages) {
+    private void verifyCorrectOutput(List<String> expectedMessages) throws InterruptedException {
         assertThat(receiveMessages(new StringDeserializer(), expectedMessages.size()),
                    is(expectedMessages));
     }

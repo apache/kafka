@@ -60,7 +60,6 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         return doAggregate(
             new KStreamReduce<K, V>(name, reducer),
             REDUCE_NAME,
-            name,
             storeFactory(valSerde, name).build());
     }
 
@@ -72,7 +71,6 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         return (KTable<Windowed<K>, V>) doAggregate(
             new KStreamWindowReduce<K, V, W>(windows, windows.name(), reducer),
             REDUCE_NAME,
-            windows.name(),
             windowedStore(valSerde, windows)
         );
     }
@@ -85,7 +83,6 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         return doAggregate(
             new KStreamAggregate<>(name, initializer, aggregator),
             AGGREGATE_NAME,
-            name,
             storeFactory(aggValueSerde, name).build());
     }
 
@@ -98,7 +95,6 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         return (KTable<Windowed<K>, T>) doAggregate(
             new KStreamWindowAggregate<>(windows, windows.name(), initializer, aggregator),
             AGGREGATE_NAME,
-            windows.name(),
             windowedStore(aggValueSerde, windows)
         );
     }
@@ -154,12 +150,11 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     private <T> KTable<K, T> doAggregate(
         final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,
         final String functionName,
-        final String name,
         final StateStoreSupplier storeSupplier) {
 
         final String aggFunctionName = topology.newName(functionName);
 
-        final String sourceName = repartitionIfRequired(name);
+        final String sourceName = repartitionIfRequired();
 
         topology.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
         topology.addStateStore(storeSupplier, aggFunctionName);
@@ -175,10 +170,9 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
      * If repartitioning is required then add a new co-partitioned internal topic and configure the
      * source & sink.
      *
-     * @param topicName - name to be used as part of internal topic
      * @return the new sourceName if repartitioned. Otherwise the name of this stream
      */
-    private String repartitionIfRequired(final String topicName) {
+    private String repartitionIfRequired() {
         if (!repartitionRequired) {
             return this.name;
         }
@@ -189,7 +183,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         final Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
 
         final String sinkName = topology.newName(KStreamImpl.SINK_NAME);
-        final String topic = topicName + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
+        final String topic = this.name + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
         final Set<String> allSourceNodes = new HashSet<>(sourceNodes);
         final String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
         allSourceNodes.add(sourceName);

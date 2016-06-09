@@ -409,14 +409,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                          Serde<K> keySerde,
                                          Serde<V> thisValueSerde,
                                          Serde<V1> otherValueSerde,
-                                         JoinOp joinOp) {
+                                         KStreamJoin join) {
         boolean otherRepartitionOnJoin = ((KStreamImpl) other).repartitionRequired;
 
         // No repartitioning required so proceed with join
         if (!otherRepartitionOnJoin && !this.repartitionRequired) {
             ensureJoinableWith((KStreamImpl<K, V1>) other);
-            return joinOp.join(this, other, joiner, windows, keySerde, thisValueSerde,
-                               otherValueSerde);
+            return join.join(this, other, joiner, windows, keySerde, thisValueSerde,
+                             otherValueSerde);
         }
 
         // Other stream requires repartitioning. Repartition it and join this with
@@ -426,16 +426,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 otherStreamRepartitioned =
                 ((KStreamImpl<K, V1>) other).repartitionStream(keySerde,
                                                               otherValueSerde,
-                                                              windows.name() + "-other",
-                                                              false);
+                                                               false);
             ensureJoinableWith(otherStreamRepartitioned);
-            return joinOp.join(this,
-                               otherStreamRepartitioned,
-                               joiner,
-                               windows,
-                               keySerde,
-                               thisValueSerde,
-                               otherValueSerde);
+            return join.join(this,
+                             otherStreamRepartitioned,
+                             joiner,
+                             windows,
+                             keySerde,
+                             thisValueSerde,
+                             otherValueSerde);
         }
 
         // This stream requires repartitioning. Repartition it and join the new stream
@@ -443,46 +442,50 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         if (!otherRepartitionOnJoin) {
             KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionStream(keySerde,
                                                                                thisValueSerde,
-                                                                               windows.name()
-                                                                               + "-this",
                                                                                false);
             thisStreamRepartitioned.ensureJoinableWith((KStreamImpl<K, V1>) other);
 
-            return joinOp.join(thisStreamRepartitioned,
-                               other,
-                               joiner,
-                               windows,
-                               keySerde,
-                               thisValueSerde,
-                               otherValueSerde);
+            return join.join(thisStreamRepartitioned,
+                             other,
+                             joiner,
+                             windows,
+                             keySerde,
+                             thisValueSerde,
+                             otherValueSerde);
         }
 
         // Both streams need repartitioning. Repartition and join the repartitioned streams
         ensureJoinableWith((KStreamImpl<K, V1>) other);
         KStreamImpl<K, V> thisRepartitioned = this.repartitionStream(keySerde,
                                                                      thisValueSerde,
-                                                                     windows.name() + "-this",
                                                                      true);
         KStreamImpl<K, V1> otherRepartitioned = ((KStreamImpl<K, V1>) other)
             .repartitionStream(keySerde,
                                otherValueSerde,
-                               windows.name() + "-other",
                                true);
 
-        return joinOp.join(thisRepartitioned,
-                           otherRepartitioned,
-                           joiner,
-                           windows,
-                           keySerde,
-                           thisValueSerde,
-                           otherValueSerde);
+        return join.join(thisRepartitioned,
+                         otherRepartitioned,
+                         joiner,
+                         windows,
+                         keySerde,
+                         thisValueSerde,
+                         otherValueSerde);
     }
 
+
+    /**
+     * Repartition a stream. This will is required on join operations occurring after
+     * an operation that changes the key, i.e, selectKey, map(..), flatMap(..).
+     * @param keySerde      Serdes for serializing the keys
+     * @param valSerde      Serdes for serilaizing the values
+     * @param copartition   true if we need to co-partition these streams
+     * @return
+     */
     private KStreamImpl<K, V> repartitionStream(Serde<K> keySerde,
                                                 Serde<V> valSerde,
-                                                String topicName,
                                                 boolean copartition) {
-        String repartitionTopic = topicName + REPARTITION_TOPIC_SUFFIX;
+        String repartitionTopic = this.name + REPARTITION_TOPIC_SUFFIX;
         String sinkName = topology.newName(SINK_NAME);
         String sourceName = topology.newName(SOURCE_NAME);
 
@@ -547,11 +550,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                           Serde<K> keySerde,
                                           Serde<V> valueSerde) {
 
-        // TODO: need topic name
         if (repartitionRequired) {
             KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionStream(keySerde,
                                                                                valueSerde,
-                                                                               "foo",
                                                                                false);
             return thisStreamRepartitioned.doLeftJoin(other, joiner);
         } else {
@@ -606,8 +607,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         this.repartitionRequired);
     }
 
+    private static <K, V> StateStoreSupplier createWindowedStateStore(final JoinWindows windows,
+                                                                     final Serde<K> keySerde,
+                                                                     final Serde<V> valueSerde,
+                                                                     final String nameSuffix) {
+        return Stores.create(windows.name() + nameSuffix)
+            .withKeys(keySerde)
+            .withValues(valueSerde)
+            .persistent()
+            .windowed(windows.maintainMs(), windows.segments, true)
+            .build();
+    }
 
-    private interface JoinOp {
+    private interface KStreamJoin {
 
         <K1, R, V1, V2> KStream<K1, R> join(KStream<K1, V1> lhs,
                                             KStream<K1, V2> other,
@@ -618,7 +630,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                             Serde<V2> otherValueSerde);
     }
 
-    private class DefaultJoin implements JoinOp {
+    private class DefaultJoin implements KStreamJoin {
 
         private final boolean outer;
 
@@ -635,19 +647,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                    Serde<V1> lhsValueSerde,
                                                    Serde<V2> otherValueSerde) {
 
-            StateStoreSupplier thisWindow = Stores.create(windows.name() + "-this")
-                .withKeys(keySerde)
-                .withValues(lhsValueSerde)
-                .persistent()
-                .windowed(windows.maintainMs(), windows.segments, true)
-                .build();
+            StateStoreSupplier thisWindow =
+                createWindowedStateStore(windows, keySerde, lhsValueSerde, "-this");
 
-            StateStoreSupplier otherWindow = Stores.create(windows.name() + "-other")
-                .withKeys(keySerde)
-                .withValues(otherValueSerde)
-                .persistent()
-                .windowed(windows.maintainMs(), windows.segments, true)
-                .build();
+            StateStoreSupplier otherWindow =
+                createWindowedStateStore(windows, keySerde, otherValueSerde, "-other");
 
 
             KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindow.name(),
@@ -690,7 +694,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
     }
 
-    private class LeftJoin implements JoinOp {
+
+    private class LeftJoin implements KStreamJoin {
 
         @Override
         public <K1, R, V1, V2> KStream<K1, R> join(KStream<K1, V1> lhs,
@@ -700,12 +705,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                    Serde<K1> keySerde,
                                                    Serde<V1> lhsValueSerde,
                                                    Serde<V2> otherValueSerde) {
-            StateStoreSupplier otherWindow = Stores.create(windows.name() + "-other")
-                .withKeys(keySerde)
-                .withValues(otherValueSerde)
-                .persistent()
-                .windowed(windows.maintainMs(), windows.segments, true)
-                .build();
+            StateStoreSupplier otherWindow =
+                createWindowedStateStore(windows, keySerde, otherValueSerde, "-other");
 
             KStreamJoinWindow<K1, V1>
                 otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name(), windows.before + windows.after + 1, windows.maintainMs());
