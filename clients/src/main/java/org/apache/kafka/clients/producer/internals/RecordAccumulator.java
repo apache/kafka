@@ -14,6 +14,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import java.util.Iterator;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
@@ -85,6 +86,7 @@ public final class RecordAccumulator {
      *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
      * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
      *        exhausting all retries in a short period of time.
+     * @param metadata The metadata associated with this record accumulator
      * @param metrics The metrics
      * @param time The time instance to use
      */
@@ -93,6 +95,7 @@ public final class RecordAccumulator {
                              CompressionType compression,
                              long lingerMs,
                              long retryBackoffMs,
+                             Metadata metadata,
                              Metrics metrics,
                              Time time) {
         this.drainIndex = 0;
@@ -110,6 +113,7 @@ public final class RecordAccumulator {
         this.muted = new HashSet<>();
         this.time = time;
         registerMetrics(metrics, metricGrpName);
+        addTopicExpiryListener(metadata);
     }
 
     private void registerMetrics(Metrics metrics, String metricGrpName) {
@@ -233,7 +237,6 @@ public final class RecordAccumulator {
      * due to metadata being unavailable
      */
     public List<RecordBatch> abortExpiredBatches(int requestTimeout, long now) {
-        Map<TopicPartition, Deque<RecordBatch>> unusedPartitions = new HashMap<>();
         List<RecordBatch> expiredBatches = new ArrayList<>();
         int count = 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
@@ -262,20 +265,11 @@ public final class RecordAccumulator {
                             break;
                         }
                     }
-                    if (dq.isEmpty())
-                        unusedPartitions.put(entry.getKey(), dq);
                 }
             }
         }
         if (!expiredBatches.isEmpty())
             log.trace("Expired {} batches in accumulator", count);
-        for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : unusedPartitions.entrySet()) {
-            Deque<RecordBatch> dq = entry.getValue();
-            synchronized (dq) {
-                if (dq.isEmpty())
-                    this.batches.remove(entry.getKey(), dq);
-            }
-        }
 
         return expiredBatches;
     }
@@ -563,6 +557,24 @@ public final class RecordAccumulator {
 
     protected Set<TopicPartition> getTopicPartitions() {
         return new HashSet<>(this.batches.keySet());
+    }
+
+    private void addTopicExpiryListener(Metadata metadata) {
+        metadata.addTopicExpiryListener(new Metadata.TopicExpiryListener() {
+            @Override
+            public void onTopicExpiry(Set<String> expiredTopics) {
+                for (Iterator<Map.Entry<TopicPartition, Deque<RecordBatch>>> it = batches.entrySet().iterator(); it.hasNext(); ) {
+                    Map.Entry<TopicPartition, Deque<RecordBatch>> entry = it.next();
+                    if (expiredTopics.contains(entry.getKey().topic())) {
+                        Deque<RecordBatch> dq = entry.getValue();
+                        synchronized (dq) {
+                            if (dq.isEmpty())
+                                it.remove();
+                        }
+                    }
+                }
+            }
+        });
     }
 
     /*

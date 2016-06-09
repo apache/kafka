@@ -58,6 +58,7 @@ public final class Metadata {
     /* Topics with expiry time */
     private final Map<String, Long> topics;
     private final List<Listener> listeners;
+    private final List<TopicExpiryListener> topicExpiryListeners;
     private boolean needMetadataForAllTopics;
     private final boolean topicExpiryEnabled;
 
@@ -90,6 +91,7 @@ public final class Metadata {
         this.needUpdate = false;
         this.topics = new HashMap<>();
         this.listeners = new ArrayList<>();
+        this.topicExpiryListeners = new ArrayList<>();
         this.needMetadataForAllTopics = false;
     }
 
@@ -188,25 +190,39 @@ public final class Metadata {
      * Updates the cluster metadata. If topic expiry is enabled, expiry time
      * is set for topics if required and expired topics are removed from the metadata.
      */
-    public synchronized void update(Cluster cluster, long now) {
+    public void update(Cluster cluster, long now) {
+        // Update and notify listeners of metadata update while holding metadata lock
+        Set<String> expiredTopics = doUpdate(cluster, now);
+        // Notify listeners of topic expiry after releasing metadata lock
+        if (!expiredTopics.isEmpty()) {
+            for (TopicExpiryListener listener : topicExpiryListeners)
+                listener.onTopicExpiry(expiredTopics);
+        }
+    }
+
+    private synchronized Set<String> doUpdate(Cluster cluster, long now) {
         this.needUpdate = false;
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
         this.version += 1;
 
+        Set<String> expiredTopics;
         if (topicExpiryEnabled) {
             // Handle expiry of topics from the metadata refresh set.
+            expiredTopics = new HashSet<>();
             for (Iterator<Map.Entry<String, Long>> it = topics.entrySet().iterator(); it.hasNext(); ) {
                 Map.Entry<String, Long> entry = it.next();
                 long expireMs = entry.getValue();
                 if (expireMs == TOPIC_EXPIRY_NEEDS_UPDATE)
                     entry.setValue(now + TOPIC_EXPIRY_MS);
                 else if (expireMs <= now) {
+                    expiredTopics.add(entry.getKey());
                     it.remove();
                     log.debug("Removing unused topic {} from the metadata list, expiryMs {} now {}", entry.getKey(), expireMs, now);
                 }
             }
-        }
+        } else
+            expiredTopics = Collections.emptySet();
 
         for (Listener listener: listeners)
             listener.onMetadataUpdate(cluster);
@@ -216,6 +232,7 @@ public final class Metadata {
 
         notifyAll();
         log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
+        return expiredTopics;
     }
 
     /**
@@ -281,6 +298,27 @@ public final class Metadata {
      */
     public interface Listener {
         void onMetadataUpdate(Cluster cluster);
+    }
+
+    /**
+     * Add a listener that gets notified of topic expiry
+     */
+    public synchronized void addTopicExpiryListener(TopicExpiryListener listener) {
+        this.topicExpiryListeners.add(listener);
+    }
+
+    /**
+     * Stop notifying the listener of topic expiry
+     */
+    public synchronized void removeTopicExpiryListener(TopicExpiryListener listener) {
+        this.topicExpiryListeners.remove(listener);
+    }
+    /**
+     * Listener that is notified of topic expiry.
+     * Note that this listener is invoked without synchronization on the metadata,
+     */
+    public interface TopicExpiryListener {
+        void onTopicExpiry(Set<String> expiredTopics);
     }
 
     private Cluster getClusterForCurrentTopics(Cluster cluster) {

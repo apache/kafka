@@ -39,6 +39,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator.ReadyCheckResult;
@@ -78,6 +79,7 @@ public class RecordAccumulatorTest {
     private int msgSize = Records.LOG_OVERHEAD + Record.recordSize(key, value);
     private Cluster cluster = new Cluster(Arrays.asList(node1, node2), Arrays.asList(part1, part2, part3), Collections.<String>emptySet());
     private Metrics metrics = new Metrics(time);
+    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
     private final long maxBlockTimeMs = 1000;
 
     @After
@@ -89,7 +91,7 @@ public class RecordAccumulatorTest {
     public void testFull() throws Exception {
         long now = time.milliseconds();
         int batchSize = 1024;
-        RecordAccumulator accum = new RecordAccumulator(batchSize, 10 * batchSize, CompressionType.NONE, 10L, 100L, metrics, time);
+        RecordAccumulator accum = new RecordAccumulator(batchSize, 10 * batchSize, CompressionType.NONE, 10L, 100L, metadata, metrics, time);
         int appends = batchSize / msgSize;
         for (int i = 0; i < appends; i++) {
             // append to the first batch
@@ -125,7 +127,7 @@ public class RecordAccumulatorTest {
     @Test
     public void testAppendLarge() throws Exception {
         int batchSize = 512;
-        RecordAccumulator accum = new RecordAccumulator(batchSize, 10 * 1024, CompressionType.NONE, 0L, 100L, metrics, time);
+        RecordAccumulator accum = new RecordAccumulator(batchSize, 10 * 1024, CompressionType.NONE, 0L, 100L, metadata, metrics, time);
         accum.append(tp1, 0L, key, new byte[2 * batchSize], null, maxBlockTimeMs);
         assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).readyNodes);
     }
@@ -133,7 +135,7 @@ public class RecordAccumulatorTest {
     @Test
     public void testLinger() throws Exception {
         long lingerMs = 10L;
-        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, lingerMs, 100L, metrics, time);
+        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, lingerMs, 100L, metadata, metrics, time);
         accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
         assertEquals("No partitions should be ready", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
         time.sleep(10);
@@ -151,7 +153,7 @@ public class RecordAccumulatorTest {
 
     @Test
     public void testPartialDrain() throws Exception {
-        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, 10L, 100L, metrics, time);
+        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, 10L, 100L, metadata, metrics, time);
         int appends = 1024 / msgSize + 1;
         List<TopicPartition> partitions = asList(tp1, tp2);
         for (TopicPartition tp : partitions) {
@@ -170,7 +172,7 @@ public class RecordAccumulatorTest {
         final int numThreads = 5;
         final int msgs = 10000;
         final int numParts = 2;
-        final RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, 0L, 100L, metrics, time);
+        final RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, 0L, 100L, metadata, metrics, time);
         List<Thread> threads = new ArrayList<Thread>();
         for (int i = 0; i < numThreads; i++) {
             threads.add(new Thread() {
@@ -210,7 +212,7 @@ public class RecordAccumulatorTest {
     public void testNextReadyCheckDelay() throws Exception {
         // Next check time will use lingerMs since this test won't trigger any retries/backoff
         long lingerMs = 10L;
-        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024,  CompressionType.NONE, lingerMs, 100L, metrics, time);
+        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024,  CompressionType.NONE, lingerMs, 100L, metadata, metrics, time);
         // Just short of going over the limit so we trigger linger time
         int appends = 1024 / msgSize;
 
@@ -244,7 +246,7 @@ public class RecordAccumulatorTest {
     public void testRetryBackoff() throws Exception {
         long lingerMs = Long.MAX_VALUE / 4;
         long retryBackoffMs = Long.MAX_VALUE / 2;
-        final RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time);
+        final RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, lingerMs, retryBackoffMs, metadata, metrics, time);
 
         long now = time.milliseconds();
         accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
@@ -281,7 +283,7 @@ public class RecordAccumulatorTest {
     @Test
     public void testFlush() throws Exception {
         long lingerMs = Long.MAX_VALUE;
-        final RecordAccumulator accum = new RecordAccumulator(4 * 1024, 64 * 1024, CompressionType.NONE, lingerMs, 100L, metrics, time);
+        final RecordAccumulator accum = new RecordAccumulator(4 * 1024, 64 * 1024, CompressionType.NONE, lingerMs, 100L, metadata, metrics, time);
         for (int i = 0; i < 100; i++)
             accum.append(new TopicPartition(topic, i % 3), 0L, key, value, null, maxBlockTimeMs);
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
@@ -314,7 +316,7 @@ public class RecordAccumulatorTest {
 
     @Test
     public void testAwaitFlushComplete() throws Exception {
-        RecordAccumulator accum = new RecordAccumulator(4 * 1024, 64 * 1024, CompressionType.NONE, Long.MAX_VALUE, 100L, metrics, time);
+        RecordAccumulator accum = new RecordAccumulator(4 * 1024, 64 * 1024, CompressionType.NONE, Long.MAX_VALUE, 100L, metadata, metrics, time);
         accum.append(new TopicPartition(topic, 0), 0L, key, value, null, maxBlockTimeMs);
 
         accum.beginFlush();
@@ -333,7 +335,7 @@ public class RecordAccumulatorTest {
     public void testAbortIncompleteBatches() throws Exception {
         long lingerMs = Long.MAX_VALUE;
         final AtomicInteger numExceptionReceivedInCallback = new AtomicInteger(0);
-        final RecordAccumulator accum = new RecordAccumulator(4 * 1024, 64 * 1024, CompressionType.NONE, lingerMs, 100L, metrics, time);
+        final RecordAccumulator accum = new RecordAccumulator(4 * 1024, 64 * 1024, CompressionType.NONE, lingerMs, 100L, metadata, metrics, time);
         class TestCallback implements Callback {
             @Override
             public void onCompletion(RecordMetadata metadata, Exception exception) {
@@ -358,7 +360,7 @@ public class RecordAccumulatorTest {
         long lingerMs = 3000L;
         int requestTimeout = 60;
 
-        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time);
+        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, lingerMs, retryBackoffMs, metadata, metrics, time);
         int appends = 1024 / msgSize;
 
         // Test batches not in retry
@@ -424,7 +426,7 @@ public class RecordAccumulatorTest {
     @Test
     public void testMutedPartitions() throws InterruptedException {
         long now = time.milliseconds();
-        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, 10, 100L, metrics, time);
+        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, 10, 100L, metadata, metrics, time);
         int appends = 1024 / msgSize;
         for (int i = 0; i < appends; i++) {
             accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
@@ -453,55 +455,76 @@ public class RecordAccumulatorTest {
         assertTrue("The batch should have been drained.", drained.get(node1.id()).size() > 0);
     }
 
+    /**
+     * Tests that partitions of a topic are removed from the accumulator when
+     * a topic expires if and only if there are no records for the partition.
+     */
     @Test
-    public void testUnusedPartitions() throws InterruptedException {
+    public void testTopicExpiry() throws InterruptedException {
         Time time = new MockTime();
         long now = time.milliseconds();
         int batchSize = 1024;
-        RecordAccumulator accum = new RecordAccumulator(batchSize, 10 * 1024, CompressionType.NONE, 10, 100L, metrics, time);
+        RecordAccumulator accum = new RecordAccumulator(batchSize, 10 * 1024, CompressionType.NONE, 10, 100L, metadata, metrics, time);
 
+        metadata.add(topic);
+        metadata.update(cluster, now);
         accum.append(tp1, 0L, key, new byte[batchSize], null, maxBlockTimeMs);
         assertTrue("Topic partition not found", accum.getTopicPartitions().contains(tp1));
-        time.sleep(2000);
         ReadyCheckResult result = accum.ready(cluster, now);
         assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
-        now = time.milliseconds();
+
         accum.drain(cluster, Collections.singleton(node1), Integer.MAX_VALUE, 0).get(node1.id());
-        accum.abortExpiredBatches(60, now);
+        time.sleep(Metadata.TOPIC_EXPIRY_MS);
+        now = time.milliseconds();
+        metadata.update(cluster, now);
         assertTrue("Unused topic partition not removed", accum.getTopicPartitions().isEmpty());
 
+        metadata.add(topic);
+        metadata.update(cluster, now);
         accum.append(tp1, 0L, key, new byte[batchSize], null, maxBlockTimeMs);
-        assertTrue("Topic partition not found", accum.getTopicPartitions().contains(tp1));
-        time.sleep(2000);
-        result = accum.ready(cluster, now);
-        assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
+        time.sleep(Metadata.TOPIC_EXPIRY_MS);
         now = time.milliseconds();
-        List<RecordBatch> expiredBatches = accum.abortExpiredBatches(60, now);
-        assertEquals(1, expiredBatches.size());
-        assertEquals(tp1, expiredBatches.get(0).topicPartition);
-        assertTrue("Unused topic partition not removed after batch expiry", accum.getTopicPartitions().isEmpty());
+        metadata.update(cluster, now);
+        assertFalse("Topic partition removed while in use", accum.getTopicPartitions().isEmpty());
     }
 
+    /**
+     * Tests that record accumulator operations are not impacted by topic expiry
+     * from another thread. Test runs a loop of different record accumulator operations
+     * in one thread and and a loop of metadata updates that trigger topic expiry on another.
+     * Verifies that batches in use are not removed and that the removal of unused batches
+     * doesn't cause any exceptions in the accumulator.
+     */
     @Test
     public void testConcurrentAppendAndExpiry() throws InterruptedException, ExecutionException, TimeoutException {
         final Time time = new MockTime();
         final int batchSize = 1024;
         final long retryBackoffMs = 100L;
-        final RecordAccumulator accum = new RecordAccumulator(batchSize, 1000 * 1024, CompressionType.NONE, 10, retryBackoffMs, metrics, time);
+        final RecordAccumulator accum = new RecordAccumulator(batchSize, 1000 * 1024, CompressionType.NONE, 10, retryBackoffMs, metadata, metrics, time);
         final AtomicBoolean done = new AtomicBoolean(false);
         final AtomicLong now = new AtomicLong(time.milliseconds());
-        ExecutorService executor = Executors.newFixedThreadPool(3);
+
+        now.set(time.milliseconds());
+        metadata.add(topic);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
         Callable<Boolean> appender = new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
                 for (int i = 0; i < 1000; i++) {
+                    time.sleep(Metadata.TOPIC_EXPIRY_MS);
+                    now.set(time.milliseconds());
                     accum.append(tp1, 0L, key, new byte[batchSize], null, maxBlockTimeMs);
+                    time.sleep(Metadata.TOPIC_EXPIRY_MS);
+                    now.set(time.milliseconds());
                     ReadyCheckResult result = accum.ready(cluster, now.get());
                     assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
                     assertTrue("Topic partition not found", accum.getTopicPartitions().contains(tp1));
+                    time.sleep(Metadata.TOPIC_EXPIRY_MS);
+                    now.set(time.milliseconds());
                     List<RecordBatch> batches = accum.drain(cluster, Collections.singleton(node1), Integer.MAX_VALUE, now.get()).get(node1.id());
                     assertFalse("Batch not found", batches.isEmpty());
-                    time.sleep(2000);
+
+                    time.sleep(Metadata.TOPIC_EXPIRY_MS);
                     now.set(time.milliseconds());
                     accum.reenqueue(batches.get(0), now.get());
                     time.sleep(retryBackoffMs);
@@ -509,30 +532,41 @@ public class RecordAccumulatorTest {
                     result = accum.ready(cluster, now.get());
                     assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
                     assertTrue("Topic partition not found", accum.getTopicPartitions().contains(tp1));
-                    time.sleep(2000);
+                    time.sleep(Metadata.TOPIC_EXPIRY_MS);
                     now.set(time.milliseconds());
+                    List<RecordBatch> expiredBatches = accum.abortExpiredBatches(1000, now.get());
+                    assertFalse("Batch not expired", expiredBatches.isEmpty());
                 }
                 return true;
             }
         };
-        Callable<Boolean> expirer = new Callable<Boolean>() {
+        Callable<Boolean> metadataUpdater = new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
+                int expiryCount = 0;
                 while (!done.get()) {
-                    accum.abortExpiredBatches(1000, now.get());
+                    metadata.update(cluster, now.get());
+                    if (!metadata.containsTopic(topic)) {
+                        metadata.add(topic);
+                        expiryCount++;
+                    }
                 }
-                time.sleep(60000);
-                accum.abortExpiredBatches(1000, time.milliseconds());
-                assertFalse("Unused topic partition not removed", accum.getTopicPartitions().contains(tp1));
+                assertTrue("Topics not expired", expiryCount > 0);
+                // Trigger an expiry and check that no partitions are left in the accumulator
+                metadata.add(topic);
+                metadata.update(cluster, time.milliseconds());
+                time.sleep(Metadata.TOPIC_EXPIRY_MS);
+                metadata.update(cluster, time.milliseconds());
+                assertTrue("Unused topic partitions not removed", accum.getTopicPartitions().isEmpty());
                 return true;
             }
         };
         try {
             Future<Boolean> appenderFuture = executor.submit(appender);
-            Future<Boolean> expirerFuture = executor.submit(expirer);
+            Future<Boolean> metadataUpdaterFuture = executor.submit(metadataUpdater);
             assertTrue(appenderFuture.get(10, TimeUnit.SECONDS));
             done.set(true);
-            assertTrue(expirerFuture.get(10, TimeUnit.SECONDS));
+            assertTrue(metadataUpdaterFuture.get(10, TimeUnit.SECONDS));
         } finally {
             executor.shutdownNow();
         }
