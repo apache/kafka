@@ -134,9 +134,7 @@ public class ProcessorStateManager {
             retry--;
             lock = lockStateDirectory(channel);
         }
-        if (lock == null) {
-            channel.close();
-        }
+
         return lock;
     }
 
