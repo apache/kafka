@@ -107,17 +107,18 @@ public class KTableAggregateTest {
         KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
         KTable<String, String> table2 = table1.groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
             @Override
-            public KeyValue<String, String> apply(String key, String value) {
-                if (key.equals("null")) {
-                    return KeyValue.pair(null, value + "s");
-                } else {
-                    return KeyValue.pair(value, value + "s");
+                public KeyValue<String, String> apply(String key, String value) {
+                    if (key.equals("null")) {
+                        return KeyValue.pair(null, value + "s");
+                    } else {
+                        return KeyValue.pair(value, value + "s");
+                    }
                 }
-            }
-        },
+            },
                 stringSerde,
                 stringSerde
-        ).aggregate(MockInitializer.STRING_INIT,
+        )
+                .aggregate(MockInitializer.STRING_INIT,
                 MockAggregator.STRING_ADDER,
                 MockAggregator.STRING_REMOVER,
                 stringSerde,
