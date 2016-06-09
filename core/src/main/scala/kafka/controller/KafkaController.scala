@@ -180,6 +180,8 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
   private val preferredReplicaElectionListener = new PreferredReplicaElectionListener(this)
   private val isrChangeNotificationListener = new IsrChangeNotificationListener(this)
 
+  val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
+
   newGauge(
     "ActiveControllerCount",
     new Gauge[Int] {
@@ -223,6 +225,15 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     val listeners = config.listeners
     val controllerListener = listeners.get(config.interBrokerSecurityProtocol)
     "id_%d-host_%s-port_%d".format(config.brokerId, controllerListener.get.host, controllerListener.get.port)
+  }
+
+  /**
+    * Try to complete delayed topic operations with the request key
+    */
+  def tryCompleteDelayedTopicOperations(topic: String) {
+    val key = TopicKey(topic)
+    val completed = topicPurgatory.checkAndComplete(key)
+    debug(s"Request key ${key.keyLabel} unblocked $completed topic requests.")
   }
 
   /**
@@ -506,6 +517,7 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     // subscribe to partition changes
     topics.foreach(topic => partitionStateMachine.registerPartitionChangeListener(topic))
     onNewPartitionCreation(newPartitions)
+    topics.foreach(topic => tryCompleteDelayedTopicOperations(topic))
   }
 
   /**

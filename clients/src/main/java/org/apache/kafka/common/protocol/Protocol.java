@@ -770,6 +770,50 @@ public class Protocol {
     public static final Schema[] API_VERSIONS_REQUEST = new Schema[]{API_VERSIONS_REQUEST_V0};
     public static final Schema[] API_VERSIONS_RESPONSE = new Schema[]{API_VERSIONS_RESPONSE_V0};
 
+    /* Admin requests common */
+    public static final Schema CONFIG_ENTRY = new Schema(new Field("config_key", STRING, "Configuration key name"),
+        new Field("config_value", STRING, "Configuration value"));
+
+    public static final Schema PARTITION_REPLICA_ASSIGNMENT_ENTRY = new Schema(
+        new Field("partition_id", INT32),
+        new Field("replicas", new ArrayOf(INT32), "The set of all nodes that should host this partition. The first replica in the list is the preferred leader."));
+
+    public static final Schema TOPIC_ERROR_CODE = new Schema(new Field("topic", STRING), new Field("error_code", INT16));
+
+    /* CreateTopic api */
+    public static final Schema SINGLE_CREATE_TOPIC_REQUEST_V0 = new Schema(
+        new Field("topic",
+            STRING,
+            "Name for newly created topic."),
+        new Field("num_partitions",
+            INT32,
+            "Number of partitions to be created. -1 indicates unset."),
+        new Field("replication_factor",
+            INT16,
+            "Replication factor for the topic. -1 indicates unset."),
+        new Field("replica_assignment",
+            new ArrayOf(PARTITION_REPLICA_ASSIGNMENT_ENTRY),
+            "Replica assignment among kafka brokers for this topic partitions. If this is set num_partitions and replication_factor must be unset."),
+        new Field("configs",
+            new ArrayOf(CONFIG_ENTRY),
+            "Topic level configuration for topic to be set."));
+
+    public static final Schema CREATE_TOPICS_REQUEST_V0 = new Schema(
+        new Field("create_topic_requests",
+            new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST_V0),
+            "An array of single topic creation requests. Can not have multiple entries for the same topic."),
+        new Field("timeout",
+            INT32,
+            "The time in ms to wait for a topic to be completely created on the controller node. Values <= 0 will trigger topic creation and return immediatly"));
+
+    public static final Schema CREATE_TOPICS_RESPONSE_V0 = new Schema(
+        new Field("topic_error_codes",
+            new ArrayOf(TOPIC_ERROR_CODE),
+            "An array of per topic error codes."));
+
+    public static final Schema[] CREATE_TOPICS_REQUEST = new Schema[] {CREATE_TOPICS_REQUEST_V0};
+    public static final Schema[] CREATE_TOPICS_RESPONSE = new Schema[] {CREATE_TOPICS_RESPONSE_V0};
+
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
@@ -799,6 +843,7 @@ public class Protocol {
         REQUESTS[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_REQUEST;
         REQUESTS[ApiKeys.SASL_HANDSHAKE.id] = SASL_HANDSHAKE_REQUEST;
         REQUESTS[ApiKeys.API_VERSIONS.id] = API_VERSIONS_REQUEST;
+        REQUESTS[ApiKeys.CREATE_TOPICS.id] = CREATE_TOPICS_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -819,6 +864,7 @@ public class Protocol {
         RESPONSES[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_RESPONSE;
         RESPONSES[ApiKeys.SASL_HANDSHAKE.id] = SASL_HANDSHAKE_RESPONSE;
         RESPONSES[ApiKeys.API_VERSIONS.id] = API_VERSIONS_RESPONSE;
+        RESPONSES[ApiKeys.CREATE_TOPICS.id] = CREATE_TOPICS_RESPONSE;
 
         /* set the minimum and maximum version of each api */
         for (ApiKeys api : ApiKeys.values()) {

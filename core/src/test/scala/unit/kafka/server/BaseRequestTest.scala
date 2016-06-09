@@ -29,6 +29,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader, ResponseHeader}
 import org.junit.Before
 
+import scala.collection.mutable.Buffer
+
 abstract class BaseRequestTest extends KafkaServerTestHarness {
   private var correlationId = 0
 
@@ -52,14 +54,32 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     TestUtils.waitUntilTrue(() => servers.head.metadataCache.getAliveBrokers.size == numBrokers, "Wait for cache to update")
   }
 
-  def socketServer = {
+  def anySocketServer = {
     servers.find { server =>
       val state = server.brokerState.currentState
       state != NotRunning.state && state != BrokerShuttingDown.state
     }.map(_.socketServer).getOrElse(throw new IllegalStateException("No live broker is available"))
   }
 
-  def connect(s: SocketServer = socketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Socket = {
+  def controllerSocketServer = {
+    servers.find { server =>
+      server.kafkaController.isActive()
+    }.map(_.socketServer).getOrElse(throw new IllegalStateException("No controller broker is available"))
+  }
+
+  def notControllerSocketServer = {
+    servers.find { server =>
+      !server.kafkaController.isActive()
+    }.map(_.socketServer).getOrElse(throw new IllegalStateException("No non-controller broker is available"))
+  }
+
+  def brokerSocketServer(brokerId: Int) = {
+    servers.find { server =>
+      server.config.brokerId == brokerId
+    }.map(_.socketServer).getOrElse(throw new IllegalStateException(s"Could not find broker with id $brokerId"))
+  }
+
+  def connect(s: SocketServer = anySocketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Socket = {
     new Socket("localhost", s.boundPort(protocol))
   }
 
@@ -83,19 +103,21 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     receiveResponse(socket)
   }
 
-  def send(request: AbstractRequest, apiKey: ApiKeys, version: Short): ByteBuffer = {
-    val socket = connect()
+  def send(request: AbstractRequest, apiKey: ApiKeys, version: Short,
+           destination: SocketServer = anySocketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): ByteBuffer = {
+    val socket = connect(destination, protocol)
     try {
-      send(socket, request, apiKey, version)
+      send(request, apiKey, version, socket)
     } finally {
       socket.close()
     }
   }
 
   /**
-    * Serializes and send the request to the given api. A ByteBuffer containing the response is returned.
+    * Serializes and send the request to the given api.
+    * A ByteBuffer containing the response is returned.
     */
-  def send(socket: Socket, request: AbstractRequest, apiKey: ApiKeys, version: Short): ByteBuffer = {
+  def send(request: AbstractRequest, apiKey: ApiKeys, version: Short, socket: Socket): ByteBuffer = {
     correlationId += 1
     val serializedBytes = {
       val header = new RequestHeader(apiKey.id, version, "", correlationId)
