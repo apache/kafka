@@ -453,7 +453,7 @@ public class KStreamRepartitionJoinTest {
         List<String> received = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(config,
                                                                                       outputTopic,
                                                                                       numMessages,
-                                                                                      30 * 1000);
+                                                                                      60 * 1000);
         Collections.sort(received);
         return received;
     }
