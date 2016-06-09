@@ -20,8 +20,10 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
@@ -95,5 +97,50 @@ public class KTableAggregateTest {
                 "D:0+6",
                 "B:0+2+4-2+7", "B:0+2+4-2+7-4",
                 "C:0+5+8", "C:0+5+8-5"), proc2.processed);
+    }
+
+    @Test
+    public void testAggRepartition() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        String topic1 = "topic1";
+
+        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
+        KTable<String, String> table2 = table1.groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+            @Override
+            public KeyValue<String, String> apply(String key, String value) {
+                if (key.equals("null")) {
+                    return KeyValue.pair(null, value + "s");
+                } else {
+                    return KeyValue.pair(value, value + "s");
+                }
+            }
+        },
+                stringSerde,
+                stringSerde
+        ).aggregate(MockInitializer.STRING_INIT,
+                MockAggregator.STRING_ADDER,
+                MockAggregator.STRING_REMOVER,
+                stringSerde,
+                "topic1-Canonized");
+
+        MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
+        table2.toStream().process(proc2);
+
+        driver = new KStreamTestDriver(builder, stateDir);
+
+        driver.process(topic1, "A", "1");
+        driver.process(topic1, "B", "2");
+        driver.process(topic1, "null", "3");
+        driver.process(topic1, "B", "4");
+        driver.process(topic1, "null", "5");
+        driver.process(topic1, "B", "7");
+
+        assertEquals(Utils.mkList(
+                "1:0+1s",
+                "2:0+2s",
+                "4:0+4s",
+                "2:0+2s-2s",
+                "7:0+7s",
+                "4:0+4s-4s"), proc2.processed);
     }
 }
