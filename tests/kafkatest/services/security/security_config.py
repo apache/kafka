@@ -115,27 +115,33 @@ class SecurityConfig(TemplateRenderer):
     def client_config(self, template_props=""):
         return SecurityConfig(self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props)
 
+    def setup_ssl(self, node):
+        node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
+        node.account.scp_to(SecurityConfig.ssl_stores['ssl.keystore.location'], SecurityConfig.KEYSTORE_PATH)
+        node.account.scp_to(SecurityConfig.ssl_stores['ssl.truststore.location'], SecurityConfig.TRUSTSTORE_PATH)
+
+    def setup_sasl(self, node):
+        node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
+        jaas_conf_file = "jaas.conf"
+        java_version = node.account.ssh_capture("java -version")
+        if any('IBM' in line for line in java_version):
+            is_ibm_jdk = True
+        else:
+            is_ibm_jdk = False
+        jaas_conf = self.render(jaas_conf_file,  node=node, is_ibm_jdk=is_ibm_jdk,
+                                client_sasl_mechanism=self.client_sasl_mechanism,
+                                enabled_sasl_mechanisms=self.enabled_sasl_mechanisms)
+        node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
+        if self.has_sasl_kerberos:
+            node.account.scp_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
+            node.account.scp_to(MiniKdc.LOCAL_KRB5CONF_FILE, SecurityConfig.KRB5CONF_PATH)
+
     def setup_node(self, node):
         if self.has_ssl:
-            node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
-            node.account.scp_to(SecurityConfig.ssl_stores['ssl.keystore.location'], SecurityConfig.KEYSTORE_PATH)
-            node.account.scp_to(SecurityConfig.ssl_stores['ssl.truststore.location'], SecurityConfig.TRUSTSTORE_PATH)
+            self.setup_ssl(node)
 
         if self.has_sasl:
-            node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
-            jaas_conf_file = "jaas.conf"
-            java_version = node.account.ssh_capture("java -version")
-            if any('IBM' in line for line in java_version):
-                is_ibm_jdk = True
-            else:
-                is_ibm_jdk = False
-            jaas_conf = self.render(jaas_conf_file,  node=node, is_ibm_jdk=is_ibm_jdk,
-                                    client_sasl_mechanism=self.client_sasl_mechanism,
-                                    enabled_sasl_mechanisms=self.enabled_sasl_mechanisms)
-            node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
-            if self.has_sasl_kerberos:
-                node.account.scp_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
-                node.account.scp_to(MiniKdc.LOCAL_KRB5CONF_FILE, SecurityConfig.KRB5CONF_PATH)
+            self.setup_sasl(node)
 
     def clean_node(self, node):
         if self.security_protocol != SecurityConfig.PLAINTEXT:
