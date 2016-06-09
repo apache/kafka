@@ -20,6 +20,10 @@ then
   exit 1
 fi
 
+# CYGINW == 1 if Cygwin is detected, else 0.
+[[ $(uname -a) =~ "CYGWIN" ]]
+CYGWIN=$((! $?))
+
 if [ -z "$INCLUDE_TEST_JARS" ]; then
   INCLUDE_TEST_JARS=false
 fi
@@ -145,13 +149,16 @@ fi
 
 # Log directory to use
 if [ "x$LOG_DIR" = "x" ]; then
-    LOG_DIR="$base_dir/logs"
+  LOG_DIR="$base_dir/logs"
 fi
 
 # Log4j settings
 if [ -z "$KAFKA_LOG4J_OPTS" ]; then
   # Log to console. This is a tool.
-  KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/config/tools-log4j.properties"
+  LOG4J_DIR="$base_dir/config/tools-log4j.properties"
+  # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
+  (( CYGWIN )) && LOG4J_DIR=`cygpath --path --mixed "${LOG4J_DIR}"`
+  KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"
 else
   # create logs directory
   if [ ! -d "$LOG_DIR" ]; then
@@ -159,6 +166,8 @@ else
   fi
 fi
 
+# If Cygwin is detected, LOG_DIR is converted to Windows format.
+(( CYGWIN )) && LOG_DIR=`cygpath --path --mixed "${LOG_DIR}"`
 KAFKA_LOG4J_OPTS="-Dkafka.logs.dir=$LOG_DIR $KAFKA_LOG4J_OPTS"
 
 # Generic jvm settings you want to add
@@ -235,6 +244,9 @@ if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   GC_LOG_FILE_NAME=$DAEMON_NAME$GC_FILE_SUFFIX
   KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
 fi
+
+# If Cygwin is detected, classpath is converted to Windows format.
+(( CYGWIN )) && CLASSPATH=`cygpath --path --mixed "${CLASSPATH}"`
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
