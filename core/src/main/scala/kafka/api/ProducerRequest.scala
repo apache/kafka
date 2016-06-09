@@ -124,7 +124,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
 
   def numPartitions = data.size
 
-  override def toString(): String = {
+  override def toString: String = {
     describe(true)
   }
 

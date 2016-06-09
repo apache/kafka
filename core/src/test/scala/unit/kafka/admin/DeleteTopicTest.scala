@@ -121,9 +121,9 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     assertTrue("Partition reassignment should fail for [test,0]", reassignPartitionsCommand.reassignPartitions())
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
-      val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas);
+      val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
       ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkUtils, topicAndPartition, newReplicas,
-        Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentFailed;
+        Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentFailed
     }, "Partition reassignment shouldn't complete.")
     val controllerId = zkUtils.getController()
     val controller = servers.filter(s => s.config.brokerId == controllerId).head
@@ -223,17 +223,17 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topic = topicAndPartition.topic
 
     val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
-    brokerConfigs(0).setProperty("delete.topic.enable", "true")
-    brokerConfigs(0).setProperty("log.cleaner.enable","true")
-    brokerConfigs(0).setProperty("log.cleanup.policy","compact")
-    brokerConfigs(0).setProperty("log.segment.bytes","100")
-    brokerConfigs(0).setProperty("log.segment.delete.delay.ms","1000")
-    brokerConfigs(0).setProperty("log.cleaner.dedupe.buffer.size","1048577")
+    brokerConfigs.head.setProperty("delete.topic.enable", "true")
+    brokerConfigs.head.setProperty("log.cleaner.enable","true")
+    brokerConfigs.head.setProperty("log.cleanup.policy","compact")
+    brokerConfigs.head.setProperty("log.segment.bytes","100")
+    brokerConfigs.head.setProperty("log.segment.delete.delay.ms","1000")
+    brokerConfigs.head.setProperty("log.cleaner.dedupe.buffer.size","1048577")
 
     val servers = createTestTopicAndCluster(topic,brokerConfigs)
 
     // for simplicity, we are validating cleaner offsets on a single broker
-    val server = servers(0)
+    val server = servers.head
     val log = server.logManager.getLog(topicAndPartition).get
 
     // write to the topic to activate cleaner

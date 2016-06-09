@@ -203,7 +203,7 @@ class LogSegment(val log: FileMessageSet,
     truncated
   }
 
-  override def toString() = "LogSegment(baseOffset=" + baseOffset + ", size=" + size + ")"
+  override def toString = "LogSegment(baseOffset=" + baseOffset + ", size=" + size + ")"
 
   /**
    * Truncate off all index and log entries with offsets >= the given offset.

@@ -107,7 +107,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    */
   def handleStateChanges(replicas: Set[PartitionAndReplica], targetState: ReplicaState,
                          callbacks: Callbacks = (new CallbackBuilder).build) {
-    if(replicas.size > 0) {
+    if(replicas.nonEmpty) {
       info("Invoking state change to %s for replicas %s".format(targetState, replicas.mkString(",")))
       try {
         brokerRequestBatch.newBatch()
@@ -330,14 +330,13 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
       val partition = topicPartition.partition
       assignedReplicas.foreach { replicaId =>
         val partitionAndReplica = PartitionAndReplica(topic, partition, replicaId)
-        controllerContext.liveBrokerIds.contains(replicaId) match {
-          case true => replicaState.put(partitionAndReplica, OnlineReplica)
-          case false =>
-            // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
-            // This is required during controller failover since during controller failover a broker can go down,
-            // so the replicas on that broker should be moved to ReplicaDeletionIneligible to be on the safer side.
-            replicaState.put(partitionAndReplica, ReplicaDeletionIneligible)
-        }
+        if (controllerContext.liveBrokerIds.contains(replicaId))
+          replicaState.put(partitionAndReplica, OnlineReplica)
+        else
+          // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
+          // This is required during controller failover since during controller failover a broker can go down,
+          // so the replicas on that broker should be moved to ReplicaDeletionIneligible to be on the safer side.
+          replicaState.put(partitionAndReplica, ReplicaDeletionIneligible)
       }
     }
   }
@@ -371,9 +370,9 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                 .format(newBrokerIdsSorted.mkString(","), deadBrokerIdsSorted.mkString(","), liveBrokerIdsSorted.mkString(",")))
               newBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
               deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
-              if(newBrokerIds.size > 0)
+              if(newBrokerIds.nonEmpty)
                 controller.onBrokerStartup(newBrokerIdsSorted)
-              if(deadBrokerIds.size > 0)
+              if(deadBrokerIds.nonEmpty)
                 controller.onBrokerFailure(deadBrokerIdsSorted)
             } catch {
               case e: Throwable => error("Error while handling broker changes", e)

@@ -257,13 +257,13 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
 
   def newBatch() {
     // raise error if the previous batch is not empty
-    if (leaderAndIsrRequestMap.size > 0)
+    if (leaderAndIsrRequestMap.nonEmpty)
       throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating " +
         "a new one. Some LeaderAndIsr state changes %s might be lost ".format(leaderAndIsrRequestMap.toString()))
-    if (stopReplicaRequestMap.size > 0)
+    if (stopReplicaRequestMap.nonEmpty)
       throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating a " +
         "new one. Some StopReplica state changes %s might be lost ".format(stopReplicaRequestMap.toString()))
-    if (updateMetadataRequestMap.size > 0)
+    if (updateMetadataRequestMap.nonEmpty)
       throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating a " +
         "new one. Some UpdateMetadata state changes %s might be lost ".format(updateMetadataRequestMap.toString()))
   }
@@ -424,15 +424,15 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
       stopReplicaRequestMap.clear()
     } catch {
       case e : Throwable => {
-        if (leaderAndIsrRequestMap.size > 0) {
+        if (leaderAndIsrRequestMap.nonEmpty) {
           error("Haven't been able to send leader and isr requests, current state of " +
               s"the map is $leaderAndIsrRequestMap. Exception message: $e")
         }
-        if (updateMetadataRequestMap.size > 0) {
+        if (updateMetadataRequestMap.nonEmpty) {
           error("Haven't been able to send metadata update requests, current state of " +
               s"the map is $updateMetadataRequestMap. Exception message: $e")
         }
-        if (stopReplicaRequestMap.size > 0) {
+        if (stopReplicaRequestMap.nonEmpty) {
           error("Haven't been able to send stop replica requests, current state of " +
               s"the map is $stopReplicaRequestMap. Exception message: $e")
         }
