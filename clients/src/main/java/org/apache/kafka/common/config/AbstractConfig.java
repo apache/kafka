@@ -53,7 +53,7 @@ public class AbstractConfig {
                 throw new ConfigException(key.toString(), originals.get(key), "Key must be a string.");
         this.originals = (Map<String, ?>) originals;
         this.values = definition.parse(this.originals);
-        this.used = Collections.synchronizedSet(new HashSet<>());
+        this.used = Collections.synchronizedSet(new HashSet<String>());
         if (doLog)
             logAll();
     }
@@ -65,7 +65,7 @@ public class AbstractConfig {
     public AbstractConfig(Map<String, Object> parsedConfig) {
         this.values = parsedConfig;
         this.originals = new HashMap<>();
-        this.used = Collections.synchronizedSet(new HashSet<>());
+        this.used = Collections.synchronizedSet(new HashSet<String>());
     }
 
     protected Object get(String key) {

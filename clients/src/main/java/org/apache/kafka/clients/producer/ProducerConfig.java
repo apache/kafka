@@ -16,6 +16,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Serializer;
@@ -336,8 +337,8 @@ public class ProducerConfig extends AbstractConfig {
         super(CONFIG, props);
     }
 
-    public static Map<String, Object> filter(Map<String, Object> props) {
-        return CONFIG.filter(props);
+    public static Map<String, ConfigKey> configKeys() {
+        return CONFIG.configKeys();
     }
 
     public static void main(String[] args) {
