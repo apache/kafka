@@ -154,6 +154,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    public int size() {
+        return this.inner.size();
+    }
+
+    @Override
     public void close() {
         inner.close();
     }

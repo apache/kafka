@@ -97,4 +97,11 @@ public interface KeyValueStore<K, V> extends StateStore {
      */
     KeyValueIterator<K, V> all();
 
+    /**
+     * Return the number of key-value mappings in this store.
+     *
+     * @return the number of key/value pairs in the store.
+     */
+    int size();
+
 }

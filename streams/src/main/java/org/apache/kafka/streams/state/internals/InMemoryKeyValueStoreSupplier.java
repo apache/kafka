@@ -147,6 +147,11 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         @Override
+        public int size() {
+            return this.map.size();
+        }
+
+        @Override
         public void flush() {
             // do-nothing since it is in-memory
         }

@@ -227,4 +227,23 @@ public abstract class AbstractKeyValueStoreTest {
             store.close();
         }
     }
+
+    @Test
+    public void testSize() {
+        // Create the test driver ...
+        KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
+        KeyValueStore<Integer, String> store = createKeyValueStore(driver.context(), Integer.class, String.class, true);
+        try {
+            assertEquals("A newly created store should have no entries", 0, store.size());
+
+            store.put(0, "zero");
+            store.put(1, "one");
+            store.put(2, "two");
+            store.put(4, "four");
+            store.put(5, "five");
+            assertEquals(5, store.size());
+        } finally {
+            store.close();
+        }
+    }
 }
