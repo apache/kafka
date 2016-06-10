@@ -28,14 +28,14 @@ import joptsimple.OptionParser
 import kafka.consumer.BaseConsumerRecord
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging, Whitelist}
-import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRebalanceListener, ConsumerRecord, KafkaConsumer, OffsetAndMetadata}
+import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRebalanceListener, ConsumerRecord, KafkaConsumer, OffsetAndMetadata, RoundRobinAssignor}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
+import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
@@ -254,6 +254,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                       whitelist: Option[String]): Seq[ConsumerWrapper] = {
     // Disable consumer auto offsets commit to prevent data loss.
     maybeSetDefaultProperty(consumerConfigProps, "enable.auto.commit", "false")
+    // Use round robin assignment by default for Mirror Maker since it gives a better balance between the instances,
+    // in particular when the number of Mirror Maker instances exceeds the typical number of partitions per topic.
+    // There doesn't seem to be any need to keep range assignment since co-partitioning is not an issue.
+    maybeSetDefaultProperty(consumerConfigProps, ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
     // Hardcode the deserializer to ByteArrayDeserializer
     consumerConfigProps.setProperty("key.deserializer", classOf[ByteArrayDeserializer].getName)
     consumerConfigProps.setProperty("value.deserializer", classOf[ByteArrayDeserializer].getName)
