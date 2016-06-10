@@ -147,7 +147,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         @Override
-        public int size() {
+        public long approximateNumEntries() {
             return this.map.size();
         }
 

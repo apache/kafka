@@ -355,7 +355,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     /**
-     * Return an estimate of the number of key-value mappings in this store.
+     * Return an approximate count of key-value mappings in this store.
      *
      * <code>RocksDB</code> cannot return an exact entry count without doing a
      * full scan, so this method relies on the <code>rocksdb.estimate-num-keys</code>
@@ -363,10 +363,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
      * a count of dirty keys in the store's in-memory cache, which may lead to some
      * double-counting of entries and inflate the estimate.
      *
-     * @return the estimated number of key/value pairs in the store.
+     * @return an approximate count of key-value mappings in the store.
      */
     @Override
-    public int size() {
+    public long approximateNumEntries() {
         long value;
         try {
             value = this.db.getLongProperty("rocksdb.estimate-num-keys");
@@ -374,21 +374,21 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             throw new ProcessorStateException("Error fetching property from store " + this.name, e);
         }
         if (isOverflowing(value)) {
-            return Integer.MAX_VALUE;
+            return Long.MAX_VALUE;
         }
         if (this.cacheDirtyKeys != null) {
             value += this.cacheDirtyKeys.size();
         }
         if (isOverflowing(value)) {
-            return Integer.MAX_VALUE;
+            return Long.MAX_VALUE;
         }
-        return (int) value;
+        return value;
     }
 
     private boolean isOverflowing(long value) {
         // RocksDB returns an unsigned 8-byte integer, which could overflow long
         // and manifest as a negative value.
-        return (value < 0) || ((int) value != value);
+        return value < 0;
     }
 
     private void flushCache() {
