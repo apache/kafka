@@ -321,7 +321,7 @@ public class KStreamRepartitionJoinTest {
         assertThat(received, is(expectedStreamOneTwoJoin));
     }
 
-//    @Test
+    @Test
     public void shouldLeftJoinWithTableProducedFromGroupBy() throws Exception {
         produceMessages();
         KTable<Integer, String> aggTable =
