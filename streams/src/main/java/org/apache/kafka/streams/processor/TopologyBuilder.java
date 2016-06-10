@@ -67,7 +67,7 @@ public class TopologyBuilder {
     private final HashMap<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
     private final HashMap<String, Pattern> topicToPatterns = new HashMap<>();
     private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
-    private final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+    private SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
     private Map<Integer, Set<String>> nodeGroups = null;
     private Pattern topicPattern;
 
@@ -139,14 +139,13 @@ public class TopologyBuilder {
         public String[] getTopics(Collection<String> subscribedTopics) {
             List<String> matchedTopics = new ArrayList<>();
             for (String update : subscribedTopics) {
-                if (this.pattern.matcher(update).matches()) {
-                    if (topicToPatterns.containsKey(update)) {
-                        if (topicToPatterns.get(update) != this.pattern) {
-                            throw new TopologyBuilderException("Topic " + update + " already matched check for overlapping regex patterns");
-                        }
-                    } else {
-                        topicToPatterns.put(update, this.pattern);
-                    }
+                if (this.pattern == topicToPatterns.get(update)) {
+                    matchedTopics.add(update);
+                    //not same pattern instance,but still matches not allowed
+                } else if (topicToPatterns.containsKey(update) && isMatch(update)) {
+                    throw new TopologyBuilderException("Topic " + update + " already matched check for overlapping regex patterns");
+                } else if (isMatch(update)) {
+                    topicToPatterns.put(update, this.pattern);
                     matchedTopics.add(update);
                 }
             }
@@ -157,6 +156,10 @@ public class TopologyBuilder {
         @Override
         public ProcessorNode build(String applicationId) {
             return new SourceNode(name, keyDeserializer, valDeserializer);
+        }
+
+        private boolean isMatch(String topic) {
+            return this.pattern.matcher(topic).matches();
         }
     }
 
@@ -843,7 +846,7 @@ public class TopologyBuilder {
         return this.topicPattern;
     }
 
-    public SubscriptionUpdates getSubscriptionUpdates() {
-        return subscriptionUpdates;
+    public void updateSubscriptions(SubscriptionUpdates subscriptionUpdates) {
+        this.subscriptionUpdates = subscriptionUpdates;
     }
 }

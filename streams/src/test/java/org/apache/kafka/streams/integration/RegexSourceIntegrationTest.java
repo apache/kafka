@@ -54,6 +54,7 @@ public class RegexSourceIntegrationTest {
 
     private static final String TOPIC_1 = "topic-1";
     private static final String TOPIC_2 = "topic-2";
+    private static final String TOPIC_3 = "topic-3";
     private static final String TOPIC_A = "topic-A";
     private static final String TOPIC_C = "topic-C";
     private static final String TOPIC_Y = "topic-Y";
@@ -74,6 +75,56 @@ public class RegexSourceIntegrationTest {
         CLUSTER.createTopic(FA_TOPIC);
         CLUSTER.createTopic(FOO_TOPIC);
 
+    }
+
+    @Test
+    public void testShouldSubscribeToNewMatchingTopicsAfterStart() throws Exception {
+
+        String topic1TestMessage = "topic-1 test";
+        String topic2TestMessage = "topic-2 test";
+        String topic3TestMessage = "topic-3 test";
+
+        final Serde<String> stringSerde = Serdes.String();
+
+        Properties streamsConfiguration = getStreamsConfig();
+
+        KStreamBuilder builder = new KStreamBuilder();
+
+        KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("topic-\\d"));
+
+        pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
+
+        // Remove any state from previous test runs
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+
+        KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        streams.start();
+
+        //create topic after start will get picked up
+        CLUSTER.createTopic(TOPIC_3);
+
+        //pause for metadata discovery
+        Thread.sleep(5000);
+        Properties producerConfig = getProducerConfig();
+        produceMessage(TOPIC_1, Arrays.asList(topic1TestMessage), producerConfig);
+        produceMessage(TOPIC_2, Arrays.asList(topic2TestMessage), producerConfig);
+        produceMessage(TOPIC_3, Arrays.asList(topic3TestMessage), producerConfig);
+
+
+        Properties consumerConfig = getConsumerConfig();
+        List<String> expectedReceivedValues = Arrays.asList(topic1TestMessage, topic2TestMessage, topic3TestMessage);
+        List<KeyValue<String, String>> receivedKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, 3);
+        List<String> actualValues = new ArrayList<>(3);
+
+        for (KeyValue<String, String> receivedKeyValue : receivedKeyValues) {
+            actualValues.add(receivedKeyValue.value);
+        }
+
+        streams.close();
+        Collections.sort(actualValues);
+        Collections.sort(expectedReceivedValues);
+        assertThat(actualValues, equalTo(expectedReceivedValues));
+        CLUSTER.deleteTopic(TOPIC_3);
     }
 
 
@@ -199,6 +250,7 @@ public class RegexSourceIntegrationTest {
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "regex-source-integration-test");
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
+        streamsConfiguration.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "500");
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

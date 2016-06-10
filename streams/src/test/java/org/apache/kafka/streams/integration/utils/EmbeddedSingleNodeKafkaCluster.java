@@ -19,12 +19,12 @@ package org.apache.kafka.streams.integration.utils;
 
 import kafka.server.KafkaConfig$;
 import kafka.zk.EmbeddedZookeeper;
+import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Properties;
-import org.junit.rules.ExternalResource;
 
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and 1 Kafka broker.
@@ -124,5 +124,9 @@ public class EmbeddedSingleNodeKafkaCluster extends ExternalResource {
                             int replication,
                             Properties topicConfig) {
         broker.createTopic(topic, partitions, replication, topicConfig);
+    }
+
+    public void deleteTopic(String topic) {
+        broker.deleteTopic(topic);
     }
 }
