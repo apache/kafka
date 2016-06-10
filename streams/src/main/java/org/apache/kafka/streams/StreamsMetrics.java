@@ -26,5 +26,5 @@ public interface StreamsMetrics {
 
     Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags);
 
-    void recordLatency(Sensor sensor, long startNs, long endNs);
+    void recordLatencyMs(Sensor sensor, long startMs, long endMs);
 }

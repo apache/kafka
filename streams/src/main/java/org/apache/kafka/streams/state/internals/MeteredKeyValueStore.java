@@ -84,7 +84,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         try {
             inner.init(context, root);
         } finally {
-            this.metrics.recordLatency(this.restoreTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.restoreTime, startNs, time.nanoseconds());
         }
     }
 
@@ -99,7 +99,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         try {
             return this.inner.get(key);
         } finally {
-            this.metrics.recordLatency(this.getTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.getTime, startNs, time.nanoseconds());
         }
     }
 
@@ -109,7 +109,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         try {
             this.inner.put(key, value);
         } finally {
-            this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.putTime, startNs, time.nanoseconds());
         }
     }
 
@@ -119,7 +119,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         try {
             return this.inner.putIfAbsent(key, value);
         } finally {
-            this.metrics.recordLatency(this.putIfAbsentTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.putIfAbsentTime, startNs, time.nanoseconds());
         }
     }
 
@@ -129,7 +129,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         try {
             this.inner.putAll(entries);
         } finally {
-            this.metrics.recordLatency(this.putAllTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.putAllTime, startNs, time.nanoseconds());
         }
     }
 
@@ -139,7 +139,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         try {
             return this.inner.delete(key);
         } finally {
-            this.metrics.recordLatency(this.deleteTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.deleteTime, startNs, time.nanoseconds());
         }
     }
 
@@ -164,7 +164,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         try {
             this.inner.flush();
         } finally {
-            this.metrics.recordLatency(this.flushTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.flushTime, startNs, time.nanoseconds());
         }
     }
 
@@ -200,7 +200,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             try {
                 iter.close();
             } finally {
-                metrics.recordLatency(this.sensor, this.startNs, time.nanoseconds());
+                metrics.recordLatencyMs(this.sensor, this.startNs, time.nanoseconds());
             }
         }
     }

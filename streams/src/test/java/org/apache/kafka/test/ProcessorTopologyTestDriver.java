@@ -182,7 +182,7 @@ public class ProcessorTopologyTestDriver {
                 }
 
                 @Override
-                public void recordLatency(Sensor sensor, long startNs, long endNs) {
+                public void recordLatencyMs(Sensor sensor, long startNs, long endNs) {
                     // do nothing
                 }
             });

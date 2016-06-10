@@ -286,13 +286,15 @@ public class StreamThread extends Thread {
         consumer.subscribe(new ArrayList<>(sourceTopics), rebalanceListener);
 
         while (stillRunning()) {
+            long now = time.milliseconds();
+
             // try to fetch some records if necessary
             if (requiresPoll) {
                 requiresPoll = false;
 
-                long startPoll = time.milliseconds();
+                boolean longPoll = totalNumBuffered == 0;
 
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(totalNumBuffered == 0 ? this.pollTimeMs : 0);
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(longPoll ? this.pollTimeMs : 0);
                 lastPoll = time.milliseconds();
 
                 if (rebalanceException != null)
@@ -305,27 +307,32 @@ public class StreamThread extends Thread {
                     }
                 }
 
-                long endPoll = time.milliseconds();
-                sensors.pollTimeSensor.record(endPoll - startPoll);
+                // only record poll latency is long poll is required
+                if (longPoll) {
+                    long then = now;
+                    now = time.milliseconds();
+                    sensors.pollTimeSensor.record(now - then, now);
+                }
             }
-
-            totalNumBuffered = 0;
 
             // try to process one fetch record from each task via the topology, and also trigger punctuate
             // functions if necessary, which may result in more records going through the topology in this loop
+            totalNumBuffered = 0;
+
             if (!activeTasks.isEmpty()) {
                 for (StreamTask task : activeTasks.values()) {
-                    long startProcess = time.milliseconds();
 
                     totalNumBuffered += task.process();
                     requiresPoll = requiresPoll || task.requiresPoll();
 
-                    sensors.processTimeSensor.record(time.milliseconds() - startProcess);
+                    long then = now;
+                    now = time.milliseconds();
+                    sensors.processTimeSensor.record(now - then, now);
 
-                    maybePunctuate(task);
+                    maybePunctuate(task, now);
 
                     if (task.commitNeeded())
-                        commitOne(task, time.milliseconds());
+                        commitOne(task, now);
                 }
 
                 // if pollTimeMs has passed since the last poll, we poll to respond to a possible rebalance
@@ -398,14 +405,15 @@ public class StreamThread extends Thread {
         return true;
     }
 
-    private void maybePunctuate(StreamTask task) {
+    private void maybePunctuate(StreamTask task, long now) {
         try {
-            long now = time.milliseconds();
-
             // check whether we should punctuate based on the task's partition group timestamp;
             // which are essentially based on record timestamp.
-            if (task.maybePunctuate())
-                sensors.punctuateTimeSensor.record(time.milliseconds() - now);
+            if (task.maybePunctuate()) {
+                long then = now;
+                now = time.milliseconds();
+                sensors.punctuateTimeSensor.record(now - then, now);
+            }
 
         } catch (KafkaException e) {
             log.error("Failed to punctuate active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
@@ -453,7 +461,9 @@ public class StreamThread extends Thread {
             throw e;
         }
 
-        sensors.commitTimeSensor.record(time.milliseconds() - now);
+        long then = now;
+        now = time.milliseconds();
+        sensors.commitTimeSensor.record(now - then, now);
     }
 
     /**
@@ -727,8 +737,8 @@ public class StreamThread extends Thread {
         }
 
         @Override
-        public void recordLatency(Sensor sensor, long startNs, long endNs) {
-            sensor.record((endNs - startNs) / 1000000, endNs);
+        public void recordLatencyMs(Sensor sensor, long startMs, long endMs) {
+            sensor.record(endMs - startMs, endMs);
         }
 
         /**
