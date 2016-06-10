@@ -80,10 +80,10 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
             KeyValue<K1, V1> oldPair = mapper.apply(key, change.oldValue);
 
             // if the selected repartition key or value is null, skip
-            if (newPair.key != null && newPair.value != null) {
+            if (newPair != null && newPair.key != null && newPair.value != null) {
                 context().forward(newPair.key, new Change<>(newPair.value, null));
             }
-            if (oldPair.key != null && oldPair.value != null) {
+            if (oldPair != null && oldPair.key != null && oldPair.value != null) {
                 context().forward(oldPair.key, new Change<>(null, oldPair.value));
             }
         }

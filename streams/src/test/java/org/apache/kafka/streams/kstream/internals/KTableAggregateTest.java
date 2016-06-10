@@ -110,6 +110,8 @@ public class KTableAggregateTest {
                 public KeyValue<String, String> apply(String key, String value) {
                     if (key.equals("null")) {
                         return KeyValue.pair(null, value + "s");
+                    } else if (key.equals("NULL")) {
+                        return null;
                     } else {
                         return KeyValue.pair(value, value + "s");
                     }
@@ -133,7 +135,7 @@ public class KTableAggregateTest {
         driver.process(topic1, "B", "2");
         driver.process(topic1, "null", "3");
         driver.process(topic1, "B", "4");
-        driver.process(topic1, "null", "5");
+        driver.process(topic1, "NULL", "5");
         driver.process(topic1, "B", "7");
 
         assertEquals(Utils.mkList(
