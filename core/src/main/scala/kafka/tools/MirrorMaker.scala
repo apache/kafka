@@ -31,7 +31,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.serializer.DefaultDecoder
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging}
 import org.apache.kafka.clients.consumer
-import org.apache.kafka.clients.consumer.{OffsetAndMetadata, Consumer, ConsumerRecord, KafkaConsumer, CommitFailedException}
+import org.apache.kafka.clients.consumer.{OffsetAndMetadata, Consumer, ConsumerConfig => NewConsumerConfig, ConsumerRecord, KafkaConsumer, CommitFailedException, RoundRobinAssignor}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
@@ -299,6 +299,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     // Set the consumer timeout so we will not block for low volume pipeline. The timeout is necessary to make sure
     // Offsets are still committed for those low volume pipelines.
     maybeSetDefaultProperty(consumerConfigProps, "consumer.timeout.ms", "10000")
+    // Use round robin assignment by default for Mirror Maker since it gives a better balance between the instances,
+    // in particular when the number of Mirror Maker instances exceeds the typical number of partitions per topic.
+    // There doesn't seem to be any need to keep range assignment since co-partitioning is not an issue.
+    maybeSetDefaultProperty(consumerConfigProps, "partition.assignment.strategy", "roundrobin")
     // The default client id is group id, we manually set client id to groupId-index to avoid metric collision
     val groupIdString = consumerConfigProps.getProperty("group.id")
     val connectors = (0 until numStreams) map { i =>
@@ -330,6 +334,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     val consumerConfigProps = Utils.loadProps(consumerConfigPath)
     // Disable consumer auto offsets commit to prevent data loss.
     maybeSetDefaultProperty(consumerConfigProps, "enable.auto.commit", "false")
+    // Use round robin assignment by default for Mirror Maker since it gives a better balance between the instances,
+    // in particular when the number of Mirror Maker instances exceeds the typical number of partitions per topic.
+    // There doesn't seem to be any need to keep range assignment since co-partitioning is not an issue.
+    maybeSetDefaultProperty(consumerConfigProps, NewConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
     // Hardcode the deserializer to ByteArrayDeserializer
     consumerConfigProps.setProperty("key.deserializer", classOf[ByteArrayDeserializer].getName)
     consumerConfigProps.setProperty("value.deserializer", classOf[ByteArrayDeserializer].getName)
