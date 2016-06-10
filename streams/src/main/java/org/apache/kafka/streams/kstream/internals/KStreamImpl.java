@@ -93,8 +93,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     private static final String FOREACH_NAME = "KSTREAM-FOREACH-";
 
-    private static final String GROUP_BY_KEY_NAME = "KSTREAM-GROUP-BY-KEY-";
-
     public static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
 
     private final boolean repartitionRequired;
@@ -582,8 +580,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public <K1, V1> KGroupedStream<K1, V1> groupBy(KeyValueMapper<K, V, K1> selector,
                                                    Serde<K1> keySerde,
                                                    Serde<V1> valSerde) {
+
+        String selectName = internalSelectKey(selector);
+        String name = addNotNullFilter(selectName);
         return new KGroupedStreamImpl<>(topology,
-                                        internalSelectKey(selector),
+                                        name,
                                         sourceNodes,
                                         keySerde,
                                         valSerde, true);
@@ -597,14 +598,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public KGroupedStream<K, V> groupByKey(Serde<K> keySerde,
                                            Serde<V> valSerde) {
-        String groupByName = topology.newName(GROUP_BY_KEY_NAME);
-        topology.addProcessor(groupByName, new KStreamPassThrough(), this.name);
         return new KGroupedStreamImpl<>(topology,
-                                        groupByName,
+                                        addNotNullFilter(this.name),
                                         sourceNodes,
                                         keySerde,
                                         valSerde,
                                         this.repartitionRequired);
+    }
+
+    private String addNotNullFilter(final String parentName) {
+        String name = topology.newName(FILTER_NAME);
+        topology.addProcessor(name, new KStreamFilter<>(new Predicate<K, V>() {
+            @Override
+            public boolean test(final K key, final V value) {
+                return key != null;
+            }
+        }, false), parentName);
+        return name;
     }
 
     private static <K, V> StateStoreSupplier createWindowedStateStore(final JoinWindows windows,

@@ -53,7 +53,7 @@ public class KGroupedStreamIntegrationTest {
     @ClassRule
     public static final EmbeddedSingleNodeKafkaCluster CLUSTER =
         new EmbeddedSingleNodeKafkaCluster();
-    private static int testNo = 0;
+    private static volatile int testNo = 0;
     private KStreamBuilder builder;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
@@ -68,6 +68,7 @@ public class KGroupedStreamIntegrationTest {
 
     @Before
     public void before() {
+        testNo++;
         builder = new KStreamBuilder();
         createTopics();
         streamsConfiguration = new Properties();
@@ -116,7 +117,6 @@ public class KGroupedStreamIntegrationTest {
 
     @After
     public void whenShuttingDown() throws IOException {
-        testNo++;
         if (kafkaStreams != null) {
             kafkaStreams.close();
         }
