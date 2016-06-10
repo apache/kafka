@@ -15,7 +15,6 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -23,6 +22,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -377,8 +377,8 @@ public class ConsumerConfig extends AbstractConfig {
         super(CONFIG, props);
     }
 
-    public static Map<String, ConfigKey> configKeys() {
-        return CONFIG.configKeys();
+    public static Set<String> configNames() {
+        return CONFIG.names();
     }
 
     public static void main(String[] args) {
