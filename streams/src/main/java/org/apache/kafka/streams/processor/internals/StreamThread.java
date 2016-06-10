@@ -132,7 +132,7 @@ public class StreamThread extends Thread {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             try {
-                commitAll();
+                commitAll(time.milliseconds());
                 lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
             } catch (Throwable t) {
                 rebalanceException = t;
@@ -245,7 +245,7 @@ public class StreamThread extends Thread {
 
         // Exceptions should not prevent this call from going through all shutdown steps
         try {
-            commitAll();
+            commitAll(time.milliseconds());
         } catch (Throwable e) {
             // already logged in commitAll()
         }
@@ -276,6 +276,20 @@ public class StreamThread extends Thread {
         removeStreamTasks();
 
         log.info("Stream thread shutdown complete [" + this.getName() + "]");
+    }
+
+    /**
+     * Compute the latency based on the previous marked timestamp,
+     * and update the marked timestamp with the current system timestamp.
+     *
+     * @param now Previous marked timestamp
+     * @return latency
+     */
+    private long computeLatency(long now) {
+        long then = now;
+        now = time.milliseconds();
+
+        return Math.max(now - then, 0);
     }
 
     private void runLoop() {
@@ -309,9 +323,7 @@ public class StreamThread extends Thread {
 
                 // only record poll latency is long poll is required
                 if (longPoll) {
-                    long then = now;
-                    now = time.milliseconds();
-                    sensors.pollTimeSensor.record(now - then, now);
+                    sensors.pollTimeSensor.record(computeLatency(now));
                 }
             }
 
@@ -325,9 +337,7 @@ public class StreamThread extends Thread {
                     totalNumBuffered += task.process();
                     requiresPoll = requiresPoll || task.requiresPoll();
 
-                    long then = now;
-                    now = time.milliseconds();
-                    sensors.processTimeSensor.record(now - then, now);
+                    sensors.processTimeSensor.record(computeLatency(now));
 
                     maybePunctuate(task, now);
 
@@ -337,14 +347,16 @@ public class StreamThread extends Thread {
 
                 // if pollTimeMs has passed since the last poll, we poll to respond to a possible rebalance
                 // even when we paused all partitions.
-                if (lastPoll + this.pollTimeMs < time.milliseconds())
+                if (lastPoll + this.pollTimeMs < now)
                     requiresPoll = true;
 
             } else {
                 // even when no task is assigned, we must poll to get a task.
                 requiresPoll = true;
             }
-            maybeCommit();
+
+            maybeCommit(now);
+
             maybeUpdateStandbyTasks();
 
             maybeClean();
@@ -410,9 +422,7 @@ public class StreamThread extends Thread {
             // check whether we should punctuate based on the task's partition group timestamp;
             // which are essentially based on record timestamp.
             if (task.maybePunctuate()) {
-                long then = now;
-                now = time.milliseconds();
-                sensors.punctuateTimeSensor.record(now - then, now);
+                sensors.punctuateTimeSensor.record(computeLatency(now));
             }
 
         } catch (KafkaException e) {
@@ -421,13 +431,11 @@ public class StreamThread extends Thread {
         }
     }
 
-    protected void maybeCommit() {
-        long now = time.milliseconds();
-
+    protected void maybeCommit(long now) {
         if (commitTimeMs >= 0 && lastCommit + commitTimeMs < now) {
             log.trace("Committing processor instances because the commit interval has elapsed.");
 
-            commitAll();
+            commitAll(now);
             lastCommit = now;
 
             processStandbyRecords = true;
@@ -437,12 +445,12 @@ public class StreamThread extends Thread {
     /**
      * Commit the states of all its tasks
      */
-    private void commitAll() {
+    private void commitAll(long now) {
         for (StreamTask task : activeTasks.values()) {
-            commitOne(task, time.milliseconds());
+            commitOne(task, now);
         }
         for (StandbyTask task : standbyTasks.values()) {
-            commitOne(task, time.milliseconds());
+            commitOne(task, now);
         }
     }
 
@@ -461,9 +469,7 @@ public class StreamThread extends Thread {
             throw e;
         }
 
-        long then = now;
-        now = time.milliseconds();
-        sensors.commitTimeSensor.record(now - then, now);
+        sensors.commitTimeSensor.record(computeLatency(now));
     }
 
     /**
